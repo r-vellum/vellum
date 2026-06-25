@@ -108,7 +108,9 @@ Net: glyph rasterization and outline extraction are always `skrifa` (one code pa
 
 ### 4.1 Scene graph (retained, immutable)
 
-The scene is a tree of **inert data nodes** — no drawing code lives in a node (the lesson from Qt's Graphics-View → Qt-Quick evolution). A node carries: identity/name, a local affine transform, geometry, a pick-shape for hit-testing, resolved style, and children. The tree is held in Rust; R holds lightweight handles.
+The scene is a tree of **inert data nodes** — no drawing code lives in a node (the lesson from Qt's Graphics-View → Qt-Quick evolution). A node carries: identity/name, a local affine transform, geometry, a pick-shape for hit-testing, resolved style, and children.
+
+> **Where the tree lives (settled in M3).** The original plan was to hold the tree in Rust with R holding handles. As built, the **retained tree lives in R as immutable S7 values**, and `render()` replays it onto a fresh, write-only Rust `Scene` (the imperative engine from M1–M2). This makes `render()` a pure function of the tree, makes `edit_node()` plain R copy-on-modify (structural sharing for free), and avoids a cross-FFI edit/invalidate protocol — the right trade for a build → render → edit workflow. A future interactive/hit-testing layer (M6) can still ask the backend for resolved geometry without changing this.
 
 Node kinds:
 
@@ -283,7 +285,7 @@ vellum/                      R package root
 
 **M2 — viewports, layout, clipping, gpar. ✅ done.** Viewport tree (arena) with each resolved viewport an affine transform (local px → device px) so nesting + rotation compose; rectangular clipping via tiny-skia `Mask::intersect_path`; the row/column flex-layout solver (absolute + `null` tracks, spanning); a cacheable DFS layout pass (pure in `(page px, dpi, tree)` → clean resize); gpar inheritance with multiplicative alpha applied once at draw. **Scoped down from the original M2 plan:** per-axis units, `strwidth`/`strheight`, and per-element unit vectors were deferred to M3; `grobwidth`/`grobheight` remain deferred (need a grob-sizing protocol). The flex `null` lives only as a layout track size, not a primitive coordinate unit. Bug fixed in passing: native *position* must use `(v − scale.lo)/span`, not `v/span` (M1 only worked because scales started at 0).
 
-**M3 — the S7/vctrs R API.** The retained API (`push`/`draw`/`edit_node`/`render`), the `unit` **vctrs** type (per-element units, finally enabling per-axis units + `strwidth`/`strheight`), named nodes and querying/editing. Also the place to settle **vectorisation + length contracts** for the primitive API (today colours/labels are scalar; multi-element input should vectorise rather than error). This is when it becomes pleasant to use from R.
+**M3 — the S7/vctrs R API. ✅ done.** Delivered in two halves. **M3a**: a vctrs `unit` type (a `(value, integer-code)` record; codes aligned 1:1 with the Rust `Unit` enum), font/string-relative kinds resolved to absolute mm at construction, and **per-element / per-axis units** threaded through the backend (primitives/viewports take per-coordinate code slices). **M3b**: an **S7** value-object model (`gpar`, abstract `grob` + concrete grobs, `viewport`, `grid_layout`, `gtree`, `vellum_scene`); a `compile` generic (multiple dispatch, one method per grob) that replays the tree onto a fresh Rust `Scene`; a functional builder (`vl_scene |> push() |> draw() |> pop() |> render()`) over an immutable R-side tree; and by-name editing (`node_names`/`get_node`/`edit_node`). The imperative `rs_*` API was demoted to internal — S7 is the only public surface. **The retained tree lives in R** (see the dedicated note above), not in Rust. Registration gotchas resolved: `vctrs::s3_register()` for double-dispatch and `S7::methods_register()` in `.onLoad` (dispatch after install), `@include` for class collation. Vectorised primitives done (grob constructors recycle); `grobwidth`/`grobheight` still deferred.
 
 **M4 — vector outputs.** SVG (hand-rolled) and PDF (krilla) backends over the shared `RenderBackend` trait. Gradients, patterns, clip paths, masks.
 
@@ -306,12 +308,14 @@ vellum/                      R package root
 
 Robustness fixes already applied (M2): scene dimensions validated finite/positive and capped (no `Pixmap` panic / runaway alloc); `rgba()` capacity computed in `usize`; per-glyph text vectors length-clamped before indexing; glyph ids carried as `u32` (no `u16` truncation); `x`/`y` length checked in `rs_lines`/`rs_polygon`; gpar colour/number args enforced length-1. (`systemfonts` is not a direct dependency — it is pulled in transitively by `textshaping`, which does the shaping/resolution; declaring it directly would be an unused-import NOTE.)
 
-Still open, mostly to settle alongside the M3 API:
-- **Scalar→vector contracts.** `rs_text`/`rs_strwidth` silently take `label[1]`; colour args are scalar. M3's vctrs work should vectorise these rather than truncate/error.
-- **Broader input validation.** `width`/`height`/`r` > 0, `alpha ∈ [0,1]` (currently clamped silently in Rust), whole-number `row`/`col`, and out-of-range / missing-layout cells (currently collapse to a 0-size viewport silently) deserve R-side checks with named-argument errors.
-- **Render caching.** `pixel()`/`rgba()`/`render_png()` each re-run the full layout + raster and rebuild the `FontCache` (re-reading font files). Memoize a `Pixmap` behind a dirty flag, or persist the font cache. Mostly a test-suite cost today.
-- **API surface.** `rs_up_viewport` is currently an alias of `rs_pop_viewport` (we don't prune the tree, so "up" and "pop" coincide) — document or give true grid semantics. The extendr-generated `Scene` env is exported; consider hiding it once the S7 API lands.
-- **Clip-mask memory.** Each clipping viewport clones a page-sized `Mask`; fine now, revisit if deep clip trees on large pages become common.
+Addressed in M3: per-element coordinate vectors and **vectorised grob constructors** (recycling via vctrs); the public S7 API replaced the scalar `rs_*` surface. `colour`/`label` are still scalar *per grob*, but a grob is now vectorised over its coordinates (N rects/points from one `rect_grob`/`points_grob`).
+
+Still open:
+- **Text vectorisation.** `text_grob`/`rs_strwidth` still take `label[1]`. A vectorised multi-label text grob (one per position) is future work.
+- **Broader input validation.** `width`/`height`/`r` > 0, `alpha ∈ [0,1]` (currently clamped silently in Rust), and out-of-range / missing-layout cells (currently collapse to a 0-size viewport silently) deserve R-side checks with named-argument errors.
+- **Render caching.** `render()` rebuilds the whole backend `Scene` and re-reads fonts each call (the tree lives in R). Memoize the backend `Scene`/`Pixmap` or persist the `FontCache` if it becomes a cost; today it is cheap relative to rasterization.
+- **API surface.** The extendr-generated `Scene` env is still exported (`export(Scene)`); hide it now that the S7 API is the public surface. `rs_*` are unexported but still generate (internal) Rd.
+- **Clip-mask memory.** Each clipping viewport clones a page-sized `Mask`; fine now, revisit for deep clip trees on large pages.
 
 ---
 
