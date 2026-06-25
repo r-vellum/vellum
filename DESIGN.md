@@ -404,8 +404,9 @@ backends.
 
 Sequencing: P1 ✅ → P2 → P3 → P4 → P5, then M6 (interactivity). Each phase is independently
 reviewable and committed; P3 precedes P5 (arbitrary clip builds on the path primitive), P4
-stands alone (re-vendor). Out of scope until a grammar layer drives it: 10M+ scale (tiled
-parallel rasterization / decimation) and render-result caching for repeated renders.
+stands alone (re-vendor). Out of scope until a grammar layer drives it: extreme scale
+(10M+ — better served by **aggregate-then-shade**, see §11, than by decimation or tiled
+parallel rasterization) and render-result caching for repeated renders.
 
 **M5 — device-shim mode (optional, deferred).** Register as an R graphics device via `DeviceDriver`; implement the minimal callback set, then climb the capability ladder (patterns → groups/compositing → glyphs). Panic-guard every callback. Validate by rendering ggplot2/lattice output. Deferred in favour of filling out the native engine (gradients/patterns/masks); this is interop, not on the Option-B critical path.
 
@@ -458,3 +459,49 @@ Minor issues still open (from the post-F3 review):
 - **The render stack**: typst (production user of kurbo + tiny-skia + skrifa/harfrust + krilla); resvg/usvg.
 - **Modern R fast-graphics stack to interoperate with**: `ragg`, `svglite`, `systemfonts`, `textshaping`, `farver`, gtable, and ggplot2's S7 migration.
 - **Scene-graph design**: Qt Quick's `QSGNode` (inert nodes + separate renderer), Flutter's layer tree + relayout/repaint boundaries, the Chromium compositor's property trees.
+- **Large-data rendering**: `datashader` (aggregate-then-shade; see §11).
+
+## 11. Future directions: aggregate-then-shade (datashader-inspired)
+
+[datashader](https://datashader.org) is a Python library that renders billions of points
+without overplotting or per-glyph cost. Its key idea is **not** "draw glyphs faster" or
+"sample the data down" — it is **aggregate, then shade**: bin the data into a fixed,
+canvas-sized grid in one O(N) pass, then turn that grid into an image. Cost decouples from
+both the point count and the overplotting. (Its GPU/CUDA and Dask-distribution paths are
+out of scope here; the CPU analog — a tight native loop, optionally tiled with rayon — is
+exactly what a Rust backend is good at, the role Numba plays for datashader.) Worth
+adopting later, in priority order:
+
+1. **An aggregation rendering mode (the headline idea).** For data beyond per-glyph
+   practicality (overplotted, ≫1M), add a path that bins points/lines into a 2D aggregate
+   grid sized to the output (a "canvas"), then colormaps the grid to a raster. This is the
+   right answer to extreme scale — far better than P1's sprite stamping or the deferred
+   decimation, because it is O(N) **and** shows density honestly. It rides on **P4's
+   `draw_image`**: the shaded grid embeds as a `raster_grob` in the normal scene (so axes,
+   facets, legends, and other layers compose around it). Likely lives in a future
+   grammar/stat layer or a `datashade()`-style helper, not the core primitives.
+
+2. **A staged pipeline with a fixed-size intermediate** (mirrors datashader's
+   project → aggregate → transform → colormap → embed): choose x/y ranges + axis scale +
+   output resolution; aggregate with a **reduction** (`count`, `sum`, `mean`, `min`, `max`,
+   `any`, and categorical `count_cat`); transform; colormap; embed. The aggregate grid is
+   the fixed-size intermediate that makes every downstream step independent of data size —
+   the same decoupling vellum already has (compile → render), with aggregation as a new
+   front-end that emits an image.
+
+3. **Perceptual colormapping for magnitude→colour** (reusable wherever counts/values map to
+   colour — the aggregation mode, density heatmaps, a future `geom_bin2d`): **histogram
+   equalization** (`eq_hist`, rank-based) reveals structure in skewed counts that linear or
+   even log mapping hides; plus `log` and percentile (`cmin`/`cmax`) clamping. A small,
+   self-contained colormap utility worth building independently of the aggregation mode.
+
+4. **Categorical aggregation + colour keys** (`count_cat`): keep per-category counts per
+   bin and blend category colours weighted by count, so category mixing is visible without
+   overplotting.
+
+5. **Spreading / `dynspread`**: a post-aggregation dilation that grows isolated non-empty
+   bins so sparse regions stay visible at low density — a cheap image-space pass.
+
+Design principle reinforced: **a fixed-size intermediate representation decouples
+downstream work from input size.** This complements (does not replace) the scene graph —
+it is the right tool for extreme-scale density, layered on the same engine.
