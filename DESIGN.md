@@ -153,15 +153,18 @@ absolute transform + clip + colour and emits through:
 
 ```rust
 trait RenderBackend {
-    fn fill_path(&mut self, path: &Path, t: Transform, paint: &ResolvedPaint, clip: &Clip);
+    fn fill_path(&mut self, path: &Path, t: Transform, paint: &ResolvedPaint, rule: FillRule, clip: &Clip);
     fn stroke_path(&mut self, path: &Path, t: Transform, color: Rgba, stroke: &StrokeStyle, clip: &Clip);
     fn draw_text(&mut self, run: &TextRun, t: Transform, clip: &Clip);
     fn begin_group(&mut self);                          // F3: isolated layer
     fn end_group(&mut self, mask: Option<MaskLayer>);   // F3: composite (+ mask)
     fn draw_circles(&mut self, …, transform, clip);     // P1: batched markers; default = per-element,
                                                         // raster overrides with sprite stamping
+    fn draw_image(&mut self, rgba, iw, ih, …, transform, clip);  // P4: raster image into a cell
 }
 ```
+A `Clip` is a chain of `ClipShape`s — a rect or an arbitrary path (P5) — that each
+backend intersects (raster `Mask`, nested SVG `<clipPath>`, PDF `push_clip_path`).
 
 Geometry is `tiny_skia::Path` + `Transform` (krilla converts at its boundary). A
 `Clip` is a backend-agnostic chain of viewport rects: the raster backend builds a
@@ -375,35 +378,41 @@ marker fast path). Defaults match grid (round cap/join, mitre 10). `test-stroke.
 `inst/examples/strokes.R`. Verified dash gaps (raster) + dasharray/cap/join/miter (SVG) +
 PDF render.
 
-**P3 — segments + general path (planned).** `segments_grob(x0, y0, x1, y1)` →
-`Node::Segments` (batched on P1's machinery; one stroke pass over disjoint segments). A
-general `path_grob(x, y, id = NULL, rule = "winding"|"evenodd")` (grid-style: `id` groups
-sub-paths, `NA` breaks them) → `Node::Path { xs, ys, breaks, rule, gp }` building a
-multi-subpath `tiny_skia::Path` filled by the rule — requires adding a `FillRule` parameter
-to `RenderBackend::fill_path` (raster `FillRule`, SVG `fill-rule`, krilla `KFillRule`;
-existing callers pass `NonZero`). Enables geom_segment / geom_path / geom_ribbon /
-polygons-with-holes. Verify: segment fan; self-intersecting star (winding vs even-odd
-differ); donut (polygon with hole); all backends.
+**P3 — segments + general path. ✅ done.** `segments_grob(x0, y0, x1, y1)` →
+`Node::Segments` (batched; one stroke pass over disjoint segments). `path_grob(x, y,
+id = NULL, rule = "winding"|"evenodd")` (`id` groups consecutive points into closed
+sub-paths via `rle`) → `Node::Path { x, y, nper, evenodd, gp }` building a multi-subpath
+`tiny_skia::Path` filled by the rule — so holes work. `RenderBackend::fill_path` gained a
+`FillRule` param threaded through all backends (raster `FillRule`, SVG `fill-rule`, krilla
+`KFillRule`; non-path callers pass `Winding`). `test-path.R`. Verified segment fan, donut
+(even-odd hole vs winding fill), single sub-path, outline stroke, SVG `fill-rule`, PDF.
 
-**P4 — raster image + native PDF images/patterns/masks (planned).** A `draw_image` backend
-op (raster `Pixmap::draw_pixmap`, SVG base64-PNG `<image>`, krilla `Image::from_png`) +
-`Node::Image { rgba, w, h, x, y, width, height, interpolate }` and
-`raster_grob(image, x, y, width, height, interpolate = TRUE)`. Enabling krilla's
-`raster-images` feature (vendor `zune-jpeg`/`gif`/`image-webp`/`imagesize`; `png` already
-present — a re-vendor) **also upgrades the F2/F3 PDF fallbacks** to real tiling-image
-patterns and real masks (replacing mean-colour / unmasked). Enables geom_raster / heatmaps.
-Verify: an embedded raster pixel-probes across backends; PDF pattern shows the tile (not
-mean colour) and a PDF mask actually masks; MSRV.
+**P4 — raster image + native PDF images/patterns. ✅ done.** `RenderBackend::draw_image`
+(raster `draw_pixmap` with a scale/translate transform + `FilterQuality` from `interpolate`;
+SVG base64-PNG `<image>`; krilla `Image::from_rgba8` + `surface.draw_image`) + `Node::Image`
+(no gpar; handled in the walk's pre-pass) + `raster_grob(image, x, y, width, height,
+interpolate)` (R `as.raster`→`col2rgb`; a `raster` is row-major so no transpose). Enabling
+krilla's **`raster-images`** feature (re-vendored `zune-jpeg`/`gif`/`image-webp`/`imagesize`)
+also **upgraded the F2 PDF pattern fallback** to a real krilla tiling `Pattern` (the tile
+image drawn into a stream); `average_rgba` removed. `test-image.R`. Verified image
+orientation pixel-identical across raster/SVG/PDF and the PDF pattern is a real tile.
+**PDF masks remain the documented unmasked fallback** — applying them needs the PDF backend
+to record the masked group into an isolated krilla stream (a recorder pass over
+`begin_group`/`end_group`); `raster-images` now unblocks it but it's deferred.
 
-**P5 — polish (planned).** (a) **Text vectorisation** — multi-label `text_grob(label, x, y)`
-shaping each label and batching, removing the `label[1]` limitation. (b)
-**grobwidth/grobheight** — a grob-sizing protocol (a measure pass / per-grob device bbox)
-plus `grobwidth`/`grobheight` unit kinds resolving against a referenced grob (the hardest
-item; may split into its own sub-step). (c) **Arbitrary path clipping** — generalise clip
-from rect-only to a path (builds on P3): `viewport(clip = <path>)` via a raster `Mask` from
-a path, an SVG `<clipPath>` with a path `d`, and krilla `push_clip_path` with the path.
-Verify: a 3-label text grob; a label sized to a referenced grob; a circular clip; all
-backends.
+**P5 — text vectorisation + arbitrary path clipping. ✅ done (grob sizing deferred).**
+(a) **Text vectorisation** — `compile(grob_text)` recycles `label`/`x`/`y`/`rot` and draws
+each, removing the `label[1]` limitation. (c) **Arbitrary path clipping** — the clip chain
+generalised from `ClipRect` to `ClipShape` (`Rect | Path{path, evenodd, transform}`);
+`viewport(clip = <polygon_grob|path_grob>)` clips to an arbitrary path (raster
+`Mask::intersect_path` with the rule, SVG `<clipPath>` with a device-space `d` + `clip-rule`,
+krilla `push_clip_path` with the transformed path). New `Scene::set_clip_path`. `test-clip-text.R`
+(multi-label text, polygon + even-odd path clips, rect-clip regression, all backends).
+(b) **grobwidth/grobheight — DEFERRED.** It needs *lazy grob-reference units*: the unit
+system resolves font/string units eagerly to mm at construction, but a grob's `npc`/`native`
+extent is only known at draw time against its viewport, so `grobwidth(grob)` must stay
+symbolic until the layout pass. That's a distinct unit-system extension, best as its own
+milestone.
 
 Sequencing: P1 ✅ → P2 → P3 → P4 → P5, then M6 (interactivity). Each phase is independently
 reviewable and committed; P3 precedes P5 (arbitrary clip builds on the path primitive), P4
