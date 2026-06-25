@@ -19,13 +19,10 @@ rs_raster(scene)
 }
 \value{
 \code{rs_pixel()}: integer \code{c(r, g, b, a)}. \code{rs_dim()}: integer
-\code{c(width, height)}.
-
-\code{rs_raster()}: an integer array with dimensions \code{c(4, width, height)}
-holding RGBA channels (top-left origin).
+\code{c(width, height)}. \code{rs_raster()}: integer array \code{c(4, width, height)}.
 }
 \description{
-\code{rs_pixel()} renders the scene and returns the RGBA value of one device pixel
-(top-left origin, 0-based) as \code{c(r, g, b, a)}. \code{rs_dim()} returns the device
-size in pixels. Primarily for testing.
+\code{rs_pixel()} renders the scene and returns the RGBA of one device pixel
+(top-left origin, 0-based). \code{rs_dim()} returns the device size in pixels.
+\code{rs_raster()} returns the whole image. Primarily for testing.
 }

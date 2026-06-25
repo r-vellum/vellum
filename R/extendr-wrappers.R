@@ -30,12 +30,29 @@ rs_bbox <- function(x, y) .Call(wrap__rs_bbox, x, y)
 #' @section Methods:
 #'\subsection{Method `new`}{
 #'Create a scene `width` x `height` inches at `dpi`, with background `bg`
-#'(a length-4 integer RGBA vector).
+#'(a length-4 integer RGBA vector). A root viewport covering the whole page
+#'(npc == native) is created as viewport 0.
 #'}
 #'
-#'\subsection{Method `set_viewport`}{
-#'Set the (single) drawing viewport: centre `(x, y)` and size `(w, h)` in
-#'page npc, with native `xscale`/`yscale` (length-2 vectors).
+#'\subsection{Method `push_viewport`}{
+#'Push a viewport as a child of the current one and make it current.
+#'Returns the new viewport's id. If `lrow`/`lcol` are >= 0 the viewport is
+#'placed into that (0-based) cell of the parent's layout; otherwise it is
+#'placed by centre/size in parent coordinates.
+#'}
+#'
+#'\subsection{Method `pop_viewport`}{
+#'Move the cursor up `n` levels (towards the root). Stops at the root.
+#'}
+#'
+#'\subsection{Method `to_root`}{
+#'Move the cursor to the root viewport.
+#'}
+#'
+#'\subsection{Method `set_layout`}{
+#'Attach a row/column layout to the current viewport. Tracks are given as
+#'parallel value + unit-code vectors; the unit `"null"` marks a flexible
+#'track whose value is its weight.
 #'}
 #'
 #'\subsection{Method `text`}{
@@ -61,20 +78,24 @@ rs_bbox <- function(x, y) .Call(wrap__rs_bbox, x, y)
 #'
 #'\subsection{Method `rgba`}{
 #'Render and return the whole image as row-major RGBA bytes
-#'`[r, g, b, a, r, g, b, a, ...]` (top-left origin, x fastest). The R
-#'wrapper reshapes this into an array.
+#'`[r, g, b, a, ...]` (top-left origin, x fastest).
 #'}
 #'
 #'\subsection{Method `pixel`}{
-#'Render and return the RGBA of device pixel `(x, y)` (top-left origin,
-#'0-based) as `c(r, g, b, a)`. For pixel-level testing.
+#'Render and return the RGBA of device pixel `(x, y)` as `c(r, g, b, a)`.
 #'}
 #'
 Scene <- new.env(parent = emptyenv())
 
 Scene$new <- function(width, height, dpi, bg) .Call(wrap__Scene__new, width, height, dpi, bg)
 
-Scene$set_viewport <- function(x, y, w, h, xscale, yscale) .Call(wrap__Scene__set_viewport, self, x, y, w, h, xscale, yscale)
+Scene$push_viewport <- function(cx, cy, w, h, units, xscale, yscale, angle, clip, lrow, lcol, lrowspan, lcolspan, fill, col, lwd, alpha) .Call(wrap__Scene__push_viewport, self, cx, cy, w, h, units, xscale, yscale, angle, clip, lrow, lcol, lrowspan, lcolspan, fill, col, lwd, alpha)
+
+Scene$pop_viewport <- function(n) .Call(wrap__Scene__pop_viewport, self, n)
+
+Scene$to_root <- function() .Call(wrap__Scene__to_root, self)
+
+Scene$set_layout <- function(wvals, wunits, hvals, hunits) .Call(wrap__Scene__set_layout, self, wvals, wunits, hvals, hunits)
 
 Scene$rect <- function(x, y, w, h, units, fill, col, lwd, alpha) .Call(wrap__Scene__rect, self, x, y, w, h, units, fill, col, lwd, alpha)
 

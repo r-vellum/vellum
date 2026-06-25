@@ -24,14 +24,15 @@ rs_rect(
 
 \item{width, height}{Rectangle size.}
 
-\item{units}{Coordinate system for the above: one of \code{"npc"}, \code{"native"},
-\code{"mm"}, \code{"in"}, \code{"pt"}.}
+\item{units}{Coordinate system: one of \code{"npc"}, \code{"native"}, \code{"mm"}, \code{"in"},
+\code{"pt"}.}
 
-\item{fill, col}{Fill and border colours (\code{NA} for none).}
+\item{fill, col}{Fill and border colours. A colour sets it, \code{NA} means none,
+and \code{NULL} inherits from the enclosing viewport's \code{gp}.}
 
-\item{lwd}{Border line width (1 == 1/96 inch).}
+\item{lwd}{Border line width (1 == 1/96 inch); \code{NULL} inherits.}
 
-\item{alpha}{Opacity multiplier in \verb{[0, 1]}.}
+\item{alpha}{Opacity multiplier in \verb{[0, 1]}; \code{NULL} inherits.}
 }
 \value{
 \code{scene}, invisibly.

@@ -2,7 +2,7 @@
 % Please edit documentation in R/scene.R
 \name{rs_viewport}
 \alias{rs_viewport}
-\title{Set the scene's viewport}
+\title{Set the current viewport (convenience)}
 \usage{
 rs_viewport(
   scene,
@@ -17,17 +17,18 @@ rs_viewport(
 \arguments{
 \item{scene}{A \code{\link[=rs_scene]{rs_scene()}}.}
 
-\item{x, y}{Viewport centre, in normalised page coordinates (0..1).}
+\item{x, y}{Viewport centre in parent coordinates (ignored if \code{row}/\code{col}).}
 
-\item{width, height}{Viewport size, in normalised page coordinates.}
+\item{width, height}{Viewport size in parent coordinates (ignored if
+\code{row}/\code{col}).}
 
-\item{xscale, yscale}{Length-2 numeric ranges for native coordinates.}
+\item{xscale, yscale}{Length-2 native coordinate ranges for this viewport.}
 }
 \value{
 \code{scene}, invisibly.
 }
 \description{
-Defines the single drawing region (M1 supports one viewport) as a centre and
-size in normalised page coordinates, together with the native scales used by
-\code{units = "native"} coordinates.
+Resets to the root viewport and pushes a single child with the given scales.
+A convenience for the common single-panel case; for nested viewports use
+\code{\link[=rs_push_viewport]{rs_push_viewport()}}.
 }

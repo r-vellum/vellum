@@ -13,11 +13,11 @@ rs_lines(scene, x, y, units = "npc", col = "black", lwd = 1, alpha = 1)
 
 \item{units}{Coordinate system; see \code{\link[=rs_rect]{rs_rect()}}.}
 
-\item{col}{Line colour (\code{NA} for none).}
+\item{col}{Line colour (\code{NA} none, \code{NULL} inherit).}
 
-\item{lwd}{Line width (1 == 1/96 inch).}
+\item{lwd}{Line width (1 == 1/96 inch); \code{NULL} inherits.}
 
-\item{alpha}{Opacity multiplier in \verb{[0, 1]}.}
+\item{alpha}{Opacity multiplier in \verb{[0, 1]}; \code{NULL} inherits.}
 }
 \value{
 \code{scene}, invisibly.

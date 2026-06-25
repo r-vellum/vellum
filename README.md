@@ -14,24 +14,30 @@ See [DESIGN.md](DESIGN.md) for the architecture and rationale.
 
 ## Status
 
-Early development. **Milestones M0 (skeleton) and M1 (raster slice) are complete:**
+Early development. **Milestones M0–M2 are complete:**
 
 - R package + Rust crate wired together via [extendr](https://extendr.github.io/),
   vendored for offline/CRAN builds, with cross-platform CI.
 - A scene graph held in Rust, rendered to PNG via
   [tiny-skia](https://github.com/RazrFalcon/tiny-skia).
-- Units (`npc` / `native` / `mm` / `in` / `pt`), one viewport with native
-  scales, and primitives: rectangles, polylines, polygons, circles.
+- Units (`npc` / `native` / `mm` / `in` / `pt`) and primitives: rectangles,
+  polylines, polygons, circles.
 - **Text with font fidelity**: shaped by
   [textshaping](https://github.com/r-lib/textshaping) and resolved by
   [systemfonts](https://github.com/r-lib/systemfonts) (the same stack as
   ragg/svglite), with glyph outlines rasterized by
   [skrifa](https://github.com/googlefonts/fontations). Includes per-glyph font
   fallback, justification, and rotation.
+- **Nested viewports** (a tree, via an affine transform) with rotation and
+  rectangular **clipping**; a row/column **flex-layout** solver (`"null"`
+  tracks); a cacheable layout pass; and **gpar inheritance** (with multiplicative
+  alpha) down the viewport tree.
 
-Still to come (see the roadmap in DESIGN.md): the unit/layout engine and nested
-viewports (M2), the S7 scene API (M3), SVG/PDF output (M4), the R graphics
-device shim (M5), and interactivity (M6).
+See `inst/examples/` for worked plots (a `cars` scatter, 2×2 small multiples).
+
+Still to come (see the roadmap in DESIGN.md): the S7 scene API and the full
+unit vector type (M3), SVG/PDF output (M4), the R graphics device shim (M5), and
+interactivity (M6).
 
 ## Development
 

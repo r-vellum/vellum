@@ -14,15 +14,11 @@ rs_scene(width = 6, height = 4, dpi = 96, bg = "white")
 \item{bg}{Background colour (any R colour, or \code{NA} for transparent).}
 }
 \value{
-A \code{Scene} object (mutated in place by the primitive functions).
+A \code{Scene} object (mutated in place by the other functions).
 }
 \description{
 A scene is a drawing surface backed by the Rust renderer. Build it up with
-\code{\link[=rs_viewport]{rs_viewport()}} and the primitive functions (\code{\link[=rs_rect]{rs_rect()}}, \code{\link[=rs_lines]{rs_lines()}},
-\code{\link[=rs_polygon]{rs_polygon()}}, \code{\link[=rs_circle]{rs_circle()}}), then write it out with \code{\link[=rs_render]{rs_render()}}.
-}
-\details{
-This is the M1 (vertical-slice) API: a single viewport with a scale, a flat
-list of primitives, and raster (PNG) output. It is intentionally minimal and
-will be superseded by the S7 API in a later milestone.
+viewports (\code{\link[=rs_push_viewport]{rs_push_viewport()}}) and the primitive functions (\code{\link[=rs_rect]{rs_rect()}},
+\code{\link[=rs_lines]{rs_lines()}}, \code{\link[=rs_polygon]{rs_polygon()}}, \code{\link[=rs_circle]{rs_circle()}}, \code{\link[=rs_text]{rs_text()}}), then write it out
+with \code{\link[=rs_render]{rs_render()}}.
 }

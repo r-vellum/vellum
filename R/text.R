@@ -53,7 +53,7 @@ rs_text <- function(scene, label, x = 0.5, y = 0.5, units = "npc",
     sh$metrics$width * scale, sh$metrics$height * scale,
     as.integer(g$index), as.numeric(g$x_offset) * scale, as.numeric(g$y_offset) * scale,
     as.numeric(g$font_size) * scale, as.character(g$font_path), as.integer(g$font_index),
-    .rs_col(col), alpha
+    .rs_col_inh(col), .rs_num_inh(alpha)
   )
   invisible(scene)
 }

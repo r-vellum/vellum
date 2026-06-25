@@ -1,11 +1,16 @@
-//! The unit system and its resolution to device pixels.
+//! The unit system and its resolution to **viewport-local** pixels.
 //!
-//! A coordinate is a `(value, Unit)` pair. Resolution happens against a
-//! resolved viewport (`Vp`) and the device DPI. The device coordinate space
-//! used here is **top-left origin** (matching the raster backend); R's
-//! bottom-left convention is handled by the y-resolvers, which flip.
+//! A coordinate is a `(value, Unit)` pair. Resolution happens against a resolved
+//! viewport ([`Vp`]) and yields a point/length in *viewport-local* pixels:
+//! origin at the viewport's top-left, x right, y down. Placement and rotation
+//! into device space are handled by the viewport's affine `transform`, so the
+//! resolvers here are purely about the viewport's own coordinate systems. The
+//! y-resolvers flip R's bottom-left convention into the local top-left frame.
 
-/// Coordinate systems supported in M1.
+use tiny_skia::Transform;
+
+/// Coordinate systems supported for primitive coordinates (M1/M2). The flexible
+/// `null` unit lives only in layout track sizes, not here.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Unit {
     /// Normalised parent coordinates: 0 = bottom/left, 1 = top/right.
@@ -18,8 +23,8 @@ pub enum Unit {
 }
 
 impl Unit {
-    /// Parse a unit string. Unknown strings fall back to `Npc`; callers should
-    /// validate (we do, on the R side) so this is only a safety net.
+    /// Parse a unit string. Unknown strings fall back to `Npc`; callers validate
+    /// on the R side, so this is only a safety net.
     pub fn parse(s: &str) -> Unit {
         match s {
             "native" => Unit::Native,
@@ -30,7 +35,7 @@ impl Unit {
         }
     }
 
-    /// Length of one absolute unit in device pixels, if absolute.
+    /// Length of one absolute unit in device pixels, if this unit is absolute.
     fn abs_px(self, value: f64, dpi: f64) -> Option<f64> {
         match self {
             Unit::Mm => Some(value / 25.4 * dpi),
@@ -41,33 +46,42 @@ impl Unit {
     }
 }
 
-/// A resolved viewport: a rectangle in device pixels (top-left origin) plus the
-/// native scales that map user coordinates onto it.
+/// A resolved viewport: its local pixel size and native scales, plus the affine
+/// transform mapping local pixels to device pixels. Geometry is built in local
+/// pixels and drawn through `transform`.
 #[derive(Clone, Copy, Debug)]
 pub struct Vp {
-    pub x0: f64,
-    pub top: f64,
+    pub transform: Transform,
     pub w: f64,
     pub h: f64,
     pub xscale: (f64, f64),
     pub yscale: (f64, f64),
+    pub dpi: f64,
 }
 
 impl Vp {
-    /// X position in device pixels.
-    pub fn x_pos(&self, value: f64, u: Unit, dpi: f64) -> f64 {
-        self.x0 + self.x_len(value, u, dpi)
+    /// X position in local pixels (from the left edge). For `native` this
+    /// accounts for the scale's origin; for npc/absolute, position == length.
+    pub fn x_pos(&self, value: f64, u: Unit) -> f64 {
+        match u {
+            Unit::Native => (value - self.xscale.0) / span(self.xscale) * self.w,
+            _ => self.x_len(value, u),
+        }
     }
 
-    /// Y position in device pixels (flips R's bottom-left convention).
-    pub fn y_pos(&self, value: f64, u: Unit, dpi: f64) -> f64 {
-        let from_bottom = self.y_len(value, u, dpi);
-        self.top + self.h - from_bottom
+    /// Y position in local pixels (flips R's bottom-left convention into the
+    /// local top-left frame). For `native` this accounts for the scale origin.
+    pub fn y_pos(&self, value: f64, u: Unit) -> f64 {
+        let from_bottom = match u {
+            Unit::Native => (value - self.yscale.0) / span(self.yscale) * self.h,
+            _ => self.y_len(value, u),
+        };
+        self.h - from_bottom
     }
 
-    /// Horizontal length in device pixels.
-    pub fn x_len(&self, value: f64, u: Unit, dpi: f64) -> f64 {
-        if let Some(px) = u.abs_px(value, dpi) {
+    /// Horizontal length in local pixels.
+    pub fn x_len(&self, value: f64, u: Unit) -> f64 {
+        if let Some(px) = u.abs_px(value, self.dpi) {
             return px;
         }
         match u {
@@ -77,9 +91,9 @@ impl Vp {
         }
     }
 
-    /// Vertical length in device pixels.
-    pub fn y_len(&self, value: f64, u: Unit, dpi: f64) -> f64 {
-        if let Some(px) = u.abs_px(value, dpi) {
+    /// Vertical length in local pixels.
+    pub fn y_len(&self, value: f64, u: Unit) -> f64 {
+        if let Some(px) = u.abs_px(value, self.dpi) {
             return px;
         }
         match u {
@@ -90,9 +104,10 @@ impl Vp {
     }
 
     /// Radius-like length: npc is taken against the smaller viewport dimension
-    /// (snpc-style), so circles stay round; native uses the x scale.
-    pub fn r_len(&self, value: f64, u: Unit, dpi: f64) -> f64 {
-        if let Some(px) = u.abs_px(value, dpi) {
+    /// (snpc-style) so circles stay round; native uses the x scale. Kept as a
+    /// single-unit resolver — radii must not be split per axis.
+    pub fn r_len(&self, value: f64, u: Unit) -> f64 {
+        if let Some(px) = u.abs_px(value, self.dpi) {
             return px;
         }
         match u {
@@ -101,6 +116,13 @@ impl Vp {
             _ => unreachable!("absolute handled above"),
         }
     }
+}
+
+/// Rotation by `angle_deg` (grid's counter-clockwise convention) about a point
+/// given in local pixels. The device frame is y-down, so we negate the angle —
+/// this is the single place that sign lives.
+pub fn rotation_about(angle_deg: f64, cx: f64, cy: f64) -> Transform {
+    Transform::from_rotate_at(-angle_deg as f32, cx as f32, cy as f32)
 }
 
 fn span((lo, hi): (f64, f64)) -> f64 {

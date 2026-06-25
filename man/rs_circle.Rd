@@ -26,11 +26,11 @@ viewport dimension so the circle stays round.}
 
 \item{units}{Coordinate system; see \code{\link[=rs_rect]{rs_rect()}}.}
 
-\item{fill, col}{Fill and border colours (\code{NA} for none).}
+\item{fill, col}{Fill and border colours (\code{NA} none, \code{NULL} inherit).}
 
-\item{lwd}{Border line width (1 == 1/96 inch).}
+\item{lwd}{Border line width (1 == 1/96 inch); \code{NULL} inherits.}
 
-\item{alpha}{Opacity multiplier in \verb{[0, 1]}.}
+\item{alpha}{Opacity multiplier in \verb{[0, 1]}; \code{NULL} inherits.}
 }
 \value{
 \code{scene}, invisibly.

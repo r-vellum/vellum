@@ -14,12 +14,29 @@ A drawing scene held in the Rust backend.
 
 \subsection{Method \code{new}}{
 Create a scene \code{width} x \code{height} inches at \code{dpi}, with background \code{bg}
-(a length-4 integer RGBA vector).
+(a length-4 integer RGBA vector). A root viewport covering the whole page
+(npc == native) is created as viewport 0.
 }
 
-\subsection{Method \code{set_viewport}}{
-Set the (single) drawing viewport: centre \verb{(x, y)} and size \verb{(w, h)} in
-page npc, with native \code{xscale}/\code{yscale} (length-2 vectors).
+\subsection{Method \code{push_viewport}}{
+Push a viewport as a child of the current one and make it current.
+Returns the new viewport's id. If \code{lrow}/\code{lcol} are >= 0 the viewport is
+placed into that (0-based) cell of the parent's layout; otherwise it is
+placed by centre/size in parent coordinates.
+}
+
+\subsection{Method \code{pop_viewport}}{
+Move the cursor up \code{n} levels (towards the root). Stops at the root.
+}
+
+\subsection{Method \code{to_root}}{
+Move the cursor to the root viewport.
+}
+
+\subsection{Method \code{set_layout}}{
+Attach a row/column layout to the current viewport. Tracks are given as
+parallel value + unit-code vectors; the unit \code{"null"} marks a flexible
+track whose value is its weight.
 }
 
 \subsection{Method \code{text}}{
@@ -45,13 +62,11 @@ Render the scene to a PNG file.
 
 \subsection{Method \code{rgba}}{
 Render and return the whole image as row-major RGBA bytes
-\verb{[r, g, b, a, r, g, b, a, ...]} (top-left origin, x fastest). The R
-wrapper reshapes this into an array.
+\verb{[r, g, b, a, ...]} (top-left origin, x fastest).
 }
 
 \subsection{Method \code{pixel}}{
-Render and return the RGBA of device pixel \verb{(x, y)} (top-left origin,
-0-based) as \code{c(r, g, b, a)}. For pixel-level testing.
+Render and return the RGBA of device pixel \verb{(x, y)} as \code{c(r, g, b, a)}.
 }
 }
 
