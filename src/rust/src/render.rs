@@ -482,11 +482,12 @@ impl RenderBackend for PdfBackend<'_, '_> {
     fn draw_text(&mut self, run: &TextRun, transform: Transform, clip: &Clip) {
         let n = run.gid.len()
             .min(run.gx.len())
+            .min(run.gy.len())
             .min(run.gsize.len())
             .min(run.gpath.len())
             .min(run.gface.len());
         if n == 0 || run.label.is_empty() {
-            return;
+            return; // n includes gy.len(), so gy[0] below is safe
         }
         let size_px = (run.size * run.dpi / 72.0) as f32;
         if size_px <= 0.0 {

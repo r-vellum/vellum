@@ -5,28 +5,12 @@
 #' @useDynLib vellum, .registration = TRUE
 NULL
 
-#' Backend identity and build info.
-#'
-#' A trivial call to confirm the R -> Rust path is wired up. As the backend
-#' grows this will report enabled render targets and engine version.
-#' @export
+#' Backend identity and build info (internal diagnostic).
 rs_backend_info <- function() .Call(wrap__rs_backend_info)
 
-#' Axis-aligned bounding box of a set of points.
+#' A drawing scene held in the Rust backend. Internal: the public R API is the
+#' S7 layer (`vl_scene()`, grobs, `render()`), which compiles to this object.
 #'
-#' Takes parallel `x`/`y` coordinate vectors and returns
-#' `c(xmin, xmax, ymin, ymax)`. Representative of the kind of geometry work the
-#' scene/layout engine will do; exercises borrowing R numeric vectors as slices
-#' and returning a vector, with no copy on the way in.
-#'
-#' @param x,y Parallel numeric vectors of point coordinates.
-#' @return Numeric vector `c(xmin, xmax, ymin, ymax)`, or `NULL` if empty.
-#' @export
-rs_bbox <- function(x, y) .Call(wrap__rs_bbox, x, y)
-
-#' A drawing scene held in the Rust backend.
-#' @export
-#' @export
 #' @section Methods:
 #'\subsection{Method `new`}{
 #'Create a scene `width` x `height` inches at `dpi`, with background `bg`
@@ -131,8 +115,6 @@ Scene$rgba <- function() .Call(wrap__Scene__rgba, self)
 
 Scene$pixel <- function(x, y) .Call(wrap__Scene__pixel, self, x, y)
 
-#' @rdname Scene
-#' @usage NULL
 #' @export
 `$.Scene` <- function (self, name) { func <- Scene[[name]]; environment(func) <- environment(); func }
 

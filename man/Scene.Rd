@@ -2,13 +2,14 @@
 % Please edit documentation in R/extendr-wrappers.R
 \name{Scene}
 \alias{Scene}
-\alias{$.Scene}
-\title{A drawing scene held in the Rust backend.}
+\title{A drawing scene held in the Rust backend. Internal: the public R API is the
+S7 layer (\code{vl_scene()}, grobs, \code{render()}), which compiles to this object.}
 \usage{
 Scene
 }
 \description{
-A drawing scene held in the Rust backend.
+A drawing scene held in the Rust backend. Internal: the public R API is the
+S7 layer (\code{vl_scene()}, grobs, \code{render()}), which compiles to this object.
 }
 \section{Methods}{
 

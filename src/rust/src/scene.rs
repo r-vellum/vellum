@@ -155,8 +155,8 @@ impl Node {
     }
 }
 
-/// A drawing scene held in the Rust backend.
-/// @export
+/// A drawing scene held in the Rust backend. Internal: the public R API is the
+/// S7 layer (`vl_scene()`, grobs, `render()`), which compiles to this object.
 #[extendr]
 #[derive(Clone, Debug)]
 pub struct Scene {
@@ -169,7 +169,6 @@ pub struct Scene {
     nodes: Vec<(usize, Node)>,
 }
 
-/// @export
 #[extendr]
 impl Scene {
     /// Create a scene `width` x `height` inches at `dpi`, with background `bg`

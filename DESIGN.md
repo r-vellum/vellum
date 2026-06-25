@@ -59,7 +59,7 @@ So: one Rust rendering/scene core, two front doors — the native vellum API (th
 ┌───────────────▼───────────────────────────▼──────────────┐
 │                       Rust core                            │
 │  scene graph  →  unit/layout solver  →  render backend     │
-│  (kurbo geometry · skrifa+harfrust text · tiny-skia raster)│
+│  (tiny-skia geometry · skrifa glyph outlines · R-side shaping)│
 └───────────────┬──────────────┬──────────────┬─────────────┘
                 ▼              ▼              ▼
               PNG/raster     SVG            PDF
@@ -80,11 +80,15 @@ All Rust crates below are pure-Rust, headless (no GPU, no system libraries requi
 | Glyph outlines / metrics / raster | **skrifa** (fontations) | FreeType replacement: outlines, metrics, advances, cmap, hinting, variable fonts, COLR/bitmap. `forbid(unsafe)`. Used by **both** text paths. |
 | Resolution + shaping (primary, fidelity) | **`systemfonts` + `textshaping`** | Reused via C callables for exact agreement with ragg/svglite (see §3). |
 | Resolution + shaping (fallback, pure-Rust) | **harfrust** + **parley**/**fontique** | HarfBuzz port + headless layout/fallback for environments without the R packages. |
-| SVG output | **hand-rolled** via `xmlwriter` | typst's approach; dedup glyph outlines into `<defs>`. Optionally emit `<text>` to match svglite. |
-| PDF output | **krilla** | The PDF backend typst shipped in 0.14. Path fill/stroke, OpenType embedding + subsetting, gradients/patterns, clip paths, masks, blend modes, images, PDF/A + tagged PDF. |
+| SVG output | **hand-rolled** (no XML dep, M4a) | `<path>` + nested `<clipPath>` + selectable `<text>` referencing system fonts (svglite-style). Outline-dedup into `<defs>` and embedded fonts are future work. |
+| PDF output | **krilla** `=0.8.2` (M4b) | OpenType subset + embed, path fill/stroke, clip paths, opacity; `default-features = false` (no raster-images/simple-text). Embedded selectable text via `draw_glyphs`. Wraps `tiny-skia-path` 0.12 in its own newtypes, so we convert at the boundary (no tiny-skia bump). |
 | Color | **palette** | Broad color science incl. Oklab/Oklch for correct gradient interpolation. |
 
-Caveat: several of these are pre-1.0 (kurbo, krilla, parley, fontique). Pin versions and budget periodic upgrades.
+Caveat: the Rust render stack is pre-1.0 (tiny-skia 0.11, skrifa 0.31, krilla pinned
+`=0.8.2`). Pin versions and budget periodic upgrades — krilla in particular breaks on
+minor bumps. (`kurbo`/`parley`/`fontique`/`palette` are listed as design references
+but not currently used — text/colour are resolved on the R side and geometry stays in
+tiny-skia's path types.)
 
 ### A note on text (font fidelity is a requirement)
 
@@ -143,25 +147,29 @@ Style — `col`, `fill` (solid / linear / radial gradient / tiling pattern), `al
 
 ### 4.5 Render backend (pluggable)
 
-Rendering is a visitor over the resolved scene, behind a single trait, so PNG/SVG/PDF/device-shim share one walk:
+Rendering is a visitor over the resolved scene behind a single trait, so PNG/SVG/PDF
+share one walk. As built (M4), the walk resolves each node to geometry +
+absolute transform + clip + colour and emits through:
 
 ```rust
 trait RenderBackend {
-    fn begin_page(&mut self, size: Size, bg: Color);
-    fn save(&mut self);                 // push transform + clip + style state
-    fn restore(&mut self);
-    fn set_clip(&mut self, clip: &Clip); // rect or path
-    fn fill_path(&mut self, path: &BezPath, rule: FillRule, paint: &Paint);
-    fn stroke_path(&mut self, path: &BezPath, stroke: &Stroke, paint: &Paint);
-    fn draw_glyphs(&mut self, run: &GlyphRun, paint: &Paint); // positioned glyph ids + font
-    fn draw_image(&mut self, img: &Image, transform: Affine, interpolate: bool);
-    fn begin_group(&mut self, op: CompositeOp);   // isolated group / compositing
-    fn end_group(&mut self, mask: Option<&Mask>);
-    fn end_page(&mut self) -> Output;
+    fn fill_path(&mut self, path: &Path, t: Transform, color: Rgba, clip: &Clip);
+    fn stroke_path(&mut self, path: &Path, t: Transform, color: Rgba, w_px: f32, clip: &Clip);
+    fn draw_text(&mut self, run: &TextRun, t: Transform, clip: &Clip);
 }
 ```
 
-This is a stateful immediate-mode rasterizer model (CTM + save/restore + path-then-paint) — the PostScript/Canvas core that R's engine already embodies. tiny-skia, the SVG writer, and krilla each implement it; the device shim implements it too, forwarding into tiny-skia.
+Geometry is `tiny_skia::Path` + `Transform` (krilla converts at its boundary). A
+`Clip` is a backend-agnostic chain of viewport rects: the raster backend builds a
+`Mask`, SVG emits a nested `<clipPath>`, PDF pushes clip paths. `TextRun` carries the
+pre-shaped glyph run **and** the source label + font descriptor, so raster fills
+glyph outlines, PDF embeds glyphs, and SVG emits `<text>`. Three impls today
+(`RasterBackend`, `SvgBackend`, `PdfBackend`); the device shim (M5) will be a fourth.
+
+Deliberately simpler than a full immediate-mode CTM/save-restore model: there is no
+`save`/`restore`/`begin_group`/`draw_image` yet — each draw call carries its own
+absolute transform and clip (paint order is the flat node list). Compositing groups,
+images, gradients, and patterns are added when the scene can express them.
 
 ### 4.6 Hit-testing and events (designed in, built later)
 
@@ -255,17 +263,14 @@ vellum/                      R package root
 │   └── rust/
 │       ├── Cargo.toml
 │       └── src/
-│           ├── lib.rs       extendr exports
-│           ├── scene/       node types, immutable tree, edit ops
-│           ├── units/       unit kinds + resolver
-│           ├── layout/      flex/constraint solver, relayout boundaries
-│           ├── text/        skrifa + harfrust + parley/fontique
-│           ├── render/      RenderBackend trait + paint state
-│           │   ├── raster.rs   tiny-skia
-│           │   ├── svg.rs      xmlwriter
-│           │   └── pdf.rs      krilla
-│           └── device/      extendr DeviceDriver shim (panic-guarded)
-├── vendor/ + vendor.tar.xz  cargo vendor output (rextendr::vendor_pkgs())
+│           ├── lib.rs       extendr exports (free fns + Scene module)
+│           ├── scene.rs     viewport arena, layout/flex solver, the render walk
+│           ├── units.rs     unit kinds + resolver (per-coordinate codes)
+│           ├── color.rs     Rgba + gpar inheritance
+│           ├── font.rs      skrifa glyph outlines + font-bytes cache
+│           ├── render.rs    RenderBackend trait + Raster/Svg/Pdf backends
+│           └── (device shim — M5 — extendr DeviceDriver, panic-guarded)
+├── vendor/ + vendor.tar.xz  cargo vendor output (rextendr::vendor_crates())
 └── tests/                   testthat + snapshot/visual regression
 ```
 
@@ -287,7 +292,7 @@ vellum/                      R package root
 
 **M3 — the S7/vctrs R API. ✅ done.** Delivered in two halves. **M3a**: a vctrs `unit` type (a `(value, integer-code)` record; codes aligned 1:1 with the Rust `Unit` enum), font/string-relative kinds resolved to absolute mm at construction, and **per-element / per-axis units** threaded through the backend (primitives/viewports take per-coordinate code slices). **M3b**: an **S7** value-object model (`gpar`, abstract `grob` + concrete grobs, `viewport`, `grid_layout`, `gtree`, `vellum_scene`); a `compile` generic (multiple dispatch, one method per grob) that replays the tree onto a fresh Rust `Scene`; a functional builder (`vl_scene |> push() |> draw() |> pop() |> render()`) over an immutable R-side tree; and by-name editing (`node_names`/`get_node`/`edit_node`). The imperative `rs_*` API was demoted to internal — S7 is the only public surface. **The retained tree lives in R** (see the dedicated note above), not in Rust. Registration gotchas resolved: `vctrs::s3_register()` for double-dispatch and `S7::methods_register()` in `.onLoad` (dispatch after install), `@include` for class collation. Vectorised primitives done (grob constructors recycle); `grobwidth`/`grobheight` still deferred.
 
-**M4 — vector outputs.** SVG (hand-rolled) and PDF (krilla) backends over the shared `RenderBackend` trait. Gradients, patterns, clip paths, masks.
+**M4 — vector outputs. ✅ done.** A `RenderBackend` trait (`fill_path`/`stroke_path`/`draw_text`, with clips as a backend-agnostic chain of viewport rects) over the shared scene walk; tiny-skia raster refactored onto it with byte-identical PNGs. **M4a**: hand-rolled **SVG** (no XML dep) — `<path>`, `matrix(...)` transforms, nested `<clipPath>` applied on a wrapping `<g>` (so a device-space clip isn't double-transformed by the element matrix), selectable `<text>` referencing system fonts (svglite-style, renderer-shaped). **M4b**: **PDF** via `krilla =0.8.2` (default-features off) — paths/transforms converted to krilla's tiny-skia-path newtypes (no tiny-skia bump), a single px→pt root transform, clip via `push_clip_path`, alpha via opacity, and **embedded selectable text** through `draw_glyphs` (font subset/embed; per-glyph text ranges for ToUnicode). `render()` dispatches on file extension. Gradients/patterns/masks remain future work (the scene can't express them yet). `render()` rebuilds a fresh backend each call (the tree lives in R).
 
 **M5 — device-shim mode.** Register as an R graphics device via `DeviceDriver`; implement the minimal callback set, then climb the capability ladder (patterns → groups/compositing → glyphs). Panic-guard every callback. Validate by rendering ggplot2/lattice output.
 
@@ -299,7 +304,7 @@ vellum/                      R package root
 
 - **Scope: confirmed B.** This design commits to a native scene-graph framework (B) with a device shim (A) as interop, not to a device-only "ragg in Rust."
 - **Font fidelity: confirmed a requirement.** The primary text path reuses `systemfonts` + `textshaping` (see §3) so font selection and glyph positions agree with the rest of the R ecosystem; the pure-Rust path is a held-to-spec fallback. Open sub-question: how far the fallback can match the primary path without R present, and whether to gate it behind a feature flag. Tension to manage: the fidelity path adds `LinkingTo` deps (and their HarfBuzz/FreeType/Fontconfig chain), partly trading away the "self-contained, headless" benefit — acceptable, since those packages are standard wherever R graphics already run.
-- **Pre-1.0 dependencies.** kurbo, krilla, parley, fontique are pre-1.0. Pin and budget upgrades; krilla in particular has breaking minors.
+- **Pre-1.0 dependencies.** The render stack (tiny-skia, skrifa, krilla) is pre-1.0. Pin and budget upgrades; krilla in particular has breaking minors (pinned `=0.8.2`). krilla bumps the MSRV to rustc 1.92.
 - **Panic safety at the C boundary** (device mode) is the top correctness hazard. Non-negotiable discipline; mirror `vellogd-r`.
 - **S7 maturity** — experimental, no S4 inheritance. Isolate behind our constructors.
 - **Visual regression** — determinism is a headline benefit, so snapshot testing of rendered output (and text geometry vs `textshaping`) is part of the build from M1, not an afterthought.
@@ -310,12 +315,15 @@ Robustness fixes already applied (M2): scene dimensions validated finite/positiv
 
 Addressed in M3: per-element coordinate vectors and **vectorised grob constructors** (recycling via vctrs); the public S7 API replaced the scalar `rs_*` surface. `colour`/`label` are still scalar *per grob*, but a grob is now vectorised over its coordinates (N rects/points from one `rect_grob`/`points_grob`).
 
+Addressed in the post-M4 tidy: the extendr `Scene` object is now **internal** (not exported — S7 is the only public surface); the M0 `rs_bbox` demo was removed and `rs_backend_info` made internal; a PDF-text panic (`gy[0]` indexed without bounding `n` by `gy.len()`) was fixed.
+
 Still open:
 - **Text vectorisation.** `text_grob`/`rs_strwidth` still take `label[1]`. A vectorised multi-label text grob (one per position) is future work.
 - **Broader input validation.** `width`/`height`/`r` > 0, `alpha ∈ [0,1]` (currently clamped silently in Rust), and out-of-range / missing-layout cells (currently collapse to a 0-size viewport silently) deserve R-side checks with named-argument errors.
 - **Render caching.** `render()` rebuilds the whole backend `Scene` and re-reads fonts each call (the tree lives in R). Memoize the backend `Scene`/`Pixmap` or persist the `FontCache` if it becomes a cost; today it is cheap relative to rasterization.
-- **API surface.** The extendr-generated `Scene` env is still exported (`export(Scene)`); hide it now that the S7 API is the public surface. `rs_*` are unexported but still generate (internal) Rd.
+- **Public naming.** `rs_strwidth`/`rs_strheight` keep the internal-looking `rs_` prefix while being public; consider renaming before any release. The internal `rs_*` imperative wrappers still generate (internal) Rd.
 - **Clip-mask memory.** Each clipping viewport clones a page-sized `Mask`; fine now, revisit for deep clip trees on large pages.
+- **SVG text fidelity / vector compositing.** SVG `<text>` is renderer-shaped (not glyph-faithful); gradients, patterns, compositing groups, and images are absent from the backend trait until the scene can express them.
 
 ---
 

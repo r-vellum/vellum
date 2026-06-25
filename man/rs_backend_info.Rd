@@ -2,11 +2,10 @@
 % Please edit documentation in R/extendr-wrappers.R
 \name{rs_backend_info}
 \alias{rs_backend_info}
-\title{Backend identity and build info.}
+\title{Backend identity and build info (internal diagnostic).}
 \usage{
 rs_backend_info()
 }
 \description{
-A trivial call to confirm the R -> Rust path is wired up. As the backend
-grows this will report enabled render targets and engine version.
+Backend identity and build info (internal diagnostic).
 }
