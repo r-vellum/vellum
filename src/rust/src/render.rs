@@ -8,7 +8,7 @@
 use std::collections::HashMap;
 use std::rc::Rc;
 
-use tiny_skia::{FillRule, Mask, Paint, Path, PathBuilder, Pixmap, Stroke, Transform};
+use tiny_skia::{FilterQuality, FillRule, Mask, Paint, Path, PathBuilder, Pixmap, Stroke, Transform};
 
 use crate::color::{Extend, Rgba, Stop};
 use crate::font::FontCache;
@@ -20,6 +20,9 @@ pub enum ResolvedPaint {
     Solid(Rgba),
     Linear { x1: f64, y1: f64, x2: f64, y2: f64, stops: Vec<Stop>, extend: Extend },
     Radial { cx: f64, cy: f64, r: f64, stops: Vec<Stop>, extend: Extend },
+    /// A tiled image: `tile` is straight RGBA (`tw` x `th`, top-left); it fills a
+    /// `w` x `h` (px) cell centred at `(x, y)` and repeats per `extend`.
+    Pattern { tile: Rc<Vec<u8>>, tw: u32, th: u32, x: f64, y: f64, w: f64, h: f64, extend: Extend },
 }
 
 /// One viewport rectangle contributing to a clip, in device space: a `w` x `h`
@@ -75,6 +78,52 @@ pub trait RenderBackend {
 
 pub fn rect_path(x: f64, y: f64, w: f64, h: f64) -> Option<Path> {
     tiny_skia::Rect::from_xywh(x as f32, y as f32, w as f32, h as f32).map(PathBuilder::from_rect)
+}
+
+/// Build a `Pixmap` from straight (non-premultiplied) RGBA bytes, top-left origin.
+fn pixmap_from_straight(tile: &[u8], tw: u32, th: u32) -> Option<Pixmap> {
+    let n = (tw as usize).checked_mul(th as usize)?;
+    if tile.len() < n * 4 {
+        return None;
+    }
+    let mut pm = Pixmap::new(tw, th)?;
+    let px = pm.pixels_mut();
+    for (i, p) in px.iter_mut().enumerate() {
+        *p = tiny_skia::ColorU8::from_rgba(tile[4 * i], tile[4 * i + 1], tile[4 * i + 2], tile[4 * i + 3])
+            .premultiply();
+    }
+    Some(pm)
+}
+
+/// The tile -> local-px transform: scale the `tw` x `th` tile into a `w` x `h`
+/// cell centred at `(x, y)`. The backend's draw transform then maps local->device.
+fn pattern_transform(tw: u32, th: u32, x: f64, y: f64, w: f64, h: f64) -> Transform {
+    Transform::from_row(
+        (w / tw as f64) as f32,
+        0.0,
+        0.0,
+        (h / th as f64) as f32,
+        (x - w / 2.0) as f32,
+        (y - h / 2.0) as f32,
+    )
+}
+
+/// Mean straight-RGBA colour of a tile (a solid stand-in where image fills are
+/// unavailable, e.g. the PDF backend without `raster-images`).
+fn average_rgba(tile: &[u8]) -> Rgba {
+    let px = tile.len() / 4;
+    if px == 0 {
+        return Rgba { r: 0, g: 0, b: 0, a: 0 };
+    }
+    let (mut r, mut g, mut b, mut a) = (0u64, 0u64, 0u64, 0u64);
+    for c in tile.chunks_exact(4) {
+        r += c[0] as u64;
+        g += c[1] as u64;
+        b += c[2] as u64;
+        a += c[3] as u64;
+    }
+    let n = px as u64;
+    Rgba { r: (r / n) as u8, g: (g / n) as u8, b: (b / n) as u8, a: (a / n) as u8 }
 }
 
 /// A fully-visible (all-255) page-sized mask, the starting point for clipping.
@@ -166,6 +215,8 @@ fn paint_for(paint: &ResolvedPaint) -> Option<Paint<'static>> {
             skia_spread(*extend),
             Transform::identity(),
         ),
+        // Patterns borrow a Pixmap and are handled inline in RasterBackend::fill_path.
+        ResolvedPaint::Pattern { .. } => return None,
     }?;
     let mut p = Paint::default();
     p.shader = shader;
@@ -176,6 +227,20 @@ fn paint_for(paint: &ResolvedPaint) -> Option<Paint<'static>> {
 impl RenderBackend for RasterBackend {
     fn fill_path(&mut self, path: &Path, transform: Transform, paint: &ResolvedPaint, clip: &Clip) {
         let mask = self.mask_for(clip);
+        if let ResolvedPaint::Pattern { tile, tw, th, x, y, w, h, extend } = paint {
+            // The tile Pixmap must outlive the Pattern shader (it borrows it), so
+            // build both here rather than via paint_for's `'static` return.
+            let pm = match pixmap_from_straight(tile, *tw, *th) {
+                Some(pm) => pm,
+                None => return,
+            };
+            let t = pattern_transform(*tw, *th, *x, *y, *w, *h);
+            let mut p = Paint::default();
+            p.shader = tiny_skia::Pattern::new(pm.as_ref(), skia_spread(*extend), FilterQuality::Bilinear, 1.0, t);
+            p.anti_alias = true;
+            self.pm.fill_path(path, &p, FillRule::Winding, transform, mask.as_deref());
+            return;
+        }
         if let Some(p) = paint_for(paint) {
             self.pm.fill_path(path, &p, FillRule::Winding, transform, mask.as_deref());
         }
@@ -267,6 +332,28 @@ impl SvgBackend {
                      cx=\"{cx}\" cy=\"{cy}\" r=\"{r}\" spreadMethod=\"{s}\">{stops}</radialGradient>",
                     s = svg_spread(*extend),
                     stops = svg_stops(stops),
+                ));
+                format!("fill=\"url(#{id})\"")
+            }
+            ResolvedPaint::Pattern { tile, tw, th, x, y, w, h, .. } => {
+                // The tile is embedded as a PNG data URI and stretched over a
+                // userSpaceOnUse cell; the element's own transform maps it to
+                // device, like the path. (SVG patterns tile by repeat; the
+                // reflect/pad extend modes degrade to repeat here.)
+                let png = pixmap_from_straight(tile, *tw, *th).and_then(|pm| pm.encode_png().ok());
+                let href = match png {
+                    Some(bytes) => format!("data:image/png;base64,{}", b64(&bytes)),
+                    None => return String::from("fill=\"none\""),
+                };
+                let id = format!("g{}", self.next_grad);
+                self.next_grad += 1;
+                self.defs.push_str(&format!(
+                    "<pattern id=\"{id}\" patternUnits=\"userSpaceOnUse\" \
+                     x=\"{px}\" y=\"{py}\" width=\"{w}\" height=\"{h}\">\
+                     <image href=\"{href}\" x=\"0\" y=\"0\" width=\"{w}\" height=\"{h}\" \
+                     preserveAspectRatio=\"none\"/></pattern>",
+                    px = x - w / 2.0,
+                    py = y - h / 2.0,
                 ));
                 format!("fill=\"url(#{id})\"")
             }
@@ -403,6 +490,11 @@ impl RenderBackend for SvgBackend {
 
 fn rgb_hex(c: Rgba) -> String {
     format!("#{:02x}{:02x}{:02x}", c.r, c.g, c.b)
+}
+
+fn b64(bytes: &[u8]) -> String {
+    use base64::Engine;
+    base64::engine::general_purpose::STANDARD.encode(bytes)
 }
 
 fn svg_spread(extend: Extend) -> &'static str {
@@ -585,6 +677,12 @@ impl RenderBackend for PdfBackend<'_, '_> {
                 }),
                 NormalizedF32::ONE,
             ),
+            // Image patterns need krilla's `raster-images` feature (extra vendored
+            // codecs); until then a pattern degrades to its mean colour in PDF.
+            ResolvedPaint::Pattern { tile, .. } => {
+                let c = average_rgba(tile);
+                (rgb::Color::new(c.r, c.g, c.b).into(), norm(c.a))
+            }
         };
         let n = self.push_state(transform, clip);
         self.surface.set_stroke(None);

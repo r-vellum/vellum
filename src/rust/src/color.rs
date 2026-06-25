@@ -11,6 +11,8 @@
 //! chain); instead it accumulates multiplicatively and is applied once when the
 //! gpar is resolved for drawing.
 
+use std::rc::Rc;
+
 use extendr_api::prelude::*;
 
 use crate::units::Unit;
@@ -63,13 +65,32 @@ pub struct Stop {
     pub color: Rgba,
 }
 
-/// A fill paint. Gradient geometry is stored in `(value, Unit)` form and resolved
-/// against the viewport at draw time (see `render_to`). `col`/stroke stays solid.
+/// A tiling-pattern fill: a pre-rendered RGBA tile (straight alpha, top-left
+/// origin, `tw` x `th` px) tiled across a cell of size `(w, h)` centred at
+/// `(x, y)`. The cell geometry is in `(value, unit)` form and resolved against
+/// the viewport at draw time; the tile pixels were rendered by R from a grob.
+#[derive(Clone, Debug)]
+pub struct PatternFill {
+    pub tile: Rc<Vec<u8>>,
+    pub tw: u32,
+    pub th: u32,
+    pub x: f64,
+    pub y: f64,
+    pub w: f64,
+    pub h: f64,
+    pub unit: Unit,
+    pub extend: Extend,
+}
+
+/// A fill paint. Gradient/pattern geometry is stored in `(value, Unit)` form and
+/// resolved against the viewport at draw time (see `render_to`). `col`/stroke
+/// stays solid.
 #[derive(Clone, Debug)]
 pub enum Paint {
     Solid(Rgba),
     Linear { x1: f64, y1: f64, x2: f64, y2: f64, unit: Unit, stops: Vec<Stop>, extend: Extend },
     Radial { cx: f64, cy: f64, r: f64, unit: Unit, stops: Vec<Stop>, extend: Extend },
+    Pattern(PatternFill),
 }
 
 impl Paint {
@@ -86,6 +107,17 @@ impl Paint {
             Paint::Radial { cx, cy, r, unit, stops, extend } => {
                 Paint::Radial { cx, cy, r, unit, stops: fade(stops), extend }
             }
+            Paint::Pattern(mut p) => {
+                let a = alpha.clamp(0.0, 1.0);
+                if a < 1.0 {
+                    let mut t = (*p.tile).clone();
+                    for px in t.chunks_exact_mut(4) {
+                        px[3] = (px[3] as f64 * a).round() as u8;
+                    }
+                    p.tile = Rc::new(t);
+                }
+                Paint::Pattern(p)
+            }
         }
     }
 }
@@ -93,10 +125,45 @@ impl Paint {
 /// Parse a fill paint from R: a length-4 integer vector is a solid colour; a list
 /// with a `kind` element is a gradient; anything else is `None` ("no fill").
 pub fn parse_paint(obj: &Robj) -> Option<Paint> {
-    if let Ok(kind) = obj.dollar("kind") {
-        return parse_gradient(obj, kind.as_str().unwrap_or(""));
+    // A gradient/pattern is a list with a `kind`; a solid is an integer RGBA
+    // vector. Only `$`-index lists (atomic vectors error on `$`).
+    if obj.is_list() {
+        if let Ok(kind) = obj.dollar("kind") {
+            let kind = kind.as_str().unwrap_or("");
+            if kind == "pattern" {
+                return parse_pattern(obj);
+            }
+            return parse_gradient(obj, kind);
+        }
     }
     opt_color(obj).map(Paint::Solid)
+}
+
+fn parse_pattern(obj: &Robj) -> Option<Paint> {
+    let tile_i = obj.dollar("tile").ok()?.as_integer_slice()?.to_vec();
+    let tw = obj.dollar("tw").ok()?.as_integer()? as u32;
+    let th = obj.dollar("th").ok()?.as_integer()? as u32;
+    let coords = obj.dollar("coords").ok()?.as_real_slice()?.to_vec();
+    if coords.len() < 4 || tw == 0 || th == 0 {
+        return None;
+    }
+    if tile_i.len() != (tw as usize) * (th as usize) * 4 {
+        return None;
+    }
+    let unit = Unit::parse(obj.dollar("units").ok().and_then(|u| u.as_str().map(String::from)).as_deref().unwrap_or("npc"));
+    let extend = Extend::parse(obj.dollar("extend").ok().and_then(|e| e.as_str().map(String::from)).as_deref().unwrap_or("repeat"));
+    let tile: Vec<u8> = tile_i.iter().map(|v| (*v).clamp(0, 255) as u8).collect();
+    Some(Paint::Pattern(PatternFill {
+        tile: Rc::new(tile),
+        tw,
+        th,
+        x: coords[0],
+        y: coords[1],
+        w: coords[2],
+        h: coords[3],
+        unit,
+        extend,
+    }))
 }
 
 fn parse_gradient(obj: &Robj, kind: &str) -> Option<Paint> {

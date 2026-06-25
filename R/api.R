@@ -129,7 +129,7 @@ S7::method(compile, grob_rect) <- function(node, scene) {
     n <- vctrs::vec_size_common(node@x, node@y, node@width, node@height)
     ex <- .coord(node@x, "npc", n); ey <- .coord(node@y, "npc", n)
     ew <- .coord(node@width, "npc", n); eh <- .coord(node@height, "npc", n)
-    g <- .gp4(node@gp)
+    g <- .gp4(node@gp, scene)
     for (i in seq_len(n)) {
       scene$rect(ex$value[i], ey$value[i], ew$value[i], eh$value[i],
                  ex$code[i], ey$code[i], ew$code[i], eh$code[i], g$fill, g$col, g$lwd, g$alpha)
@@ -139,14 +139,14 @@ S7::method(compile, grob_rect) <- function(node, scene) {
 
 S7::method(compile, grob_lines) <- function(node, scene) {
   .with_vp(node, scene, {
-    ex <- .coord(node@x); ey <- .coord(node@y); g <- .gp4(node@gp)
+    ex <- .coord(node@x); ey <- .coord(node@y); g <- .gp4(node@gp, scene)
     scene$lines(ex$value, ey$value, ex$code, ey$code, g$col, g$lwd, g$alpha)
   })
 }
 
 S7::method(compile, grob_polygon) <- function(node, scene) {
   .with_vp(node, scene, {
-    ex <- .coord(node@x); ey <- .coord(node@y); g <- .gp4(node@gp)
+    ex <- .coord(node@x); ey <- .coord(node@y); g <- .gp4(node@gp, scene)
     scene$polygon(ex$value, ey$value, ex$code, ey$code, g$fill, g$col, g$lwd, g$alpha)
   })
 }
@@ -155,7 +155,7 @@ S7::method(compile, grob_circle) <- function(node, scene) {
   .with_vp(node, scene, {
     n <- vctrs::vec_size_common(node@x, node@y, node@r)
     ex <- .coord(node@x, "npc", n); ey <- .coord(node@y, "npc", n); er <- .coord(node@r, "npc", n)
-    g <- .gp4(node@gp)
+    g <- .gp4(node@gp, scene)
     for (i in seq_len(n)) {
       scene$circle(ex$value[i], ey$value[i], er$value[i], ex$code[i], ey$code[i], er$code[i],
                    g$fill, g$col, g$lwd, g$alpha)
@@ -167,7 +167,7 @@ S7::method(compile, grob_points) <- function(node, scene) {
   .with_vp(node, scene, {
     n <- vctrs::vec_size_common(node@x, node@y, node@size)
     ex <- .coord(node@x, "npc", n); ey <- .coord(node@y, "npc", n); es <- .coord(node@size, "mm", n)
-    g <- .gp4(node@gp)
+    g <- .gp4(node@gp, scene)
     for (i in seq_len(n)) {
       scene$circle(ex$value[i], ey$value[i], es$value[i], ex$code[i], ey$code[i], es$code[i],
                    g$fill, g$col, g$lwd, g$alpha)
@@ -244,9 +244,9 @@ edit_node <- function(scene, name, ...) {
 }
 
 # Encode a gpar's four core fields for the backend (tri-state). `fill` may be a
-# colour or a gradient (see .encode_paint).
-.gp4 <- function(gp) {
-  list(fill = .encode_paint(gp@fill), col = .rs_col_inh(gp@col),
+# colour, a gradient, or a pattern (see .encode_paint); patterns need `scene`.
+.gp4 <- function(gp, scene = NULL) {
+  list(fill = .encode_paint(gp@fill, scene), col = .rs_col_inh(gp@col),
        lwd = .rs_num_inh(gp@lwd), alpha = .rs_num_inh(gp@alpha))
 }
 
@@ -259,7 +259,7 @@ edit_node <- function(scene, name, ...) {
     cx$value, cy$value, cw$value, ch$value, cx$code, cy$code, cw$code, ch$code,
     as.numeric(vp@xscale), as.numeric(vp@yscale), vp@angle, isTRUE(vp@clip),
     lrow, lcol, vp@rowspan, vp@colspan,
-    .encode_paint(vp@gp@fill), .rs_col_inh(vp@gp@col), .rs_num_inh(vp@gp@lwd), .rs_num_inh(vp@gp@alpha)
+    .encode_paint(vp@gp@fill, scene), .rs_col_inh(vp@gp@col), .rs_num_inh(vp@gp@lwd), .rs_num_inh(vp@gp@alpha)
   )
   if (!is.null(vp@layout)) .set_layout(scene, vp@layout)
 }

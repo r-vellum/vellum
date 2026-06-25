@@ -730,6 +730,16 @@ fn resolve_paint(paint: &Paint, vp: &Vp) -> ResolvedPaint {
             stops: stops.clone(),
             extend: *extend,
         },
+        Paint::Pattern(p) => ResolvedPaint::Pattern {
+            tile: p.tile.clone(),
+            tw: p.tw,
+            th: p.th,
+            x: vp.x_pos(p.x, p.unit),
+            y: vp.y_pos(p.y, p.unit),
+            w: vp.x_len(p.w, p.unit),
+            h: vp.y_len(p.h, p.unit),
+            extend: p.extend,
+        },
     }
 }
 

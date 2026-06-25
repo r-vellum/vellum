@@ -166,21 +166,32 @@ pre-shaped glyph run **and** the source label + font descriptor, so raster fills
 glyph outlines, PDF embeds glyphs, and SVG emits `<text>`. Three impls today
 (`RasterBackend`, `SvgBackend`, `PdfBackend`); the device shim (M5) will be a fourth.
 
-**Fill is a `Paint`, not just a colour (F1).** `gpar.fill` carries a
-`Paint` (`Solid` / `Linear` / `Radial`) through the gpar fold; gradient geometry is
-stored unresolved as `(value, unit)` and the gpar `alpha` folds into every stop. The
-scene walk resolves that geometry against the viewport into **local pixels** and hands
-the backend a `ResolvedPaint`. Each backend builds its native gradient from local-px
-endpoints + an **identity** gradient transform, relying on the primitive's own draw
-transform to map fill and outline together (tiny-skia post-concats the CTM into the
-shader; krilla into the gradient; SVG via `gradientUnits="userSpaceOnUse"` on a
+**Fill is a `Paint`, not just a colour (F1/F2).** `gpar.fill` carries a
+`Paint` (`Solid` / `Linear` / `Radial` / `Pattern`) through the gpar fold; gradient
+and pattern geometry is stored unresolved as `(value, unit)` and the gpar `alpha`
+folds into every stop (or, for a pattern, into the tile's alpha channel). The scene
+walk resolves that geometry against the viewport into **local pixels** and hands the
+backend a `ResolvedPaint`. Each backend builds its native fill from local-px geometry
++ an **identity** paint transform, relying on the primitive's own draw transform to
+map fill and outline together (tiny-skia post-concats the CTM into the shader/pattern;
+krilla into the gradient; SVG via `gradientUnits`/`patternUnits="userSpaceOnUse"` on a
 transformed element) — the same "don't transform twice" discipline as the clip fix.
 `col`/stroke and text stay solid `Rgba`.
 
+**Patterns (F2)** tile a grob. R renders the tile grob to an RGBA raster (via a
+throwaway sub-`Scene` sized from `width`/`height` at the scene dpi, using one
+reference dimension so the tile's aspect is `width:height`), then passes the pixels +
+cell geometry. The backend tiles that image: tiny-skia `Pattern`, SVG
+`<pattern><image href="data:image/png;base64,…">`. The PDF backend has no image
+support (krilla's `raster-images` feature needs extra vendored codecs), so a pattern
+**degrades to its mean colour** there — a documented first-cut limitation. The new
+`b64`/`pixmap_from_straight`/`average_rgba` helpers and the `base64` crate (already
+vendored via krilla) support this; no re-vendor was needed.
+
 Deliberately simpler than a full immediate-mode CTM/save-restore model: there is no
-`save`/`restore`/`begin_group`/`draw_image` yet — each draw call carries its own
-absolute transform and clip (paint order is the flat node list). Tiling patterns
-(F2) and compositing groups/masks (F3) are added when the scene can express them.
+`save`/`restore`/`begin_group` yet — each draw call carries its own absolute transform
+and clip (paint order is the flat node list). Compositing groups/masks (F3) and a
+general `draw_image` op are added when the scene can express them.
 
 ### 4.6 Hit-testing and events (designed in, built later)
 
@@ -305,7 +316,9 @@ vellum/                      R package root
 
 **M4 — vector outputs. ✅ done.** A `RenderBackend` trait (`fill_path`/`stroke_path`/`draw_text`, with clips as a backend-agnostic chain of viewport rects) over the shared scene walk; tiny-skia raster refactored onto it with byte-identical PNGs. **M4a**: hand-rolled **SVG** (no XML dep) — `<path>`, `matrix(...)` transforms, nested `<clipPath>` applied on a wrapping `<g>` (so a device-space clip isn't double-transformed by the element matrix), selectable `<text>` referencing system fonts (svglite-style, renderer-shaped). **M4b**: **PDF** via `krilla =0.8.2` (default-features off) — paths/transforms converted to krilla's tiny-skia-path newtypes (no tiny-skia bump), a single px→pt root transform, clip via `push_clip_path`, alpha via opacity, and **embedded selectable text** through `draw_glyphs` (font subset/embed; per-glyph text ranges for ToUnicode). `render()` dispatches on file extension. Gradients/patterns/masks remain future work (the scene can't express them yet). `render()` rebuilds a fresh backend each call (the tree lives in R).
 
-**F1 — gradient fills. ✅ done.** Introduced the `Paint` model (see §4.5): `gpar(fill =)` accepts `linear_gradient()` / `radial_gradient()` (colours + optional stops, geometry in any unit, `extend = pad/repeat/reflect`). `fill` is now an `Option<Paint>` through the gpar fold (alpha folds into stops); the scene walk resolves gradient geometry against the viewport into local px and the `fill_path` trait takes a `&ResolvedPaint`. All three backends build native gradients from local-px geometry + identity gradient transform (tiny-skia `LinearGradient`/`RadialGradient`, krilla ditto, SVG `<linearGradient>`/`<radialGradient gradientUnits="userSpaceOnUse">`), so fill and outline share one coordinate space. Verified pixel-identical across raster/rasterized-SVG/rasterized-PDF (±2/255). No new crates. **Next: F2 tiling patterns, F3 masks** (the device-shim fork below was declined as optional interop).
+**F1 — gradient fills. ✅ done.** Introduced the `Paint` model (see §4.5): `gpar(fill =)` accepts `linear_gradient()` / `radial_gradient()` (colours + optional stops, geometry in any unit, `extend = pad/repeat/reflect`). `fill` is now an `Option<Paint>` through the gpar fold (alpha folds into stops); the scene walk resolves gradient geometry against the viewport into local px and the `fill_path` trait takes a `&ResolvedPaint`. All three backends build native gradients from local-px geometry + identity gradient transform (tiny-skia `LinearGradient`/`RadialGradient`, krilla ditto, SVG `<linearGradient>`/`<radialGradient gradientUnits="userSpaceOnUse">`), so fill and outline share one coordinate space. Verified pixel-identical across raster/rasterized-SVG/rasterized-PDF (±2/255). No new crates. (The device-shim fork below was declined as optional interop.)
+
+**F2 — tiling patterns. ✅ done.** `pattern(grob, width, height, x, y, units, extend)` (a grob or list of grobs) added to the `Paint` model. R renders the tile grob to an RGBA raster via a throwaway sub-`Scene` (sized from `width`/`height` at the scene dpi using one reference dimension, so the tile aspect is `width:height` and only the genuine viewport aspect stretches it), then the backend tiles the image: raster tiny-skia `Pattern`, SVG `<pattern>` + base64-PNG `<image>` (both verified pixel-identical via rsvg-convert). The PDF backend lacks image support (krilla `raster-images` needs un-vendored codecs), so a pattern degrades to its **mean colour** — a documented first-cut limitation. Added the `base64` crate (already vendored transitively via krilla → no re-vendor) plus `pixmap_from_straight`/`average_rgba` helpers; also guarded `parse_paint` to `$`-index only lists (atomic colour vectors error on `$`). `test-pattern.R`, `inst/examples/patterns.R`. **Next: F3 masks.**
 
 **M5 — device-shim mode (optional, deferred).** Register as an R graphics device via `DeviceDriver`; implement the minimal callback set, then climb the capability ladder (patterns → groups/compositing → glyphs). Panic-guard every callback. Validate by rendering ggplot2/lattice output. Deferred in favour of filling out the native engine (gradients/patterns/masks); this is interop, not on the Option-B critical path.
 

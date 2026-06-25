@@ -77,10 +77,15 @@ print.vellum_gradient <- function(x, ...) {
   invisible(x)
 }
 
-# Encode a fill (solid colour or gradient) for the backend. Solids reuse the
-# tri-state colour encoding (NULL inherit / integer(0) none / int[4] set); a
-# gradient becomes a list the Rust `parse_paint` decodes (`kind` distinguishes).
-.encode_paint <- function(x) {
+# Encode a fill (solid colour, gradient, or pattern) for the backend. Solids
+# reuse the tri-state colour encoding (NULL inherit / integer(0) none / int[4]
+# set); a gradient/pattern becomes a list the Rust `parse_paint` decodes (`kind`
+# distinguishes). Patterns need the rendering context (`scene`, a backend Scene)
+# to rasterize their tile grob.
+.encode_paint <- function(x, scene = NULL) {
+  if (inherits(x, "vellum_pattern")) {
+    return(.encode_pattern(x, scene))
+  }
   if (inherits(x, "vellum_gradient")) {
     return(.encode_gradient(x))
   }
@@ -96,5 +101,92 @@ print.vellum_gradient <- function(x, ...) {
     col = as.integer(rgba), # column-major -> flat r,g,b,a per stop
     offset = pmin(pmax(g$stops, 0), 1),
     extend = g$extend
+  )
+}
+
+#' Tiling-pattern fills
+#'
+#' Create a pattern that fills a shape by tiling a grob. The grob is drawn once
+#' into a tile occupying the unit square (`0..1` npc), then repeated across a cell
+#' of size `width` x `height` (in `units`) anchored at `(x, y)`. Like gradients,
+#' the cell geometry is resolved against the viewport at draw time.
+#'
+#' The tile is rendered to a raster image (sized from `width`/`height` at the
+#' scene's resolution) and embedded: PNG raster, SVG `<image>` in a `<pattern>`.
+#' The PDF backend has no image support yet, so a pattern degrades to the tile's
+#' average colour there.
+#'
+#' @param grob A grob, or a list of grobs, drawn into the tile (their `0..1` npc
+#'   coordinates map to the tile, painted in order).
+#' @param width,height Size of one tile cell (default `0.1` npc).
+#' @param x,y Cell centre (default centred).
+#' @param units Coordinate system for the geometry; see [linear_gradient()].
+#' @param extend Tiling mode: `"repeat"` (default), `"reflect"`, or `"pad"`.
+#'   (SVG renders all modes as `repeat`.)
+#' @return A `vellum_pattern` object, suitable for `gpar(fill = ...)`.
+#' @examples
+#' dots <- circle_grob(r = 0.25, gp = gpar(fill = "white", col = NA))
+#' pattern(dots, width = 0.08, height = 0.08)
+#' @export
+pattern <- function(grob, width = 0.1, height = 0.1, x = 0.5, y = 0.5,
+                    units = "npc", extend = "repeat") {
+  units <- match.arg(units, .gradient_units)
+  extend <- match.arg(extend, .gradient_extend)
+  if (!all(is.finite(c(width, height, x, y)))) {
+    cli::cli_abort("Pattern geometry must be finite.")
+  }
+  structure(
+    list(grob = grob, width = width, height = height, x = x, y = y,
+         units = units, extend = extend),
+    class = "vellum_pattern"
+  )
+}
+
+#' @export
+print.vellum_pattern <- function(x, ...) {
+  cli::cli_text("<vellum_pattern> cell {x$width} x {x$height} {.val {x$units}}, extend = {.val {x$extend}}")
+  invisible(x)
+}
+
+# Render the pattern's tile grob to RGBA bytes and package the cell geometry.
+# `scene` is the backend Scene currently being compiled (for dpi + page size).
+.encode_pattern <- function(p, scene) {
+  if (is.null(scene)) {
+    cli::cli_abort("A pattern fill can only be used inside a scene being rendered.")
+  }
+  dpi <- scene$dpi()
+  page <- scene$dim() # c(width_px, height_px)
+  # Tile resolution. Absolute units give physical px directly; for npc/native we
+  # use ONE reference dimension for both axes so the tile's aspect ratio equals
+  # width:height. The backend then scales that tile into the cell resolved
+  # against the actual viewport (which may be non-square) -- so the only stretch
+  # is the genuine viewport aspect, not the page aspect.
+  ref <- min(page)
+  tw <- max(1L, as.integer(round(.paint_len_px(p$width, p$units, ref, dpi))))
+  th <- max(1L, as.integer(round(.paint_len_px(p$height, p$units, ref, dpi))))
+  tile <- Scene$new(tw / dpi, th / dpi, dpi, c(0L, 0L, 0L, 0L))
+  nodes <- if (inherits(p$grob, "S7_object")) list(p$grob) else as.list(p$grob)
+  for (nd in nodes) compile(nd, tile)
+  list(
+    kind = "pattern",
+    tile = tile$rgba(),
+    tw = tile$dim()[1],
+    th = tile$dim()[2],
+    coords = as.double(c(p$x, p$y, p$width, p$height)),
+    units = p$units,
+    extend = p$extend
+  )
+}
+
+# A length resolved to device pixels for tile sizing. npc/native are taken
+# against the page extent `total_px`; absolute units use the dpi.
+.paint_len_px <- function(value, units, total_px, dpi) {
+  switch(units,
+    npc = value * total_px,
+    native = value * total_px,
+    mm = value / 25.4 * dpi,
+    `in` = value * dpi,
+    pt = value / 72 * dpi,
+    value * total_px
   )
 }
