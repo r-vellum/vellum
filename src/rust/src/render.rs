@@ -64,21 +64,20 @@ pub enum ResolvedPaint {
     Pattern { tile: Rc<Vec<u8>>, tw: u32, th: u32, x: f64, y: f64, w: f64, h: f64, extend: Extend, opacity: f32 },
 }
 
-/// One viewport rectangle contributing to a clip, in device space: a `w` x `h`
-/// rectangle (viewport-local pixels) placed by `transform`.
-#[derive(Clone, Copy, Debug)]
-pub struct ClipRect {
-    pub w: f64,
-    pub h: f64,
-    pub transform: Transform,
+/// One clip region contributing to a clip chain, in viewport-local pixels placed
+/// by `transform`: either a `w` x `h` rectangle or an arbitrary path.
+#[derive(Clone, Debug)]
+pub enum ClipShape {
+    Rect { w: f64, h: f64, transform: Transform },
+    Path { path: Path, evenodd: bool, transform: Transform },
 }
 
-/// The clip applying to a draw: the intersection of `rects` (empty = no clip).
+/// The clip applying to a draw: the intersection of `shapes` (empty = no clip).
 /// `id` identifies the originating viewport so backends can cache per-viewport
 /// clip artifacts (a raster `Mask`, an SVG `<clipPath>`).
 pub struct Clip<'a> {
     pub id: usize,
-    pub rects: &'a [ClipRect],
+    pub shapes: &'a [ClipShape],
 }
 
 /// Everything a backend needs to render one text node. Glyphs are pre-shaped
@@ -322,17 +321,23 @@ impl RasterBackend {
     }
 
     fn mask_for(&mut self, clip: &Clip) -> Option<Rc<Mask>> {
-        if clip.rects.is_empty() {
+        if clip.shapes.is_empty() {
             return None;
         }
         if let Some(m) = self.masks.get(&clip.id) {
             return m.clone();
         }
         let mut m = page_mask(self.w, self.h);
-        for r in clip.rects {
-            match rect_path(0.0, 0.0, r.w, r.h) {
-                Some(rect) => m.intersect_path(&rect, FillRule::Winding, true, r.transform),
-                None => m.clear(),
+        for shape in clip.shapes {
+            match shape {
+                ClipShape::Rect { w, h, transform } => match rect_path(0.0, 0.0, *w, *h) {
+                    Some(rect) => m.intersect_path(&rect, FillRule::Winding, true, *transform),
+                    None => m.clear(),
+                },
+                ClipShape::Path { path, evenodd, transform } => {
+                    let rule = if *evenodd { FillRule::EvenOdd } else { FillRule::Winding };
+                    m.intersect_path(path, rule, true, *transform);
+                }
             }
         }
         let m = Some(Rc::new(m));
@@ -703,7 +708,7 @@ impl SvgBackend {
     /// A ` clip-path="url(#…)"` attribute for this clip (empty string = none).
     /// Nested `<clipPath>` elements (each referencing the previous) intersect.
     fn clip_attr(&mut self, clip: &Clip) -> String {
-        if clip.rects.is_empty() {
+        if clip.shapes.is_empty() {
             return String::new();
         }
         if let Some(a) = self.clip_attrs.get(&clip.id) {
@@ -711,12 +716,16 @@ impl SvgBackend {
         }
         let mut parent_ref = String::new();
         let mut last = String::new();
-        for r in clip.rects {
+        for shape in clip.shapes {
             let id = format!("c{}", self.next_clip);
             self.next_clip += 1;
+            // Clip geometry is baked to device coords (userSpaceOnUse) so the
+            // wrapping `<g>` carries no transform.
+            let rule = matches!(shape, ClipShape::Path { evenodd: true, .. });
+            let rule_attr = if rule { " clip-rule=\"evenodd\"" } else { "" };
             self.defs.push_str(&format!(
-                "<clipPath id=\"{id}\" clipPathUnits=\"userSpaceOnUse\"{parent_ref}><path d=\"{d}\"/></clipPath>",
-                d = rect_corners_d(r)
+                "<clipPath id=\"{id}\" clipPathUnits=\"userSpaceOnUse\"{parent_ref}><path d=\"{d}\"{rule_attr}/></clipPath>",
+                d = clip_shape_d(shape),
             ));
             parent_ref = format!(" clip-path=\"url(#{id})\"");
             last = id;
@@ -961,18 +970,26 @@ fn path_to_d(path: &Path) -> String {
     d.trim_end().to_string()
 }
 
-/// The four transformed corners of a `w` x `h` rect as a closed SVG path `d`.
-fn rect_corners_d(r: &ClipRect) -> String {
-    let pt = |x: f64, y: f64| {
-        let dx = r.transform.sx as f64 * x + r.transform.kx as f64 * y + r.transform.tx as f64;
-        let dy = r.transform.ky as f64 * x + r.transform.sy as f64 * y + r.transform.ty as f64;
-        (dx, dy)
-    };
-    let (x0, y0) = pt(0.0, 0.0);
-    let (x1, y1) = pt(r.w, 0.0);
-    let (x2, y2) = pt(r.w, r.h);
-    let (x3, y3) = pt(0.0, r.h);
-    format!("M{x0} {y0} L{x1} {y1} L{x2} {y2} L{x3} {y3} Z")
+/// A clip shape as a closed SVG path `d` in device coords (transform baked in).
+fn clip_shape_d(shape: &ClipShape) -> String {
+    match shape {
+        ClipShape::Rect { w, h, transform } => {
+            let pt = |x: f64, y: f64| {
+                let dx = transform.sx as f64 * x + transform.kx as f64 * y + transform.tx as f64;
+                let dy = transform.ky as f64 * x + transform.sy as f64 * y + transform.ty as f64;
+                (dx, dy)
+            };
+            let (x0, y0) = pt(0.0, 0.0);
+            let (x1, y1) = pt(*w, 0.0);
+            let (x2, y2) = pt(*w, *h);
+            let (x3, y3) = pt(0.0, *h);
+            format!("M{x0} {y0} L{x1} {y1} L{x2} {y2} L{x3} {y3} Z")
+        }
+        ClipShape::Path { path, transform, .. } => match path.clone().transform(*transform) {
+            Some(p) => path_to_d(&p),
+            None => String::new(),
+        },
+    }
 }
 
 fn xml_escape(s: &str) -> String {
@@ -1012,7 +1029,7 @@ impl<'a, 'b> PdfBackend<'a, 'b> {
             return;
         }
         if let Some(path) = rect_path(0.0, 0.0, w as f64, h as f64) {
-            let empty = Clip { id: usize::MAX, rects: &[] };
+            let empty = Clip { id: usize::MAX, shapes: &[] };
             self.fill_path(&path, Transform::identity(), &ResolvedPaint::Solid(bg), FillRule::Winding, &empty);
         }
     }
@@ -1021,9 +1038,18 @@ impl<'a, 'b> PdfBackend<'a, 'b> {
     /// returns the number of `pop()`s needed to unwind.
     fn push_state(&mut self, transform: Transform, clip: &Clip) -> usize {
         let mut n = 0;
-        for r in clip.rects {
-            if let Some(p) = clip_rect_kpath(r) {
-                self.surface.push_clip_path(&p, &KFillRule::NonZero);
+        for shape in clip.shapes {
+            let (kpath, rule) = match shape {
+                ClipShape::Rect { w, h, transform } => {
+                    (clip_rect_kpath(*w, *h, *transform), KFillRule::NonZero)
+                }
+                ClipShape::Path { path, evenodd, transform } => {
+                    let dev = path.clone().transform(*transform).and_then(|p| to_kpath(&p));
+                    (dev, if *evenodd { KFillRule::EvenOdd } else { KFillRule::NonZero })
+                }
+            };
+            if let Some(p) = kpath {
+                self.surface.push_clip_path(&p, &rule);
                 n += 1;
             }
         }
@@ -1277,20 +1303,20 @@ fn to_ktransform(t: Transform) -> KTransform {
     KTransform::from_row(t.sx, t.ky, t.kx, t.sy, t.tx, t.ty)
 }
 
-fn clip_rect_kpath(r: &ClipRect) -> Option<KPath> {
+fn clip_rect_kpath(w: f64, h: f64, transform: Transform) -> Option<KPath> {
     let pt = |x: f64, y: f64| {
-        let dx = r.transform.sx as f64 * x + r.transform.kx as f64 * y + r.transform.tx as f64;
-        let dy = r.transform.ky as f64 * x + r.transform.sy as f64 * y + r.transform.ty as f64;
+        let dx = transform.sx as f64 * x + transform.kx as f64 * y + transform.tx as f64;
+        let dy = transform.ky as f64 * x + transform.sy as f64 * y + transform.ty as f64;
         (dx as f32, dy as f32)
     };
     let mut pb = KPathBuilder::new();
     let (x0, y0) = pt(0.0, 0.0);
     pb.move_to(x0, y0);
-    let (x1, y1) = pt(r.w, 0.0);
+    let (x1, y1) = pt(w, 0.0);
     pb.line_to(x1, y1);
-    let (x2, y2) = pt(r.w, r.h);
+    let (x2, y2) = pt(w, h);
     pb.line_to(x2, y2);
-    let (x3, y3) = pt(0.0, r.h);
+    let (x3, y3) = pt(0.0, h);
     pb.line_to(x3, y3);
     pb.close();
     pb.finish()

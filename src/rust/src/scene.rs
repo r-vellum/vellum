@@ -13,7 +13,7 @@ use extendr_api::prelude::*;
 use tiny_skia::{FillRule, PathBuilder, Pixmap, Transform};
 
 use crate::render::{
-    rect_path, Clip, ClipRect, MaskKind, MaskLayer, PdfBackend, RasterBackend, RenderBackend, ResolvedPaint,
+    rect_path, Clip, ClipShape, MaskKind, MaskLayer, PdfBackend, RasterBackend, RenderBackend, ResolvedPaint,
     StrokeStyle, SvgBackend, TextRun,
 };
 
@@ -89,6 +89,14 @@ enum Placement {
     Cell { row: usize, col: usize, rowspan: usize, colspan: usize },
 }
 
+/// An arbitrary clip-path spec attached to a viewport (its own coordinates):
+/// `nper` closed sub-paths over `(x, y)`, filled by winding or even-odd.
+#[derive(Clone, Debug)]
+struct ClipPathSpec {
+    x: Vec<f64>, y: Vec<f64>, xu: Vec<Unit>, yu: Vec<Unit>,
+    nper: Vec<usize>, evenodd: bool,
+}
+
 #[derive(Clone, Debug)]
 struct ViewportNode {
     parent: Option<usize>,
@@ -98,18 +106,20 @@ struct ViewportNode {
     yscale: (f64, f64),
     angle: f64,
     clip: bool,
+    /// An arbitrary clip path (overrides the rectangular `clip` when set).
+    clip_path: Option<ClipPathSpec>,
     gp: PartialGpar,
     layout: Option<Layout>,
 }
 
 /// A viewport after the layout pass: its local frame and effective context.
-/// `clip_chain` is the list of clipping-ancestor rectangles to intersect
+/// `clip_chain` is the list of clipping-ancestor shapes to intersect
 /// (empty = no clip); backends turn it into a mask / `<clipPath>` / PDF clip.
 #[derive(Clone)]
 struct ResolvedVp {
     vp: Vp,
     gp_acc: GparAcc,
-    clip_chain: Vec<ClipRect>,
+    clip_chain: Vec<ClipShape>,
 }
 
 // --- primitives -------------------------------------------------------------
@@ -264,6 +274,7 @@ impl Scene {
             yscale: (0.0, 1.0),
             angle: 0.0,
             clip: false,
+            clip_path: None,
             gp: PartialGpar::from_robj(&rnull(), &rnull(), &rnull(), &rnull(), &rnull()),
             layout: None,
         };
@@ -337,12 +348,24 @@ impl Scene {
             yscale: pair(yscale, (0.0, 1.0)),
             angle,
             clip,
+            clip_path: None,
             gp: PartialGpar::from_robj(&fill, &col, &lwd, &alpha, &stroke),
             layout: None,
         });
         self.viewports[self.current].children.push(id);
         self.current = id;
         id as i32
+    }
+
+    /// Attach an arbitrary clip path (in the current viewport's coordinates) to
+    /// the current viewport; `nper` gives the point count of each closed sub-path.
+    fn set_clip_path(&mut self, x: &[f64], y: &[f64], xu: &[i32], yu: &[i32], nper: &[i32], evenodd: bool) {
+        let spec = ClipPathSpec {
+            x: x.to_vec(), y: y.to_vec(), xu: codes(xu), yu: codes(yu),
+            nper: nper.iter().map(|&v| v.max(0) as usize).collect(),
+            evenodd,
+        };
+        self.viewports[self.current].clip_path = Some(spec);
     }
 
     /// Move the cursor up `n` levels (towards the root). Stops at the root.
@@ -681,7 +704,7 @@ impl Scene {
             dpi: self.dpi,
         };
         let root_clip = if root.clip {
-            vec![ClipRect { w: self.w_px as f64, h: self.h_px as f64, transform: Transform::identity() }]
+            vec![ClipShape::Rect { w: self.w_px as f64, h: self.h_px as f64, transform: Transform::identity() }]
         } else {
             Vec::new()
         };
@@ -762,8 +785,12 @@ impl Scene {
         };
 
         let mut clip_chain = parent.clip_chain.clone();
-        if node.clip {
-            clip_chain.push(ClipRect { w: cw, h: ch, transform });
+        if let Some(cp) = &node.clip_path {
+            if let Some(path) = build_subpaths(&cp.x, &cp.y, &cp.xu, &cp.yu, &cp.nper, &vp) {
+                clip_chain.push(ClipShape::Path { path, evenodd: cp.evenodd, transform });
+            }
+        } else if node.clip {
+            clip_chain.push(ClipShape::Rect { w: cw, h: ch, transform });
         }
 
         ResolvedVp {
@@ -813,7 +840,7 @@ impl Scene {
                 Node::Image { rgba, iw, ih, x, y, w, h, xu, yu, wu, hu, interpolate } => {
                     let rv = &resolved[*vp_id];
                     let vp = &rv.vp;
-                    let clip = Clip { id: *vp_id, rects: &rv.clip_chain };
+                    let clip = Clip { id: *vp_id, shapes: &rv.clip_chain };
                     let cx = vp.x_pos(*x, *xu);
                     let cy = vp.y_pos(*y, *yu);
                     let pw = vp.x_len(*w, *wu);
@@ -828,7 +855,7 @@ impl Scene {
             let vp = &rv.vp;
             let gp = rv.gp_acc.apply(node.gp()).resolve();
             let t = vp.transform;
-            let clip = Clip { id: *vp_id, rects: &rv.clip_chain };
+            let clip = Clip { id: *vp_id, shapes: &rv.clip_chain };
 
             match node {
                 Node::Rect { x, y, w, h, xu, yu, wu, hu, .. } => {

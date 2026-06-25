@@ -10,7 +10,9 @@
 #' @param width,height Size ([unit()] or numeric, in the parent).
 #' @param xscale,yscale Length-2 native coordinate ranges.
 #' @param angle Rotation in degrees, counter-clockwise about the centre.
-#' @param clip Clip drawing to this viewport's rectangle?
+#' @param clip Clip drawing to this viewport: `TRUE`/`FALSE` for the viewport
+#'   rectangle, or a [polygon_grob()]/[path_grob()] (in this viewport's
+#'   coordinates) to clip to an arbitrary path.
 #' @param gp Inheritable graphical parameters, from [gpar()].
 #' @param layout An optional [grid_layout()].
 #' @param row,col Cell (1-based) of the parent's layout to place into.
@@ -38,7 +40,7 @@ viewport <- function(x = 0.5, y = 0.5, width = 1, height = 1,
   class_viewport(
     x = as_unit(x), y = as_unit(y), width = as_unit(width), height = as_unit(height),
     xscale = as.numeric(xscale), yscale = as.numeric(yscale),
-    angle = as.numeric(angle), clip = isTRUE(clip), gp = gp, layout = layout,
+    angle = as.numeric(angle), clip = clip, gp = gp, layout = layout,
     row = row, col = col, rowspan = as.integer(rowspan), colspan = as.integer(colspan),
     mask = mask, name = name
   )
@@ -52,7 +54,7 @@ class_viewport <- S7::new_class(
     xscale = S7::new_property(S7::class_double, default = c(0, 1)),
     yscale = S7::new_property(S7::class_double, default = c(0, 1)),
     angle = S7::new_property(S7::class_double, default = 0),
-    clip = S7::new_property(S7::class_logical, default = FALSE),
+    clip = S7::new_property(S7::class_any, default = FALSE),
     gp = S7::new_property(gpar, default = quote(gpar())),
     layout = S7::new_property(S7::class_any, default = NULL),
     row = S7::new_property(S7::class_any, default = NULL),

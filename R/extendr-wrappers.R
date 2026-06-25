@@ -25,6 +25,11 @@ rs_backend_info <- function() .Call(wrap__rs_backend_info)
 #'placed by centre/size in parent coordinates.
 #'}
 #'
+#'\subsection{Method `set_clip_path`}{
+#'Attach an arbitrary clip path (in the current viewport's coordinates) to
+#'the current viewport; `nper` gives the point count of each closed sub-path.
+#'}
+#'
 #'\subsection{Method `pop_viewport`}{
 #'Move the cursor up `n` levels (towards the root). Stops at the root.
 #'}
@@ -127,6 +132,8 @@ Scene <- new.env(parent = emptyenv())
 Scene$new <- function(width, height, dpi, bg) .Call(wrap__Scene__new, width, height, dpi, bg)
 
 Scene$push_viewport <- function(cx, cy, w, h, cxu, cyu, wu, hu, xscale, yscale, angle, clip, lrow, lcol, lrowspan, lcolspan, fill, col, lwd, alpha, stroke) .Call(wrap__Scene__push_viewport, self, cx, cy, w, h, cxu, cyu, wu, hu, xscale, yscale, angle, clip, lrow, lcol, lrowspan, lcolspan, fill, col, lwd, alpha, stroke)
+
+Scene$set_clip_path <- function(x, y, xu, yu, nper, evenodd) .Call(wrap__Scene__set_clip_path, self, x, y, xu, yu, nper, evenodd)
 
 Scene$pop_viewport <- function(n) .Call(wrap__Scene__pop_viewport, self, n)
 

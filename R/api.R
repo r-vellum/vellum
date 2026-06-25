@@ -204,10 +204,17 @@ S7::method(compile, grob_raster) <- function(node, scene) {
 
 S7::method(compile, grob_text) <- function(node, scene) {
   .with_vp(node, scene, {
+    n <- vctrs::vec_size_common(node@label, node@x, node@y)
+    if (n == 0L) return(invisible())
+    lab <- vctrs::vec_recycle(node@label, n)
+    x <- vctrs::vec_recycle(node@x, n); y <- vctrs::vec_recycle(node@y, n)
+    rot <- vctrs::vec_recycle(node@rot, n)
     hv <- .just_to_hv(node@just)
-    .draw_text(scene, node@label, node@x, node@y, hv[1], hv[2], node@rot,
-               node@gp@fontfamily %||% "", node@gp@fontface %||% "plain",
-               node@gp@fontsize %||% 12, 1, node@gp@col %||% "black", node@gp@alpha)
+    fam <- node@gp@fontfamily %||% ""; face <- node@gp@fontface %||% "plain"
+    fs <- node@gp@fontsize %||% 12; col <- node@gp@col %||% "black"; alpha <- node@gp@alpha
+    for (i in seq_len(n)) {
+      .draw_text(scene, lab[i], x[i], y[i], hv[1], hv[2], rot[i], fam, face, fs, 1, col, alpha)
+    }
   })
 }
 
@@ -295,14 +302,38 @@ edit_node <- function(scene, name, ...) {
   cw <- .coord(vp@width, "npc", 1); ch <- .coord(vp@height, "npc", 1)
   lrow <- if (is.null(vp@row)) -1L else as.integer(vp@row) - 1L
   lcol <- if (is.null(vp@col)) -1L else as.integer(vp@col) - 1L
+  # clip may be TRUE/FALSE (rect) or a path-like grob (arbitrary clip path).
+  clip_grob <- if (S7::S7_inherits(vp@clip, grob)) vp@clip else NULL
+  clip_flag <- if (is.null(clip_grob)) isTRUE(vp@clip) else TRUE
   scene$push_viewport(
     cx$value, cy$value, cw$value, ch$value, cx$code, cy$code, cw$code, ch$code,
-    as.numeric(vp@xscale), as.numeric(vp@yscale), vp@angle, isTRUE(vp@clip),
+    as.numeric(vp@xscale), as.numeric(vp@yscale), vp@angle, clip_flag,
     lrow, lcol, vp@rowspan, vp@colspan,
     .encode_paint(vp@gp@fill, scene), .rs_col_inh(vp@gp@col), .rs_num_inh(vp@gp@lwd), .rs_num_inh(vp@gp@alpha),
     .encode_stroke(vp@gp)
   )
+  if (!is.null(clip_grob)) {
+    cp <- .clip_path_of(clip_grob)
+    scene$set_clip_path(cp$x, cp$y, cp$xcode, cp$ycode, cp$nper, cp$evenodd)
+  }
   if (!is.null(vp@layout)) .set_layout(scene, vp@layout)
+}
+
+# Extract clip-path coordinates (in the viewport's coordinate system) from a
+# polygon or path grob.
+.clip_path_of <- function(g) {
+  if (S7::S7_inherits(g, grob_path)) {
+    ex <- .coord(g@x, "native"); ey <- .coord(g@y, "native")
+    list(x = ex$value, y = ey$value, xcode = ex$code, ycode = ey$code,
+         nper = as.integer(g@nper), evenodd = identical(g@rule, "evenodd"))
+  } else if (S7::S7_inherits(g, grob_polygon)) {
+    n <- vctrs::vec_size_common(g@x, g@y)
+    ex <- .coord(g@x, "native", n); ey <- .coord(g@y, "native", n)
+    list(x = ex$value, y = ey$value, xcode = ex$code, ycode = ey$code,
+         nper = as.integer(n), evenodd = FALSE)
+  } else {
+    cli::cli_abort("A viewport {.arg clip} grob must be a {.fn polygon_grob} or {.fn path_grob}.")
+  }
 }
 
 .set_layout <- function(scene, layout) {

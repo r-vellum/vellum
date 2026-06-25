@@ -26,6 +26,11 @@ placed into that (0-based) cell of the parent's layout; otherwise it is
 placed by centre/size in parent coordinates.
 }
 
+\subsection{Method \code{set_clip_path}}{
+Attach an arbitrary clip path (in the current viewport's coordinates) to
+the current viewport; \code{nper} gives the point count of each closed sub-path.
+}
+
 \subsection{Method \code{pop_viewport}}{
 Move the cursor up \code{n} levels (towards the root). Stops at the root.
 }

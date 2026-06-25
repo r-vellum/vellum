@@ -35,7 +35,9 @@ grid_layout(widths = unit(1, "null"), heights = unit(1, "null"))
 
 \item{angle}{Rotation in degrees, counter-clockwise about the centre.}
 
-\item{clip}{Clip drawing to this viewport's rectangle?}
+\item{clip}{Clip drawing to this viewport: \code{TRUE}/\code{FALSE} for the viewport
+rectangle, or a \code{\link[=polygon_grob]{polygon_grob()}}/\code{\link[=path_grob]{path_grob()}} (in this viewport's
+coordinates) to clip to an arbitrary path.}
 
 \item{gp}{Inheritable graphical parameters, from \code{\link[=gpar]{gpar()}}.}
 
