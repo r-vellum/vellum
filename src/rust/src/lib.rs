@@ -1,6 +1,7 @@
 use extendr_api::prelude::*;
 
 mod color;
+mod font;
 mod scene;
 mod units;
 

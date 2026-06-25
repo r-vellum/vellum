@@ -3,11 +3,14 @@
 \name{rs_pixel}
 \alias{rs_pixel}
 \alias{rs_dim}
+\alias{rs_raster}
 \title{Inspect a rendered scene}
 \usage{
 rs_pixel(scene, x, y)
 
 rs_dim(scene)
+
+rs_raster(scene)
 }
 \arguments{
 \item{scene}{A \code{\link[=rs_scene]{rs_scene()}}.}
@@ -17,6 +20,9 @@ rs_dim(scene)
 \value{
 \code{rs_pixel()}: integer \code{c(r, g, b, a)}. \code{rs_dim()}: integer
 \code{c(width, height)}.
+
+\code{rs_raster()}: an integer array with dimensions \code{c(4, width, height)}
+holding RGBA channels (top-left origin).
 }
 \description{
 \code{rs_pixel()} renders the scene and returns the RGBA value of one device pixel

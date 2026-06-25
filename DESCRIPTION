@@ -19,4 +19,5 @@ Suggests:
     withr
 Config/testthat/edition: 3
 Imports: 
-    grDevices
+    grDevices,
+    textshaping

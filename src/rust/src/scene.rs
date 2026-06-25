@@ -9,6 +9,7 @@ use extendr_api::prelude::*;
 use tiny_skia::{FillRule, Paint, PathBuilder, Pixmap, Stroke, Transform};
 
 use crate::color::{opt_color, Gpar, Rgba};
+use crate::font::FontCache;
 use crate::units::{Unit, Vp};
 
 /// A viewport described in normalised page coordinates (centre + size), with
@@ -68,6 +69,28 @@ enum Node {
         r: f64,
         unit: Unit,
         gp: Gpar,
+    },
+    /// Pre-shaped text. Glyphs are positioned by the R-side shaper; we only
+    /// place the anchor and rasterize each glyph outline.
+    Text {
+        x: f64,
+        y: f64,
+        unit: Unit,
+        rot: f64,
+        hjust: f64,
+        vjust: f64,
+        /// Shaped block width/height in device pixels.
+        w: f64,
+        h: f64,
+        /// Per-glyph: font glyph id, baseline pen offset (px, y-up text-local),
+        /// em size (px), font file, and face index.
+        gid: Vec<u16>,
+        gx: Vec<f64>,
+        gy: Vec<f64>,
+        gsize: Vec<f64>,
+        gpath: Vec<String>,
+        gface: Vec<u32>,
+        col: Option<Rgba>,
     },
 }
 
@@ -154,6 +177,47 @@ impl Scene {
         });
     }
 
+    /// Add pre-shaped text. The R wrapper does shaping (via `textshaping`) and
+    /// passes per-glyph ids/positions/fonts plus the block size.
+    #[allow(clippy::too_many_arguments)]
+    fn text(
+        &mut self,
+        x: f64,
+        y: f64,
+        units: &str,
+        rot: f64,
+        hjust: f64,
+        vjust: f64,
+        w: f64,
+        h: f64,
+        gid: &[i32],
+        gx: &[f64],
+        gy: &[f64],
+        gsize: &[f64],
+        gpath: Vec<String>,
+        gface: &[i32],
+        col: Robj,
+        alpha: f64,
+    ) {
+        self.nodes.push(Node::Text {
+            x,
+            y,
+            unit: Unit::parse(units),
+            rot,
+            hjust,
+            vjust,
+            w,
+            h,
+            gid: gid.iter().map(|&v| v.max(0) as u16).collect(),
+            gx: gx.to_vec(),
+            gy: gy.to_vec(),
+            gsize: gsize.to_vec(),
+            gpath,
+            gface: gface.iter().map(|&v| v.max(0) as u32).collect(),
+            col: opt_color(&col).map(|c| c.with_alpha(alpha)),
+        });
+    }
+
     /// Number of primitives currently in the scene.
     fn len(&self) -> i32 {
         self.nodes.len() as i32
@@ -164,12 +228,33 @@ impl Scene {
         vec![self.w_px as i32, self.h_px as i32]
     }
 
+    /// Device resolution in dots per inch.
+    fn dpi(&self) -> f64 {
+        self.dpi
+    }
+
     /// Render the scene to a PNG file.
     fn render_png(&self, path: &str) {
         let pm = self.rasterize();
         if let Err(e) = pm.save_png(path) {
             throw_r_error(format!("failed to write PNG: {e}"));
         }
+    }
+
+    /// Render and return the whole image as row-major RGBA bytes
+    /// `[r, g, b, a, r, g, b, a, ...]` (top-left origin, x fastest). The R
+    /// wrapper reshapes this into an array.
+    fn rgba(&self) -> Vec<i32> {
+        let pm = self.rasterize();
+        let mut out = Vec::with_capacity((self.w_px * self.h_px * 4) as usize);
+        for p in pm.pixels() {
+            let c = p.demultiply();
+            out.push(c.red() as i32);
+            out.push(c.green() as i32);
+            out.push(c.blue() as i32);
+            out.push(c.alpha() as i32);
+        }
+        out
     }
 
     /// Render and return the RGBA of device pixel `(x, y)` (top-left origin,
@@ -212,8 +297,9 @@ impl Scene {
         let mut pm = Pixmap::new(self.w_px, self.h_px).expect("non-zero pixmap dimensions");
         pm.fill(self.bg.to_skia());
         let vp = self.resolved_vp();
+        let mut fonts = FontCache::default();
         for node in &self.nodes {
-            draw_node(&mut pm, node, &vp, self.dpi);
+            draw_node(&mut pm, node, &vp, self.dpi, &mut fonts);
         }
         pm
     }
@@ -243,7 +329,7 @@ fn fill_and_stroke(pm: &mut Pixmap, path: &tiny_skia::Path, gp: &Gpar, dpi: f64,
     }
 }
 
-fn draw_node(pm: &mut Pixmap, node: &Node, vp: &Vp, dpi: f64) {
+fn draw_node(pm: &mut Pixmap, node: &Node, vp: &Vp, dpi: f64, fonts: &mut FontCache) {
     match node {
         Node::Rect { x, y, w, h, unit, gp } => {
             let cx = vp.x_pos(*x, *unit, dpi);
@@ -275,6 +361,51 @@ fn draw_node(pm: &mut Pixmap, node: &Node, vp: &Vp, dpi: f64) {
             pb.push_circle(cx as f32, cy as f32, rr as f32);
             if let Some(path) = pb.finish() {
                 fill_and_stroke(pm, &path, gp, dpi, false);
+            }
+        }
+        Node::Text {
+            x,
+            y,
+            unit,
+            rot,
+            hjust,
+            vjust,
+            w,
+            h,
+            gid,
+            gx,
+            gy,
+            gsize,
+            gpath,
+            gface,
+            col,
+        } => {
+            let color = match col {
+                Some(c) => *c,
+                None => return,
+            };
+            let ax = vp.x_pos(*x, *unit, dpi);
+            let ay = vp.y_pos(*y, *unit, dpi);
+            let mut paint = Paint::default();
+            paint.set_color(color.to_skia());
+            paint.anti_alias = true;
+            let rot_t = (*rot != 0.0)
+                .then(|| Transform::from_rotate_at(-(*rot) as f32, ax as f32, ay as f32));
+            for i in 0..gid.len() {
+                let path = match fonts.glyph_outline(&gpath[i], gface[i], gid[i], gsize[i] as f32) {
+                    Some(p) => p,
+                    None => continue, // whitespace / missing outline
+                };
+                // Glyph baseline origin in device pixels (top-left origin).
+                let ox = ax + gx[i] - hjust * w;
+                let oy = ay - (gy[i] - vjust * h);
+                // Glyph outlines are y-up; flip and place at the origin.
+                let place = Transform::from_row(1.0, 0.0, 0.0, -1.0, ox as f32, oy as f32);
+                let t = match rot_t {
+                    Some(r) => r.pre_concat(place),
+                    None => place,
+                };
+                pm.fill_path(&path, &paint, FillRule::Winding, t, None);
             }
         }
     }

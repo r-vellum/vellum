@@ -38,6 +38,11 @@ rs_bbox <- function(x, y) .Call(wrap__rs_bbox, x, y)
 #'page npc, with native `xscale`/`yscale` (length-2 vectors).
 #'}
 #'
+#'\subsection{Method `text`}{
+#'Add pre-shaped text. The R wrapper does shaping (via `textshaping`) and
+#'passes per-glyph ids/positions/fonts plus the block size.
+#'}
+#'
 #'\subsection{Method `len`}{
 #'Number of primitives currently in the scene.
 #'}
@@ -46,8 +51,18 @@ rs_bbox <- function(x, y) .Call(wrap__rs_bbox, x, y)
 #'Device dimensions in pixels, `c(width, height)`.
 #'}
 #'
+#'\subsection{Method `dpi`}{
+#'Device resolution in dots per inch.
+#'}
+#'
 #'\subsection{Method `render_png`}{
 #'Render the scene to a PNG file.
+#'}
+#'
+#'\subsection{Method `rgba`}{
+#'Render and return the whole image as row-major RGBA bytes
+#'`[r, g, b, a, r, g, b, a, ...]` (top-left origin, x fastest). The R
+#'wrapper reshapes this into an array.
 #'}
 #'
 #'\subsection{Method `pixel`}{
@@ -69,11 +84,17 @@ Scene$polygon <- function(x, y, units, fill, col, lwd, alpha) .Call(wrap__Scene_
 
 Scene$circle <- function(x, y, r, units, fill, col, lwd, alpha) .Call(wrap__Scene__circle, self, x, y, r, units, fill, col, lwd, alpha)
 
+Scene$text <- function(x, y, units, rot, hjust, vjust, w, h, gid, gx, gy, gsize, gpath, gface, col, alpha) .Call(wrap__Scene__text, self, x, y, units, rot, hjust, vjust, w, h, gid, gx, gy, gsize, gpath, gface, col, alpha)
+
 Scene$len <- function() .Call(wrap__Scene__len, self)
 
 Scene$dim <- function() .Call(wrap__Scene__dim, self)
 
+Scene$dpi <- function() .Call(wrap__Scene__dpi, self)
+
 Scene$render_png <- function(path) .Call(wrap__Scene__render_png, self, path)
+
+Scene$rgba <- function() .Call(wrap__Scene__rgba, self)
 
 Scene$pixel <- function(x, y) .Call(wrap__Scene__pixel, self, x, y)
 

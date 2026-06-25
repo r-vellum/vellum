@@ -133,6 +133,15 @@ rs_dim <- function(scene) {
   scene$dim()
 }
 
+#' @rdname rs_pixel
+#' @return `rs_raster()`: an integer array with dimensions `c(4, width, height)`
+#'   holding RGBA channels (top-left origin).
+#' @export
+rs_raster <- function(scene) {
+  d <- scene$dim()
+  array(scene$rgba(), dim = c(4L, d[1], d[2]))
+}
+
 # --- internal helpers -------------------------------------------------------
 
 # Resolve an R colour to a length-4 integer RGBA vector, or NULL for "no paint"

@@ -22,6 +22,11 @@ Set the (single) drawing viewport: centre \verb{(x, y)} and size \verb{(w, h)} i
 page npc, with native \code{xscale}/\code{yscale} (length-2 vectors).
 }
 
+\subsection{Method \code{text}}{
+Add pre-shaped text. The R wrapper does shaping (via \code{textshaping}) and
+passes per-glyph ids/positions/fonts plus the block size.
+}
+
 \subsection{Method \code{len}}{
 Number of primitives currently in the scene.
 }
@@ -30,8 +35,18 @@ Number of primitives currently in the scene.
 Device dimensions in pixels, \code{c(width, height)}.
 }
 
+\subsection{Method \code{dpi}}{
+Device resolution in dots per inch.
+}
+
 \subsection{Method \code{render_png}}{
 Render the scene to a PNG file.
+}
+
+\subsection{Method \code{rgba}}{
+Render and return the whole image as row-major RGBA bytes
+\verb{[r, g, b, a, r, g, b, a, ...]} (top-left origin, x fastest). The R
+wrapper reshapes this into an array.
 }
 
 \subsection{Method \code{pixel}}{

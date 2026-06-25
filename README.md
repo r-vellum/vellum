@@ -14,15 +14,24 @@ See [DESIGN.md](DESIGN.md) for the architecture and rationale.
 
 ## Status
 
-Early development. **Milestone M0 (skeleton) is complete:**
+Early development. **Milestones M0 (skeleton) and M1 (raster slice) are complete:**
 
-- R package + Rust crate wired together via [extendr](https://extendr.github.io/).
-- Cross-platform CI (`R CMD check` on Linux/macOS/Windows, with an explicit Rust
-  toolchain and the Windows GNU target).
-- Cargo dependencies vendored for offline/CRAN builds.
-- A round-trip across the R↔Rust boundary, exercised by tests.
+- R package + Rust crate wired together via [extendr](https://extendr.github.io/),
+  vendored for offline/CRAN builds, with cross-platform CI.
+- A scene graph held in Rust, rendered to PNG via
+  [tiny-skia](https://github.com/RazrFalcon/tiny-skia).
+- Units (`npc` / `native` / `mm` / `in` / `pt`), one viewport with native
+  scales, and primitives: rectangles, polylines, polygons, circles.
+- **Text with font fidelity**: shaped by
+  [textshaping](https://github.com/r-lib/textshaping) and resolved by
+  [systemfonts](https://github.com/r-lib/systemfonts) (the same stack as
+  ragg/svglite), with glyph outlines rasterized by
+  [skrifa](https://github.com/googlefonts/fontations). Includes per-glyph font
+  fallback, justification, and rotation.
 
-Nothing renders yet — that begins in M1 (see the roadmap in DESIGN.md).
+Still to come (see the roadmap in DESIGN.md): the unit/layout engine and nested
+viewports (M2), the S7 scene API (M3), SVG/PDF output (M4), the R graphics
+device shim (M5), and interactivity (M6).
 
 ## Development
 
