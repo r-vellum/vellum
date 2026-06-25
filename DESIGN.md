@@ -153,7 +153,7 @@ absolute transform + clip + colour and emits through:
 
 ```rust
 trait RenderBackend {
-    fn fill_path(&mut self, path: &Path, t: Transform, color: Rgba, clip: &Clip);
+    fn fill_path(&mut self, path: &Path, t: Transform, paint: &ResolvedPaint, clip: &Clip);
     fn stroke_path(&mut self, path: &Path, t: Transform, color: Rgba, w_px: f32, clip: &Clip);
     fn draw_text(&mut self, run: &TextRun, t: Transform, clip: &Clip);
 }
@@ -166,10 +166,21 @@ pre-shaped glyph run **and** the source label + font descriptor, so raster fills
 glyph outlines, PDF embeds glyphs, and SVG emits `<text>`. Three impls today
 (`RasterBackend`, `SvgBackend`, `PdfBackend`); the device shim (M5) will be a fourth.
 
+**Fill is a `Paint`, not just a colour (F1).** `gpar.fill` carries a
+`Paint` (`Solid` / `Linear` / `Radial`) through the gpar fold; gradient geometry is
+stored unresolved as `(value, unit)` and the gpar `alpha` folds into every stop. The
+scene walk resolves that geometry against the viewport into **local pixels** and hands
+the backend a `ResolvedPaint`. Each backend builds its native gradient from local-px
+endpoints + an **identity** gradient transform, relying on the primitive's own draw
+transform to map fill and outline together (tiny-skia post-concats the CTM into the
+shader; krilla into the gradient; SVG via `gradientUnits="userSpaceOnUse"` on a
+transformed element) — the same "don't transform twice" discipline as the clip fix.
+`col`/stroke and text stay solid `Rgba`.
+
 Deliberately simpler than a full immediate-mode CTM/save-restore model: there is no
 `save`/`restore`/`begin_group`/`draw_image` yet — each draw call carries its own
-absolute transform and clip (paint order is the flat node list). Compositing groups,
-images, gradients, and patterns are added when the scene can express them.
+absolute transform and clip (paint order is the flat node list). Tiling patterns
+(F2) and compositing groups/masks (F3) are added when the scene can express them.
 
 ### 4.6 Hit-testing and events (designed in, built later)
 
@@ -294,7 +305,9 @@ vellum/                      R package root
 
 **M4 — vector outputs. ✅ done.** A `RenderBackend` trait (`fill_path`/`stroke_path`/`draw_text`, with clips as a backend-agnostic chain of viewport rects) over the shared scene walk; tiny-skia raster refactored onto it with byte-identical PNGs. **M4a**: hand-rolled **SVG** (no XML dep) — `<path>`, `matrix(...)` transforms, nested `<clipPath>` applied on a wrapping `<g>` (so a device-space clip isn't double-transformed by the element matrix), selectable `<text>` referencing system fonts (svglite-style, renderer-shaped). **M4b**: **PDF** via `krilla =0.8.2` (default-features off) — paths/transforms converted to krilla's tiny-skia-path newtypes (no tiny-skia bump), a single px→pt root transform, clip via `push_clip_path`, alpha via opacity, and **embedded selectable text** through `draw_glyphs` (font subset/embed; per-glyph text ranges for ToUnicode). `render()` dispatches on file extension. Gradients/patterns/masks remain future work (the scene can't express them yet). `render()` rebuilds a fresh backend each call (the tree lives in R).
 
-**M5 — device-shim mode.** Register as an R graphics device via `DeviceDriver`; implement the minimal callback set, then climb the capability ladder (patterns → groups/compositing → glyphs). Panic-guard every callback. Validate by rendering ggplot2/lattice output.
+**F1 — gradient fills. ✅ done.** Introduced the `Paint` model (see §4.5): `gpar(fill =)` accepts `linear_gradient()` / `radial_gradient()` (colours + optional stops, geometry in any unit, `extend = pad/repeat/reflect`). `fill` is now an `Option<Paint>` through the gpar fold (alpha folds into stops); the scene walk resolves gradient geometry against the viewport into local px and the `fill_path` trait takes a `&ResolvedPaint`. All three backends build native gradients from local-px geometry + identity gradient transform (tiny-skia `LinearGradient`/`RadialGradient`, krilla ditto, SVG `<linearGradient>`/`<radialGradient gradientUnits="userSpaceOnUse">`), so fill and outline share one coordinate space. Verified pixel-identical across raster/rasterized-SVG/rasterized-PDF (±2/255). No new crates. **Next: F2 tiling patterns, F3 masks** (the device-shim fork below was declined as optional interop).
+
+**M5 — device-shim mode (optional, deferred).** Register as an R graphics device via `DeviceDriver`; implement the minimal callback set, then climb the capability ladder (patterns → groups/compositing → glyphs). Panic-guard every callback. Validate by rendering ggplot2/lattice output. Deferred in favour of filling out the native engine (gradients/patterns/masks); this is interop, not on the Option-B critical path.
 
 **M6 — interactivity.** Spatial index, hit-testing, event model. The scene graph already supports it; this milestone exposes it.
 
@@ -323,7 +336,7 @@ Still open:
 - **Render caching.** `render()` rebuilds the whole backend `Scene` and re-reads fonts each call (the tree lives in R). Memoize the backend `Scene`/`Pixmap` or persist the `FontCache` if it becomes a cost; today it is cheap relative to rasterization.
 - **Public naming.** `rs_strwidth`/`rs_strheight` keep the internal-looking `rs_` prefix while being public; consider renaming before any release. The internal `rs_*` imperative wrappers still generate (internal) Rd.
 - **Clip-mask memory.** Each clipping viewport clones a page-sized `Mask`; fine now, revisit for deep clip trees on large pages.
-- **SVG text fidelity / vector compositing.** SVG `<text>` is renderer-shaped (not glyph-faithful); gradients, patterns, compositing groups, and images are absent from the backend trait until the scene can express them.
+- **SVG text fidelity / vector compositing.** SVG `<text>` is renderer-shaped (not glyph-faithful). Gradients now exist in the backend (F1); tiling patterns, compositing groups/masks, and images remain absent until F2/F3 add the scene support (`draw_image`, isolated `begin_group`/`end_group(mask)`).
 
 ---
 

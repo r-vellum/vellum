@@ -12,9 +12,11 @@
 use extendr_api::prelude::*;
 use tiny_skia::{PathBuilder, Pixmap, Transform};
 
-use crate::render::{rect_path, Clip, ClipRect, PdfBackend, RasterBackend, RenderBackend, SvgBackend, TextRun};
+use crate::render::{
+    rect_path, Clip, ClipRect, PdfBackend, RasterBackend, RenderBackend, ResolvedPaint, SvgBackend, TextRun,
+};
 
-use crate::color::{opt_color, Gpar, GparAcc, PartialGpar, Rgba};
+use crate::color::{opt_color, Gpar, GparAcc, Paint, PartialGpar, Rgba};
 use crate::units::{rotation_about, Unit, Vp};
 
 // --- layout ----------------------------------------------------------------
@@ -632,7 +634,7 @@ impl Scene {
                     let pw = vp.x_len(*w, *wu);
                     let ph = vp.y_len(*h, *hu);
                     if let Some(path) = rect_path(cx - pw / 2.0, cy - ph / 2.0, pw, ph) {
-                        fill_then_stroke(b, &path, &gp, t, &clip, vp.dpi);
+                        fill_then_stroke(b, &path, &gp, t, &clip, vp);
                     }
                 }
                 Node::Lines { x, y, xu, yu, .. } => {
@@ -645,7 +647,7 @@ impl Scene {
                 }
                 Node::Polygon { x, y, xu, yu, .. } => {
                     if let Some(path) = build_poly(x, y, xu, yu, vp, true) {
-                        fill_then_stroke(b, &path, &gp, t, &clip, vp.dpi);
+                        fill_then_stroke(b, &path, &gp, t, &clip, vp);
                     }
                 }
                 Node::Circle { x, y, r, xu, yu, ru, .. } => {
@@ -655,7 +657,7 @@ impl Scene {
                     let mut pb = PathBuilder::new();
                     pb.push_circle(cx as f32, cy as f32, rr as f32);
                     if let Some(path) = pb.finish() {
-                        fill_then_stroke(b, &path, &gp, t, &clip, vp.dpi);
+                        fill_then_stroke(b, &path, &gp, t, &clip, vp);
                     }
                 }
                 Node::Text {
@@ -694,16 +696,40 @@ impl Scene {
     }
 }
 
-/// Fill then stroke a shape according to its effective gpar.
-fn fill_then_stroke<B: RenderBackend>(b: &mut B, path: &tiny_skia::Path, gp: &Gpar, t: Transform, clip: &Clip, dpi: f64) {
-    if let Some(fill) = gp.fill {
-        b.fill_path(path, t, fill, clip);
+/// Fill then stroke a shape according to its effective gpar. Gradient fill
+/// geometry is resolved against `vp` into viewport-local px (so it transforms
+/// with the grob, like the path coordinates).
+fn fill_then_stroke<B: RenderBackend>(b: &mut B, path: &tiny_skia::Path, gp: &Gpar, t: Transform, clip: &Clip, vp: &Vp) {
+    if let Some(fill) = &gp.fill {
+        b.fill_path(path, t, &resolve_paint(fill, vp), clip);
     }
     if let Some(col) = gp.col {
-        let width = gp.lwd_px(dpi);
+        let width = gp.lwd_px(vp.dpi);
         if width > 0.0 {
             b.stroke_path(path, t, col, width, clip);
         }
+    }
+}
+
+/// Resolve a paint's gradient geometry through the viewport into local px.
+fn resolve_paint(paint: &Paint, vp: &Vp) -> ResolvedPaint {
+    match paint {
+        Paint::Solid(c) => ResolvedPaint::Solid(*c),
+        Paint::Linear { x1, y1, x2, y2, unit, stops, extend } => ResolvedPaint::Linear {
+            x1: vp.x_pos(*x1, *unit),
+            y1: vp.y_pos(*y1, *unit),
+            x2: vp.x_pos(*x2, *unit),
+            y2: vp.y_pos(*y2, *unit),
+            stops: stops.clone(),
+            extend: *extend,
+        },
+        Paint::Radial { cx, cy, r, unit, stops, extend } => ResolvedPaint::Radial {
+            cx: vp.x_pos(*cx, *unit),
+            cy: vp.y_pos(*cy, *unit),
+            r: vp.r_len(*r, *unit),
+            stops: stops.clone(),
+            extend: *extend,
+        },
     }
 }
 

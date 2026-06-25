@@ -5,7 +5,8 @@
 #' the viewport tree. A colour value sets it; `NA` means "no paint".
 #'
 #' @param col Stroke/text colour.
-#' @param fill Fill colour.
+#' @param fill Fill colour, or a gradient from [linear_gradient()] /
+#'   [radial_gradient()].
 #' @param lwd Line width (1 == 1/96 inch).
 #' @param alpha Opacity multiplier in `[0, 1]`.
 #' @param fontfamily Font family (text grobs).

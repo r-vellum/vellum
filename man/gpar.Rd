@@ -18,7 +18,8 @@ gpar(
 \arguments{
 \item{col}{Stroke/text colour.}
 
-\item{fill}{Fill colour.}
+\item{fill}{Fill colour, or a gradient from \code{\link[=linear_gradient]{linear_gradient()}} /
+\code{\link[=radial_gradient]{radial_gradient()}}.}
 
 \item{lwd}{Line width (1 == 1/96 inch).}
 

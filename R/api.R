@@ -243,9 +243,10 @@ edit_node <- function(scene, name, ...) {
   invisible()
 }
 
-# Encode a gpar's four core fields for the backend (tri-state).
+# Encode a gpar's four core fields for the backend (tri-state). `fill` may be a
+# colour or a gradient (see .encode_paint).
 .gp4 <- function(gp) {
-  list(fill = .rs_col_inh(gp@fill), col = .rs_col_inh(gp@col),
+  list(fill = .encode_paint(gp@fill), col = .rs_col_inh(gp@col),
        lwd = .rs_num_inh(gp@lwd), alpha = .rs_num_inh(gp@alpha))
 }
 
@@ -258,7 +259,7 @@ edit_node <- function(scene, name, ...) {
     cx$value, cy$value, cw$value, ch$value, cx$code, cy$code, cw$code, ch$code,
     as.numeric(vp@xscale), as.numeric(vp@yscale), vp@angle, isTRUE(vp@clip),
     lrow, lcol, vp@rowspan, vp@colspan,
-    .rs_col_inh(vp@gp@fill), .rs_col_inh(vp@gp@col), .rs_num_inh(vp@gp@lwd), .rs_num_inh(vp@gp@alpha)
+    .encode_paint(vp@gp@fill), .rs_col_inh(vp@gp@col), .rs_num_inh(vp@gp@lwd), .rs_num_inh(vp@gp@alpha)
   )
   if (!is.null(vp@layout)) .set_layout(scene, vp@layout)
 }

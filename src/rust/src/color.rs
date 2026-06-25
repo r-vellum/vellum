@@ -13,6 +13,8 @@
 
 use extendr_api::prelude::*;
 
+use crate::units::Unit;
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Rgba {
     pub r: u8,
@@ -33,6 +35,99 @@ impl Rgba {
 
     pub fn to_skia(self) -> tiny_skia::Color {
         tiny_skia::Color::from_rgba8(self.r, self.g, self.b, self.a)
+    }
+}
+
+/// How a gradient extends beyond its [0, 1] stop range.
+#[derive(Clone, Copy, Debug)]
+pub enum Extend {
+    Pad,
+    Repeat,
+    Reflect,
+}
+
+impl Extend {
+    pub fn parse(s: &str) -> Extend {
+        match s {
+            "repeat" => Extend::Repeat,
+            "reflect" => Extend::Reflect,
+            _ => Extend::Pad,
+        }
+    }
+}
+
+/// A gradient colour stop (`offset` in 0..=1).
+#[derive(Clone, Copy, Debug)]
+pub struct Stop {
+    pub offset: f32,
+    pub color: Rgba,
+}
+
+/// A fill paint. Gradient geometry is stored in `(value, Unit)` form and resolved
+/// against the viewport at draw time (see `render_to`). `col`/stroke stays solid.
+#[derive(Clone, Debug)]
+pub enum Paint {
+    Solid(Rgba),
+    Linear { x1: f64, y1: f64, x2: f64, y2: f64, unit: Unit, stops: Vec<Stop>, extend: Extend },
+    Radial { cx: f64, cy: f64, r: f64, unit: Unit, stops: Vec<Stop>, extend: Extend },
+}
+
+impl Paint {
+    /// Fold a multiplicative gpar alpha into the paint (every stop / the solid).
+    pub fn with_alpha(self, alpha: f64) -> Paint {
+        let fade = |stops: Vec<Stop>| {
+            stops.into_iter().map(|s| Stop { offset: s.offset, color: s.color.with_alpha(alpha) }).collect()
+        };
+        match self {
+            Paint::Solid(c) => Paint::Solid(c.with_alpha(alpha)),
+            Paint::Linear { x1, y1, x2, y2, unit, stops, extend } => {
+                Paint::Linear { x1, y1, x2, y2, unit, stops: fade(stops), extend }
+            }
+            Paint::Radial { cx, cy, r, unit, stops, extend } => {
+                Paint::Radial { cx, cy, r, unit, stops: fade(stops), extend }
+            }
+        }
+    }
+}
+
+/// Parse a fill paint from R: a length-4 integer vector is a solid colour; a list
+/// with a `kind` element is a gradient; anything else is `None` ("no fill").
+pub fn parse_paint(obj: &Robj) -> Option<Paint> {
+    if let Ok(kind) = obj.dollar("kind") {
+        return parse_gradient(obj, kind.as_str().unwrap_or(""));
+    }
+    opt_color(obj).map(Paint::Solid)
+}
+
+fn parse_gradient(obj: &Robj, kind: &str) -> Option<Paint> {
+    let coords = obj.dollar("coords").ok()?.as_real_slice()?.to_vec();
+    let unit = Unit::parse(obj.dollar("units").ok().and_then(|u| u.as_str().map(String::from)).as_deref().unwrap_or("npc"));
+    let extend = Extend::parse(obj.dollar("extend").ok().and_then(|e| e.as_str().map(String::from)).as_deref().unwrap_or("pad"));
+    let cols = obj.dollar("col").ok()?.as_integer_slice()?.to_vec();
+    let offs = obj.dollar("offset").ok()?.as_real_slice()?.to_vec();
+    let n = offs.len().min(cols.len() / 4);
+    if n == 0 {
+        return None;
+    }
+    let stops: Vec<Stop> = (0..n)
+        .map(|i| Stop {
+            offset: offs[i].clamp(0.0, 1.0) as f32,
+            color: Rgba {
+                r: cols[4 * i].clamp(0, 255) as u8,
+                g: cols[4 * i + 1].clamp(0, 255) as u8,
+                b: cols[4 * i + 2].clamp(0, 255) as u8,
+                a: cols[4 * i + 3].clamp(0, 255) as u8,
+            },
+        })
+        .collect();
+    match kind {
+        "radial" if coords.len() >= 3 => {
+            Some(Paint::Radial { cx: coords[0], cy: coords[1], r: coords[2], unit, stops, extend })
+        }
+        "linear" if coords.len() >= 4 => {
+            Some(Paint::Linear { x1: coords[0], y1: coords[1], x2: coords[2], y2: coords[3], unit, stops, extend })
+        }
+        _ => None,
     }
 }
 
@@ -62,9 +157,9 @@ pub enum Inh<T> {
 /// a primitive. Built from R, where the encoding is:
 ///   * colour: `NULL` -> Inherit, length-4 int -> Set(colour), else -> Set(none)
 ///   * lwd/alpha: `NULL`/`NA` -> Inherit, finite number -> Set
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 pub struct PartialGpar {
-    pub fill: Inh<Option<Rgba>>,
+    pub fill: Inh<Option<Paint>>,
     pub col: Inh<Option<Rgba>>,
     pub lwd: Inh<f64>,
     pub alpha: Inh<f64>,
@@ -73,11 +168,19 @@ pub struct PartialGpar {
 impl PartialGpar {
     pub fn from_robj(fill: &Robj, col: &Robj, lwd: &Robj, alpha: &Robj) -> Self {
         PartialGpar {
-            fill: inh_color(fill),
+            fill: inh_paint(fill),
             col: inh_color(col),
             lwd: inh_f64(lwd),
             alpha: inh_f64(alpha),
         }
+    }
+}
+
+fn inh_paint(obj: &Robj) -> Inh<Option<Paint>> {
+    if obj.is_null() {
+        Inh::Inherit
+    } else {
+        Inh::Set(parse_paint(obj))
     }
 }
 
@@ -99,9 +202,9 @@ fn inh_f64(obj: &Robj) -> Inh<f64> {
 
 /// Accumulated graphical parameters while folding down the tree. `alpha` is the
 /// running product; colours are not yet alpha-adjusted.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 pub struct GparAcc {
-    pub fill: Option<Rgba>,
+    pub fill: Option<Paint>,
     pub col: Option<Rgba>,
     pub lwd: f64,
     pub alpha: f64,
@@ -119,11 +222,11 @@ impl GparAcc {
     }
 
     /// Fold a partial gpar onto this accumulator (more-specific overrides).
-    pub fn apply(self, p: &PartialGpar) -> Self {
+    pub fn apply(&self, p: &PartialGpar) -> Self {
         GparAcc {
-            fill: match p.fill {
-                Inh::Set(v) => v,
-                Inh::Inherit => self.fill,
+            fill: match &p.fill {
+                Inh::Set(v) => v.clone(),
+                Inh::Inherit => self.fill.clone(),
             },
             col: match p.col {
                 Inh::Set(v) => v,
@@ -141,9 +244,9 @@ impl GparAcc {
     }
 
     /// Resolve to concrete drawing parameters, applying the accumulated alpha.
-    pub fn resolve(self) -> Gpar {
+    pub fn resolve(&self) -> Gpar {
         Gpar {
-            fill: self.fill.map(|c| c.with_alpha(self.alpha)),
+            fill: self.fill.clone().map(|p| p.with_alpha(self.alpha)),
             col: self.col.map(|c| c.with_alpha(self.alpha)),
             lwd: self.lwd,
         }
@@ -151,9 +254,9 @@ impl GparAcc {
 }
 
 /// Effective graphical parameters for a single primitive (alpha already applied).
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 pub struct Gpar {
-    pub fill: Option<Rgba>,
+    pub fill: Option<Paint>,
     pub col: Option<Rgba>,
     /// Line width in R "lwd" units (1 == 1/96 inch).
     pub lwd: f64,

@@ -30,6 +30,7 @@ Collate:
     'grob.R'
     'api.R'
     'extendr-wrappers.R'
+    'paint.R'
     'scene.R'
     'text.R'
     'unit.R'

@@ -10,9 +10,17 @@ use std::rc::Rc;
 
 use tiny_skia::{FillRule, Mask, Paint, Path, PathBuilder, Pixmap, Stroke, Transform};
 
-use crate::color::Rgba;
+use crate::color::{Extend, Rgba, Stop};
 use crate::font::FontCache;
 use crate::units::rotation_about;
+
+/// A fill paint with geometry resolved to viewport-local pixels (the backend's
+/// own draw transform then maps it to device space, exactly like the path).
+pub enum ResolvedPaint {
+    Solid(Rgba),
+    Linear { x1: f64, y1: f64, x2: f64, y2: f64, stops: Vec<Stop>, extend: Extend },
+    Radial { cx: f64, cy: f64, r: f64, stops: Vec<Stop>, extend: Extend },
+}
 
 /// One viewport rectangle contributing to a clip, in device space: a `w` x `h`
 /// rectangle (viewport-local pixels) placed by `transform`.
@@ -58,7 +66,7 @@ pub struct TextRun<'a> {
 
 /// A drawing target. The walk calls these in paint order.
 pub trait RenderBackend {
-    fn fill_path(&mut self, path: &Path, transform: Transform, color: Rgba, clip: &Clip);
+    fn fill_path(&mut self, path: &Path, transform: Transform, paint: &ResolvedPaint, clip: &Clip);
     fn stroke_path(&mut self, path: &Path, transform: Transform, color: Rgba, width_px: f32, clip: &Clip);
     fn draw_text(&mut self, run: &TextRun, transform: Transform, clip: &Clip);
 }
@@ -126,10 +134,51 @@ fn solid_paint(color: Rgba) -> Paint<'static> {
     paint
 }
 
+fn skia_spread(extend: Extend) -> tiny_skia::SpreadMode {
+    match extend {
+        Extend::Pad => tiny_skia::SpreadMode::Pad,
+        Extend::Repeat => tiny_skia::SpreadMode::Repeat,
+        Extend::Reflect => tiny_skia::SpreadMode::Reflect,
+    }
+}
+
+fn skia_stops(stops: &[Stop]) -> Vec<tiny_skia::GradientStop> {
+    stops.iter().map(|s| tiny_skia::GradientStop::new(s.offset, s.color.to_skia())).collect()
+}
+
+/// Build a tiny-skia paint for a resolved fill. Gradient geometry is in local px
+/// with an identity gradient transform; `fill_path`'s ctm maps it like the path.
+fn paint_for(paint: &ResolvedPaint) -> Option<Paint<'static>> {
+    let shader = match paint {
+        ResolvedPaint::Solid(c) => return Some(solid_paint(*c)),
+        ResolvedPaint::Linear { x1, y1, x2, y2, stops, extend } => tiny_skia::LinearGradient::new(
+            tiny_skia::Point::from_xy(*x1 as f32, *y1 as f32),
+            tiny_skia::Point::from_xy(*x2 as f32, *y2 as f32),
+            skia_stops(stops),
+            skia_spread(*extend),
+            Transform::identity(),
+        ),
+        ResolvedPaint::Radial { cx, cy, r, stops, extend } => tiny_skia::RadialGradient::new(
+            tiny_skia::Point::from_xy(*cx as f32, *cy as f32),
+            tiny_skia::Point::from_xy(*cx as f32, *cy as f32),
+            *r as f32,
+            skia_stops(stops),
+            skia_spread(*extend),
+            Transform::identity(),
+        ),
+    }?;
+    let mut p = Paint::default();
+    p.shader = shader;
+    p.anti_alias = true;
+    Some(p)
+}
+
 impl RenderBackend for RasterBackend {
-    fn fill_path(&mut self, path: &Path, transform: Transform, color: Rgba, clip: &Clip) {
+    fn fill_path(&mut self, path: &Path, transform: Transform, paint: &ResolvedPaint, clip: &Clip) {
         let mask = self.mask_for(clip);
-        self.pm.fill_path(path, &solid_paint(color), FillRule::Winding, transform, mask.as_deref());
+        if let Some(p) = paint_for(paint) {
+            self.pm.fill_path(path, &p, FillRule::Winding, transform, mask.as_deref());
+        }
     }
 
     fn stroke_path(&mut self, path: &Path, transform: Transform, color: Rgba, width_px: f32, clip: &Clip) {
@@ -177,6 +226,7 @@ pub struct SvgBackend {
     body: String,
     clip_attrs: HashMap<usize, String>,
     next_clip: u32,
+    next_grad: u32,
 }
 
 impl SvgBackend {
@@ -189,7 +239,38 @@ impl SvgBackend {
                 opacity(bg)
             ));
         }
-        SvgBackend { w, h, defs: String::new(), body, clip_attrs: HashMap::new(), next_clip: 0 }
+        SvgBackend { w, h, defs: String::new(), body, clip_attrs: HashMap::new(), next_clip: 0, next_grad: 0 }
+    }
+
+    /// The `fill="..."` attributes for a resolved paint (registers a gradient def
+    /// when needed). Gradient coords are local px (`userSpaceOnUse`); the element's
+    /// own `transform` maps them to device, exactly like the path geometry.
+    fn svg_fill(&mut self, paint: &ResolvedPaint) -> String {
+        match paint {
+            ResolvedPaint::Solid(c) => format!("fill=\"{}\" fill-opacity=\"{}\"", rgb_hex(*c), opacity(*c)),
+            ResolvedPaint::Linear { x1, y1, x2, y2, stops, extend } => {
+                let id = format!("g{}", self.next_grad);
+                self.next_grad += 1;
+                self.defs.push_str(&format!(
+                    "<linearGradient id=\"{id}\" gradientUnits=\"userSpaceOnUse\" \
+                     x1=\"{x1}\" y1=\"{y1}\" x2=\"{x2}\" y2=\"{y2}\" spreadMethod=\"{s}\">{stops}</linearGradient>",
+                    s = svg_spread(*extend),
+                    stops = svg_stops(stops),
+                ));
+                format!("fill=\"url(#{id})\"")
+            }
+            ResolvedPaint::Radial { cx, cy, r, stops, extend } => {
+                let id = format!("g{}", self.next_grad);
+                self.next_grad += 1;
+                self.defs.push_str(&format!(
+                    "<radialGradient id=\"{id}\" gradientUnits=\"userSpaceOnUse\" \
+                     cx=\"{cx}\" cy=\"{cy}\" r=\"{r}\" spreadMethod=\"{s}\">{stops}</radialGradient>",
+                    s = svg_spread(*extend),
+                    stops = svg_stops(stops),
+                ));
+                format!("fill=\"url(#{id})\"")
+            }
+        }
     }
 
     pub fn into_string(self) -> String {
@@ -246,12 +327,11 @@ impl SvgBackend {
 }
 
 impl RenderBackend for SvgBackend {
-    fn fill_path(&mut self, path: &Path, transform: Transform, color: Rgba, clip: &Clip) {
+    fn fill_path(&mut self, path: &Path, transform: Transform, paint: &ResolvedPaint, clip: &Clip) {
+        let fill = self.svg_fill(paint);
         let element = format!(
-            "<path d=\"{}\" fill=\"{}\" fill-opacity=\"{}\"{}/>",
+            "<path d=\"{}\" {fill}{}/>",
             path_to_d(path),
-            rgb_hex(color),
-            opacity(color),
             transform_attr(transform),
         );
         self.emit(&element, clip);
@@ -325,6 +405,28 @@ fn rgb_hex(c: Rgba) -> String {
     format!("#{:02x}{:02x}{:02x}", c.r, c.g, c.b)
 }
 
+fn svg_spread(extend: Extend) -> &'static str {
+    match extend {
+        Extend::Pad => "pad",
+        Extend::Repeat => "repeat",
+        Extend::Reflect => "reflect",
+    }
+}
+
+fn svg_stops(stops: &[Stop]) -> String {
+    stops
+        .iter()
+        .map(|s| {
+            format!(
+                "<stop offset=\"{}\" stop-color=\"{}\" stop-opacity=\"{}\"/>",
+                s.offset,
+                rgb_hex(s.color),
+                opacity(s.color)
+            )
+        })
+        .collect()
+}
+
 fn opacity(c: Rgba) -> f32 {
     c.a as f32 / 255.0
 }
@@ -381,7 +483,10 @@ fn xml_escape(s: &str) -> String {
 use krilla::color::rgb;
 use krilla::geom::{Path as KPath, PathBuilder as KPathBuilder, Point as KPoint, Transform as KTransform};
 use krilla::num::NormalizedF32;
-use krilla::paint::{Fill, FillRule as KFillRule, Stroke as KStroke};
+use krilla::paint::{
+    Fill, FillRule as KFillRule, LinearGradient as KLinear, Paint as KPaint, RadialGradient as KRadial,
+    SpreadMethod as KSpread, Stop as KStop, Stroke as KStroke,
+};
 use krilla::surface::Surface;
 use krilla::text::{Font, GlyphId, KrillaGlyph};
 
@@ -405,7 +510,7 @@ impl<'a, 'b> PdfBackend<'a, 'b> {
         }
         if let Some(path) = rect_path(0.0, 0.0, w as f64, h as f64) {
             let empty = Clip { id: usize::MAX, rects: &[] };
-            self.fill_path(&path, Transform::identity(), bg, &empty);
+            self.fill_path(&path, Transform::identity(), &ResolvedPaint::Solid(bg), &empty);
         }
     }
 
@@ -443,18 +548,47 @@ impl<'a, 'b> PdfBackend<'a, 'b> {
 }
 
 impl RenderBackend for PdfBackend<'_, '_> {
-    fn fill_path(&mut self, path: &Path, transform: Transform, color: Rgba, clip: &Clip) {
+    fn fill_path(&mut self, path: &Path, transform: Transform, paint: &ResolvedPaint, clip: &Clip) {
         let kp = match to_kpath(path) {
             Some(p) => p,
             None => return,
         };
+        // Gradient geometry is local px (identity gradient transform); the
+        // primitive `transform` pushed below maps it to device, like the path.
+        let (kpaint, opacity) = match paint {
+            ResolvedPaint::Solid(c) => (rgb::Color::new(c.r, c.g, c.b).into(), norm(c.a)),
+            ResolvedPaint::Linear { x1, y1, x2, y2, stops, extend } => (
+                KPaint::from(KLinear {
+                    x1: *x1 as f32,
+                    y1: *y1 as f32,
+                    x2: *x2 as f32,
+                    y2: *y2 as f32,
+                    transform: KTransform::identity(),
+                    spread_method: krilla_spread(*extend),
+                    stops: krilla_stops(stops),
+                    anti_alias: true,
+                }),
+                NormalizedF32::ONE,
+            ),
+            ResolvedPaint::Radial { cx, cy, r, stops, extend } => (
+                KPaint::from(KRadial {
+                    fx: *cx as f32,
+                    fy: *cy as f32,
+                    fr: 0.0,
+                    cx: *cx as f32,
+                    cy: *cy as f32,
+                    cr: *r as f32,
+                    transform: KTransform::identity(),
+                    spread_method: krilla_spread(*extend),
+                    stops: krilla_stops(stops),
+                    anti_alias: true,
+                }),
+                NormalizedF32::ONE,
+            ),
+        };
         let n = self.push_state(transform, clip);
         self.surface.set_stroke(None);
-        self.surface.set_fill(Some(Fill {
-            paint: rgb::Color::new(color.r, color.g, color.b).into(),
-            opacity: norm(color.a),
-            rule: KFillRule::NonZero,
-        }));
+        self.surface.set_fill(Some(Fill { paint: kpaint, opacity, rule: KFillRule::NonZero }));
         self.surface.draw_path(&kp);
         self.pop_state(n);
     }
@@ -602,4 +736,23 @@ fn clip_rect_kpath(r: &ClipRect) -> Option<KPath> {
 
 fn norm(a: u8) -> NormalizedF32 {
     NormalizedF32::new(a as f32 / 255.0).unwrap_or(NormalizedF32::ONE)
+}
+
+fn krilla_spread(extend: Extend) -> KSpread {
+    match extend {
+        Extend::Pad => KSpread::Pad,
+        Extend::Repeat => KSpread::Repeat,
+        Extend::Reflect => KSpread::Reflect,
+    }
+}
+
+fn krilla_stops(stops: &[Stop]) -> Vec<KStop> {
+    stops
+        .iter()
+        .map(|s| KStop {
+            offset: NormalizedF32::new(s.offset.clamp(0.0, 1.0)).unwrap_or(NormalizedF32::ZERO),
+            color: rgb::Color::new(s.color.r, s.color.g, s.color.b).into(),
+            opacity: norm(s.color.a),
+        })
+        .collect()
 }

@@ -53,7 +53,7 @@ rs_push_viewport <- function(scene, x = 0.5, y = 0.5, width = 1, height = 1,
     cx$value, cy$value, cw$value, ch$value, cx$code, cy$code, cw$code, ch$code,
     as.numeric(xscale), as.numeric(yscale), angle, isTRUE(clip),
     lrow, lcol, as.integer(rowspan), as.integer(colspan),
-    .rs_col_inh(gp$fill), .rs_col_inh(gp$col), .rs_num_inh(gp$lwd), .rs_num_inh(gp$alpha)
+    .encode_paint(gp$fill), .rs_col_inh(gp$col), .rs_num_inh(gp$lwd), .rs_num_inh(gp$alpha)
   )
 }
 
@@ -145,7 +145,7 @@ rs_rect <- function(scene, x = 0.5, y = 0.5, width = 1, height = 1,
   cx <- .coord(x, units, 1); cy <- .coord(y, units, 1)
   cw <- .coord(width, units, 1); ch <- .coord(height, units, 1)
   scene$rect(cx$value, cy$value, cw$value, ch$value, cx$code, cy$code, cw$code, ch$code,
-             .rs_col_inh(fill), .rs_col_inh(col), .rs_num_inh(lwd), .rs_num_inh(alpha))
+             .encode_paint(fill), .rs_col_inh(col), .rs_num_inh(lwd), .rs_num_inh(alpha))
   invisible(scene)
 }
 
@@ -179,7 +179,7 @@ rs_polygon <- function(scene, x, y, units = "npc", fill = NA, col = "black", lwd
   n <- .coord_n(x, y)
   cx <- .coord(x, units, n); cy <- .coord(y, units, n)
   scene$polygon(cx$value, cy$value, cx$code, cy$code,
-                .rs_col_inh(fill), .rs_col_inh(col), .rs_num_inh(lwd), .rs_num_inh(alpha))
+                .encode_paint(fill), .rs_col_inh(col), .rs_num_inh(lwd), .rs_num_inh(alpha))
   invisible(scene)
 }
 
@@ -200,7 +200,7 @@ rs_circle <- function(scene, x = 0.5, y = 0.5, r = 0.25,
   units <- .rs_units(units)
   cx <- .coord(x, units, 1); cy <- .coord(y, units, 1); cr <- .coord(r, units, 1)
   scene$circle(cx$value, cy$value, cr$value, cx$code, cy$code, cr$code,
-               .rs_col_inh(fill), .rs_col_inh(col), .rs_num_inh(lwd), .rs_num_inh(alpha))
+               .encode_paint(fill), .rs_col_inh(col), .rs_num_inh(lwd), .rs_num_inh(alpha))
   invisible(scene)
 }
 
