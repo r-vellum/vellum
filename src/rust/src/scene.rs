@@ -12,7 +12,7 @@
 use extendr_api::prelude::*;
 use tiny_skia::{PathBuilder, Pixmap, Transform};
 
-use crate::render::{rect_path, Clip, ClipRect, RasterBackend, RenderBackend, SvgBackend, TextRun};
+use crate::render::{rect_path, Clip, ClipRect, PdfBackend, RasterBackend, RenderBackend, SvgBackend, TextRun};
 
 use crate::color::{opt_color, Gpar, GparAcc, PartialGpar, Rgba};
 use crate::units::{rotation_about, Unit, Vp};
@@ -432,6 +432,38 @@ impl Scene {
         self.render_to(&mut b);
         if let Err(e) = std::fs::write(path, b.into_string()) {
             throw_r_error(format!("failed to write SVG: {e}"));
+        }
+    }
+
+    /// Render the scene to a PDF file.
+    fn render_pdf(&self, path: &str) {
+        let scale = 72.0 / self.dpi as f32;
+        let w_pt = self.w_px as f32 * scale;
+        let h_pt = self.h_px as f32 * scale;
+        let mut doc = krilla::Document::new();
+        let settings = match krilla::page::PageSettings::from_wh(w_pt, h_pt) {
+            Some(s) => s,
+            None => throw_r_error("invalid PDF page size"),
+        };
+        let mut page = doc.start_page_with(settings);
+        let mut surface = page.surface();
+        // One root transform maps device pixels -> PDF points.
+        surface.push_transform(&krilla::geom::Transform::from_scale(scale, scale));
+        {
+            let mut b = PdfBackend::new(&mut surface);
+            b.fill_background(self.w_px, self.h_px, self.bg);
+            self.render_to(&mut b);
+        }
+        surface.pop();
+        surface.finish();
+        page.finish();
+        match doc.finish() {
+            Ok(bytes) => {
+                if let Err(e) = std::fs::write(path, bytes) {
+                    throw_r_error(format!("failed to write PDF: {e}"));
+                }
+            }
+            Err(e) => throw_r_error(format!("failed to serialize PDF: {e}")),
         }
     }
 

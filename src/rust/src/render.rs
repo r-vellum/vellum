@@ -375,3 +375,230 @@ fn rect_corners_d(r: &ClipRect) -> String {
 fn xml_escape(s: &str) -> String {
     s.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;").replace('"', "&quot;")
 }
+
+// --- PDF backend (krilla) ---------------------------------------------------
+
+use krilla::color::rgb;
+use krilla::geom::{Path as KPath, PathBuilder as KPathBuilder, Point as KPoint, Transform as KTransform};
+use krilla::num::NormalizedF32;
+use krilla::paint::{Fill, FillRule as KFillRule, Stroke as KStroke};
+use krilla::surface::Surface;
+use krilla::text::{Font, GlyphId, KrillaGlyph};
+
+/// Draws onto a krilla PDF surface. Geometry is converted from `tiny_skia`
+/// types; everything is drawn in device pixels and a single root scale
+/// (`72/dpi`) maps to PDF points.
+pub struct PdfBackend<'a, 'b> {
+    surface: &'a mut Surface<'b>,
+    fonts: HashMap<(String, u32), Option<Font>>,
+}
+
+impl<'a, 'b> PdfBackend<'a, 'b> {
+    pub fn new(surface: &'a mut Surface<'b>) -> Self {
+        PdfBackend { surface, fonts: HashMap::new() }
+    }
+
+    /// Fill the page with the background colour (device-px page rect).
+    pub fn fill_background(&mut self, w: u32, h: u32, bg: Rgba) {
+        if bg.a == 0 {
+            return;
+        }
+        if let Some(path) = rect_path(0.0, 0.0, w as f64, h as f64) {
+            let empty = Clip { id: usize::MAX, rects: &[] };
+            self.fill_path(&path, Transform::identity(), bg, &empty);
+        }
+    }
+
+    /// Push clip paths (under the root scale) then the primitive transform;
+    /// returns the number of `pop()`s needed to unwind.
+    fn push_state(&mut self, transform: Transform, clip: &Clip) -> usize {
+        let mut n = 0;
+        for r in clip.rects {
+            if let Some(p) = clip_rect_kpath(r) {
+                self.surface.push_clip_path(&p, &KFillRule::NonZero);
+                n += 1;
+            }
+        }
+        self.surface.push_transform(&to_ktransform(transform));
+        n + 1
+    }
+
+    fn pop_state(&mut self, n: usize) {
+        for _ in 0..n {
+            self.surface.pop();
+        }
+    }
+
+    fn font_for(&mut self, path: &str, index: u32) -> Option<Font> {
+        let key = (path.to_string(), index);
+        if let Some(f) = self.fonts.get(&key) {
+            return f.clone();
+        }
+        let font = std::fs::read(path)
+            .ok()
+            .and_then(|bytes| Font::new(krilla::Data::from(bytes), index));
+        self.fonts.insert(key, font.clone());
+        font
+    }
+}
+
+impl RenderBackend for PdfBackend<'_, '_> {
+    fn fill_path(&mut self, path: &Path, transform: Transform, color: Rgba, clip: &Clip) {
+        let kp = match to_kpath(path) {
+            Some(p) => p,
+            None => return,
+        };
+        let n = self.push_state(transform, clip);
+        self.surface.set_stroke(None);
+        self.surface.set_fill(Some(Fill {
+            paint: rgb::Color::new(color.r, color.g, color.b).into(),
+            opacity: norm(color.a),
+            rule: KFillRule::NonZero,
+        }));
+        self.surface.draw_path(&kp);
+        self.pop_state(n);
+    }
+
+    fn stroke_path(&mut self, path: &Path, transform: Transform, color: Rgba, width_px: f32, clip: &Clip) {
+        if width_px <= 0.0 {
+            return;
+        }
+        let kp = match to_kpath(path) {
+            Some(p) => p,
+            None => return,
+        };
+        let n = self.push_state(transform, clip);
+        self.surface.set_fill(None);
+        self.surface.set_stroke(Some(KStroke {
+            paint: rgb::Color::new(color.r, color.g, color.b).into(),
+            width: width_px,
+            opacity: norm(color.a),
+            ..KStroke::default()
+        }));
+        self.surface.draw_path(&kp);
+        self.pop_state(n);
+    }
+
+    fn draw_text(&mut self, run: &TextRun, transform: Transform, clip: &Clip) {
+        let n = run.gid.len()
+            .min(run.gx.len())
+            .min(run.gsize.len())
+            .min(run.gpath.len())
+            .min(run.gface.len());
+        if n == 0 || run.label.is_empty() {
+            return;
+        }
+        let size_px = (run.size * run.dpi / 72.0) as f32;
+        if size_px <= 0.0 {
+            return;
+        }
+        // Text origin (local px). Glyph i sits at origin + gx[i]; baseline y is
+        // shared. Mirrors the raster placement.
+        let start_x = (run.ax - run.hjust * run.w) as f32;
+        let start_y = (run.ay - (run.gy[0] - run.vjust * run.h)) as f32;
+        let base = if run.rot != 0.0 {
+            transform.pre_concat(rotation_about(run.rot, run.ax, run.ay))
+        } else {
+            transform
+        };
+
+        // char byte boundaries for ToUnicode (exact when glyphs == chars).
+        let bounds: Vec<usize> =
+            run.label.char_indices().map(|(b, _)| b).chain(std::iter::once(run.label.len())).collect();
+        let exact = n + 1 == bounds.len();
+        let range_for = |i: usize| {
+            if exact {
+                bounds[i]..bounds[i + 1]
+            } else if i == 0 {
+                0..run.label.len()
+            } else {
+                0..0
+            }
+        };
+
+        let pushes = self.push_state(base, clip);
+        self.surface.set_stroke(None);
+        self.surface.set_fill(Some(Fill {
+            paint: rgb::Color::new(run.color.r, run.color.g, run.color.b).into(),
+            opacity: norm(run.color.a),
+            rule: KFillRule::NonZero,
+        }));
+
+        // Draw in runs of consecutive glyphs sharing a font (handles fallback).
+        let mut i = 0;
+        while i < n {
+            let (gpath, gface) = (&run.gpath[i], run.gface[i]);
+            let mut j = i;
+            while j < n && &run.gpath[j] == gpath && run.gface[j] == gface {
+                j += 1;
+            }
+            if let Some(font) = self.font_for(gpath, gface) {
+                let glyphs: Vec<KrillaGlyph> = (i..j)
+                    .map(|k| {
+                        KrillaGlyph::new(
+                            GlyphId::new(run.gid[k]),
+                            0.0,                              // x_advance (positions via x_offset)
+                            run.gx[k] as f32 / size_px,       // x_offset, normalized
+                            0.0,
+                            0.0,
+                            range_for(k),
+                            None,
+                        )
+                    })
+                    .collect();
+                self.surface.draw_glyphs(
+                    KPoint::from_xy(start_x, start_y),
+                    &glyphs,
+                    font,
+                    run.label,
+                    size_px,
+                    false,
+                );
+            }
+            i = j;
+        }
+        self.pop_state(pushes);
+    }
+}
+
+fn to_kpath(p: &Path) -> Option<KPath> {
+    use tiny_skia::PathSegment;
+    let mut pb = KPathBuilder::new();
+    for seg in p.segments() {
+        match seg {
+            PathSegment::MoveTo(pt) => pb.move_to(pt.x, pt.y),
+            PathSegment::LineTo(pt) => pb.line_to(pt.x, pt.y),
+            PathSegment::QuadTo(c, pt) => pb.quad_to(c.x, c.y, pt.x, pt.y),
+            PathSegment::CubicTo(c1, c2, pt) => pb.cubic_to(c1.x, c1.y, c2.x, c2.y, pt.x, pt.y),
+            PathSegment::Close => pb.close(),
+        }
+    }
+    pb.finish()
+}
+
+fn to_ktransform(t: Transform) -> KTransform {
+    KTransform::from_row(t.sx, t.ky, t.kx, t.sy, t.tx, t.ty)
+}
+
+fn clip_rect_kpath(r: &ClipRect) -> Option<KPath> {
+    let pt = |x: f64, y: f64| {
+        let dx = r.transform.sx as f64 * x + r.transform.kx as f64 * y + r.transform.tx as f64;
+        let dy = r.transform.ky as f64 * x + r.transform.sy as f64 * y + r.transform.ty as f64;
+        (dx as f32, dy as f32)
+    };
+    let mut pb = KPathBuilder::new();
+    let (x0, y0) = pt(0.0, 0.0);
+    pb.move_to(x0, y0);
+    let (x1, y1) = pt(r.w, 0.0);
+    pb.line_to(x1, y1);
+    let (x2, y2) = pt(r.w, r.h);
+    pb.line_to(x2, y2);
+    let (x3, y3) = pt(0.0, r.h);
+    pb.line_to(x3, y3);
+    pb.close();
+    pb.finish()
+}
+
+fn norm(a: u8) -> NormalizedF32 {
+    NormalizedF32::new(a as f32 / 255.0).unwrap_or(NormalizedF32::ONE)
+}

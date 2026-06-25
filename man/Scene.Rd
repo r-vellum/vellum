@@ -64,6 +64,10 @@ Render the scene to a PNG file.
 Render the scene to an SVG file.
 }
 
+\subsection{Method \code{render_pdf}}{
+Render the scene to a PDF file.
+}
+
 \subsection{Method \code{rgba}}{
 Render and return the whole image as row-major RGBA bytes
 \verb{[r, g, b, a, ...]} (top-left origin, x fastest).

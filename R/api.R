@@ -100,7 +100,8 @@ render <- function(scene, path) {
   switch(ext,
     png = s$render_png(path),
     svg = s$render_svg(path),
-    cli::cli_abort("Unsupported output format {.val {ext}}; use .png or .svg.")
+    pdf = s$render_pdf(path),
+    cli::cli_abort("Unsupported output format {.val {ext}}; use .png, .svg, or .pdf.")
   )
   invisible(path)
 }

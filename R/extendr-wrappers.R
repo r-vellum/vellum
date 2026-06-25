@@ -80,6 +80,10 @@ rs_bbox <- function(x, y) .Call(wrap__rs_bbox, x, y)
 #'Render the scene to an SVG file.
 #'}
 #'
+#'\subsection{Method `render_pdf`}{
+#'Render the scene to a PDF file.
+#'}
+#'
 #'\subsection{Method `rgba`}{
 #'Render and return the whole image as row-major RGBA bytes
 #'`[r, g, b, a, ...]` (top-left origin, x fastest).
@@ -120,6 +124,8 @@ Scene$dpi <- function() .Call(wrap__Scene__dpi, self)
 Scene$render_png <- function(path) .Call(wrap__Scene__render_png, self, path)
 
 Scene$render_svg <- function(path) .Call(wrap__Scene__render_svg, self, path)
+
+Scene$render_pdf <- function(path) .Call(wrap__Scene__render_pdf, self, path)
 
 Scene$rgba <- function() .Call(wrap__Scene__rgba, self)
 
