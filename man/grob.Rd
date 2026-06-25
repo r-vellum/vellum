@@ -83,9 +83,10 @@ text_grob(
 
 \item{x0, y0, x1, y1}{Segment start/end coordinates (\code{\link[=unit]{unit()}} or numeric).}
 
-\item{id}{Optional integer vector (one per point) grouping points into closed
-sub-paths; consecutive equal values form a sub-path (so a hole is a second
-sub-path). \code{NULL} makes a single sub-path.}
+\item{id}{Optional vector (one per point) grouping points into closed
+sub-paths: all points sharing an \code{id} form one sub-path (so a hole is a
+separate \code{id}), grouped in first-appearance order \(à la grid\). \code{NULL}
+makes a single sub-path.}
 
 \item{rule}{Fill rule: \code{"winding"} (non-zero, default) or \code{"evenodd"}.}
 

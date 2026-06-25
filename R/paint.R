@@ -230,20 +230,30 @@ print.vellum_mask <- function(x, ...) {
 .lineend_codes <- c(round = 0L, butt = 1L, square = 2L)
 .linejoin_codes <- c(round = 0L, mitre = 1L, miter = 1L, bevel = 2L)
 
-# lty -> numeric dash nibbles (numeric(0) = solid) or NULL (inherit).
+# lty -> a value the backend decodes: NULL (inherit), numeric(0) (solid),
+# NA_real_ (blank = no line), or numeric dash nibbles.
 .encode_lty <- function(lty) {
   if (is.null(lty)) {
     return(NULL)
   }
   if (is.numeric(lty)) {
     if (length(lty) == 1L) {
+      if (is.na(lty)) {
+        return(NA_real_) # blank
+      }
       nm <- .lty_names[as.integer(lty) + 1L]
+      if (!is.na(nm) && nm == "blank") {
+        return(NA_real_)
+      }
       return(if (is.na(nm)) numeric(0) else .lty_patterns[[nm]])
     }
     return(as.double(lty)) # explicit on/off lengths
   }
   if (is.character(lty)) {
     nm <- lty[1]
+    if (identical(nm, "blank")) {
+      return(NA_real_)
+    }
     if (!is.null(.lty_patterns[[nm]])) {
       return(.lty_patterns[[nm]])
     }

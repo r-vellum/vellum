@@ -84,3 +84,18 @@ test_that("PDF renders dashed strokes without error", {
 test_that("invalid lty is rejected (at compile time)", {
   expect_error(.scene_to_backend(hline(gpar(col = "black", lty = "zzz"))), "lty")
 })
+
+test_that('lty = "blank"/0 suppresses the line but keeps the fill', {
+  pxl <- function(s, x, y) .scene_to_backend(s)$pixel(x, y)
+  blank <- vl_scene(1, 1, dpi = 100, bg = "white") |>
+    draw(rect_grob(x = 0.5, y = 0.5, width = 0.6, height = 0.6,
+                   gp = gpar(fill = "red", col = "black", lwd = 8, lty = "blank")))
+  solid <- vl_scene(1, 1, dpi = 100, bg = "white") |>
+    draw(rect_grob(x = 0.5, y = 0.5, width = 0.6, height = 0.6,
+                   gp = gpar(fill = "red", col = "black", lwd = 8)))
+  # just outside the rect edge (npc y ~0.82 -> dev ~18): solid paints a border, blank does not
+  expect_equal(pxl(blank, 50, 17)[1:3], c(255L, 255L, 255L)) # no border
+  expect_equal(pxl(solid, 50, 17)[1:3], c(0L, 0L, 0L))       # black border
+  expect_equal(pxl(blank, 50, 50)[1:3], c(255L, 0L, 0L))     # fill still drawn
+  expect_equal(.encode_lty(0), .encode_lty("blank"))         # code 0 == "blank"
+})

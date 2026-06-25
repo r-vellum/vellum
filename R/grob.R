@@ -132,25 +132,29 @@ segments_grob <- function(x0, y0, x1, y1, gp = gpar(), name = NULL, vp = NULL) {
 }
 
 #' @rdname grob
-#' @param id Optional integer vector (one per point) grouping points into closed
-#'   sub-paths; consecutive equal values form a sub-path (so a hole is a second
-#'   sub-path). `NULL` makes a single sub-path.
+#' @param id Optional vector (one per point) grouping points into closed
+#'   sub-paths: all points sharing an `id` form one sub-path (so a hole is a
+#'   separate `id`), grouped in first-appearance order \(à la grid\). `NULL`
+#'   makes a single sub-path.
 #' @param rule Fill rule: `"winding"` (non-zero, default) or `"evenodd"`.
 #' @export
 path_grob <- function(x, y, id = NULL, rule = c("winding", "evenodd"),
                       gp = gpar(), name = NULL, vp = NULL) {
   rule <- match.arg(rule)
   n <- .coord_n(x, y)
-  nper <- if (is.null(id)) {
-    n
+  xu <- vctrs::vec_recycle(as_unit(x, "native"), n)
+  yu <- vctrs::vec_recycle(as_unit(y, "native"), n)
+  if (is.null(id)) {
+    nper <- n
   } else {
     if (length(id) != n) cli::cli_abort("{.arg id} must have one value per point ({n}).")
-    rle(id)$lengths
+    grp <- match(id, unique(id)) # group index in first-appearance order
+    ord <- order(grp, seq_along(grp)) # stable: gather each id's points together
+    xu <- xu[ord]; yu <- yu[ord]
+    nper <- tabulate(grp)
   }
   grob_path(
-    x = vctrs::vec_recycle(as_unit(x, "native"), n),
-    y = vctrs::vec_recycle(as_unit(y, "native"), n),
-    nper = as.integer(nper), rule = rule, gp = gp, name = name, vp = vp
+    x = xu, y = yu, nper = as.integer(nper), rule = rule, gp = gp, name = name, vp = vp
   )
 }
 

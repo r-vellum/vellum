@@ -62,3 +62,16 @@ test_that("SVG path emits fill-rule for even-odd; PDF renders", {
 test_that("path_grob rejects an id of the wrong length", {
   expect_error(path_grob(c(0, 1, 1), c(0, 0, 1), id = c(1, 1)), "one value per point")
 })
+
+test_that("path_grob groups non-consecutive ids into one sub-path (grid-style)", {
+  px <- function(s, x, y) .scene_to_backend(s)$pixel(x, y)
+  ring <- function(r, n = 32) { a <- seq(0, 2 * pi, length.out = n); list(x = 0.5 + r * cos(a), y = 0.5 + r * sin(a)) }
+  o <- ring(0.4); i <- ring(0.18)
+  # interleave the outer ring around the inner ring; ids are non-consecutive
+  xv <- c(o$x[1:16], i$x, o$x[17:32]); yv <- c(o$y[1:16], i$y, o$y[17:32])
+  idv <- c(rep(1, 16), rep(2, 32), rep(1, 16))
+  s <- vl_scene(1, 1, dpi = 100, bg = "white") |>
+    draw(path_grob(xv, yv, id = idv, rule = "evenodd", gp = gpar(fill = "steelblue", col = NA)))
+  expect_equal(px(s, 50, 12)[1:3], c(70L, 130L, 180L))   # ring filled
+  expect_equal(px(s, 50, 50)[1:3], c(255L, 255L, 255L))  # hole (would fill if mis-grouped)
+})

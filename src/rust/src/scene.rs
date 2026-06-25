@@ -17,7 +17,7 @@ use crate::render::{
     StrokeStyle, SvgBackend, TextRun,
 };
 
-use crate::color::{opt_color, Gpar, GparAcc, Paint, PartialGpar, Rgba};
+use crate::color::{opt_color, Gpar, GparAcc, Lty, Paint, PartialGpar, Rgba};
 use crate::units::{rotation_about, Unit, Vp};
 
 // --- layout ----------------------------------------------------------------
@@ -1075,9 +1075,12 @@ fn fill_then_stroke<B: RenderBackend>(b: &mut B, path: &tiny_skia::Path, gp: &Gp
 /// scaled by the line width (grid's convention, so thicker lines get longer dashes).
 fn stroke_style(gp: &Gpar, dpi: f64) -> StrokeStyle {
     let width = gp.lwd_px(dpi);
-    let dash = match &gp.lty {
-        Some(nibs) => nibs.iter().map(|n| n * width).collect(),
-        None => Vec::new(),
+    // `blank` suppresses the stroke (width 0 -> backends skip it). A dash pattern
+    // scales by the line width (grid convention).
+    let (width, dash) = match &gp.lty {
+        Lty::Blank => (0.0, Vec::new()),
+        Lty::Solid => (width, Vec::new()),
+        Lty::Dash(nibs) => (width, nibs.iter().map(|n| n * width).collect()),
     };
     StrokeStyle { width, dash, cap: gp.lineend, join: gp.linejoin, miter: gp.linemitre as f32 }
 }

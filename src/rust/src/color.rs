@@ -254,6 +254,15 @@ pub enum Inh<T> {
     Set(T),
 }
 
+/// Line type: solid, blank (no line), or a dash pattern (on/off nibble lengths,
+/// scaled by `lwd` at draw time).
+#[derive(Clone, Debug)]
+pub enum Lty {
+    Solid,
+    Blank,
+    Dash(Vec<f32>),
+}
+
 /// A possibly-partial set of graphical parameters, as attached to a viewport or
 /// a primitive. Built from R, where the encoding is:
 ///   * colour: `NULL` -> Inherit, length-4 int -> Set(colour), else -> Set(none)
@@ -264,9 +273,9 @@ pub struct PartialGpar {
     pub col: Inh<Option<Rgba>>,
     pub lwd: Inh<f64>,
     pub alpha: Inh<f64>,
-    /// Dash pattern as on/off nibble lengths (`None` = solid); scaled by `lwd` at
-    /// draw time.
-    pub lty: Inh<Option<Vec<f32>>>,
+    /// Line type (`NULL` -> inherit; `numeric(0)` -> solid; `NA` -> blank; a
+    /// numeric vector -> dash nibbles).
+    pub lty: Inh<Lty>,
     pub lineend: Inh<LineCap>,
     pub linejoin: Inh<LineJoin>,
     pub linemitre: Inh<f64>,
@@ -295,13 +304,15 @@ impl PartialGpar {
     }
 }
 
-fn inh_lty(obj: &Robj) -> Inh<Option<Vec<f32>>> {
+fn inh_lty(obj: &Robj) -> Inh<Lty> {
     if obj.is_null() {
         return Inh::Inherit;
     }
     match obj.as_real_slice() {
-        Some(s) if !s.is_empty() => Inh::Set(Some(s.iter().map(|&v| v as f32).collect())),
-        _ => Inh::Set(None), // numeric(0) -> explicit solid
+        Some(s) if s.is_empty() => Inh::Set(Lty::Solid), // numeric(0) -> solid
+        Some(s) if s.iter().any(|v| v.is_nan()) => Inh::Set(Lty::Blank), // NA -> no line
+        Some(s) => Inh::Set(Lty::Dash(s.iter().map(|&v| v as f32).collect())),
+        None => Inh::Inherit,
     }
 }
 
@@ -351,7 +362,7 @@ pub struct GparAcc {
     pub col: Option<Rgba>,
     pub lwd: f64,
     pub alpha: f64,
-    pub lty: Option<Vec<f32>>,
+    pub lty: Lty,
     pub lineend: LineCap,
     pub linejoin: LineJoin,
     pub linemitre: f64,
@@ -366,7 +377,7 @@ impl GparAcc {
             col: Some(Rgba::BLACK),
             lwd: 1.0,
             alpha: 1.0,
-            lty: None,
+            lty: Lty::Solid,
             lineend: LineCap::Round,
             linejoin: LineJoin::Round,
             linemitre: 10.0,
@@ -433,7 +444,7 @@ pub struct Gpar {
     /// Line width in R "lwd" units (1 == 1/96 inch).
     pub lwd: f64,
     /// Dash nibble lengths (`None` = solid); scaled by `lwd_px` at draw time.
-    pub lty: Option<Vec<f32>>,
+    pub lty: Lty,
     pub lineend: LineCap,
     pub linejoin: LineJoin,
     pub linemitre: f64,
