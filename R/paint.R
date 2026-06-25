@@ -218,6 +218,67 @@ print.vellum_mask <- function(x, ...) {
   }
 }
 
+# --- stroke style encoding (lty / lineend / linejoin / linemitre) -----------
+
+# Standard R dash patterns as on/off nibble lengths (scaled by lwd in Rust).
+.lty_patterns <- list(
+  blank = numeric(0), solid = numeric(0),
+  dashed = c(4, 4), dotted = c(1, 3), dotdash = c(1, 3, 4, 3),
+  longdash = c(7, 3), twodash = c(2, 2, 6, 2)
+)
+.lty_names <- c("blank", "solid", "dashed", "dotted", "dotdash", "longdash", "twodash") # codes 0:6
+.lineend_codes <- c(round = 0L, butt = 1L, square = 2L)
+.linejoin_codes <- c(round = 0L, mitre = 1L, miter = 1L, bevel = 2L)
+
+# lty -> numeric dash nibbles (numeric(0) = solid) or NULL (inherit).
+.encode_lty <- function(lty) {
+  if (is.null(lty)) {
+    return(NULL)
+  }
+  if (is.numeric(lty)) {
+    if (length(lty) == 1L) {
+      nm <- .lty_names[as.integer(lty) + 1L]
+      return(if (is.na(nm)) numeric(0) else .lty_patterns[[nm]])
+    }
+    return(as.double(lty)) # explicit on/off lengths
+  }
+  if (is.character(lty)) {
+    nm <- lty[1]
+    if (!is.null(.lty_patterns[[nm]])) {
+      return(.lty_patterns[[nm]])
+    }
+    v <- strtoi(strsplit(nm, "")[[1]], base = 16L) # hex dash string, e.g. "44"
+    if (length(v) == 0L || anyNA(v)) {
+      cli::cli_abort("Invalid {.arg lty} {.val {nm}}.")
+    }
+    return(as.double(v))
+  }
+  cli::cli_abort("{.arg lty} must be a name, code, hex string, or numeric vector.")
+}
+
+.encode_code <- function(x, table, arg) {
+  if (is.null(x)) {
+    return(NULL)
+  }
+  if (is.numeric(x)) {
+    return(as.integer(x))
+  }
+  code <- table[match.arg(as.character(x), names(table))]
+  unname(as.integer(code))
+}
+
+# Pack a gpar's stroke style into a list for the backend, or NULL if all inherit.
+.encode_stroke <- function(gp) {
+  lty <- .encode_lty(gp@lty)
+  lineend <- .encode_code(gp@lineend, .lineend_codes, "lineend")
+  linejoin <- .encode_code(gp@linejoin, .linejoin_codes, "linejoin")
+  linemitre <- if (is.null(gp@linemitre)) NULL else as.double(gp@linemitre)
+  if (is.null(lty) && is.null(lineend) && is.null(linejoin) && is.null(linemitre)) {
+    return(NULL)
+  }
+  list(lty = lty, lineend = lineend, linejoin = linejoin, linemitre = linemitre)
+}
+
 # A length resolved to device pixels for tile sizing. npc/native are taken
 # against the page extent `total_px`; absolute units use the dpi.
 .paint_len_px <- function(value, units, total_px, dpi) {

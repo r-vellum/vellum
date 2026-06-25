@@ -211,6 +211,42 @@ pub fn opt_color(obj: &Robj) -> Option<Rgba> {
     })
 }
 
+/// Stroke end cap. Codes mirror the R encoding: 0 round, 1 butt, 2 square.
+#[derive(Clone, Copy, Debug)]
+pub enum LineCap {
+    Round,
+    Butt,
+    Square,
+}
+
+impl LineCap {
+    pub fn from_code(c: i32) -> LineCap {
+        match c {
+            1 => LineCap::Butt,
+            2 => LineCap::Square,
+            _ => LineCap::Round,
+        }
+    }
+}
+
+/// Stroke corner join. Codes mirror R: 0 round, 1 mitre, 2 bevel.
+#[derive(Clone, Copy, Debug)]
+pub enum LineJoin {
+    Round,
+    Mitre,
+    Bevel,
+}
+
+impl LineJoin {
+    pub fn from_code(c: i32) -> LineJoin {
+        match c {
+            1 => LineJoin::Mitre,
+            2 => LineJoin::Bevel,
+            _ => LineJoin::Round,
+        }
+    }
+}
+
 /// A graphical parameter that is either inherited from an ancestor or set here.
 #[derive(Clone, Copy, Debug)]
 pub enum Inh<T> {
@@ -228,16 +264,58 @@ pub struct PartialGpar {
     pub col: Inh<Option<Rgba>>,
     pub lwd: Inh<f64>,
     pub alpha: Inh<f64>,
+    /// Dash pattern as on/off nibble lengths (`None` = solid); scaled by `lwd` at
+    /// draw time.
+    pub lty: Inh<Option<Vec<f32>>>,
+    pub lineend: Inh<LineCap>,
+    pub linejoin: Inh<LineJoin>,
+    pub linemitre: Inh<f64>,
 }
 
 impl PartialGpar {
-    pub fn from_robj(fill: &Robj, col: &Robj, lwd: &Robj, alpha: &Robj) -> Self {
+    /// `stroke` is an R list with optional `lty`/`lineend`/`linejoin`/`linemitre`
+    /// (each `NULL` = inherit), or `NULL` to inherit all of them.
+    pub fn from_robj(fill: &Robj, col: &Robj, lwd: &Robj, alpha: &Robj, stroke: &Robj) -> Self {
+        let field = |name: &str| stroke.dollar(name).unwrap_or_else(|_| ().into());
+        let (lty, lineend, linejoin, linemitre) = if stroke.is_list() {
+            (inh_lty(&field("lty")), inh_linecap(&field("lineend")), inh_linejoin(&field("linejoin")), inh_f64(&field("linemitre")))
+        } else {
+            (Inh::Inherit, Inh::Inherit, Inh::Inherit, Inh::Inherit)
+        };
         PartialGpar {
             fill: inh_paint(fill),
             col: inh_color(col),
             lwd: inh_f64(lwd),
             alpha: inh_f64(alpha),
+            lty,
+            lineend,
+            linejoin,
+            linemitre,
         }
+    }
+}
+
+fn inh_lty(obj: &Robj) -> Inh<Option<Vec<f32>>> {
+    if obj.is_null() {
+        return Inh::Inherit;
+    }
+    match obj.as_real_slice() {
+        Some(s) if !s.is_empty() => Inh::Set(Some(s.iter().map(|&v| v as f32).collect())),
+        _ => Inh::Set(None), // numeric(0) -> explicit solid
+    }
+}
+
+fn inh_linecap(obj: &Robj) -> Inh<LineCap> {
+    match obj.as_integer() {
+        Some(c) => Inh::Set(LineCap::from_code(c)),
+        None => Inh::Inherit,
+    }
+}
+
+fn inh_linejoin(obj: &Robj) -> Inh<LineJoin> {
+    match obj.as_integer() {
+        Some(c) => Inh::Set(LineJoin::from_code(c)),
+        None => Inh::Inherit,
     }
 }
 
@@ -273,16 +351,25 @@ pub struct GparAcc {
     pub col: Option<Rgba>,
     pub lwd: f64,
     pub alpha: f64,
+    pub lty: Option<Vec<f32>>,
+    pub lineend: LineCap,
+    pub linejoin: LineJoin,
+    pub linemitre: f64,
 }
 
 impl GparAcc {
-    /// Root defaults: no fill, black stroke, lwd 1, fully opaque.
+    /// Root defaults: no fill, black stroke, lwd 1, opaque, solid round-capped
+    /// round-joined lines, mitre limit 10 (grid's defaults).
     pub fn root_default() -> Self {
         GparAcc {
             fill: None,
             col: Some(Rgba::BLACK),
             lwd: 1.0,
             alpha: 1.0,
+            lty: None,
+            lineend: LineCap::Round,
+            linejoin: LineJoin::Round,
+            linemitre: 10.0,
         }
     }
 
@@ -305,6 +392,22 @@ impl GparAcc {
                 Inh::Set(v) => self.alpha * v,
                 Inh::Inherit => self.alpha,
             },
+            lty: match &p.lty {
+                Inh::Set(v) => v.clone(),
+                Inh::Inherit => self.lty.clone(),
+            },
+            lineend: match p.lineend {
+                Inh::Set(v) => v,
+                Inh::Inherit => self.lineend,
+            },
+            linejoin: match p.linejoin {
+                Inh::Set(v) => v,
+                Inh::Inherit => self.linejoin,
+            },
+            linemitre: match p.linemitre {
+                Inh::Set(v) => v,
+                Inh::Inherit => self.linemitre,
+            },
         }
     }
 
@@ -314,6 +417,10 @@ impl GparAcc {
             fill: self.fill.clone().map(|p| p.with_alpha(self.alpha)),
             col: self.col.map(|c| c.with_alpha(self.alpha)),
             lwd: self.lwd,
+            lty: self.lty.clone(),
+            lineend: self.lineend,
+            linejoin: self.linejoin,
+            linemitre: self.linemitre,
         }
     }
 }
@@ -325,6 +432,11 @@ pub struct Gpar {
     pub col: Option<Rgba>,
     /// Line width in R "lwd" units (1 == 1/96 inch).
     pub lwd: f64,
+    /// Dash nibble lengths (`None` = solid); scaled by `lwd_px` at draw time.
+    pub lty: Option<Vec<f32>>,
+    pub lineend: LineCap,
+    pub linejoin: LineJoin,
+    pub linemitre: f64,
 }
 
 impl Gpar {

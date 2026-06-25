@@ -8,11 +8,49 @@
 use std::collections::HashMap;
 use std::rc::Rc;
 
-use tiny_skia::{FilterQuality, FillRule, Mask, Paint, Path, PathBuilder, Pixmap, Stroke, Transform};
+use tiny_skia::{FilterQuality, FillRule, Mask, Paint, Path, PathBuilder, Pixmap, Stroke, StrokeDash, Transform};
 
-use crate::color::{Extend, Rgba, Stop};
+use crate::color::{Extend, LineCap, LineJoin, Rgba, Stop};
 use crate::font::FontCache;
 use crate::units::rotation_about;
+
+/// Resolved stroke style handed to `stroke_path`: width + dash (device px, on/off,
+/// empty = solid) + cap/join/mitre.
+#[derive(Clone, Debug)]
+pub struct StrokeStyle {
+    pub width: f32,
+    pub dash: Vec<f32>,
+    pub cap: LineCap,
+    pub join: LineJoin,
+    pub miter: f32,
+}
+
+fn skia_cap(c: LineCap) -> tiny_skia::LineCap {
+    match c {
+        LineCap::Round => tiny_skia::LineCap::Round,
+        LineCap::Butt => tiny_skia::LineCap::Butt,
+        LineCap::Square => tiny_skia::LineCap::Square,
+    }
+}
+
+fn skia_join(j: LineJoin) -> tiny_skia::LineJoin {
+    match j {
+        LineJoin::Round => tiny_skia::LineJoin::Round,
+        LineJoin::Mitre => tiny_skia::LineJoin::Miter,
+        LineJoin::Bevel => tiny_skia::LineJoin::Bevel,
+    }
+}
+
+fn skia_stroke(s: &StrokeStyle) -> Stroke {
+    Stroke {
+        width: s.width,
+        miter_limit: s.miter,
+        line_cap: skia_cap(s.cap),
+        line_join: skia_join(s.join),
+        dash: if s.dash.is_empty() { None } else { StrokeDash::new(s.dash.clone(), 0.0) },
+        ..Stroke::default()
+    }
+}
 
 /// A fill paint with geometry resolved to viewport-local pixels (the backend's
 /// own draw transform then maps it to device space, exactly like the path).
@@ -99,7 +137,7 @@ pub struct MaskLayer<'a> {
 /// the layer, and `end_group` composites it back (optionally through a mask).
 pub trait RenderBackend {
     fn fill_path(&mut self, path: &Path, transform: Transform, paint: &ResolvedPaint, clip: &Clip);
-    fn stroke_path(&mut self, path: &Path, transform: Transform, color: Rgba, width_px: f32, clip: &Clip);
+    fn stroke_path(&mut self, path: &Path, transform: Transform, color: Rgba, stroke: &StrokeStyle, clip: &Clip);
     fn draw_text(&mut self, run: &TextRun, transform: Transform, clip: &Clip);
     fn begin_group(&mut self);
     fn end_group(&mut self, mask: Option<MaskLayer>);
@@ -107,33 +145,33 @@ pub trait RenderBackend {
     /// Draw a batch of circles: centres `(cx, cy)` + radii `r` in local px,
     /// mapped to device by `transform`. The default places one unit circle per
     /// element; the raster backend overrides this to stamp a cached sprite for
-    /// large uniform solid-fill point clouds. `stroke` is `(colour, width_px)`.
+    /// large uniform solid-fill point clouds. `stroke` is `(colour, style)`.
     fn draw_circles(
         &mut self,
         cx: &[f64],
         cy: &[f64],
         r: &[f64],
         fill: Option<&ResolvedPaint>,
-        stroke: Option<(Rgba, f32)>,
+        stroke: Option<(Rgba, StrokeStyle)>,
         transform: Transform,
         clip: &Clip,
     ) where
         Self: Sized,
     {
-        circles_by_path(self, cx, cy, r, fill, stroke, transform, clip);
+        circles_by_path(self, cx, cy, r, fill, stroke.as_ref(), transform, clip);
     }
 }
 
 /// One unit circle (origin, radius 1) reused with a per-element affine transform.
-/// Stroke width is pre-divided by the radius so it lands at `width_px` device px
-/// after the uniform scale.
+/// The stroke width and dash are pre-divided by the radius so they land at their
+/// device sizes after the uniform scale.
 fn circles_by_path<B: RenderBackend>(
     b: &mut B,
     cx: &[f64],
     cy: &[f64],
     r: &[f64],
     fill: Option<&ResolvedPaint>,
-    stroke: Option<(Rgba, f32)>,
+    stroke: Option<&(Rgba, StrokeStyle)>,
     transform: Transform,
     clip: &Clip,
 ) {
@@ -148,8 +186,15 @@ fn circles_by_path<B: RenderBackend>(
         if let Some(f) = fill {
             b.fill_path(&unit, tr, f, clip);
         }
-        if let Some((c, w)) = stroke {
-            b.stroke_path(&unit, tr, c, w / rr as f32, clip);
+        if let Some((c, st)) = stroke {
+            let scaled = StrokeStyle {
+                width: st.width / rr as f32,
+                dash: st.dash.iter().map(|d| d / rr as f32).collect(),
+                cap: st.cap,
+                join: st.join,
+                miter: st.miter,
+            };
+            b.stroke_path(&unit, tr, *c, &scaled, clip);
         }
     }
 }
@@ -367,13 +412,13 @@ impl RenderBackend for RasterBackend {
         }
     }
 
-    fn stroke_path(&mut self, path: &Path, transform: Transform, color: Rgba, width_px: f32, clip: &Clip) {
-        if width_px <= 0.0 {
+    fn stroke_path(&mut self, path: &Path, transform: Transform, color: Rgba, stroke: &StrokeStyle, clip: &Clip) {
+        if stroke.width <= 0.0 {
             return;
         }
         let mask = self.mask_for(clip);
-        let stroke = Stroke { width: width_px, ..Stroke::default() };
-        self.target().stroke_path(path, &solid_paint(color), &stroke, transform, mask.as_deref());
+        let sk = skia_stroke(stroke);
+        self.target().stroke_path(path, &solid_paint(color), &sk, transform, mask.as_deref());
     }
 
     fn draw_text(&mut self, run: &TextRun, transform: Transform, clip: &Clip) {
@@ -441,7 +486,7 @@ impl RenderBackend for RasterBackend {
         cy: &[f64],
         r: &[f64],
         fill: Option<&ResolvedPaint>,
-        stroke: Option<(Rgba, f32)>,
+        stroke: Option<(Rgba, StrokeStyle)>,
         transform: Transform,
         clip: &Clip,
     ) {
@@ -480,7 +525,7 @@ impl RenderBackend for RasterBackend {
                 }
             }
         }
-        circles_by_path(self, cx, cy, r, fill, stroke, transform, clip);
+        circles_by_path(self, cx, cy, r, fill, stroke.as_ref(), transform, clip);
     }
 }
 
@@ -677,16 +722,27 @@ impl RenderBackend for SvgBackend {
         self.emit(&element, clip);
     }
 
-    fn stroke_path(&mut self, path: &Path, transform: Transform, color: Rgba, width_px: f32, clip: &Clip) {
-        if width_px <= 0.0 {
+    fn stroke_path(&mut self, path: &Path, transform: Transform, color: Rgba, stroke: &StrokeStyle, clip: &Clip) {
+        if stroke.width <= 0.0 {
             return;
         }
+        let dash = if stroke.dash.is_empty() {
+            String::new()
+        } else {
+            let arr: Vec<String> = stroke.dash.iter().map(|d| d.to_string()).collect();
+            format!(" stroke-dasharray=\"{}\"", arr.join(","))
+        };
         let element = format!(
-            "<path d=\"{}\" fill=\"none\" stroke=\"{}\" stroke-opacity=\"{}\" stroke-width=\"{}\"{}/>",
+            "<path d=\"{}\" fill=\"none\" stroke=\"{}\" stroke-opacity=\"{}\" stroke-width=\"{}\" \
+             stroke-linecap=\"{}\" stroke-linejoin=\"{}\" stroke-miterlimit=\"{}\"{}{}/>",
             path_to_d(path),
             rgb_hex(color),
             opacity(color),
-            width_px,
+            stroke.width,
+            svg_cap(stroke.cap),
+            svg_join(stroke.join),
+            stroke.miter,
+            dash,
             transform_attr(transform),
         );
         self.emit(&element, clip);
@@ -805,6 +861,22 @@ fn svg_spread(extend: Extend) -> &'static str {
     }
 }
 
+fn svg_cap(c: LineCap) -> &'static str {
+    match c {
+        LineCap::Round => "round",
+        LineCap::Butt => "butt",
+        LineCap::Square => "square",
+    }
+}
+
+fn svg_join(j: LineJoin) -> &'static str {
+    match j {
+        LineJoin::Round => "round",
+        LineJoin::Mitre => "miter",
+        LineJoin::Bevel => "bevel",
+    }
+}
+
 fn svg_stops(stops: &[Stop]) -> String {
     stops
         .iter()
@@ -876,8 +948,9 @@ use krilla::color::rgb;
 use krilla::geom::{Path as KPath, PathBuilder as KPathBuilder, Point as KPoint, Transform as KTransform};
 use krilla::num::NormalizedF32;
 use krilla::paint::{
-    Fill, FillRule as KFillRule, LinearGradient as KLinear, Paint as KPaint, RadialGradient as KRadial,
-    SpreadMethod as KSpread, Stop as KStop, Stroke as KStroke,
+    Fill, FillRule as KFillRule, LineCap as KLineCap, LineJoin as KLineJoin, LinearGradient as KLinear,
+    Paint as KPaint, RadialGradient as KRadial, SpreadMethod as KSpread, Stop as KStop, Stroke as KStroke,
+    StrokeDash as KStrokeDash,
 };
 use krilla::surface::Surface;
 use krilla::text::{Font, GlyphId, KrillaGlyph};
@@ -992,8 +1065,8 @@ impl RenderBackend for PdfBackend<'_, '_> {
         self.pop_state(n);
     }
 
-    fn stroke_path(&mut self, path: &Path, transform: Transform, color: Rgba, width_px: f32, clip: &Clip) {
-        if width_px <= 0.0 {
+    fn stroke_path(&mut self, path: &Path, transform: Transform, color: Rgba, stroke: &StrokeStyle, clip: &Clip) {
+        if stroke.width <= 0.0 {
             return;
         }
         let kp = match to_kpath(path) {
@@ -1004,8 +1077,16 @@ impl RenderBackend for PdfBackend<'_, '_> {
         self.surface.set_fill(None);
         self.surface.set_stroke(Some(KStroke {
             paint: rgb::Color::new(color.r, color.g, color.b).into(),
-            width: width_px,
+            width: stroke.width,
             opacity: norm(color.a),
+            miter_limit: stroke.miter,
+            line_cap: krilla_cap(stroke.cap),
+            line_join: krilla_join(stroke.join),
+            dash: if stroke.dash.is_empty() {
+                None
+            } else {
+                Some(KStrokeDash { array: stroke.dash.clone(), offset: 0.0 })
+            },
             ..KStroke::default()
         }));
         self.surface.draw_path(&kp);
@@ -1147,6 +1228,22 @@ fn krilla_spread(extend: Extend) -> KSpread {
         Extend::Pad => KSpread::Pad,
         Extend::Repeat => KSpread::Repeat,
         Extend::Reflect => KSpread::Reflect,
+    }
+}
+
+fn krilla_cap(c: LineCap) -> KLineCap {
+    match c {
+        LineCap::Round => KLineCap::Round,
+        LineCap::Butt => KLineCap::Butt,
+        LineCap::Square => KLineCap::Square,
+    }
+}
+
+fn krilla_join(j: LineJoin) -> KLineJoin {
+    match j {
+        LineJoin::Round => KLineJoin::Round,
+        LineJoin::Mitre => KLineJoin::Miter,
+        LineJoin::Bevel => KLineJoin::Bevel,
     }
 }
 

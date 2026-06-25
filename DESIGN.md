@@ -143,7 +143,7 @@ A viewport may carry a row/column layout with track sizes that mix absolute unit
 
 ### 4.4 Graphical parameters (gpar-equivalent)
 
-Style — `col`, `fill` (solid / linear / radial gradient / tiling pattern), `alpha`, `lwd`, `lty`, `lineend`, `linejoin`, `linemitre`, `fontsize`, `cex`, `fontfamily`, `fontface`, `lineheight` — is attached to viewports and nodes and **inherits down the tree**, more-specific overriding less-specific. Resolution is explicit and produces a concrete style on each node during the layout pass. This maps directly onto the rasterizer's paint state and onto R's engine `R_GE_gcontext` for the device-shim mode.
+Style — `col`, `fill` (solid / linear / radial gradient / tiling pattern), `alpha`, `lwd`, `lty`, `lineend`, `linejoin`, `linemitre`, `fontsize`, `cex`, `fontfamily`, `fontface`, `lineheight` — is attached to viewports and nodes and **inherits down the tree**, more-specific overriding less-specific. Resolution is explicit and produces a concrete style on each node during the layout pass. This maps directly onto the rasterizer's paint state and onto R's engine `R_GE_gcontext` for the device-shim mode. Stroke style (`lty`/`lineend`/`linejoin`/`linemitre`) is implemented as of P2: `lty` decodes to dash nibbles (names / codes `0:6` / hex strings / numeric vectors) scaled by `lwd`, and the four fields fold through the same `Inh<T>` machinery into a `StrokeStyle` handed to `stroke_path`; defaults are grid's (round cap/join, mitre 10).
 
 ### 4.5 Render backend (pluggable)
 
@@ -154,7 +154,7 @@ absolute transform + clip + colour and emits through:
 ```rust
 trait RenderBackend {
     fn fill_path(&mut self, path: &Path, t: Transform, paint: &ResolvedPaint, clip: &Clip);
-    fn stroke_path(&mut self, path: &Path, t: Transform, color: Rgba, w_px: f32, clip: &Clip);
+    fn stroke_path(&mut self, path: &Path, t: Transform, color: Rgba, stroke: &StrokeStyle, clip: &Clip);
     fn draw_text(&mut self, run: &TextRun, t: Transform, clip: &Clip);
     fn begin_group(&mut self);                          // F3: isolated layer
     fn end_group(&mut self, mask: Option<MaskLayer>);   // F3: composite (+ mask)
@@ -363,14 +363,17 @@ isometries so the device radius equals the local radius). Measured: **1M points 
 realistic monotone line of 500k verts is ~0.65s, so this is a pathological-input cost, not
 a general limit; revisit with decimation if needed.
 
-**P2 — stroke fidelity (planned).** Add `lty` (dashing), `lineend`, `linejoin`, `linemitre`
-to `gpar` and thread them through the `PartialGpar`/`GparAcc`/`Gpar` fold (same `Inh<T>`
-machinery). Backends: tiny-skia `Stroke { dash, line_cap, line_join, miter_limit }`, krilla
-`KStroke`, SVG `stroke-dasharray`/`stroke-linecap`/`stroke-linejoin`/`stroke-miterlimit`.
-R encoding maps `lty` (numeric codes / `"dashed"` names / hex strings) → a dash array
-scaled by `lwd` (grid convention) and cap/join names → codes. Small, high-ROI; a grammar
-layer needs dashed/dotted lines. Verify: dashed line shows gaps (pixel-probe on/off-dash),
-cap/join shapes, all three backends.
+**P2 — stroke fidelity. ✅ done.** `gpar` gained `lty`, `lineend`, `linejoin`, `linemitre`,
+folded through `PartialGpar`/`GparAcc`/`Gpar` (same `Inh<T>` machinery) into a `StrokeStyle`
+{ width, dash, cap, join, miter } that `RenderBackend::stroke_path` now takes. Backends:
+tiny-skia `Stroke { dash, line_cap, line_join, miter_limit }`, krilla `KStroke` (same
+fields), SVG `stroke-dasharray`/`stroke-linecap`/`stroke-linejoin`/`stroke-miterlimit`. R
+encodes `lty` (names / codes `0:6` / hex strings / numeric vectors) to dash nibbles bundled
+with cap/join codes into one `stroke` list per Scene call; the walk scales dash by `lwd_px`
+(grid convention, so thicker lines get longer dashes — also divided by the radius in the
+marker fast path). Defaults match grid (round cap/join, mitre 10). `test-stroke.R`,
+`inst/examples/strokes.R`. Verified dash gaps (raster) + dasharray/cap/join/miter (SVG) +
+PDF render.
 
 **P3 — segments + general path (planned).** `segments_grob(x0, y0, x1, y1)` →
 `Node::Segments` (batched on P1's machinery; one stroke pass over disjoint segments). A

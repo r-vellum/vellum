@@ -14,7 +14,7 @@ use tiny_skia::{PathBuilder, Pixmap, Transform};
 
 use crate::render::{
     rect_path, Clip, ClipRect, MaskKind, MaskLayer, PdfBackend, RasterBackend, RenderBackend, ResolvedPaint,
-    SvgBackend, TextRun,
+    StrokeStyle, SvgBackend, TextRun,
 };
 
 use crate::color::{opt_color, Gpar, GparAcc, Paint, PartialGpar, Rgba};
@@ -238,7 +238,7 @@ impl Scene {
             yscale: (0.0, 1.0),
             angle: 0.0,
             clip: false,
-            gp: PartialGpar::from_robj(&rnull(), &rnull(), &rnull(), &rnull()),
+            gp: PartialGpar::from_robj(&rnull(), &rnull(), &rnull(), &rnull(), &rnull()),
             layout: None,
         };
         Scene {
@@ -281,6 +281,7 @@ impl Scene {
         col: Robj,
         lwd: Robj,
         alpha: Robj,
+        stroke: Robj,
     ) -> i32 {
         let placement = if lrow >= 0 && lcol >= 0 {
             Placement::Cell {
@@ -310,7 +311,7 @@ impl Scene {
             yscale: pair(yscale, (0.0, 1.0)),
             angle,
             clip,
-            gp: PartialGpar::from_robj(&fill, &col, &lwd, &alpha),
+            gp: PartialGpar::from_robj(&fill, &col, &lwd, &alpha, &stroke),
             layout: None,
         });
         self.viewports[self.current].children.push(id);
@@ -342,8 +343,8 @@ impl Scene {
     }
 
     #[allow(clippy::too_many_arguments)]
-    fn rect(&mut self, x: f64, y: f64, w: f64, h: f64, xu: i32, yu: i32, wu: i32, hu: i32, fill: Robj, col: Robj, lwd: Robj, alpha: Robj) {
-        let gp = PartialGpar::from_robj(&fill, &col, &lwd, &alpha);
+    fn rect(&mut self, x: f64, y: f64, w: f64, h: f64, xu: i32, yu: i32, wu: i32, hu: i32, fill: Robj, col: Robj, lwd: Robj, alpha: Robj, stroke: Robj) {
+        let gp = PartialGpar::from_robj(&fill, &col, &lwd, &alpha, &stroke);
         self.emit_node(Node::Rect {
             x,
             y,
@@ -357,20 +358,20 @@ impl Scene {
         });
     }
 
-    fn lines(&mut self, x: &[f64], y: &[f64], xu: &[i32], yu: &[i32], col: Robj, lwd: Robj, alpha: Robj) {
-        let gp = PartialGpar::from_robj(&rnull(), &col, &lwd, &alpha);
+    fn lines(&mut self, x: &[f64], y: &[f64], xu: &[i32], yu: &[i32], col: Robj, lwd: Robj, alpha: Robj, stroke: Robj) {
+        let gp = PartialGpar::from_robj(&rnull(), &col, &lwd, &alpha, &stroke);
         self.emit_node(Node::Lines { x: x.to_vec(), y: y.to_vec(), xu: codes(xu), yu: codes(yu), gp });
     }
 
     #[allow(clippy::too_many_arguments)]
-    fn polygon(&mut self, x: &[f64], y: &[f64], xu: &[i32], yu: &[i32], fill: Robj, col: Robj, lwd: Robj, alpha: Robj) {
-        let gp = PartialGpar::from_robj(&fill, &col, &lwd, &alpha);
+    fn polygon(&mut self, x: &[f64], y: &[f64], xu: &[i32], yu: &[i32], fill: Robj, col: Robj, lwd: Robj, alpha: Robj, stroke: Robj) {
+        let gp = PartialGpar::from_robj(&fill, &col, &lwd, &alpha, &stroke);
         self.emit_node(Node::Polygon { x: x.to_vec(), y: y.to_vec(), xu: codes(xu), yu: codes(yu), gp });
     }
 
     #[allow(clippy::too_many_arguments)]
-    fn circle(&mut self, x: f64, y: f64, r: f64, xu: i32, yu: i32, ru: i32, fill: Robj, col: Robj, lwd: Robj, alpha: Robj) {
-        let gp = PartialGpar::from_robj(&fill, &col, &lwd, &alpha);
+    fn circle(&mut self, x: f64, y: f64, r: f64, xu: i32, yu: i32, ru: i32, fill: Robj, col: Robj, lwd: Robj, alpha: Robj, stroke: Robj) {
+        let gp = PartialGpar::from_robj(&fill, &col, &lwd, &alpha, &stroke);
         self.emit_node(Node::Circle { x, y, r, xu: Unit::from_code(xu), yu: Unit::from_code(yu), ru: Unit::from_code(ru), gp });
     }
 
@@ -380,9 +381,9 @@ impl Scene {
     fn rects(
         &mut self, x: &[f64], y: &[f64], w: &[f64], h: &[f64],
         xu: &[i32], yu: &[i32], wu: &[i32], hu: &[i32],
-        fill: Robj, col: Robj, lwd: Robj, alpha: Robj,
+        fill: Robj, col: Robj, lwd: Robj, alpha: Robj, stroke: Robj,
     ) {
-        let gp = PartialGpar::from_robj(&fill, &col, &lwd, &alpha);
+        let gp = PartialGpar::from_robj(&fill, &col, &lwd, &alpha, &stroke);
         self.emit_node(Node::Rects {
             x: x.to_vec(), y: y.to_vec(), w: w.to_vec(), h: h.to_vec(),
             xu: codes(xu), yu: codes(yu), wu: codes(wu), hu: codes(hu), gp,
@@ -395,9 +396,9 @@ impl Scene {
     fn circles(
         &mut self, x: &[f64], y: &[f64], r: &[f64],
         xu: &[i32], yu: &[i32], ru: &[i32],
-        fill: Robj, col: Robj, lwd: Robj, alpha: Robj,
+        fill: Robj, col: Robj, lwd: Robj, alpha: Robj, stroke: Robj,
     ) {
-        let gp = PartialGpar::from_robj(&fill, &col, &lwd, &alpha);
+        let gp = PartialGpar::from_robj(&fill, &col, &lwd, &alpha, &stroke);
         self.emit_node(Node::Circles {
             x: x.to_vec(), y: y.to_vec(), r: r.to_vec(),
             xu: codes(xu), yu: codes(yu), ru: codes(ru), gp,
@@ -431,7 +432,7 @@ impl Scene {
         col: Robj,
         alpha: Robj,
     ) {
-        let gp = PartialGpar::from_robj(&rnull(), &col, &rnull(), &alpha);
+        let gp = PartialGpar::from_robj(&rnull(), &col, &rnull(), &alpha, &rnull());
         self.emit_node(Node::Text {
             x,
             y,
@@ -757,9 +758,9 @@ impl Scene {
                 }
                 Node::Lines { x, y, xu, yu, .. } => {
                     if let (Some(path), Some(col)) = (build_poly(x, y, xu, yu, vp, false), gp.col) {
-                        let w = gp.lwd_px(vp.dpi);
-                        if w > 0.0 {
-                            b.stroke_path(&path, t, col, w, &clip);
+                        let style = stroke_style(&gp, vp.dpi);
+                        if style.width > 0.0 {
+                            b.stroke_path(&path, t, col, &style, &clip);
                         }
                     }
                 }
@@ -805,6 +806,7 @@ impl Scene {
                     } else {
                         // Stroke (non-uniform scale would distort it) or a gradient
                         // that must be resolved in local px: build each rect.
+                        let style = stroke_style(&gp, vp.dpi);
                         for i in 0..n {
                             let cx = vp.x_pos(x[i], xu[i]);
                             let cy = vp.y_pos(y[i], yu[i]);
@@ -815,7 +817,7 @@ impl Scene {
                                     b.fill_path(&path, t, rp, &clip);
                                 }
                                 if let Some(c) = stroke {
-                                    b.stroke_path(&path, t, c, lwd, &clip);
+                                    b.stroke_path(&path, t, c, &style, &clip);
                                 }
                             }
                         }
@@ -838,9 +840,10 @@ impl Scene {
                             cy.push(vp.y_pos(y[i], yu[i]));
                             rr.push(vp.r_len(r[i], ru[i]));
                         }
-                        b.draw_circles(&cx, &cy, &rr, rf.as_ref(), stroke.map(|c| (c, lwd)), t, &clip);
+                        b.draw_circles(&cx, &cy, &rr, rf.as_ref(), stroke.map(|c| (c, stroke_style(&gp, vp.dpi))), t, &clip);
                     } else {
                         // Gradient/pattern fill: build each circle in local px.
+                        let style = stroke_style(&gp, vp.dpi);
                         for i in 0..n {
                             let cx = vp.x_pos(x[i], xu[i]);
                             let cy = vp.y_pos(y[i], yu[i]);
@@ -852,7 +855,7 @@ impl Scene {
                                     b.fill_path(&path, t, rp, &clip);
                                 }
                                 if let Some(c) = stroke {
-                                    b.stroke_path(&path, t, c, lwd, &clip);
+                                    b.stroke_path(&path, t, c, &style, &clip);
                                 }
                             }
                         }
@@ -909,11 +912,22 @@ fn fill_then_stroke<B: RenderBackend>(b: &mut B, path: &tiny_skia::Path, gp: &Gp
         b.fill_path(path, t, &resolve_paint(fill, vp), clip);
     }
     if let Some(col) = gp.col {
-        let width = gp.lwd_px(vp.dpi);
-        if width > 0.0 {
-            b.stroke_path(path, t, col, width, clip);
+        let style = stroke_style(gp, vp.dpi);
+        if style.width > 0.0 {
+            b.stroke_path(path, t, col, &style, clip);
         }
     }
+}
+
+/// Build a device-space [`StrokeStyle`] from a resolved gpar. The dash nibbles are
+/// scaled by the line width (grid's convention, so thicker lines get longer dashes).
+fn stroke_style(gp: &Gpar, dpi: f64) -> StrokeStyle {
+    let width = gp.lwd_px(dpi);
+    let dash = match &gp.lty {
+        Some(nibs) => nibs.iter().map(|n| n * width).collect(),
+        None => Vec::new(),
+    };
+    StrokeStyle { width, dash, cap: gp.lineend, join: gp.linejoin, miter: gp.linemitre as f32 }
 }
 
 /// Resolve a paint's gradient geometry through the viewport into local px.

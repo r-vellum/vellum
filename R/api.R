@@ -132,21 +132,21 @@ S7::method(compile, grob_rect) <- function(node, scene) {
     g <- .gp4(node@gp, scene)
     # One batched call (one shared gpar) instead of a per-element FFI loop.
     scene$rects(ex$value, ey$value, ew$value, eh$value,
-                ex$code, ey$code, ew$code, eh$code, g$fill, g$col, g$lwd, g$alpha)
+                ex$code, ey$code, ew$code, eh$code, g$fill, g$col, g$lwd, g$alpha, g$stroke)
   })
 }
 
 S7::method(compile, grob_lines) <- function(node, scene) {
   .with_vp(node, scene, {
     ex <- .coord(node@x); ey <- .coord(node@y); g <- .gp4(node@gp, scene)
-    scene$lines(ex$value, ey$value, ex$code, ey$code, g$col, g$lwd, g$alpha)
+    scene$lines(ex$value, ey$value, ex$code, ey$code, g$col, g$lwd, g$alpha, g$stroke)
   })
 }
 
 S7::method(compile, grob_polygon) <- function(node, scene) {
   .with_vp(node, scene, {
     ex <- .coord(node@x); ey <- .coord(node@y); g <- .gp4(node@gp, scene)
-    scene$polygon(ex$value, ey$value, ex$code, ey$code, g$fill, g$col, g$lwd, g$alpha)
+    scene$polygon(ex$value, ey$value, ex$code, ey$code, g$fill, g$col, g$lwd, g$alpha, g$stroke)
   })
 }
 
@@ -156,7 +156,7 @@ S7::method(compile, grob_circle) <- function(node, scene) {
     ex <- .coord(node@x, "npc", n); ey <- .coord(node@y, "npc", n); er <- .coord(node@r, "npc", n)
     g <- .gp4(node@gp, scene)
     scene$circles(ex$value, ey$value, er$value, ex$code, ey$code, er$code,
-                  g$fill, g$col, g$lwd, g$alpha)
+                  g$fill, g$col, g$lwd, g$alpha, g$stroke)
   })
 }
 
@@ -167,7 +167,7 @@ S7::method(compile, grob_points) <- function(node, scene) {
     g <- .gp4(node@gp, scene)
     # Points are circles whose radius carries the marker size; batched.
     scene$circles(ex$value, ey$value, es$value, ex$code, ey$code, es$code,
-                  g$fill, g$col, g$lwd, g$alpha)
+                  g$fill, g$col, g$lwd, g$alpha, g$stroke)
   })
 }
 
@@ -250,11 +250,13 @@ edit_node <- function(scene, name, ...) {
   invisible()
 }
 
-# Encode a gpar's four core fields for the backend (tri-state). `fill` may be a
-# colour, a gradient, or a pattern (see .encode_paint); patterns need `scene`.
+# Encode a gpar's drawing fields for the backend. `fill` may be a colour, a
+# gradient, or a pattern (see .encode_paint; patterns need `scene`); `stroke`
+# bundles lty/lineend/linejoin/linemitre (or NULL = inherit all).
 .gp4 <- function(gp, scene = NULL) {
   list(fill = .encode_paint(gp@fill, scene), col = .rs_col_inh(gp@col),
-       lwd = .rs_num_inh(gp@lwd), alpha = .rs_num_inh(gp@alpha))
+       lwd = .rs_num_inh(gp@lwd), alpha = .rs_num_inh(gp@alpha),
+       stroke = .encode_stroke(gp))
 }
 
 .push_vp <- function(scene, vp) {
@@ -266,7 +268,8 @@ edit_node <- function(scene, name, ...) {
     cx$value, cy$value, cw$value, ch$value, cx$code, cy$code, cw$code, ch$code,
     as.numeric(vp@xscale), as.numeric(vp@yscale), vp@angle, isTRUE(vp@clip),
     lrow, lcol, vp@rowspan, vp@colspan,
-    .encode_paint(vp@gp@fill, scene), .rs_col_inh(vp@gp@col), .rs_num_inh(vp@gp@lwd), .rs_num_inh(vp@gp@alpha)
+    .encode_paint(vp@gp@fill, scene), .rs_col_inh(vp@gp@col), .rs_num_inh(vp@gp@lwd), .rs_num_inh(vp@gp@alpha),
+    .encode_stroke(vp@gp)
   )
   if (!is.null(vp@layout)) .set_layout(scene, vp@layout)
 }

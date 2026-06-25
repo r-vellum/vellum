@@ -9,13 +9,20 @@
 #'   [radial_gradient()].
 #' @param lwd Line width (1 == 1/96 inch).
 #' @param alpha Opacity multiplier in `[0, 1]`.
+#' @param lty Line type: a name (`"solid"`, `"dashed"`, `"dotted"`, `"dotdash"`,
+#'   `"longdash"`, `"twodash"`), an integer code `0:6`, a hex dash string (e.g.
+#'   `"44"`), or a numeric vector of on/off dash lengths. Dash lengths scale with
+#'   `lwd`.
+#' @param lineend Line cap: `"round"` (default), `"butt"`, or `"square"`.
+#' @param linejoin Line join: `"round"` (default), `"mitre"`, or `"bevel"`.
+#' @param linemitre Mitre limit (>= 1) for mitre joins; default 10.
 #' @param fontfamily Font family (text grobs).
 #' @param fontface One of `"plain"`, `"bold"`, `"italic"`, `"bold.italic"`.
 #' @param fontsize Font size in points.
 #' @param lineheight Line-height multiple.
 #' @return A `gpar` object.
 #' @examples
-#' gpar(col = "steelblue", lwd = 2)
+#' gpar(col = "steelblue", lwd = 2, lty = "dashed", lineend = "round")
 #' @export
 gpar <- S7::new_class(
   "gpar",
@@ -25,6 +32,10 @@ gpar <- S7::new_class(
     fill       = S7::new_property(S7::class_any, default = NULL),
     lwd        = S7::new_property(S7::class_any, default = NULL),
     alpha      = S7::new_property(S7::class_any, default = NULL),
+    lty        = S7::new_property(S7::class_any, default = NULL),
+    lineend    = S7::new_property(S7::class_any, default = NULL),
+    linejoin   = S7::new_property(S7::class_any, default = NULL),
+    linemitre  = S7::new_property(S7::class_any, default = NULL),
     fontfamily = S7::new_property(S7::class_any, default = NULL),
     fontface   = S7::new_property(S7::class_any, default = NULL),
     fontsize   = S7::new_property(S7::class_any, default = NULL),

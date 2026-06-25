@@ -9,6 +9,10 @@ gpar(
   fill = NULL,
   lwd = NULL,
   alpha = NULL,
+  lty = NULL,
+  lineend = NULL,
+  linejoin = NULL,
+  linemitre = NULL,
   fontfamily = NULL,
   fontface = NULL,
   fontsize = NULL,
@@ -24,6 +28,17 @@ gpar(
 \item{lwd}{Line width (1 == 1/96 inch).}
 
 \item{alpha}{Opacity multiplier in \verb{[0, 1]}.}
+
+\item{lty}{Line type: a name (\code{"solid"}, \code{"dashed"}, \code{"dotted"}, \code{"dotdash"},
+\code{"longdash"}, \code{"twodash"}), an integer code \code{0:6}, a hex dash string (e.g.
+\code{"44"}), or a numeric vector of on/off dash lengths. Dash lengths scale with
+\code{lwd}.}
+
+\item{lineend}{Line cap: \code{"round"} (default), \code{"butt"}, or \code{"square"}.}
+
+\item{linejoin}{Line join: \code{"round"} (default), \code{"mitre"}, or \code{"bevel"}.}
+
+\item{linemitre}{Mitre limit (>= 1) for mitre joins; default 10.}
 
 \item{fontfamily}{Font family (text grobs).}
 
@@ -42,5 +57,5 @@ left \code{NULL} is inherited from the enclosing viewport; \code{alpha} multipli
 the viewport tree. A colour value sets it; \code{NA} means "no paint".
 }
 \examples{
-gpar(col = "steelblue", lwd = 2)
+gpar(col = "steelblue", lwd = 2, lty = "dashed", lineend = "round")
 }
