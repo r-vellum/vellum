@@ -1,4 +1,4 @@
-Package: rsplot
+Package: vellum
 Title: A Low-Level Graphics Framework with a Rust Backend
 Version: 0.0.0.9000
 Authors@R: 

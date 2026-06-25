@@ -1,4 +1,4 @@
-# rsplot
+# vellum
 
 <!-- badges: start -->
 <!-- badges: end -->
@@ -8,7 +8,9 @@ backend. The scene graph, unit/layout engine, and rendering live in Rust; R is a
 thin declarative API.
 
 This is **not** a grammar of graphics (no scales/stats/geoms/facets) — it is the
-lower layer such a grammar would build on, like grid is for ggplot2 and lattice.
+lower layer such a grammar would build on, the way grid underlies ggplot2 and
+lattice. A higher-level grammar package (working name `rsplot`) is intended to
+build on top of vellum later.
 
 See [DESIGN.md](DESIGN.md) for the architecture and rationale.
 
@@ -56,8 +58,8 @@ rextendr::vendor_crates()
 
 ```r
 # the M0 round-trip
-rsplot::rs_backend_info()
-#> "rsplot Rust backend v0.1.0"
-rsplot::rs_bbox(c(3, -1, 4, 1, 5), c(9, 2, 6, 5, 3))
+vellum::rs_backend_info()
+#> "vellum Rust backend v0.1.0"
+vellum::rs_bbox(c(3, -1, 4, 1, 5), c(9, 2, 6, 5, 3))
 #> -1  5  2  9
 ```

@@ -1,4 +1,4 @@
-# A worked rsplot example: a scatter plot of the base `cars` dataset with a
+# A worked vellum example: a scatter plot of the base `cars` dataset with a
 # fitted regression line, axes, tick labels, and titles.
 #
 # Updated for M2 (viewports + clipping). The plot interior (panel background,
@@ -10,7 +10,7 @@
 #
 # Run with:  Rscript inst/examples/scatter.R  [output.png]
 
-library(rsplot)
+library(vellum)
 
 # --- data -------------------------------------------------------------------
 x <- cars$speed
@@ -145,7 +145,7 @@ args <- commandArgs(trailingOnly = TRUE)
 out <- if (length(args) >= 1) {
   args[[1]]
 } else {
-  file.path(tempdir(), "rsplot-cars.png")
+  file.path(tempdir(), "vellum-cars.png")
 }
 rs_render(s, out)
 message("wrote ", out)

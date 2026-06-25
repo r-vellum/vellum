@@ -2,7 +2,7 @@
 # nolint start
 
 #' @usage NULL
-#' @useDynLib rsplot, .registration = TRUE
+#' @useDynLib vellum, .registration = TRUE
 NULL
 
 #' Backend identity and build info.

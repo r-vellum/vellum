@@ -1,4 +1,4 @@
-# A worked rsplot example: 2x2 small multiples via a layout + nested viewports.
+# A worked vellum example: 2x2 small multiples via a layout + nested viewports.
 #
 # Demonstrates M2: a row/column layout on the root viewport, one clipped child
 # viewport per cell (each with its own native scale), gpar inheritance for a
@@ -6,7 +6,7 @@
 #
 # Run with:  Rscript inst/examples/panels.R  [output.png]
 
-library(rsplot)
+library(vellum)
 
 # four little series to plot
 xs <- seq(0, 2 * pi, length.out = 80)
@@ -45,6 +45,6 @@ for (i in seq_along(series)) {
 rs_pop_viewport(s)
 
 args <- commandArgs(trailingOnly = TRUE)
-out <- if (length(args) >= 1) args[[1]] else file.path(tempdir(), "rsplot-panels.png")
+out <- if (length(args) >= 1) args[[1]] else file.path(tempdir(), "vellum-panels.png")
 rs_render(s, out)
 message("wrote ", out)

@@ -12,7 +12,7 @@ mod units;
 /// @export
 #[extendr]
 fn rs_backend_info() -> String {
-    format!("rsplot Rust backend v{}", env!("CARGO_PKG_VERSION"))
+    format!("vellum Rust backend v{}", env!("CARGO_PKG_VERSION"))
 }
 
 /// Axis-aligned bounding box of a set of points.
@@ -58,7 +58,7 @@ fn rs_bbox(x: &[f64], y: &[f64]) -> Robj {
 // This ensures exported functions are registered with R.
 // See corresponding C code in `entrypoint.c`.
 extendr_module! {
-    mod rsplot;
+    mod vellum;
     fn rs_backend_info;
     fn rs_bbox;
     use scene;

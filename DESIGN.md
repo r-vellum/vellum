@@ -1,4 +1,4 @@
-# rsplot — design
+# vellum — design
 
 A low-level graphics framework for R in the spirit of **grid**, with a **Rust** computational and rendering backend.
 
@@ -16,9 +16,9 @@ low-level layer    grid                    primitives, viewports, units, grobs, 
 engine + device    grDevices, ragg, …      clipping, colour, display list; DevDesc rasterizers
 ```
 
-`rsplot` targets the **low-level layer** — a grid replacement. It provides drawing primitives, a coordinate/viewport model, a unit system, a retained tree of graphical objects, inherited graphical parameters, and a layout engine. It does **not** provide a grammar of graphics: no data binding, aesthetic mappings, statistical transforms, scales, geoms, facets, guides, or themes. Those belong to a grammar layer built *on top* of rsplot, exactly as ggplot2 and lattice are built on grid.
+`vellum` targets the **low-level layer** — a grid replacement. It provides drawing primitives, a coordinate/viewport model, a unit system, a retained tree of graphical objects, inherited graphical parameters, and a layout engine. It does **not** provide a grammar of graphics: no data binding, aesthetic mappings, statistical transforms, scales, geoms, facets, guides, or themes. Those belong to a grammar layer built *on top* of vellum (a future package, working name `rsplot`), exactly as ggplot2 and lattice are built on grid.
 
-The difference from grid is where the work happens. In grid, the scene, the units, and the layout solver all live in interpreted R, and rendering is delegated to a separate graphics device. In rsplot, **the scene graph, unit resolution, layout, and rendering all live in Rust**, and R is a thin declarative API that describes what to draw.
+The difference from grid is where the work happens. In grid, the scene, the units, and the layout solver all live in interpreted R, and rendering is delegated to a separate graphics device. In vellum, **the scene graph, unit resolution, layout, and rendering all live in Rust**, and R is a thin declarative API that describes what to draw.
 
 ### Why a Rust backend at all
 
@@ -37,22 +37,22 @@ Concretely the backend buys us:
 
 ## 2. The central architectural decision
 
-There are two genuinely different things "a grid-like framework with a Rust backend" can mean. We need to be explicit about which one rsplot is, because it shapes everything.
+There are two genuinely different things "a grid-like framework with a Rust backend" can mean. We need to be explicit about which one vellum is, because it shapes everything.
 
 **Option A — be an R graphics device** (the ragg / svglite / vellogd model). R's engine and grid stay in charge; Rust only rasterizes the primitives the engine hands down via the `DevDesc` callback table. Low risk, proven in Rust (`vellogd-r`, `wgpugd`), and the whole existing ecosystem renders through you for free. But it does **not** give you a new grid — you have only reimplemented a device, and you inherit all of grid's layout/unit/replay costs because grid is still doing that work upstream.
 
 **Option B — reimplement the grid model in Rust** (scene graph, units, viewports, layout, rendering), exposing a thin declarative R API and rendering directly to PNG/SVG/PDF. This is the literal reading of "a framework like grid," and it is the only option that actually fixes the pain points above. Higher risk, more surface area, and it does not automatically inherit ggplot2/lattice.
 
-**rsplot chooses B as the primary architecture, and keeps A as a secondary interop mode.**
+**vellum chooses B as the primary architecture, and keeps A as a secondary interop mode.**
 
 - The **core** is a Rust scene graph + unit/layout engine + render backend, driven by an S7-based R API. This is the product.
-- A separate, optional **device adapter** lets rsplot register as a standard R graphics device (filling a `DevDesc` and forwarding engine primitives into the same Rust renderer). That gives a migration path and lets existing R graphics — including ggplot2 — render onto rsplot's rasterizer without us reimplementing the grammar. It is an adapter over the same rendering core, not a separate codebase.
+- A separate, optional **device adapter** lets vellum register as a standard R graphics device (filling a `DevDesc` and forwarding engine primitives into the same Rust renderer). That gives a migration path and lets existing R graphics — including ggplot2 — render onto vellum's rasterizer without us reimplementing the grammar. It is an adapter over the same rendering core, not a separate codebase.
 
-So: one Rust rendering/scene core, two front doors — the native rsplot API (the focus) and an R-device shim (for ecosystem reach).
+So: one Rust rendering/scene core, two front doors — the native vellum API (the focus) and an R-device shim (for ecosystem reach).
 
 ```
 ┌─────────────────────────── R ───────────────────────────┐
-│  rsplot native API (S7)            R graphics device shim │
+│  vellum native API (S7)            R graphics device shim │
 │  viewport(), rect(), text() …      (DevDesc callbacks)    │
 └───────────────┬───────────────────────────┬──────────────┘
                 │            extendr          │
@@ -100,7 +100,7 @@ A pure-Rust path (`fontique` resolution + `harfrust` shaping) would be *close*, 
 - **Primary text path (fidelity):** link `systemfonts` and `textshaping` via their registered C callables (`R_GetCCallable`, `LinkingTo`, shared `FontSettings` struct — exactly how ragg and svglite stay mutually consistent). They hand us a resolved `{file, index}` and positioned glyph runs; **`skrifa`** then loads that file and produces the glyph **outlines** we fill (tiny-skia) or embed (SVG/PDF). This is the ragg architecture with the rasterizer swapped for Rust.
 - **Fallback text path (self-contained):** **`skrifa` + `harfrust` + `parley`/`fontique`**, all pure-Rust and headless, for environments without those packages (or where we want zero R-side font deps). Configured to mirror R's family/face resolution rules as closely as possible, and held to the primary path by tests.
 
-Net: glyph rasterization and outline extraction are always `skrifa` (one code path for both text routes); only resolution + shaping differ between the fidelity and self-contained routes. Fidelity is verified by snapshot tests comparing rsplot text geometry against `textshaping::shape_text()` / `systemfonts` output for a fixed corpus.
+Net: glyph rasterization and outline extraction are always `skrifa` (one code path for both text routes); only resolution + shaping differ between the fidelity and self-contained routes. Fidelity is verified by snapshot tests comparing vellum text geometry against `textshaping::shape_text()` / `systemfonts` output for a fixed corpus.
 
 ---
 
@@ -174,7 +174,7 @@ Idiomatic modern R: **S7** for the value-facing object model (the direction ggpl
 Two usage styles over the same core: a **retained** style (build a scene, edit it, draw it) and an **immediate** style (draw straight to a device) layered on top.
 
 ```r
-library(rsplot)
+library(vellum)
 
 # A device-independent scene, drawn to several outputs
 scene <- rs_scene(width = unit(6, "inch"), height = unit(4, "inch"))
@@ -217,10 +217,10 @@ Key API properties, contrasted with grid:
 
 ## 6. The device-shim mode
 
-A thin adapter registers rsplot as a standard R graphics device using extendr's `graphics::DeviceDriver` trait (which wraps `GEcreateDevDesc` / `GEaddDevice2` and the `pDevDesc` callbacks). The engine hands down primitives in device coordinates with an `R_GE_gcontext`; the shim forwards them straight into the Rust render core.
+A thin adapter registers vellum as a standard R graphics device using extendr's `graphics::DeviceDriver` trait (which wraps `GEcreateDevDesc` / `GEaddDevice2` and the `pDevDesc` callbacks). The engine hands down primitives in device coordinates with an `R_GE_gcontext`; the shim forwards them straight into the Rust render core.
 
 ```r
-rs_png("out.png", width = 800, height = 600)   # rsplot rasterizer as a device
+rs_png("out.png", width = 800, height = 600)   # vellum rasterizer as a device
 print(ggplot(mpg, aes(displ, hwy)) + geom_point())
 dev.off()
 ```
@@ -244,7 +244,7 @@ A minimal device is ~12 callbacks (`line`, `polyline`, `polygon`, `rect`, `circl
 ## 7. Crate / package layout
 
 ```
-rsplot/                      R package root
+vellum/                      R package root
 ├── DESCRIPTION              SystemRequirements: Cargo (Rust's package manager), rustc
 ├── R/                       S7 classes, unit (vctrs), public API, device entry points
 ├── src/

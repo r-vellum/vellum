@@ -7,6 +7,6 @@
 # * https://testthat.r-lib.org/articles/special-files.html
 
 library(testthat)
-library(rsplot)
+library(vellum)
 
-test_check("rsplot")
+test_check("vellum")

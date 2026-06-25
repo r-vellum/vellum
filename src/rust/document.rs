@@ -6,13 +6,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         # nolint start\n\
         \n\
         #' @usage NULL\n\
-        #' @useDynLib rsplot, .registration = TRUE\n\
+        #' @useDynLib vellum, .registration = TRUE\n\
         NULL\n\
         \n\
     ";
     let footer = "# nolint end\n";
-    let wrappers = rsplot::get_rsplot_metadata()
-        .make_r_wrappers(true, "rsplot")
+    let wrappers = vellum::get_vellum_metadata()
+        .make_r_wrappers(true, "vellum")
         .map_err(|e| format!("failed to generate wrappers: {e}"))?;
     std::fs::write(wrapper_path, format!("{header}{wrappers}{footer}"))
         .map_err(|e| format!("failed to write {wrapper_path}: {e}"))?;

@@ -1,5 +1,5 @@
 test_that("backend round-trip is wired up", {
-  expect_match(rs_backend_info(), "^rsplot Rust backend v")
+  expect_match(rs_backend_info(), "^vellum Rust backend v")
 })
 
 test_that("rs_bbox computes the axis-aligned bounding box", {
