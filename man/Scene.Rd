@@ -56,7 +56,9 @@ Stop routing primitives into the most recent mask.
 }
 
 \subsection{Method \code{group_start}}{
-Open an isolated compositing group in the drawn scene.
+Open an isolated compositing group. Routed through \code{emit_node} so a group
+nested inside a mask (a mask grob that itself masks a viewport) lands in
+the same node list as its content, keeping markers and content in sync.
 }
 
 \subsection{Method \code{group_end}}{

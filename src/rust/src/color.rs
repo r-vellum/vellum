@@ -80,6 +80,9 @@ pub struct PatternFill {
     pub h: f64,
     pub unit: Unit,
     pub extend: Extend,
+    /// Multiplicative opacity from the gpar `alpha` fold (kept separate so the
+    /// shared tile `Rc` is never cloned just to fade it).
+    pub opacity: f64,
 }
 
 /// A fill paint. Gradient/pattern geometry is stored in `(value, Unit)` form and
@@ -108,14 +111,8 @@ impl Paint {
                 Paint::Radial { cx, cy, r, unit, stops: fade(stops), extend }
             }
             Paint::Pattern(mut p) => {
-                let a = alpha.clamp(0.0, 1.0);
-                if a < 1.0 {
-                    let mut t = (*p.tile).clone();
-                    for px in t.chunks_exact_mut(4) {
-                        px[3] = (px[3] as f64 * a).round() as u8;
-                    }
-                    p.tile = Rc::new(t);
-                }
+                // Fold alpha into the opacity scalar; the tile `Rc` stays shared.
+                p.opacity *= alpha.clamp(0.0, 1.0);
                 Paint::Pattern(p)
             }
         }
@@ -163,6 +160,7 @@ fn parse_pattern(obj: &Robj) -> Option<Paint> {
         h: coords[3],
         unit,
         extend,
+        opacity: 1.0,
     }))
 }
 

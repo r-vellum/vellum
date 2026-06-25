@@ -72,3 +72,22 @@ test_that("existing single-viewport API still works (backward compat)", {
   rs_rect(s, x = 5, y = 5, width = 4, height = 4, units = "native", fill = "blue", col = NA)
   expect_equal(rs_pixel(s, 50, 50)[1:3], c(0L, 0L, 255L))
 })
+
+test_that("viewport() rejects non-positive row/col", {
+  expect_error(viewport(row = 0), "positive integer")
+  expect_error(viewport(col = -1), "positive integer")
+  expect_error(viewport(row = NA_integer_), "positive integer")
+  expect_silent(viewport(row = 1, col = 2))
+  expect_silent(viewport()) # NULL row/col is fine
+})
+
+test_that("a degenerate or non-finite native scale falls back instead of vanishing", {
+  # zero-span x scale + non-finite y scale would yield NaN native coords (which
+  # tiny-skia silently drops); the resolver falls back to (0, 1) so npc still draws.
+  s <- vl_scene(1, 1, dpi = 100, bg = "white") |>
+    push(viewport(xscale = c(0, 0), yscale = c(NA, 1))) |>
+    draw(rect_grob(gp = gpar(fill = "red", col = NA))) |>
+    pop()
+  bk <- .scene_to_backend(s)
+  expect_equal(bk$pixel(50, 50)[1:3], c(255L, 0L, 0L))
+})

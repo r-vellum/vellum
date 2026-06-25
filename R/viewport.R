@@ -28,6 +28,13 @@ viewport <- function(x = 0.5, y = 0.5, width = 1, height = 1,
                      gp = gpar(), layout = NULL,
                      row = NULL, col = NULL, rowspan = 1, colspan = 1,
                      mask = NULL, name = NULL) {
+  .check_cell <- function(v, arg) {
+    if (!is.null(v) && (length(v) != 1L || is.na(v) || v < 1)) {
+      cli::cli_abort("{.arg {arg}} must be a single positive integer (1-based) or NULL.")
+    }
+  }
+  .check_cell(row, "row")
+  .check_cell(col, "col")
   class_viewport(
     x = as_unit(x), y = as_unit(y), width = as_unit(width), height = as_unit(height),
     xscale = as.numeric(xscale), yscale = as.numeric(yscale),

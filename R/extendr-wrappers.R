@@ -55,7 +55,9 @@ rs_backend_info <- function() .Call(wrap__rs_backend_info)
 #'}
 #'
 #'\subsection{Method `group_start`}{
-#'Open an isolated compositing group in the drawn scene.
+#'Open an isolated compositing group. Routed through `emit_node` so a group
+#'nested inside a mask (a mask grob that itself masks a viewport) lands in
+#'the same node list as its content, keeping markers and content in sync.
 #'}
 #'
 #'\subsection{Method `group_end`}{

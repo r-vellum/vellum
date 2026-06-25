@@ -81,6 +81,17 @@ test_that("SVG emits gradient defs referenced by the fill", {
   expect_match(svg, 'fill="url\\(#g0\\)"')
 })
 
+test_that("identical gradient fills share a single SVG def", {
+  f <- withr::local_tempfile(fileext = ".svg")
+  s <- vl_scene(1, 1, dpi = 100, bg = "white") |>
+    draw(rect_grob(x = 0.25, width = 0.4, gp = gpar(col = NA, fill = linear_gradient(c("black", "white"))))) |>
+    draw(rect_grob(x = 0.75, width = 0.4, gp = gpar(col = NA, fill = linear_gradient(c("black", "white")))))
+  render(s, f)
+  svg <- paste(readLines(f, warn = FALSE), collapse = "\n")
+  # Two shapes, one shared <linearGradient> def (deduplicated by signature).
+  expect_equal(lengths(regmatches(svg, gregexpr("<linearGradient", svg))), 1L)
+})
+
 test_that("PDF with gradient fills renders without error", {
   f <- withr::local_tempfile(fileext = ".pdf")
   s <- vl_scene(2, 1, dpi = 100) |>

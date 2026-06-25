@@ -21,8 +21,9 @@ pub enum ResolvedPaint {
     Linear { x1: f64, y1: f64, x2: f64, y2: f64, stops: Vec<Stop>, extend: Extend },
     Radial { cx: f64, cy: f64, r: f64, stops: Vec<Stop>, extend: Extend },
     /// A tiled image: `tile` is straight RGBA (`tw` x `th`, top-left); it fills a
-    /// `w` x `h` (px) cell centred at `(x, y)` and repeats per `extend`.
-    Pattern { tile: Rc<Vec<u8>>, tw: u32, th: u32, x: f64, y: f64, w: f64, h: f64, extend: Extend },
+    /// `w` x `h` (px) cell centred at `(x, y)` and repeats per `extend`. `opacity`
+    /// is the folded gpar alpha (applied without touching the shared tile).
+    Pattern { tile: Rc<Vec<u8>>, tw: u32, th: u32, x: f64, y: f64, w: f64, h: f64, extend: Extend, opacity: f32 },
 }
 
 /// One viewport rectangle contributing to a clip, in device space: a `w` x `h`
@@ -187,7 +188,12 @@ pub struct RasterBackend {
 impl RasterBackend {
     pub fn new(w: u32, h: u32, bg: Rgba) -> Self {
         let mut pm = Pixmap::new(w, h).expect("non-zero pixmap dimensions");
-        pm.fill(bg.to_skia());
+        // `Pixmap::new` is already zeroed (transparent); only paint a non-empty
+        // background. This skips a full-page write for every rasterized mask,
+        // whose backdrop is always transparent.
+        if bg.a != 0 {
+            pm.fill(bg.to_skia());
+        }
         RasterBackend { targets: vec![pm], fonts: FontCache::default(), masks: HashMap::new(), w, h }
     }
 
@@ -271,7 +277,7 @@ fn paint_for(paint: &ResolvedPaint) -> Option<Paint<'static>> {
 impl RenderBackend for RasterBackend {
     fn fill_path(&mut self, path: &Path, transform: Transform, paint: &ResolvedPaint, clip: &Clip) {
         let mask = self.mask_for(clip);
-        if let ResolvedPaint::Pattern { tile, tw, th, x, y, w, h, extend } = paint {
+        if let ResolvedPaint::Pattern { tile, tw, th, x, y, w, h, extend, opacity } = paint {
             // The tile Pixmap must outlive the Pattern shader (it borrows it), so
             // build both here rather than via paint_for's `'static` return.
             let pm = match pixmap_from_straight(tile, *tw, *th) {
@@ -280,7 +286,7 @@ impl RenderBackend for RasterBackend {
             };
             let t = pattern_transform(*tw, *th, *x, *y, *w, *h);
             let mut p = Paint::default();
-            p.shader = tiny_skia::Pattern::new(pm.as_ref(), skia_spread(*extend), FilterQuality::Bilinear, 1.0, t);
+            p.shader = tiny_skia::Pattern::new(pm.as_ref(), skia_spread(*extend), FilterQuality::Bilinear, *opacity, t);
             p.anti_alias = true;
             self.target().fill_path(path, &p, FillRule::Winding, transform, mask.as_deref());
             return;
@@ -370,6 +376,9 @@ pub struct SvgBackend {
     /// empty). `end_group` pops one and wraps it in a `<g>` (with a mask).
     groups: Vec<String>,
     clip_attrs: HashMap<usize, String>,
+    /// Deduplicates gradient/pattern `<defs>` by content signature so repeated
+    /// identical fills reference one def instead of emitting N copies.
+    def_ids: HashMap<String, String>,
     next_clip: u32,
     next_grad: u32,
 }
@@ -391,9 +400,24 @@ impl SvgBackend {
             body,
             groups: Vec::new(),
             clip_attrs: HashMap::new(),
+            def_ids: HashMap::new(),
             next_clip: 0,
             next_grad: 0,
         }
+    }
+
+    /// Return the id of a `<defs>` entry with signature `key`, emitting it via
+    /// `make(id)` the first time and reusing it afterwards.
+    fn intern_def(&mut self, key: String, make: impl FnOnce(&str) -> String) -> String {
+        if let Some(id) = self.def_ids.get(&key) {
+            return id.clone();
+        }
+        let id = format!("g{}", self.next_grad);
+        self.next_grad += 1;
+        let def = make(&id);
+        self.defs.push_str(&def);
+        self.def_ids.insert(key, id.clone());
+        id
     }
 
     /// The buffer currently receiving output: the innermost open group, else the
@@ -412,48 +436,59 @@ impl SvgBackend {
         match paint {
             ResolvedPaint::Solid(c) => format!("fill=\"{}\" fill-opacity=\"{}\"", rgb_hex(*c), opacity(*c)),
             ResolvedPaint::Linear { x1, y1, x2, y2, stops, extend } => {
-                let id = format!("g{}", self.next_grad);
-                self.next_grad += 1;
-                self.defs.push_str(&format!(
-                    "<linearGradient id=\"{id}\" gradientUnits=\"userSpaceOnUse\" \
-                     x1=\"{x1}\" y1=\"{y1}\" x2=\"{x2}\" y2=\"{y2}\" spreadMethod=\"{s}\">{stops}</linearGradient>",
-                    s = svg_spread(*extend),
-                    stops = svg_stops(stops),
-                ));
+                let stops_xml = svg_stops(stops);
+                let s = svg_spread(*extend);
+                let key = format!("L|{x1}|{y1}|{x2}|{y2}|{s}|{stops_xml}");
+                let id = self.intern_def(key, |id| {
+                    format!(
+                        "<linearGradient id=\"{id}\" gradientUnits=\"userSpaceOnUse\" \
+                         x1=\"{x1}\" y1=\"{y1}\" x2=\"{x2}\" y2=\"{y2}\" spreadMethod=\"{s}\">{stops_xml}</linearGradient>"
+                    )
+                });
                 format!("fill=\"url(#{id})\"")
             }
             ResolvedPaint::Radial { cx, cy, r, stops, extend } => {
-                let id = format!("g{}", self.next_grad);
-                self.next_grad += 1;
-                self.defs.push_str(&format!(
-                    "<radialGradient id=\"{id}\" gradientUnits=\"userSpaceOnUse\" \
-                     cx=\"{cx}\" cy=\"{cy}\" r=\"{r}\" spreadMethod=\"{s}\">{stops}</radialGradient>",
-                    s = svg_spread(*extend),
-                    stops = svg_stops(stops),
-                ));
+                let stops_xml = svg_stops(stops);
+                let s = svg_spread(*extend);
+                let key = format!("R|{cx}|{cy}|{r}|{s}|{stops_xml}");
+                let id = self.intern_def(key, |id| {
+                    format!(
+                        "<radialGradient id=\"{id}\" gradientUnits=\"userSpaceOnUse\" \
+                         cx=\"{cx}\" cy=\"{cy}\" r=\"{r}\" spreadMethod=\"{s}\">{stops_xml}</radialGradient>"
+                    )
+                });
                 format!("fill=\"url(#{id})\"")
             }
-            ResolvedPaint::Pattern { tile, tw, th, x, y, w, h, .. } => {
+            ResolvedPaint::Pattern { tile, tw, th, x, y, w, h, opacity, .. } => {
                 // The tile is embedded as a PNG data URI and stretched over a
                 // userSpaceOnUse cell; the element's own transform maps it to
                 // device, like the path. (SVG patterns tile by repeat; the
-                // reflect/pad extend modes degrade to repeat here.)
-                let png = pixmap_from_straight(tile, *tw, *th).and_then(|pm| pm.encode_png().ok());
-                let href = match png {
-                    Some(bytes) => format!("data:image/png;base64,{}", b64(&bytes)),
-                    None => return String::from("fill=\"none\""),
+                // reflect/pad extend modes degrade to repeat here.) Dedup by the
+                // tile's `Rc` identity + geometry so we don't re-encode the PNG.
+                let (px, py) = (x - w / 2.0, y - h / 2.0);
+                let key = format!("P|{:p}|{px}|{py}|{w}|{h}", Rc::as_ptr(tile));
+                let id = match self.def_ids.get(&key) {
+                    Some(id) => id.clone(),
+                    None => {
+                        let png = pixmap_from_straight(tile, *tw, *th).and_then(|pm| pm.encode_png().ok());
+                        let href = match png {
+                            Some(bytes) => format!("data:image/png;base64,{}", b64(&bytes)),
+                            None => return String::from("fill=\"none\""),
+                        };
+                        let id = format!("g{}", self.next_grad);
+                        self.next_grad += 1;
+                        self.defs.push_str(&format!(
+                            "<pattern id=\"{id}\" patternUnits=\"userSpaceOnUse\" \
+                             x=\"{px}\" y=\"{py}\" width=\"{w}\" height=\"{h}\">\
+                             <image href=\"{href}\" x=\"0\" y=\"0\" width=\"{w}\" height=\"{h}\" \
+                             preserveAspectRatio=\"none\"/></pattern>"
+                        ));
+                        self.def_ids.insert(key, id.clone());
+                        id
+                    }
                 };
-                let id = format!("g{}", self.next_grad);
-                self.next_grad += 1;
-                self.defs.push_str(&format!(
-                    "<pattern id=\"{id}\" patternUnits=\"userSpaceOnUse\" \
-                     x=\"{px}\" y=\"{py}\" width=\"{w}\" height=\"{h}\">\
-                     <image href=\"{href}\" x=\"0\" y=\"0\" width=\"{w}\" height=\"{h}\" \
-                     preserveAspectRatio=\"none\"/></pattern>",
-                    px = x - w / 2.0,
-                    py = y - h / 2.0,
-                ));
-                format!("fill=\"url(#{id})\"")
+                let op = if *opacity < 1.0 { format!(" fill-opacity=\"{opacity}\"") } else { String::new() };
+                format!("fill=\"url(#{id})\"{op}")
             }
         }
     }
@@ -825,9 +860,10 @@ impl RenderBackend for PdfBackend<'_, '_> {
             ),
             // Image patterns need krilla's `raster-images` feature (extra vendored
             // codecs); until then a pattern degrades to its mean colour in PDF.
-            ResolvedPaint::Pattern { tile, .. } => {
+            ResolvedPaint::Pattern { tile, opacity, .. } => {
                 let c = average_rgba(tile);
-                (rgb::Color::new(c.r, c.g, c.b).into(), norm(c.a))
+                let a = NormalizedF32::new((c.a as f32 / 255.0) * opacity).unwrap_or(NormalizedF32::ONE);
+                (rgb::Color::new(c.r, c.g, c.b).into(), a)
             }
         };
         let n = self.push_state(transform, clip);

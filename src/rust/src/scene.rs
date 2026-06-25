@@ -426,16 +426,18 @@ impl Scene {
         self.mask_target.pop();
     }
 
-    /// Open an isolated compositing group in the drawn scene.
+    /// Open an isolated compositing group. Routed through `emit_node` so a group
+    /// nested inside a mask (a mask grob that itself masks a viewport) lands in
+    /// the same node list as its content, keeping markers and content in sync.
     fn group_start(&mut self) {
-        self.nodes.push((self.current, Node::GroupStart));
+        self.emit_node(Node::GroupStart);
     }
 
     /// Close the group, compositing it through mask index `mask` (negative = no
     /// mask, just isolation).
     fn group_end(&mut self, mask: i32) {
         let mask = if mask >= 0 { Some(mask as usize) } else { None };
-        self.nodes.push((self.current, Node::GroupEnd { mask }));
+        self.emit_node(Node::GroupEnd { mask });
     }
 
     /// Number of primitives currently in the scene.
@@ -811,6 +813,7 @@ fn resolve_paint(paint: &Paint, vp: &Vp) -> ResolvedPaint {
             w: vp.x_len(p.w, p.unit),
             h: vp.y_len(p.h, p.unit),
             extend: p.extend,
+            opacity: p.opacity as f32,
         },
     }
 }
@@ -846,9 +849,11 @@ fn build_tracks(vals: &[f64], units: &[String]) -> Vec<Track> {
 }
 
 fn pair(s: &[f64], default: (f64, f64)) -> (f64, f64) {
-    if s.len() >= 2 {
+    if s.len() >= 2 && s[0].is_finite() && s[1].is_finite() && s[0] != s[1] {
         (s[0], s[1])
     } else {
+        // A missing, non-finite, or zero-span scale would yield NaN/degenerate
+        // native coordinates (which silently vanish); fall back to the default.
         default
     }
 }

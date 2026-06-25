@@ -363,7 +363,18 @@ Still open:
 - **Render caching.** `render()` rebuilds the whole backend `Scene` and re-reads fonts each call (the tree lives in R). Memoize the backend `Scene`/`Pixmap` or persist the `FontCache` if it becomes a cost; today it is cheap relative to rasterization.
 - **Public naming.** `rs_strwidth`/`rs_strheight` keep the internal-looking `rs_` prefix while being public; consider renaming before any release. The internal `rs_*` imperative wrappers still generate (internal) Rd.
 - **Clip-mask memory.** Each clipping viewport clones a page-sized `Mask`; fine now, revisit for deep clip trees on large pages.
-- **SVG text fidelity / vector compositing.** SVG `<text>` is renderer-shaped (not glyph-faithful). Gradients now exist in the backend (F1); tiling patterns, compositing groups/masks, and images remain absent until F2/F3 add the scene support (`draw_image`, isolated `begin_group`/`end_group(mask)`).
+- **SVG text fidelity.** SVG `<text>` is renderer-shaped (not glyph-faithful). Gradients (F1), tiling patterns (F2), and masks (F3) now exist across the backends; a general `draw_image` primitive and a native PDF image path (patterns/masks; needs krilla's `raster-images`) remain future work.
+
+Addressed in the post-F3 review: a nested-mask routing desync (`group_start`/`group_end` now go through `emit_node`, so a mask grob that itself masks a viewport keeps markers and content in the same node list); pattern `alpha` no longer clones the shared tile (folded into a `PatternFill.opacity` scalar → tiny-skia `Pattern` opacity / SVG `fill-opacity` / PDF fallback alpha); SVG gradient/pattern `<defs>` are deduplicated by content signature (patterns keyed by tile `Rc` identity, so the PNG isn't re-encoded); `RasterBackend::new` skips the full-page clear for transparent backdrops (every rasterized mask); non-finite or zero-span viewport scales fall back to the default instead of producing silently-vanishing NaN geometry; and `viewport()` rejects non-positive `row`/`col`.
+
+Minor issues still open (from the post-F3 review):
+- **PDF pattern/mask fidelity.** Patterns degrade to their tile's *unweighted* mean colour and masked groups render unmasked (krilla `raster-images` is off). Alpha-weighting the mean and, eventually, a real image path would improve this.
+- **Transparent-texel colour loss.** SVG pattern/mask images round-trip through a premultiplied `Pixmap` (`encode_png`), so RGB under fully transparent texels is discarded. Harmless for display; encode straight bytes if fidelity ever matters.
+- **Text colour inheritance.** `compile(grob_text)` passes `col %||% "black"`, so a `NULL` (inherit) text colour is forced black rather than inheriting from the enclosing viewport.
+- **Root viewport properties.** `.scene_to_backend` applies only the root viewport's `layout`; its `gp`/`clip`/scales/`mask` are ignored (latent — `vl_scene` always builds a default root).
+- **Gradient stop order.** Custom `stops` are clamped to `[0, 1]` but not checked monotonic; out-of-order offsets yield an undefined gradient. Validate/sort.
+- **Over-range layout cells.** A `row`/`col` beyond the layout's track count still collapses to a 0-size viewport silently (now at least rejected for `< 1`); a track-count check with a named error is the remaining piece.
+- **Full-page mask buffers.** Each masked group allocates page-sized layer + mask pixmaps; inherent to the `draw_pixmap`-masking approach (the mask must match the page-aligned target), so a bounding-box optimisation would require relaxing the page-sized-clip-mask invariant.
 
 ---
 
