@@ -192,6 +192,16 @@ S7::method(compile, grob_path) <- function(node, scene) {
   })
 }
 
+S7::method(compile, grob_raster) <- function(node, scene) {
+  .with_vp(node, scene, {
+    ex <- .coord(node@x, "npc", 1); ey <- .coord(node@y, "npc", 1)
+    ew <- .coord(node@width, "npc", 1); eh <- .coord(node@height, "npc", 1)
+    scene$image(node@rgba, node@iw, node@ih,
+                ex$value, ey$value, ew$value, eh$value,
+                ex$code, ey$code, ew$code, eh$code, isTRUE(node@interpolate))
+  })
+}
+
 S7::method(compile, grob_text) <- function(node, scene) {
   .with_vp(node, scene, {
     hv <- .just_to_hv(node@just)

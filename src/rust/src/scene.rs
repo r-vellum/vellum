@@ -171,6 +171,14 @@ enum Node {
         evenodd: bool,
         gp: PartialGpar,
     },
+    /// A straight-RGBA image (`iw` x `ih`, top-left) filling a `w` x `h` cell
+    /// centred at `(x, y)`. Carries no gpar (handled in the walk's pre-pass).
+    Image {
+        rgba: Vec<u8>, iw: u32, ih: u32,
+        x: f64, y: f64, w: f64, h: f64,
+        xu: Unit, yu: Unit, wu: Unit, hu: Unit,
+        interpolate: bool,
+    },
     /// Opens an isolated compositing layer (paired with `GroupEnd`).
     GroupStart,
     /// Closes the layer and composites it, optionally through mask `mask` (an
@@ -190,7 +198,9 @@ impl Node {
             | Node::Segments { gp, .. }
             | Node::Path { gp, .. }
             | Node::Text { gp, .. } => gp,
-            Node::GroupStart | Node::GroupEnd { .. } => unreachable!("group markers carry no gpar"),
+            Node::Image { .. } | Node::GroupStart | Node::GroupEnd { .. } => {
+                unreachable!("handled before gpar resolution")
+            }
         }
     }
 }
@@ -447,6 +457,23 @@ impl Scene {
             x: x.to_vec(), y: y.to_vec(), xu: codes(xu), yu: codes(yu),
             nper: nper.iter().map(|&v| v.max(0) as usize).collect(),
             evenodd, gp,
+        });
+    }
+
+    /// A raster image: `rgba` is a flat straight-RGBA integer vector (`iw` x `ih`,
+    /// top-left, 4 per pixel), drawn into a `w` x `h` cell centred at `(x, y)`.
+    #[allow(clippy::too_many_arguments)]
+    fn image(
+        &mut self, rgba: &[i32], iw: i32, ih: i32,
+        x: f64, y: f64, w: f64, h: f64, xu: i32, yu: i32, wu: i32, hu: i32,
+        interpolate: bool,
+    ) {
+        let bytes: Vec<u8> = rgba.iter().map(|&v| v.clamp(0, 255) as u8).collect();
+        self.emit_node(Node::Image {
+            rgba: bytes, iw: iw.max(0) as u32, ih: ih.max(0) as u32,
+            x, y, w, h,
+            xu: Unit::from_code(xu), yu: Unit::from_code(yu), wu: Unit::from_code(wu), hu: Unit::from_code(hu),
+            interpolate,
         });
     }
 
@@ -782,6 +809,18 @@ impl Scene {
                     }
                     continue;
                 }
+                // Images carry no gpar; resolve geometry and draw directly.
+                Node::Image { rgba, iw, ih, x, y, w, h, xu, yu, wu, hu, interpolate } => {
+                    let rv = &resolved[*vp_id];
+                    let vp = &rv.vp;
+                    let clip = Clip { id: *vp_id, rects: &rv.clip_chain };
+                    let cx = vp.x_pos(*x, *xu);
+                    let cy = vp.y_pos(*y, *yu);
+                    let pw = vp.x_len(*w, *wu);
+                    let ph = vp.y_len(*h, *hu);
+                    b.draw_image(rgba, *iw, *ih, cx, cy, pw, ph, *interpolate, vp.transform, &clip);
+                    continue;
+                }
                 _ => {}
             }
 
@@ -960,7 +999,7 @@ impl Scene {
                         fill_then_stroke(b, &path, &gp, t, &clip, vp, rule);
                     }
                 }
-                Node::GroupStart | Node::GroupEnd { .. } => unreachable!("handled above"),
+                Node::Image { .. } | Node::GroupStart | Node::GroupEnd { .. } => unreachable!("handled above"),
             }
         }
     }

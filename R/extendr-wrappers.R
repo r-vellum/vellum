@@ -58,6 +58,11 @@ rs_backend_info <- function() .Call(wrap__rs_backend_info)
 #'(so holes are sub-paths under the even-odd or winding rule).
 #'}
 #'
+#'\subsection{Method `image`}{
+#'A raster image: `rgba` is a flat straight-RGBA integer vector (`iw` x `ih`,
+#'top-left, 4 per pixel), drawn into a `w` x `h` cell centred at `(x, y)`.
+#'}
+#'
 #'\subsection{Method `text`}{
 #'Add pre-shaped text. The R wrapper does shaping (via `textshaping`) and
 #'passes per-glyph ids/positions/fonts plus the block size.
@@ -144,6 +149,8 @@ Scene$circles <- function(x, y, r, xu, yu, ru, fill, col, lwd, alpha, stroke) .C
 Scene$segments <- function(x0, y0, x1, y1, x0u, y0u, x1u, y1u, col, lwd, alpha, stroke) .Call(wrap__Scene__segments, self, x0, y0, x1, y1, x0u, y0u, x1u, y1u, col, lwd, alpha, stroke)
 
 Scene$path <- function(x, y, xu, yu, nper, evenodd, fill, col, lwd, alpha, stroke) .Call(wrap__Scene__path, self, x, y, xu, yu, nper, evenodd, fill, col, lwd, alpha, stroke)
+
+Scene$image <- function(rgba, iw, ih, x, y, w, h, xu, yu, wu, hu, interpolate) .Call(wrap__Scene__image, self, rgba, iw, ih, x, y, w, h, xu, yu, wu, hu, interpolate)
 
 Scene$text <- function(x, y, xu, yu, rot, hjust, vjust, w, h, gid, gx, gy, gsize, gpath, gface, label, family, face, size, col, alpha) .Call(wrap__Scene__text, self, x, y, xu, yu, rot, hjust, vjust, w, h, gid, gx, gy, gsize, gpath, gface, label, family, face, size, col, alpha)
 

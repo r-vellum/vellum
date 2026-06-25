@@ -50,6 +50,16 @@ grob_path <- S7::new_class("grob_path", parent = grob, package = "vellum",
     rule = S7::new_property(S7::class_character, default = "winding")
   )
 )
+grob_raster <- S7::new_class("grob_raster", parent = grob, package = "vellum",
+  properties = list(
+    rgba = S7::new_property(S7::class_integer, default = integer(0)),
+    iw = S7::new_property(S7::class_integer, default = 0L),
+    ih = S7::new_property(S7::class_integer, default = 0L),
+    x = .unit_prop(), y = .unit_prop(),
+    width = .unit_prop("unit(1, \"npc\")"), height = .unit_prop("unit(1, \"npc\")"),
+    interpolate = S7::new_property(S7::class_logical, default = TRUE)
+  )
+)
 
 # --- friendly constructors --------------------------------------------------
 
@@ -142,6 +152,35 @@ path_grob <- function(x, y, id = NULL, rule = c("winding", "evenodd"),
     y = vctrs::vec_recycle(as_unit(y, "native"), n),
     nper = as.integer(nper), rule = rule, gp = gp, name = name, vp = vp
   )
+}
+
+#' @rdname grob
+#' @param image A raster image: a [grDevices::as.raster()]-compatible object — a
+#'   matrix/array of colours or greyscale values, or a `raster` object.
+#' @param interpolate Smoothly interpolate when scaling (default `TRUE`)? `FALSE`
+#'   keeps hard pixel edges.
+#' @export
+raster_grob <- function(image, x = 0.5, y = 0.5, width = 1, height = 1,
+                        interpolate = TRUE, gp = gpar(), name = NULL, vp = NULL) {
+  px <- .image_to_rgba(image)
+  grob_raster(
+    rgba = px$rgba, iw = px$iw, ih = px$ih,
+    x = as_unit(x), y = as_unit(y),
+    width = as_unit(width), height = as_unit(height),
+    interpolate = isTRUE(interpolate), gp = gp, name = name, vp = vp
+  )
+}
+
+# Convert an R image to a flat straight-RGBA integer vector (row-major, top-left,
+# 4 ints per pixel) plus its pixel dimensions. A `raster` object stores its cells
+# by row (top-left first), so `as.vector()` already gives the order we want.
+.image_to_rgba <- function(image) {
+  r <- grDevices::as.raster(image)
+  d <- dim(r)
+  if (is.null(d) || any(d == 0L)) cli::cli_abort("{.arg image} has no pixels.")
+  ih <- d[1]; iw <- d[2]
+  rgba <- grDevices::col2rgb(as.vector(r), alpha = TRUE) # 4 x N (r, g, b, alpha)
+  list(rgba = as.integer(rgba), iw = as.integer(iw), ih = as.integer(ih))
 }
 
 #' @rdname grob

@@ -9,6 +9,7 @@
 \alias{points_grob}
 \alias{segments_grob}
 \alias{path_grob}
+\alias{raster_grob}
 \alias{text_grob}
 \title{Graphical objects (grobs)}
 \usage{
@@ -37,6 +38,18 @@ path_grob(
   y,
   id = NULL,
   rule = c("winding", "evenodd"),
+  gp = gpar(),
+  name = NULL,
+  vp = NULL
+)
+
+raster_grob(
+  image,
+  x = 0.5,
+  y = 0.5,
+  width = 1,
+  height = 1,
+  interpolate = TRUE,
   gp = gpar(),
   name = NULL,
   vp = NULL
@@ -75,6 +88,12 @@ sub-paths; consecutive equal values form a sub-path (so a hole is a second
 sub-path). \code{NULL} makes a single sub-path.}
 
 \item{rule}{Fill rule: \code{"winding"} (non-zero, default) or \code{"evenodd"}.}
+
+\item{image}{A raster image: a \code{\link[grDevices:as.raster]{grDevices::as.raster()}}-compatible object — a
+matrix/array of colours or greyscale values, or a \code{raster} object.}
+
+\item{interpolate}{Smoothly interpolate when scaling (default \code{TRUE})? \code{FALSE}
+keeps hard pixel edges.}
 
 \item{label}{Character string(s) to draw.}
 

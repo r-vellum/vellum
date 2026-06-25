@@ -142,6 +142,23 @@ pub trait RenderBackend {
     fn begin_group(&mut self);
     fn end_group(&mut self, mask: Option<MaskLayer>);
 
+    /// Draw a straight-RGBA image (`iw` x `ih`, top-left origin) into a `w` x `h`
+    /// (local px) cell centred at `(x, y)`, mapped to device by `transform`.
+    #[allow(clippy::too_many_arguments)]
+    fn draw_image(
+        &mut self,
+        rgba: &[u8],
+        iw: u32,
+        ih: u32,
+        x: f64,
+        y: f64,
+        w: f64,
+        h: f64,
+        interpolate: bool,
+        transform: Transform,
+        clip: &Clip,
+    );
+
     /// Draw a batch of circles: centres `(cx, cy)` + radii `r` in local px,
     /// mapped to device by `transform`. The default places one unit circle per
     /// element; the raster backend overrides this to stamp a cached sprite for
@@ -260,24 +277,6 @@ fn pattern_transform(tw: u32, th: u32, x: f64, y: f64, w: f64, h: f64) -> Transf
         (x - w / 2.0) as f32,
         (y - h / 2.0) as f32,
     )
-}
-
-/// Mean straight-RGBA colour of a tile (a solid stand-in where image fills are
-/// unavailable, e.g. the PDF backend without `raster-images`).
-fn average_rgba(tile: &[u8]) -> Rgba {
-    let px = tile.len() / 4;
-    if px == 0 {
-        return Rgba { r: 0, g: 0, b: 0, a: 0 };
-    }
-    let (mut r, mut g, mut b, mut a) = (0u64, 0u64, 0u64, 0u64);
-    for c in tile.chunks_exact(4) {
-        r += c[0] as u64;
-        g += c[1] as u64;
-        b += c[2] as u64;
-        a += c[3] as u64;
-    }
-    let n = px as u64;
-    Rgba { r: (r / n) as u8, g: (g / n) as u8, b: (b / n) as u8, a: (a / n) as u8 }
 }
 
 /// A fully-visible (all-255) page-sized mask, the starting point for clipping.
@@ -526,6 +525,23 @@ impl RenderBackend for RasterBackend {
             }
         }
         circles_by_path(self, cx, cy, r, fill, stroke.as_ref(), transform, clip);
+    }
+
+    fn draw_image(&mut self, rgba: &[u8], iw: u32, ih: u32, x: f64, y: f64, w: f64, h: f64, interpolate: bool, transform: Transform, clip: &Clip) {
+        let pm = match pixmap_from_straight(rgba, iw, ih) {
+            Some(p) => p,
+            None => return,
+        };
+        let mask = self.mask_for(clip);
+        // Map the iw x ih pixmap into the w x h cell at (x-w/2, y-h/2); `transform` then to device.
+        let place = transform.pre_concat(Transform::from_row(
+            (w / iw as f64) as f32, 0.0, 0.0, (h / ih as f64) as f32,
+            (x - w / 2.0) as f32, (y - h / 2.0) as f32,
+        ));
+        let mut paint = tiny_skia::PixmapPaint::default();
+        paint.quality = if interpolate { FilterQuality::Bilinear } else { FilterQuality::Nearest };
+        self.targets.last_mut().expect("at least the page target")
+            .draw_pixmap(0, 0, pm.as_ref(), &paint, place, mask.as_deref());
     }
 }
 
@@ -824,6 +840,23 @@ impl RenderBackend for SvgBackend {
         };
         self.out().push_str(&wrapped);
     }
+
+    fn draw_image(&mut self, rgba: &[u8], iw: u32, ih: u32, x: f64, y: f64, w: f64, h: f64, interpolate: bool, transform: Transform, clip: &Clip) {
+        let png = match pixmap_from_straight(rgba, iw, ih).and_then(|pm| pm.encode_png().ok()) {
+            Some(b) => b,
+            None => return,
+        };
+        let rendering = if interpolate { "" } else { " image-rendering=\"pixelated\"" };
+        let element = format!(
+            "<image href=\"data:image/png;base64,{b}\" x=\"{px}\" y=\"{py}\" width=\"{w}\" height=\"{h}\" \
+             preserveAspectRatio=\"none\"{rendering}{tr}/>",
+            b = b64(&png),
+            px = x - w / 2.0,
+            py = y - h / 2.0,
+            tr = transform_attr(transform),
+        );
+        self.emit(&element, clip);
+    }
 }
 
 /// Encode a mask raster as an opaque grayscale PNG where each pixel's gray level
@@ -949,12 +982,13 @@ fn xml_escape(s: &str) -> String {
 // --- PDF backend (krilla) ---------------------------------------------------
 
 use krilla::color::rgb;
-use krilla::geom::{Path as KPath, PathBuilder as KPathBuilder, Point as KPoint, Transform as KTransform};
+use krilla::geom::{Path as KPath, PathBuilder as KPathBuilder, Point as KPoint, Size as KSize, Transform as KTransform};
+use krilla::image::Image as KImage;
 use krilla::num::NormalizedF32;
 use krilla::paint::{
     Fill, FillRule as KFillRule, LineCap as KLineCap, LineJoin as KLineJoin, LinearGradient as KLinear,
-    Paint as KPaint, RadialGradient as KRadial, SpreadMethod as KSpread, Stop as KStop, Stroke as KStroke,
-    StrokeDash as KStrokeDash,
+    Paint as KPaint, Pattern as KPattern, RadialGradient as KRadial, SpreadMethod as KSpread, Stop as KStop,
+    Stroke as KStroke, StrokeDash as KStrokeDash,
 };
 use krilla::surface::Surface;
 use krilla::text::{Font, GlyphId, KrillaGlyph};
@@ -1054,12 +1088,29 @@ impl RenderBackend for PdfBackend<'_, '_> {
                 }),
                 NormalizedF32::ONE,
             ),
-            // Image patterns need krilla's `raster-images` feature (extra vendored
-            // codecs); until then a pattern degrades to its mean colour in PDF.
-            ResolvedPaint::Pattern { tile, opacity, .. } => {
-                let c = average_rgba(tile);
-                let a = NormalizedF32::new((c.a as f32 / 255.0) * opacity).unwrap_or(NormalizedF32::ONE);
-                (rgb::Color::new(c.r, c.g, c.b).into(), a)
+            // A real tiling pattern: draw the tile image into a stream sized to the
+            // cell, anchored at the cell's top-left (matching raster/SVG).
+            ResolvedPaint::Pattern { tile, tw, th, x, y, w, h, opacity, .. } => {
+                match KSize::from_wh(*w as f32, *h as f32) {
+                    Some(cell) if tile.len() == (*tw as usize) * (*th as usize) * 4 => {
+                        let img = KImage::from_rgba8(tile.to_vec(), *tw, *th);
+                        let stream = {
+                            let mut sb = self.surface.stream_builder();
+                            let mut surf = sb.surface();
+                            surf.draw_image(img, cell);
+                            surf.finish();
+                            sb.finish()
+                        };
+                        let pat = KPattern {
+                            stream,
+                            transform: KTransform::from_translate((x - w / 2.0) as f32, (y - h / 2.0) as f32),
+                            width: *w as f32,
+                            height: *h as f32,
+                        };
+                        (KPaint::from(pat), NormalizedF32::new(opacity.clamp(0.0, 1.0)).unwrap_or(NormalizedF32::ONE))
+                    }
+                    _ => return,
+                }
             }
         };
         let krule = match rule {
@@ -1183,10 +1234,28 @@ impl RenderBackend for PdfBackend<'_, '_> {
         self.pop_state(pushes);
     }
 
-    // Masks need an image/transparency-group path krilla can't take without the
-    // `raster-images` feature (un-vendored codecs); the group draws unmasked.
+    // Masks would need an isolated transparency group recorded into a krilla
+    // stream; the PDF backend draws groups inline, so masking is not applied yet
+    // (raster-images is now on, so a future recorder pass can add it).
     fn begin_group(&mut self) {}
     fn end_group(&mut self, _mask: Option<MaskLayer>) {}
+
+    fn draw_image(&mut self, rgba: &[u8], iw: u32, ih: u32, x: f64, y: f64, w: f64, h: f64, _interpolate: bool, transform: Transform, clip: &Clip) {
+        if iw == 0 || ih == 0 || rgba.len() < (iw as usize) * (ih as usize) * 4 {
+            return;
+        }
+        let size = match KSize::from_wh(w as f32, h as f32) {
+            Some(s) => s,
+            None => return,
+        };
+        let img = KImage::from_rgba8(rgba.to_vec(), iw, ih);
+        // draw_image places the image at the origin scaled to `size`; translate to
+        // the cell's top-left, under the primitive transform + clip.
+        let place = transform.pre_concat(Transform::from_row(1.0, 0.0, 0.0, 1.0, (x - w / 2.0) as f32, (y - h / 2.0) as f32));
+        let n = self.push_state(place, clip);
+        self.surface.draw_image(img, size);
+        self.pop_state(n);
+    }
 }
 
 fn to_kpath(p: &Path) -> Option<KPath> {

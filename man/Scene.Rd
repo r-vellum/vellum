@@ -59,6 +59,11 @@ A general path. \code{nper} gives the number of points in each closed sub-path
 (so holes are sub-paths under the even-odd or winding rule).
 }
 
+\subsection{Method \code{image}}{
+A raster image: \code{rgba} is a flat straight-RGBA integer vector (\code{iw} x \code{ih},
+top-left, 4 per pixel), drawn into a \code{w} x \code{h} cell centred at \verb{(x, y)}.
+}
+
 \subsection{Method \code{text}}{
 Add pre-shaped text. The R wrapper does shaping (via \code{textshaping}) and
 passes per-glyph ids/positions/fonts plus the block size.
