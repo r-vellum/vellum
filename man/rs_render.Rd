@@ -17,3 +17,4 @@ rs_render(scene, path)
 \description{
 Render a scene to a PNG file
 }
+\keyword{internal}

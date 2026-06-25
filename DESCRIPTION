@@ -21,5 +21,17 @@ Config/testthat/edition: 3
 Imports:
     cli,
     grDevices,
+    S7,
     textshaping,
     vctrs
+Collate: 
+    'gpar.R'
+    'viewport.R'
+    'grob.R'
+    'api.R'
+    'extendr-wrappers.R'
+    'scene.R'
+    'text.R'
+    'unit.R'
+    'vellum-package.R'
+    'zzz.R'

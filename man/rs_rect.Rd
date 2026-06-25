@@ -40,3 +40,4 @@ and \code{NULL} inherits from the enclosing viewport's \code{gp}.}
 \description{
 Draw a rectangle
 }
+\keyword{internal}

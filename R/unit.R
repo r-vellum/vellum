@@ -37,9 +37,8 @@ unit <- function(values, units = "npc", data = NULL) {
   if (length(bad)) {
     cli::cli_abort("Unknown unit{?s}: {.val {bad}}.")
   }
-  if ("null" %in% units) {
-    cli::cli_abort('{.val null} units are only valid in layouts, not coordinates.')
-  }
+  # "null" (flexible) units are allowed in the type but only meaningful in
+  # layouts; `.coord()` rejects them for primitive coordinates.
 
   out_val <- values
   out_code <- integer(length(values))
@@ -195,6 +194,9 @@ vec_arith.vellum_unit.MISSING <- function(op, x, y, ...) {
   } else {
     val <- as.double(v)
     code <- rep(.unit_codes[[default]], length(val))
+  }
+  if (any(code == .unit_codes[["null"]])) {
+    stop("`null` units are only valid in layouts, not coordinates", call. = FALSE)
   }
   if (!is.null(n)) {
     val <- vctrs::vec_recycle(val, n)

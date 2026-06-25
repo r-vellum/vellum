@@ -65,3 +65,4 @@ are given — into a cell of the parent's \code{\link[=rs_layout]{rs_layout()}}.
 (\code{angle}), clip their contents (\code{clip}), and set inheritable graphical
 parameters (\code{gp}).
 }
+\keyword{internal}

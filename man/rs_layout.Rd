@@ -21,3 +21,4 @@ placed into cells via the \code{row}/\code{col} arguments of \code{\link[=rs_pus
 Track sizes mix absolute units with flexible \code{"null"} weights (which share the
 leftover space in proportion to their value).
 }
+\keyword{internal}

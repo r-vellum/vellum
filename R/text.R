@@ -21,42 +21,14 @@
 #' @param col Text colour (`NA` for none).
 #' @param alpha Opacity multiplier in `[0, 1]`.
 #' @return `scene`, invisibly.
-#' @export
+#' @keywords internal
 rs_text <- function(scene, label, x = 0.5, y = 0.5, units = "npc",
                     hjust = 0.5, vjust = 0.5, rot = 0,
                     family = "", fontface = "plain", fontsize = 12, cex = 1,
                     col = "black", alpha = 1) {
   units <- .rs_units(units)
-  label <- as.character(label)[1]
-  if (is.na(label) || !nzchar(label)) {
-    return(invisible(scene))
-  }
-
-  dpi <- scene$dpi()
-  face <- .rs_face(fontface)
-  sh <- textshaping::shape_text(
-    label,
-    family = family, italic = face$italic, weight = face$weight,
-    size = fontsize * cex
-  )
-  g <- sh$shape
-  if (nrow(g) == 0L) {
-    return(invisible(scene))
-  }
-
-  # shape_text reports offsets, advances and metrics in points (1/72 inch);
-  # convert to device pixels. The em size skrifa needs is likewise pt -> px.
-  scale <- dpi / 72
-  cx <- .coord(x, units, 1)
-  cy <- .coord(y, units, 1)
-
-  scene$text(
-    cx$value, cy$value, cx$code, cy$code, rot, hjust, vjust,
-    sh$metrics$width * scale, sh$metrics$height * scale,
-    as.integer(g$index), as.numeric(g$x_offset) * scale, as.numeric(g$y_offset) * scale,
-    as.numeric(g$font_size) * scale, as.character(g$font_path), as.integer(g$font_index),
-    .rs_col_inh(col), .rs_num_inh(alpha)
-  )
+  .draw_text(scene, label, as_unit(x, units), as_unit(y, units),
+             hjust, vjust, rot, family, fontface, fontsize, cex, col, alpha)
   invisible(scene)
 }
 
@@ -105,6 +77,37 @@ rs_strheight <- function(label, family = "", fontface = "plain",
     mm = h_pt / 72 * 25.4,
     cm = h_pt / 72 * 2.54
   )
+}
+
+# Shape `label` and emit a text node into `scene`. Shared by rs_text() and the
+# compile(grob_text) method. `x`/`y` are unit objects; `col`/`alpha` tri-state.
+.draw_text <- function(scene, label, x, y, hjust, vjust, rot,
+                       family, fontface, fontsize, cex, col, alpha) {
+  label <- as.character(label)[1]
+  if (is.na(label) || !nzchar(label)) {
+    return(invisible())
+  }
+  dpi <- scene$dpi()
+  face <- .rs_face(fontface)
+  sh <- textshaping::shape_text(label,
+    family = family, italic = face$italic, weight = face$weight, size = fontsize * cex
+  )
+  g <- sh$shape
+  if (nrow(g) == 0L) {
+    return(invisible())
+  }
+  # shape_text reports points; convert to device pixels (em size likewise).
+  scale <- dpi / 72
+  cx <- .coord(x, "npc", 1)
+  cy <- .coord(y, "npc", 1)
+  scene$text(
+    cx$value, cy$value, cx$code, cy$code, rot, hjust, vjust,
+    sh$metrics$width * scale, sh$metrics$height * scale,
+    as.integer(g$index), as.numeric(g$x_offset) * scale, as.numeric(g$y_offset) * scale,
+    as.numeric(g$font_size) * scale, as.character(g$font_path), as.integer(g$font_index),
+    .rs_col_inh(col), .rs_num_inh(alpha)
+  )
+  invisible()
 }
 
 # Map an R fontface to textshaping's italic/weight arguments.

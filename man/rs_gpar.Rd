@@ -23,3 +23,4 @@ Builds an inheritable set of graphical parameters for \code{\link[=rs_push_viewp
 Any field left \code{NULL} is inherited from the enclosing viewport; \code{alpha}
 multiplies down the viewport tree.
 }
+\keyword{internal}

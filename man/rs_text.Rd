@@ -58,3 +58,4 @@ package (HarfBuzz) and the font is resolved by
 \pkg{ragg} and \pkg{svglite}. Glyph outlines are then rasterized by the Rust
 backend, so text geometry matches the rest of the R graphics ecosystem.
 }
+\keyword{internal}

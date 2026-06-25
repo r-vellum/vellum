@@ -22,3 +22,4 @@ viewports (\code{\link[=rs_push_viewport]{rs_push_viewport()}}) and the primitiv
 \code{\link[=rs_lines]{rs_lines()}}, \code{\link[=rs_polygon]{rs_polygon()}}, \code{\link[=rs_circle]{rs_circle()}}, \code{\link[=rs_text]{rs_text()}}), then write it out
 with \code{\link[=rs_render]{rs_render()}}.
 }
+\keyword{internal}

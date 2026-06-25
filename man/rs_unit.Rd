@@ -20,3 +20,4 @@ A lightweight \verb{(value, unit)} spec for \code{\link[=rs_layout]{rs_layout()}
 \code{"null"} marks a flexible track whose value is its weight. (This is a minimal
 helper for layouts; a full unit type arrives in a later milestone.)
 }
+\keyword{internal}

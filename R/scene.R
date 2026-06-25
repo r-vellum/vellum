@@ -9,7 +9,7 @@
 #' @param dpi Resolution in dots per inch.
 #' @param bg Background colour (any R colour, or `NA` for transparent).
 #' @return A `Scene` object (mutated in place by the other functions).
-#' @export
+#' @keywords internal
 rs_scene <- function(width = 6, height = 4, dpi = 96, bg = "white") {
   Scene$new(width, height, dpi, .rs_col(bg) %||% c(255L, 255L, 255L, 0L))
 }
@@ -39,7 +39,7 @@ rs_scene <- function(width = 6, height = 4, dpi = 96, bg = "white") {
 #' @param rowspan,colspan Number of cells to span.
 #' @return `rs_push_viewport()` returns the new viewport's id; the others return
 #'   `scene`, invisibly.
-#' @export
+#' @keywords internal
 rs_push_viewport <- function(scene, x = 0.5, y = 0.5, width = 1, height = 1,
                              units = "npc", xscale = c(0, 1), yscale = c(0, 1),
                              angle = 0, clip = FALSE, gp = rs_gpar(),
@@ -59,14 +59,14 @@ rs_push_viewport <- function(scene, x = 0.5, y = 0.5, width = 1, height = 1,
 
 #' @rdname rs_push_viewport
 #' @param n Number of levels to move up.
-#' @export
+#' @keywords internal
 rs_pop_viewport <- function(scene, n = 1) {
   scene$pop_viewport(as.integer(n))
   invisible(scene)
 }
 
 #' @rdname rs_push_viewport
-#' @export
+#' @keywords internal
 rs_up_viewport <- function(scene, n = 1) {
   scene$pop_viewport(as.integer(n))
   invisible(scene)
@@ -80,7 +80,7 @@ rs_up_viewport <- function(scene, n = 1) {
 #'
 #' @inheritParams rs_push_viewport
 #' @return `scene`, invisibly.
-#' @export
+#' @keywords internal
 rs_viewport <- function(scene, x = 0.5, y = 0.5, width = 1, height = 1,
                         xscale = c(0, 1), yscale = c(0, 1)) {
   scene$to_root()
@@ -100,7 +100,7 @@ rs_viewport <- function(scene, x = 0.5, y = 0.5, width = 1, height = 1,
 #' @param widths,heights Track sizes: a bare numeric vector (treated as `"null"`
 #'   weights), or an [rs_unit()] spec mixing absolute units and `"null"`.
 #' @return `scene`, invisibly.
-#' @export
+#' @keywords internal
 rs_layout <- function(scene, widths, heights) {
   widths <- .as_track(widths)
   heights <- .as_track(heights)
@@ -118,7 +118,7 @@ rs_layout <- function(scene, widths, heights) {
 #' @param units Unit(s): `"null"`, `"npc"`, `"mm"`, `"in"`, or `"pt"`, recycled
 #'   to the length of `values`.
 #' @return A track-spec list.
-#' @export
+#' @keywords internal
 rs_unit <- function(values, units = "null") {
   list(values = as.numeric(values),
        units = rep(as.character(units), length.out = length(values)))
@@ -138,7 +138,7 @@ rs_unit <- function(values, units = "null") {
 #' @param lwd Border line width (1 == 1/96 inch); `NULL` inherits.
 #' @param alpha Opacity multiplier in `[0, 1]`; `NULL` inherits.
 #' @return `scene`, invisibly.
-#' @export
+#' @keywords internal
 rs_rect <- function(scene, x = 0.5, y = 0.5, width = 1, height = 1,
                     units = "npc", fill = NA, col = "black", lwd = 1, alpha = 1) {
   units <- .rs_units(units)
@@ -158,7 +158,7 @@ rs_rect <- function(scene, x = 0.5, y = 0.5, width = 1, height = 1,
 #' @param lwd Line width (1 == 1/96 inch); `NULL` inherits.
 #' @param alpha Opacity multiplier in `[0, 1]`; `NULL` inherits.
 #' @return `scene`, invisibly.
-#' @export
+#' @keywords internal
 rs_lines <- function(scene, x, y, units = "npc", col = "black", lwd = 1, alpha = 1) {
   units <- .rs_units(units)
   n <- .coord_n(x, y)
@@ -173,7 +173,7 @@ rs_lines <- function(scene, x, y, units = "npc", col = "black", lwd = 1, alpha =
 #' @inheritParams rs_lines
 #' @param fill Fill colour (`NA` none, `NULL` inherit).
 #' @return `scene`, invisibly.
-#' @export
+#' @keywords internal
 rs_polygon <- function(scene, x, y, units = "npc", fill = NA, col = "black", lwd = 1, alpha = 1) {
   units <- .rs_units(units)
   n <- .coord_n(x, y)
@@ -194,7 +194,7 @@ rs_polygon <- function(scene, x, y, units = "npc", fill = NA, col = "black", lwd
 #' @param lwd Border line width (1 == 1/96 inch); `NULL` inherits.
 #' @param alpha Opacity multiplier in `[0, 1]`; `NULL` inherits.
 #' @return `scene`, invisibly.
-#' @export
+#' @keywords internal
 rs_circle <- function(scene, x = 0.5, y = 0.5, r = 0.25,
                       units = "npc", fill = NA, col = "black", lwd = 1, alpha = 1) {
   units <- .rs_units(units)
@@ -211,7 +211,7 @@ rs_circle <- function(scene, x = 0.5, y = 0.5, r = 0.25,
 #' @param scene A [rs_scene()].
 #' @param path Output file path.
 #' @return `path`, invisibly.
-#' @export
+#' @keywords internal
 rs_render <- function(scene, path) {
   scene$render_png(path)
   invisible(path)
@@ -227,19 +227,19 @@ rs_render <- function(scene, path) {
 #' @param x,y Pixel coordinates (0-based, from the top-left).
 #' @return `rs_pixel()`: integer `c(r, g, b, a)`. `rs_dim()`: integer
 #'   `c(width, height)`. `rs_raster()`: integer array `c(4, width, height)`.
-#' @export
+#' @keywords internal
 rs_pixel <- function(scene, x, y) {
   scene$pixel(as.integer(x), as.integer(y))
 }
 
 #' @rdname rs_pixel
-#' @export
+#' @keywords internal
 rs_dim <- function(scene) {
   scene$dim()
 }
 
 #' @rdname rs_pixel
-#' @export
+#' @keywords internal
 rs_raster <- function(scene) {
   d <- scene$dim()
   array(scene$rgba(), dim = c(4L, d[1], d[2]))
@@ -258,7 +258,7 @@ rs_raster <- function(scene) {
 #' @param lwd Line width (1 == 1/96 inch), or `NULL` to inherit.
 #' @param alpha Opacity multiplier in `[0, 1]`, or `NULL` to inherit.
 #' @return A gpar list.
-#' @export
+#' @keywords internal
 rs_gpar <- function(col = NULL, fill = NULL, lwd = NULL, alpha = NULL) {
   list(col = col, fill = fill, lwd = lwd, alpha = alpha)
 }

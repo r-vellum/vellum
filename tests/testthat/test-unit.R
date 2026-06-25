@@ -10,7 +10,9 @@ test_that("unit() constructs, recycles, and validates", {
   expect_equal(vctrs::field(m, "unit"), c(0L, 3L))
 
   expect_error(unit(1, "furlong"), "Unknown unit")
-  expect_error(unit(1, "null"), "only valid in layouts")
+  # "null" is allowed in the type (for layouts) but rejected as a coordinate
+  expect_s3_class(unit(1, "null"), "vellum_unit")
+  expect_error(.coord(unit(1, "null")), "only valid in layouts")
 })
 
 test_that("format / print show value+unit", {

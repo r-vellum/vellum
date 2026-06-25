@@ -38,3 +38,4 @@ viewport dimension so the circle stays round.}
 \description{
 Draw a circle
 }
+\keyword{internal}

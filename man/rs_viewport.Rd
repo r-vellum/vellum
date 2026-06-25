@@ -32,3 +32,4 @@ Resets to the root viewport and pushes a single child with the given scales.
 A convenience for the common single-panel case; for nested viewports use
 \code{\link[=rs_push_viewport]{rs_push_viewport()}}.
 }
+\keyword{internal}

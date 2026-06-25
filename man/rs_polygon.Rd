@@ -36,3 +36,4 @@ rs_polygon(
 \description{
 Draw a polygon
 }
+\keyword{internal}

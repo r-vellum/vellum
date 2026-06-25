@@ -25,3 +25,4 @@ rs_lines(scene, x, y, units = "npc", col = "black", lwd = 1, alpha = 1)
 \description{
 Draw a polyline
 }
+\keyword{internal}

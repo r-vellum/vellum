@@ -26,3 +26,4 @@ rs_raster(scene)
 (top-left origin, 0-based). \code{rs_dim()} returns the device size in pixels.
 \code{rs_raster()} returns the whole image. Primarily for testing.
 }
+\keyword{internal}
