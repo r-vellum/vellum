@@ -157,6 +157,9 @@ rs_rect <- function(scene, x = 0.5, y = 0.5, width = 1, height = 1,
 #' @export
 rs_lines <- function(scene, x, y, units = "npc", col = "black", lwd = 1, alpha = 1) {
   units <- .rs_units(units)
+  if (length(x) != length(y)) {
+    stop("`x` and `y` must have the same length", call. = FALSE)
+  }
   scene$lines(as.numeric(x), as.numeric(y), units,
               .rs_col_inh(col), .rs_num_inh(lwd), .rs_num_inh(alpha))
   invisible(scene)
@@ -170,6 +173,9 @@ rs_lines <- function(scene, x, y, units = "npc", col = "black", lwd = 1, alpha =
 #' @export
 rs_polygon <- function(scene, x, y, units = "npc", fill = NA, col = "black", lwd = 1, alpha = 1) {
   units <- .rs_units(units)
+  if (length(x) != length(y)) {
+    stop("`x` and `y` must have the same length", call. = FALSE)
+  }
   scene$polygon(as.numeric(x), as.numeric(y), units,
                 .rs_col_inh(fill), .rs_col_inh(col), .rs_num_inh(lwd), .rs_num_inh(alpha))
   invisible(scene)
@@ -272,7 +278,10 @@ rs_gpar <- function(col = NULL, fill = NULL, lwd = NULL, alpha = NULL) {
   if (is.null(x)) {
     return(NULL)
   }
-  if (length(x) != 1L || is.na(x)) {
+  if (length(x) != 1L) {
+    stop("a colour must be a single value, `NA` (none), or `NULL` (inherit)", call. = FALSE)
+  }
+  if (is.na(x)) {
     return(integer(0))
   }
   as.integer(grDevices::col2rgb(x, alpha = TRUE)[, 1L])
@@ -280,7 +289,13 @@ rs_gpar <- function(col = NULL, fill = NULL, lwd = NULL, alpha = NULL) {
 
 # Tri-state numeric encoding: NULL/NA -> NA_real_ (inherit); else the value.
 .rs_num_inh <- function(x) {
-  if (is.null(x) || (length(x) == 1L && is.na(x))) {
+  if (is.null(x)) {
+    return(NA_real_)
+  }
+  if (length(x) != 1L) {
+    stop("`lwd`/`alpha` must be a single number or `NULL` (inherit)", call. = FALSE)
+  }
+  if (is.na(x)) {
     return(NA_real_)
   }
   as.numeric(x)

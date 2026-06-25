@@ -124,7 +124,7 @@ enum Node {
         vjust: f64,
         w: f64,
         h: f64,
-        gid: Vec<u16>,
+        gid: Vec<u32>,
         gx: Vec<f64>,
         gy: Vec<f64>,
         gsize: Vec<f64>,
@@ -167,8 +167,15 @@ impl Scene {
     /// (a length-4 integer RGBA vector). A root viewport covering the whole page
     /// (npc == native) is created as viewport 0.
     fn new(width: f64, height: f64, dpi: f64, bg: Robj) -> Self {
-        let w_px = (width * dpi).round().max(1.0) as u32;
-        let h_px = (height * dpi).round().max(1.0) as u32;
+        if !(width.is_finite() && height.is_finite() && dpi.is_finite())
+            || width <= 0.0
+            || height <= 0.0
+            || dpi <= 0.0
+        {
+            throw_r_error("scene width, height, and dpi must be finite and positive");
+        }
+        let w_px = px_dim(width * dpi);
+        let h_px = px_dim(height * dpi);
         let root = ViewportNode {
             parent: None,
             children: Vec::new(),
@@ -323,7 +330,7 @@ impl Scene {
                 vjust,
                 w,
                 h,
-                gid: gid.iter().map(|&v| v.max(0) as u16).collect(),
+                gid: gid.iter().map(|&v| v.max(0) as u32).collect(),
                 gx: gx.to_vec(),
                 gy: gy.to_vec(),
                 gsize: gsize.to_vec(),
@@ -361,7 +368,7 @@ impl Scene {
     /// `[r, g, b, a, ...]` (top-left origin, x fastest).
     fn rgba(&self) -> Vec<i32> {
         let pm = self.rasterize();
-        let mut out = Vec::with_capacity((self.w_px * self.h_px * 4) as usize);
+        let mut out = Vec::with_capacity((self.w_px as usize) * (self.h_px as usize) * 4);
         for p in pm.pixels() {
             let c = p.demultiply();
             out.push(c.red() as i32);
@@ -572,7 +579,16 @@ fn draw_node(pm: &mut Pixmap, node: &Node, rv: &ResolvedVp, fonts: &mut FontCach
             } else {
                 transform
             };
-            for i in 0..gid.len() {
+            // Defensive: the per-glyph vectors should be equal length, but never
+            // index past the shortest if a shaping bug makes them ragged.
+            let n = gid
+                .len()
+                .min(gx.len())
+                .min(gy.len())
+                .min(gsize.len())
+                .min(gpath.len())
+                .min(gface.len());
+            for i in 0..n {
                 let path = match fonts.glyph_outline(&gpath[i], gface[i], gid[i], gsize[i] as f32) {
                     Some(p) => p,
                     None => continue,
@@ -670,6 +686,17 @@ fn pair(s: &[f64], default: (f64, f64)) -> (f64, f64) {
 /// An R `NULL` as an `Robj` (used to mean "inherit" for gpar fields).
 fn rnull() -> Robj {
     Robj::from(NULL)
+}
+
+/// Convert a (finite, positive) dimension in pixels to a `u32`, at least 1 and
+/// capped so we never attempt an absurd allocation. Callers validate finiteness.
+fn px_dim(v: f64) -> u32 {
+    let r = v.round().max(1.0);
+    const MAX_DIM: f64 = 30000.0;
+    if r > MAX_DIM {
+        throw_r_error("scene dimension too large (max 30000 px per side)");
+    }
+    r as u32
 }
 
 extendr_module! {

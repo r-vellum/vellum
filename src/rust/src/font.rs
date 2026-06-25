@@ -36,13 +36,13 @@ impl FontCache {
         &mut self,
         font_path: &str,
         face_index: u32,
-        glyph_id: u16,
+        glyph_id: u32,
         size_px: f32,
     ) -> Option<tiny_skia::Path> {
         let bytes = self.bytes(font_path)?;
         let font = FontRef::from_index(bytes, face_index).ok()?;
         let outlines = font.outline_glyphs();
-        let glyph = outlines.get(GlyphId::new(glyph_id as u32))?;
+        let glyph = outlines.get(GlyphId::new(glyph_id))?;
 
         let mut pen = PathPen::default();
         let settings = DrawSettings::unhinted(Size::new(size_px), LocationRef::default());

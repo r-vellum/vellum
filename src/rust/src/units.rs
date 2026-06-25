@@ -122,7 +122,7 @@ impl Vp {
 /// given in local pixels. The device frame is y-down, so we negate the angle —
 /// this is the single place that sign lives.
 pub fn rotation_about(angle_deg: f64, cx: f64, cy: f64) -> Transform {
-    Transform::from_rotate_at(-angle_deg as f32, cx as f32, cy as f32)
+    Transform::from_rotate_at((-angle_deg) as f32, cx as f32, cy as f32)
 }
 
 fn span((lo, hi): (f64, f64)) -> f64 {

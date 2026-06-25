@@ -277,13 +277,13 @@ rsplot/                      R package root
 
 ## 8. Phased roadmap
 
-**M0 — skeleton.** `rextendr::use_extendr()` scaffold; CI that builds Rust + R on Linux/macOS/Windows; vendoring; one trivial extendr call round-tripped. Decide nothing else until this is green.
+**M0 — skeleton. ✅ done.** `rextendr::use_extendr()` scaffold; cross-platform CI (with the Windows GNU Rust target); cargo vendoring; an R↔Rust round-trip. As built: extendr 0.9, tiny-skia 0.11, skrifa 0.31.
 
-**M1 — raster vertical slice.** Scene graph + a handful of primitives (rect, lines, polygon, circle, text), `npc`/`native`/absolute units, a single viewport with a scale, tiny-skia → PNG. No layout, no editing yet. Goal: a hand-built scene renders correct, deterministic pixels. Establish visual-regression snapshots here.
+**M1 — raster vertical slice. ✅ done.** Scene graph + primitives (rect, lines, polygon, circle, text), `npc`/`native`/absolute units, a single viewport with a scale, tiny-skia → PNG. Text shipped with **font fidelity** (textshaping + systemfonts shaping/resolution, skrifa glyph outlines, per-glyph fallback, justification, rotation). Deterministic pixel-probe tests via `rs_pixel`/`rs_raster`.
 
-**M2 — units, viewports, layout.** Full unit set incl. `strwidth`/`grobwidth` and the flex `null` replacement; nested viewports with rotation and clipping; the row/column layout solver; gpar inheritance; the cacheable layout pass.
+**M2 — viewports, layout, clipping, gpar. ✅ done.** Viewport tree (arena) with each resolved viewport an affine transform (local px → device px) so nesting + rotation compose; rectangular clipping via tiny-skia `Mask::intersect_path`; the row/column flex-layout solver (absolute + `null` tracks, spanning); a cacheable DFS layout pass (pure in `(page px, dpi, tree)` → clean resize); gpar inheritance with multiplicative alpha applied once at draw. **Scoped down from the original M2 plan:** per-axis units, `strwidth`/`strheight`, and per-element unit vectors were deferred to M3; `grobwidth`/`grobheight` remain deferred (need a grob-sizing protocol). The flex `null` lives only as a layout track size, not a primitive coordinate unit. Bug fixed in passing: native *position* must use `(v − scale.lo)/span`, not `v/span` (M1 only worked because scales started at 0).
 
-**M3 — the S7/vctrs R API.** The retained API (`push`/`draw`/`edit_node`/`render`), the `unit` vctrs type, named nodes and querying/editing. This is when it becomes pleasant to use from R.
+**M3 — the S7/vctrs R API.** The retained API (`push`/`draw`/`edit_node`/`render`), the `unit` **vctrs** type (per-element units, finally enabling per-axis units + `strwidth`/`strheight`), named nodes and querying/editing. Also the place to settle **vectorisation + length contracts** for the primitive API (today colours/labels are scalar; multi-element input should vectorise rather than error). This is when it becomes pleasant to use from R.
 
 **M4 — vector outputs.** SVG (hand-rolled) and PDF (krilla) backends over the shared `RenderBackend` trait. Gradients, patterns, clip paths, masks.
 
@@ -301,6 +301,17 @@ rsplot/                      R package root
 - **Panic safety at the C boundary** (device mode) is the top correctness hazard. Non-negotiable discipline; mirror `vellogd-r`.
 - **S7 maturity** — experimental, no S4 inheritance. Isolate behind our constructors.
 - **Visual regression** — determinism is a headline benefit, so snapshot testing of rendered output (and text geometry vs `textshaping`) is part of the build from M1, not an afterthought.
+
+### Hardening backlog (from the post-M2 review)
+
+Robustness fixes already applied (M2): scene dimensions validated finite/positive and capped (no `Pixmap` panic / runaway alloc); `rgba()` capacity computed in `usize`; per-glyph text vectors length-clamped before indexing; glyph ids carried as `u32` (no `u16` truncation); `x`/`y` length checked in `rs_lines`/`rs_polygon`; gpar colour/number args enforced length-1. (`systemfonts` is not a direct dependency — it is pulled in transitively by `textshaping`, which does the shaping/resolution; declaring it directly would be an unused-import NOTE.)
+
+Still open, mostly to settle alongside the M3 API:
+- **Scalar→vector contracts.** `rs_text`/`rs_strwidth` silently take `label[1]`; colour args are scalar. M3's vctrs work should vectorise these rather than truncate/error.
+- **Broader input validation.** `width`/`height`/`r` > 0, `alpha ∈ [0,1]` (currently clamped silently in Rust), whole-number `row`/`col`, and out-of-range / missing-layout cells (currently collapse to a 0-size viewport silently) deserve R-side checks with named-argument errors.
+- **Render caching.** `pixel()`/`rgba()`/`render_png()` each re-run the full layout + raster and rebuild the `FontCache` (re-reading font files). Memoize a `Pixmap` behind a dirty flag, or persist the font cache. Mostly a test-suite cost today.
+- **API surface.** `rs_up_viewport` is currently an alias of `rs_pop_viewport` (we don't prune the tree, so "up" and "pop" coincide) — document or give true grid semantics. The extendr-generated `Scene` env is exported; consider hiding it once the S7 API lands.
+- **Clip-mask memory.** Each clipping viewport clones a page-sized `Mask`; fine now, revisit if deep clip trees on large pages become common.
 
 ---
 
