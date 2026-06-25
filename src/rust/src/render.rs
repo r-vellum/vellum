@@ -103,6 +103,61 @@ pub trait RenderBackend {
     fn draw_text(&mut self, run: &TextRun, transform: Transform, clip: &Clip);
     fn begin_group(&mut self);
     fn end_group(&mut self, mask: Option<MaskLayer>);
+
+    /// Draw a batch of circles: centres `(cx, cy)` + radii `r` in local px,
+    /// mapped to device by `transform`. The default places one unit circle per
+    /// element; the raster backend overrides this to stamp a cached sprite for
+    /// large uniform solid-fill point clouds. `stroke` is `(colour, width_px)`.
+    fn draw_circles(
+        &mut self,
+        cx: &[f64],
+        cy: &[f64],
+        r: &[f64],
+        fill: Option<&ResolvedPaint>,
+        stroke: Option<(Rgba, f32)>,
+        transform: Transform,
+        clip: &Clip,
+    ) where
+        Self: Sized,
+    {
+        circles_by_path(self, cx, cy, r, fill, stroke, transform, clip);
+    }
+}
+
+/// One unit circle (origin, radius 1) reused with a per-element affine transform.
+/// Stroke width is pre-divided by the radius so it lands at `width_px` device px
+/// after the uniform scale.
+fn circles_by_path<B: RenderBackend>(
+    b: &mut B,
+    cx: &[f64],
+    cy: &[f64],
+    r: &[f64],
+    fill: Option<&ResolvedPaint>,
+    stroke: Option<(Rgba, f32)>,
+    transform: Transform,
+    clip: &Clip,
+) {
+    let n = cx.len().min(cy.len()).min(r.len());
+    let unit = unit_circle_path();
+    for i in 0..n {
+        let rr = r[i];
+        if rr <= 0.0 {
+            continue;
+        }
+        let tr = transform.pre_concat(Transform::from_row(rr as f32, 0.0, 0.0, rr as f32, cx[i] as f32, cy[i] as f32));
+        if let Some(f) = fill {
+            b.fill_path(&unit, tr, f, clip);
+        }
+        if let Some((c, w)) = stroke {
+            b.stroke_path(&unit, tr, c, w / rr as f32, clip);
+        }
+    }
+}
+
+fn unit_circle_path() -> Path {
+    let mut pb = PathBuilder::new();
+    pb.push_circle(0.0, 0.0, 1.0);
+    pb.finish().expect("unit circle path")
 }
 
 fn skia_masktype(k: MaskKind) -> tiny_skia::MaskType {
@@ -116,6 +171,22 @@ fn skia_masktype(k: MaskKind) -> tiny_skia::MaskType {
 
 pub fn rect_path(x: f64, y: f64, w: f64, h: f64) -> Option<Path> {
     tiny_skia::Rect::from_xywh(x as f32, y as f32, w as f32, h as f32).map(PathBuilder::from_rect)
+}
+
+/// Render a solid AA circle of radius `r` (device px) into a tight square sprite,
+/// centred. Used to stamp large uniform point clouds instead of filling each.
+fn circle_sprite(r: f64, color: Rgba) -> Option<Pixmap> {
+    let dim = ((r + 1.0) * 2.0).ceil() as u32; // +1px AA padding
+    let mut pm = Pixmap::new(dim, dim)?;
+    let c = dim as f32 / 2.0;
+    let mut pb = PathBuilder::new();
+    pb.push_circle(c, c, r as f32);
+    let path = pb.finish()?;
+    let mut paint = Paint::default();
+    paint.set_color(color.to_skia());
+    paint.anti_alias = true;
+    pm.fill_path(&path, &paint, FillRule::Winding, Transform::identity(), None);
+    Some(pm)
 }
 
 /// Build a `Pixmap` from straight (non-premultiplied) RGBA bytes, top-left origin.
@@ -362,6 +433,54 @@ impl RenderBackend for RasterBackend {
             Transform::identity(),
             m.as_ref(),
         );
+    }
+
+    fn draw_circles(
+        &mut self,
+        cx: &[f64],
+        cy: &[f64],
+        r: &[f64],
+        fill: Option<&ResolvedPaint>,
+        stroke: Option<(Rgba, f32)>,
+        transform: Transform,
+        clip: &Clip,
+    ) {
+        // Sprite fast path: a large cloud of equal-radius, solid-fill, unstroked
+        // markers. Rasterize the marker once and blit it per point (pixel-snapped,
+        // imperceptible at the densities where it triggers). Anything else falls
+        // back to per-element path fills.
+        const SPRITE_MIN: usize = 10_000;
+        let n = cx.len().min(cy.len()).min(r.len());
+        let uniform_small = n >= SPRITE_MIN
+            && stroke.is_none()
+            && r[0] > 0.0
+            && r[0] <= 64.0
+            && r[..n].iter().all(|&v| (v - r[0]).abs() < 1e-9);
+        if uniform_small {
+            if let Some(ResolvedPaint::Solid(color)) = fill {
+                if let Some(sprite) = circle_sprite(r[0], *color) {
+                    let mask = self.mask_for(clip);
+                    let off = sprite.width() as f64 / 2.0;
+                    let paint = tiny_skia::PixmapPaint::default();
+                    let target = self.targets.last_mut().expect("at least the page target");
+                    for i in 0..n {
+                        // transform is a rigid isometry, so map the centre directly.
+                        let dx = transform.sx as f64 * cx[i] + transform.kx as f64 * cy[i] + transform.tx as f64;
+                        let dy = transform.ky as f64 * cx[i] + transform.sy as f64 * cy[i] + transform.ty as f64;
+                        target.draw_pixmap(
+                            (dx - off).round() as i32,
+                            (dy - off).round() as i32,
+                            sprite.as_ref(),
+                            &paint,
+                            Transform::identity(),
+                            mask.as_deref(),
+                        );
+                    }
+                    return;
+                }
+            }
+        }
+        circles_by_path(self, cx, cy, r, fill, stroke, transform, clip);
     }
 }
 

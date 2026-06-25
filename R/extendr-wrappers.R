@@ -39,6 +39,16 @@ rs_backend_info <- function() .Call(wrap__rs_backend_info)
 #'track whose value is its weight.
 #'}
 #'
+#'\subsection{Method `rects`}{
+#'A whole batch of rectangles in one call, sharing one gpar. Coordinates and
+#'per-coordinate unit codes are parallel slices.
+#'}
+#'
+#'\subsection{Method `circles`}{
+#'A whole batch of circles in one call, sharing one gpar (also used for
+#'`points`, with the radius carrying the marker size).
+#'}
+#'
 #'\subsection{Method `text`}{
 #'Add pre-shaped text. The R wrapper does shaping (via `textshaping`) and
 #'passes per-glyph ids/positions/fonts plus the block size.
@@ -117,6 +127,10 @@ Scene$lines <- function(x, y, xu, yu, col, lwd, alpha) .Call(wrap__Scene__lines,
 Scene$polygon <- function(x, y, xu, yu, fill, col, lwd, alpha) .Call(wrap__Scene__polygon, self, x, y, xu, yu, fill, col, lwd, alpha)
 
 Scene$circle <- function(x, y, r, xu, yu, ru, fill, col, lwd, alpha) .Call(wrap__Scene__circle, self, x, y, r, xu, yu, ru, fill, col, lwd, alpha)
+
+Scene$rects <- function(x, y, w, h, xu, yu, wu, hu, fill, col, lwd, alpha) .Call(wrap__Scene__rects, self, x, y, w, h, xu, yu, wu, hu, fill, col, lwd, alpha)
+
+Scene$circles <- function(x, y, r, xu, yu, ru, fill, col, lwd, alpha) .Call(wrap__Scene__circles, self, x, y, r, xu, yu, ru, fill, col, lwd, alpha)
 
 Scene$text <- function(x, y, xu, yu, rot, hjust, vjust, w, h, gid, gx, gy, gsize, gpath, gface, label, family, face, size, col, alpha) .Call(wrap__Scene__text, self, x, y, xu, yu, rot, hjust, vjust, w, h, gid, gx, gy, gsize, gpath, gface, label, family, face, size, col, alpha)
 

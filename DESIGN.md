@@ -156,6 +156,10 @@ trait RenderBackend {
     fn fill_path(&mut self, path: &Path, t: Transform, paint: &ResolvedPaint, clip: &Clip);
     fn stroke_path(&mut self, path: &Path, t: Transform, color: Rgba, w_px: f32, clip: &Clip);
     fn draw_text(&mut self, run: &TextRun, t: Transform, clip: &Clip);
+    fn begin_group(&mut self);                          // F3: isolated layer
+    fn end_group(&mut self, mask: Option<MaskLayer>);   // F3: composite (+ mask)
+    fn draw_circles(&mut self, …, transform, clip);     // P1: batched markers; default = per-element,
+                                                        // raster overrides with sprite stamping
 }
 ```
 
@@ -333,6 +337,31 @@ vellum/                      R package root
 **F2 — tiling patterns. ✅ done.** `pattern(grob, width, height, x, y, units, extend)` (a grob or list of grobs) added to the `Paint` model. R renders the tile grob to an RGBA raster via a throwaway sub-`Scene` (sized from `width`/`height` at the scene dpi using one reference dimension, so the tile aspect is `width:height` and only the genuine viewport aspect stretches it), then the backend tiles the image: raster tiny-skia `Pattern`, SVG `<pattern>` + base64-PNG `<image>` (both verified pixel-identical via rsvg-convert). The PDF backend lacks image support (krilla `raster-images` needs un-vendored codecs), so a pattern degrades to its **mean colour** — a documented first-cut limitation. Added the `base64` crate (already vendored transitively via krilla → no re-vendor) plus `pixmap_from_straight`/`average_rgba` helpers; also guarded `parse_paint` to `$`-index only lists (atomic colour vectors error on `$`). `test-pattern.R`, `inst/examples/patterns.R`.
 
 **F3 — masks. ✅ done.** `as_mask(grob, type = "alpha"|"luminance")` + `viewport(mask = …)`. Introduced the isolated compositing group the trait had deferred: `begin_group`/`end_group(mask)`, with masked content compiled to a `GroupStart`…`GroupEnd{mask}` bracket and the mask grob's nodes routed to a side buffer (see §4.5). The mask is always rasterized via a nested `RasterBackend`; raster composites through a tiny-skia `Mask` (alpha/luminance) over a draw-target stack, SVG wraps a buffered group in `<g mask>` with a grayscale-coverage `<mask>` image, PDF renders unmasked (documented, like F2). Verified raster and rasterized-SVG agree (alpha disc, luminance black/white contrast, soft gradient mask). `test-mask.R`, `inst/examples/masks.R`. **The fills/compositing milestone (F1–F3: gradients, patterns, masks) is complete.**
+
+### Scale & fidelity (pre-interactivity, phases P1–P5)
+
+Before interactivity (M6), make the engine scale to large datasets and close the
+static-rendering gaps a grammar layer needs. Phases: **P1** batched primitives, **P2**
+stroke fidelity (lty/caps/joins), **P3** segments + general path, **P4** raster image
+(`draw_image`) + native PDF images/patterns/masks, **P5** polish (text vectorisation,
+grob sizing, arbitrary clip).
+
+**P1 — batched primitives & marker fast-path. ✅ done.** The scaling bottleneck was the
+per-element R→Rust FFI loop in `compile(grob_rect/circle/points)` (one call + one cloned
+`PartialGpar` per element). Now each grob makes **one batched call** (`Scene::rects`/
+`circles`) storing a single `Node::Rects`/`Node::Circles` with **one shared gpar**; the
+walk resolves gpar/paint once per batch. Rects use a unit-rect + per-element transform for
+the solid-no-stroke case (build per-element only when stroked/gradient). Circles go through
+a `RenderBackend::draw_circles` method: the default places one unit circle per element
+(SVG/PDF, and stroked/gradient cases); the **raster backend overrides it to stamp a cached
+AA sprite** for large (≥10k) uniform-radius solid-fill clouds (`circle_sprite` +
+`draw_pixmap`, pixel-snapped — imperceptible at that density; viewport transforms are rigid
+isometries so the device radius equals the local radius). Measured: **1M points ~7s → 0.76s,
+500k → 0.38s, compile 2.2s → 0.01s**; small N keeps the per-element path (pixel-identical).
+`test-batch.R`. **Note:** a densely *self-intersecting* polyline is superlinear to stroke
+(tiny-skia's stroke→fill of a self-overlapping outline: 100k random verts ≈ 18s) — a
+realistic monotone line of 500k verts is ~0.65s, so this is a pathological-input cost, not
+a general limit; revisit with decimation if needed.
 
 **M5 — device-shim mode (optional, deferred).** Register as an R graphics device via `DeviceDriver`; implement the minimal callback set, then climb the capability ladder (patterns → groups/compositing → glyphs). Panic-guard every callback. Validate by rendering ggplot2/lattice output. Deferred in favour of filling out the native engine (gradients/patterns/masks); this is interop, not on the Option-B critical path.
 

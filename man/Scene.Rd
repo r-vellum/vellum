@@ -40,6 +40,16 @@ parallel value + unit-code vectors; the unit \code{"null"} marks a flexible
 track whose value is its weight.
 }
 
+\subsection{Method \code{rects}}{
+A whole batch of rectangles in one call, sharing one gpar. Coordinates and
+per-coordinate unit codes are parallel slices.
+}
+
+\subsection{Method \code{circles}}{
+A whole batch of circles in one call, sharing one gpar (also used for
+\code{points}, with the radius carrying the marker size).
+}
+
 \subsection{Method \code{text}}{
 Add pre-shaped text. The R wrapper does shaping (via \code{textshaping}) and
 passes per-glyph ids/positions/fonts plus the block size.

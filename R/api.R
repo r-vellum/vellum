@@ -130,10 +130,9 @@ S7::method(compile, grob_rect) <- function(node, scene) {
     ex <- .coord(node@x, "npc", n); ey <- .coord(node@y, "npc", n)
     ew <- .coord(node@width, "npc", n); eh <- .coord(node@height, "npc", n)
     g <- .gp4(node@gp, scene)
-    for (i in seq_len(n)) {
-      scene$rect(ex$value[i], ey$value[i], ew$value[i], eh$value[i],
-                 ex$code[i], ey$code[i], ew$code[i], eh$code[i], g$fill, g$col, g$lwd, g$alpha)
-    }
+    # One batched call (one shared gpar) instead of a per-element FFI loop.
+    scene$rects(ex$value, ey$value, ew$value, eh$value,
+                ex$code, ey$code, ew$code, eh$code, g$fill, g$col, g$lwd, g$alpha)
   })
 }
 
@@ -156,10 +155,8 @@ S7::method(compile, grob_circle) <- function(node, scene) {
     n <- vctrs::vec_size_common(node@x, node@y, node@r)
     ex <- .coord(node@x, "npc", n); ey <- .coord(node@y, "npc", n); er <- .coord(node@r, "npc", n)
     g <- .gp4(node@gp, scene)
-    for (i in seq_len(n)) {
-      scene$circle(ex$value[i], ey$value[i], er$value[i], ex$code[i], ey$code[i], er$code[i],
-                   g$fill, g$col, g$lwd, g$alpha)
-    }
+    scene$circles(ex$value, ey$value, er$value, ex$code, ey$code, er$code,
+                  g$fill, g$col, g$lwd, g$alpha)
   })
 }
 
@@ -168,10 +165,9 @@ S7::method(compile, grob_points) <- function(node, scene) {
     n <- vctrs::vec_size_common(node@x, node@y, node@size)
     ex <- .coord(node@x, "npc", n); ey <- .coord(node@y, "npc", n); es <- .coord(node@size, "mm", n)
     g <- .gp4(node@gp, scene)
-    for (i in seq_len(n)) {
-      scene$circle(ex$value[i], ey$value[i], es$value[i], ex$code[i], ey$code[i], es$code[i],
-                   g$fill, g$col, g$lwd, g$alpha)
-    }
+    # Points are circles whose radius carries the marker size; batched.
+    scene$circles(ex$value, ey$value, es$value, ex$code, ey$code, es$code,
+                  g$fill, g$col, g$lwd, g$alpha)
   })
 }
 

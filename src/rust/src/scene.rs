@@ -144,6 +144,19 @@ enum Node {
         size: f64,
         gp: PartialGpar,
     },
+    /// A batch of rectangles sharing one gpar (one FFI call, one resolve).
+    Rects {
+        x: Vec<f64>, y: Vec<f64>, w: Vec<f64>, h: Vec<f64>,
+        xu: Vec<Unit>, yu: Vec<Unit>, wu: Vec<Unit>, hu: Vec<Unit>,
+        gp: PartialGpar,
+    },
+    /// A batch of circles sharing one gpar (also serves `points`). Markers with a
+    /// solid/no fill take a fast path (one path, per-element transform).
+    Circles {
+        x: Vec<f64>, y: Vec<f64>, r: Vec<f64>,
+        xu: Vec<Unit>, yu: Vec<Unit>, ru: Vec<Unit>,
+        gp: PartialGpar,
+    },
     /// Opens an isolated compositing layer (paired with `GroupEnd`).
     GroupStart,
     /// Closes the layer and composites it, optionally through mask `mask` (an
@@ -158,6 +171,8 @@ impl Node {
             | Node::Lines { gp, .. }
             | Node::Polygon { gp, .. }
             | Node::Circle { gp, .. }
+            | Node::Rects { gp, .. }
+            | Node::Circles { gp, .. }
             | Node::Text { gp, .. } => gp,
             Node::GroupStart | Node::GroupEnd { .. } => unreachable!("group markers carry no gpar"),
         }
@@ -357,6 +372,36 @@ impl Scene {
     fn circle(&mut self, x: f64, y: f64, r: f64, xu: i32, yu: i32, ru: i32, fill: Robj, col: Robj, lwd: Robj, alpha: Robj) {
         let gp = PartialGpar::from_robj(&fill, &col, &lwd, &alpha);
         self.emit_node(Node::Circle { x, y, r, xu: Unit::from_code(xu), yu: Unit::from_code(yu), ru: Unit::from_code(ru), gp });
+    }
+
+    /// A whole batch of rectangles in one call, sharing one gpar. Coordinates and
+    /// per-coordinate unit codes are parallel slices.
+    #[allow(clippy::too_many_arguments)]
+    fn rects(
+        &mut self, x: &[f64], y: &[f64], w: &[f64], h: &[f64],
+        xu: &[i32], yu: &[i32], wu: &[i32], hu: &[i32],
+        fill: Robj, col: Robj, lwd: Robj, alpha: Robj,
+    ) {
+        let gp = PartialGpar::from_robj(&fill, &col, &lwd, &alpha);
+        self.emit_node(Node::Rects {
+            x: x.to_vec(), y: y.to_vec(), w: w.to_vec(), h: h.to_vec(),
+            xu: codes(xu), yu: codes(yu), wu: codes(wu), hu: codes(hu), gp,
+        });
+    }
+
+    /// A whole batch of circles in one call, sharing one gpar (also used for
+    /// `points`, with the radius carrying the marker size).
+    #[allow(clippy::too_many_arguments)]
+    fn circles(
+        &mut self, x: &[f64], y: &[f64], r: &[f64],
+        xu: &[i32], yu: &[i32], ru: &[i32],
+        fill: Robj, col: Robj, lwd: Robj, alpha: Robj,
+    ) {
+        let gp = PartialGpar::from_robj(&fill, &col, &lwd, &alpha);
+        self.emit_node(Node::Circles {
+            x: x.to_vec(), y: y.to_vec(), r: r.to_vec(),
+            xu: codes(xu), yu: codes(yu), ru: codes(ru), gp,
+        });
     }
 
     /// Add pre-shaped text. The R wrapper does shaping (via `textshaping`) and
@@ -733,6 +778,86 @@ impl Scene {
                         fill_then_stroke(b, &path, &gp, t, &clip, vp);
                     }
                 }
+                Node::Rects { x, y, w, h, xu, yu, wu, hu, .. } => {
+                    let n = [x.len(), y.len(), w.len(), h.len(), xu.len(), yu.len(), wu.len(), hu.len()]
+                        .into_iter().min().unwrap_or(0);
+                    let lwd = gp.lwd_px(vp.dpi);
+                    let stroke = gp.col.filter(|_| lwd > 0.0);
+                    let rf = gp.fill.as_ref().map(|p| resolve_paint(p, vp)); // resolve gradient/pattern geom once
+                    let solid = matches!(gp.fill, Some(Paint::Solid(_)) | None);
+                    if solid && stroke.is_none() {
+                        // Fast path: a single unit rect placed per-element by an
+                        // affine transform (solid fill is transform-invariant).
+                        if let Some(rp) = &rf {
+                            let unit = unit_rect();
+                            for i in 0..n {
+                                let cx = vp.x_pos(x[i], xu[i]);
+                                let cy = vp.y_pos(y[i], yu[i]);
+                                let pw = vp.x_len(w[i], wu[i]);
+                                let ph = vp.y_len(h[i], hu[i]);
+                                if pw <= 0.0 || ph <= 0.0 {
+                                    continue;
+                                }
+                                let tr = t.pre_concat(Transform::from_row(pw as f32, 0.0, 0.0, ph as f32, cx as f32, cy as f32));
+                                b.fill_path(&unit, tr, rp, &clip);
+                            }
+                        }
+                    } else {
+                        // Stroke (non-uniform scale would distort it) or a gradient
+                        // that must be resolved in local px: build each rect.
+                        for i in 0..n {
+                            let cx = vp.x_pos(x[i], xu[i]);
+                            let cy = vp.y_pos(y[i], yu[i]);
+                            let pw = vp.x_len(w[i], wu[i]);
+                            let ph = vp.y_len(h[i], hu[i]);
+                            if let Some(path) = rect_path(cx - pw / 2.0, cy - ph / 2.0, pw, ph) {
+                                if let Some(rp) = &rf {
+                                    b.fill_path(&path, t, rp, &clip);
+                                }
+                                if let Some(c) = stroke {
+                                    b.stroke_path(&path, t, c, lwd, &clip);
+                                }
+                            }
+                        }
+                    }
+                }
+                Node::Circles { x, y, r, xu, yu, ru, .. } => {
+                    let n = [x.len(), y.len(), r.len(), xu.len(), yu.len(), ru.len()]
+                        .into_iter().min().unwrap_or(0);
+                    let lwd = gp.lwd_px(vp.dpi);
+                    let stroke = gp.col.filter(|_| lwd > 0.0);
+                    let rf = gp.fill.as_ref().map(|p| resolve_paint(p, vp));
+                    if matches!(gp.fill, Some(Paint::Solid(_)) | None) {
+                        // Solid/no fill: resolve centres+radii to local px and hand
+                        // the batch to the backend (raster may sprite-stamp).
+                        let mut cx = Vec::with_capacity(n);
+                        let mut cy = Vec::with_capacity(n);
+                        let mut rr = Vec::with_capacity(n);
+                        for i in 0..n {
+                            cx.push(vp.x_pos(x[i], xu[i]));
+                            cy.push(vp.y_pos(y[i], yu[i]));
+                            rr.push(vp.r_len(r[i], ru[i]));
+                        }
+                        b.draw_circles(&cx, &cy, &rr, rf.as_ref(), stroke.map(|c| (c, lwd)), t, &clip);
+                    } else {
+                        // Gradient/pattern fill: build each circle in local px.
+                        for i in 0..n {
+                            let cx = vp.x_pos(x[i], xu[i]);
+                            let cy = vp.y_pos(y[i], yu[i]);
+                            let rr = vp.r_len(r[i], ru[i]);
+                            let mut pb = PathBuilder::new();
+                            pb.push_circle(cx as f32, cy as f32, rr as f32);
+                            if let Some(path) = pb.finish() {
+                                if let Some(rp) = &rf {
+                                    b.fill_path(&path, t, rp, &clip);
+                                }
+                                if let Some(c) = stroke {
+                                    b.stroke_path(&path, t, c, lwd, &clip);
+                                }
+                            }
+                        }
+                    }
+                }
                 Node::Text {
                     x, y, xu, yu, rot, hjust, vjust, w, h,
                     gid, gx, gy, gsize, gpath, gface, label, family, face, size, ..
@@ -773,6 +898,12 @@ impl Scene {
 /// Fill then stroke a shape according to its effective gpar. Gradient fill
 /// geometry is resolved against `vp` into viewport-local px (so it transforms
 /// with the grob, like the path coordinates).
+/// A unit rect centred at the origin (`-0.5..0.5`), scaled per element in the
+/// batched-rect solid fast path.
+fn unit_rect() -> tiny_skia::Path {
+    rect_path(-0.5, -0.5, 1.0, 1.0).expect("unit rect path")
+}
+
 fn fill_then_stroke<B: RenderBackend>(b: &mut B, path: &tiny_skia::Path, gp: &Gpar, t: Transform, clip: &Clip, vp: &Vp) {
     if let Some(fill) = &gp.fill {
         b.fill_path(path, t, &resolve_paint(fill, vp), clip);
