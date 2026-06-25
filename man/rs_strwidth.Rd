@@ -2,9 +2,19 @@
 % Please edit documentation in R/text.R
 \name{rs_strwidth}
 \alias{rs_strwidth}
+\alias{rs_strheight}
 \title{Measure text}
 \usage{
 rs_strwidth(
+  label,
+  family = "",
+  fontface = "plain",
+  fontsize = 12,
+  cex = 1,
+  unit = "in"
+)
+
+rs_strheight(
   label,
   family = "",
   fontface = "plain",
@@ -29,6 +39,8 @@ family name). \code{""} uses the system default.}
 }
 \value{
 The text width as a single number in \code{unit}.
+
+\code{rs_strheight()}: the text height as a single number in \code{unit}.
 }
 \description{
 Returns the rendered width of a string for layout purposes, using the same

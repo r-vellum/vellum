@@ -80,8 +80,9 @@ fn solve_tracks(tracks: &[Track], total: f64, dpi: f64) -> Vec<f64> {
 /// How a viewport is positioned within its parent.
 #[derive(Clone, Copy, Debug)]
 enum Placement {
-    /// Centre `(cx, cy)` and size `(w, h)` in parent coordinates.
-    Absolute { cx: f64, cy: f64, w: f64, h: f64, unit: Unit },
+    /// Centre `(cx, cy)` and size `(w, h)` in parent coordinates, each with its
+    /// own unit.
+    Absolute { cx: f64, cy: f64, w: f64, h: f64, cxu: Unit, cyu: Unit, wu: Unit, hu: Unit },
     /// A cell (0-based) of the parent's layout, possibly spanning.
     Cell { row: usize, col: usize, rowspan: usize, colspan: usize },
 }
@@ -111,14 +112,15 @@ struct ResolvedVp {
 
 #[derive(Clone, Debug)]
 enum Node {
-    Rect { x: f64, y: f64, w: f64, h: f64, unit: Unit, gp: PartialGpar },
-    Lines { x: Vec<f64>, y: Vec<f64>, unit: Unit, gp: PartialGpar },
-    Polygon { x: Vec<f64>, y: Vec<f64>, unit: Unit, gp: PartialGpar },
-    Circle { x: f64, y: f64, r: f64, unit: Unit, gp: PartialGpar },
+    Rect { x: f64, y: f64, w: f64, h: f64, xu: Unit, yu: Unit, wu: Unit, hu: Unit, gp: PartialGpar },
+    Lines { x: Vec<f64>, y: Vec<f64>, xu: Vec<Unit>, yu: Vec<Unit>, gp: PartialGpar },
+    Polygon { x: Vec<f64>, y: Vec<f64>, xu: Vec<Unit>, yu: Vec<Unit>, gp: PartialGpar },
+    Circle { x: f64, y: f64, r: f64, xu: Unit, yu: Unit, ru: Unit, gp: PartialGpar },
     Text {
         x: f64,
         y: f64,
-        unit: Unit,
+        xu: Unit,
+        yu: Unit,
         rot: f64,
         hjust: f64,
         vjust: f64,
@@ -179,7 +181,16 @@ impl Scene {
         let root = ViewportNode {
             parent: None,
             children: Vec::new(),
-            placement: Placement::Absolute { cx: 0.5, cy: 0.5, w: 1.0, h: 1.0, unit: Unit::Npc },
+            placement: Placement::Absolute {
+                cx: 0.5,
+                cy: 0.5,
+                w: 1.0,
+                h: 1.0,
+                cxu: Unit::Npc,
+                cyu: Unit::Npc,
+                wu: Unit::Npc,
+                hu: Unit::Npc,
+            },
             xscale: (0.0, 1.0),
             yscale: (0.0, 1.0),
             angle: 0.0,
@@ -209,7 +220,10 @@ impl Scene {
         cy: f64,
         w: f64,
         h: f64,
-        units: &str,
+        cxu: i32,
+        cyu: i32,
+        wu: i32,
+        hu: i32,
         xscale: &[f64],
         yscale: &[f64],
         angle: f64,
@@ -231,7 +245,16 @@ impl Scene {
                 colspan: lcolspan.max(1) as usize,
             }
         } else {
-            Placement::Absolute { cx, cy, w, h, unit: Unit::parse(units) }
+            Placement::Absolute {
+                cx,
+                cy,
+                w,
+                h,
+                cxu: Unit::from_code(cxu),
+                cyu: Unit::from_code(cyu),
+                wu: Unit::from_code(wu),
+                hu: Unit::from_code(hu),
+            }
         };
         let id = self.viewports.len();
         self.viewports.push(ViewportNode {
@@ -274,26 +297,48 @@ impl Scene {
     }
 
     #[allow(clippy::too_many_arguments)]
-    fn rect(&mut self, x: f64, y: f64, w: f64, h: f64, units: &str, fill: Robj, col: Robj, lwd: Robj, alpha: Robj) {
+    fn rect(&mut self, x: f64, y: f64, w: f64, h: f64, xu: i32, yu: i32, wu: i32, hu: i32, fill: Robj, col: Robj, lwd: Robj, alpha: Robj) {
         let gp = PartialGpar::from_robj(&fill, &col, &lwd, &alpha);
-        self.nodes.push((self.current, Node::Rect { x, y, w, h, unit: Unit::parse(units), gp }));
+        self.nodes.push((
+            self.current,
+            Node::Rect {
+                x,
+                y,
+                w,
+                h,
+                xu: Unit::from_code(xu),
+                yu: Unit::from_code(yu),
+                wu: Unit::from_code(wu),
+                hu: Unit::from_code(hu),
+                gp,
+            },
+        ));
     }
 
-    fn lines(&mut self, x: &[f64], y: &[f64], units: &str, col: Robj, lwd: Robj, alpha: Robj) {
+    fn lines(&mut self, x: &[f64], y: &[f64], xu: &[i32], yu: &[i32], col: Robj, lwd: Robj, alpha: Robj) {
         let gp = PartialGpar::from_robj(&rnull(), &col, &lwd, &alpha);
-        self.nodes.push((self.current, Node::Lines { x: x.to_vec(), y: y.to_vec(), unit: Unit::parse(units), gp }));
+        self.nodes.push((
+            self.current,
+            Node::Lines { x: x.to_vec(), y: y.to_vec(), xu: codes(xu), yu: codes(yu), gp },
+        ));
     }
 
     #[allow(clippy::too_many_arguments)]
-    fn polygon(&mut self, x: &[f64], y: &[f64], units: &str, fill: Robj, col: Robj, lwd: Robj, alpha: Robj) {
+    fn polygon(&mut self, x: &[f64], y: &[f64], xu: &[i32], yu: &[i32], fill: Robj, col: Robj, lwd: Robj, alpha: Robj) {
         let gp = PartialGpar::from_robj(&fill, &col, &lwd, &alpha);
-        self.nodes.push((self.current, Node::Polygon { x: x.to_vec(), y: y.to_vec(), unit: Unit::parse(units), gp }));
+        self.nodes.push((
+            self.current,
+            Node::Polygon { x: x.to_vec(), y: y.to_vec(), xu: codes(xu), yu: codes(yu), gp },
+        ));
     }
 
     #[allow(clippy::too_many_arguments)]
-    fn circle(&mut self, x: f64, y: f64, r: f64, units: &str, fill: Robj, col: Robj, lwd: Robj, alpha: Robj) {
+    fn circle(&mut self, x: f64, y: f64, r: f64, xu: i32, yu: i32, ru: i32, fill: Robj, col: Robj, lwd: Robj, alpha: Robj) {
         let gp = PartialGpar::from_robj(&fill, &col, &lwd, &alpha);
-        self.nodes.push((self.current, Node::Circle { x, y, r, unit: Unit::parse(units), gp }));
+        self.nodes.push((
+            self.current,
+            Node::Circle { x, y, r, xu: Unit::from_code(xu), yu: Unit::from_code(yu), ru: Unit::from_code(ru), gp },
+        ));
     }
 
     /// Add pre-shaped text. The R wrapper does shaping (via `textshaping`) and
@@ -303,7 +348,8 @@ impl Scene {
         &mut self,
         x: f64,
         y: f64,
-        units: &str,
+        xu: i32,
+        yu: i32,
         rot: f64,
         hjust: f64,
         vjust: f64,
@@ -324,7 +370,8 @@ impl Scene {
             Node::Text {
                 x,
                 y,
-                unit: Unit::parse(units),
+                xu: Unit::from_code(xu),
+                yu: Unit::from_code(yu),
                 rot,
                 hjust,
                 vjust,
@@ -439,11 +486,11 @@ impl Scene {
     fn resolve_one(&self, node: &ViewportNode, parent: &ResolvedVp) -> ResolvedVp {
         // Child rectangle in PARENT-local pixels.
         let (x0, top, cw, ch) = match node.placement {
-            Placement::Absolute { cx, cy, w, h, unit } => {
-                let cw = parent.vp.x_len(w, unit);
-                let ch = parent.vp.y_len(h, unit);
-                let center_x = parent.vp.x_pos(cx, unit);
-                let center_y = parent.vp.y_pos(cy, unit);
+            Placement::Absolute { cx, cy, w, h, cxu, cyu, wu, hu } => {
+                let cw = parent.vp.x_len(w, wu);
+                let ch = parent.vp.y_len(h, hu);
+                let center_x = parent.vp.x_pos(cx, cxu);
+                let center_y = parent.vp.y_pos(cy, cyu);
                 (center_x - cw / 2.0, center_y - ch / 2.0, cw, ch)
             }
             Placement::Cell { row, col, rowspan, colspan } => {
@@ -534,42 +581,42 @@ fn draw_node(pm: &mut Pixmap, node: &Node, rv: &ResolvedVp, fonts: &mut FontCach
     let mask = rv.clip_mask.as_deref();
 
     match node {
-        Node::Rect { x, y, w, h, unit, .. } => {
-            let cx = vp.x_pos(*x, *unit);
-            let cy = vp.y_pos(*y, *unit);
-            let pw = vp.x_len(*w, *unit);
-            let ph = vp.y_len(*h, *unit);
+        Node::Rect { x, y, w, h, xu, yu, wu, hu, .. } => {
+            let cx = vp.x_pos(*x, *xu);
+            let cy = vp.y_pos(*y, *yu);
+            let pw = vp.x_len(*w, *wu);
+            let ph = vp.y_len(*h, *hu);
             if let Some(path) = rect_path(cx - pw / 2.0, cy - ph / 2.0, pw, ph) {
                 fill_and_stroke(pm, &path, &gp, transform, mask, vp.dpi, false);
             }
         }
-        Node::Lines { x, y, unit, .. } => {
-            if let Some(path) = build_poly(x, y, *unit, vp, false) {
+        Node::Lines { x, y, xu, yu, .. } => {
+            if let Some(path) = build_poly(x, y, xu, yu, vp, false) {
                 fill_and_stroke(pm, &path, &gp, transform, mask, vp.dpi, true);
             }
         }
-        Node::Polygon { x, y, unit, .. } => {
-            if let Some(path) = build_poly(x, y, *unit, vp, true) {
+        Node::Polygon { x, y, xu, yu, .. } => {
+            if let Some(path) = build_poly(x, y, xu, yu, vp, true) {
                 fill_and_stroke(pm, &path, &gp, transform, mask, vp.dpi, false);
             }
         }
-        Node::Circle { x, y, r, unit, .. } => {
-            let cx = vp.x_pos(*x, *unit);
-            let cy = vp.y_pos(*y, *unit);
-            let rr = vp.r_len(*r, *unit);
+        Node::Circle { x, y, r, xu, yu, ru, .. } => {
+            let cx = vp.x_pos(*x, *xu);
+            let cy = vp.y_pos(*y, *yu);
+            let rr = vp.r_len(*r, *ru);
             let mut pb = PathBuilder::new();
             pb.push_circle(cx as f32, cy as f32, rr as f32);
             if let Some(path) = pb.finish() {
                 fill_and_stroke(pm, &path, &gp, transform, mask, vp.dpi, false);
             }
         }
-        Node::Text { x, y, unit, rot, hjust, vjust, w, h, gid, gx, gy, gsize, gpath, gface, .. } => {
+        Node::Text { x, y, xu, yu, rot, hjust, vjust, w, h, gid, gx, gy, gsize, gpath, gface, .. } => {
             let color = match gp.col {
                 Some(c) => c,
                 None => return,
             };
-            let ax = vp.x_pos(*x, *unit);
-            let ay = vp.y_pos(*y, *unit);
+            let ax = vp.x_pos(*x, *xu);
+            let ay = vp.y_pos(*y, *yu);
             let mut paint = Paint::default();
             paint.set_color(color.to_skia());
             paint.anti_alias = true;
@@ -632,15 +679,15 @@ fn fill_and_stroke(
     }
 }
 
-fn build_poly(x: &[f64], y: &[f64], unit: Unit, vp: &Vp, close: bool) -> Option<tiny_skia::Path> {
-    let n = x.len().min(y.len());
+fn build_poly(x: &[f64], y: &[f64], xu: &[Unit], yu: &[Unit], vp: &Vp, close: bool) -> Option<tiny_skia::Path> {
+    let n = x.len().min(y.len()).min(xu.len()).min(yu.len());
     if n < 2 {
         return None;
     }
     let mut pb = PathBuilder::new();
-    pb.move_to(vp.x_pos(x[0], unit) as f32, vp.y_pos(y[0], unit) as f32);
+    pb.move_to(vp.x_pos(x[0], xu[0]) as f32, vp.y_pos(y[0], yu[0]) as f32);
     for i in 1..n {
-        pb.line_to(vp.x_pos(x[i], unit) as f32, vp.y_pos(y[i], unit) as f32);
+        pb.line_to(vp.x_pos(x[i], xu[i]) as f32, vp.y_pos(y[i], yu[i]) as f32);
     }
     if close {
         pb.close();
@@ -686,6 +733,11 @@ fn pair(s: &[f64], default: (f64, f64)) -> (f64, f64) {
 /// An R `NULL` as an `Robj` (used to mean "inherit" for gpar fields).
 fn rnull() -> Robj {
     Robj::from(NULL)
+}
+
+/// Decode a slice of integer unit codes from R into `Unit`s (per element).
+fn codes(c: &[i32]) -> Vec<Unit> {
+    c.iter().map(|&v| Unit::from_code(v)).collect()
 }
 
 /// Convert a (finite, positive) dimension in pixels to a `u32`, at least 1 and

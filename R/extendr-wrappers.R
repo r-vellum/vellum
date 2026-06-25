@@ -89,7 +89,7 @@ Scene <- new.env(parent = emptyenv())
 
 Scene$new <- function(width, height, dpi, bg) .Call(wrap__Scene__new, width, height, dpi, bg)
 
-Scene$push_viewport <- function(cx, cy, w, h, units, xscale, yscale, angle, clip, lrow, lcol, lrowspan, lcolspan, fill, col, lwd, alpha) .Call(wrap__Scene__push_viewport, self, cx, cy, w, h, units, xscale, yscale, angle, clip, lrow, lcol, lrowspan, lcolspan, fill, col, lwd, alpha)
+Scene$push_viewport <- function(cx, cy, w, h, cxu, cyu, wu, hu, xscale, yscale, angle, clip, lrow, lcol, lrowspan, lcolspan, fill, col, lwd, alpha) .Call(wrap__Scene__push_viewport, self, cx, cy, w, h, cxu, cyu, wu, hu, xscale, yscale, angle, clip, lrow, lcol, lrowspan, lcolspan, fill, col, lwd, alpha)
 
 Scene$pop_viewport <- function(n) .Call(wrap__Scene__pop_viewport, self, n)
 
@@ -97,15 +97,15 @@ Scene$to_root <- function() .Call(wrap__Scene__to_root, self)
 
 Scene$set_layout <- function(wvals, wunits, hvals, hunits) .Call(wrap__Scene__set_layout, self, wvals, wunits, hvals, hunits)
 
-Scene$rect <- function(x, y, w, h, units, fill, col, lwd, alpha) .Call(wrap__Scene__rect, self, x, y, w, h, units, fill, col, lwd, alpha)
+Scene$rect <- function(x, y, w, h, xu, yu, wu, hu, fill, col, lwd, alpha) .Call(wrap__Scene__rect, self, x, y, w, h, xu, yu, wu, hu, fill, col, lwd, alpha)
 
-Scene$lines <- function(x, y, units, col, lwd, alpha) .Call(wrap__Scene__lines, self, x, y, units, col, lwd, alpha)
+Scene$lines <- function(x, y, xu, yu, col, lwd, alpha) .Call(wrap__Scene__lines, self, x, y, xu, yu, col, lwd, alpha)
 
-Scene$polygon <- function(x, y, units, fill, col, lwd, alpha) .Call(wrap__Scene__polygon, self, x, y, units, fill, col, lwd, alpha)
+Scene$polygon <- function(x, y, xu, yu, fill, col, lwd, alpha) .Call(wrap__Scene__polygon, self, x, y, xu, yu, fill, col, lwd, alpha)
 
-Scene$circle <- function(x, y, r, units, fill, col, lwd, alpha) .Call(wrap__Scene__circle, self, x, y, r, units, fill, col, lwd, alpha)
+Scene$circle <- function(x, y, r, xu, yu, ru, fill, col, lwd, alpha) .Call(wrap__Scene__circle, self, x, y, r, xu, yu, ru, fill, col, lwd, alpha)
 
-Scene$text <- function(x, y, units, rot, hjust, vjust, w, h, gid, gx, gy, gsize, gpath, gface, col, alpha) .Call(wrap__Scene__text, self, x, y, units, rot, hjust, vjust, w, h, gid, gx, gy, gsize, gpath, gface, col, alpha)
+Scene$text <- function(x, y, xu, yu, rot, hjust, vjust, w, h, gid, gx, gy, gsize, gpath, gface, col, alpha) .Call(wrap__Scene__text, self, x, y, xu, yu, rot, hjust, vjust, w, h, gid, gx, gy, gsize, gpath, gface, col, alpha)
 
 Scene$len <- function() .Call(wrap__Scene__len, self)
 

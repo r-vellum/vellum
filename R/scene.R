@@ -47,8 +47,10 @@ rs_push_viewport <- function(scene, x = 0.5, y = 0.5, width = 1, height = 1,
   units <- .rs_units(units)
   lrow <- if (is.null(row)) -1L else as.integer(row) - 1L
   lcol <- if (is.null(col)) -1L else as.integer(col) - 1L
+  cx <- .coord(x, units, 1); cy <- .coord(y, units, 1)
+  cw <- .coord(width, units, 1); ch <- .coord(height, units, 1)
   scene$push_viewport(
-    x, y, width, height, units,
+    cx$value, cy$value, cw$value, ch$value, cx$code, cy$code, cw$code, ch$code,
     as.numeric(xscale), as.numeric(yscale), angle, isTRUE(clip),
     lrow, lcol, as.integer(rowspan), as.integer(colspan),
     .rs_col_inh(gp$fill), .rs_col_inh(gp$col), .rs_num_inh(gp$lwd), .rs_num_inh(gp$alpha)
@@ -140,7 +142,9 @@ rs_unit <- function(values, units = "null") {
 rs_rect <- function(scene, x = 0.5, y = 0.5, width = 1, height = 1,
                     units = "npc", fill = NA, col = "black", lwd = 1, alpha = 1) {
   units <- .rs_units(units)
-  scene$rect(x, y, width, height, units,
+  cx <- .coord(x, units, 1); cy <- .coord(y, units, 1)
+  cw <- .coord(width, units, 1); ch <- .coord(height, units, 1)
+  scene$rect(cx$value, cy$value, cw$value, ch$value, cx$code, cy$code, cw$code, ch$code,
              .rs_col_inh(fill), .rs_col_inh(col), .rs_num_inh(lwd), .rs_num_inh(alpha))
   invisible(scene)
 }
@@ -157,10 +161,9 @@ rs_rect <- function(scene, x = 0.5, y = 0.5, width = 1, height = 1,
 #' @export
 rs_lines <- function(scene, x, y, units = "npc", col = "black", lwd = 1, alpha = 1) {
   units <- .rs_units(units)
-  if (length(x) != length(y)) {
-    stop("`x` and `y` must have the same length", call. = FALSE)
-  }
-  scene$lines(as.numeric(x), as.numeric(y), units,
+  n <- .coord_n(x, y)
+  cx <- .coord(x, units, n); cy <- .coord(y, units, n)
+  scene$lines(cx$value, cy$value, cx$code, cy$code,
               .rs_col_inh(col), .rs_num_inh(lwd), .rs_num_inh(alpha))
   invisible(scene)
 }
@@ -173,10 +176,9 @@ rs_lines <- function(scene, x, y, units = "npc", col = "black", lwd = 1, alpha =
 #' @export
 rs_polygon <- function(scene, x, y, units = "npc", fill = NA, col = "black", lwd = 1, alpha = 1) {
   units <- .rs_units(units)
-  if (length(x) != length(y)) {
-    stop("`x` and `y` must have the same length", call. = FALSE)
-  }
-  scene$polygon(as.numeric(x), as.numeric(y), units,
+  n <- .coord_n(x, y)
+  cx <- .coord(x, units, n); cy <- .coord(y, units, n)
+  scene$polygon(cx$value, cy$value, cx$code, cy$code,
                 .rs_col_inh(fill), .rs_col_inh(col), .rs_num_inh(lwd), .rs_num_inh(alpha))
   invisible(scene)
 }
@@ -196,7 +198,8 @@ rs_polygon <- function(scene, x, y, units = "npc", fill = NA, col = "black", lwd
 rs_circle <- function(scene, x = 0.5, y = 0.5, r = 0.25,
                       units = "npc", fill = NA, col = "black", lwd = 1, alpha = 1) {
   units <- .rs_units(units)
-  scene$circle(x, y, r, units,
+  cx <- .coord(x, units, 1); cy <- .coord(y, units, 1); cr <- .coord(r, units, 1)
+  scene$circle(cx$value, cy$value, cr$value, cx$code, cy$code, cr$code,
                .rs_col_inh(fill), .rs_col_inh(col), .rs_num_inh(lwd), .rs_num_inh(alpha))
   invisible(scene)
 }

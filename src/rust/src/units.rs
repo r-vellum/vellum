@@ -35,6 +35,19 @@ impl Unit {
         }
     }
 
+    /// Decode an integer unit code from R. These codes are part of the R<->Rust
+    /// ABI and MUST match `.unit_codes` in `R/unit.R`
+    /// (npc=0, native=1, mm=2, in=3, pt=4). Unknown codes fall back to npc.
+    pub fn from_code(code: i32) -> Unit {
+        match code {
+            1 => Unit::Native,
+            2 => Unit::Mm,
+            3 => Unit::Inch,
+            4 => Unit::Pt,
+            _ => Unit::Npc,
+        }
+    }
+
     /// Length of one absolute unit in device pixels, if this unit is absolute.
     fn abs_px(self, value: f64, dpi: f64) -> Option<f64> {
         match self {

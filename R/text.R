@@ -47,9 +47,11 @@ rs_text <- function(scene, label, x = 0.5, y = 0.5, units = "npc",
   # shape_text reports offsets, advances and metrics in points (1/72 inch);
   # convert to device pixels. The em size skrifa needs is likewise pt -> px.
   scale <- dpi / 72
+  cx <- .coord(x, units, 1)
+  cy <- .coord(y, units, 1)
 
   scene$text(
-    x, y, units, rot, hjust, vjust,
+    cx$value, cy$value, cx$code, cy$code, rot, hjust, vjust,
     sh$metrics$width * scale, sh$metrics$height * scale,
     as.integer(g$index), as.numeric(g$x_offset) * scale, as.numeric(g$y_offset) * scale,
     as.numeric(g$font_size) * scale, as.character(g$font_path), as.integer(g$font_index),
@@ -82,6 +84,26 @@ rs_strwidth <- function(label, family = "", fontface = "plain",
     "in" = w_pt / 72,
     mm = w_pt / 72 * 25.4,
     cm = w_pt / 72 * 2.54
+  )
+}
+
+#' @rdname rs_strwidth
+#' @return `rs_strheight()`: the text height as a single number in `unit`.
+#' @export
+rs_strheight <- function(label, family = "", fontface = "plain",
+                         fontsize = 12, cex = 1, unit = "in") {
+  unit <- match.arg(unit, c("in", "pt", "mm", "cm"))
+  face <- .rs_face(fontface)
+  h_pt <- textshaping::shape_text(
+    as.character(label)[1],
+    family = family, italic = face$italic, weight = face$weight,
+    size = fontsize * cex, res = 72
+  )$metrics$height
+  switch(unit,
+    pt = h_pt,
+    "in" = h_pt / 72,
+    mm = h_pt / 72 * 25.4,
+    cm = h_pt / 72 * 2.54
   )
 }
 
