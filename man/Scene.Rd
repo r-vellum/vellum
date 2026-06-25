@@ -60,6 +60,10 @@ Device resolution in dots per inch.
 Render the scene to a PNG file.
 }
 
+\subsection{Method \code{render_svg}}{
+Render the scene to an SVG file.
+}
+
 \subsection{Method \code{rgba}}{
 Render and return the whole image as row-major RGBA bytes
 \verb{[r, g, b, a, ...]} (top-left origin, x fastest).

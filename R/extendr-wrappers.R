@@ -76,6 +76,10 @@ rs_bbox <- function(x, y) .Call(wrap__rs_bbox, x, y)
 #'Render the scene to a PNG file.
 #'}
 #'
+#'\subsection{Method `render_svg`}{
+#'Render the scene to an SVG file.
+#'}
+#'
 #'\subsection{Method `rgba`}{
 #'Render and return the whole image as row-major RGBA bytes
 #'`[r, g, b, a, ...]` (top-left origin, x fastest).
@@ -105,7 +109,7 @@ Scene$polygon <- function(x, y, xu, yu, fill, col, lwd, alpha) .Call(wrap__Scene
 
 Scene$circle <- function(x, y, r, xu, yu, ru, fill, col, lwd, alpha) .Call(wrap__Scene__circle, self, x, y, r, xu, yu, ru, fill, col, lwd, alpha)
 
-Scene$text <- function(x, y, xu, yu, rot, hjust, vjust, w, h, gid, gx, gy, gsize, gpath, gface, col, alpha) .Call(wrap__Scene__text, self, x, y, xu, yu, rot, hjust, vjust, w, h, gid, gx, gy, gsize, gpath, gface, col, alpha)
+Scene$text <- function(x, y, xu, yu, rot, hjust, vjust, w, h, gid, gx, gy, gsize, gpath, gface, label, family, face, size, col, alpha) .Call(wrap__Scene__text, self, x, y, xu, yu, rot, hjust, vjust, w, h, gid, gx, gy, gsize, gpath, gface, label, family, face, size, col, alpha)
 
 Scene$len <- function() .Call(wrap__Scene__len, self)
 
@@ -114,6 +118,8 @@ Scene$dim <- function() .Call(wrap__Scene__dim, self)
 Scene$dpi <- function() .Call(wrap__Scene__dpi, self)
 
 Scene$render_png <- function(path) .Call(wrap__Scene__render_png, self, path)
+
+Scene$render_svg <- function(path) .Call(wrap__Scene__render_svg, self, path)
 
 Scene$rgba <- function() .Call(wrap__Scene__rgba, self)
 

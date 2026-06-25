@@ -9,13 +9,12 @@
 //!
 //! The `Scene` is held in Rust and exposed to R as an external-pointer object.
 
-use std::rc::Rc;
-
 use extendr_api::prelude::*;
-use tiny_skia::{FillRule, Mask, Paint, PathBuilder, Pixmap, Stroke, Transform};
+use tiny_skia::{PathBuilder, Pixmap, Transform};
+
+use crate::render::{rect_path, Clip, ClipRect, RasterBackend, RenderBackend, SvgBackend, TextRun};
 
 use crate::color::{opt_color, Gpar, GparAcc, PartialGpar, Rgba};
-use crate::font::FontCache;
 use crate::units::{rotation_about, Unit, Vp};
 
 // --- layout ----------------------------------------------------------------
@@ -101,11 +100,13 @@ struct ViewportNode {
 }
 
 /// A viewport after the layout pass: its local frame and effective context.
+/// `clip_chain` is the list of clipping-ancestor rectangles to intersect
+/// (empty = no clip); backends turn it into a mask / `<clipPath>` / PDF clip.
 #[derive(Clone)]
 struct ResolvedVp {
     vp: Vp,
     gp_acc: GparAcc,
-    clip_mask: Option<Rc<Mask>>,
+    clip_chain: Vec<ClipRect>,
 }
 
 // --- primitives -------------------------------------------------------------
@@ -132,6 +133,12 @@ enum Node {
         gsize: Vec<f64>,
         gpath: Vec<String>,
         gface: Vec<u32>,
+        /// Source string + font descriptor, for vector backends that emit real
+        /// `<text>` / embedded glyphs rather than filled outlines.
+        label: String,
+        family: String,
+        face: String,
+        size: f64,
         gp: PartialGpar,
     },
 }
@@ -361,6 +368,10 @@ impl Scene {
         gsize: &[f64],
         gpath: Vec<String>,
         gface: &[i32],
+        label: &str,
+        family: &str,
+        face: &str,
+        size: f64,
         col: Robj,
         alpha: Robj,
     ) {
@@ -383,6 +394,10 @@ impl Scene {
                 gsize: gsize.to_vec(),
                 gpath,
                 gface: gface.iter().map(|&v| v.max(0) as u32).collect(),
+                label: label.to_string(),
+                family: family.to_string(),
+                face: face.to_string(),
+                size,
                 gp,
             },
         ));
@@ -408,6 +423,15 @@ impl Scene {
         let pm = self.rasterize();
         if let Err(e) = pm.save_png(path) {
             throw_r_error(format!("failed to write PNG: {e}"));
+        }
+    }
+
+    /// Render the scene to an SVG file.
+    fn render_svg(&self, path: &str) {
+        let mut b = SvgBackend::new(self.w_px, self.h_px, self.bg);
+        self.render_to(&mut b);
+        if let Err(e) = std::fs::write(path, b.into_string()) {
+            throw_r_error(format!("failed to write SVG: {e}"));
         }
     }
 
@@ -460,14 +484,14 @@ impl Scene {
             dpi: self.dpi,
         };
         let root_clip = if root.clip {
-            Some(Rc::new(page_mask(self.w_px, self.h_px)))
+            vec![ClipRect { w: self.w_px as f64, h: self.h_px as f64, transform: Transform::identity() }]
         } else {
-            None
+            Vec::new()
         };
         out[0] = Some(ResolvedVp {
             vp: root_vp,
             gp_acc: GparAcc::root_default().apply(&root.gp),
-            clip_mask: root_clip,
+            clip_chain: root_clip,
         });
 
         let mut stack: Vec<usize> = root.children.iter().rev().copied().collect();
@@ -540,141 +564,114 @@ impl Scene {
             dpi: self.dpi,
         };
 
-        let clip_mask = if node.clip {
-            let mut m = match &parent.clip_mask {
-                Some(pm) => (**pm).clone(),
-                None => page_mask(self.w_px, self.h_px),
-            };
-            if let Some(rect) = rect_path(0.0, 0.0, cw, ch) {
-                m.intersect_path(&rect, FillRule::Winding, true, transform);
-            } else {
-                m.clear(); // degenerate viewport clips everything
-            }
-            Some(Rc::new(m))
-        } else {
-            parent.clip_mask.clone()
-        };
+        let mut clip_chain = parent.clip_chain.clone();
+        if node.clip {
+            clip_chain.push(ClipRect { w: cw, h: ch, transform });
+        }
 
         ResolvedVp {
             vp,
             gp_acc: parent.gp_acc.apply(&node.gp),
-            clip_mask,
+            clip_chain,
         }
     }
 
     fn rasterize(&self) -> Pixmap {
-        let mut pm = Pixmap::new(self.w_px, self.h_px).expect("non-zero pixmap dimensions");
-        pm.fill(self.bg.to_skia());
+        let mut b = RasterBackend::new(self.w_px, self.h_px, self.bg);
+        self.render_to(&mut b);
+        b.into_pixmap()
+    }
+
+    /// Walk the resolved scene in paint order, emitting each primitive through a
+    /// [`RenderBackend`]. Geometry resolution (transform, clip, gpar, path) is
+    /// shared; only the per-primitive draw calls are backend-specific.
+    fn render_to<B: RenderBackend>(&self, b: &mut B) {
         let resolved = self.resolve_all();
-        let mut fonts = FontCache::default();
         for (vp_id, node) in &self.nodes {
-            draw_node(&mut pm, node, &resolved[*vp_id], &mut fonts);
-        }
-        pm
-    }
-}
+            let rv = &resolved[*vp_id];
+            let vp = &rv.vp;
+            let gp = rv.gp_acc.apply(node.gp()).resolve();
+            let t = vp.transform;
+            let clip = Clip { id: *vp_id, rects: &rv.clip_chain };
 
-fn draw_node(pm: &mut Pixmap, node: &Node, rv: &ResolvedVp, fonts: &mut FontCache) {
-    let gp = rv.gp_acc.apply(node.gp()).resolve();
-    let vp = &rv.vp;
-    let transform = vp.transform;
-    let mask = rv.clip_mask.as_deref();
-
-    match node {
-        Node::Rect { x, y, w, h, xu, yu, wu, hu, .. } => {
-            let cx = vp.x_pos(*x, *xu);
-            let cy = vp.y_pos(*y, *yu);
-            let pw = vp.x_len(*w, *wu);
-            let ph = vp.y_len(*h, *hu);
-            if let Some(path) = rect_path(cx - pw / 2.0, cy - ph / 2.0, pw, ph) {
-                fill_and_stroke(pm, &path, &gp, transform, mask, vp.dpi, false);
-            }
-        }
-        Node::Lines { x, y, xu, yu, .. } => {
-            if let Some(path) = build_poly(x, y, xu, yu, vp, false) {
-                fill_and_stroke(pm, &path, &gp, transform, mask, vp.dpi, true);
-            }
-        }
-        Node::Polygon { x, y, xu, yu, .. } => {
-            if let Some(path) = build_poly(x, y, xu, yu, vp, true) {
-                fill_and_stroke(pm, &path, &gp, transform, mask, vp.dpi, false);
-            }
-        }
-        Node::Circle { x, y, r, xu, yu, ru, .. } => {
-            let cx = vp.x_pos(*x, *xu);
-            let cy = vp.y_pos(*y, *yu);
-            let rr = vp.r_len(*r, *ru);
-            let mut pb = PathBuilder::new();
-            pb.push_circle(cx as f32, cy as f32, rr as f32);
-            if let Some(path) = pb.finish() {
-                fill_and_stroke(pm, &path, &gp, transform, mask, vp.dpi, false);
-            }
-        }
-        Node::Text { x, y, xu, yu, rot, hjust, vjust, w, h, gid, gx, gy, gsize, gpath, gface, .. } => {
-            let color = match gp.col {
-                Some(c) => c,
-                None => return,
-            };
-            let ax = vp.x_pos(*x, *xu);
-            let ay = vp.y_pos(*y, *yu);
-            let mut paint = Paint::default();
-            paint.set_color(color.to_skia());
-            paint.anti_alias = true;
-            // The viewport transform, optionally with the text's own rotation.
-            let base = if *rot != 0.0 {
-                transform.pre_concat(rotation_about(*rot, ax, ay))
-            } else {
-                transform
-            };
-            // Defensive: the per-glyph vectors should be equal length, but never
-            // index past the shortest if a shaping bug makes them ragged.
-            let n = gid
-                .len()
-                .min(gx.len())
-                .min(gy.len())
-                .min(gsize.len())
-                .min(gpath.len())
-                .min(gface.len());
-            for i in 0..n {
-                let path = match fonts.glyph_outline(&gpath[i], gface[i], gid[i], gsize[i] as f32) {
-                    Some(p) => p,
-                    None => continue,
-                };
-                let ox = ax + gx[i] - hjust * w;
-                let oy = ay - (gy[i] - vjust * h);
-                // Glyph outlines are y-up; flip and place at the baseline origin.
-                let place = Transform::from_row(1.0, 0.0, 0.0, -1.0, ox as f32, oy as f32);
-                pm.fill_path(&path, &paint, FillRule::Winding, base.pre_concat(place), mask);
+            match node {
+                Node::Rect { x, y, w, h, xu, yu, wu, hu, .. } => {
+                    let cx = vp.x_pos(*x, *xu);
+                    let cy = vp.y_pos(*y, *yu);
+                    let pw = vp.x_len(*w, *wu);
+                    let ph = vp.y_len(*h, *hu);
+                    if let Some(path) = rect_path(cx - pw / 2.0, cy - ph / 2.0, pw, ph) {
+                        fill_then_stroke(b, &path, &gp, t, &clip, vp.dpi);
+                    }
+                }
+                Node::Lines { x, y, xu, yu, .. } => {
+                    if let (Some(path), Some(col)) = (build_poly(x, y, xu, yu, vp, false), gp.col) {
+                        let w = gp.lwd_px(vp.dpi);
+                        if w > 0.0 {
+                            b.stroke_path(&path, t, col, w, &clip);
+                        }
+                    }
+                }
+                Node::Polygon { x, y, xu, yu, .. } => {
+                    if let Some(path) = build_poly(x, y, xu, yu, vp, true) {
+                        fill_then_stroke(b, &path, &gp, t, &clip, vp.dpi);
+                    }
+                }
+                Node::Circle { x, y, r, xu, yu, ru, .. } => {
+                    let cx = vp.x_pos(*x, *xu);
+                    let cy = vp.y_pos(*y, *yu);
+                    let rr = vp.r_len(*r, *ru);
+                    let mut pb = PathBuilder::new();
+                    pb.push_circle(cx as f32, cy as f32, rr as f32);
+                    if let Some(path) = pb.finish() {
+                        fill_then_stroke(b, &path, &gp, t, &clip, vp.dpi);
+                    }
+                }
+                Node::Text {
+                    x, y, xu, yu, rot, hjust, vjust, w, h,
+                    gid, gx, gy, gsize, gpath, gface, label, family, face, size, ..
+                } => {
+                    let color = match gp.col {
+                        Some(c) => c,
+                        None => continue,
+                    };
+                    let run = TextRun {
+                        ax: vp.x_pos(*x, *xu),
+                        ay: vp.y_pos(*y, *yu),
+                        w: *w,
+                        h: *h,
+                        hjust: *hjust,
+                        vjust: *vjust,
+                        rot: *rot,
+                        color,
+                        gid,
+                        gx,
+                        gy,
+                        gsize,
+                        gpath,
+                        gface,
+                        label,
+                        family,
+                        face,
+                        size: *size,
+                        dpi: vp.dpi,
+                    };
+                    b.draw_text(&run, t, &clip);
+                }
             }
         }
     }
 }
 
-fn fill_and_stroke(
-    pm: &mut Pixmap,
-    path: &tiny_skia::Path,
-    gp: &Gpar,
-    transform: Transform,
-    mask: Option<&Mask>,
-    dpi: f64,
-    stroke_only: bool,
-) {
-    if !stroke_only {
-        if let Some(fill) = gp.fill {
-            let mut paint = Paint::default();
-            paint.set_color(fill.to_skia());
-            paint.anti_alias = true;
-            pm.fill_path(path, &paint, FillRule::Winding, transform, mask);
-        }
+/// Fill then stroke a shape according to its effective gpar.
+fn fill_then_stroke<B: RenderBackend>(b: &mut B, path: &tiny_skia::Path, gp: &Gpar, t: Transform, clip: &Clip, dpi: f64) {
+    if let Some(fill) = gp.fill {
+        b.fill_path(path, t, fill, clip);
     }
     if let Some(col) = gp.col {
         let width = gp.lwd_px(dpi);
         if width > 0.0 {
-            let mut paint = Paint::default();
-            paint.set_color(col.to_skia());
-            paint.anti_alias = true;
-            let stroke = Stroke { width, ..Stroke::default() };
-            pm.stroke_path(path, &paint, &stroke, transform, mask);
+            b.stroke_path(path, t, col, width, clip);
         }
     }
 }
@@ -707,19 +704,6 @@ fn build_tracks(vals: &[f64], units: &[String]) -> Vec<Track> {
             }
         })
         .collect()
-}
-
-fn rect_path(x: f64, y: f64, w: f64, h: f64) -> Option<tiny_skia::Path> {
-    tiny_skia::Rect::from_xywh(x as f32, y as f32, w as f32, h as f32).map(PathBuilder::from_rect)
-}
-
-/// A fully-visible (all-255) page-sized mask, the starting point for clipping.
-fn page_mask(w: u32, h: u32) -> Mask {
-    let mut m = Mask::new(w, h).expect("non-zero mask dimensions");
-    if let Some(p) = rect_path(0.0, 0.0, w as f64, h as f64) {
-        m.fill_path(&p, FillRule::Winding, true, Transform::identity());
-    }
-    m
 }
 
 fn pair(s: &[f64], default: (f64, f64)) -> (f64, f64) {

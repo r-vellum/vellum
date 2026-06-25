@@ -96,7 +96,12 @@ pop <- function(scene, n = 1) {
 #' @export
 render <- function(scene, path) {
   s <- .scene_to_backend(scene)
-  s$render_png(path)
+  ext <- tolower(tools::file_ext(path))
+  switch(ext,
+    png = s$render_png(path),
+    svg = s$render_svg(path),
+    cli::cli_abort("Unsupported output format {.val {ext}}; use .png or .svg.")
+  )
   invisible(path)
 }
 
