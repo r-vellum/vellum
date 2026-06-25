@@ -363,6 +363,50 @@ isometries so the device radius equals the local radius). Measured: **1M points 
 realistic monotone line of 500k verts is ~0.65s, so this is a pathological-input cost, not
 a general limit; revisit with decimation if needed.
 
+**P2 — stroke fidelity (planned).** Add `lty` (dashing), `lineend`, `linejoin`, `linemitre`
+to `gpar` and thread them through the `PartialGpar`/`GparAcc`/`Gpar` fold (same `Inh<T>`
+machinery). Backends: tiny-skia `Stroke { dash, line_cap, line_join, miter_limit }`, krilla
+`KStroke`, SVG `stroke-dasharray`/`stroke-linecap`/`stroke-linejoin`/`stroke-miterlimit`.
+R encoding maps `lty` (numeric codes / `"dashed"` names / hex strings) → a dash array
+scaled by `lwd` (grid convention) and cap/join names → codes. Small, high-ROI; a grammar
+layer needs dashed/dotted lines. Verify: dashed line shows gaps (pixel-probe on/off-dash),
+cap/join shapes, all three backends.
+
+**P3 — segments + general path (planned).** `segments_grob(x0, y0, x1, y1)` →
+`Node::Segments` (batched on P1's machinery; one stroke pass over disjoint segments). A
+general `path_grob(x, y, id = NULL, rule = "winding"|"evenodd")` (grid-style: `id` groups
+sub-paths, `NA` breaks them) → `Node::Path { xs, ys, breaks, rule, gp }` building a
+multi-subpath `tiny_skia::Path` filled by the rule — requires adding a `FillRule` parameter
+to `RenderBackend::fill_path` (raster `FillRule`, SVG `fill-rule`, krilla `KFillRule`;
+existing callers pass `NonZero`). Enables geom_segment / geom_path / geom_ribbon /
+polygons-with-holes. Verify: segment fan; self-intersecting star (winding vs even-odd
+differ); donut (polygon with hole); all backends.
+
+**P4 — raster image + native PDF images/patterns/masks (planned).** A `draw_image` backend
+op (raster `Pixmap::draw_pixmap`, SVG base64-PNG `<image>`, krilla `Image::from_png`) +
+`Node::Image { rgba, w, h, x, y, width, height, interpolate }` and
+`raster_grob(image, x, y, width, height, interpolate = TRUE)`. Enabling krilla's
+`raster-images` feature (vendor `zune-jpeg`/`gif`/`image-webp`/`imagesize`; `png` already
+present — a re-vendor) **also upgrades the F2/F3 PDF fallbacks** to real tiling-image
+patterns and real masks (replacing mean-colour / unmasked). Enables geom_raster / heatmaps.
+Verify: an embedded raster pixel-probes across backends; PDF pattern shows the tile (not
+mean colour) and a PDF mask actually masks; MSRV.
+
+**P5 — polish (planned).** (a) **Text vectorisation** — multi-label `text_grob(label, x, y)`
+shaping each label and batching, removing the `label[1]` limitation. (b)
+**grobwidth/grobheight** — a grob-sizing protocol (a measure pass / per-grob device bbox)
+plus `grobwidth`/`grobheight` unit kinds resolving against a referenced grob (the hardest
+item; may split into its own sub-step). (c) **Arbitrary path clipping** — generalise clip
+from rect-only to a path (builds on P3): `viewport(clip = <path>)` via a raster `Mask` from
+a path, an SVG `<clipPath>` with a path `d`, and krilla `push_clip_path` with the path.
+Verify: a 3-label text grob; a label sized to a referenced grob; a circular clip; all
+backends.
+
+Sequencing: P1 ✅ → P2 → P3 → P4 → P5, then M6 (interactivity). Each phase is independently
+reviewable and committed; P3 precedes P5 (arbitrary clip builds on the path primitive), P4
+stands alone (re-vendor). Out of scope until a grammar layer drives it: 10M+ scale (tiled
+parallel rasterization / decimation) and render-result caching for repeated renders.
+
 **M5 — device-shim mode (optional, deferred).** Register as an R graphics device via `DeviceDriver`; implement the minimal callback set, then climb the capability ladder (patterns → groups/compositing → glyphs). Panic-guard every callback. Validate by rendering ggplot2/lattice output. Deferred in favour of filling out the native engine (gradients/patterns/masks); this is interop, not on the Option-B critical path.
 
 **M6 — interactivity.** Spatial index, hit-testing, event model. The scene graph already supports it; this milestone exposes it.
