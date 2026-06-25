@@ -49,6 +49,15 @@ rs_backend_info <- function() .Call(wrap__rs_backend_info)
 #'`points`, with the radius carrying the marker size).
 #'}
 #'
+#'\subsection{Method `segments`}{
+#'A batch of disjoint line segments (stroke only), sharing one gpar.
+#'}
+#'
+#'\subsection{Method `path`}{
+#'A general path. `nper` gives the number of points in each closed sub-path
+#'(so holes are sub-paths under the even-odd or winding rule).
+#'}
+#'
 #'\subsection{Method `text`}{
 #'Add pre-shaped text. The R wrapper does shaping (via `textshaping`) and
 #'passes per-glyph ids/positions/fonts plus the block size.
@@ -131,6 +140,10 @@ Scene$circle <- function(x, y, r, xu, yu, ru, fill, col, lwd, alpha, stroke) .Ca
 Scene$rects <- function(x, y, w, h, xu, yu, wu, hu, fill, col, lwd, alpha, stroke) .Call(wrap__Scene__rects, self, x, y, w, h, xu, yu, wu, hu, fill, col, lwd, alpha, stroke)
 
 Scene$circles <- function(x, y, r, xu, yu, ru, fill, col, lwd, alpha, stroke) .Call(wrap__Scene__circles, self, x, y, r, xu, yu, ru, fill, col, lwd, alpha, stroke)
+
+Scene$segments <- function(x0, y0, x1, y1, x0u, y0u, x1u, y1u, col, lwd, alpha, stroke) .Call(wrap__Scene__segments, self, x0, y0, x1, y1, x0u, y0u, x1u, y1u, col, lwd, alpha, stroke)
+
+Scene$path <- function(x, y, xu, yu, nper, evenodd, fill, col, lwd, alpha, stroke) .Call(wrap__Scene__path, self, x, y, xu, yu, nper, evenodd, fill, col, lwd, alpha, stroke)
 
 Scene$text <- function(x, y, xu, yu, rot, hjust, vjust, w, h, gid, gx, gy, gsize, gpath, gface, label, family, face, size, col, alpha) .Call(wrap__Scene__text, self, x, y, xu, yu, rot, hjust, vjust, w, h, gid, gx, gy, gsize, gpath, gface, label, family, face, size, col, alpha)
 

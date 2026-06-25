@@ -171,6 +171,27 @@ S7::method(compile, grob_points) <- function(node, scene) {
   })
 }
 
+S7::method(compile, grob_segments) <- function(node, scene) {
+  .with_vp(node, scene, {
+    n <- vctrs::vec_size_common(node@x0, node@y0, node@x1, node@y1)
+    e0x <- .coord(node@x0, "native", n); e0y <- .coord(node@y0, "native", n)
+    e1x <- .coord(node@x1, "native", n); e1y <- .coord(node@y1, "native", n)
+    g <- .gp4(node@gp, scene)
+    scene$segments(e0x$value, e0y$value, e1x$value, e1y$value,
+                   e0x$code, e0y$code, e1x$code, e1y$code, g$col, g$lwd, g$alpha, g$stroke)
+  })
+}
+
+S7::method(compile, grob_path) <- function(node, scene) {
+  .with_vp(node, scene, {
+    n <- vctrs::vec_size_common(node@x, node@y)
+    ex <- .coord(node@x, "native", n); ey <- .coord(node@y, "native", n)
+    g <- .gp4(node@gp, scene)
+    scene$path(ex$value, ey$value, ex$code, ey$code, as.integer(node@nper),
+               identical(node@rule, "evenodd"), g$fill, g$col, g$lwd, g$alpha, g$stroke)
+  })
+}
+
 S7::method(compile, grob_text) <- function(node, scene) {
   .with_vp(node, scene, {
     hv <- .just_to_hv(node@just)

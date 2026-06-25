@@ -136,7 +136,7 @@ pub struct MaskLayer<'a> {
 /// `end_group` bracket an isolated compositing layer: drawing in between targets
 /// the layer, and `end_group` composites it back (optionally through a mask).
 pub trait RenderBackend {
-    fn fill_path(&mut self, path: &Path, transform: Transform, paint: &ResolvedPaint, clip: &Clip);
+    fn fill_path(&mut self, path: &Path, transform: Transform, paint: &ResolvedPaint, rule: FillRule, clip: &Clip);
     fn stroke_path(&mut self, path: &Path, transform: Transform, color: Rgba, stroke: &StrokeStyle, clip: &Clip);
     fn draw_text(&mut self, run: &TextRun, transform: Transform, clip: &Clip);
     fn begin_group(&mut self);
@@ -184,7 +184,7 @@ fn circles_by_path<B: RenderBackend>(
         }
         let tr = transform.pre_concat(Transform::from_row(rr as f32, 0.0, 0.0, rr as f32, cx[i] as f32, cy[i] as f32));
         if let Some(f) = fill {
-            b.fill_path(&unit, tr, f, clip);
+            b.fill_path(&unit, tr, f, FillRule::Winding, clip);
         }
         if let Some((c, st)) = stroke {
             let scaled = StrokeStyle {
@@ -391,7 +391,7 @@ fn paint_for(paint: &ResolvedPaint) -> Option<Paint<'static>> {
 }
 
 impl RenderBackend for RasterBackend {
-    fn fill_path(&mut self, path: &Path, transform: Transform, paint: &ResolvedPaint, clip: &Clip) {
+    fn fill_path(&mut self, path: &Path, transform: Transform, paint: &ResolvedPaint, rule: FillRule, clip: &Clip) {
         let mask = self.mask_for(clip);
         if let ResolvedPaint::Pattern { tile, tw, th, x, y, w, h, extend, opacity } = paint {
             // The tile Pixmap must outlive the Pattern shader (it borrows it), so
@@ -404,11 +404,11 @@ impl RenderBackend for RasterBackend {
             let mut p = Paint::default();
             p.shader = tiny_skia::Pattern::new(pm.as_ref(), skia_spread(*extend), FilterQuality::Bilinear, *opacity, t);
             p.anti_alias = true;
-            self.target().fill_path(path, &p, FillRule::Winding, transform, mask.as_deref());
+            self.target().fill_path(path, &p, rule, transform, mask.as_deref());
             return;
         }
         if let Some(p) = paint_for(paint) {
-            self.target().fill_path(path, &p, FillRule::Winding, transform, mask.as_deref());
+            self.target().fill_path(path, &p, rule, transform, mask.as_deref());
         }
     }
 
@@ -712,10 +712,14 @@ impl SvgBackend {
 }
 
 impl RenderBackend for SvgBackend {
-    fn fill_path(&mut self, path: &Path, transform: Transform, paint: &ResolvedPaint, clip: &Clip) {
+    fn fill_path(&mut self, path: &Path, transform: Transform, paint: &ResolvedPaint, rule: FillRule, clip: &Clip) {
         let fill = self.svg_fill(paint);
+        let rule_attr = match rule {
+            FillRule::EvenOdd => " fill-rule=\"evenodd\"",
+            FillRule::Winding => "",
+        };
         let element = format!(
-            "<path d=\"{}\" {fill}{}/>",
+            "<path d=\"{}\" {fill}{rule_attr}{}/>",
             path_to_d(path),
             transform_attr(transform),
         );
@@ -975,7 +979,7 @@ impl<'a, 'b> PdfBackend<'a, 'b> {
         }
         if let Some(path) = rect_path(0.0, 0.0, w as f64, h as f64) {
             let empty = Clip { id: usize::MAX, rects: &[] };
-            self.fill_path(&path, Transform::identity(), &ResolvedPaint::Solid(bg), &empty);
+            self.fill_path(&path, Transform::identity(), &ResolvedPaint::Solid(bg), FillRule::Winding, &empty);
         }
     }
 
@@ -1013,7 +1017,7 @@ impl<'a, 'b> PdfBackend<'a, 'b> {
 }
 
 impl RenderBackend for PdfBackend<'_, '_> {
-    fn fill_path(&mut self, path: &Path, transform: Transform, paint: &ResolvedPaint, clip: &Clip) {
+    fn fill_path(&mut self, path: &Path, transform: Transform, paint: &ResolvedPaint, rule: FillRule, clip: &Clip) {
         let kp = match to_kpath(path) {
             Some(p) => p,
             None => return,
@@ -1058,9 +1062,13 @@ impl RenderBackend for PdfBackend<'_, '_> {
                 (rgb::Color::new(c.r, c.g, c.b).into(), a)
             }
         };
+        let krule = match rule {
+            FillRule::EvenOdd => KFillRule::EvenOdd,
+            FillRule::Winding => KFillRule::NonZero,
+        };
         let n = self.push_state(transform, clip);
         self.surface.set_stroke(None);
-        self.surface.set_fill(Some(Fill { paint: kpaint, opacity, rule: KFillRule::NonZero }));
+        self.surface.set_fill(Some(Fill { paint: kpaint, opacity, rule: krule }));
         self.surface.draw_path(&kp);
         self.pop_state(n);
     }

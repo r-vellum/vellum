@@ -7,6 +7,8 @@
 \alias{polygon_grob}
 \alias{circle_grob}
 \alias{points_grob}
+\alias{segments_grob}
+\alias{path_grob}
 \alias{text_grob}
 \title{Graphical objects (grobs)}
 \usage{
@@ -27,6 +29,18 @@ polygon_grob(x, y, gp = gpar(), name = NULL, vp = NULL)
 circle_grob(x = 0.5, y = 0.5, r = 0.25, gp = gpar(), name = NULL, vp = NULL)
 
 points_grob(x, y, size = unit(2, "mm"), gp = gpar(), name = NULL, vp = NULL)
+
+segments_grob(x0, y0, x1, y1, gp = gpar(), name = NULL, vp = NULL)
+
+path_grob(
+  x,
+  y,
+  id = NULL,
+  rule = c("winding", "evenodd"),
+  gp = gpar(),
+  name = NULL,
+  vp = NULL
+)
 
 text_grob(
   label,
@@ -53,6 +67,14 @@ text_grob(
 \item{r}{Radius (\code{\link[=unit]{unit()}} or numeric).}
 
 \item{size}{Point size (\code{\link[=unit]{unit()}} or numeric).}
+
+\item{x0, y0, x1, y1}{Segment start/end coordinates (\code{\link[=unit]{unit()}} or numeric).}
+
+\item{id}{Optional integer vector (one per point) grouping points into closed
+sub-paths; consecutive equal values form a sub-path (so a hole is a second
+sub-path). \code{NULL} makes a single sub-path.}
+
+\item{rule}{Fill rule: \code{"winding"} (non-zero, default) or \code{"evenodd"}.}
 
 \item{label}{Character string(s) to draw.}
 

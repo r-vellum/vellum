@@ -41,6 +41,15 @@ grob_text <- S7::new_class("grob_text", parent = grob, package = "vellum",
     rot  = S7::new_property(S7::class_double, default = 0)
   )
 )
+grob_segments <- S7::new_class("grob_segments", parent = grob, package = "vellum",
+  properties = list(x0 = .unit_prop(), y0 = .unit_prop(), x1 = .unit_prop(), y1 = .unit_prop()))
+grob_path <- S7::new_class("grob_path", parent = grob, package = "vellum",
+  properties = list(
+    x = .unit_prop(), y = .unit_prop(),
+    nper = S7::new_property(S7::class_integer, default = integer(0)),
+    rule = S7::new_property(S7::class_character, default = "winding")
+  )
+)
 
 # --- friendly constructors --------------------------------------------------
 
@@ -96,6 +105,43 @@ points_grob <- function(x, y, size = unit(2, "mm"), gp = gpar(), name = NULL, vp
               y = vctrs::vec_recycle(as_unit(y), n),
               size = vctrs::vec_recycle(as_unit(size, "mm"), n),
               gp = gp, name = name, vp = vp)
+}
+
+#' @rdname grob
+#' @param x0,y0,x1,y1 Segment start/end coordinates ([unit()] or numeric).
+#' @export
+segments_grob <- function(x0, y0, x1, y1, gp = gpar(), name = NULL, vp = NULL) {
+  n <- .common_n(x0, y0, x1, y1)
+  grob_segments(
+    x0 = vctrs::vec_recycle(as_unit(x0, "native"), n),
+    y0 = vctrs::vec_recycle(as_unit(y0, "native"), n),
+    x1 = vctrs::vec_recycle(as_unit(x1, "native"), n),
+    y1 = vctrs::vec_recycle(as_unit(y1, "native"), n),
+    gp = gp, name = name, vp = vp
+  )
+}
+
+#' @rdname grob
+#' @param id Optional integer vector (one per point) grouping points into closed
+#'   sub-paths; consecutive equal values form a sub-path (so a hole is a second
+#'   sub-path). `NULL` makes a single sub-path.
+#' @param rule Fill rule: `"winding"` (non-zero, default) or `"evenodd"`.
+#' @export
+path_grob <- function(x, y, id = NULL, rule = c("winding", "evenodd"),
+                      gp = gpar(), name = NULL, vp = NULL) {
+  rule <- match.arg(rule)
+  n <- .coord_n(x, y)
+  nper <- if (is.null(id)) {
+    n
+  } else {
+    if (length(id) != n) cli::cli_abort("{.arg id} must have one value per point ({n}).")
+    rle(id)$lengths
+  }
+  grob_path(
+    x = vctrs::vec_recycle(as_unit(x, "native"), n),
+    y = vctrs::vec_recycle(as_unit(y, "native"), n),
+    nper = as.integer(nper), rule = rule, gp = gp, name = name, vp = vp
+  )
 }
 
 #' @rdname grob

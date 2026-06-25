@@ -50,6 +50,15 @@ A whole batch of circles in one call, sharing one gpar (also used for
 \code{points}, with the radius carrying the marker size).
 }
 
+\subsection{Method \code{segments}}{
+A batch of disjoint line segments (stroke only), sharing one gpar.
+}
+
+\subsection{Method \code{path}}{
+A general path. \code{nper} gives the number of points in each closed sub-path
+(so holes are sub-paths under the even-odd or winding rule).
+}
+
 \subsection{Method \code{text}}{
 Add pre-shaped text. The R wrapper does shaping (via \code{textshaping}) and
 passes per-glyph ids/positions/fonts plus the block size.

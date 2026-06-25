@@ -10,7 +10,7 @@
 //! The `Scene` is held in Rust and exposed to R as an external-pointer object.
 
 use extendr_api::prelude::*;
-use tiny_skia::{PathBuilder, Pixmap, Transform};
+use tiny_skia::{FillRule, PathBuilder, Pixmap, Transform};
 
 use crate::render::{
     rect_path, Clip, ClipRect, MaskKind, MaskLayer, PdfBackend, RasterBackend, RenderBackend, ResolvedPaint,
@@ -157,6 +157,20 @@ enum Node {
         xu: Vec<Unit>, yu: Vec<Unit>, ru: Vec<Unit>,
         gp: PartialGpar,
     },
+    /// A batch of disjoint line segments `(x0,y0)->(x1,y1)`, stroked in one pass.
+    Segments {
+        x0: Vec<f64>, y0: Vec<f64>, x1: Vec<f64>, y1: Vec<f64>,
+        x0u: Vec<Unit>, y0u: Vec<Unit>, x1u: Vec<Unit>, y1u: Vec<Unit>,
+        gp: PartialGpar,
+    },
+    /// A general path: `nper` gives the point count of each closed sub-path
+    /// (consecutive runs of `x`/`y`), filled by the winding or even-odd rule.
+    Path {
+        x: Vec<f64>, y: Vec<f64>, xu: Vec<Unit>, yu: Vec<Unit>,
+        nper: Vec<usize>,
+        evenodd: bool,
+        gp: PartialGpar,
+    },
     /// Opens an isolated compositing layer (paired with `GroupEnd`).
     GroupStart,
     /// Closes the layer and composites it, optionally through mask `mask` (an
@@ -173,6 +187,8 @@ impl Node {
             | Node::Circle { gp, .. }
             | Node::Rects { gp, .. }
             | Node::Circles { gp, .. }
+            | Node::Segments { gp, .. }
+            | Node::Path { gp, .. }
             | Node::Text { gp, .. } => gp,
             Node::GroupStart | Node::GroupEnd { .. } => unreachable!("group markers carry no gpar"),
         }
@@ -402,6 +418,35 @@ impl Scene {
         self.emit_node(Node::Circles {
             x: x.to_vec(), y: y.to_vec(), r: r.to_vec(),
             xu: codes(xu), yu: codes(yu), ru: codes(ru), gp,
+        });
+    }
+
+    /// A batch of disjoint line segments (stroke only), sharing one gpar.
+    #[allow(clippy::too_many_arguments)]
+    fn segments(
+        &mut self, x0: &[f64], y0: &[f64], x1: &[f64], y1: &[f64],
+        x0u: &[i32], y0u: &[i32], x1u: &[i32], y1u: &[i32],
+        col: Robj, lwd: Robj, alpha: Robj, stroke: Robj,
+    ) {
+        let gp = PartialGpar::from_robj(&rnull(), &col, &lwd, &alpha, &stroke);
+        self.emit_node(Node::Segments {
+            x0: x0.to_vec(), y0: y0.to_vec(), x1: x1.to_vec(), y1: y1.to_vec(),
+            x0u: codes(x0u), y0u: codes(y0u), x1u: codes(x1u), y1u: codes(y1u), gp,
+        });
+    }
+
+    /// A general path. `nper` gives the number of points in each closed sub-path
+    /// (so holes are sub-paths under the even-odd or winding rule).
+    #[allow(clippy::too_many_arguments)]
+    fn path(
+        &mut self, x: &[f64], y: &[f64], xu: &[i32], yu: &[i32], nper: &[i32],
+        evenodd: bool, fill: Robj, col: Robj, lwd: Robj, alpha: Robj, stroke: Robj,
+    ) {
+        let gp = PartialGpar::from_robj(&fill, &col, &lwd, &alpha, &stroke);
+        self.emit_node(Node::Path {
+            x: x.to_vec(), y: y.to_vec(), xu: codes(xu), yu: codes(yu),
+            nper: nper.iter().map(|&v| v.max(0) as usize).collect(),
+            evenodd, gp,
         });
     }
 
@@ -753,7 +798,7 @@ impl Scene {
                     let pw = vp.x_len(*w, *wu);
                     let ph = vp.y_len(*h, *hu);
                     if let Some(path) = rect_path(cx - pw / 2.0, cy - ph / 2.0, pw, ph) {
-                        fill_then_stroke(b, &path, &gp, t, &clip, vp);
+                        fill_then_stroke(b, &path, &gp, t, &clip, vp, FillRule::Winding);
                     }
                 }
                 Node::Lines { x, y, xu, yu, .. } => {
@@ -766,7 +811,7 @@ impl Scene {
                 }
                 Node::Polygon { x, y, xu, yu, .. } => {
                     if let Some(path) = build_poly(x, y, xu, yu, vp, true) {
-                        fill_then_stroke(b, &path, &gp, t, &clip, vp);
+                        fill_then_stroke(b, &path, &gp, t, &clip, vp, FillRule::Winding);
                     }
                 }
                 Node::Circle { x, y, r, xu, yu, ru, .. } => {
@@ -776,7 +821,7 @@ impl Scene {
                     let mut pb = PathBuilder::new();
                     pb.push_circle(cx as f32, cy as f32, rr as f32);
                     if let Some(path) = pb.finish() {
-                        fill_then_stroke(b, &path, &gp, t, &clip, vp);
+                        fill_then_stroke(b, &path, &gp, t, &clip, vp, FillRule::Winding);
                     }
                 }
                 Node::Rects { x, y, w, h, xu, yu, wu, hu, .. } => {
@@ -800,7 +845,7 @@ impl Scene {
                                     continue;
                                 }
                                 let tr = t.pre_concat(Transform::from_row(pw as f32, 0.0, 0.0, ph as f32, cx as f32, cy as f32));
-                                b.fill_path(&unit, tr, rp, &clip);
+                                b.fill_path(&unit, tr, rp, FillRule::Winding, &clip);
                             }
                         }
                     } else {
@@ -814,7 +859,7 @@ impl Scene {
                             let ph = vp.y_len(h[i], hu[i]);
                             if let Some(path) = rect_path(cx - pw / 2.0, cy - ph / 2.0, pw, ph) {
                                 if let Some(rp) = &rf {
-                                    b.fill_path(&path, t, rp, &clip);
+                                    b.fill_path(&path, t, rp, FillRule::Winding, &clip);
                                 }
                                 if let Some(c) = stroke {
                                     b.stroke_path(&path, t, c, &style, &clip);
@@ -852,7 +897,7 @@ impl Scene {
                             pb.push_circle(cx as f32, cy as f32, rr as f32);
                             if let Some(path) = pb.finish() {
                                 if let Some(rp) = &rf {
-                                    b.fill_path(&path, t, rp, &clip);
+                                    b.fill_path(&path, t, rp, FillRule::Winding, &clip);
                                 }
                                 if let Some(c) = stroke {
                                     b.stroke_path(&path, t, c, &style, &clip);
@@ -892,24 +937,65 @@ impl Scene {
                     };
                     b.draw_text(&run, t, &clip);
                 }
+                Node::Segments { x0, y0, x1, y1, x0u, y0u, x1u, y1u, .. } => {
+                    if let Some(col) = gp.col {
+                        let style = stroke_style(&gp, vp.dpi);
+                        if style.width > 0.0 {
+                            let n = [x0.len(), y0.len(), x1.len(), y1.len(), x0u.len(), y0u.len(), x1u.len(), y1u.len()]
+                                .into_iter().min().unwrap_or(0);
+                            let mut pb = PathBuilder::new();
+                            for i in 0..n {
+                                pb.move_to(vp.x_pos(x0[i], x0u[i]) as f32, vp.y_pos(y0[i], y0u[i]) as f32);
+                                pb.line_to(vp.x_pos(x1[i], x1u[i]) as f32, vp.y_pos(y1[i], y1u[i]) as f32);
+                            }
+                            if let Some(path) = pb.finish() {
+                                b.stroke_path(&path, t, col, &style, &clip);
+                            }
+                        }
+                    }
+                }
+                Node::Path { x, y, xu, yu, nper, evenodd, .. } => {
+                    if let Some(path) = build_subpaths(x, y, xu, yu, nper, vp) {
+                        let rule = if *evenodd { FillRule::EvenOdd } else { FillRule::Winding };
+                        fill_then_stroke(b, &path, &gp, t, &clip, vp, rule);
+                    }
+                }
                 Node::GroupStart | Node::GroupEnd { .. } => unreachable!("handled above"),
             }
         }
     }
 }
 
-/// Fill then stroke a shape according to its effective gpar. Gradient fill
-/// geometry is resolved against `vp` into viewport-local px (so it transforms
-/// with the grob, like the path coordinates).
 /// A unit rect centred at the origin (`-0.5..0.5`), scaled per element in the
 /// batched-rect solid fast path.
 fn unit_rect() -> tiny_skia::Path {
     rect_path(-0.5, -0.5, 1.0, 1.0).expect("unit rect path")
 }
 
-fn fill_then_stroke<B: RenderBackend>(b: &mut B, path: &tiny_skia::Path, gp: &Gpar, t: Transform, clip: &Clip, vp: &Vp) {
+/// Build a multi-subpath device path: `nper[k]` consecutive points form one
+/// closed sub-path (so even-odd/winding rules give holes).
+fn build_subpaths(x: &[f64], y: &[f64], xu: &[Unit], yu: &[Unit], nper: &[usize], vp: &Vp) -> Option<tiny_skia::Path> {
+    let mut pb = PathBuilder::new();
+    let mut i = 0usize;
+    for &cnt in nper {
+        let end = i + cnt;
+        if cnt >= 2 && end <= x.len() && end <= y.len() && end <= xu.len() && end <= yu.len() {
+            pb.move_to(vp.x_pos(x[i], xu[i]) as f32, vp.y_pos(y[i], yu[i]) as f32);
+            for k in (i + 1)..end {
+                pb.line_to(vp.x_pos(x[k], xu[k]) as f32, vp.y_pos(y[k], yu[k]) as f32);
+            }
+            pb.close();
+        }
+        i = end;
+    }
+    pb.finish()
+}
+
+/// Fill then stroke a shape according to its effective gpar, using `rule` for the
+/// fill. Gradient fill geometry is resolved against `vp` into viewport-local px.
+fn fill_then_stroke<B: RenderBackend>(b: &mut B, path: &tiny_skia::Path, gp: &Gpar, t: Transform, clip: &Clip, vp: &Vp, rule: FillRule) {
     if let Some(fill) = &gp.fill {
-        b.fill_path(path, t, &resolve_paint(fill, vp), clip);
+        b.fill_path(path, t, &resolve_paint(fill, vp), rule, clip);
     }
     if let Some(col) = gp.col {
         let style = stroke_style(gp, vp.dpi);
