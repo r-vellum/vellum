@@ -20,6 +20,7 @@ viewport(
   col = NULL,
   rowspan = 1,
   colspan = 1,
+  mask = NULL,
   name = NULL
 )
 
@@ -43,6 +44,10 @@ grid_layout(widths = unit(1, "null"), heights = unit(1, "null"))
 \item{row, col}{Cell (1-based) of the parent's layout to place into.}
 
 \item{rowspan, colspan}{Number of cells to span.}
+
+\item{mask}{An optional mask: a grob (or list of grobs), or an \code{\link[=as_mask]{as_mask()}}
+result. The viewport's contents are rendered as an isolated layer and the
+mask modulates their visibility.}
 
 \item{name}{Optional name (for \code{\link[=edit_node]{edit_node()}}).}
 

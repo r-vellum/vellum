@@ -188,10 +188,22 @@ support (krilla's `raster-images` feature needs extra vendored codecs), so a pat
 `b64`/`pixmap_from_straight`/`average_rgba` helpers and the `base64` crate (already
 vendored via krilla) support this; no re-vendor was needed.
 
-Deliberately simpler than a full immediate-mode CTM/save-restore model: there is no
-`save`/`restore`/`begin_group` yet — each draw call carries its own absolute transform
-and clip (paint order is the flat node list). Compositing groups/masks (F3) and a
-general `draw_image` op are added when the scene can express them.
+**Masks & isolated groups (F3).** The trait gained `begin_group`/`end_group(mask)`:
+between them, drawing targets an isolated layer that `end_group` composites back,
+optionally through a mask. A masked `viewport(mask = …)` compiles to a `GroupStart`
+… content … `GroupEnd{mask}` bracket in the flat node stream (the mask grob's own
+nodes are routed to a side buffer during compilation). The mask is **always
+rasterized** — the walk renders its nodes through a fresh `RasterBackend` to a
+page-sized `Pixmap` regardless of output format — and each backend applies it: raster
+pushes a layer `Pixmap` (a target stack) and composites with a tiny-skia `Mask`
+(`Alpha`/`Luminance`); SVG buffers the group's elements (a buffer stack) and wraps
+them in `<g mask="url(#m)">`, the mask embedded as a grayscale-coverage PNG `<mask>`;
+PDF renders the group **unmasked** (krilla masks need the un-vendored `raster-images`
+path) — a documented limitation alongside F2's pattern fallback.
+
+Still simpler than a full immediate-mode model: no `save`/`restore` and no general
+`draw_image` op yet — each draw call carries its own absolute transform and clip
+(paint order is the flat node list); group brackets are the one nesting construct.
 
 ### 4.6 Hit-testing and events (designed in, built later)
 
@@ -318,7 +330,9 @@ vellum/                      R package root
 
 **F1 — gradient fills. ✅ done.** Introduced the `Paint` model (see §4.5): `gpar(fill =)` accepts `linear_gradient()` / `radial_gradient()` (colours + optional stops, geometry in any unit, `extend = pad/repeat/reflect`). `fill` is now an `Option<Paint>` through the gpar fold (alpha folds into stops); the scene walk resolves gradient geometry against the viewport into local px and the `fill_path` trait takes a `&ResolvedPaint`. All three backends build native gradients from local-px geometry + identity gradient transform (tiny-skia `LinearGradient`/`RadialGradient`, krilla ditto, SVG `<linearGradient>`/`<radialGradient gradientUnits="userSpaceOnUse">`), so fill and outline share one coordinate space. Verified pixel-identical across raster/rasterized-SVG/rasterized-PDF (±2/255). No new crates. (The device-shim fork below was declined as optional interop.)
 
-**F2 — tiling patterns. ✅ done.** `pattern(grob, width, height, x, y, units, extend)` (a grob or list of grobs) added to the `Paint` model. R renders the tile grob to an RGBA raster via a throwaway sub-`Scene` (sized from `width`/`height` at the scene dpi using one reference dimension, so the tile aspect is `width:height` and only the genuine viewport aspect stretches it), then the backend tiles the image: raster tiny-skia `Pattern`, SVG `<pattern>` + base64-PNG `<image>` (both verified pixel-identical via rsvg-convert). The PDF backend lacks image support (krilla `raster-images` needs un-vendored codecs), so a pattern degrades to its **mean colour** — a documented first-cut limitation. Added the `base64` crate (already vendored transitively via krilla → no re-vendor) plus `pixmap_from_straight`/`average_rgba` helpers; also guarded `parse_paint` to `$`-index only lists (atomic colour vectors error on `$`). `test-pattern.R`, `inst/examples/patterns.R`. **Next: F3 masks.**
+**F2 — tiling patterns. ✅ done.** `pattern(grob, width, height, x, y, units, extend)` (a grob or list of grobs) added to the `Paint` model. R renders the tile grob to an RGBA raster via a throwaway sub-`Scene` (sized from `width`/`height` at the scene dpi using one reference dimension, so the tile aspect is `width:height` and only the genuine viewport aspect stretches it), then the backend tiles the image: raster tiny-skia `Pattern`, SVG `<pattern>` + base64-PNG `<image>` (both verified pixel-identical via rsvg-convert). The PDF backend lacks image support (krilla `raster-images` needs un-vendored codecs), so a pattern degrades to its **mean colour** — a documented first-cut limitation. Added the `base64` crate (already vendored transitively via krilla → no re-vendor) plus `pixmap_from_straight`/`average_rgba` helpers; also guarded `parse_paint` to `$`-index only lists (atomic colour vectors error on `$`). `test-pattern.R`, `inst/examples/patterns.R`.
+
+**F3 — masks. ✅ done.** `as_mask(grob, type = "alpha"|"luminance")` + `viewport(mask = …)`. Introduced the isolated compositing group the trait had deferred: `begin_group`/`end_group(mask)`, with masked content compiled to a `GroupStart`…`GroupEnd{mask}` bracket and the mask grob's nodes routed to a side buffer (see §4.5). The mask is always rasterized via a nested `RasterBackend`; raster composites through a tiny-skia `Mask` (alpha/luminance) over a draw-target stack, SVG wraps a buffered group in `<g mask>` with a grayscale-coverage `<mask>` image, PDF renders unmasked (documented, like F2). Verified raster and rasterized-SVG agree (alpha disc, luminance black/white contrast, soft gradient mask). `test-mask.R`, `inst/examples/masks.R`. **The fills/compositing milestone (F1–F3: gradients, patterns, masks) is complete.**
 
 **M5 — device-shim mode (optional, deferred).** Register as an R graphics device via `DeviceDriver`; implement the minimal callback set, then climb the capability ladder (patterns → groups/compositing → glyphs). Panic-guard every callback. Validate by rendering ggplot2/lattice output. Deferred in favour of filling out the native engine (gradients/patterns/masks); this is interop, not on the Option-B critical path.
 

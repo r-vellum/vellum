@@ -67,11 +67,48 @@ pub struct TextRun<'a> {
     pub dpi: f64,
 }
 
-/// A drawing target. The walk calls these in paint order.
+/// How a mask's pixels modulate the group they cover.
+#[derive(Clone, Copy, Debug)]
+pub enum MaskKind {
+    /// Use the mask's alpha channel as coverage.
+    Alpha,
+    /// Use the mask's luminance (`0.2126R + 0.7152G + 0.0722B`) as coverage.
+    Luminance,
+}
+
+impl MaskKind {
+    pub fn from_code(c: i32) -> MaskKind {
+        match c {
+            1 => MaskKind::Luminance,
+            _ => MaskKind::Alpha,
+        }
+    }
+}
+
+/// A rendered mask handed to `end_group`: a page-sized RGBA raster plus how to
+/// read coverage from it. The mask is always rasterized (uniform across output
+/// formats); only how each backend *applies* it differs.
+pub struct MaskLayer<'a> {
+    pub pixmap: &'a Pixmap,
+    pub kind: MaskKind,
+}
+
+/// A drawing target. The walk calls these in paint order. `begin_group` /
+/// `end_group` bracket an isolated compositing layer: drawing in between targets
+/// the layer, and `end_group` composites it back (optionally through a mask).
 pub trait RenderBackend {
     fn fill_path(&mut self, path: &Path, transform: Transform, paint: &ResolvedPaint, clip: &Clip);
     fn stroke_path(&mut self, path: &Path, transform: Transform, color: Rgba, width_px: f32, clip: &Clip);
     fn draw_text(&mut self, run: &TextRun, transform: Transform, clip: &Clip);
+    fn begin_group(&mut self);
+    fn end_group(&mut self, mask: Option<MaskLayer>);
+}
+
+fn skia_masktype(k: MaskKind) -> tiny_skia::MaskType {
+    match k {
+        MaskKind::Alpha => tiny_skia::MaskType::Alpha,
+        MaskKind::Luminance => tiny_skia::MaskType::Luminance,
+    }
 }
 
 // --- shared geometry helpers ------------------------------------------------
@@ -138,7 +175,9 @@ fn page_mask(w: u32, h: u32) -> Mask {
 // --- raster backend ---------------------------------------------------------
 
 pub struct RasterBackend {
-    pm: Pixmap,
+    /// A stack of draw targets: `targets[0]` is the page; `begin_group` pushes an
+    /// isolated layer that drawing then targets until `end_group` composites it.
+    targets: Vec<Pixmap>,
     fonts: FontCache,
     masks: HashMap<usize, Option<Rc<Mask>>>,
     w: u32,
@@ -149,11 +188,16 @@ impl RasterBackend {
     pub fn new(w: u32, h: u32, bg: Rgba) -> Self {
         let mut pm = Pixmap::new(w, h).expect("non-zero pixmap dimensions");
         pm.fill(bg.to_skia());
-        RasterBackend { pm, fonts: FontCache::default(), masks: HashMap::new(), w, h }
+        RasterBackend { targets: vec![pm], fonts: FontCache::default(), masks: HashMap::new(), w, h }
     }
 
-    pub fn into_pixmap(self) -> Pixmap {
-        self.pm
+    pub fn into_pixmap(mut self) -> Pixmap {
+        // Balanced groups leave only the page; if not, the base is still first.
+        self.targets.swap_remove(0)
+    }
+
+    fn target(&mut self) -> &mut Pixmap {
+        self.targets.last_mut().expect("at least the page target")
     }
 
     fn mask_for(&mut self, clip: &Clip) -> Option<Rc<Mask>> {
@@ -238,11 +282,11 @@ impl RenderBackend for RasterBackend {
             let mut p = Paint::default();
             p.shader = tiny_skia::Pattern::new(pm.as_ref(), skia_spread(*extend), FilterQuality::Bilinear, 1.0, t);
             p.anti_alias = true;
-            self.pm.fill_path(path, &p, FillRule::Winding, transform, mask.as_deref());
+            self.target().fill_path(path, &p, FillRule::Winding, transform, mask.as_deref());
             return;
         }
         if let Some(p) = paint_for(paint) {
-            self.pm.fill_path(path, &p, FillRule::Winding, transform, mask.as_deref());
+            self.target().fill_path(path, &p, FillRule::Winding, transform, mask.as_deref());
         }
     }
 
@@ -252,7 +296,7 @@ impl RenderBackend for RasterBackend {
         }
         let mask = self.mask_for(clip);
         let stroke = Stroke { width: width_px, ..Stroke::default() };
-        self.pm.stroke_path(path, &solid_paint(color), &stroke, transform, mask.as_deref());
+        self.target().stroke_path(path, &solid_paint(color), &stroke, transform, mask.as_deref());
     }
 
     fn draw_text(&mut self, run: &TextRun, transform: Transform, clip: &Clip) {
@@ -277,8 +321,41 @@ impl RenderBackend for RasterBackend {
             let ox = run.ax + run.gx[i] - run.hjust * run.w;
             let oy = run.ay - (run.gy[i] - run.vjust * run.h);
             let place = Transform::from_row(1.0, 0.0, 0.0, -1.0, ox as f32, oy as f32);
-            self.pm.fill_path(&outline, &paint, FillRule::Winding, base.pre_concat(place), mask.as_deref());
+            self.targets.last_mut().expect("at least the page target").fill_path(
+                &outline,
+                &paint,
+                FillRule::Winding,
+                base.pre_concat(place),
+                mask.as_deref(),
+            );
         }
+    }
+
+    fn begin_group(&mut self) {
+        // A transparent isolated layer; subsequent drawing targets it.
+        self.targets.push(Pixmap::new(self.w, self.h).expect("non-zero layer dimensions"));
+    }
+
+    fn end_group(&mut self, mask: Option<MaskLayer>) {
+        let layer = match self.targets.pop() {
+            Some(l) if !self.targets.is_empty() => l,
+            other => {
+                // Unbalanced end_group: nothing to composite onto. Restore and bail.
+                if let Some(l) = other {
+                    self.targets.push(l);
+                }
+                return;
+            }
+        };
+        let m = mask.map(|ml| Mask::from_pixmap(ml.pixmap.as_ref(), skia_masktype(ml.kind)));
+        self.target().draw_pixmap(
+            0,
+            0,
+            layer.as_ref(),
+            &tiny_skia::PixmapPaint::default(),
+            Transform::identity(),
+            m.as_ref(),
+        );
     }
 }
 
@@ -289,6 +366,9 @@ pub struct SvgBackend {
     h: u32,
     defs: String,
     body: String,
+    /// A stack of open group buffers; drawing appends to the top (or `body` when
+    /// empty). `end_group` pops one and wraps it in a `<g>` (with a mask).
+    groups: Vec<String>,
     clip_attrs: HashMap<usize, String>,
     next_clip: u32,
     next_grad: u32,
@@ -304,7 +384,25 @@ impl SvgBackend {
                 opacity(bg)
             ));
         }
-        SvgBackend { w, h, defs: String::new(), body, clip_attrs: HashMap::new(), next_clip: 0, next_grad: 0 }
+        SvgBackend {
+            w,
+            h,
+            defs: String::new(),
+            body,
+            groups: Vec::new(),
+            clip_attrs: HashMap::new(),
+            next_clip: 0,
+            next_grad: 0,
+        }
+    }
+
+    /// The buffer currently receiving output: the innermost open group, else the
+    /// document body.
+    fn out(&mut self) -> &mut String {
+        match self.groups.last_mut() {
+            Some(b) => b,
+            None => &mut self.body,
+        }
     }
 
     /// The `fill="..."` attributes for a resolved paint (registers a gradient def
@@ -379,11 +477,12 @@ impl SvgBackend {
     /// would double-transform the clip region.
     fn emit(&mut self, element: &str, clip: &Clip) {
         let attr = self.clip_attr(clip);
-        if attr.is_empty() {
-            self.body.push_str(element);
+        let wrapped = if attr.is_empty() {
+            element.to_string()
         } else {
-            self.body.push_str(&format!("<g{attr}>{element}</g>"));
-        }
+            format!("<g{attr}>{element}</g>")
+        };
+        self.out().push_str(&wrapped);
     }
 
     /// A ` clip-path="url(#…)"` attribute for this clip (empty string = none).
@@ -484,6 +583,53 @@ impl RenderBackend for SvgBackend {
         );
         self.emit(&element, clip);
     }
+
+    fn begin_group(&mut self) {
+        self.groups.push(String::new());
+    }
+
+    fn end_group(&mut self, mask: Option<MaskLayer>) {
+        let inner = self.groups.pop().unwrap_or_default();
+        // SVG masks are luminance-based; bake the chosen coverage into a grayscale
+        // image (gray == coverage) so a single luminance mask serves both kinds.
+        let wrapped = match mask.and_then(|ml| mask_png(ml.pixmap, ml.kind)) {
+            Some(png) => {
+                let id = format!("g{}", self.next_grad);
+                self.next_grad += 1;
+                self.defs.push_str(&format!(
+                    "<mask id=\"{id}\" maskUnits=\"userSpaceOnUse\" x=\"0\" y=\"0\" \
+                     width=\"{w}\" height=\"{h}\"><image href=\"data:image/png;base64,{b}\" \
+                     x=\"0\" y=\"0\" width=\"{w}\" height=\"{h}\" preserveAspectRatio=\"none\"/></mask>",
+                    w = self.w,
+                    h = self.h,
+                    b = b64(&png),
+                ));
+                format!("<g mask=\"url(#{id})\">{inner}</g>")
+            }
+            None => format!("<g>{inner}</g>"),
+        };
+        self.out().push_str(&wrapped);
+    }
+}
+
+/// Encode a mask raster as an opaque grayscale PNG where each pixel's gray level
+/// is its coverage (alpha or luminance), for use as an SVG luminance `<mask>`.
+fn mask_png(pm: &Pixmap, kind: MaskKind) -> Option<Vec<u8>> {
+    let mut out = Pixmap::new(pm.width(), pm.height())?;
+    let src = pm.pixels();
+    let dst = out.pixels_mut();
+    for (s, d) in src.iter().zip(dst.iter_mut()) {
+        let c = s.demultiply();
+        let cov = match kind {
+            MaskKind::Alpha => c.alpha(),
+            MaskKind::Luminance => {
+                (0.2126 * c.red() as f32 + 0.7152 * c.green() as f32 + 0.0722 * c.blue() as f32)
+                    .round() as u8
+            }
+        };
+        *d = tiny_skia::ColorU8::from_rgba(cov, cov, cov, 255).premultiply();
+    }
+    out.encode_png().ok()
 }
 
 // --- SVG serialization helpers ----------------------------------------------
@@ -792,6 +938,11 @@ impl RenderBackend for PdfBackend<'_, '_> {
         }
         self.pop_state(pushes);
     }
+
+    // Masks need an image/transparency-group path krilla can't take without the
+    // `raster-images` feature (un-vendored codecs); the group draws unmasked.
+    fn begin_group(&mut self) {}
+    fn end_group(&mut self, _mask: Option<MaskLayer>) {}
 }
 
 fn to_kpath(p: &Path) -> Option<KPath> {

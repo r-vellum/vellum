@@ -178,6 +178,46 @@ print.vellum_pattern <- function(x, ...) {
   )
 }
 
+#' Masks
+#'
+#' Wrap a grob (or list of grobs) as a mask for `viewport(mask = ...)`. The mask
+#' content is rendered to an isolated layer; its coverage then modulates the
+#' visibility of the viewport's contents.
+#'
+#' @param grob A grob, or a list of grobs, drawn in the masked viewport's
+#'   coordinate system.
+#' @param type `"alpha"` (default) uses the mask's opacity as coverage;
+#'   `"luminance"` uses its brightness (white shows, black hides).
+#' @return A `vellum_mask` object.
+#' @examples
+#' as_mask(circle_grob(r = 0.4, gp = gpar(fill = "white", col = NA)))
+#' @export
+as_mask <- function(grob, type = c("alpha", "luminance")) {
+  type <- match.arg(type)
+  structure(list(grobs = .as_grob_list(grob), type = type), class = "vellum_mask")
+}
+
+#' @export
+print.vellum_mask <- function(x, ...) {
+  cli::cli_text("<vellum_mask> type = {.val {x$type}}, {length(x$grobs)} grob{?s}")
+  invisible(x)
+}
+
+# A grob or list of grobs -> a flat list of grobs.
+.as_grob_list <- function(x) {
+  if (inherits(x, "S7_object")) list(x) else as.list(x)
+}
+
+# Normalize a viewport `mask` (a vellum_mask, or a bare grob/list defaulting to
+# alpha) to list(type_code, grobs). type code: alpha = 0, luminance = 1.
+.normalize_mask <- function(m) {
+  if (inherits(m, "vellum_mask")) {
+    list(code = if (m$type == "luminance") 1L else 0L, grobs = m$grobs)
+  } else {
+    list(code = 0L, grobs = .as_grob_list(m))
+  }
+}
+
 # A length resolved to device pixels for tile sizing. npc/native are taken
 # against the page extent `total_px`; absolute units use the dpi.
 .paint_len_px <- function(value, units, total_px, dpi) {

@@ -44,6 +44,25 @@ rs_backend_info <- function() .Call(wrap__rs_backend_info)
 #'passes per-glyph ids/positions/fonts plus the block size.
 #'}
 #'
+#'\subsection{Method `mask_begin`}{
+#'Begin collecting a mask's content for the current viewport. Until the
+#'matching `mask_end`, primitives are routed into the mask instead of the
+#'drawn scene. `kind` is 0 (alpha) or 1 (luminance). Returns its index.
+#'}
+#'
+#'\subsection{Method `mask_end`}{
+#'Stop routing primitives into the most recent mask.
+#'}
+#'
+#'\subsection{Method `group_start`}{
+#'Open an isolated compositing group in the drawn scene.
+#'}
+#'
+#'\subsection{Method `group_end`}{
+#'Close the group, compositing it through mask index `mask` (negative = no
+#'mask, just isolation).
+#'}
+#'
 #'\subsection{Method `len`}{
 #'Number of primitives currently in the scene.
 #'}
@@ -98,6 +117,14 @@ Scene$polygon <- function(x, y, xu, yu, fill, col, lwd, alpha) .Call(wrap__Scene
 Scene$circle <- function(x, y, r, xu, yu, ru, fill, col, lwd, alpha) .Call(wrap__Scene__circle, self, x, y, r, xu, yu, ru, fill, col, lwd, alpha)
 
 Scene$text <- function(x, y, xu, yu, rot, hjust, vjust, w, h, gid, gx, gy, gsize, gpath, gface, label, family, face, size, col, alpha) .Call(wrap__Scene__text, self, x, y, xu, yu, rot, hjust, vjust, w, h, gid, gx, gy, gsize, gpath, gface, label, family, face, size, col, alpha)
+
+Scene$mask_begin <- function(kind) .Call(wrap__Scene__mask_begin, self, kind)
+
+Scene$mask_end <- function() .Call(wrap__Scene__mask_end, self)
+
+Scene$group_start <- function() .Call(wrap__Scene__group_start, self)
+
+Scene$group_end <- function(mask) .Call(wrap__Scene__group_end, self, mask)
 
 Scene$len <- function() .Call(wrap__Scene__len, self)
 

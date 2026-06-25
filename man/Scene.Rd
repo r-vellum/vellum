@@ -45,6 +45,25 @@ Add pre-shaped text. The R wrapper does shaping (via \code{textshaping}) and
 passes per-glyph ids/positions/fonts plus the block size.
 }
 
+\subsection{Method \code{mask_begin}}{
+Begin collecting a mask's content for the current viewport. Until the
+matching \code{mask_end}, primitives are routed into the mask instead of the
+drawn scene. \code{kind} is 0 (alpha) or 1 (luminance). Returns its index.
+}
+
+\subsection{Method \code{mask_end}}{
+Stop routing primitives into the most recent mask.
+}
+
+\subsection{Method \code{group_start}}{
+Open an isolated compositing group in the drawn scene.
+}
+
+\subsection{Method \code{group_end}}{
+Close the group, compositing it through mask index \code{mask} (negative = no
+mask, just isolation).
+}
+
 \subsection{Method \code{len}}{
 Number of primitives currently in the scene.
 }

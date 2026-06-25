@@ -13,7 +13,8 @@ use extendr_api::prelude::*;
 use tiny_skia::{PathBuilder, Pixmap, Transform};
 
 use crate::render::{
-    rect_path, Clip, ClipRect, PdfBackend, RasterBackend, RenderBackend, ResolvedPaint, SvgBackend, TextRun,
+    rect_path, Clip, ClipRect, MaskKind, MaskLayer, PdfBackend, RasterBackend, RenderBackend, ResolvedPaint,
+    SvgBackend, TextRun,
 };
 
 use crate::color::{opt_color, Gpar, GparAcc, Paint, PartialGpar, Rgba};
@@ -143,6 +144,11 @@ enum Node {
         size: f64,
         gp: PartialGpar,
     },
+    /// Opens an isolated compositing layer (paired with `GroupEnd`).
+    GroupStart,
+    /// Closes the layer and composites it, optionally through mask `mask` (an
+    /// index into `Scene::masks`).
+    GroupEnd { mask: Option<usize> },
 }
 
 impl Node {
@@ -153,8 +159,17 @@ impl Node {
             | Node::Polygon { gp, .. }
             | Node::Circle { gp, .. }
             | Node::Text { gp, .. } => gp,
+            Node::GroupStart | Node::GroupEnd { .. } => unreachable!("group markers carry no gpar"),
         }
     }
+}
+
+/// A mask attached to a viewport: the grob content to rasterize plus how its
+/// pixels modulate coverage. Filled while the mask grob is compiled.
+#[derive(Clone, Debug)]
+struct MaskDef {
+    kind: MaskKind,
+    nodes: Vec<(usize, Node)>,
 }
 
 /// A drawing scene held in the Rust backend. Internal: the public R API is the
@@ -169,6 +184,11 @@ pub struct Scene {
     viewports: Vec<ViewportNode>,
     current: usize,
     nodes: Vec<(usize, Node)>,
+    /// Mask definitions, referenced by index from `Node::GroupEnd`.
+    masks: Vec<MaskDef>,
+    /// Stack of mask indices currently being filled (nested mask compilation);
+    /// while non-empty, new primitives are routed to the top mask's content.
+    mask_target: Vec<usize>,
 }
 
 #[extendr]
@@ -214,6 +234,8 @@ impl Scene {
             viewports: vec![root],
             current: 0,
             nodes: Vec::new(),
+            masks: Vec::new(),
+            mask_target: Vec::new(),
         }
     }
 
@@ -307,46 +329,34 @@ impl Scene {
     #[allow(clippy::too_many_arguments)]
     fn rect(&mut self, x: f64, y: f64, w: f64, h: f64, xu: i32, yu: i32, wu: i32, hu: i32, fill: Robj, col: Robj, lwd: Robj, alpha: Robj) {
         let gp = PartialGpar::from_robj(&fill, &col, &lwd, &alpha);
-        self.nodes.push((
-            self.current,
-            Node::Rect {
-                x,
-                y,
-                w,
-                h,
-                xu: Unit::from_code(xu),
-                yu: Unit::from_code(yu),
-                wu: Unit::from_code(wu),
-                hu: Unit::from_code(hu),
-                gp,
-            },
-        ));
+        self.emit_node(Node::Rect {
+            x,
+            y,
+            w,
+            h,
+            xu: Unit::from_code(xu),
+            yu: Unit::from_code(yu),
+            wu: Unit::from_code(wu),
+            hu: Unit::from_code(hu),
+            gp,
+        });
     }
 
     fn lines(&mut self, x: &[f64], y: &[f64], xu: &[i32], yu: &[i32], col: Robj, lwd: Robj, alpha: Robj) {
         let gp = PartialGpar::from_robj(&rnull(), &col, &lwd, &alpha);
-        self.nodes.push((
-            self.current,
-            Node::Lines { x: x.to_vec(), y: y.to_vec(), xu: codes(xu), yu: codes(yu), gp },
-        ));
+        self.emit_node(Node::Lines { x: x.to_vec(), y: y.to_vec(), xu: codes(xu), yu: codes(yu), gp });
     }
 
     #[allow(clippy::too_many_arguments)]
     fn polygon(&mut self, x: &[f64], y: &[f64], xu: &[i32], yu: &[i32], fill: Robj, col: Robj, lwd: Robj, alpha: Robj) {
         let gp = PartialGpar::from_robj(&fill, &col, &lwd, &alpha);
-        self.nodes.push((
-            self.current,
-            Node::Polygon { x: x.to_vec(), y: y.to_vec(), xu: codes(xu), yu: codes(yu), gp },
-        ));
+        self.emit_node(Node::Polygon { x: x.to_vec(), y: y.to_vec(), xu: codes(xu), yu: codes(yu), gp });
     }
 
     #[allow(clippy::too_many_arguments)]
     fn circle(&mut self, x: f64, y: f64, r: f64, xu: i32, yu: i32, ru: i32, fill: Robj, col: Robj, lwd: Robj, alpha: Robj) {
         let gp = PartialGpar::from_robj(&fill, &col, &lwd, &alpha);
-        self.nodes.push((
-            self.current,
-            Node::Circle { x, y, r, xu: Unit::from_code(xu), yu: Unit::from_code(yu), ru: Unit::from_code(ru), gp },
-        ));
+        self.emit_node(Node::Circle { x, y, r, xu: Unit::from_code(xu), yu: Unit::from_code(yu), ru: Unit::from_code(ru), gp });
     }
 
     /// Add pre-shaped text. The R wrapper does shaping (via `textshaping`) and
@@ -377,31 +387,55 @@ impl Scene {
         alpha: Robj,
     ) {
         let gp = PartialGpar::from_robj(&rnull(), &col, &rnull(), &alpha);
-        self.nodes.push((
-            self.current,
-            Node::Text {
-                x,
-                y,
-                xu: Unit::from_code(xu),
-                yu: Unit::from_code(yu),
-                rot,
-                hjust,
-                vjust,
-                w,
-                h,
-                gid: gid.iter().map(|&v| v.max(0) as u32).collect(),
-                gx: gx.to_vec(),
-                gy: gy.to_vec(),
-                gsize: gsize.to_vec(),
-                gpath,
-                gface: gface.iter().map(|&v| v.max(0) as u32).collect(),
-                label: label.to_string(),
-                family: family.to_string(),
-                face: face.to_string(),
-                size,
-                gp,
-            },
-        ));
+        self.emit_node(Node::Text {
+            x,
+            y,
+            xu: Unit::from_code(xu),
+            yu: Unit::from_code(yu),
+            rot,
+            hjust,
+            vjust,
+            w,
+            h,
+            gid: gid.iter().map(|&v| v.max(0) as u32).collect(),
+            gx: gx.to_vec(),
+            gy: gy.to_vec(),
+            gsize: gsize.to_vec(),
+            gpath,
+            gface: gface.iter().map(|&v| v.max(0) as u32).collect(),
+            label: label.to_string(),
+            family: family.to_string(),
+            face: face.to_string(),
+            size,
+            gp,
+        });
+    }
+
+    /// Begin collecting a mask's content for the current viewport. Until the
+    /// matching `mask_end`, primitives are routed into the mask instead of the
+    /// drawn scene. `kind` is 0 (alpha) or 1 (luminance). Returns its index.
+    fn mask_begin(&mut self, kind: i32) -> i32 {
+        let idx = self.masks.len();
+        self.masks.push(MaskDef { kind: MaskKind::from_code(kind), nodes: Vec::new() });
+        self.mask_target.push(idx);
+        idx as i32
+    }
+
+    /// Stop routing primitives into the most recent mask.
+    fn mask_end(&mut self) {
+        self.mask_target.pop();
+    }
+
+    /// Open an isolated compositing group in the drawn scene.
+    fn group_start(&mut self) {
+        self.nodes.push((self.current, Node::GroupStart));
+    }
+
+    /// Close the group, compositing it through mask index `mask` (negative = no
+    /// mask, just isolation).
+    fn group_end(&mut self, mask: i32) {
+        let mask = if mask >= 0 { Some(mask as usize) } else { None };
+        self.nodes.push((self.current, Node::GroupEnd { mask }));
     }
 
     /// Number of primitives currently in the scene.
@@ -500,6 +534,16 @@ impl Scene {
 }
 
 impl Scene {
+    /// Append a primitive to the current draw target: the mask being filled (if
+    /// any), else the drawn scene. Tagged with the current viewport.
+    fn emit_node(&mut self, node: Node) {
+        let vp = self.current;
+        match self.mask_target.last() {
+            Some(&mi) => self.masks[mi].nodes.push((vp, node)),
+            None => self.nodes.push((vp, node)),
+        }
+    }
+
     /// Resolve every viewport (transform, size, accumulated gpar, clip mask).
     /// DFS from the root guarantees a parent is resolved before its children.
     fn resolve_all(&self) -> Vec<ResolvedVp> {
@@ -620,7 +664,34 @@ impl Scene {
     /// shared; only the per-primitive draw calls are backend-specific.
     fn render_to<B: RenderBackend>(&self, b: &mut B) {
         let resolved = self.resolve_all();
-        for (vp_id, node) in &self.nodes {
+        self.render_nodes(b, &resolved, &self.nodes);
+    }
+
+    /// Render an ordered node list (the scene, or a mask's content) onto `b`.
+    /// Group markers open/close isolated layers; a closing mask is rasterized
+    /// (always to a `RasterBackend`) and handed to `end_group`.
+    fn render_nodes<B: RenderBackend>(&self, b: &mut B, resolved: &[ResolvedVp], nodes: &[(usize, Node)]) {
+        for (vp_id, node) in nodes {
+            match node {
+                Node::GroupStart => {
+                    b.begin_group();
+                    continue;
+                }
+                Node::GroupEnd { mask } => {
+                    match mask.and_then(|m| self.masks.get(m)) {
+                        Some(md) => {
+                            let mut mb = RasterBackend::new(self.w_px, self.h_px, Rgba { r: 0, g: 0, b: 0, a: 0 });
+                            self.render_nodes(&mut mb, resolved, &md.nodes);
+                            let mpm = mb.into_pixmap();
+                            b.end_group(Some(MaskLayer { pixmap: &mpm, kind: md.kind }));
+                        }
+                        None => b.end_group(None),
+                    }
+                    continue;
+                }
+                _ => {}
+            }
+
             let rv = &resolved[*vp_id];
             let vp = &rv.vp;
             let gp = rv.gp_acc.apply(node.gp()).resolve();
@@ -691,6 +762,7 @@ impl Scene {
                     };
                     b.draw_text(&run, t, &clip);
                 }
+                Node::GroupStart | Node::GroupEnd { .. } => unreachable!("handled above"),
             }
         }
     }

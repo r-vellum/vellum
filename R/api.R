@@ -186,7 +186,18 @@ S7::method(compile, grob_text) <- function(node, scene) {
 
 S7::method(compile, gtree) <- function(node, scene) {
   .push_vp(scene, node@vp)
-  for (child in node@children) compile(child, scene)
+  mask <- if (!is.null(node@vp)) node@vp@mask else NULL
+  if (!is.null(mask)) {
+    m <- .normalize_mask(mask)
+    idx <- scene$mask_begin(m$code)        # route mask grobs into the mask
+    for (g in m$grobs) compile(g, scene)
+    scene$mask_end()
+    scene$group_start()                    # the masked content as an isolated layer
+    for (child in node@children) compile(child, scene)
+    scene$group_end(idx)
+  } else {
+    for (child in node@children) compile(child, scene)
+  }
   scene$pop_viewport(1L)
 }
 

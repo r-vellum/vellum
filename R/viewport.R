@@ -15,6 +15,9 @@
 #' @param layout An optional [grid_layout()].
 #' @param row,col Cell (1-based) of the parent's layout to place into.
 #' @param rowspan,colspan Number of cells to span.
+#' @param mask An optional mask: a grob (or list of grobs), or an [as_mask()]
+#'   result. The viewport's contents are rendered as an isolated layer and the
+#'   mask modulates their visibility.
 #' @param name Optional name (for [edit_node()]).
 #' @return A `viewport` object.
 #' @examples
@@ -23,13 +26,14 @@
 viewport <- function(x = 0.5, y = 0.5, width = 1, height = 1,
                      xscale = c(0, 1), yscale = c(0, 1), angle = 0, clip = FALSE,
                      gp = gpar(), layout = NULL,
-                     row = NULL, col = NULL, rowspan = 1, colspan = 1, name = NULL) {
+                     row = NULL, col = NULL, rowspan = 1, colspan = 1,
+                     mask = NULL, name = NULL) {
   class_viewport(
     x = as_unit(x), y = as_unit(y), width = as_unit(width), height = as_unit(height),
     xscale = as.numeric(xscale), yscale = as.numeric(yscale),
     angle = as.numeric(angle), clip = isTRUE(clip), gp = gp, layout = layout,
     row = row, col = col, rowspan = as.integer(rowspan), colspan = as.integer(colspan),
-    name = name
+    mask = mask, name = name
   )
 }
 
@@ -48,6 +52,7 @@ class_viewport <- S7::new_class(
     col = S7::new_property(S7::class_any, default = NULL),
     rowspan = S7::new_property(S7::class_integer, default = 1L),
     colspan = S7::new_property(S7::class_integer, default = 1L),
+    mask = S7::new_property(S7::class_any, default = NULL),
     name = S7::new_property(S7::class_any, default = NULL)
   )
 )
