@@ -15,6 +15,7 @@ path = 'document.rs'
 
 [dependencies]
 extendr-api = '0.9'
+tiny-skia = '0.11'
 
 [profile.release]
 lto = true

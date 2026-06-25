@@ -1,5 +1,9 @@
 use extendr_api::prelude::*;
 
+mod color;
+mod scene;
+mod units;
+
 /// Backend identity and build info.
 ///
 /// A trivial call to confirm the R -> Rust path is wired up. As the backend
@@ -56,4 +60,5 @@ extendr_module! {
     mod rsplot;
     fn rs_backend_info;
     fn rs_bbox;
+    use scene;
 }

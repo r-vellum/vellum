@@ -24,4 +24,65 @@ rs_backend_info <- function() .Call(wrap__rs_backend_info)
 #' @export
 rs_bbox <- function(x, y) .Call(wrap__rs_bbox, x, y)
 
+#' A drawing scene held in the Rust backend.
+#' @export
+#' @export
+#' @section Methods:
+#'\subsection{Method `new`}{
+#'Create a scene `width` x `height` inches at `dpi`, with background `bg`
+#'(a length-4 integer RGBA vector).
+#'}
+#'
+#'\subsection{Method `set_viewport`}{
+#'Set the (single) drawing viewport: centre `(x, y)` and size `(w, h)` in
+#'page npc, with native `xscale`/`yscale` (length-2 vectors).
+#'}
+#'
+#'\subsection{Method `len`}{
+#'Number of primitives currently in the scene.
+#'}
+#'
+#'\subsection{Method `dim`}{
+#'Device dimensions in pixels, `c(width, height)`.
+#'}
+#'
+#'\subsection{Method `render_png`}{
+#'Render the scene to a PNG file.
+#'}
+#'
+#'\subsection{Method `pixel`}{
+#'Render and return the RGBA of device pixel `(x, y)` (top-left origin,
+#'0-based) as `c(r, g, b, a)`. For pixel-level testing.
+#'}
+#'
+Scene <- new.env(parent = emptyenv())
+
+Scene$new <- function(width, height, dpi, bg) .Call(wrap__Scene__new, width, height, dpi, bg)
+
+Scene$set_viewport <- function(x, y, w, h, xscale, yscale) .Call(wrap__Scene__set_viewport, self, x, y, w, h, xscale, yscale)
+
+Scene$rect <- function(x, y, w, h, units, fill, col, lwd, alpha) .Call(wrap__Scene__rect, self, x, y, w, h, units, fill, col, lwd, alpha)
+
+Scene$lines <- function(x, y, units, col, lwd, alpha) .Call(wrap__Scene__lines, self, x, y, units, col, lwd, alpha)
+
+Scene$polygon <- function(x, y, units, fill, col, lwd, alpha) .Call(wrap__Scene__polygon, self, x, y, units, fill, col, lwd, alpha)
+
+Scene$circle <- function(x, y, r, units, fill, col, lwd, alpha) .Call(wrap__Scene__circle, self, x, y, r, units, fill, col, lwd, alpha)
+
+Scene$len <- function() .Call(wrap__Scene__len, self)
+
+Scene$dim <- function() .Call(wrap__Scene__dim, self)
+
+Scene$render_png <- function(path) .Call(wrap__Scene__render_png, self, path)
+
+Scene$pixel <- function(x, y) .Call(wrap__Scene__pixel, self, x, y)
+
+#' @rdname Scene
+#' @usage NULL
+#' @export
+`$.Scene` <- function (self, name) { func <- Scene[[name]]; environment(func) <- environment(); func }
+
+#' @export
+`[[.Scene` <- `$.Scene`
+
 # nolint end
