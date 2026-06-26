@@ -29,6 +29,7 @@ Collate:
     'viewport.R'
     'grob.R'
     'api.R'
+    'datashade.R'
     'extendr-wrappers.R'
     'paint.R'
     'scene.R'

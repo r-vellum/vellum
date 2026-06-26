@@ -25,6 +25,15 @@ Rscript inst/benchmarks/scatter.R 1e6 /tmp   # choose N and output dir
   ~7.5 s, vellum ~2.6 s). (Note: vellum's edge here is *small* markers — for large
   markers the per-blit cost erodes it.)
 
+- **`lines.R`** — a long *self-intersecting* polyline (default 1e5 vertices). The
+  worst case for a naive stroke-to-fill backend; vellum's per-segment stroke fast
+  path makes it O(n). On the author's machine ~**2.8× faster** than grid (1e5).
+
+- **`datashade.R`** — an overplotted scatter (default 1e7 points) drawn by
+  aggregate-then-shade ([`datashade()`]) vs grid drawing tiny dots. Aggregation
+  decouples cost from point count and overplotting; on the author's machine
+  ~**35× faster** than grid at 1e7, and overplotting-honest.
+
 The `grid` timing depends on the active PNG device (cairo/quartz/…).
 
 Timings are wall-clock and machine/device dependent; treat them as relative, not

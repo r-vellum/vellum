@@ -176,6 +176,18 @@ pub trait RenderBackend {
     {
         circles_by_path(self, cx, cy, r, fill, stroke.as_ref(), transform, clip);
     }
+
+    /// Stroke a polyline / batch of disjoint segments (one `Path` whose subpaths
+    /// are the lines). The default emits the single combined stroke; the raster
+    /// backend overrides this with a per-segment fast path that avoids the
+    /// superlinear winding-fill of a self-overlapping or many-subpath stroke
+    /// outline. Vector backends keep the compact single-path form.
+    fn stroke_lines(&mut self, path: &Path, transform: Transform, color: Rgba, stroke: &StrokeStyle, clip: &Clip)
+    where
+        Self: Sized,
+    {
+        self.stroke_path(path, transform, color, stroke, clip);
+    }
 }
 
 /// One unit circle (origin, radius 1) reused with a per-element affine transform.
@@ -425,6 +437,54 @@ impl RenderBackend for RasterBackend {
         self.target().stroke_path(path, &solid_paint(color), &sk, transform, mask.as_deref());
     }
 
+    fn stroke_lines(&mut self, path: &Path, transform: Transform, color: Rgba, stroke: &StrokeStyle, clip: &Clip) {
+        if stroke.width <= 0.0 {
+            return;
+        }
+        // Fast path for grid's default line style: opaque, solid (no dash), round
+        // cap + round join. Stroke each segment independently. When opaque, drawing
+        // overlaps twice is idempotent, and a round cap covers the same disc as a
+        // round join — so the result matches the combined stroke pixel-for-pixel,
+        // but each tiny fill touches only its own few scanlines. The combined
+        // winding-fill instead pays O(active_edges x height): for a self-
+        // intersecting polyline (many outline edges crossing every scanline) or a
+        // page-spanning batch of disjoint segments that is the dominant cost.
+        let fast = color.a == 255
+            && stroke.dash.is_empty()
+            && matches!(stroke.cap, LineCap::Round)
+            && matches!(stroke.join, LineJoin::Round);
+        if !fast {
+            self.stroke_path(path, transform, color, stroke, clip);
+            return;
+        }
+        let mask = self.mask_for(clip);
+        let sk = skia_stroke(stroke);
+        let paint = solid_paint(color);
+        let target = self.targets.last_mut().expect("at least the page target");
+        use tiny_skia::PathSegment;
+        let mut prev: Option<(f32, f32)> = None;
+        for seg in path.segments() {
+            match seg {
+                PathSegment::MoveTo(p) => prev = Some((p.x, p.y)),
+                PathSegment::LineTo(p) => {
+                    if let Some((ax, ay)) = prev {
+                        let mut pb = PathBuilder::new();
+                        pb.move_to(ax, ay);
+                        pb.line_to(p.x, p.y);
+                        if let Some(sp) = pb.finish() {
+                            target.stroke_path(&sp, &paint, &sk, transform, mask.as_deref());
+                        }
+                    }
+                    prev = Some((p.x, p.y));
+                }
+                // Lines/segments are polylines only; curves/closes shouldn't occur,
+                // but track the endpoint so any stragglers connect sensibly.
+                PathSegment::QuadTo(_, p) | PathSegment::CubicTo(_, _, p) => prev = Some((p.x, p.y)),
+                PathSegment::Close => {}
+            }
+        }
+    }
+
     fn draw_text(&mut self, run: &TextRun, transform: Transform, clip: &Clip) {
         let mask = self.mask_for(clip);
         let paint = solid_paint(run.color);
@@ -498,12 +558,22 @@ impl RenderBackend for RasterBackend {
         // markers. Rasterize the marker once and blit it per point (pixel-snapped,
         // imperceptible at the densities where it triggers). Anything else falls
         // back to per-element path fills.
+        //
+        // PERF-4 (measured): the sprite blit beats both alternatives across the
+        // whole tested radius range — per-element circle fills (~1.2x slower at
+        // r=24px) and a single combined-path fill of all discs (much slower:
+        // 3e5 discs in one rasterizer sweep is ~2.7x slower than the sprite).
+        // So the sprite is kept for all uniform small-to-large markers; SPRITE_MAX_R
+        // only guards against absurd per-blit areas. The residual ~0.6x vs grid for
+        // big markers is raster throughput (grid's device circle fill is hard to
+        // beat); for huge overplotted clouds use datashade() (PERF-5) instead.
         const SPRITE_MIN: usize = 10_000;
+        const SPRITE_MAX_R: f64 = 64.0;
         let n = cx.len().min(cy.len()).min(r.len());
         let uniform_small = n >= SPRITE_MIN
             && stroke.is_none()
             && r[0] > 0.0
-            && r[0] <= 64.0
+            && r[0] <= SPRITE_MAX_R
             && r[..n].iter().all(|&v| (v - r[0]).abs() < 1e-9);
         if uniform_small {
             if let Some(ResolvedPaint::Solid(color)) = fill {

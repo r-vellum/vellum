@@ -8,6 +8,8 @@ NULL
 #' Backend identity and build info (internal diagnostic).
 rs_backend_info <- function() .Call(wrap__rs_backend_info)
 
+rs_aggregate_2d <- function(x, y, w, nx, ny, x0, x1, y0, y1) .Call(wrap__rs_aggregate_2d, x, y, w, nx, ny, x0, x1, y0, y1)
+
 #' A drawing scene held in the Rust backend. Internal: the public R API is the
 #' S7 layer (`vl_scene()`, grobs, `render()`), which compiles to this object.
 #'

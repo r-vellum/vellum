@@ -935,7 +935,7 @@ impl Scene {
                     if let (Some(path), Some(col)) = (build_poly(x, y, xu, yu, vp, false), gp.col) {
                         let style = stroke_style(&gp, vp.dpi);
                         if style.width > 0.0 {
-                            b.stroke_path(&path, t, col, &style, &clip);
+                            b.stroke_lines(&path, t, col, &style, &clip);
                         }
                     }
                 }
@@ -1079,7 +1079,7 @@ impl Scene {
                                 pb.line_to(vp.x_pos(x1[i], x1u[i]) as f32, vp.y_pos(y1[i], y1u[i]) as f32);
                             }
                             if let Some(path) = pb.finish() {
-                                b.stroke_path(&path, t, col, &style, &clip);
+                                b.stroke_lines(&path, t, col, &style, &clip);
                             }
                         }
                     }

@@ -24,14 +24,18 @@ in `inst/benchmarks/`.
 | polyline, monotone | 5e5 | 0.94 | 0.23 | **4.1×** ✓ | raster |
 | raster image | 1e6 px | 0.05 | 0.04 | **1.3×** ✓ | build (RGBA encode) |
 | rects, solid | 2e5 | 0.21 | 0.22 | ~1.0× | raster (per-elem path) |
-| points, large marker (6 mm) | 3e5 | 0.52 | 0.84 | 0.6× ✗ | raster (big sprite blits) |
-| polyline, self-intersecting | 1e5 | 5.80 | 18.3 | 0.3× ✗ | raster (tiny-skia stroke→fill) |
-| segments | 3e4 | 0.62 | 2.73 | 0.2× ✗ | raster (stroke of many sub-paths) |
+| points, large marker (6 mm) | 3e5 | 1.71 | 2.55 | 0.67× | raster (big sprite blits) |
+| points, medium marker (3 mm) | 3e5 | 1.75 | 0.97 | **1.8× ✓** | raster (sprite stamp) |
+| polyline, self-intersecting | 1e5 | 3.73 | 1.35 | **2.8× ✓** (was 0.3×) | raster (per-segment stroke) |
+| segments | 3e4 | 0.56 | 1.37 | 0.41× (was 0.2×) | raster (per-segment stroke overhead) |
+| **datashade** | 1e7 | 9.04 | 0.25 | **36× ✓✓** | aggregate-then-shade (vs grid dots) |
 | **text** | 5e3 | 0.03 | 1.87 | **0.02× ✗✗** | **compile (per-label shaping)** |
 | viewports (faceting) | 2500 | 0.57 | 2.64 | 0.2× (was 0.003×) | build now O(n); per-op overhead |
 
-vellum already wins the dense-marker and line cases (batched FFI + sprite
-stamping + one rasterize pass). The losses cluster in four root causes below.
+vellum wins the dense-marker, line, and (with `datashade()`) big-data cases
+(batched FFI + sprite stamping + per-segment strokes + one rasterize pass). The
+remaining losses (text; large markers; segments; tiny-grob faceting) and their
+status are tracked below.
 
 ## Root causes
 
@@ -96,34 +100,44 @@ Result: builder is a flat **~4.5 µs/draw regardless of N** (10k/20k/40k all 4.4
 per-call grob construction (S7 + vctrs `unit`) and compile dispatch — not the
 builder; a separate, lower-priority concern.
 
-### PERF-3 — Cheap strokes (raster)
-Get line/segment stroking to grid-class. Investigate, in order: (a) a **hairline
-fast path** — when the device stroke width ≤ ~1 px, use tiny-skia's hairline
-stroker (no outline fill) instead of stroke→fill; (b) draw `segments`/multi-group
-lines as many cheap sub-strokes rather than one giant filled outline, or chunk the
-fill; (c) for very dense/​overlapping line data, **line aggregation** (see PERF-5).
-Target: segments and self-intersecting polylines ≥ grid. Files: `src/rust/src/render.rs`
-(stroke path), maybe `scene.rs` (segments arm).
+### PERF-3 — Cheap strokes (raster) — ✅ **done** (lines win; segments improved)
+`stroke_lines()` (a new `RenderBackend` method) replaces the single combined
+stroke for `Lines`/`Segments`. The raster backend takes a **per-segment fast
+path** for grid's *default* line style — opaque, solid (no dash), round cap +
+round join: each segment is stroked independently. When the colour is opaque,
+drawing overlaps twice is idempotent, and a round cap covers the same disc as a
+round join, so the result is **pixel-identical** to the combined stroke for that
+style — but each tiny fill touches only its own few scanlines, avoiding the
+`O(active_edges × height)` winding-fill of a self-overlapping / page-spanning
+outline. Non-default styles (dashed, butt/square cap, translucent) fall back to
+the combined stroke. (`src/rust/src/render.rs`, `scene.rs` Lines/Segments arms.)
+Result: **self-intersecting polyline 1e5: 18.3 s → 1.35 s (0.3× → 2.8×, now
+wins)**; **segments 3e4: 2.73 s → 1.37 s (0.2× → 0.41×)**. Monotone lines (already
+winning) unaffected. Segments still trail grid (see "remaining" below): ~45 µs per
+segment of per-call stroke setup vs grid's dedicated polyline rasterizer.
 
-### PERF-4 — Marker threshold tuning (raster)
-Pick sprite-stamp vs per-element fill by *marker pixel size* (sprite wins small,
-fill wins large), and reuse the marker sprite across a batch. Restores ≥ grid for
-large markers without losing the small-marker win. Files: `src/rust/src/render.rs`
-(`draw_circles`).
+### PERF-4 — Marker threshold (raster) — ✅ **done** (measured; sprite kept)
+The premise ("per-element fill wins for large markers") turned out **false** when
+measured. For uniform solid markers the sprite blit beats both alternatives across
+the whole radius range: at 6 mm (r≈24 px, 3e5 pts) sprite = 0.67×, per-element
+circle fill = 0.51×, single combined-path fill of all discs = 0.25×. So the sprite
+is kept for the entire uniform small-to-large range (`SPRITE_MAX_R` only guards
+absurd per-blit areas). Medium markers (3 mm) already **win at 1.8×**. The residual
+~0.67× at large markers is raster throughput — grid's device circle fill is hard to
+beat per-pixel; the real lever for huge overplotted clouds is PERF-5. Net code: the
+threshold is now a documented knob; no regression. (`src/rust/src/render.rs`
+`draw_circles`.)
 
-### PERF-5 — Aggregate-then-shade (datashader fold-in) — *the big-data lever*
-For data beyond per-glyph practicality (overplotted, ≫1e6), the win is not "draw
-markers faster" but **don't draw markers at all**: bin points (and lines) into a
-canvas-sized aggregate grid in one O(N) Rust pass, then colormap the grid to a
-raster (embedded via P4's `draw_image`). This is what makes datashader fast —
-aggregation decouples cost from point count *and* overplotting; the Rust tight
-loop is our analog of its Numba kernel (GPU/Dask out of scope). It beats *both*
-grid and per-marker vellum for huge scatter/line/heatmap data, and is
-overplotting-honest. Bring the perceptual colormapping with it (histogram
-equalization `eq_hist`, log, percentile clamp) so dense structure is visible.
-(Design already sketched in DESIGN §11.) Likely lives in a `datashade()`-style
-helper / future stat layer, not the core primitives. Larger, higher-level work —
-sequence after PERF-1..4.
+### PERF-5 — Aggregate-then-shade (datashader fold-in) — ✅ **done**
+`datashade(x, y, …)` (R) bins points into a `width × height` grid in one O(N) Rust
+pass (`rs_aggregate_2d`, `src/rust/src/aggregate.rs`), shades the grid (`eq_hist`
+histogram-equalisation by default, plus `log`/`cbrt`/`linear`) through a colour
+ramp, and returns a single `raster_grob` you draw like any other grob (drawn via
+the existing `draw_image` path). Aggregation decouples cost from point count *and*
+overplotting — the Rust tight loop is our analog of datashader's Numba kernel
+(GPU/Dask out of scope). Result: **1e7 points: grid dots 9.04 s → datashade
+0.25 s (~36×)**, and overplotting-honest. Optional per-point `weight` sums instead
+of counting. (`R/datashade.R`, `inst/benchmarks/datashade.R`.)
 
 ### PERF-6 — Tiled parallel rasterization (optional)
 tiny-skia is single-threaded; tile the page and rasterize tiles across cores with
@@ -131,27 +145,74 @@ tiny-skia is single-threaded; tile the page and rasterize tiles across cores wit
 A new vendored dep and real complexity — revisit only if PERF-1..5 leave a
 raster-bound gap that matters.
 
-## Cross-cutting / smaller ideas
+### PERF-6 — Tiled parallel rasterization (optional)
+tiny-skia is single-threaded; tile the page and rasterize tiles across cores with
+`rayon` for raster-bound fills (large markers, big polygons, full-page gradients).
+A new vendored dep and real complexity — revisit only if the gaps below matter.
+
+## Remaining improvements (what's left, by size)
+
+After PERF-1..5, four gaps to grid remain. None is catastrophic; here is what each
+would take.
+
+**Major (real engineering, possible fidelity trade-offs):**
+
+- **Text at high *distinct*-label counts** (~3–9× behind grid). Two costs: shaping
+  goes through `textshaping` (R/HarfBuzz wrapper, slower than the device's internal
+  C path), and the raster backend fills crisp **glyph outlines** rather than
+  blitting cached glyph bitmaps. *Fix:* a sub-pixel **glyph-bitmap cache** (rasterize
+  each (glyph, size, subpixel-phase) once, blit thereafter) — would close most of
+  the raster half, but risks the font fidelity that is a core goal, so it needs a
+  careful AA/hinting story. The shaping half needs caching shaped runs across
+  identical (string, font) or a faster shaper. Biggest remaining user-visible gap.
+
+- **Large markers** (~0.67× at 6 mm). Pure raster throughput: the sprite blit is
+  already the best of the strategies tried, but grid's device circle fill writes
+  fewer pixels per marker. *Fix options:* (a) SIMD/word-at-a-time sprite blit for
+  the opaque no-clip case; (b) PERF-6 tiled parallel raster; (c) steer users to
+  `datashade()` when the cloud is large enough that markers overplot anyway. Modest
+  upside; only matters for many *large* markers (an unusual combination).
+
+**Minor (mechanical, no fidelity risk):**
+
+- **Segments** (~0.41×). The per-segment fast path fixed the asymptotics but pays
+  ~per-call stroke-setup overhead (a `PathBuilder` + stroker per segment). *Fix:*
+  reuse one `PathBuilder`/`Stroke` across the batch, or hand-roll a thin
+  round-capped-quad rasterizer for the width≤~2 px case — bounded win, since grid's
+  dedicated polyline rasterizer is genuinely fast here.
+
+- **Tiny-grob faceting** (~0.2× at 2500 panels of trivial content). The builder is
+  now O(n); the residual is per-grob **construction** (S7 object + vctrs `unit`
+  records) and per-node `compile` dispatch on the R side, not drawing. *Fix:*
+  lighter-weight unit construction (avoid a vctrs record per coordinate where a
+  bare numeric + code would do), or a batched compile path for homogeneous
+  children. Pure R-side overhead; scales fine, just a constant.
+
+**Cross-cutting / smaller ideas (unchanged):**
 - **Rect sprite/uniform fast path** for equal-size solid rects (geom_tile-like),
-  mirroring circles.
+  mirroring circles — would lift the ~1.0× rects tie.
 - **Render-result caching**: memoise the compiled backend `Scene`/`Pixmap` for
   repeated renders (resize, animation); the tree is immutable so a content hash
   keys it.
-- **Avoid the redundant transparent page-fill** already done; audit other
-  per-draw allocations (clip-mask clones for deep clip trees).
-- **Lower-precision measure dpi** is already used for grobwidth; keep measurement
-  paths cheap.
+- **datashade line/area aggregation**: extend `rs_aggregate_2d` to rasterize line
+  segments into the grid (Bresenham/​DDA) for the dense-timeseries case, mirroring
+  datashader's line canvas.
+- **Audit per-draw allocations** (clip-mask clones for deep clip trees).
 
 ## Reproduce
 ```sh
 Rscript inst/benchmarks/scatter.R          # general 1e6 scatter
 Rscript inst/benchmarks/points-cloud.R     # dense small-marker cloud (vellum win)
+Rscript inst/benchmarks/lines.R            # self-intersecting polyline (PERF-3 win)
+Rscript inst/benchmarks/datashade.R        # 1e7 aggregate-then-shade (PERF-5 win)
 # the full cross-primitive probe used for the table above lives in this doc's
 # history; re-run by adapting inst/benchmarks/*.R per aspect.
 ```
 
 ## Status
-Findings captured. **PERF-1 (batched text)** and **PERF-2 (O(1) scene builder)**
-are ✅ done — the two that moved the most plots. Remaining: PERF-3 (cheap strokes),
-PERF-4 (marker threshold), PERF-5 (aggregate-then-shade / datashader), PERF-6
-(tiled parallel raster, optional).
+**PERF-1..5 are ✅ done.** Text batching (PERF-1) and the O(1) scene builder
+(PERF-2) moved the most plots; per-segment strokes (PERF-3) turned the worst case
+(self-intersecting lines) into a win; the marker threshold (PERF-4) was measured
+and the sprite kept; `datashade()` (PERF-5) is the big-data lever (~36× at 1e7).
+Remaining gaps and their cost are catalogued under *Remaining improvements* above;
+PERF-6 (tiled parallel raster) stays optional, pursued only if those gaps bite.

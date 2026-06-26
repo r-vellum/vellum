@@ -1,5 +1,6 @@
 use extendr_api::prelude::*;
 
+mod aggregate;
 mod color;
 mod font;
 mod render;
@@ -19,4 +20,5 @@ extendr_module! {
     mod vellum;
     fn rs_backend_info;
     use scene;
+    use aggregate;
 }

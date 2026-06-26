@@ -42,8 +42,9 @@ render(scene, path)
 }
 \description{
 \code{vl_scene()} creates an empty scene. \code{\link[=push]{push()}} adds a viewport (and descends
-into it), \code{\link[=draw]{draw()}} adds a grob, \code{\link[=pop]{pop()}} ascends. All return a new scene value
-(the scene is immutable). \code{\link[=render]{render()}} compiles the scene and writes a PNG.
+into it), \code{\link[=draw]{draw()}} adds a grob, \code{\link[=pop]{pop()}} ascends. The builder is a linear pipe;
+a \emph{rendered or edited} scene is an immutable value (\code{\link[=edit_node]{edit_node()}} copies on
+modify). \code{\link[=render]{render()}} compiles the scene and writes the output.
 }
 \examples{
 s <- vl_scene(width = 4, height = 3) |>

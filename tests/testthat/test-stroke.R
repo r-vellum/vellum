@@ -81,6 +81,33 @@ test_that("PDF renders dashed strokes without error", {
   expect_equal(rawToChar(readBin(f, "raw", 5)), "%PDF-")
 })
 
+# PERF-3: per-segment stroke fast path (opaque, solid, round cap/join).
+test_that("a bent polyline is continuous through the vertex (round join filled)", {
+  # Two segments meeting at (0.5, 0.8); the join must not leave a gap.
+  s <- vl_scene(1, 1, dpi = 100, bg = "white") |>
+    draw(lines_grob(unit(c(0.2, 0.5, 0.8), "npc"), unit(c(0.2, 0.8, 0.2), "npc"),
+                    gp = gpar(col = "black", lwd = 4)))
+  apex <- px(s, 50, 20) # device y=20 ~ npc y=0.8
+  expect_lt(apex[1], 128L) # dark at the apex -> join is filled, no gap
+})
+
+test_that("a segments grob strokes every segment", {
+  s <- vl_scene(1, 1, dpi = 100, bg = "white") |>
+    draw(segments_grob(c(0.1, 0.1), c(0.2, 0.8), c(0.9, 0.9), c(0.2, 0.8),
+                       gp = gpar(col = "black", lwd = 3)))
+  expect_lt(px(s, 50, 80)[1], 128L) # lower segment (npc y=0.2 -> dev y=80)
+  expect_lt(px(s, 50, 20)[1], 128L) # upper segment (npc y=0.8 -> dev y=20)
+})
+
+test_that("a translucent line still renders (fast path falls back)", {
+  s <- vl_scene(2, 1, dpi = 100, bg = "white") |>
+    draw(lines_grob(unit(c(0.02, 0.98), "npc"), unit(c(0.5, 0.5), "npc"),
+                    gp = gpar(col = "#000000", lwd = 6, alpha = 0.5)))
+  mid <- px(s, 100, 50)
+  expect_gt(mid[1], 0L)   # blended grey, not pure black
+  expect_lt(mid[1], 200L) # but clearly darkened
+})
+
 test_that("invalid lty is rejected (at compile time)", {
   expect_error(.scene_to_backend(hline(gpar(col = "black", lty = "zzz"))), "lty")
 })
