@@ -64,7 +64,36 @@ fn rs_aggregate_2d(x: &[f64], y: &[f64], w: Robj, nx: i32, ny: i32, x0: f64, x1:
     grid
 }
 
+// Iterate a strange-attractor map `n` steps from `(x0, y0)`, returning the orbit
+// as a flat `[x0..xn, y0..yn]` vector (length `2n`; the R side splits it). The
+// per-step recurrence is sequential (each point depends on the last), so this
+// tight Rust loop is the analog of datashader's Numba kernel — it makes 10M-point
+// attractors practical to feed `datashade()`. `kind` selects the family; unknown
+// kinds fall back to Clifford. Internal (used by inst/examples/attractors.R).
+#[extendr]
+#[allow(clippy::many_single_char_names)]
+fn rs_attractor(kind: &str, n: i32, a: f64, b: f64, c: f64, d: f64, x0: f64, y0: f64) -> Vec<f64> {
+    let n = n.max(0) as usize;
+    let mut out = vec![0.0f64; 2 * n];
+    let (mut x, mut y) = (x0, y0);
+    for i in 0..n {
+        let (nx, ny) = match kind {
+            "dejong" => ((a * y).sin() - (b * x).cos(), (c * x).sin() - (d * y).cos()),
+            "svensson" => (d * (a * x).sin() - (b * y).sin(), c * (a * x).cos() + (b * y).cos()),
+            "bedhead" => ((x * y / b).sin() * y + (a * x - y).cos(), x + (y).sin() / b),
+            // clifford (default)
+            _ => ((a * y).sin() + c * (a * x).cos(), (b * x).sin() + d * (b * y).cos()),
+        };
+        x = nx;
+        y = ny;
+        out[i] = x;
+        out[n + i] = y;
+    }
+    out
+}
+
 extendr_module! {
     mod aggregate;
     fn rs_aggregate_2d;
+    fn rs_attractor;
 }
