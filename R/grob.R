@@ -32,7 +32,13 @@ grob_polygon <- S7::new_class("grob_polygon", parent = grob, package = "vellum",
 grob_circle <- S7::new_class("grob_circle", parent = grob, package = "vellum",
   properties = list(x = .unit_prop(), y = .unit_prop(), r = .unit_prop("unit(0.25, \"npc\")")))
 grob_points <- S7::new_class("grob_points", parent = grob, package = "vellum",
-  properties = list(x = .unit_prop(), y = .unit_prop(), size = .unit_prop("unit(2, \"mm\")")))
+  properties = list(
+    x = .unit_prop(), y = .unit_prop(), size = .unit_prop("unit(2, \"mm\")"),
+    shape = S7::new_property(S7::class_character, default = "circle")
+  ))
+
+# Marker shape names -> backend codes (must match the `markers` arm in scene.rs).
+.marker_codes <- c(circle = 0L, square = 1L, triangle = 2L, diamond = 3L, plus = 4L, cross = 5L)
 grob_text <- S7::new_class("grob_text", parent = grob, package = "vellum",
   properties = list(
     label = S7::new_property(S7::class_character),
@@ -124,14 +130,24 @@ circle_grob <- function(x = 0.5, y = 0.5, r = 0.25, gp = gpar(), name = NULL, vp
 
 #' @rdname grob
 #' @param size Point size ([unit()] or numeric).
+#' @param shape Marker shape(s): `"circle"` (default), `"square"`, `"triangle"`,
+#'   `"diamond"`, `"plus"`, or `"cross"`, recycled per point. Filled shapes use
+#'   `gp$fill` (and outline `gp$col`); `"plus"`/`"cross"` are stroke-only.
 #' @export
-points_grob <- function(x, y, size = unit(2, "mm"), gp = gpar(), name = NULL, vp = NULL) {
+points_grob <- function(x, y, size = unit(2, "mm"), shape = "circle",
+                        gp = gpar(), name = NULL, vp = NULL) {
   n <- .coord_n(x, y)
   sz <- as_unit(size, "mm")
   .check_extent(sz, "size")
+  shape <- as.character(shape)
+  bad <- setdiff(unique(shape), names(.marker_codes))
+  if (length(bad)) {
+    cli::cli_abort("Unknown point {.arg shape}: {.val {bad}}. Use {.or {names(.marker_codes)}}.")
+  }
   grob_points(x = vctrs::vec_recycle(as_unit(x), n),
               y = vctrs::vec_recycle(as_unit(y), n),
               size = vctrs::vec_recycle(sz, n),
+              shape = vctrs::vec_recycle(shape, n),
               gp = gp, name = name, vp = vp)
 }
 

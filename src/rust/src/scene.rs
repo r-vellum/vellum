@@ -167,6 +167,14 @@ enum Node {
         xu: Vec<Unit>, yu: Vec<Unit>, ru: Vec<Unit>,
         gp: PartialGpar,
     },
+    /// A batch of point markers with per-element `shape` codes (0 circle, 1 square,
+    /// 2 triangle, 3 diamond, 4 plus, 5 cross); `size` is the marker radius.
+    Markers {
+        x: Vec<f64>, y: Vec<f64>, size: Vec<f64>,
+        xu: Vec<Unit>, yu: Vec<Unit>, su: Vec<Unit>,
+        shape: Vec<u32>,
+        gp: PartialGpar,
+    },
     /// A batch of disjoint line segments `(x0,y0)->(x1,y1)`, stroked in one pass.
     Segments {
         x0: Vec<f64>, y0: Vec<f64>, x1: Vec<f64>, y1: Vec<f64>,
@@ -205,6 +213,7 @@ impl Node {
             | Node::Circle { gp, .. }
             | Node::Rects { gp, .. }
             | Node::Circles { gp, .. }
+            | Node::Markers { gp, .. }
             | Node::Segments { gp, .. }
             | Node::Path { gp, .. }
             | Node::Text { gp, .. } => gp,
@@ -451,6 +460,25 @@ impl Scene {
         self.emit_node(Node::Circles {
             x: x.to_vec(), y: y.to_vec(), r: r.to_vec(),
             xu: codes(xu), yu: codes(yu), ru: codes(ru), gp,
+        });
+    }
+
+    /// A batch of markers (point glyphs) sharing one gpar. Like `circles` but each
+    /// element carries a `shape` code (0 circle, 1 square, 2 triangle, 3 diamond,
+    /// 4 plus, 5 cross); `size` is the marker radius. Filled shapes fill+stroke per
+    /// gpar; plus/cross are stroke-only. (circle_grob / default points use the
+    /// faster `circles` path; this is for shape variety.)
+    #[allow(clippy::too_many_arguments)]
+    fn markers(
+        &mut self, x: &[f64], y: &[f64], size: &[f64],
+        xu: &[i32], yu: &[i32], su: &[i32], shape: &[i32],
+        fill: Robj, col: Robj, lwd: Robj, alpha: Robj, stroke: Robj,
+    ) {
+        let gp = PartialGpar::from_robj(&fill, &col, &lwd, &alpha, &stroke);
+        self.emit_node(Node::Markers {
+            x: x.to_vec(), y: y.to_vec(), size: size.to_vec(),
+            xu: codes(xu), yu: codes(yu), su: codes(su),
+            shape: shape.iter().map(|&v| v.max(0) as u32).collect(), gp,
         });
     }
 
@@ -1042,6 +1070,74 @@ impl Scene {
                                 }
                                 if let Some(c) = stroke {
                                     b.stroke_path(&path, t, c, &style, &clip);
+                                }
+                            }
+                        }
+                    }
+                }
+                Node::Markers { x, y, size, xu, yu, su, shape, .. } => {
+                    let n = [x.len(), y.len(), size.len(), xu.len(), yu.len(), su.len(), shape.len()]
+                        .into_iter().min().unwrap_or(0);
+                    let style = stroke_style(&gp, vp.dpi);
+                    for i in 0..n {
+                        let cx = vp.x_pos(x[i], xu[i]);
+                        let cy = vp.y_pos(y[i], yu[i]);
+                        let rr = vp.r_len(size[i], su[i]);
+                        if rr <= 0.0 {
+                            continue;
+                        }
+                        let (cxf, cyf, rrf) = (cx as f32, cy as f32, rr as f32);
+                        let mut pb = PathBuilder::new();
+                        match shape[i] {
+                            // plus / cross: stroke-only line glyphs (no fill)
+                            4 | 5 => {
+                                if shape[i] == 4 {
+                                    pb.move_to(cxf, cyf - rrf);
+                                    pb.line_to(cxf, cyf + rrf);
+                                    pb.move_to(cxf - rrf, cyf);
+                                    pb.line_to(cxf + rrf, cyf);
+                                } else {
+                                    let d = rrf * std::f32::consts::FRAC_1_SQRT_2;
+                                    pb.move_to(cxf - d, cyf - d);
+                                    pb.line_to(cxf + d, cyf + d);
+                                    pb.move_to(cxf - d, cyf + d);
+                                    pb.line_to(cxf + d, cyf - d);
+                                }
+                                if let (Some(path), Some(col)) = (pb.finish(), gp.col) {
+                                    if style.width > 0.0 {
+                                        b.stroke_lines(&path, t, col, &style, &clip);
+                                    }
+                                }
+                            }
+                            // filled / outlined polygons + circle (y-down: -y is up)
+                            s => {
+                                match s {
+                                    1 => {
+                                        pb.move_to(cxf - rrf, cyf - rrf);
+                                        pb.line_to(cxf + rrf, cyf - rrf);
+                                        pb.line_to(cxf + rrf, cyf + rrf);
+                                        pb.line_to(cxf - rrf, cyf + rrf);
+                                        pb.close();
+                                    }
+                                    2 => {
+                                        pb.move_to(cxf, cyf - rrf);
+                                        pb.line_to(cxf + 0.866 * rrf, cyf + 0.5 * rrf);
+                                        pb.line_to(cxf - 0.866 * rrf, cyf + 0.5 * rrf);
+                                        pb.close();
+                                    }
+                                    3 => {
+                                        pb.move_to(cxf, cyf - rrf);
+                                        pb.line_to(cxf + rrf, cyf);
+                                        pb.line_to(cxf, cyf + rrf);
+                                        pb.line_to(cxf - rrf, cyf);
+                                        pb.close();
+                                    }
+                                    _ => {
+                                        pb.push_circle(cxf, cyf, rrf);
+                                    }
+                                }
+                                if let Some(path) = pb.finish() {
+                                    fill_then_stroke(b, &path, &gp, t, &clip, vp, FillRule::Winding);
                                 }
                             }
                         }

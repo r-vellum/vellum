@@ -73,3 +73,25 @@ test_that("the sprite path respects clipping", {
   # The viewport occupies the central 40%; outside it must stay background.
   expect_equal(px(s, 5, 5)[1:3], c(255L, 255L, 255L))
 })
+
+# FW2(a): point marker shapes.
+test_that("point markers render distinct shapes; default circle keeps the fast path", {
+  shp <- function(shape, gp) {
+    vl_scene(1, 1, dpi = 100, bg = "white") |>
+      draw(points_grob(unit(0.5, "npc"), unit(0.5, "npc"), size = unit(0.4, "npc"), shape = shape, gp = gp))
+  }
+  blue <- gpar(fill = "blue", col = NA)
+  # filled shapes paint the centre blue
+  for (s in c("circle", "square", "triangle", "diamond")) {
+    expect_equal(px(shp(s, blue), 50, 50)[1:3], c(0L, 0L, 255L), info = s)
+  }
+  # a corner: inside the square, outside the circle
+  expect_equal(px(shp("square", blue), 12, 12)[1:3], c(0L, 0L, 255L))
+  expect_equal(px(shp("circle", blue), 12, 12)[1:3], c(255L, 255L, 255L))
+  # plus is stroke-only: centre inked, mid-quadrant empty
+  pl <- shp("plus", gpar(col = "black", lwd = 3))
+  expect_lt(px(pl, 50, 50)[1], 128L)
+  expect_equal(px(pl, 70, 30)[1:3], c(255L, 255L, 255L))
+  # an unknown shape errors
+  expect_error(points_grob(0.5, 0.5, shape = "hexagon"), "shape")
+})

@@ -58,6 +58,14 @@ rs_attractor <- function(kind, n, a, b, c, d, x0, y0) .Call(wrap__rs_attractor, 
 #'`points`, with the radius carrying the marker size).
 #'}
 #'
+#'\subsection{Method `markers`}{
+#'A batch of markers (point glyphs) sharing one gpar. Like `circles` but each
+#'element carries a `shape` code (0 circle, 1 square, 2 triangle, 3 diamond,
+#'4 plus, 5 cross); `size` is the marker radius. Filled shapes fill+stroke per
+#'gpar; plus/cross are stroke-only. (circle_grob / default points use the
+#'faster `circles` path; this is for shape variety.)
+#'}
+#'
 #'\subsection{Method `segments`}{
 #'A batch of disjoint line segments (stroke only), sharing one gpar.
 #'}
@@ -169,6 +177,8 @@ Scene$circle <- function(x, y, r, xu, yu, ru, fill, col, lwd, alpha, stroke) .Ca
 Scene$rects <- function(x, y, w, h, xu, yu, wu, hu, fill, col, lwd, alpha, stroke) .Call(wrap__Scene__rects, self, x, y, w, h, xu, yu, wu, hu, fill, col, lwd, alpha, stroke)
 
 Scene$circles <- function(x, y, r, xu, yu, ru, fill, col, lwd, alpha, stroke) .Call(wrap__Scene__circles, self, x, y, r, xu, yu, ru, fill, col, lwd, alpha, stroke)
+
+Scene$markers <- function(x, y, size, xu, yu, su, shape, fill, col, lwd, alpha, stroke) .Call(wrap__Scene__markers, self, x, y, size, xu, yu, su, shape, fill, col, lwd, alpha, stroke)
 
 Scene$segments <- function(x0, y0, x1, y1, x0u, y0u, x1u, y1u, col, lwd, alpha, stroke) .Call(wrap__Scene__segments, self, x0, y0, x1, y1, x0u, y0u, x1u, y1u, col, lwd, alpha, stroke)
 

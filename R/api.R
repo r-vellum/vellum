@@ -313,8 +313,21 @@ S7::method(compile, grob_circle) <- function(node, scene) {
 }
 
 S7::method(compile, grob_points) <- function(node, scene) {
-  # Points are circles whose radius carries the marker size (in mm).
-  .compile_circles(node, scene, node@size, "mm")
+  codes <- unname(.marker_codes[node@shape])
+  if (all(codes == 0L)) {
+    # All circles: the batched circle path (radius carries marker size, sprite
+    # fast-path for dense clouds).
+    .compile_circles(node, scene, node@size, "mm")
+  } else {
+    .with_vp(node, scene, {
+      n <- vctrs::vec_size_common(node@x, node@y, node@size)
+      ex <- .coord(node@x, "npc", n); ey <- .coord(node@y, "npc", n); es <- .coord(node@size, "mm", n)
+      g <- .gp4(node@gp, scene)
+      scene$markers(ex$value, ey$value, es$value, ex$code, ey$code, es$code,
+                    vctrs::vec_recycle(as.integer(codes), n),
+                    g$fill, g$col, g$lwd, g$alpha, g$stroke)
+    })
+  }
 }
 
 S7::method(compile, grob_segments) <- function(node, scene) {
