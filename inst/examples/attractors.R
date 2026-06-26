@@ -41,21 +41,20 @@ specs <- list(
   list(name = "Bedhead",   kind = "bedhead",  a = -0.81, b = -0.92, c = 0, d = 0)
 )
 
-# Random colormaps: a curated set of dark -> bright ramps (so low-density regions
-# fade into the black background and dense filaments glow). One per panel, picked
-# at random and sometimes reversed.
+# Random colormaps: a curated set of light -> dark ramps, so on the white page
+# low-density regions fade into the background and dense filaments are saturated.
+# One per panel, picked at random.
 palettes <- list(
-  inferno = c("#000004", "#420a68", "#932667", "#dd513a", "#fca50a", "#fcffa4"),
-  ice     = c("#040613", "#122a59", "#1c63a8", "#3fa0d6", "#a9e3f2", "#ffffff"),
-  fire    = c("#000000", "#5c0000", "#b81d13", "#ef7e0d", "#ffd500", "#ffffff"),
-  kgy     = c("#000000", "#0b3d0b", "#2e8b2e", "#9be564", "#fbffb0"),
-  bmy     = c("#000000", "#1a0b4b", "#6a00a8", "#cf4bb0", "#ffd0e0"),
-  cet     = c("#03051a", "#2c1a73", "#7b2382", "#c43c75", "#f06b51", "#f7e36b")
+  blues   = c("#ffffff", "#c6dbef", "#6baed6", "#2171b5", "#08306b"),
+  reds    = c("#ffffff", "#fcbba1", "#fb6a4a", "#cb181d", "#67000d"),
+  greens  = c("#ffffff", "#c7e9c0", "#74c476", "#238b45", "#00441b"),
+  purples = c("#ffffff", "#dadaeb", "#9e9ac8", "#6a51a3", "#3f007d"),
+  oranges = c("#ffffff", "#fdd0a2", "#fd8d3c", "#d94801", "#7f2704"),
+  magma   = c("#ffffff", "#fca50a", "#dd513a", "#932667", "#000004"),
+  ocean   = c("#ffffff", "#a9e3f2", "#3fa0d6", "#1c63a8", "#040613"),
+  forest  = c("#ffffff", "#9be564", "#2e8b2e", "#0b3d0b", "#000000")
 )
-random_palette <- function() {
-  p <- palettes[[sample(length(palettes), 1)]]
-  if (runif(1) < 0.5) rev(p) else p
-}
+random_palette <- function() palettes[[sample(length(palettes), 1)]]
 
 # --- gallery layout ---------------------------------------------------------
 ncol <- 3
@@ -66,7 +65,7 @@ dpi <- 100
 cell_px_w <- round(W * dpi / ncol) # datashade canvas = cell pixel size (crisp)
 cell_px_h <- round(H * dpi / nrow)
 
-s <- vl_scene(width = W, height = H, dpi = dpi, bg = "black") |>
+s <- vl_scene(width = W, height = H, dpi = dpi, bg = "white") |>
   push(viewport(layout = grid_layout(
     widths = unit(rep(1, ncol), "null"), heights = unit(rep(1, nrow), "null")
   )))
@@ -100,7 +99,7 @@ for (i in seq_along(specs)) {
     push(viewport(row = row, col = col)) |>
     draw(img) |>
     draw(text_grob(sp$name, x = 0.04, y = 0.95, just = c("left", "top"),
-                   gp = gpar(col = "#ffffffcc", fontsize = 13))) |>
+                   gp = gpar(col = "#222222cc", fontsize = 13))) |>
     pop()
 }
 
