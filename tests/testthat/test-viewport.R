@@ -1,3 +1,16 @@
+test_that("deeply nested clips render correctly (clip-mask cache eviction)", {
+  # More nested clips than the backend's clip-mask LRU capacity, so the cache
+  # evicts and recomputes masks mid-walk; output must stay correct regardless.
+  s <- vl_scene(3, 3, dpi = 100, bg = "white")
+  for (i in seq_len(12)) s <- push(s, viewport(width = 0.92, height = 0.92, clip = TRUE))
+  s <- draw(s, circle_grob(r = 2, gp = gpar(fill = "tomato", col = NA)))
+  centre <- px(s, 150, 150)[1:3]
+  corner <- px(s, 3, 3)[1:3] # outside every clip -> background
+  expect_gt(centre[1], 200) # tomato: high red...
+  expect_lt(centre[3], 120) # ...low blue
+  expect_equal(corner, c(255L, 255L, 255L))
+})
+
 test_that("a nested viewport places drawing in the right region", {
   # child centred in the top-left quadrant (npc y=0.75 is near the top)
   s <- vl_scene(width = 1, height = 1, dpi = 100, bg = "white") |>

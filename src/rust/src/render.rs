@@ -309,10 +309,19 @@ pub struct RasterBackend {
     /// Per-open-group mask (parallel to the layer stack above the page); applied
     /// when the group closes.
     group_masks: Vec<Option<MaskLayer>>,
-    masks: HashMap<usize, Option<Rc<Mask>>>,
+    /// Bounded LRU of compiled clip masks (most-recent first). tiny-skia requires
+    /// a clip `Mask` to match the target pixmap size, so each entry is page-sized
+    /// and cannot be shrunk to a bounding box; instead we cap how many stay
+    /// resident. Primitives sharing a clip are drawn contiguously, so a small
+    /// cache captures essentially all reuse while keeping memory bounded on pages
+    /// with very many distinct clips or deep clip trees.
+    clip_cache: Vec<(usize, Option<Rc<Mask>>)>,
     w: u32,
     h: u32,
 }
+
+/// Max page-sized clip masks kept resident at once (see `clip_cache`).
+const CLIP_CACHE_CAP: usize = 8;
 
 impl RasterBackend {
     pub fn new(w: u32, h: u32, bg: Rgba) -> Self {
@@ -323,7 +332,7 @@ impl RasterBackend {
         if bg.a != 0 {
             pm.fill(bg.to_skia());
         }
-        RasterBackend { targets: vec![pm], group_masks: Vec::new(), masks: HashMap::new(), w, h }
+        RasterBackend { targets: vec![pm], group_masks: Vec::new(), clip_cache: Vec::new(), w, h }
     }
 
     pub fn into_pixmap(mut self) -> Pixmap {
@@ -339,8 +348,12 @@ impl RasterBackend {
         if clip.shapes.is_empty() {
             return None;
         }
-        if let Some(m) = self.masks.get(&clip.id) {
-            return m.clone();
+        if let Some(pos) = self.clip_cache.iter().position(|(id, _)| *id == clip.id) {
+            // Cache hit: promote to most-recent and return.
+            let entry = self.clip_cache.remove(pos);
+            let val = entry.1.clone();
+            self.clip_cache.insert(0, entry);
+            return val;
         }
         let mut m = page_mask(self.w, self.h);
         for shape in clip.shapes {
@@ -356,7 +369,10 @@ impl RasterBackend {
             }
         }
         let m = Some(Rc::new(m));
-        self.masks.insert(clip.id, m.clone());
+        // Insert most-recent-first; evicting the oldest keeps memory bounded. An
+        // evicted mask still in use survives via the Rc the caller already holds.
+        self.clip_cache.insert(0, (clip.id, m.clone()));
+        self.clip_cache.truncate(CLIP_CACHE_CAP);
         m
     }
 }
