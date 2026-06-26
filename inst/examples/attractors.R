@@ -98,8 +98,6 @@ for (i in seq_along(specs)) {
   s <- s |>
     push(viewport(row = row, col = col)) |>
     draw(img) |>
-    draw(text_grob(sp$name, x = 0.04, y = 0.95, just = c("left", "top"),
-                   gp = gpar(col = "#222222cc", fontsize = 13))) |>
     pop()
 }
 
