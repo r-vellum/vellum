@@ -660,6 +660,31 @@ impl Scene {
         out
     }
 
+    /// Render and return the tight bounding box of non-transparent content as
+    /// `c(min_x, min_y, max_x, max_y)` (device px, inclusive), or an empty vector
+    /// if nothing was drawn. Used to measure a grob's extent (grobwidth/height).
+    fn content_bbox(&self) -> Vec<i32> {
+        let pm = self.rasterize();
+        let w = self.w_px as usize;
+        let (mut minx, mut miny, mut maxx, mut maxy) = (usize::MAX, usize::MAX, 0usize, 0usize);
+        let mut any = false;
+        for (i, p) in pm.pixels().iter().enumerate() {
+            if p.alpha() > 0 {
+                let (x, y) = (i % w, i / w);
+                any = true;
+                minx = minx.min(x);
+                miny = miny.min(y);
+                maxx = maxx.max(x);
+                maxy = maxy.max(y);
+            }
+        }
+        if any {
+            vec![minx as i32, miny as i32, maxx as i32, maxy as i32]
+        } else {
+            Vec::new()
+        }
+    }
+
     /// Render and return the RGBA of device pixel `(x, y)` as `c(r, g, b, a)`.
     fn pixel(&self, x: i32, y: i32) -> Vec<i32> {
         let pm = self.rasterize();

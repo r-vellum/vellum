@@ -200,6 +200,53 @@ text_grob <- function(label, x = 0.5, y = 0.5, just = "centre", rot = 0,
             gp = gp, name = name, vp = vp)
 }
 
+#' Size a unit by a grob's extent
+#'
+#' `grobwidth(grob)` and `grobheight(grob)` return a [unit()] equal to the drawn
+#' width/height of `grob` — handy for sizing a [viewport()] or [grid_layout()]
+#' track to its contents (e.g. a margin to an axis label). The extent is measured
+#' **eagerly** to absolute millimetres at construction, so it is exact for text
+#' and absolute-unit (`mm`/`in`/`pt`) grobs. A grob sized in `npc`/`native` has no
+#' viewport-independent extent and is measured against a fixed reference, so for
+#' those prefer `npc`/`native` directly.
+#'
+#' @param grob A grob (or composite subtree) to measure.
+#' @param mult A multiplier on the measured extent (default 1).
+#' @return A `unit` (in millimetres).
+#' @examples
+#' grobwidth(text_grob("A wide axis label", gp = gpar(fontsize = 14)))
+#' grobheight(rect_grob(height = unit(8, "mm")))
+#' @export
+grobwidth <- function(grob, mult = 1) unit(mult, "grobwidth", data = grob)
+
+#' @rdname grobwidth
+#' @export
+grobheight <- function(grob, mult = 1) unit(mult, "grobheight", data = grob)
+
+# A grob's drawn extent as c(width_mm, height_mm). Text uses exact (advance)
+# metrics; any other grob (incl. a gtree) is rendered into a throwaway scene and
+# measured by its non-transparent bounding box. Device-independent for text and
+# absolute geometry; npc/native content is measured against REF_IN.
+.MEASURE_DPI <- 96
+.MEASURE_REF_IN <- 12
+.grob_extent <- function(g) {
+  if (S7::S7_inherits(g, grob_text)) {
+    labs <- as.character(g@label)
+    if (length(labs) == 0L) return(c(0, 0))
+    fs <- g@gp@fontsize %||% 12
+    fam <- g@gp@fontfamily %||% ""
+    face <- g@gp@fontface %||% "plain"
+    w <- max(vapply(labs, function(l) rs_strwidth(l, fam, face, fs, unit = "mm"), double(1)))
+    h <- max(vapply(labs, function(l) rs_strheight(l, fam, face, fs, unit = "mm"), double(1)))
+    return(c(w, h))
+  }
+  sc <- Scene$new(.MEASURE_REF_IN, .MEASURE_REF_IN, .MEASURE_DPI, c(0L, 0L, 0L, 0L))
+  compile(g, sc)
+  bb <- sc$content_bbox() # c(min_x, min_y, max_x, max_y) px, or empty
+  if (length(bb) < 4L) return(c(0, 0))
+  c((bb[3] - bb[1] + 1) / .MEASURE_DPI * 25.4, (bb[4] - bb[2] + 1) / .MEASURE_DPI * 25.4)
+}
+
 # Common length across several coordinate args, allowing length-1 recycling.
 .common_n <- function(...) {
   sizes <- vapply(list(...), .vsize, integer(1))

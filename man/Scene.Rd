@@ -124,6 +124,12 @@ Render and return the whole image as row-major RGBA bytes
 \verb{[r, g, b, a, ...]} (top-left origin, x fastest).
 }
 
+\subsection{Method \code{content_bbox}}{
+Render and return the tight bounding box of non-transparent content as
+\code{c(min_x, min_y, max_x, max_y)} (device px, inclusive), or an empty vector
+if nothing was drawn. Used to measure a grob's extent (grobwidth/height).
+}
+
 \subsection{Method \code{pixel}}{
 Render and return the RGBA of device pixel \verb{(x, y)} as \code{c(r, g, b, a)}.
 }

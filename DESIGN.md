@@ -132,7 +132,7 @@ A unit is a `(value, coordinate-space)` pair, vectorized. We keep a small, princ
 - **Absolute**: `mm`, `cm`, `inch`, `pt`, `bigpt`.
 - **User-scale**: `native` (relative to the viewport's `xscale`/`yscale`).
 - **Font-relative**: `char`, `line` (depend on fontsize and lineheight).
-- **Object-relative**: `strwidth`, `strheight`, `grobwidth`, `grobheight` — resolvable at construction because metrics are available.
+- **Object-relative**: `strwidth`, `strheight`, `grobwidth`, `grobheight` — resolved to mm **at construction** (text via shaping metrics; other grobs via a measure-render + `Scene::content_bbox`). Exact for text and absolute-unit grobs; a grob sized in `npc`/`native` is measured against a fixed reference (true viewport-relative resolution would need draw-time measurement in Rust, which can't run the R `compile` generic).
 - **Flex**: `null` replaced by a principled flexible-length type (CSS `fr`-style weights) for layout, not a relative unit bolted onto the absolute type.
 
 Unit resolution happens in an explicit **layout pass** keyed on (device size, viewport scales), and the result is cached. Units are flat numeric + enum data, not arithmetic-expression objects, so resolution is cheap and re-runnable on resize.
@@ -408,11 +408,18 @@ generalised from `ClipRect` to `ClipShape` (`Rect | Path{path, evenodd, transfor
 `Mask::intersect_path` with the rule, SVG `<clipPath>` with a device-space `d` + `clip-rule`,
 krilla `push_clip_path` with the transformed path). New `Scene::set_clip_path`. `test-clip-text.R`
 (multi-label text, polygon + even-odd path clips, rect-clip regression, all backends).
-(b) **grobwidth/grobheight — DEFERRED.** It needs *lazy grob-reference units*: the unit
-system resolves font/string units eagerly to mm at construction, but a grob's `npc`/`native`
-extent is only known at draw time against its viewport, so `grobwidth(grob)` must stay
-symbolic until the layout pass. That's a distinct unit-system extension, best as its own
-milestone.
+(b) **grobwidth/grobheight. ✅ done (follow-up).** `grobwidth(grob)`/`grobheight(grob)`
+(and `unit(v, "grobwidth", data = grob)`) measure a grob's drawn extent and resolve
+**eagerly to mm at construction** — the same model as `strwidth`/`strheight`. Text uses
+exact advance metrics (`rs_strwidth`/`rs_strheight`); any other grob (incl. a composite
+subtree) is rendered into a throwaway `Scene` and measured by its non-transparent bounding
+box via a new `Scene::content_bbox()`. Because the result is a plain mm `unit`, it flows
+through the existing pipeline (coordinates, `grid_layout` tracks, viewport sizing) with no
+ABI/Rust-resolver/layout changes. **Caveat:** a grob sized in `npc`/`native` has no
+viewport-independent extent and is measured against a fixed reference canvas, so only text
+and absolute-unit grobs measure exactly — true lazy/viewport-relative resolution is
+infeasible here (it would need draw-time measurement in Rust of R-compiled grobs).
+`test-grobsize.R`, `inst/examples/grobsize.R`.
 
 Sequencing: P1 ✅ → P2 → P3 → P4 → P5, then M6 (interactivity). Each phase is independently
 reviewable and committed; P3 precedes P5 (arbitrary clip builds on the path primitive), P4

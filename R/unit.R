@@ -32,7 +32,7 @@ unit <- function(values, units = "npc", data = NULL) {
   }
   units <- vctrs::vec_recycle(as.character(units), length(values))
 
-  known <- c(names(.unit_codes), "cm", "char", "line", "strwidth", "strheight")
+  known <- c(names(.unit_codes), "cm", "char", "line", "strwidth", "strheight", "grobwidth", "grobheight")
   bad <- setdiff(unique(units), known)
   if (length(bad)) {
     cli::cli_abort("Unknown unit{?s}: {.val {bad}}.")
@@ -71,12 +71,26 @@ as_unit <- function(x, default = "npc") {
   if (is_unit(x)) x else unit(x, default)
 }
 
-# Resolve derived units (cm/char/line/strwidth/strheight) to millimetres.
+# Resolve derived units (cm/char/line/strwidth/strheight/grobwidth/grobheight)
+# to millimetres. `data` is a list (label + font fields) for the string/font
+# kinds, or a grob (or `list(grob =)`) for grobwidth/grobheight.
 .resolve_to_mm <- function(values, units, data) {
-  fontsize <- (data$fontsize %||% 12)[1]
-  lineheight <- (data$lineheight %||% 1.2)[1]
-  family <- (data$fontfamily %||% "")[1]
-  face <- (data$fontface %||% "plain")[1]
+  is_grob <- !is.null(data) && S7::S7_inherits(data, grob)
+  fontsize <- if (is_grob) 12 else (data$fontsize %||% 12)[1]
+  lineheight <- if (is_grob) 1.2 else (data$lineheight %||% 1.2)[1]
+  family <- if (is_grob) "" else (data$fontfamily %||% "")[1]
+  face <- if (is_grob) "plain" else (data$fontface %||% "plain")[1]
+  # Measure the grob once (its extent is shared across all grobwidth/grobheight
+  # values), eagerly to device-independent mm.
+  ext <- if (any(units %in% c("grobwidth", "grobheight"))) {
+    g <- if (is_grob) data else data$grob
+    if (is.null(g) || !S7::S7_inherits(g, grob)) {
+      cli::cli_abort('{.val grobwidth}/{.val grobheight} units need a grob in {.arg data}.')
+    }
+    .grob_extent(g)
+  } else {
+    NULL
+  }
   vapply(seq_along(values), function(i) {
     v <- values[i]
     switch(units[i],
@@ -90,7 +104,9 @@ as_unit <- function(x, default = "npc") {
       strheight = {
         if (is.null(data$label)) cli::cli_abort('{.val strheight} units need a {.arg label} in {.arg data}.')
         v * rs_strheight(data$label, family, face, fontsize, unit = "mm")
-      }
+      },
+      grobwidth = v * ext[1],
+      grobheight = v * ext[2]
     )
   }, double(1))
 }

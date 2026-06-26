@@ -123,6 +123,12 @@ rs_backend_info <- function() .Call(wrap__rs_backend_info)
 #'`[r, g, b, a, ...]` (top-left origin, x fastest).
 #'}
 #'
+#'\subsection{Method `content_bbox`}{
+#'Render and return the tight bounding box of non-transparent content as
+#'`c(min_x, min_y, max_x, max_y)` (device px, inclusive), or an empty vector
+#'if nothing was drawn. Used to measure a grob's extent (grobwidth/height).
+#'}
+#'
 #'\subsection{Method `pixel`}{
 #'Render and return the RGBA of device pixel `(x, y)` as `c(r, g, b, a)`.
 #'}
@@ -182,6 +188,8 @@ Scene$render_svg <- function(path) .Call(wrap__Scene__render_svg, self, path)
 Scene$render_pdf <- function(path) .Call(wrap__Scene__render_pdf, self, path)
 
 Scene$rgba <- function() .Call(wrap__Scene__rgba, self)
+
+Scene$content_bbox <- function() .Call(wrap__Scene__content_bbox, self)
 
 Scene$pixel <- function(x, y) .Call(wrap__Scene__pixel, self, x, y)
 
