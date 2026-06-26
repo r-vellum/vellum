@@ -9,6 +9,7 @@
 //!
 //! The `Scene` is held in Rust and exposed to R as an external-pointer object.
 
+use std::cell::RefCell;
 use std::collections::HashMap;
 
 use extendr_api::prelude::*;
@@ -258,6 +259,12 @@ pub struct Scene {
     /// before compiling each grob; used by `hit_test`'s colour pick-buffer.
     picks: Vec<i32>,
     cur_pick: i32,
+    /// Memoized full-page rasterization. The drawn output is a pure function of
+    /// (nodes, viewports, masks, dims, bg); this caches the last `rasterize()`
+    /// result so a render-then-inspect (e.g. `render_png` then `rgba`) or a
+    /// repeated render skips the second walk. Invalidated by every mutator that
+    /// changes those inputs (`invalidate`). Holds one page-sized pixmap.
+    raster_cache: RefCell<Option<Pixmap>>,
 }
 
 #[extendr]
@@ -308,6 +315,7 @@ impl Scene {
             mask_target: Vec::new(),
             picks: Vec::new(),
             cur_pick: -1,
+            raster_cache: RefCell::new(None),
         }
     }
 
@@ -346,6 +354,7 @@ impl Scene {
         alpha: Robj,
         stroke: Robj,
     ) -> i32 {
+        self.invalidate();
         let placement = if lrow >= 0 && lcol >= 0 {
             Placement::Cell {
                 row: lrow as usize,
@@ -386,6 +395,7 @@ impl Scene {
     /// Attach an arbitrary clip path (in the current viewport's coordinates) to
     /// the current viewport; `nper` gives the point count of each closed sub-path.
     fn set_clip_path(&mut self, x: &[f64], y: &[f64], xu: &[i32], yu: &[i32], nper: &[i32], evenodd: bool) {
+        self.invalidate();
         let spec = ClipPathSpec {
             x: x.to_vec(), y: y.to_vec(), xu: codes(xu), yu: codes(yu),
             nper: nper.iter().map(|&v| v.max(0) as usize).collect(),
@@ -412,6 +422,7 @@ impl Scene {
     /// parallel value + unit-code vectors; the unit `"null"` marks a flexible
     /// track whose value is its weight.
     fn set_layout(&mut self, wvals: &[f64], wunits: Vec<String>, hvals: &[f64], hunits: Vec<String>) {
+        self.invalidate();
         let widths = build_tracks(wvals, &wunits);
         let heights = build_tracks(hvals, &hunits);
         self.viewports[self.current].layout = Some(Layout { widths, heights });
@@ -653,6 +664,7 @@ impl Scene {
     /// matching `mask_end`, primitives are routed into the mask instead of the
     /// drawn scene. `kind` is 0 (alpha) or 1 (luminance). Returns its index.
     fn mask_begin(&mut self, kind: i32) -> i32 {
+        self.invalidate();
         let idx = self.masks.len();
         self.masks.push(MaskDef { kind: MaskKind::from_code(kind), nodes: Vec::new() });
         self.mask_target.push(idx);
@@ -965,6 +977,7 @@ impl Scene {
     /// Append a primitive to the current draw target: the mask being filled (if
     /// any), else the drawn scene. Tagged with the current viewport.
     fn emit_node(&mut self, node: Node) {
+        self.invalidate();
         let vp = self.current;
         match self.mask_target.last() {
             Some(&mi) => self.masks[mi].nodes.push((vp, node)),
@@ -1096,9 +1109,20 @@ impl Scene {
     }
 
     fn rasterize(&self) -> Pixmap {
+        if let Some(pm) = self.raster_cache.borrow().as_ref() {
+            return pm.clone();
+        }
         let mut b = RasterBackend::new(self.w_px, self.h_px, self.bg);
         self.render_to(&mut b);
-        b.into_pixmap()
+        let pm = b.into_pixmap();
+        *self.raster_cache.borrow_mut() = Some(pm.clone());
+        pm
+    }
+
+    /// Drop the memoized rasterization. Called by every mutator that changes a
+    /// render input (the node list, a viewport, or a mask).
+    fn invalidate(&mut self) {
+        self.raster_cache.get_mut().take();
     }
 
     /// Walk the resolved scene in paint order, emitting each primitive through a

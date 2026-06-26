@@ -23,6 +23,7 @@ Imports:
     cli,
     grDevices,
     grid,
+    rlang,
     S7,
     textshaping,
     vctrs

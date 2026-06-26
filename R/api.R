@@ -259,13 +259,38 @@ render <- function(scene, path, text = c("native", "outline")) {
   invisible(path)
 }
 
-# Compile an immutable scene onto a fresh backend `Scene` (write-only target).
+# Render-result cache (FW4). A vellum_scene is immutable (every push/draw/pop
+# returns a new object), and the compiled backend `Scene` is logically immutable
+# once built — only an internal pixmap cache mutates, and the vector backends read
+# it without mutation. So a compiled Scene can be shared across repeated renders /
+# inspections of the same content. We key on a content hash of the materialized
+# tree (+ device fields): two structurally identical scenes share one compile and,
+# via the backend's pixmap cache, one rasterization. A crude size cap bounds memory
+# (each entry may hold one page-sized pixmap once rasterized).
+.scene_cache <- new.env(parent = emptyenv())
+.scene_cache$.n <- 0L
+.SCENE_CACHE_CAP <- 32L
+
+# Compile an immutable scene onto a backend `Scene`, reusing a cached compile when
+# the same content was rendered before.
 .scene_to_backend <- function(scene) {
+  tree <- .materialize(scene)
+  key <- rlang::hash(list(tree, scene@width, scene@height, scene@dpi, scene@bg))
+  hit <- .scene_cache[[key]]
+  if (!is.null(hit)) {
+    return(hit)
+  }
+  if (.scene_cache$.n > .SCENE_CACHE_CAP) { # memory backstop: drop everything
+    rm(list = setdiff(ls(.scene_cache, all.names = TRUE), ".n"), envir = .scene_cache)
+    .scene_cache$.n <- 0L
+  }
   s <- Scene$new(.to_inches(scene@width), .to_inches(scene@height), scene@dpi,
                  .rs_col(scene@bg) %||% c(255L, 255L, 255L, 0L))
   # Compile the root as a gtree so the root viewport's gp / scales / clip / layout
   # / mask all apply (it is pushed like any viewport), not just its layout.
-  compile(.materialize(scene), s)
+  compile(tree, s)
+  .scene_cache[[key]] <- s
+  .scene_cache$.n <- .scene_cache$.n + 1L
   s
 }
 

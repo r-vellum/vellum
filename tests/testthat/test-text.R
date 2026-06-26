@@ -38,16 +38,23 @@ test_that("text colour reaches the raster", {
 })
 
 test_that("the shape cache is transparent: cold and warm renders are identical", {
-  clear <- function() rm(
+  clear_shape <- function() rm(
     list = setdiff(ls(.shape_cache, all.names = TRUE), ".n"), envir = .shape_cache
+  )
+  # The render-result cache would otherwise serve the warm render without
+  # touching the shape cache; clear it so the warm render genuinely recompiles.
+  clear_scene <- function() rm(
+    list = setdiff(ls(.scene_cache, all.names = TRUE), ".n"), envir = .scene_cache
   )
   scene <- function() {
     vl_scene(2, 1, dpi = 100, bg = "white") |>
       draw(text_grob(c("Ab", "Ab", "cD"), x = c(0.2, 0.5, 0.8), y = 0.5, gp = gpar(fontsize = 24)))
   }
-  clear()
-  cold <- scene_raster(scene()) # populates the cache (one shape per distinct label)
-  warm <- scene_raster(scene()) # all cache hits
+  clear_shape()
+  clear_scene()
+  cold <- scene_raster(scene()) # populates the shape cache (one per distinct label)
+  clear_scene() # force a recompile so the warm render exercises the shape cache
+  warm <- scene_raster(scene()) # all shape-cache hits
   expect_identical(cold, warm)
 })
 
@@ -68,8 +75,13 @@ test_that("the shape cache keys on size (no cross-size collision)", {
 test_that("the persistent glyph cache is transparent (cold == warm render)", {
   s <- vl_scene(2, 1, dpi = 100, bg = "white") |>
     draw(text_grob("Ahoy Ahoy", x = 0.5, y = 0.5, gp = gpar(fontsize = 28, col = "black")))
+  clear_scene <- function() rm(
+    list = setdiff(ls(.scene_cache, all.names = TRUE), ".n"), envir = .scene_cache
+  )
   rs_clear_glyph_cache()
+  clear_scene()
   cold <- scene_raster(s) # populates the persistent glyph cache
+  clear_scene() # force a recompile so the warm render reuses the glyph cache
   warm <- scene_raster(s) # reuses it
   expect_identical(cold, warm)
 })
