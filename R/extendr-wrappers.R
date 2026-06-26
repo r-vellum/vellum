@@ -168,7 +168,7 @@ Scene$set_layout <- function(wvals, wunits, hvals, hunits) .Call(wrap__Scene__se
 
 Scene$rect <- function(x, y, w, h, xu, yu, wu, hu, fill, col, lwd, alpha, stroke) .Call(wrap__Scene__rect, self, x, y, w, h, xu, yu, wu, hu, fill, col, lwd, alpha, stroke)
 
-Scene$lines <- function(x, y, xu, yu, col, lwd, alpha, stroke) .Call(wrap__Scene__lines, self, x, y, xu, yu, col, lwd, alpha, stroke)
+Scene$lines <- function(x, y, xu, yu, col, lwd, alpha, stroke, aangle, alen, aends, aclosed) .Call(wrap__Scene__lines, self, x, y, xu, yu, col, lwd, alpha, stroke, aangle, alen, aends, aclosed)
 
 Scene$polygon <- function(x, y, xu, yu, fill, col, lwd, alpha, stroke) .Call(wrap__Scene__polygon, self, x, y, xu, yu, fill, col, lwd, alpha, stroke)
 
@@ -180,7 +180,7 @@ Scene$circles <- function(x, y, r, xu, yu, ru, fill, col, lwd, alpha, stroke) .C
 
 Scene$markers <- function(x, y, size, xu, yu, su, shape, fill, col, lwd, alpha, stroke) .Call(wrap__Scene__markers, self, x, y, size, xu, yu, su, shape, fill, col, lwd, alpha, stroke)
 
-Scene$segments <- function(x0, y0, x1, y1, x0u, y0u, x1u, y1u, col, lwd, alpha, stroke) .Call(wrap__Scene__segments, self, x0, y0, x1, y1, x0u, y0u, x1u, y1u, col, lwd, alpha, stroke)
+Scene$segments <- function(x0, y0, x1, y1, x0u, y0u, x1u, y1u, col, lwd, alpha, stroke, aangle, alen, aends, aclosed) .Call(wrap__Scene__segments, self, x0, y0, x1, y1, x0u, y0u, x1u, y1u, col, lwd, alpha, stroke, aangle, alen, aends, aclosed)
 
 Scene$path <- function(x, y, xu, yu, nper, evenodd, fill, col, lwd, alpha, stroke) .Call(wrap__Scene__path, self, x, y, xu, yu, nper, evenodd, fill, col, lwd, alpha, stroke)
 

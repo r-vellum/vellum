@@ -127,7 +127,7 @@ struct ResolvedVp {
 #[derive(Clone, Debug)]
 enum Node {
     Rect { x: f64, y: f64, w: f64, h: f64, xu: Unit, yu: Unit, wu: Unit, hu: Unit, gp: PartialGpar },
-    Lines { x: Vec<f64>, y: Vec<f64>, xu: Vec<Unit>, yu: Vec<Unit>, gp: PartialGpar },
+    Lines { x: Vec<f64>, y: Vec<f64>, xu: Vec<Unit>, yu: Vec<Unit>, arrow: Option<Arrow>, gp: PartialGpar },
     Polygon { x: Vec<f64>, y: Vec<f64>, xu: Vec<Unit>, yu: Vec<Unit>, gp: PartialGpar },
     Circle { x: f64, y: f64, r: f64, xu: Unit, yu: Unit, ru: Unit, gp: PartialGpar },
     Text {
@@ -179,6 +179,7 @@ enum Node {
     Segments {
         x0: Vec<f64>, y0: Vec<f64>, x1: Vec<f64>, y1: Vec<f64>,
         x0u: Vec<Unit>, y0u: Vec<Unit>, x1u: Vec<Unit>, y1u: Vec<Unit>,
+        arrow: Option<Arrow>,
         gp: PartialGpar,
     },
     /// A general path: `nper` gives the point count of each closed sub-path
@@ -416,9 +417,16 @@ impl Scene {
         });
     }
 
-    fn lines(&mut self, x: &[f64], y: &[f64], xu: &[i32], yu: &[i32], col: Robj, lwd: Robj, alpha: Robj, stroke: Robj) {
+    #[allow(clippy::too_many_arguments)]
+    fn lines(
+        &mut self, x: &[f64], y: &[f64], xu: &[i32], yu: &[i32], col: Robj, lwd: Robj, alpha: Robj, stroke: Robj,
+        aangle: f64, alen: f64, aends: i32, aclosed: bool,
+    ) {
         let gp = PartialGpar::from_robj(&rnull(), &col, &lwd, &alpha, &stroke);
-        self.emit_node(Node::Lines { x: x.to_vec(), y: y.to_vec(), xu: codes(xu), yu: codes(yu), gp });
+        self.emit_node(Node::Lines {
+            x: x.to_vec(), y: y.to_vec(), xu: codes(xu), yu: codes(yu),
+            arrow: arrow_from(aangle, alen, aends, aclosed), gp,
+        });
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -488,11 +496,13 @@ impl Scene {
         &mut self, x0: &[f64], y0: &[f64], x1: &[f64], y1: &[f64],
         x0u: &[i32], y0u: &[i32], x1u: &[i32], y1u: &[i32],
         col: Robj, lwd: Robj, alpha: Robj, stroke: Robj,
+        aangle: f64, alen: f64, aends: i32, aclosed: bool,
     ) {
         let gp = PartialGpar::from_robj(&rnull(), &col, &lwd, &alpha, &stroke);
         self.emit_node(Node::Segments {
             x0: x0.to_vec(), y0: y0.to_vec(), x1: x1.to_vec(), y1: y1.to_vec(),
-            x0u: codes(x0u), y0u: codes(y0u), x1u: codes(x1u), y1u: codes(y1u), gp,
+            x0u: codes(x0u), y0u: codes(y0u), x1u: codes(x1u), y1u: codes(y1u),
+            arrow: arrow_from(aangle, alen, aends, aclosed), gp,
         });
     }
 
@@ -970,11 +980,29 @@ impl Scene {
                         fill_then_stroke(b, &path, &gp, t, &clip, vp, FillRule::Winding);
                     }
                 }
-                Node::Lines { x, y, xu, yu, .. } => {
+                Node::Lines { x, y, xu, yu, arrow, .. } => {
                     if let (Some(path), Some(col)) = (build_poly(x, y, xu, yu, vp, false), gp.col) {
                         let style = stroke_style(&gp, vp.dpi);
                         if style.width > 0.0 {
                             b.stroke_lines(&path, t, col, &style, &clip);
+                        }
+                        if let Some(a) = arrow {
+                            let n = x.len().min(y.len()).min(xu.len()).min(yu.len());
+                            if n >= 2 {
+                                let pt = |i: usize| (vp.x_pos(x[i], xu[i]) as f32, vp.y_pos(y[i], yu[i]) as f32);
+                                let mut ends = Vec::new();
+                                if a.ends & 2 != 0 {
+                                    let (ex, ey) = pt(n - 1);
+                                    let (qx, qy) = pt(n - 2);
+                                    ends.push((ex, ey, (ex - qx) as f64, (ey - qy) as f64));
+                                }
+                                if a.ends & 1 != 0 {
+                                    let (sx, sy) = pt(0);
+                                    let (qx, qy) = pt(1);
+                                    ends.push((sx, sy, (sx - qx) as f64, (sy - qy) as f64));
+                                }
+                                draw_arrows(b, a, &ends, col, &style, t, &clip, vp.dpi);
+                            }
                         }
                     }
                 }
@@ -1174,12 +1202,12 @@ impl Scene {
                     };
                     b.draw_text(&run, t, &clip);
                 }
-                Node::Segments { x0, y0, x1, y1, x0u, y0u, x1u, y1u, .. } => {
+                Node::Segments { x0, y0, x1, y1, x0u, y0u, x1u, y1u, arrow, .. } => {
                     if let Some(col) = gp.col {
                         let style = stroke_style(&gp, vp.dpi);
+                        let n = [x0.len(), y0.len(), x1.len(), y1.len(), x0u.len(), y0u.len(), x1u.len(), y1u.len()]
+                            .into_iter().min().unwrap_or(0);
                         if style.width > 0.0 {
-                            let n = [x0.len(), y0.len(), x1.len(), y1.len(), x0u.len(), y0u.len(), x1u.len(), y1u.len()]
-                                .into_iter().min().unwrap_or(0);
                             let mut pb = PathBuilder::new();
                             for i in 0..n {
                                 pb.move_to(vp.x_pos(x0[i], x0u[i]) as f32, vp.y_pos(y0[i], y0u[i]) as f32);
@@ -1188,6 +1216,20 @@ impl Scene {
                             if let Some(path) = pb.finish() {
                                 b.stroke_lines(&path, t, col, &style, &clip);
                             }
+                        }
+                        if let Some(a) = arrow {
+                            let mut ends = Vec::new();
+                            for i in 0..n {
+                                let (sx, sy) = (vp.x_pos(x0[i], x0u[i]) as f32, vp.y_pos(y0[i], y0u[i]) as f32);
+                                let (ex, ey) = (vp.x_pos(x1[i], x1u[i]) as f32, vp.y_pos(y1[i], y1u[i]) as f32);
+                                if a.ends & 2 != 0 {
+                                    ends.push((ex, ey, (ex - sx) as f64, (ey - sy) as f64));
+                                }
+                                if a.ends & 1 != 0 {
+                                    ends.push((sx, sy, (sx - ex) as f64, (sy - ey) as f64));
+                                }
+                            }
+                            draw_arrows(b, a, &ends, col, &style, t, &clip, vp.dpi);
                         }
                     }
                 }
@@ -1286,6 +1328,80 @@ fn resolve_paint(paint: &Paint, vp: &Vp) -> ResolvedPaint {
             extend: p.extend,
             opacity: p.opacity as f32,
         },
+    }
+}
+
+/// An arrowhead spec attached to a `Lines`/`Segments` node. `len` is in inches
+/// (an absolute length, resolved to px via dpi); `ends` is a bitmask (1 = start,
+/// 2 = end); `closed` fills a triangular head, else strokes a two-barb "V".
+#[derive(Clone, Copy, Debug)]
+struct Arrow {
+    angle: f64,
+    len: f64,
+    ends: u8,
+    closed: bool,
+}
+
+/// Build an arrow from FFI scalars, or `None` when there is no head (`len <= 0`).
+fn arrow_from(angle: f64, len_in: f64, ends: i32, closed: bool) -> Option<Arrow> {
+    if !(len_in > 0.0) || !len_in.is_finite() {
+        return None;
+    }
+    Some(Arrow { angle, len: len_in, ends: (ends.clamp(0, 3)) as u8, closed })
+}
+
+/// Append one arrowhead at `(px, py)` whose line travels in direction `(dx, dy)`
+/// (pointing toward the head). Open heads add two barb strokes to `open`; closed
+/// heads add a filled triangle to `fill`.
+fn push_arrow_head(
+    open: &mut PathBuilder, fill: &mut PathBuilder, a: &Arrow, dpi: f64,
+    px: f32, py: f32, dx: f64, dy: f64,
+) {
+    let mag = (dx * dx + dy * dy).sqrt();
+    if mag < 1e-9 {
+        return;
+    }
+    let (bx, by) = (-dx / mag, -dy / mag); // unit vector back along the line
+    let ang = a.angle.to_radians();
+    let (ca, sa) = (ang.cos(), ang.sin());
+    let l = a.len * dpi;
+    let b1 = (px + ((bx * ca - by * sa) * l) as f32, py + ((bx * sa + by * ca) * l) as f32);
+    let b2 = (px + ((bx * ca + by * sa) * l) as f32, py + ((-bx * sa + by * ca) * l) as f32);
+    if a.closed {
+        fill.move_to(px, py);
+        fill.line_to(b1.0, b1.1);
+        fill.line_to(b2.0, b2.1);
+        fill.close();
+    } else {
+        open.move_to(b1.0, b1.1);
+        open.line_to(px, py);
+        open.move_to(b2.0, b2.1);
+        open.line_to(px, py);
+    }
+}
+
+/// Draw the arrowheads for a polyline / batch of segments: `ends` is a list of
+/// `(point, incoming-direction)` already resolved to local px. Open barbs stroke
+/// in `col`; closed heads fill with `col` (and outline). Shared by both nodes.
+fn draw_arrows<B: RenderBackend>(
+    b: &mut B, arrow: &Arrow, ends: &[(f32, f32, f64, f64)], col: Rgba,
+    style: &StrokeStyle, t: Transform, clip: &Clip, dpi: f64,
+) {
+    let mut open = PathBuilder::new();
+    let mut fill = PathBuilder::new();
+    for &(px, py, dx, dy) in ends {
+        push_arrow_head(&mut open, &mut fill, arrow, dpi, px, py, dx, dy);
+    }
+    if let Some(path) = open.finish() {
+        if style.width > 0.0 {
+            b.stroke_lines(&path, t, col, style, clip);
+        }
+    }
+    if let Some(path) = fill.finish() {
+        b.fill_path(&path, t, &ResolvedPaint::Solid(col), FillRule::Winding, clip);
+        if style.width > 0.0 {
+            b.stroke_lines(&path, t, col, style, clip);
+        }
     }
 }
 

@@ -65,6 +65,18 @@ test_that("the shape cache keys on size (no cross-size collision)", {
   expect_gt(ink_w(40), ink_w(12))
 })
 
+test_that("a newline produces two stacked lines of text", {
+  # "X" over "X": two separated dark bands in the central column.
+  s <- vl_scene(1, 1.5, dpi = 100, bg = "white") |>
+    draw(text_grob("X\nX", x = 0.5, y = 0.5, gp = gpar(fontsize = 40, col = "black")))
+  col <- scene_raster(s)[1, 50, ] # central column, top->bottom
+  dark <- which(col < 128L)
+  expect_gt(length(dark), 0L)
+  # a gap between the two glyph bands => more than one contiguous run of ink
+  runs <- sum(diff(dark) > 1L) + 1L
+  expect_gte(runs, 2L)
+})
+
 test_that("justification places text on the correct side of the anchor", {
   inked_x <- function(hjust) {
     s <- vl_scene(width = 3, height = 1, dpi = 100, bg = "white") |>

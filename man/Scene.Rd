@@ -55,6 +55,14 @@ A whole batch of circles in one call, sharing one gpar (also used for
 \code{points}, with the radius carrying the marker size).
 }
 
+\subsection{Method \code{markers}}{
+A batch of markers (point glyphs) sharing one gpar. Like \code{circles} but each
+element carries a \code{shape} code (0 circle, 1 square, 2 triangle, 3 diamond,
+4 plus, 5 cross); \code{size} is the marker radius. Filled shapes fill+stroke per
+gpar; plus/cross are stroke-only. (circle_grob / default points use the
+faster \code{circles} path; this is for shape variety.)
+}
+
 \subsection{Method \code{segments}}{
 A batch of disjoint line segments (stroke only), sharing one gpar.
 }

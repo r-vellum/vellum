@@ -5,6 +5,8 @@
 \alias{rect_grob}
 \alias{lines_grob}
 \alias{polygon_grob}
+\alias{bezier_grob}
+\alias{spline_grob}
 \alias{circle_grob}
 \alias{points_grob}
 \alias{segments_grob}
@@ -23,15 +25,45 @@ rect_grob(
   vp = NULL
 )
 
-lines_grob(x, y, gp = gpar(), name = NULL, vp = NULL)
+lines_grob(x, y, arrow = NULL, gp = gpar(), name = NULL, vp = NULL)
 
 polygon_grob(x, y, gp = gpar(), name = NULL, vp = NULL)
 
+bezier_grob(x, y, n = 60, gp = gpar(), name = NULL, vp = NULL)
+
+spline_grob(
+  x,
+  y,
+  shape = 1,
+  n = 20,
+  open = TRUE,
+  gp = gpar(),
+  name = NULL,
+  vp = NULL
+)
+
 circle_grob(x = 0.5, y = 0.5, r = 0.25, gp = gpar(), name = NULL, vp = NULL)
 
-points_grob(x, y, size = unit(2, "mm"), gp = gpar(), name = NULL, vp = NULL)
+points_grob(
+  x,
+  y,
+  size = unit(2, "mm"),
+  shape = "circle",
+  gp = gpar(),
+  name = NULL,
+  vp = NULL
+)
 
-segments_grob(x0, y0, x1, y1, gp = gpar(), name = NULL, vp = NULL)
+segments_grob(
+  x0,
+  y0,
+  x1,
+  y1,
+  arrow = NULL,
+  gp = gpar(),
+  name = NULL,
+  vp = NULL
+)
 
 path_grob(
   x,
@@ -76,6 +108,17 @@ text_grob(
 \item{name}{Optional name (for \code{\link[=edit_node]{edit_node()}}).}
 
 \item{vp}{Optional \code{\link[=viewport]{viewport()}} to draw this grob inside.}
+
+\item{arrow}{An \code{\link[=arrow]{arrow()}} spec to draw heads on the line/segment ends, or
+\code{NULL} for none.}
+
+\item{n}{Number of points to sample the curve at (flattened to a polyline).}
+
+\item{shape}{Marker shape(s): \code{"circle"} (default), \code{"square"}, \code{"triangle"},
+\code{"diamond"}, \code{"plus"}, or \code{"cross"}, recycled per point. Filled shapes use
+\code{gp$fill} (and outline \code{gp$col}); \code{"plus"}/\code{"cross"} are stroke-only.}
+
+\item{open}{If \code{FALSE}, the spline is closed (wraps end to start).}
 
 \item{r}{Radius (\code{\link[=unit]{unit()}} or numeric).}
 

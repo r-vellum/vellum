@@ -26,7 +26,8 @@ grob_rect <- S7::new_class("grob_rect", parent = grob, package = "vellum",
   )
 )
 grob_lines <- S7::new_class("grob_lines", parent = grob, package = "vellum",
-  properties = list(x = .unit_prop(), y = .unit_prop()))
+  properties = list(x = .unit_prop(), y = .unit_prop(),
+                    arrow = S7::new_property(S7::class_any, default = NULL)))
 grob_polygon <- S7::new_class("grob_polygon", parent = grob, package = "vellum",
   properties = list(x = .unit_prop(), y = .unit_prop()))
 grob_circle <- S7::new_class("grob_circle", parent = grob, package = "vellum",
@@ -48,7 +49,8 @@ grob_text <- S7::new_class("grob_text", parent = grob, package = "vellum",
   )
 )
 grob_segments <- S7::new_class("grob_segments", parent = grob, package = "vellum",
-  properties = list(x0 = .unit_prop(), y0 = .unit_prop(), x1 = .unit_prop(), y1 = .unit_prop()))
+  properties = list(x0 = .unit_prop(), y0 = .unit_prop(), x1 = .unit_prop(), y1 = .unit_prop(),
+                    arrow = S7::new_property(S7::class_any, default = NULL)))
 grob_path <- S7::new_class("grob_path", parent = grob, package = "vellum",
   properties = list(
     x = .unit_prop(), y = .unit_prop(),
@@ -98,12 +100,48 @@ rect_grob <- function(x = 0.5, y = 0.5, width = 1, height = 1,
 }
 
 #' @rdname grob
+#' @param arrow An [arrow()] spec to draw heads on the line/segment ends, or
+#'   `NULL` for none.
 #' @export
-lines_grob <- function(x, y, gp = gpar(), name = NULL, vp = NULL) {
+lines_grob <- function(x, y, arrow = NULL, gp = gpar(), name = NULL, vp = NULL) {
   n <- .coord_n(x, y)
   grob_lines(x = vctrs::vec_recycle(as_unit(x, "native"), n),
              y = vctrs::vec_recycle(as_unit(y, "native"), n),
-             gp = gp, name = name, vp = vp)
+             arrow = arrow, gp = gp, name = name, vp = vp)
+}
+
+#' Arrowheads
+#'
+#' Describe arrowheads to draw on the ends of a [lines_grob()] or
+#' [segments_grob()] (pass as their `arrow =` argument).
+#'
+#' @param angle Half-angle of the head at the tip, in degrees (default 30).
+#' @param length Head length as an absolute [unit()] (default `unit(0.25, "in")`).
+#' @param ends Which ends get a head: `"last"` (default), `"first"`, or `"both"`.
+#' @param type `"open"` (a two-barb V) or `"closed"` (a filled triangle).
+#' @return A `vellum_arrow` object.
+#' @examples
+#' lines_grob(c(0.1, 0.9), c(0.1, 0.9), arrow = arrow(type = "closed"))
+#' @export
+arrow <- function(angle = 30, length = unit(0.25, "in"),
+                  ends = c("last", "first", "both"), type = c("open", "closed")) {
+  ends <- match.arg(ends)
+  type <- match.arg(type)
+  len <- as_unit(length, "in")
+  structure(
+    list(angle = as.numeric(angle)[1], length = len, ends = ends, type = type),
+    class = "vellum_arrow"
+  )
+}
+
+# Encode an arrow (or NULL) into the scalars the backend takes.
+.encode_arrow <- function(a) {
+  if (is.null(a)) {
+    return(list(angle = 0, len = 0, ends = 0L, closed = FALSE))
+  }
+  list(angle = a$angle, len = .to_inches(a$length),
+       ends = switch(a$ends, first = 1L, last = 2L, both = 3L),
+       closed = identical(a$type, "closed"))
 }
 
 #' @rdname grob
@@ -113,6 +151,81 @@ polygon_grob <- function(x, y, gp = gpar(), name = NULL, vp = NULL) {
   grob_polygon(x = vctrs::vec_recycle(as_unit(x, "native"), n),
                y = vctrs::vec_recycle(as_unit(y, "native"), n),
                gp = gp, name = name, vp = vp)
+}
+
+# Decompose a curve coordinate into (values, single unit name). Flattening is a
+# linear combination of control-point values, so all coordinates on an axis must
+# share one unit (a numeric defaults to "native", like lines).
+.axis_unit <- function(a, default = "native") {
+  if (!is_unit(a)) {
+    return(list(value = as.numeric(a), unit = default))
+  }
+  codes <- vctrs::field(a, "unit")
+  if (length(unique(codes)) > 1L) {
+    cli::cli_abort("Curve coordinates on one axis must use a single unit.")
+  }
+  list(value = vctrs::field(a, "value"), unit = names(.unit_codes)[match(codes[1], .unit_codes)])
+}
+
+# Evaluate a Bezier (control values `p`) at parameters `t` via de Casteljau.
+.bezier_eval <- function(p, t) {
+  vapply(t, function(tt) {
+    b <- p
+    while (length(b) > 1L) b <- b[-length(b)] * (1 - tt) + b[-1] * tt
+    b
+  }, double(1))
+}
+
+# Cardinal (Catmull-Rom) spline through control values `p`; `tension` 0 = loose
+# (smooth), 1 = straight; `per` points per segment; `closed` wraps the ends.
+.cardinal <- function(p, tension, per, closed) {
+  k <- length(p)
+  if (k < 3L) {
+    return(p)
+  }
+  at <- function(i) if (closed) p[((i - 1L) %% k) + 1L] else p[min(max(i, 1L), k)]
+  c_ <- 1 - tension
+  tt <- seq(0, 1, length.out = per + 1L)[-(per + 1L)]
+  h00 <- 2 * tt^3 - 3 * tt^2 + 1
+  h10 <- tt^3 - 2 * tt^2 + tt
+  h01 <- -2 * tt^3 + 3 * tt^2
+  h11 <- tt^3 - tt^2
+  segs <- if (closed) seq_len(k) else seq_len(k - 1L)
+  out <- unlist(lapply(segs, function(i) {
+    p1 <- at(i); p2 <- at(i + 1L)
+    m1 <- c_ * (p2 - at(i - 1L)) / 2
+    m2 <- c_ * (at(i + 2L) - p1) / 2
+    h00 * p1 + h10 * m1 + h01 * p2 + h11 * m2
+  }), use.names = FALSE)
+  c(out, at(if (closed) 1L else k))
+}
+
+#' @rdname grob
+#' @param n Number of points to sample the curve at (flattened to a polyline).
+#' @export
+bezier_grob <- function(x, y, n = 60, gp = gpar(), name = NULL, vp = NULL) {
+  ax <- .axis_unit(x)
+  ay <- .axis_unit(y)
+  if (length(ax$value) != length(ay$value)) cli::cli_abort("{.arg x} and {.arg y} must have the same length.")
+  if (length(ax$value) < 2L) cli::cli_abort("A Bezier needs at least 2 control points.")
+  t <- seq(0, 1, length.out = max(2L, n))
+  lines_grob(unit(.bezier_eval(ax$value, t), ax$unit), unit(.bezier_eval(ay$value, t), ay$unit),
+             gp = gp, name = name, vp = vp)
+}
+
+#' @rdname grob
+#' @param shape Spline smoothness in `[0, 1]`: `1` (default) a smooth
+#'   Catmull-Rom curve through the points, `0` straight segments.
+#' @param open If `FALSE`, the spline is closed (wraps end to start).
+#' @export
+spline_grob <- function(x, y, shape = 1, n = 20, open = TRUE, gp = gpar(), name = NULL, vp = NULL) {
+  ax <- .axis_unit(x)
+  ay <- .axis_unit(y)
+  if (length(ax$value) != length(ay$value)) cli::cli_abort("{.arg x} and {.arg y} must have the same length.")
+  tension <- 1 - max(0, min(1, shape))
+  fx <- .cardinal(ax$value, tension, max(1L, n), !open)
+  fy <- .cardinal(ay$value, tension, max(1L, n), !open)
+  lines_grob(unit(fx, ax$unit), unit(fy, ay$unit), gp = gp, name = name, vp = vp)
 }
 
 #' @rdname grob
@@ -154,14 +267,14 @@ points_grob <- function(x, y, size = unit(2, "mm"), shape = "circle",
 #' @rdname grob
 #' @param x0,y0,x1,y1 Segment start/end coordinates ([unit()] or numeric).
 #' @export
-segments_grob <- function(x0, y0, x1, y1, gp = gpar(), name = NULL, vp = NULL) {
+segments_grob <- function(x0, y0, x1, y1, arrow = NULL, gp = gpar(), name = NULL, vp = NULL) {
   n <- .common_n(x0, y0, x1, y1)
   grob_segments(
     x0 = vctrs::vec_recycle(as_unit(x0, "native"), n),
     y0 = vctrs::vec_recycle(as_unit(y0, "native"), n),
     x1 = vctrs::vec_recycle(as_unit(x1, "native"), n),
     y1 = vctrs::vec_recycle(as_unit(y1, "native"), n),
-    gp = gp, name = name, vp = vp
+    arrow = arrow, gp = gp, name = name, vp = vp
   )
 }
 
