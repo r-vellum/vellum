@@ -421,11 +421,19 @@ and absolute-unit grobs measure exactly — true lazy/viewport-relative resoluti
 infeasible here (it would need draw-time measurement in Rust of R-compiled grobs).
 `test-grobsize.R`, `inst/examples/grobsize.R`.
 
-Sequencing: P1 ✅ → P2 → P3 → P4 → P5, then M6 (interactivity). Each phase is independently
-reviewable and committed; P3 precedes P5 (arbitrary clip builds on the path primitive), P4
-stands alone (re-vendor). Out of scope until a grammar layer drives it: extreme scale
-(10M+ — better served by **aggregate-then-shade**, see §11, than by decimation or tiled
-parallel rasterization) and render-result caching for repeated renders.
+Sequencing: P1 ✅ → P2 ✅ → P3 ✅ → P4 ✅ → P5 ✅ (+ grobwidth/grobheight follow-up ✅).
+
+### Performance — match/beat grid everywhere (next milestone)
+
+P1 made dense markers fast, but a cross-primitive benchmark vs base `grid` shows
+vellum still **loses on text (≈50×, per-label shaping), faceting/many-grobs
+(≈O(n²) R builder), segments & self-intersecting lines (tiny-skia stroke→fill),
+and large markers** — while winning small markers, circles, monotone lines, and
+raster. The next milestone is to be **at least as fast as grid in every drawing
+aspect**. Findings, root causes, and the prioritised plan (PERF-1 batched text,
+PERF-2 O(1) scene builder, PERF-3 cheap strokes, PERF-4 marker thresholds, PERF-5
+aggregate-then-shade per datashader §11, PERF-6 optional tiled-parallel raster)
+live in **[PERFORMANCE.md](PERFORMANCE.md)**. Benchmarks in `inst/benchmarks/`.
 
 **M5 — device-shim mode (optional, deferred).** Register as an R graphics device via `DeviceDriver`; implement the minimal callback set, then climb the capability ladder (patterns → groups/compositing → glyphs). Panic-guard every callback. Validate by rendering ggplot2/lattice output. Deferred in favour of filling out the native engine (gradients/patterns/masks); this is interop, not on the Option-B critical path.
 

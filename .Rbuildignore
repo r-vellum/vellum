@@ -7,3 +7,4 @@
 ^src/Makevars\.win$
 ^\.github$
 ^DESIGN\.md$
+^PERFORMANCE\.md$
