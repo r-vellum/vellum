@@ -49,9 +49,16 @@ test_that("lwd inherits from the enclosing viewport", {
 test_that("alpha outside [0, 1] is rejected at gpar construction", {
   expect_error(gpar(alpha = 1.5), "alpha")
   expect_error(gpar(alpha = -0.1), "alpha")
+  expect_error(gpar(alpha = c(0.5, 1.5)), "alpha") # any out-of-range element
   expect_no_error(gpar(alpha = 0))
   expect_no_error(gpar(alpha = 1))
+  expect_no_error(gpar(alpha = c(0.2, 0.8)))
   expect_no_error(gpar(alpha = NULL)) # inherit
+})
+
+test_that("linemitre below 1 is rejected", {
+  expect_error(gpar(linemitre = 0.5), "linemitre")
+  expect_no_error(gpar(linemitre = 10))
 })
 
 test_that("negative extents are rejected", {

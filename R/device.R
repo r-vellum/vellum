@@ -163,11 +163,19 @@ render_grid <- function(x, path, width = 7, height = 7, dpi = 96, bg = "white",
 # grid allows per-element (vector) gpar, but a vellum grob carries one gpar; so
 # group `n` elements by their distinct style (+ any `extra` per-element keys such
 # as pch/size) and return a list of index vectors, one per group.
-.gv_style_fields <- c("col", "fill", "lwd", "lty", "alpha", "lineend", "linejoin", "fontface", "fontfamily", "fontsize")
+.gv_style_fields <- c("col", "fill", "lwd", "lty", "alpha", "lineend", "linejoin",
+                      "linemitre", "fontface", "fontfamily", "fontsize", "lineheight")
 .gv_groups <- function(gp, n, extra = list()) {
+  # Group by EXACT per-element style: encode each field's distinct values as
+  # integer codes (match against unique) — `format()` would merge numerically
+  # close but distinct values (e.g. continuous alpha/size) and mislabel a group.
+  code <- function(v) {
+    v <- rep_len(v, n)
+    match(v, unique(v))
+  }
   cols <- list()
-  for (f in .gv_style_fields) if (!is.null(gp[[f]])) cols[[f]] <- format(rep_len(gp[[f]], n))
-  for (nm in names(extra)) cols[[nm]] <- format(rep_len(extra[[nm]], n))
+  for (f in .gv_style_fields) if (!is.null(gp[[f]])) cols[[f]] <- code(gp[[f]])
+  for (nm in names(extra)) cols[[nm]] <- code(extra[[nm]])
   if (!length(cols)) {
     return(list(seq_len(n)))
   }
@@ -315,7 +323,8 @@ render_grid <- function(x, path, width = 7, height = 7, dpi = 96, bg = "white",
   gpar(
     col = gp$col, fill = gp$fill, lwd = gp$lwd, lty = gp$lty,
     alpha = gp$alpha, lineend = gp$lineend, linejoin = gp$linejoin,
-    fontfamily = gp$fontfamily, fontface = ff, fontsize = gp$fontsize
+    linemitre = gp$linemitre, fontfamily = gp$fontfamily, fontface = ff,
+    fontsize = gp$fontsize, lineheight = gp$lineheight
   )
 }
 
@@ -339,11 +348,10 @@ render_grid <- function(x, path, width = 7, height = 7, dpi = 96, bg = "white",
   c(h, v)
 }
 
-# grid just -> vellum text `just` names (vellum maps left/centre/right etc.).
+# grid just -> vellum text `just` as exact fractions (text_grob parses numeric
+# strings), so non-standard justifications survive instead of snapping to thirds.
 .gv_just_names <- function(just, hjust, vjust) {
-  hv <- .gv_just(just, hjust, vjust)
-  c(c("left", "centre", "right")[findInterval(hv[1], c(-Inf, 0.25, 0.75)) ],
-    c("bottom", "centre", "top")[findInterval(hv[2], c(-Inf, 0.25, 0.75))])
+  as.character(.gv_just(just, hjust, vjust))
 }
 
 # Map an R pch to a vellum marker shape + whether it is solid-filled.
@@ -352,11 +360,12 @@ render_grid <- function(x, path, width = 7, height = 7, dpi = 96, bg = "white",
   if (is.character(pch)) {
     return(list(shape = "circle", fill = FALSE))
   }
+  # Solid pch (15-20) take col as fill; 21-25 keep their own gp$fill/border.
   filled <- pch %in% c(15:20)
   shape <- switch(as.character(pch),
     "0" = "square", "15" = "square", "22" = "square",
     "1" = "circle", "16" = "circle", "19" = "circle", "20" = "circle", "21" = "circle",
-    "2" = "triangle", "17" = "triangle", "24" = "triangle",
+    "2" = "triangle", "6" = "triangle", "17" = "triangle", "24" = "triangle", "25" = "triangle",
     "5" = "diamond", "18" = "diamond", "23" = "diamond",
     "3" = "plus", "4" = "cross",
     "circle"

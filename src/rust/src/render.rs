@@ -1297,10 +1297,11 @@ impl RenderBackend for PdfBackend<'_, '_> {
         if size_px <= 0.0 {
             return;
         }
-        // Text origin (local px). Glyph i sits at origin + gx[i]; baseline y is
-        // shared. Mirrors the raster placement.
+        // Text origin (local px). Glyph i sits at origin + gx[i]. The baseline y
+        // is per-line: glyph runs are split on a change of `gy` (a new line) and
+        // each is drawn at its own `start_y`, so multi-line text stacks correctly
+        // (avoids guessing krilla's per-glyph y_offset sign). Mirrors raster.
         let start_x = (run.ax - run.hjust * run.w) as f32;
-        let start_y = (run.ay - (run.gy[0] - run.vjust * run.h)) as f32;
         let base = if run.rot != 0.0 {
             transform.pre_concat(rotation_about(run.rot, run.ax, run.ay))
         } else {
@@ -1329,14 +1330,16 @@ impl RenderBackend for PdfBackend<'_, '_> {
             rule: KFillRule::NonZero,
         }));
 
-        // Draw in runs of consecutive glyphs sharing a font (handles fallback).
+        // Draw in runs of consecutive glyphs sharing a font AND a baseline (so a
+        // line break, which changes gy, starts a new run handles font fallback too).
         let mut i = 0;
         while i < n {
-            let (gpath, gface) = (&run.gpath[i], run.gface[i]);
+            let (gpath, gface, gy0) = (&run.gpath[i], run.gface[i], run.gy[i]);
             let mut j = i;
-            while j < n && &run.gpath[j] == gpath && run.gface[j] == gface {
+            while j < n && &run.gpath[j] == gpath && run.gface[j] == gface && run.gy[j] == gy0 {
                 j += 1;
             }
+            let start_y = (run.ay - (gy0 - run.vjust * run.h)) as f32;
             if let Some(font) = self.font_for(gpath, gface) {
                 let glyphs: Vec<KrillaGlyph> = (i..j)
                     .map(|k| {

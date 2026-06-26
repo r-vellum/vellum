@@ -24,6 +24,21 @@ test_that("per-element (vector) gpar is split into per-style vellum grobs", {
   expect_gt(px(225, 50)[3], 150L) # blue point
 })
 
+test_that("near-equal continuous styles are not merged into one group", {
+  # two points with sizes differing below format()'s precision must stay distinct
+  # (exact grouping), so each keeps its own style.
+  g <- grid::pointsGrob(c(0.3, 0.7), c(0.5, 0.5), pch = 19,
+                        size = grid::unit(c(2, 2 + 1e-7), "mm"),
+                        gp = grid::gpar(col = c("red", "blue")))
+  s <- as_vellum(g, 3, 1, dpi = 100)
+  expect_equal(length(s@bstate$build$kids), 2L) # two marker grobs, not one
+})
+
+test_that("pch 25 maps to a triangle (not the circle fallback)", {
+  expect_equal(.gv_pch(25)$shape, "triangle")
+  expect_false(.gv_pch(25)$fill) # 21-25 use gp$fill, not col-as-fill
+})
+
 test_that("a ggplot renders through vellum without error", {
   skip_if_not_installed("ggplot2")
   p <- ggplot2::ggplot(mtcars, ggplot2::aes(wt, mpg, colour = factor(cyl))) +

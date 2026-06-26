@@ -9,6 +9,8 @@
 //!
 //! The `Scene` is held in Rust and exposed to R as an external-pointer object.
 
+use std::collections::HashMap;
+
 use extendr_api::prelude::*;
 use tiny_skia::{Color, FillRule, Mask, PathBuilder, Pixmap, Stroke, Transform};
 
@@ -806,6 +808,8 @@ impl Scene {
         let resolved = self.resolve_all();
         let mut pm = Pixmap::new(self.w_px, self.h_px).expect("pick pixmap");
         pm.fill(Color::WHITE); // 0xFFFFFF = "no hit"
+        // Clip masks are page-sized; build one per viewport, not per node.
+        let mut mask_cache: HashMap<usize, Option<Mask>> = HashMap::new();
         for (i, (vp_id, node)) in self.nodes.iter().enumerate() {
             let id = self.picks[i];
             if id < 0 || id > 0x00FF_FFFE {
@@ -814,7 +818,9 @@ impl Scene {
             let rv = &resolved[*vp_id];
             let vp = &rv.vp;
             let t = vp.transform;
-            let mask = build_clip_mask(self.w_px, self.h_px, &rv.clip_chain);
+            let mask = &*mask_cache
+                .entry(*vp_id)
+                .or_insert_with(|| build_clip_mask(self.w_px, self.h_px, &rv.clip_chain));
             let mut paint = tiny_skia::Paint::default();
             paint.set_color(Color::from_rgba8(
                 ((id >> 16) & 255) as u8, ((id >> 8) & 255) as u8, (id & 255) as u8, 255,

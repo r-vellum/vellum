@@ -43,9 +43,13 @@ gpar <- S7::new_class(
   ),
   validator = function(self) {
     a <- self@alpha
-    # NULL/NA mean "inherit"; a concrete alpha must be a single number in [0, 1].
-    if (!is.null(a) && length(a) == 1L && !is.na(a) && is.numeric(a) && (a < 0 || a > 1)) {
-      return("@alpha must be a number in [0, 1] (or NULL to inherit)")
+    # NULL/NA mean "inherit"; any concrete alpha must lie in [0, 1].
+    if (!is.null(a) && is.numeric(a) && any(!is.na(a) & (a < 0 | a > 1))) {
+      return("@alpha must be in [0, 1] (or NULL to inherit)")
+    }
+    m <- self@linemitre
+    if (!is.null(m) && is.numeric(m) && any(!is.na(m) & m < 1)) {
+      return("@linemitre must be >= 1")
     }
     NULL
   }
