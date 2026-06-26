@@ -138,7 +138,8 @@ rs_attractor <- function(kind, n, a, b, c, d, x0, y0) .Call(wrap__rs_attractor, 
 #'}
 #'
 #'\subsection{Method `render_svg`}{
-#'Render the scene to an SVG file.
+#'Render the scene to an SVG file. `outline_text` emits glyph outlines
+#'instead of selectable `<text>` (pixel-faithful, matches raster/PDF).
 #'}
 #'
 #'\subsection{Method `render_pdf`}{
@@ -224,7 +225,7 @@ Scene$dpi <- function() .Call(wrap__Scene__dpi, self)
 
 Scene$render_png <- function(path) .Call(wrap__Scene__render_png, self, path)
 
-Scene$render_svg <- function(path) .Call(wrap__Scene__render_svg, self, path)
+Scene$render_svg <- function(path, outline_text) .Call(wrap__Scene__render_svg, self, path, outline_text)
 
 Scene$render_pdf <- function(path) .Call(wrap__Scene__render_pdf, self, path)
 

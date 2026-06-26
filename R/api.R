@@ -238,15 +238,21 @@ pop <- function(scene, n = 1) {
 }
 
 #' @rdname vl_scene
-#' @param path Output PNG file path.
+#' @param path Output file path; the format is taken from the extension (`.png`,
+#'   `.svg`, or `.pdf`).
+#' @param text For SVG output, how text is written: `"native"` (default) emits
+#'   selectable `<text>` referencing system fonts, `"outline"` emits glyph
+#'   outlines (pixel-faithful, identical to the raster/PDF backends, but not
+#'   selectable). Ignored for PNG/PDF.
 #' @return `render()`: `path`, invisibly.
 #' @export
-render <- function(scene, path) {
+render <- function(scene, path, text = c("native", "outline")) {
+  text <- match.arg(text)
   s <- .scene_to_backend(scene)
   ext <- tolower(tools::file_ext(path))
   switch(ext,
     png = s$render_png(path),
-    svg = s$render_svg(path),
+    svg = s$render_svg(path, identical(text, "outline")),
     pdf = s$render_pdf(path),
     cli::cli_abort("Unsupported output format {.val {ext}}; use .png, .svg, or .pdf.")
   )

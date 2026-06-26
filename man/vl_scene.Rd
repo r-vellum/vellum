@@ -25,7 +25,7 @@ draw(scene, grob)
 
 pop(scene, n = 1)
 
-render(scene, path)
+render(scene, path, text = c("native", "outline"))
 }
 \arguments{
 \item{width, height}{Page size (\code{\link[=unit]{unit()}} or numeric inches).}
@@ -50,7 +50,13 @@ viewport; inherited by everything drawn (e.g. a default \code{col}/\code{fontsiz
 
 \item{n}{Number of viewport levels to ascend.}
 
-\item{path}{Output PNG file path.}
+\item{path}{Output file path; the format is taken from the extension (\code{.png},
+\code{.svg}, or \code{.pdf}).}
+
+\item{text}{For SVG output, how text is written: \code{"native"} (default) emits
+selectable \verb{<text>} referencing system fonts, \code{"outline"} emits glyph
+outlines (pixel-faithful, identical to the raster/PDF backends, but not
+selectable). Ignored for PNG/PDF.}
 }
 \value{
 \code{vl_scene()}, \code{push()}, \code{draw()}, \code{pop()}: a \code{vellum_scene}.

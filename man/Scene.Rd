@@ -132,7 +132,8 @@ Render the scene to a PNG file.
 }
 
 \subsection{Method \code{render_svg}}{
-Render the scene to an SVG file.
+Render the scene to an SVG file. \code{outline_text} emits glyph outlines
+instead of selectable \verb{<text>} (pixel-faithful, matches raster/PDF).
 }
 
 \subsection{Method \code{render_pdf}}{

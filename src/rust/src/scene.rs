@@ -697,9 +697,10 @@ impl Scene {
         }
     }
 
-    /// Render the scene to an SVG file.
-    fn render_svg(&self, path: &str) {
-        let mut b = SvgBackend::new(self.w_px, self.h_px, self.bg);
+    /// Render the scene to an SVG file. `outline_text` emits glyph outlines
+    /// instead of selectable `<text>` (pixel-faithful, matches raster/PDF).
+    fn render_svg(&self, path: &str, outline_text: bool) {
+        let mut b = SvgBackend::new(self.w_px, self.h_px, self.bg, outline_text);
         self.render_to(&mut b);
         if let Err(e) = std::fs::write(path, b.into_string()) {
             throw_r_error(format!("failed to write SVG: {e}"));

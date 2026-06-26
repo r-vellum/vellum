@@ -51,6 +51,15 @@ test_that("text becomes a <text> element carrying the label and font", {
   expect_match(svg, 'font-weight="bold"')
 })
 
+test_that("text = 'outline' emits glyph outlines instead of <text> (FW5)", {
+  s <- vl_scene(2, 1, dpi = 100) |> draw(text_grob("Ag", x = 0.5, y = 0.5, gp = gpar(fontsize = 40)))
+  f <- withr::local_tempfile(fileext = ".svg")
+  render(s, f, text = "outline")
+  svg <- paste(readLines(f, warn = FALSE), collapse = "\n")
+  expect_no_match(svg, "<text")
+  expect_match(svg, "<path d=\"M") # filled glyph outlines
+})
+
 test_that("special characters in labels are XML-escaped", {
   s <- vl_scene() |> draw(text_grob("a<b&c"))
   expect_match(svg_of(s), "a&lt;b&amp;c")

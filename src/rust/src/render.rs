@@ -635,10 +635,13 @@ pub struct SvgBackend {
     def_ids: HashMap<String, String>,
     next_clip: u32,
     next_grad: u32,
+    /// When true, text is emitted as filled glyph `<path>` outlines (pixel-faithful,
+    /// matching raster/PDF) instead of selectable `<text>` (renderer-shaped).
+    outline_text: bool,
 }
 
 impl SvgBackend {
-    pub fn new(w: u32, h: u32, bg: Rgba) -> Self {
+    pub fn new(w: u32, h: u32, bg: Rgba, outline_text: bool) -> Self {
         let mut body = String::new();
         if bg.a > 0 {
             body.push_str(&format!(
@@ -657,6 +660,7 @@ impl SvgBackend {
             def_ids: HashMap::new(),
             next_clip: 0,
             next_grad: 0,
+            outline_text,
         }
     }
 
@@ -848,6 +852,38 @@ impl RenderBackend for SvgBackend {
 
     fn draw_text(&mut self, run: &TextRun, transform: Transform, clip: &Clip) {
         if run.label.is_empty() {
+            return;
+        }
+        if self.outline_text {
+            // Glyph-faithful: fill the same skrifa outlines the raster backend uses,
+            // each placed by the shared glyph transform — so SVG matches raster/PDF
+            // exactly (no dependence on the viewer's fonts).
+            let base = if run.rot != 0.0 {
+                transform.pre_concat(rotation_about(run.rot, run.ax, run.ay))
+            } else {
+                transform
+            };
+            let n = run.gid.len().min(run.gx.len()).min(run.gy.len())
+                .min(run.gsize.len()).min(run.gpath.len()).min(run.gface.len());
+            let mut paths = String::new();
+            for i in 0..n {
+                let outline = match glyph_outline_cached(&run.gpath[i], run.gface[i], run.gid[i], run.gsize[i] as f32) {
+                    Some(p) => p,
+                    None => continue,
+                };
+                let ox = run.ax + run.gx[i] - run.hjust * run.w;
+                let oy = run.ay - (run.gy[i] - run.vjust * run.h);
+                let place = base.pre_concat(Transform::from_row(1.0, 0.0, 0.0, -1.0, ox as f32, oy as f32));
+                paths.push_str(&format!("<path d=\"{}\"{}/>", path_to_d(&outline), transform_attr(place)));
+            }
+            if !paths.is_empty() {
+                let element = format!(
+                    "<g fill=\"{col}\" fill-opacity=\"{op}\">{paths}</g>",
+                    col = rgb_hex(run.color),
+                    op = opacity(run.color),
+                );
+                self.emit(&element, clip);
+            }
             return;
         }
         let anchor = match run.hjust {
