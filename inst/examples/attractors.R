@@ -25,9 +25,17 @@ library(vellum)
 args <- commandArgs(trailingOnly = TRUE)
 out <- if (length(args) >= 1) args[[1]] else "attractors.png"
 N <- if (length(args) >= 2) as.numeric(args[[2]]) else 1e7
-seed <- if (length(args) >= 3) as.integer(args[[3]]) else sample.int(.Machine$integer.max, 1)
+seed <- if (length(args) >= 3) {
+  as.integer(args[[3]])
+} else {
+  sample.int(.Machine$integer.max, 1)
+}
 set.seed(seed)
-message("seed: ", seed, "  (pass as the 3rd argument to reproduce this gallery)")
+message(
+  "seed: ",
+  seed,
+  "  (pass as the 3rd argument to reproduce this gallery)"
+)
 
 # --- the attractor cloud (Rust kernel) --------------------------------------
 # The map is sequential (each point depends on the previous), so it can't be
@@ -43,9 +51,9 @@ attractor <- function(kind, p, n = N, x0 = 0.1, y0 = 0.1) {
 # Families that yield interesting attractors across wide random ranges, with the
 # uniform range each of their four parameters is drawn from.
 families <- list(
-  clifford      = c(-2, 2),
-  dejong        = c(-3, 3),
-  svensson      = c(-3, 3),
+  clifford = c(-2, 2),
+  dejong = c(-3, 3),
+  svensson = c(-3, 3),
   fractal_dream = c(-2, 2)
 )
 
@@ -55,7 +63,11 @@ window <- function(x, y) {
   xr <- range(x)
   yr <- range(y)
   half <- max(diff(xr), diff(yr)) / 2 * 1.05
-  list(xlim = mean(xr) + c(-half, half), ylim = mean(yr) + c(-half, half), half = half)
+  list(
+    xlim = mean(xr) + c(-half, half),
+    ylim = mean(yr) + c(-half, half),
+    half = half
+  )
 }
 
 # Is this orbit worth drawing? Generate a cheap test orbit and reject a point, a
@@ -67,12 +79,29 @@ is_interesting <- function(kind, p, n = 1e5, g = 96L) {
   if (!all(is.finite(x)) || !all(is.finite(y))) {
     return(FALSE)
   }
-  if (diff(range(x)) < 1e-2 || diff(range(y)) < 1e-2 ||
-    diff(range(x)) > 1e4 || diff(range(y)) > 1e4) {
+  if (
+    diff(range(x)) < 1e-2 ||
+      diff(range(y)) < 1e-2 ||
+      diff(range(x)) > 1e4 ||
+      diff(range(y)) > 1e4
+  ) {
     return(FALSE)
   }
   w <- window(x, y)
-  occ <- mean(vellum:::rs_aggregate_2d(x, y, NULL, g, g, w$xlim[1], w$xlim[2], w$ylim[1], w$ylim[2]) > 0)
+  occ <- mean(
+    vellum:::rs_aggregate_2d(
+      x,
+      y,
+      NULL,
+      g,
+      g,
+      w$xlim[1],
+      w$xlim[2],
+      w$ylim[1],
+      w$ylim[2]
+    ) >
+      0
+  )
   occ >= 0.09 && occ <= 0.98 # reject point-collapse, short cycles, and thin streaks
 }
 
@@ -92,14 +121,17 @@ random_attractor <- function() {
 # Random colormaps: a curated set of light -> dark ramps, so on the white page
 # low-density regions fade into the background and dense filaments are saturated.
 palettes <- list(
-  blues   = c("#ffffff", "#c6dbef", "#6baed6", "#2171b5", "#08306b"),
-  reds    = c("#ffffff", "#fcbba1", "#fb6a4a", "#cb181d", "#67000d"),
-  greens  = c("#ffffff", "#c7e9c0", "#74c476", "#238b45", "#00441b"),
+  blues = c("#ffffff", "#c6dbef", "#6baed6", "#2171b5", "#08306b"),
+  reds = c("#ffffff", "#fcbba1", "#fb6a4a", "#cb181d", "#67000d"),
+  greens = c("#ffffff", "#c7e9c0", "#74c476", "#238b45", "#00441b"),
   purples = c("#ffffff", "#dadaeb", "#9e9ac8", "#6a51a3", "#3f007d"),
   oranges = c("#ffffff", "#fdd0a2", "#fd8d3c", "#d94801", "#7f2704"),
-  magma   = c("#ffffff", "#fca50a", "#dd513a", "#932667", "#000004"),
-  ocean   = c("#ffffff", "#a9e3f2", "#3fa0d6", "#1c63a8", "#040613"),
-  forest  = c("#ffffff", "#9be564", "#2e8b2e", "#0b3d0b", "#000000")
+  magma = c("#ffffff", "#fca50a", "#dd513a", "#932667", "#000004"),
+  ocean = c("#ffffff", "#a9e3f2", "#3fa0d6", "#1c63a8", "#040613"),
+  forest = c("#ffffff", "#9be564", "#2e8b2e", "#0b3d0b", "#000000"),
+  teal = c("#ffffff", "#b2e2e2", "#66c2a4", "#238b8d", "#00441b"),
+  gold = c("#ffffff", "#fee391", "#fec44f", "#d95f0e", "#662506"),
+  berry = c("#ffffff", "#f1b6da", "#de77ae", "#c51b7d", "#49006a")
 )
 random_palette <- function() palettes[[sample(length(palettes), 1)]]
 
@@ -115,24 +147,37 @@ H <- W * nrow / ncol
 cell_px <- round(W * dpi / ncol) # datashade canvas = cell pixel size (crisp)
 
 s <- vl_scene(width = W, height = H, dpi = dpi, bg = "white") |>
-  push(viewport(layout = grid_layout(
-    widths = unit(rep(1, ncol), "null"), heights = unit(rep(1, nrow), "null")
-  )))
+  push(viewport(
+    layout = grid_layout(
+      widths = unit(rep(1, ncol), "null"),
+      heights = unit(rep(1, nrow), "null")
+    )
+  ))
 
 for (i in seq_len(panels)) {
   a <- random_attractor()
   message(sprintf(
-    "[%2d/%d] %-13s a=%+.3f b=%+.3f c=%+.3f d=%+.3f", i, panels, a$kind,
-    a$p[1], a$p[2], a$p[3], a$p[4]
+    "[%2d/%d] %-13s a=%+.3f b=%+.3f c=%+.3f d=%+.3f",
+    i,
+    panels,
+    a$kind,
+    a$p[1],
+    a$p[2],
+    a$p[3],
+    a$p[4]
   ))
   pts <- attractor(a$kind, a$p) # full N points
   w <- window(pts$x, pts$y)
 
   img <- datashade(
-    pts$x, pts$y,
-    width = cell_px, height = cell_px,
-    xlim = w$xlim, ylim = w$ylim,
-    colors = random_palette(), how = "eq_hist"
+    pts$x,
+    pts$y,
+    width = cell_px,
+    height = cell_px,
+    xlim = w$xlim,
+    ylim = w$ylim,
+    colors = random_palette(),
+    how = "eq_hist"
   )
 
   row <- (i - 1) %/% ncol + 1

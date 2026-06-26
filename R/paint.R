@@ -52,6 +52,12 @@ radial_gradient <- function(colours, stops = NULL, cx = 0.5, cy = 0.5, r = 0.5,
   if (length(stops) != n) {
     cli::cli_abort("{.arg stops} must have one offset per colour ({n}).")
   }
+  if (any(!is.finite(stops) | stops < 0 | stops > 1)) {
+    cli::cli_abort("{.arg stops} must be finite offsets in [0, 1].")
+  }
+  if (is.unsorted(stops)) {
+    cli::cli_abort("{.arg stops} must be non-decreasing.")
+  }
   units <- match.arg(units, .coord_units)
   extend <- match.arg(extend, .gradient_extend)
   if (!all(is.finite(coords))) {

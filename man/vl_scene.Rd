@@ -8,7 +8,16 @@
 \alias{render}
 \title{Build and render a scene}
 \usage{
-vl_scene(width = 6, height = 4, dpi = 96, bg = "white")
+vl_scene(
+  width = 6,
+  height = 4,
+  dpi = 96,
+  bg = "white",
+  gp = gpar(),
+  xscale = c(0, 1),
+  yscale = c(0, 1),
+  clip = FALSE
+)
 
 push(scene, vp)
 
@@ -24,6 +33,14 @@ render(scene, path)
 \item{dpi}{Resolution in dots per inch.}
 
 \item{bg}{Background colour (or \code{NA} for transparent).}
+
+\item{gp}{Page-level graphical parameters (\code{\link[=gpar]{gpar()}}) carried by the root
+viewport; inherited by everything drawn (e.g. a default \code{col}/\code{fontsize}).}
+
+\item{xscale, yscale}{Native coordinate range of the root viewport, so
+\code{"native"} units work at the page level without an explicit \code{\link[=push]{push()}}.}
+
+\item{clip}{Clip drawing to the page rectangle?}
 
 \item{scene}{A \code{\link[=vl_scene]{vl_scene()}}.}
 

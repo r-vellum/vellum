@@ -160,6 +160,11 @@ vellum_scene <- S7::new_class(
 #' @param width,height Page size ([unit()] or numeric inches).
 #' @param dpi Resolution in dots per inch.
 #' @param bg Background colour (or `NA` for transparent).
+#' @param gp Page-level graphical parameters ([gpar()]) carried by the root
+#'   viewport; inherited by everything drawn (e.g. a default `col`/`fontsize`).
+#' @param xscale,yscale Native coordinate range of the root viewport, so
+#'   `"native"` units work at the page level without an explicit [push()].
+#' @param clip Clip drawing to the page rectangle?
 #' @return `vl_scene()`, `push()`, `draw()`, `pop()`: a `vellum_scene`.
 #' @examples
 #' s <- vl_scene(width = 4, height = 3) |>
@@ -168,8 +173,9 @@ vellum_scene <- S7::new_class(
 #'   draw(lines_grob(x = unit(0:10, "native"), y = unit(0:10, "native"),
 #'                   gp = gpar(col = "steelblue", lwd = 2)))
 #' @export
-vl_scene <- function(width = 6, height = 4, dpi = 96, bg = "white") {
-  root <- .bnode(vp = viewport(name = "root"))
+vl_scene <- function(width = 6, height = 4, dpi = 96, bg = "white",
+                     gp = gpar(), xscale = c(0, 1), yscale = c(0, 1), clip = FALSE) {
+  root <- .bnode(vp = viewport(name = "root", gp = gp, xscale = xscale, yscale = yscale, clip = clip))
   vellum_scene(
     width = .as_size(width), height = .as_size(height), dpi = dpi, bg = bg,
     root = NULL, bstate = .bstate_new(root, list(root), 0L, 0)
@@ -251,11 +257,9 @@ render <- function(scene, path) {
 .scene_to_backend <- function(scene) {
   s <- Scene$new(.to_inches(scene@width), .to_inches(scene@height), scene@dpi,
                  .rs_col(scene@bg) %||% c(255L, 255L, 255L, 0L))
-  root <- .materialize(scene)
-  if (!is.null(root@vp) && !is.null(root@vp@layout)) {
-    .set_layout(s, root@vp@layout)
-  }
-  for (child in root@children) compile(child, s)
+  # Compile the root as a gtree so the root viewport's gp / scales / clip / layout
+  # / mask all apply (it is pushed like any viewport), not just its layout.
+  compile(.materialize(scene), s)
   s
 }
 
@@ -353,9 +357,11 @@ S7::method(compile, grob_text) <- function(node, scene) {
     rot <- vctrs::vec_recycle(node@rot, n)
     hv <- .just_to_hv(node@just)
     # One shaping pass for all labels (repeats shaped once); see .draw_text_batch.
+    # `col` is passed through as-is (NULL = inherit the viewport's gp$col, like
+    # every other primitive; the root default is black, so plain text stays black).
     .draw_text_batch(scene, lab, x, y, hv[1], hv[2], rot,
                      node@gp@fontfamily %||% "", node@gp@fontface %||% "plain",
-                     node@gp@fontsize %||% 12, node@gp@col %||% "black", node@gp@alpha)
+                     node@gp@fontsize %||% 12, node@gp@col, node@gp@alpha)
   })
 }
 

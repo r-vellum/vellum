@@ -806,8 +806,15 @@ impl Scene {
                 (center_x - cw / 2.0, center_y - ch / 2.0, cw, ch)
             }
             Placement::Cell { row, col, rowspan, colspan } => {
-                let empty = Layout { widths: vec![], heights: vec![] };
-                let layout = self.viewports[node.parent.unwrap()].layout.as_ref().unwrap_or(&empty);
+                let layout = match self.viewports[node.parent.unwrap()].layout.as_ref() {
+                    Some(l) => l,
+                    None => throw_r_error(
+                        "a viewport placed by row/col must be inside a viewport that has a layout",
+                    ),
+                };
+                if row >= layout.heights.len() || col >= layout.widths.len() {
+                    throw_r_error("layout row/col is out of range for the parent layout's tracks");
+                }
                 let xe = solve_tracks(&layout.widths, parent.vp.w, self.dpi);
                 let ye = solve_tracks(&layout.heights, parent.vp.h, self.dpi);
                 let cstart = col.min(xe.len().saturating_sub(1));

@@ -45,6 +45,62 @@ test_that("lwd inherits from the enclosing viewport", {
   expect_gt(band(10), band(2))
 })
 
+# FW1: correctness & validation pass.
+test_that("alpha outside [0, 1] is rejected at gpar construction", {
+  expect_error(gpar(alpha = 1.5), "alpha")
+  expect_error(gpar(alpha = -0.1), "alpha")
+  expect_no_error(gpar(alpha = 0))
+  expect_no_error(gpar(alpha = 1))
+  expect_no_error(gpar(alpha = NULL)) # inherit
+})
+
+test_that("negative extents are rejected", {
+  expect_error(rect_grob(width = -1), "non-negative")
+  expect_error(rect_grob(height = -0.5), "non-negative")
+  expect_error(circle_grob(r = -0.2), "non-negative")
+  expect_error(points_grob(0.5, 0.5, size = unit(-2, "mm")), "non-negative")
+})
+
+test_that("gradient stops must be in [0, 1] and non-decreasing", {
+  expect_error(linear_gradient(c("a", "b"), stops = c(0, 1.4)), "0, 1|\\[0, 1\\]")
+  expect_error(linear_gradient(c("a", "b", "c"), stops = c(0, 1, 0.5)), "non-decreasing")
+  expect_no_error(linear_gradient(c("a", "b", "c"), stops = c(0, 0.3, 1)))
+})
+
+test_that("a layout cell out of range (or with no layout) errors at render", {
+  cell <- function(vp_layout, row, col) {
+    s <- vl_scene(1, 1, dpi = 50)
+    if (!is.null(vp_layout)) s <- push(s, viewport(layout = vp_layout))
+    s <- s |> push(viewport(row = row, col = col)) |> draw(rect_grob())
+    .scene_to_backend(s)$pixel(1, 1)
+  }
+  lay <- grid_layout(unit(c(1, 1), "null"), unit(c(1, 1), "null"))
+  expect_error(cell(lay, 5, 1), "out of range")
+  expect_error(cell(NULL, 1, 1), "layout") # row/col without a layout
+  expect_no_error(cell(lay, 2, 2))
+})
+
+test_that("text colour inherits the enclosing viewport (not forced black)", {
+  red <- vl_scene(1, 1, dpi = 100, bg = "white") |>
+    push(viewport(gp = gpar(col = "red"))) |>
+    draw(text_grob("A", x = 0.5, y = 0.5, gp = gpar(fontsize = 60)))
+  a <- scene_raster(red)
+  reddish <- a[1, , ] > a[2, , ] + 40 & a[1, , ] > 150
+  expect_true(any(reddish)) # red ink present
+  # default (no viewport col) still renders black
+  blk <- vl_scene(1, 1, dpi = 100, bg = "white") |>
+    draw(text_grob("A", x = 0.5, y = 0.5, gp = gpar(fontsize = 60)))
+  expect_lt(min(scene_raster(blk)[1, , ]), 80L)
+})
+
+test_that("page-level scales/gp on vl_scene reach the root viewport", {
+  s <- vl_scene(1, 1, dpi = 100, bg = "white", xscale = c(0, 10), yscale = c(0, 10)) |>
+    draw(rect_grob(x = unit(5, "native"), y = unit(5, "native"),
+                   width = unit(4, "native"), height = unit(4, "native"),
+                   gp = gpar(fill = "blue", col = NA)))
+  expect_equal(px(s, 50, 50)[1:3], c(0L, 0L, 255L))
+})
+
 test_that("an unrecognized text justification errors instead of silently becoming NA", {
   s <- vl_scene(1, 1, dpi = 50) |> draw(text_grob("x", just = "frobnicate"))
   expect_error(.scene_to_backend(s), "just")

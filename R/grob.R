@@ -72,9 +72,23 @@ grob_raster <- S7::new_class("grob_raster", parent = grob, package = "vellum",
 #' @export
 rect_grob <- function(x = 0.5, y = 0.5, width = 1, height = 1,
                       gp = gpar(), name = NULL, vp = NULL) {
-  grob_rect(x = as_unit(x), y = as_unit(y),
-            width = as_unit(width), height = as_unit(height),
+  w <- as_unit(width)
+  h <- as_unit(height)
+  .check_extent(w, "width")
+  .check_extent(h, "height")
+  grob_rect(x = as_unit(x), y = as_unit(y), width = w, height = h,
             gp = gp, name = name, vp = vp)
+}
+
+# An extent (width/height/radius/size) must be non-negative. Checks the resolved
+# numeric value of a unit vector (absolute/derived kinds are already in mm; npc/
+# native lengths are likewise non-negative when sensible).
+.check_extent <- function(u, arg) {
+  v <- vctrs::field(u, "value")
+  if (length(v) && any(v < 0, na.rm = TRUE)) {
+    cli::cli_abort("{.arg {arg}} must be non-negative.")
+  }
+  invisible(u)
 }
 
 #' @rdname grob
@@ -100,9 +114,11 @@ polygon_grob <- function(x, y, gp = gpar(), name = NULL, vp = NULL) {
 #' @export
 circle_grob <- function(x = 0.5, y = 0.5, r = 0.25, gp = gpar(), name = NULL, vp = NULL) {
   n <- .common_n(x, y, r)
+  ru <- as_unit(r)
+  .check_extent(ru, "r")
   grob_circle(x = vctrs::vec_recycle(as_unit(x), n),
               y = vctrs::vec_recycle(as_unit(y), n),
-              r = vctrs::vec_recycle(as_unit(r), n),
+              r = vctrs::vec_recycle(ru, n),
               gp = gp, name = name, vp = vp)
 }
 
@@ -111,9 +127,11 @@ circle_grob <- function(x = 0.5, y = 0.5, r = 0.25, gp = gpar(), name = NULL, vp
 #' @export
 points_grob <- function(x, y, size = unit(2, "mm"), gp = gpar(), name = NULL, vp = NULL) {
   n <- .coord_n(x, y)
+  sz <- as_unit(size, "mm")
+  .check_extent(sz, "size")
   grob_points(x = vctrs::vec_recycle(as_unit(x), n),
               y = vctrs::vec_recycle(as_unit(y), n),
-              size = vctrs::vec_recycle(as_unit(size, "mm"), n),
+              size = vctrs::vec_recycle(sz, n),
               gp = gp, name = name, vp = vp)
 }
 

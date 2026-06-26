@@ -40,7 +40,15 @@ gpar <- S7::new_class(
     fontface   = S7::new_property(S7::class_any, default = NULL),
     fontsize   = S7::new_property(S7::class_any, default = NULL),
     lineheight = S7::new_property(S7::class_any, default = NULL)
-  )
+  ),
+  validator = function(self) {
+    a <- self@alpha
+    # NULL/NA mean "inherit"; a concrete alpha must be a single number in [0, 1].
+    if (!is.null(a) && length(a) == 1L && !is.na(a) && is.numeric(a) && (a < 0 || a > 1)) {
+      return("@alpha must be a number in [0, 1] (or NULL to inherit)")
+    }
+    NULL
+  }
 )
 
 # An S7 property typed as a `unit` vector, with a quoted default evaluated at
