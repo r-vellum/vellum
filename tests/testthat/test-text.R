@@ -1,9 +1,9 @@
-test_that("rs_strwidth matches textshaping (fidelity) and scales", {
+test_that("vl_strwidth matches textshaping (fidelity) and scales", {
   ref <- textshaping::shape_text("Hello", size = 20)$metrics$width
-  expect_equal(rs_strwidth("Hello", fontsize = 20, unit = "pt"), ref, tolerance = 1e-6)
-  expect_equal(rs_strwidth("Hello", fontsize = 20, unit = "in"), ref / 72, tolerance = 1e-6)
-  expect_gt(rs_strwidth("Hello", fontsize = 40), rs_strwidth("Hello", fontsize = 20))
-  expect_gt(rs_strwidth("Hello", fontface = "bold"), 0)
+  expect_equal(vl_strwidth("Hello", fontsize = 20, unit = "pt"), ref, tolerance = 1e-6)
+  expect_equal(vl_strwidth("Hello", fontsize = 20, unit = "in"), ref / 72, tolerance = 1e-6)
+  expect_gt(vl_strwidth("Hello", fontsize = 40), vl_strwidth("Hello", fontsize = 20))
+  expect_gt(vl_strwidth("Hello", fontface = "bold"), 0)
 })
 
 test_that("empty or NA labels are a no-op", {

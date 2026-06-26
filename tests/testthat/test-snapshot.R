@@ -75,7 +75,7 @@ test_that("drawn text width matches the shaped (textshaping) width", {
   red <- scene_raster(s)[1, , ]
   inked <- which(apply(red, 1, min) < 128) # x columns with ink
   drawn_w <- diff(range(inked)) # px
-  shaped_w <- rs_strwidth(label, fontsize = fs, unit = "in") * 100 # px at 100 dpi
+  shaped_w <- vl_strwidth(label, fontsize = fs, unit = "in") * 100 # px at 100 dpi
   # ink extent ignores side bearings, so allow a few px slack
   expect_lt(abs(drawn_w - shaped_w), 8)
 })

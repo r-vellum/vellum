@@ -104,11 +104,11 @@ as_unit <- function(x, default = "npc") {
       line = v * fontsize * lineheight / 72 * 25.4,
       strwidth = {
         if (is.null(data$label)) cli::cli_abort('{.val strwidth} units need a {.arg label} in {.arg data}.')
-        v * rs_strwidth(data$label, family, face, fontsize, unit = "mm")
+        v * vl_strwidth(data$label, family, face, fontsize, unit = "mm")
       },
       strheight = {
         if (is.null(data$label)) cli::cli_abort('{.val strheight} units need a {.arg label} in {.arg data}.')
-        v * rs_strheight(data$label, family, face, fontsize, unit = "mm")
+        v * vl_strheight(data$label, family, face, fontsize, unit = "mm")
       },
       grobwidth = v * ext[1],
       grobheight = v * ext[2]

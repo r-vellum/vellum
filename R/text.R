@@ -1,53 +1,53 @@
 #' Measure text
 #'
-#' Returns the rendered width of a string for layout purposes, using the same
-#' shaping (\pkg{textshaping}/HarfBuzz + \pkg{systemfonts}) the renderer uses, so
-#' measurements match drawn text. Device-independent (does not need an open scene).
+#' `vl_strwidth()` / `vl_strheight()` return the rendered width/height of each
+#' string, using the same shaping (\pkg{textshaping}/HarfBuzz + \pkg{systemfonts})
+#' the renderer uses, so measurements match drawn text. Device-independent (does
+#' not need an open scene). Vectorised over `label`. (Named `vl_*` to avoid masking
+#' [grDevices::strwidth()].)
 #'
-#' @param label A single string to measure.
+#' @param label Character vector of strings to measure.
 #' @param family Font family (e.g. `"sans"`, `"serif"`, `"mono"`, or a specific
 #'   family name). `""` uses the system default.
 #' @param fontface One of `"plain"`, `"bold"`, `"italic"`, `"bold.italic"`.
 #' @param fontsize Font size in points.
 #' @param cex Multiplier applied to `fontsize`.
 #' @param unit Output unit: one of `"in"`, `"pt"`, `"mm"`, `"cm"`.
-#' @return The text width as a single number in `unit`.
+#' @return A numeric vector (one per `label`) of widths/heights in `unit`.
+#' @examples
+#' vl_strwidth(c("short", "a longer label"), fontsize = 14)
 #' @export
-rs_strwidth <- function(label, family = "", fontface = "plain",
+vl_strwidth <- function(label, family = "", fontface = "plain",
                         fontsize = 12, cex = 1, unit = "in") {
-  unit <- match.arg(unit, c("in", "pt", "mm", "cm"))
-  face <- .rs_face(fontface)
-  # res = 72 -> width in points.
-  w_pt <- textshaping::shape_text(
-    as.character(label)[1],
-    family = family, italic = face$italic, weight = face$weight,
-    size = fontsize * cex, res = 72
-  )$metrics$width
-  switch(unit,
-    pt = w_pt,
-    "in" = w_pt / 72,
-    mm = w_pt / 72 * 25.4,
-    cm = w_pt / 72 * 2.54
-  )
+  .text_metric(label, family, fontface, fontsize, cex, unit, "width")
 }
 
-#' @rdname rs_strwidth
-#' @return `rs_strheight()`: the text height as a single number in `unit`.
+#' @rdname vl_strwidth
 #' @export
-rs_strheight <- function(label, family = "", fontface = "plain",
+vl_strheight <- function(label, family = "", fontface = "plain",
                          fontsize = 12, cex = 1, unit = "in") {
+  .text_metric(label, family, fontface, fontsize, cex, unit, "height")
+}
+
+# Shared width/height measurement (vectorised over `label`); `which` is the
+# `shape_text` metric column ("width"/"height"). `res = 72` => points.
+.text_metric <- function(label, family, fontface, fontsize, cex, unit, which) {
   unit <- match.arg(unit, c("in", "pt", "mm", "cm"))
+  label <- as.character(label)
+  if (length(label) == 0L) {
+    return(numeric(0))
+  }
   face <- .rs_face(fontface)
-  h_pt <- textshaping::shape_text(
-    as.character(label)[1],
+  pt <- textshaping::shape_text(
+    label,
     family = family, italic = face$italic, weight = face$weight,
     size = fontsize * cex, res = 72
-  )$metrics$height
+  )$metrics[[which]]
   switch(unit,
-    pt = h_pt,
-    "in" = h_pt / 72,
-    mm = h_pt / 72 * 25.4,
-    cm = h_pt / 72 * 2.54
+    pt = pt,
+    "in" = pt / 72,
+    mm = pt / 72 * 25.4,
+    cm = pt / 72 * 2.54
   )
 }
 

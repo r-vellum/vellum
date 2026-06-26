@@ -383,8 +383,8 @@ grobheight <- function(grob, mult = 1) unit(mult, "grobheight", data = grob)
     fs <- g@gp@fontsize %||% 12
     fam <- g@gp@fontfamily %||% ""
     face <- g@gp@fontface %||% "plain"
-    w <- max(vapply(labs, function(l) rs_strwidth(l, fam, face, fs, unit = "mm"), double(1)))
-    h <- max(vapply(labs, function(l) rs_strheight(l, fam, face, fs, unit = "mm"), double(1)))
+    w <- max(vl_strwidth(labs, fam, face, fs, unit = "mm"))
+    h <- max(vl_strheight(labs, fam, face, fs, unit = "mm"))
     return(c(w, h))
   }
   sc <- Scene$new(.MEASURE_REF_IN, .MEASURE_REF_IN, .MEASURE_DPI, c(0L, 0L, 0L, 0L))
