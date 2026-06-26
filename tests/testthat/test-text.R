@@ -65,6 +65,15 @@ test_that("the shape cache keys on size (no cross-size collision)", {
   expect_gt(ink_w(40), ink_w(12))
 })
 
+test_that("the persistent glyph cache is transparent (cold == warm render)", {
+  s <- vl_scene(2, 1, dpi = 100, bg = "white") |>
+    draw(text_grob("Ahoy Ahoy", x = 0.5, y = 0.5, gp = gpar(fontsize = 28, col = "black")))
+  rs_clear_glyph_cache()
+  cold <- scene_raster(s) # populates the persistent glyph cache
+  warm <- scene_raster(s) # reuses it
+  expect_identical(cold, warm)
+})
+
 test_that("a newline produces two stacked lines of text", {
   # "X" over "X": two separated dark bands in the central column.
   s <- vl_scene(1, 1.5, dpi = 100, bg = "white") |>

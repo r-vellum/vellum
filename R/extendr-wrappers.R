@@ -8,6 +8,9 @@ NULL
 #' Backend identity and build info (internal diagnostic).
 rs_backend_info <- function() .Call(wrap__rs_backend_info)
 
+#' Empty the persistent glyph-outline cache (font bytes + extracted outlines).
+rs_clear_glyph_cache <- function() .Call(wrap__rs_clear_glyph_cache)
+
 rs_aggregate_2d <- function(x, y, w, nx, ny, x0, x1, y0, y1) .Call(wrap__rs_aggregate_2d, x, y, w, nx, ny, x0, x1, y0, y1)
 
 rs_attractor <- function(kind, n, a, b, c, d, x0, y0) .Call(wrap__rs_attractor, kind, n, a, b, c, d, x0, y0)

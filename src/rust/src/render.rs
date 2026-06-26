@@ -11,7 +11,7 @@ use std::rc::Rc;
 use tiny_skia::{FilterQuality, FillRule, Mask, Paint, Path, PathBuilder, Pixmap, Stroke, StrokeDash, Transform};
 
 use crate::color::{Extend, LineCap, LineJoin, Rgba, Stop};
-use crate::font::FontCache;
+use crate::font::glyph_outline_cached;
 use crate::units::rotation_about;
 
 /// Resolved stroke style handed to `stroke_path`: width + dash (device px, on/off,
@@ -305,7 +305,6 @@ pub struct RasterBackend {
     /// A stack of draw targets: `targets[0]` is the page; `begin_group` pushes an
     /// isolated layer that drawing then targets until `end_group` composites it.
     targets: Vec<Pixmap>,
-    fonts: FontCache,
     masks: HashMap<usize, Option<Rc<Mask>>>,
     w: u32,
     h: u32,
@@ -320,7 +319,7 @@ impl RasterBackend {
         if bg.a != 0 {
             pm.fill(bg.to_skia());
         }
-        RasterBackend { targets: vec![pm], fonts: FontCache::default(), masks: HashMap::new(), w, h }
+        RasterBackend { targets: vec![pm], masks: HashMap::new(), w, h }
     }
 
     pub fn into_pixmap(mut self) -> Pixmap {
@@ -500,7 +499,7 @@ impl RenderBackend for RasterBackend {
             .min(run.gpath.len())
             .min(run.gface.len());
         for i in 0..n {
-            let outline = match self.fonts.glyph_outline(&run.gpath[i], run.gface[i], run.gid[i], run.gsize[i] as f32) {
+            let outline = match glyph_outline_cached(&run.gpath[i], run.gface[i], run.gid[i], run.gsize[i] as f32) {
                 Some(p) => p,
                 None => continue,
             };
