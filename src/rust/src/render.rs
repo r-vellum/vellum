@@ -139,7 +139,7 @@ pub trait RenderBackend {
     fn fill_path(&mut self, path: &Path, transform: Transform, paint: &ResolvedPaint, rule: FillRule, clip: &Clip);
     fn stroke_path(&mut self, path: &Path, transform: Transform, color: Rgba, stroke: &StrokeStyle, clip: &Clip);
     fn draw_text(&mut self, run: &TextRun, transform: Transform, clip: &Clip);
-    fn begin_group(&mut self, mask: Option<MaskLayer>);
+    fn begin_group(&mut self, mask: Option<MaskLayer>, alpha: f32);
     fn end_group(&mut self);
 
     /// Draw a straight-RGBA image (`iw` x `ih`, top-left origin) into a `w` x `h`
@@ -247,6 +247,34 @@ pub fn rect_path(x: f64, y: f64, w: f64, h: f64) -> Option<Path> {
     tiny_skia::Rect::from_xywh(x as f32, y as f32, w as f32, h as f32).map(PathBuilder::from_rect)
 }
 
+/// A rounded rectangle (top-left `(x, y)`, size `w`×`h`, corner radius `r` in the
+/// same px units). `r` is clamped to half the shorter side; `r == 0` degrades to
+/// a plain rect. Corners are cubic-Bézier quarter-circle approximations.
+pub fn roundrect_path(x: f64, y: f64, w: f64, h: f64, r: f64) -> Option<Path> {
+    if w <= 0.0 || h <= 0.0 {
+        return None;
+    }
+    let r = r.max(0.0).min(w / 2.0).min(h / 2.0);
+    if r <= 0.0 {
+        return rect_path(x, y, w, h);
+    }
+    let kr = (r * 0.552_284_749_830_793_6) as f32; // control-point offset for a 90° arc
+    let r = r as f32;
+    let (x0, y0, x1, y1) = (x as f32, y as f32, (x + w) as f32, (y + h) as f32);
+    let mut pb = PathBuilder::new();
+    pb.move_to(x0 + r, y0);
+    pb.line_to(x1 - r, y0);
+    pb.cubic_to(x1 - r + kr, y0, x1, y0 + r - kr, x1, y0 + r);
+    pb.line_to(x1, y1 - r);
+    pb.cubic_to(x1, y1 - r + kr, x1 - r + kr, y1, x1 - r, y1);
+    pb.line_to(x0 + r, y1);
+    pb.cubic_to(x0 + r - kr, y1, x0, y1 - r + kr, x0, y1 - r);
+    pb.line_to(x0, y0 + r);
+    pb.cubic_to(x0, y0 + r - kr, x0 + r - kr, y0, x0 + r, y0);
+    pb.close();
+    pb.finish()
+}
+
 /// Render a solid AA circle of radius `r` (device px) into a tight square sprite,
 /// centred. Used to stamp large uniform point clouds instead of filling each.
 fn circle_sprite(r: f64, color: Rgba) -> Option<Pixmap> {
@@ -306,9 +334,10 @@ pub struct RasterBackend {
     /// A stack of draw targets: `targets[0]` is the page; `begin_group` pushes an
     /// isolated layer that drawing then targets until `end_group` composites it.
     targets: Vec<Pixmap>,
-    /// Per-open-group mask (parallel to the layer stack above the page); applied
-    /// when the group closes.
+    /// Per-open-group mask and opacity (parallel to the layer stack above the
+    /// page); applied when the group closes.
     group_masks: Vec<Option<MaskLayer>>,
+    group_alpha: Vec<f32>,
     /// Bounded LRU of compiled clip masks (most-recent first). tiny-skia requires
     /// a clip `Mask` to match the target pixmap size, so each entry is page-sized
     /// and cannot be shrunk to a bounding box; instead we cap how many stay
@@ -332,7 +361,7 @@ impl RasterBackend {
         if bg.a != 0 {
             pm.fill(bg.to_skia());
         }
-        RasterBackend { targets: vec![pm], group_masks: Vec::new(), clip_cache: Vec::new(), w, h }
+        RasterBackend { targets: vec![pm], group_masks: Vec::new(), group_alpha: Vec::new(), clip_cache: Vec::new(), w, h }
     }
 
     pub fn into_pixmap(mut self) -> Pixmap {
@@ -536,15 +565,17 @@ impl RenderBackend for RasterBackend {
         }
     }
 
-    fn begin_group(&mut self, mask: Option<MaskLayer>) {
-        // A transparent isolated layer; subsequent drawing targets it. The mask is
-        // held until the group closes.
+    fn begin_group(&mut self, mask: Option<MaskLayer>, alpha: f32) {
+        // A transparent isolated layer; subsequent drawing targets it. The mask
+        // and opacity are held until the group closes.
         self.targets.push(Pixmap::new(self.w, self.h).expect("non-zero layer dimensions"));
         self.group_masks.push(mask);
+        self.group_alpha.push(alpha);
     }
 
     fn end_group(&mut self) {
         let mask = self.group_masks.pop().flatten();
+        let alpha = self.group_alpha.pop().unwrap_or(1.0);
         let layer = match self.targets.pop() {
             Some(l) if !self.targets.is_empty() => l,
             other => {
@@ -556,14 +587,10 @@ impl RenderBackend for RasterBackend {
             }
         };
         let m = mask.map(|ml| Mask::from_pixmap(ml.pixmap.as_ref(), skia_masktype(ml.kind)));
-        self.target().draw_pixmap(
-            0,
-            0,
-            layer.as_ref(),
-            &tiny_skia::PixmapPaint::default(),
-            Transform::identity(),
-            m.as_ref(),
-        );
+        // Compositing the layer as a whole at `alpha` is what makes group opacity
+        // differ from per-element alpha: overlaps inside the layer don't compound.
+        let paint = tiny_skia::PixmapPaint { opacity: alpha.clamp(0.0, 1.0), ..Default::default() };
+        self.target().draw_pixmap(0, 0, layer.as_ref(), &paint, Transform::identity(), m.as_ref());
     }
 
     fn draw_circles(
@@ -653,6 +680,7 @@ pub struct SvgBackend {
     /// empty). `end_group` pops one and wraps it in a `<g>` (with its mask).
     groups: Vec<String>,
     group_masks: Vec<Option<MaskLayer>>,
+    group_alpha: Vec<f32>,
     clip_attrs: HashMap<usize, String>,
     /// Deduplicates gradient/pattern `<defs>` by content signature so repeated
     /// identical fills reference one def instead of emitting N copies.
@@ -681,6 +709,7 @@ impl SvgBackend {
             body,
             groups: Vec::new(),
             group_masks: Vec::new(),
+            group_alpha: Vec::new(),
             clip_attrs: HashMap::new(),
             def_ids: HashMap::new(),
             next_clip: 0,
@@ -953,17 +982,20 @@ impl RenderBackend for SvgBackend {
         self.emit(&element, clip);
     }
 
-    fn begin_group(&mut self, mask: Option<MaskLayer>) {
+    fn begin_group(&mut self, mask: Option<MaskLayer>, alpha: f32) {
         self.groups.push(String::new());
         self.group_masks.push(mask);
+        self.group_alpha.push(alpha);
     }
 
     fn end_group(&mut self) {
         let mask = self.group_masks.pop().flatten();
+        let alpha = self.group_alpha.pop().unwrap_or(1.0);
         let inner = self.groups.pop().unwrap_or_default();
         // SVG masks are luminance-based; bake the chosen coverage into a grayscale
         // image (gray == coverage) so a single luminance mask serves both kinds.
-        let wrapped = match mask.and_then(|ml| mask_png(&ml.pixmap, ml.kind)) {
+        // Group opacity is a `<g opacity>` (applies to the composited layer).
+        let mask_attr = match mask.and_then(|ml| mask_png(&ml.pixmap, ml.kind)) {
             Some(png) => {
                 let id = format!("g{}", self.next_grad);
                 self.next_grad += 1;
@@ -975,11 +1007,16 @@ impl RenderBackend for SvgBackend {
                     h = self.h,
                     b = b64(&png),
                 ));
-                format!("<g mask=\"url(#{id})\">{inner}</g>")
+                format!(" mask=\"url(#{id})\"")
             }
-            None => format!("<g>{inner}</g>"),
+            None => String::new(),
         };
-        self.out().push_str(&wrapped);
+        let opacity_attr = if alpha < 1.0 {
+            format!(" opacity=\"{alpha}\"")
+        } else {
+            String::new()
+        };
+        self.out().push_str(&format!("<g{mask_attr}{opacity_attr}>{inner}</g>"));
     }
 
     fn draw_image(&mut self, rgba: &[u8], iw: u32, ih: u32, x: f64, y: f64, w: f64, h: f64, interpolate: bool, transform: Transform, clip: &Clip) {
@@ -1427,28 +1464,30 @@ impl RenderBackend for PdfBackend<'_, '_> {
     // unifies alpha/luminance kinds and avoids premultiplied-color pitfalls. The
     // mask stream is drawn in device px, matching the root px->pt scale that is on
     // the surface stack throughout the walk, so it aligns with the content.
-    fn begin_group(&mut self, mask: Option<MaskLayer>) {
-        let pushes = match mask {
-            Some(ml) => {
-                let (w, h) = (ml.pixmap.width(), ml.pixmap.height());
-                match KSize::from_wh(w as f32, h as f32) {
-                    Some(size) => {
-                        let img = KImage::from_rgba8(mask_gray_rgba(&ml.pixmap, ml.kind), w, h);
-                        let stream = {
-                            let mut sb = self.surface.stream_builder();
-                            let mut surf = sb.surface();
-                            surf.draw_image(img, size);
-                            surf.finish();
-                            sb.finish()
-                        };
-                        self.surface.push_mask(KMask::new(stream, KMaskType::Luminosity));
-                        1
-                    }
-                    None => 0,
-                }
+    fn begin_group(&mut self, mask: Option<MaskLayer>, alpha: f32) {
+        let mut pushes = 0usize;
+        if let Some(ml) = mask {
+            let (w, h) = (ml.pixmap.width(), ml.pixmap.height());
+            if let Some(size) = KSize::from_wh(w as f32, h as f32) {
+                let img = KImage::from_rgba8(mask_gray_rgba(&ml.pixmap, ml.kind), w, h);
+                let stream = {
+                    let mut sb = self.surface.stream_builder();
+                    let mut surf = sb.surface();
+                    surf.draw_image(img, size);
+                    surf.finish();
+                    sb.finish()
+                };
+                self.surface.push_mask(KMask::new(stream, KMaskType::Luminosity));
+                pushes += 1;
             }
-            None => 0,
-        };
+        }
+        // Group opacity: an isolated transparency group composited at `alpha`.
+        if alpha < 1.0 {
+            if let Some(a) = NormalizedF32::new(alpha.clamp(0.0, 1.0)) {
+                self.surface.push_opacity(a);
+                pushes += 1;
+            }
+        }
         self.group_pushes.push(pushes);
     }
 

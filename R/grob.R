@@ -25,6 +25,13 @@ grob_rect <- S7::new_class("grob_rect", parent = grob, package = "vellum",
     width = .unit_prop("unit(1, \"npc\")"), height = .unit_prop("unit(1, \"npc\")")
   )
 )
+grob_roundrect <- S7::new_class("grob_roundrect", parent = grob, package = "vellum",
+  properties = list(
+    x = .unit_prop(), y = .unit_prop(),
+    width = .unit_prop("unit(1, \"npc\")"), height = .unit_prop("unit(1, \"npc\")"),
+    r = .unit_prop("unit(0.1, \"npc\")")
+  )
+)
 grob_lines <- S7::new_class("grob_lines", parent = grob, package = "vellum",
   properties = list(x = .unit_prop(), y = .unit_prop(),
                     arrow = S7::new_property(S7::class_any, default = NULL)))
@@ -40,9 +47,22 @@ grob_points <- S7::new_class("grob_points", parent = grob, package = "vellum",
 
 # Marker shape names -> backend codes (must match the `markers` arm in scene.rs).
 .marker_codes <- c(circle = 0L, square = 1L, triangle = 2L, diamond = 3L, plus = 4L, cross = 5L)
+# Extension point for rich text labels (plotmath, markdown, ...). A concrete
+# rich-label type subclasses this and adds a `.text_labels()` method that returns
+# the strings to shape; until such a type exists only plain character labels are
+# drawn. The seam keeps the grammar's text path from hard-coding `character`, so a
+# future label kind plugs in here rather than in every geom (see DESIGN, the
+# grammar-coupled items section).
+vellum_label <- S7::new_class("vellum_label", package = "vellum", abstract = TRUE)
+
+# The single place a label becomes the character vector the backend shapes.
+.text_labels <- S7::new_generic("text_labels", "label")
+S7::method(.text_labels, S7::class_character) <- function(label) label
+S7::method(.text_labels, S7::class_any) <- function(label) as.character(label)
+
 grob_text <- S7::new_class("grob_text", parent = grob, package = "vellum",
   properties = list(
-    label = S7::new_property(S7::class_character),
+    label = S7::new_property(S7::new_union(S7::class_character, vellum_label)),
     x = .unit_prop(), y = .unit_prop(),
     just = S7::new_property(S7::class_character, default = c("centre", "centre")),
     rot  = S7::new_property(S7::class_double, default = 0)
@@ -86,6 +106,23 @@ rect_grob <- function(x = 0.5, y = 0.5, width = 1, height = 1,
   .check_extent(h, "height")
   grob_rect(x = as_unit(x), y = as_unit(y), width = w, height = h,
             gp = gp, name = name, vp = vp)
+}
+
+#' @rdname grob
+#' @param r Corner radius ([unit()] or numeric). An `"npc"`/numeric radius is
+#'   isotropic (a fraction of the shorter side, like grid's `"snpc"`), so corners
+#'   stay circular on non-square rectangles; clamped to half the shorter side.
+#' @export
+roundrect_grob <- function(x = 0.5, y = 0.5, width = 1, height = 1, r = 0.1,
+                           gp = gpar(), name = NULL, vp = NULL) {
+  w <- as_unit(width)
+  h <- as_unit(height)
+  rr <- as_unit(r)
+  .check_extent(w, "width")
+  .check_extent(h, "height")
+  .check_extent(rr, "r")
+  grob_roundrect(x = as_unit(x), y = as_unit(y), width = w, height = h, r = rr,
+                 gp = gp, name = name, vp = vp)
 }
 
 # An extent (width/height/radius/size) must be non-negative. Checks the resolved
@@ -342,7 +379,9 @@ raster_grob <- function(image, x = 0.5, y = 0.5, width = 1, height = 1,
 #' @export
 text_grob <- function(label, x = 0.5, y = 0.5, just = "centre", rot = 0,
                       gp = gpar(), name = NULL, vp = NULL) {
-  grob_text(label = as.character(label), x = as_unit(x), y = as_unit(y),
+  # Rich labels pass through untouched; everything else coerces to character.
+  if (!S7::S7_inherits(label, vellum_label)) label <- as.character(label)
+  grob_text(label = label, x = as_unit(x), y = as_unit(y),
             just = as.character(just), rot = as.numeric(rot),
             gp = gp, name = name, vp = vp)
 }
@@ -378,13 +417,21 @@ grobheight <- function(grob, mult = 1) unit(mult, "grobheight", data = grob)
 .MEASURE_REF_IN <- 12
 .grob_extent <- function(g) {
   if (S7::S7_inherits(g, grob_text)) {
-    labs <- as.character(g@label)
+    labs <- .text_labels(g@label)
     if (length(labs) == 0L) return(c(0, 0))
     fs <- g@gp@fontsize %||% 12
     fam <- g@gp@fontfamily %||% ""
     face <- g@gp@fontface %||% "plain"
     w <- max(vl_strwidth(labs, fam, face, fs, unit = "mm"))
     h <- max(vl_strheight(labs, fam, face, fs, unit = "mm"))
+    # Rotation grows the axis-aligned bounding box; report the rotated extent so a
+    # grobwidth/grobheight-sized region holds slanted/vertical text.
+    rot <- (g@rot %||% 0)[1]
+    if (!is.null(rot) && rot %% 180 != 0) {
+      th <- rot * pi / 180
+      c <- abs(cos(th)); s <- abs(sin(th))
+      return(c(w * c + h * s, w * s + h * c))
+    }
     return(c(w, h))
   }
   sc <- Scene$new(.MEASURE_REF_IN, .MEASURE_REF_IN, .MEASURE_DPI, c(0L, 0L, 0L, 0L))

@@ -187,6 +187,8 @@ Scene$set_layout <- function(wvals, wunits, hvals, hunits) .Call(wrap__Scene__se
 
 Scene$rect <- function(x, y, w, h, xu, yu, wu, hu, fill, col, lwd, alpha, stroke) .Call(wrap__Scene__rect, self, x, y, w, h, xu, yu, wu, hu, fill, col, lwd, alpha, stroke)
 
+Scene$roundrect <- function(x, y, w, h, r, xu, yu, wu, hu, ru, fill, col, lwd, alpha, stroke) .Call(wrap__Scene__roundrect, self, x, y, w, h, r, xu, yu, wu, hu, ru, fill, col, lwd, alpha, stroke)
+
 Scene$lines <- function(x, y, xu, yu, col, lwd, alpha, stroke, aangle, alen, aends, aclosed) .Call(wrap__Scene__lines, self, x, y, xu, yu, col, lwd, alpha, stroke, aangle, alen, aends, aclosed)
 
 Scene$polygon <- function(x, y, xu, yu, fill, col, lwd, alpha, stroke) .Call(wrap__Scene__polygon, self, x, y, xu, yu, fill, col, lwd, alpha, stroke)
@@ -213,7 +215,7 @@ Scene$mask_begin <- function(kind) .Call(wrap__Scene__mask_begin, self, kind)
 
 Scene$mask_end <- function() .Call(wrap__Scene__mask_end, self)
 
-Scene$group_start <- function(mask) .Call(wrap__Scene__group_start, self, mask)
+Scene$group_start <- function(mask, alpha) .Call(wrap__Scene__group_start, self, mask, alpha)
 
 Scene$group_end <- function() .Call(wrap__Scene__group_end, self)
 

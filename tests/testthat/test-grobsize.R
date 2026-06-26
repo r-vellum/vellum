@@ -56,3 +56,17 @@ test_that("a viewport sized by grobwidth holds a box matching the label", {
   expect_equal(px(s, 200, 100)[1:3], c(255L, 0L, 0L))             # centre: in the box
   expect_equal(px(s, round(200 + half_w + 8), 100)[1:3], c(255L, 255L, 255L)) # past the box edge
 })
+
+test_that("text extent is rotation-aware (90 degrees swaps width and height)", {
+  g <- text_grob("Wide label", gp = gpar(fontsize = 20))
+  g90 <- text_grob("Wide label", rot = 90, gp = gpar(fontsize = 20))
+  w0 <- mm(grobwidth(g)); h0 <- mm(grobheight(g))
+  expect_equal(mm(grobwidth(g90)), h0, tolerance = 1e-6) # rotated width = upright height
+  expect_equal(mm(grobheight(g90)), w0, tolerance = 1e-6) # rotated height = upright width
+})
+
+test_that("a 45-degree label has a larger bounding box than upright", {
+  g <- text_grob("Wide label", gp = gpar(fontsize = 20))
+  g45 <- text_grob("Wide label", rot = 45, gp = gpar(fontsize = 20))
+  expect_gt(mm(grobheight(g45)), mm(grobheight(g))) # slanted text is taller
+})

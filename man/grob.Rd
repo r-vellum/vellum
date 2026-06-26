@@ -3,6 +3,7 @@
 \name{grob}
 \alias{grob}
 \alias{rect_grob}
+\alias{roundrect_grob}
 \alias{lines_grob}
 \alias{polygon_grob}
 \alias{bezier_grob}
@@ -20,6 +21,17 @@ rect_grob(
   y = 0.5,
   width = 1,
   height = 1,
+  gp = gpar(),
+  name = NULL,
+  vp = NULL
+)
+
+roundrect_grob(
+  x = 0.5,
+  y = 0.5,
+  width = 1,
+  height = 1,
+  r = 0.1,
   gp = gpar(),
   name = NULL,
   vp = NULL
@@ -109,6 +121,8 @@ text_grob(
 
 \item{vp}{Optional \code{\link[=viewport]{viewport()}} to draw this grob inside.}
 
+\item{r}{Radius (\code{\link[=unit]{unit()}} or numeric).}
+
 \item{arrow}{An \code{\link[=arrow]{arrow()}} spec to draw heads on the line/segment ends, or
 \code{NULL} for none.}
 
@@ -119,8 +133,6 @@ text_grob(
 \code{gp$fill} (and outline \code{gp$col}); \code{"plus"}/\code{"cross"} are stroke-only.}
 
 \item{open}{If \code{FALSE}, the spline is closed (wraps end to start).}
-
-\item{r}{Radius (\code{\link[=unit]{unit()}} or numeric).}
 
 \item{size}{Point size (\code{\link[=unit]{unit()}} or numeric).}
 

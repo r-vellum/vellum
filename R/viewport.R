@@ -20,6 +20,10 @@
 #' @param mask An optional mask: a grob (or list of grobs), or an [as_mask()]
 #'   result. The viewport's contents are rendered as an isolated layer and the
 #'   mask modulates their visibility.
+#' @param alpha Optional group opacity in `[0, 1]`. The viewport's contents are
+#'   composited as a single isolated layer at this opacity, so overlapping
+#'   elements do not accumulate (unlike per-element `gpar(alpha=)`). `NULL`
+#'   (default) means fully opaque.
 #' @param name Optional name (for [edit_node()]).
 #' @return A `viewport` object.
 #' @examples
@@ -29,7 +33,7 @@ viewport <- function(x = 0.5, y = 0.5, width = 1, height = 1,
                      xscale = c(0, 1), yscale = c(0, 1), angle = 0, clip = FALSE,
                      gp = gpar(), layout = NULL,
                      row = NULL, col = NULL, rowspan = 1, colspan = 1,
-                     mask = NULL, name = NULL) {
+                     mask = NULL, alpha = NULL, name = NULL) {
   .check_cell <- function(v, arg) {
     if (!is.null(v) && (length(v) != 1L || is.na(v) || v < 1)) {
       cli::cli_abort("{.arg {arg}} must be a single positive integer (1-based) or NULL.")
@@ -37,12 +41,15 @@ viewport <- function(x = 0.5, y = 0.5, width = 1, height = 1,
   }
   .check_cell(row, "row")
   .check_cell(col, "col")
+  if (!is.null(alpha) && (length(alpha) != 1L || is.na(alpha) || alpha < 0 || alpha > 1)) {
+    cli::cli_abort("{.arg alpha} must be a single number in {.val {c(0, 1)}} or NULL.")
+  }
   class_viewport(
     x = as_unit(x), y = as_unit(y), width = as_unit(width), height = as_unit(height),
     xscale = as.numeric(xscale), yscale = as.numeric(yscale),
     angle = as.numeric(angle), clip = clip, gp = gp, layout = layout,
     row = row, col = col, rowspan = as.integer(rowspan), colspan = as.integer(colspan),
-    mask = mask, name = name
+    mask = mask, alpha = alpha, name = name
   )
 }
 
@@ -62,6 +69,7 @@ class_viewport <- S7::new_class(
     rowspan = S7::new_property(S7::class_integer, default = 1L),
     colspan = S7::new_property(S7::class_integer, default = 1L),
     mask = S7::new_property(S7::class_any, default = NULL),
+    alpha = S7::new_property(S7::class_any, default = NULL),
     name = S7::new_property(S7::class_any, default = NULL)
   )
 )

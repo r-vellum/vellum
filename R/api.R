@@ -312,6 +312,22 @@ S7::method(compile, grob_rect) <- function(node, scene) {
   })
 }
 
+S7::method(compile, grob_roundrect) <- function(node, scene) {
+  .with_vp(node, scene, {
+    n <- vctrs::vec_size_common(node@x, node@y, node@width, node@height, node@r)
+    ex <- .coord(node@x, "npc", n); ey <- .coord(node@y, "npc", n)
+    ew <- .coord(node@width, "npc", n); eh <- .coord(node@height, "npc", n)
+    er <- .coord(node@r, "npc", n)
+    g <- .gp4(node@gp, scene)
+    # Rounded rects are typically few (keys/labels); one FFI call each, shared gpar.
+    for (i in seq_len(n)) {
+      scene$roundrect(ex$value[i], ey$value[i], ew$value[i], eh$value[i], er$value[i],
+                      ex$code[i], ey$code[i], ew$code[i], eh$code[i], er$code[i],
+                      g$fill, g$col, g$lwd, g$alpha, g$stroke)
+    }
+  })
+}
+
 S7::method(compile, grob_lines) <- function(node, scene) {
   .with_vp(node, scene, {
     ex <- .coord(node@x); ey <- .coord(node@y); g <- .gp4(node@gp, scene)
@@ -398,9 +414,10 @@ S7::method(compile, grob_raster) <- function(node, scene) {
 
 S7::method(compile, grob_text) <- function(node, scene) {
   .with_vp(node, scene, {
-    n <- vctrs::vec_size_common(node@label, node@x, node@y)
+    labels <- .text_labels(node@label) # seam: rich labels -> strings (plain = identity)
+    n <- vctrs::vec_size_common(labels, node@x, node@y)
     if (n == 0L) return(invisible())
-    lab <- vctrs::vec_recycle(node@label, n)
+    lab <- vctrs::vec_recycle(labels, n)
     x <- vctrs::vec_recycle(node@x, n); y <- vctrs::vec_recycle(node@y, n)
     rot <- vctrs::vec_recycle(node@rot, n)
     hv <- .just_to_hv(node@just)
@@ -416,12 +433,17 @@ S7::method(compile, grob_text) <- function(node, scene) {
 S7::method(compile, gtree) <- function(node, scene) {
   .push_vp(scene, node@vp)
   mask <- if (!is.null(node@vp)) node@vp@mask else NULL
-  if (!is.null(mask)) {
-    m <- .normalize_mask(mask)
-    idx <- scene$mask_begin(m$code)        # route mask grobs into the mask
-    for (g in m$grobs) compile(g, scene)
-    scene$mask_end()
-    scene$group_start(idx)                 # mask installed up front; content is isolated
+  alpha <- if (!is.null(node@vp)) node@vp@alpha else NULL
+  # A group (isolated layer) is needed for a mask and/or a sub-1 group opacity.
+  if (!is.null(mask) || (!is.null(alpha) && alpha < 1)) {
+    idx <- -1L
+    if (!is.null(mask)) {
+      m <- .normalize_mask(mask)
+      idx <- scene$mask_begin(m$code)      # route mask grobs into the mask
+      for (g in m$grobs) compile(g, scene)
+      scene$mask_end()
+    }
+    scene$group_start(idx, alpha %||% 1)   # mask + opacity installed up front; content isolated
     for (child in node@children) compile(child, scene)
     scene$group_end()
   } else {

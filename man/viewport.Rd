@@ -21,6 +21,7 @@ viewport(
   rowspan = 1,
   colspan = 1,
   mask = NULL,
+  alpha = NULL,
   name = NULL
 )
 
@@ -50,6 +51,11 @@ coordinates) to clip to an arbitrary path.}
 \item{mask}{An optional mask: a grob (or list of grobs), or an \code{\link[=as_mask]{as_mask()}}
 result. The viewport's contents are rendered as an isolated layer and the
 mask modulates their visibility.}
+
+\item{alpha}{Optional group opacity in \verb{[0, 1]}. The viewport's contents are
+composited as a single isolated layer at this opacity, so overlapping
+elements do not accumulate (unlike per-element \code{gpar(alpha=)}). \code{NULL}
+(default) means fully opaque.}
 
 \item{name}{Optional name (for \code{\link[=edit_node]{edit_node()}}).}
 

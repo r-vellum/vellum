@@ -16,8 +16,8 @@ use extendr_api::prelude::*;
 use tiny_skia::{Color, FillRule, Mask, PathBuilder, Pixmap, Stroke, Transform};
 
 use crate::render::{
-    rect_path, Clip, ClipShape, MaskKind, MaskLayer, PdfBackend, RasterBackend, RenderBackend, ResolvedPaint,
-    StrokeStyle, SvgBackend, TextRun,
+    rect_path, roundrect_path, Clip, ClipShape, MaskKind, MaskLayer, PdfBackend, RasterBackend, RenderBackend,
+    ResolvedPaint, StrokeStyle, SvgBackend, TextRun,
 };
 
 use crate::color::{opt_color, Gpar, GparAcc, Lty, Paint, PartialGpar, Rgba};
@@ -130,6 +130,7 @@ struct ResolvedVp {
 #[derive(Clone, Debug)]
 enum Node {
     Rect { x: f64, y: f64, w: f64, h: f64, xu: Unit, yu: Unit, wu: Unit, hu: Unit, gp: PartialGpar },
+    RoundRect { x: f64, y: f64, w: f64, h: f64, r: f64, xu: Unit, yu: Unit, wu: Unit, hu: Unit, ru: Unit, gp: PartialGpar },
     Lines { x: Vec<f64>, y: Vec<f64>, xu: Vec<Unit>, yu: Vec<Unit>, arrow: Option<Arrow>, gp: PartialGpar },
     Polygon { x: Vec<f64>, y: Vec<f64>, xu: Vec<Unit>, yu: Vec<Unit>, gp: PartialGpar },
     Circle { x: f64, y: f64, r: f64, xu: Unit, yu: Unit, ru: Unit, gp: PartialGpar },
@@ -202,10 +203,10 @@ enum Node {
         interpolate: bool,
     },
     /// Opens an isolated compositing layer (paired with `GroupEnd`), optionally
-    /// modulated by mask `mask` (an index into `Scene::masks`). The mask is
-    /// attached at the start because PDF must install its soft mask before the
-    /// masked content is drawn.
-    GroupStart { mask: Option<usize> },
+    /// modulated by mask `mask` (an index into `Scene::masks`) and composited at
+    /// group opacity `alpha` (1.0 = opaque). The mask/opacity are attached at the
+    /// start because PDF must install them before the masked content is drawn.
+    GroupStart { mask: Option<usize>, alpha: f32 },
     /// Closes the layer and composites it.
     GroupEnd,
 }
@@ -214,6 +215,7 @@ impl Node {
     fn gp(&self) -> &PartialGpar {
         match self {
             Node::Rect { gp, .. }
+            | Node::RoundRect { gp, .. }
             | Node::Lines { gp, .. }
             | Node::Polygon { gp, .. }
             | Node::Circle { gp, .. }
@@ -440,6 +442,24 @@ impl Scene {
             yu: Unit::from_code(yu),
             wu: Unit::from_code(wu),
             hu: Unit::from_code(hu),
+            gp,
+        });
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn roundrect(&mut self, x: f64, y: f64, w: f64, h: f64, r: f64, xu: i32, yu: i32, wu: i32, hu: i32, ru: i32, fill: Robj, col: Robj, lwd: Robj, alpha: Robj, stroke: Robj) {
+        let gp = PartialGpar::from_robj(&fill, &col, &lwd, &alpha, &stroke);
+        self.emit_node(Node::RoundRect {
+            x,
+            y,
+            w,
+            h,
+            r,
+            xu: Unit::from_code(xu),
+            yu: Unit::from_code(yu),
+            wu: Unit::from_code(wu),
+            hu: Unit::from_code(hu),
+            ru: Unit::from_code(ru),
             gp,
         });
     }
@@ -680,9 +700,9 @@ impl Scene {
     /// (negative = no mask, just isolation). Routed through `emit_node` so a group
     /// nested inside a mask (a mask grob that itself masks a viewport) lands in
     /// the same node list as its content, keeping markers and content in sync.
-    fn group_start(&mut self, mask: i32) {
+    fn group_start(&mut self, mask: i32, alpha: f64) {
         let mask = if mask >= 0 { Some(mask as usize) } else { None };
-        self.emit_node(Node::GroupStart { mask });
+        self.emit_node(Node::GroupStart { mask, alpha: alpha.clamp(0.0, 1.0) as f32 });
     }
 
     /// Close the most recently opened group.
@@ -848,6 +868,13 @@ impl Scene {
                     let (cx, cy) = (vp.x_pos(*x, *xu), vp.y_pos(*y, *yu));
                     let (pw, ph) = (vp.x_len(*w, *wu), vp.y_len(*h, *hu));
                     if let Some(p) = rect_path(cx - pw / 2.0, cy - ph / 2.0, pw, ph) {
+                        fill(&mut pm, &p, FillRule::Winding);
+                    }
+                }
+                Node::RoundRect { x, y, w, h, r, xu, yu, wu, hu, ru, .. } => {
+                    let (cx, cy) = (vp.x_pos(*x, *xu), vp.y_pos(*y, *yu));
+                    let (pw, ph) = (vp.x_len(*w, *wu), vp.y_len(*h, *hu));
+                    if let Some(p) = roundrect_path(cx - pw / 2.0, cy - ph / 2.0, pw, ph, vp.r_len(*r, *ru)) {
                         fill(&mut pm, &p, FillRule::Winding);
                     }
                 }
@@ -1139,13 +1166,13 @@ impl Scene {
     fn render_nodes<B: RenderBackend>(&self, b: &mut B, resolved: &[ResolvedVp], nodes: &[(usize, Node)]) {
         for (vp_id, node) in nodes {
             match node {
-                Node::GroupStart { mask } => {
+                Node::GroupStart { mask, alpha } => {
                     let ml = mask.and_then(|m| self.masks.get(m)).map(|md| {
                         let mut mb = RasterBackend::new(self.w_px, self.h_px, Rgba { r: 0, g: 0, b: 0, a: 0 });
                         self.render_nodes(&mut mb, resolved, &md.nodes);
                         MaskLayer { pixmap: mb.into_pixmap(), kind: md.kind }
                     });
-                    b.begin_group(ml);
+                    b.begin_group(ml, *alpha);
                     continue;
                 }
                 Node::GroupEnd => {
@@ -1180,6 +1207,16 @@ impl Scene {
                     let pw = vp.x_len(*w, *wu);
                     let ph = vp.y_len(*h, *hu);
                     if let Some(path) = rect_path(cx - pw / 2.0, cy - ph / 2.0, pw, ph) {
+                        fill_then_stroke(b, &path, &gp, t, &clip, vp, FillRule::Winding);
+                    }
+                }
+                Node::RoundRect { x, y, w, h, r, xu, yu, wu, hu, ru, .. } => {
+                    let cx = vp.x_pos(*x, *xu);
+                    let cy = vp.y_pos(*y, *yu);
+                    let pw = vp.x_len(*w, *wu);
+                    let ph = vp.y_len(*h, *hu);
+                    let pr = vp.r_len(*r, *ru); // isotropic radius (npc -> min side)
+                    if let Some(path) = roundrect_path(cx - pw / 2.0, cy - ph / 2.0, pw, ph, pr) {
                         fill_then_stroke(b, &path, &gp, t, &clip, vp, FillRule::Winding);
                     }
                 }
@@ -1314,7 +1351,8 @@ impl Scene {
                         let cx = vp.x_pos(x[i], xu[i]);
                         let cy = vp.y_pos(y[i], yu[i]);
                         let rr = vp.r_len(size[i], su[i]);
-                        if rr <= 0.0 {
+                        // Drop a marker at a non-finite position (an R `NA`).
+                        if rr <= 0.0 || !cx.is_finite() || !cy.is_finite() {
                             continue;
                         }
                         let (cxf, cyf, rrf) = (cx as f32, cy as f32, rr as f32);
@@ -1413,8 +1451,13 @@ impl Scene {
                         if style.width > 0.0 {
                             let mut pb = PathBuilder::new();
                             for i in 0..n {
-                                pb.move_to(vp.x_pos(x0[i], x0u[i]) as f32, vp.y_pos(y0[i], y0u[i]) as f32);
-                                pb.line_to(vp.x_pos(x1[i], x1u[i]) as f32, vp.y_pos(y1[i], y1u[i]) as f32);
+                                let (sx, sy) = (vp.x_pos(x0[i], x0u[i]) as f32, vp.y_pos(y0[i], y0u[i]) as f32);
+                                let (ex, ey) = (vp.x_pos(x1[i], x1u[i]) as f32, vp.y_pos(y1[i], y1u[i]) as f32);
+                                // Skip a segment with a non-finite endpoint (an R `NA`).
+                                if sx.is_finite() && sy.is_finite() && ex.is_finite() && ey.is_finite() {
+                                    pb.move_to(sx, sy);
+                                    pb.line_to(ex, ey);
+                                }
                             }
                             if let Some(path) = pb.finish() {
                                 b.stroke_lines(&path, t, col, &style, &clip);
@@ -1613,12 +1656,32 @@ fn build_poly(x: &[f64], y: &[f64], xu: &[Unit], yu: &[Unit], vp: &Vp, close: bo
     if n < 2 {
         return None;
     }
+    // A non-finite coordinate (an R `NA`/`NaN`) breaks the line, matching grid:
+    // the polyline splits into independent sub-paths, and for a polygon each run
+    // of finite points becomes its own closed sub-polygon.
     let mut pb = PathBuilder::new();
-    pb.move_to(vp.x_pos(x[0], xu[0]) as f32, vp.y_pos(y[0], yu[0]) as f32);
-    for i in 1..n {
-        pb.line_to(vp.x_pos(x[i], xu[i]) as f32, vp.y_pos(y[i], yu[i]) as f32);
+    let mut open = false; // a sub-path is currently being built
+    let mut run = 0; // points in the current sub-path
+    for i in 0..n {
+        let px = vp.x_pos(x[i], xu[i]) as f32;
+        let py = vp.y_pos(y[i], yu[i]) as f32;
+        if px.is_finite() && py.is_finite() {
+            if open {
+                pb.line_to(px, py);
+            } else {
+                pb.move_to(px, py);
+                open = true;
+            }
+            run += 1;
+        } else {
+            if open && close && run >= 2 {
+                pb.close();
+            }
+            open = false;
+            run = 0;
+        }
     }
-    if close {
+    if open && close && run >= 2 {
         pb.close();
     }
     pb.finish()
