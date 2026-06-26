@@ -73,6 +73,13 @@ rs_backend_info <- function() .Call(wrap__rs_backend_info)
 #'passes per-glyph ids/positions/fonts plus the block size.
 #'}
 #'
+#'\subsection{Method `texts`}{
+#'Add a whole batch of pre-shaped text labels in one call (one shaping pass
+#'on the R side, one FFI here). Glyphs are flat across all labels, split by
+#'`nper` (glyph count per label); positions/sizes/rot/labels are per-label;
+#'font + just + colour are shared.
+#'}
+#'
 #'\subsection{Method `mask_begin`}{
 #'Begin collecting a mask's content for the current viewport. Until the
 #'matching `mask_end`, primitives are routed into the mask instead of the
@@ -166,6 +173,8 @@ Scene$path <- function(x, y, xu, yu, nper, evenodd, fill, col, lwd, alpha, strok
 Scene$image <- function(rgba, iw, ih, x, y, w, h, xu, yu, wu, hu, interpolate) .Call(wrap__Scene__image, self, rgba, iw, ih, x, y, w, h, xu, yu, wu, hu, interpolate)
 
 Scene$text <- function(x, y, xu, yu, rot, hjust, vjust, w, h, gid, gx, gy, gsize, gpath, gface, label, family, face, size, col, alpha) .Call(wrap__Scene__text, self, x, y, xu, yu, rot, hjust, vjust, w, h, gid, gx, gy, gsize, gpath, gface, label, family, face, size, col, alpha)
+
+Scene$texts <- function(x, y, xu, yu, rot, hjust, vjust, w, h, nper, gid, gx, gy, gsize, gpath, gface, label, family, face, size, col, alpha) .Call(wrap__Scene__texts, self, x, y, xu, yu, rot, hjust, vjust, w, h, nper, gid, gx, gy, gsize, gpath, gface, label, family, face, size, col, alpha)
 
 Scene$mask_begin <- function(kind) .Call(wrap__Scene__mask_begin, self, kind)
 

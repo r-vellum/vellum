@@ -111,6 +111,57 @@ rs_strheight <- function(label, family = "", fontface = "plain",
   invisible()
 }
 
+# Shape and emit many labels that share one font (a vectorised text grob). All
+# labels are shaped in ONE textshaping call (10x faster than per-label) and
+# repeated strings are shaped once. `x`/`y` are unit vectors recycled to the label
+# count; `rot` is per-label; `hjust`/`vjust`/`col`/`alpha`/font are shared.
+.draw_text_batch <- function(scene, labels, x, y, hjust, vjust, rot,
+                             family, fontface, fontsize, col, alpha) {
+  labels <- as.character(labels)
+  n <- length(labels)
+  keep <- !is.na(labels) & nzchar(labels)
+  if (!any(keep)) {
+    return(invisible())
+  }
+  dpi <- scene$dpi()
+  scale <- dpi / 72
+  face <- .rs_face(fontface)
+  uniq <- unique(labels[keep])
+  sh <- textshaping::shape_text(uniq,
+    family = family, italic = face$italic, weight = face$weight, size = fontsize
+  )
+  g <- sh$shape
+  by_id <- split(seq_len(nrow(g)), g$metric_id) # glyph rows per unique label
+  umap <- match(labels, uniq)
+  # Drawn labels, with their glyph-row blocks; drop labels that shaped to nothing.
+  drawn <- which(keep)
+  rows <- lapply(umap[drawn], function(ui) {
+    r <- by_id[[as.character(ui)]]
+    if (is.null(r)) integer(0) else r
+  })
+  nper <- lengths(rows)
+  ok <- nper > 0L
+  drawn <- drawn[ok]
+  if (length(drawn) == 0L) {
+    return(invisible())
+  }
+  gi <- unlist(rows[ok], use.names = FALSE) # flat glyph-row indices, label order
+  nper <- nper[ok]
+  cx <- .coord(x, "npc", n)
+  cy <- .coord(y, "npc", n)
+  rot <- vctrs::vec_recycle(as.numeric(rot), n)
+  ud <- umap[drawn]
+  # One FFI call builds one text node per label from the flat glyph arrays.
+  scene$texts(
+    cx$value[drawn], cy$value[drawn], cx$code[drawn], cy$code[drawn], rot[drawn], hjust, vjust,
+    sh$metrics$width[ud] * scale, sh$metrics$height[ud] * scale, as.integer(nper),
+    as.integer(g$index[gi]), as.numeric(g$x_offset[gi]) * scale, as.numeric(g$y_offset[gi]) * scale,
+    as.numeric(g$font_size[gi]) * scale, as.character(g$font_path[gi]), as.integer(g$font_index[gi]),
+    labels[drawn], family, fontface, fontsize, .rs_col_inh(col), .rs_num_inh(alpha)
+  )
+  invisible()
+}
+
 # Map an R fontface to textshaping's italic/weight arguments.
 .rs_face <- function(fontface) {
   f <- tolower(as.character(fontface)[1])

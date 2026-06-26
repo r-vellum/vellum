@@ -74,6 +74,13 @@ Add pre-shaped text. The R wrapper does shaping (via \code{textshaping}) and
 passes per-glyph ids/positions/fonts plus the block size.
 }
 
+\subsection{Method \code{texts}}{
+Add a whole batch of pre-shaped text labels in one call (one shaping pass
+on the R side, one FFI here). Glyphs are flat across all labels, split by
+\code{nper} (glyph count per label); positions/sizes/rot/labels are per-label;
+font + just + colour are shared.
+}
+
 \subsection{Method \code{mask_begin}}{
 Begin collecting a mask's content for the current viewport. Until the
 matching \code{mask_end}, primitives are routed into the mask instead of the

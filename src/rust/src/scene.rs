@@ -552,6 +552,45 @@ impl Scene {
         });
     }
 
+    /// Add a whole batch of pre-shaped text labels in one call (one shaping pass
+    /// on the R side, one FFI here). Glyphs are flat across all labels, split by
+    /// `nper` (glyph count per label); positions/sizes/rot/labels are per-label;
+    /// font + just + colour are shared.
+    #[allow(clippy::too_many_arguments)]
+    fn texts(
+        &mut self,
+        x: &[f64], y: &[f64], xu: &[i32], yu: &[i32], rot: &[f64],
+        hjust: f64, vjust: f64, w: &[f64], h: &[f64], nper: &[i32],
+        gid: &[i32], gx: &[f64], gy: &[f64], gsize: &[f64], gpath: Vec<String>, gface: &[i32],
+        label: Vec<String>, family: &str, face: &str, size: f64, col: Robj, alpha: Robj,
+    ) {
+        let gp = PartialGpar::from_robj(&rnull(), &col, &rnull(), &alpha, &rnull());
+        let nlab = [x.len(), y.len(), xu.len(), yu.len(), rot.len(), w.len(), h.len(), nper.len(), label.len()]
+            .into_iter().min().unwrap_or(0);
+        let mut off = 0usize;
+        for i in 0..nlab {
+            let cnt = nper[i].max(0) as usize;
+            let lo = off.min(gid.len());
+            let hi = (off + cnt).min(gid.len());
+            off = hi;
+            self.emit_node(Node::Text {
+                x: x[i], y: y[i], xu: Unit::from_code(xu[i]), yu: Unit::from_code(yu[i]),
+                rot: rot[i], hjust, vjust, w: w[i], h: h[i],
+                gid: gid[lo..hi].iter().map(|&v| v.max(0) as u32).collect(),
+                gx: gx[lo..hi].to_vec(),
+                gy: gy[lo..hi].to_vec(),
+                gsize: gsize[lo..hi].to_vec(),
+                gpath: gpath[lo..hi].to_vec(),
+                gface: gface[lo..hi].iter().map(|&v| v.max(0) as u32).collect(),
+                label: label[i].clone(),
+                family: family.to_string(),
+                face: face.to_string(),
+                size,
+                gp: gp.clone(),
+            });
+        }
+    }
+
     /// Begin collecting a mask's content for the current viewport. Until the
     /// matching `mask_end`, primitives are routed into the mask instead of the
     /// drawn scene. `kind` is 0 (alpha) or 1 (luminance). Returns its index.

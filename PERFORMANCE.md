@@ -68,14 +68,19 @@ it (no sprite reuse, since rects vary in size). Acceptable but improvable.
 Ordered by impact × breadth. Each is independently shippable + benchmark-gated
 (must not regress the wins; must reach ≥ grid on its target aspect).
 
-### PERF-1 — Batched text (compile) — *highest priority*
-Shape **all** of a `grob_text`'s labels in one `textshaping::shape_text` call and
-emit **one** batched text node (one FFI), instead of the per-label loop. Add a
-small **shaping cache** keyed by (label, family, face, size) so repeated strings
-(tick labels, legends) shape once. Rust gains a `texts()` batch method storing a
-run of positioned labels under one gpar. Target: 5e3 labels from 1.87 s → ~0.15 s
-(≈ grid-class). Files: `R/text.R`, `R/api.R` (`compile(grob_text)`),
-`src/rust/src/scene.rs` (batched text node + method).
+### PERF-1 — Batched text (compile) — ✅ **done**
+`compile(grob_text)` now shapes **all** labels in one `textshaping::shape_text`
+call (repeats shaped once — `unique()`), flattens the glyphs, and emits them in
+**one** FFI via a new `Scene::texts()` that builds one text node per label in
+Rust. (`R/text.R` `.draw_text_batch`, `R/api.R`, `src/rust/src/scene.rs`.)
+Result (5e3 labels): **1.87 s → 0.13 s repeated / 0.50 s distinct** (≈4–14×); at
+realistic counts (≤500 labels) text is now tens of ms (100 repeated ≈ grid).
+**Residual gap to grid** (still ~3–9× at high *distinct*-label counts): shaping
+goes through `textshaping` (R/HarfBuzz wrapper, slower than the device's C path)
+and vellum fills crisp **glyph outlines** rather than blitting cached glyph
+bitmaps. A sub-pixel glyph-bitmap cache would close the raster part but risks the
+font fidelity that is a core goal — deliberately *not* done; left as a possible
+future PERF-1b if profiling of real plots demands it.
 
 ### PERF-2 — O(1) scene builder (build) — *highest priority*
 Make `draw()`/`push()`/`pop()` append in amortised O(1) instead of copying the

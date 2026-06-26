@@ -210,11 +210,10 @@ S7::method(compile, grob_text) <- function(node, scene) {
     x <- vctrs::vec_recycle(node@x, n); y <- vctrs::vec_recycle(node@y, n)
     rot <- vctrs::vec_recycle(node@rot, n)
     hv <- .just_to_hv(node@just)
-    fam <- node@gp@fontfamily %||% ""; face <- node@gp@fontface %||% "plain"
-    fs <- node@gp@fontsize %||% 12; col <- node@gp@col %||% "black"; alpha <- node@gp@alpha
-    for (i in seq_len(n)) {
-      .draw_text(scene, lab[i], x[i], y[i], hv[1], hv[2], rot[i], fam, face, fs, 1, col, alpha)
-    }
+    # One shaping pass for all labels (repeats shaped once); see .draw_text_batch.
+    .draw_text_batch(scene, lab, x, y, hv[1], hv[2], rot,
+                     node@gp@fontfamily %||% "", node@gp@fontface %||% "plain",
+                     node@gp@fontsize %||% 12, node@gp@col %||% "black", node@gp@alpha)
   })
 }
 
