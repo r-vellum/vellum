@@ -1,57 +1,96 @@
-# Strange-attractor gallery, in the spirit of https://datashader.org — a grid of
-# chaotic maps, each iterated for *millions* of points, then drawn with
-# `datashade()` (aggregate-then-shade) under a randomly chosen colormap.
+# Random strange-attractor gallery, in the spirit of https://datashader.org — a
+# grid of chaotic maps with RANDOM parameters, each iterated for millions of
+# points, then drawn with `datashade()` (aggregate-then-shade) under a random
+# colormap. Every run is different.
 #
 # The recipe mirrors what makes datashader fast: a tight compiled kernel produces
 # the orbit (here a Rust kernel, `vellum:::rs_attractor`, ~0.25 s for 10M points),
 # then `datashade()` bins the cloud to a canvas-sized grid in one O(N) pass and
 # colour-maps it with histogram equalisation (`eq_hist`) so structure across many
-# orders of density magnitude stays visible. Each panel is composited into a
-# `grid_layout` cell — so this also exercises vellum's viewport/layout engine.
+# orders of density magnitude stays visible. Panels are composited into a
+# `grid_layout` — so this also exercises vellum's viewport/layout engine.
 #
-# Run with:  Rscript inst/examples/attractors.R [output.png] [N]
+# Random parameters mostly produce a *point* or a divergence, not a pretty
+# attractor, so each panel is found by rejection sampling: draw random params,
+# keep only orbits that fill a fair fraction of the canvas.
+#
+# Run with:  Rscript inst/examples/attractors.R [output.png] [N] [seed]
 #   output.png  where to write (default: attractors.png in the working dir)
 #   N           points per attractor (default 1e7 = 10 million; lower for speed)
-#
-# Colormaps are random per run, so each render looks different. Re-run for more.
+#   seed        integer for a reproducible gallery (default: a fresh random one,
+#               printed so you can reproduce a run you liked)
 
 library(vellum)
 
 args <- commandArgs(trailingOnly = TRUE)
 out <- if (length(args) >= 1) args[[1]] else "attractors.png"
 N <- if (length(args) >= 2) as.numeric(args[[2]]) else 1e7
+seed <- if (length(args) >= 3) as.integer(args[[3]]) else sample.int(.Machine$integer.max, 1)
+set.seed(seed)
+message("seed: ", seed, "  (pass as the 3rd argument to reproduce this gallery)")
 
 # --- the attractor cloud (Rust kernel) --------------------------------------
-# Returns the orbit as list(x, y). The map is sequential (each point depends on
-# the previous), so it can't be vectorised in R — the Rust kernel is what makes
-# 10M points practical. Supported `kind`s: "clifford", "dejong", "svensson",
-# "bedhead", "fractal_dream", "hopalong", "gumowski_mira".
-attractor <- function(kind, a, b, c = 0, d = 0, n = N, x0 = 0.1, y0 = 0.1) {
+# The map is sequential (each point depends on the previous), so it can't be
+# vectorised in R — the Rust kernel is what makes 10M points practical. The kernel
+# also supports "bedhead"/"hopalong"/"gumowski_mira", but those need hand-tuned
+# parameters, so the random gallery samples only the families below.
+attractor <- function(kind, p, n = N, x0 = 0.1, y0 = 0.1) {
   n <- as.integer(n)
-  v <- vellum:::rs_attractor(kind, n, a, b, c, d, x0, y0)
+  v <- vellum:::rs_attractor(kind, n, p[1], p[2], p[3], p[4], x0, y0)
   list(x = v[seq_len(n)], y = v[n + seq_len(n)])
 }
 
-# A diverse set of well-known parameter sets across the attractor families.
-# (`x0`/`y0` default to 0.1; Gumowski-Mira needs a non-trivial start.)
-specs <- list(
-  list(kind = "clifford",      a = -1.4,      b = 1.6,       c = 1.0,      d = 0.7),
-  list(kind = "clifford",      a = -1.7,      b = 1.8,       c = -1.9,     d = -0.4),
-  list(kind = "dejong",        a = -2.0,      b = -2.0,      c = -1.2,     d = 2.0),
-  list(kind = "dejong",        a = 1.4,       b = -2.3,      c = 2.4,      d = -2.1),
-  list(kind = "dejong",        a = -2.7,      b = -0.09,     c = -0.86,    d = -2.2),
-  list(kind = "svensson",      a = 1.5,       b = -1.8,      c = 1.6,      d = 0.9),
-  list(kind = "bedhead",       a = -0.81,     b = -0.92),
-  list(kind = "fractal_dream", a = -0.966918, b = -2.879879, c = 0.765145, d = 0.744728),
-  list(kind = "fractal_dream", a = -2.8276,   b = 1.2813,    c = 1.9655,   d = 0.597),
-  list(kind = "hopalong",      a = 2.0,       b = 1.0,       c = 0.0),
-  list(kind = "hopalong",      a = -11.0,     b = 0.5,       c = 0.5),
-  list(kind = "gumowski_mira", a = 0.0083,    b = 0.9998,    x0 = 0.5,     y0 = 0.5)
+# Families that yield interesting attractors across wide random ranges, with the
+# uniform range each of their four parameters is drawn from.
+families <- list(
+  clifford      = c(-2, 2),
+  dejong        = c(-3, 3),
+  svensson      = c(-3, 3),
+  fractal_dream = c(-2, 2)
 )
+
+# Square data window centred on the orbit (so a square cell maps without
+# distortion), with a small margin.
+window <- function(x, y) {
+  xr <- range(x)
+  yr <- range(y)
+  half <- max(diff(xr), diff(yr)) / 2 * 1.05
+  list(xlim = mean(xr) + c(-half, half), ylim = mean(yr) + c(-half, half), half = half)
+}
+
+# Is this orbit worth drawing? Generate a cheap test orbit and reject a point, a
+# short cycle, or a divergence: require it to occupy a fair fraction of the grid.
+is_interesting <- function(kind, p, n = 1e5, g = 96L) {
+  pts <- attractor(kind, p, n = n)
+  x <- pts$x
+  y <- pts$y
+  if (!all(is.finite(x)) || !all(is.finite(y))) {
+    return(FALSE)
+  }
+  if (diff(range(x)) < 1e-2 || diff(range(y)) < 1e-2 ||
+    diff(range(x)) > 1e4 || diff(range(y)) > 1e4) {
+    return(FALSE)
+  }
+  w <- window(x, y)
+  occ <- mean(vellum:::rs_aggregate_2d(x, y, NULL, g, g, w$xlim[1], w$xlim[2], w$ylim[1], w$ylim[2]) > 0)
+  occ >= 0.09 && occ <= 0.98 # reject point-collapse, short cycles, and thin streaks
+}
+
+# Draw a random interesting (family, parameters) pair.
+random_attractor <- function() {
+  for (try in seq_len(500)) {
+    kind <- sample(names(families), 1)
+    rng <- families[[kind]]
+    p <- runif(4, rng[1], rng[2])
+    if (is_interesting(kind, p)) {
+      return(list(kind = kind, p = p))
+    }
+  }
+  stop("no interesting attractor found in 500 tries (unlucky seed) — re-run")
+}
 
 # Random colormaps: a curated set of light -> dark ramps, so on the white page
 # low-density regions fade into the background and dense filaments are saturated.
-# One per panel, picked at random.
 palettes <- list(
   blues   = c("#ffffff", "#c6dbef", "#6baed6", "#2171b5", "#08306b"),
   reds    = c("#ffffff", "#fcbba1", "#fb6a4a", "#cb181d", "#67000d"),
@@ -65,14 +104,14 @@ palettes <- list(
 random_palette <- function() palettes[[sample(length(palettes), 1)]]
 
 # --- gallery layout ---------------------------------------------------------
-# A grid derived from the number of attractors, with square cells (so the square
-# data window below maps without distortion): pick the columns, then size the page
+# Square cells (the data window above is square): pick the columns, size the page
 # height to match.
+panels <- 12
 ncol <- 4
-nrow <- ceiling(length(specs) / ncol)
+nrow <- ceiling(panels / ncol)
 W <- 12
 dpi <- 100
-H <- W * nrow / ncol # square cells
+H <- W * nrow / ncol
 cell_px <- round(W * dpi / ncol) # datashade canvas = cell pixel size (crisp)
 
 s <- vl_scene(width = W, height = H, dpi = dpi, bg = "white") |>
@@ -80,30 +119,19 @@ s <- vl_scene(width = W, height = H, dpi = dpi, bg = "white") |>
     widths = unit(rep(1, ncol), "null"), heights = unit(rep(1, nrow), "null")
   )))
 
-for (i in seq_along(specs)) {
-  sp <- specs[[i]]
-  message(sprintf("[%d/%d] %s: %s points...", i, length(specs), sp$kind,
-                  format(N, big.mark = ",", scientific = FALSE)))
-  pts <- attractor(
-    sp$kind, sp$a, sp$b,
-    c = if (is.null(sp$c)) 0 else sp$c, d = if (is.null(sp$d)) 0 else sp$d,
-    x0 = if (is.null(sp$x0)) 0.1 else sp$x0, y0 = if (is.null(sp$y0)) 0.1 else sp$y0
-  )
-
-  # A square data window centred on the orbit (no aspect distortion in a square
-  # cell), with a small margin.
-  xr <- range(pts$x)
-  yr <- range(pts$y)
-  half <- max(diff(xr), diff(yr)) / 2 * 1.05
-  cx <- mean(xr)
-  cy <- mean(yr)
-  xlim <- c(cx - half, cx + half)
-  ylim <- c(cy - half, cy + half)
+for (i in seq_len(panels)) {
+  a <- random_attractor()
+  message(sprintf(
+    "[%2d/%d] %-13s a=%+.3f b=%+.3f c=%+.3f d=%+.3f", i, panels, a$kind,
+    a$p[1], a$p[2], a$p[3], a$p[4]
+  ))
+  pts <- attractor(a$kind, a$p) # full N points
+  w <- window(pts$x, pts$y)
 
   img <- datashade(
     pts$x, pts$y,
     width = cell_px, height = cell_px,
-    xlim = xlim, ylim = ylim,
+    xlim = w$xlim, ylim = w$ylim,
     colors = random_palette(), how = "eq_hist"
   )
 
