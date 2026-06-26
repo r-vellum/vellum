@@ -81,6 +81,14 @@ fn rs_attractor(kind: &str, n: i32, a: f64, b: f64, c: f64, d: f64, x0: f64, y0:
             "dejong" => ((a * y).sin() - (b * x).cos(), (c * x).sin() - (d * y).cos()),
             "svensson" => (d * (a * x).sin() - (b * y).sin(), c * (a * x).cos() + (b * y).cos()),
             "bedhead" => ((x * y / b).sin() * y + (a * x - y).cos(), x + (y).sin() / b),
+            "fractal_dream" => ((b * y).sin() + c * (b * x).sin(), (a * x).sin() + d * (a * y).sin()),
+            "hopalong" => (y - x.signum() * (b * x - c).abs().sqrt(), a - x),
+            "gumowski_mira" => {
+                // g(t) = a*t + 2(1-a) t^2 / (1+t^2); x' = b*y + g(x); y' = -x + g(x')
+                let g = |t: f64| a * t + 2.0 * (1.0 - a) * t * t / (1.0 + t * t);
+                let px = b * y + g(x);
+                (px, -x + g(px))
+            }
             // clifford (default)
             _ => ((a * y).sin() + c * (a * x).cos(), (b * x).sin() + d * (b * y).cos()),
         };

@@ -24,21 +24,29 @@ N <- if (length(args) >= 2) as.numeric(args[[2]]) else 1e7
 # --- the attractor cloud (Rust kernel) --------------------------------------
 # Returns the orbit as list(x, y). The map is sequential (each point depends on
 # the previous), so it can't be vectorised in R — the Rust kernel is what makes
-# 10M points practical.
+# 10M points practical. Supported `kind`s: "clifford", "dejong", "svensson",
+# "bedhead", "fractal_dream", "hopalong", "gumowski_mira".
 attractor <- function(kind, a, b, c = 0, d = 0, n = N, x0 = 0.1, y0 = 0.1) {
   n <- as.integer(n)
   v <- vellum:::rs_attractor(kind, n, a, b, c, d, x0, y0)
   list(x = v[seq_len(n)], y = v[n + seq_len(n)])
 }
 
-# A few well-known parameter sets (Clifford / de Jong / Svensson / Bedhead).
+# A diverse set of well-known parameter sets across the attractor families.
+# (`x0`/`y0` default to 0.1; Gumowski-Mira needs a non-trivial start.)
 specs <- list(
-  list(name = "Clifford",  kind = "clifford", a = -1.4, b = 1.6,  c = 1.0,  d = 0.7),
-  list(name = "Clifford'", kind = "clifford", a = -1.7, b = 1.8,  c = -1.9, d = -0.4),
-  list(name = "De Jong",   kind = "dejong",   a = -2.0, b = -2.0, c = -1.2, d = 2.0),
-  list(name = "De Jong'",  kind = "dejong",   a = 1.4,  b = -2.3, c = 2.4,  d = -2.1),
-  list(name = "Svensson",  kind = "svensson", a = 1.5,  b = -1.8, c = 1.6,  d = 0.9),
-  list(name = "Bedhead",   kind = "bedhead",  a = -0.81, b = -0.92, c = 0, d = 0)
+  list(kind = "clifford",      a = -1.4,      b = 1.6,       c = 1.0,      d = 0.7),
+  list(kind = "clifford",      a = -1.7,      b = 1.8,       c = -1.9,     d = -0.4),
+  list(kind = "dejong",        a = -2.0,      b = -2.0,      c = -1.2,     d = 2.0),
+  list(kind = "dejong",        a = 1.4,       b = -2.3,      c = 2.4,      d = -2.1),
+  list(kind = "dejong",        a = -2.7,      b = -0.09,     c = -0.86,    d = -2.2),
+  list(kind = "svensson",      a = 1.5,       b = -1.8,      c = 1.6,      d = 0.9),
+  list(kind = "bedhead",       a = -0.81,     b = -0.92),
+  list(kind = "fractal_dream", a = -0.966918, b = -2.879879, c = 0.765145, d = 0.744728),
+  list(kind = "fractal_dream", a = -2.8276,   b = 1.2813,    c = 1.9655,   d = 0.597),
+  list(kind = "hopalong",      a = 2.0,       b = 1.0,       c = 0.0),
+  list(kind = "hopalong",      a = -11.0,     b = 0.5,       c = 0.5),
+  list(kind = "gumowski_mira", a = 0.0083,    b = 0.9998,    x0 = 0.5,     y0 = 0.5)
 )
 
 # Random colormaps: a curated set of light -> dark ramps, so on the white page
@@ -57,13 +65,15 @@ palettes <- list(
 random_palette <- function() palettes[[sample(length(palettes), 1)]]
 
 # --- gallery layout ---------------------------------------------------------
-ncol <- 3
-nrow <- 2
+# A grid derived from the number of attractors, with square cells (so the square
+# data window below maps without distortion): pick the columns, then size the page
+# height to match.
+ncol <- 4
+nrow <- ceiling(length(specs) / ncol)
 W <- 12
-H <- 8
 dpi <- 100
-cell_px_w <- round(W * dpi / ncol) # datashade canvas = cell pixel size (crisp)
-cell_px_h <- round(H * dpi / nrow)
+H <- W * nrow / ncol # square cells
+cell_px <- round(W * dpi / ncol) # datashade canvas = cell pixel size (crisp)
 
 s <- vl_scene(width = W, height = H, dpi = dpi, bg = "white") |>
   push(viewport(layout = grid_layout(
@@ -72,9 +82,13 @@ s <- vl_scene(width = W, height = H, dpi = dpi, bg = "white") |>
 
 for (i in seq_along(specs)) {
   sp <- specs[[i]]
-  message(sprintf("[%d/%d] %s: %s points...", i, length(specs), sp$name,
+  message(sprintf("[%d/%d] %s: %s points...", i, length(specs), sp$kind,
                   format(N, big.mark = ",", scientific = FALSE)))
-  pts <- attractor(sp$kind, sp$a, sp$b, sp$c, sp$d)
+  pts <- attractor(
+    sp$kind, sp$a, sp$b,
+    c = if (is.null(sp$c)) 0 else sp$c, d = if (is.null(sp$d)) 0 else sp$d,
+    x0 = if (is.null(sp$x0)) 0.1 else sp$x0, y0 = if (is.null(sp$y0)) 0.1 else sp$y0
+  )
 
   # A square data window centred on the orbit (no aspect distortion in a square
   # cell), with a small margin.
@@ -88,7 +102,7 @@ for (i in seq_along(specs)) {
 
   img <- datashade(
     pts$x, pts$y,
-    width = cell_px_w, height = cell_px_h,
+    width = cell_px, height = cell_px,
     xlim = xlim, ylim = ylim,
     colors = random_palette(), how = "eq_hist"
   )
