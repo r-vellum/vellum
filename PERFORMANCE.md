@@ -28,7 +28,7 @@ in `inst/benchmarks/`.
 | polyline, self-intersecting | 1e5 | 5.80 | 18.3 | 0.3× ✗ | raster (tiny-skia stroke→fill) |
 | segments | 3e4 | 0.62 | 2.73 | 0.2× ✗ | raster (stroke of many sub-paths) |
 | **text** | 5e3 | 0.03 | 1.87 | **0.02× ✗✗** | **compile (per-label shaping)** |
-| viewports (faceting) | 2500 | 0.60 | 182 | 0.003× ✗✗ | **build (O(n²) scene builder)** |
+| viewports (faceting) | 2500 | 0.57 | 2.64 | 0.2× (was 0.003×) | build now O(n); per-op overhead |
 
 vellum already wins the dense-marker and line cases (batched FFI + sprite
 stamping + one rasterize pass). The losses cluster in four root causes below.
@@ -82,14 +82,19 @@ bitmaps. A sub-pixel glyph-bitmap cache would close the raster part but risks th
 font fidelity that is a core goal — deliberately *not* done; left as a possible
 future PERF-1b if profiling of real plots demands it.
 
-### PERF-2 — O(1) scene builder (build) — *highest priority*
-Make `draw()`/`push()`/`pop()` append in amortised O(1) instead of copying the
-children vector each time. Options: (a) back the builder with a mutable
-accumulator (an environment-held list per open node) and materialise the immutable
-`gtree` once at `render()`; (b) keep immutability but store children in a
-structure with O(1) append (e.g. a growable list / pairlist reversed at the end).
-Target: 2500 panels from 182 s → < 1 s; linear in grob count. Files: `R/api.R`
-(`vl_scene`/`push`/`draw`/`pop`/`.modify_at`, builder internals).
+### PERF-2 — O(1) scene builder (build) — ✅ **done**
+`draw()`/`push()`/`pop()` now append in amortised **O(1)**. The builder is backed
+by mutable "build nodes" (`.bnode`: an environment whose `kids` env is a hashed
+dict keyed by append index — O(1) insert), kept on `scene@build`/`scene@open`. The
+immutable `gtree` is materialised lazily (`.materialize`) only when needed — at
+`render()`/`.scene_to_backend()` and at any query/edit (`node_names`/`get_node`/
+`edit_node`). `edit_node` returns a materialised (immutable) scene and clears the
+build env, so editing never mutates a shared builder. (`R/api.R`.)
+Result: builder is a flat **~4.5 µs/draw regardless of N** (10k/20k/40k all 4.4–4.7
+µs). Faceting 2500 panels: **182 s → 2.64 s** (~70×); now linear in grob count
+(500/2500/10k → 0.5/2.6/11.8 s). The residual ~5× vs grid at this op count is
+per-call grob construction (S7 + vctrs `unit`) and compile dispatch — not the
+builder; a separate, lower-priority concern.
 
 ### PERF-3 — Cheap strokes (raster)
 Get line/segment stroking to grid-class. Investigate, in order: (a) a **hairline
@@ -146,5 +151,7 @@ Rscript inst/benchmarks/points-cloud.R     # dense small-marker cloud (vellum wi
 ```
 
 ## Status
-Findings captured (this pass). Implementation not started — PERF-1 (text) and
-PERF-2 (builder) are the two that move the most plots and should go first.
+Findings captured. **PERF-1 (batched text)** and **PERF-2 (O(1) scene builder)**
+are ✅ done — the two that moved the most plots. Remaining: PERF-3 (cheap strokes),
+PERF-4 (marker threshold), PERF-5 (aggregate-then-shade / datashader), PERF-6
+(tiled parallel raster, optional).

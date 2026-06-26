@@ -12,8 +12,10 @@ gtree <- S7::new_class(
   )
 )
 
-# A drawing scene: page size + background + a root gtree, plus the builder's
-# focus (an integer path into the root's descendants).
+# A drawing scene: page size + background + the scene tree. While building, the
+# tree is held in a fast mutable form (`build` = a root "build node", `open` = the
+# stack of open ancestors); it is materialised to an immutable `root` gtree lazily
+# (at render/edit/query). Exactly one of `build`/`root` is non-NULL.
 vellum_scene <- S7::new_class(
   "vellum_scene", package = "vellum",
   properties = list(
@@ -22,17 +24,76 @@ vellum_scene <- S7::new_class(
     dpi = S7::new_property(S7::class_double, default = 96),
     bg = S7::new_property(S7::class_any, default = "white"),
     root = S7::new_property(S7::class_any, default = NULL),
-    focus = S7::new_property(S7::class_integer, default = integer(0))
+    build = S7::new_property(S7::class_any, default = NULL),
+    open = S7::new_property(S7::class_any, default = NULL)
   )
 )
+
+# --- mutable build tree (O(1) append) ---------------------------------------
+# A "build node" is an environment with the viewport plus a child dictionary
+# (hashed env keyed "1","2",… + a counter), so appending a child is amortised
+# O(1) — versus copying an immutable children list on every draw (O(n^2) total).
+
+.bnode <- function(vp = NULL) {
+  e <- new.env(parent = emptyenv())
+  e$vp <- vp
+  e$kids <- new.env(parent = emptyenv())
+  e$n <- 0L
+  e$is_bnode <- TRUE
+  e
+}
+.is_bnode <- function(x) is.environment(x) && isTRUE(x$is_bnode)
+.bnode_add <- function(node, child) {
+  node$n <- node$n + 1L
+  assign(as.character(node$n), child, envir = node$kids)
+  invisible()
+}
+# Materialise a build node into an immutable gtree (children recurse / pass through).
+.bnode_to_gtree <- function(node) {
+  children <- lapply(seq_len(node$n), function(i) {
+    c <- get(as.character(i), envir = node$kids)
+    if (.is_bnode(c)) .bnode_to_gtree(c) else c
+  })
+  gtree(name = node$vp@name, vp = node$vp, children = children)
+}
+# Reopen an immutable gtree into a build tree (for drawing after edit/render).
+.gtree_to_bnode <- function(g) {
+  node <- .bnode(vp = g@vp)
+  for (ch in g@children) .bnode_add(node, if (S7::S7_inherits(ch, gtree)) .gtree_to_bnode(ch) else ch)
+  node
+}
+
+# The immutable root gtree for a scene (materialising the build tree if needed).
+.materialize <- function(scene) {
+  if (!is.null(scene@root)) {
+    return(scene@root)
+  }
+  if (!is.null(scene@build)) {
+    return(.bnode_to_gtree(scene@build))
+  }
+  gtree(name = "root", vp = viewport(name = "root"), children = list())
+}
+
+# Ensure the scene is in building mode (reopening a materialised one if needed).
+.ensure_building <- function(scene) {
+  if (!is.null(scene@build)) {
+    return(scene)
+  }
+  br <- .gtree_to_bnode(.materialize(scene))
+  scene@build <- br
+  scene@open <- list(br)
+  scene@root <- NULL
+  scene
+}
 
 # --- scene construction + functional builder --------------------------------
 
 #' Build and render a scene
 #'
 #' `vl_scene()` creates an empty scene. [push()] adds a viewport (and descends
-#' into it), [draw()] adds a grob, [pop()] ascends. All return a new scene value
-#' (the scene is immutable). [render()] compiles the scene and writes a PNG.
+#' into it), [draw()] adds a grob, [pop()] ascends. The builder is a linear pipe;
+#' a *rendered or edited* scene is an immutable value ([edit_node()] copies on
+#' modify). [render()] compiles the scene and writes the output.
 #'
 #' @param width,height Page size ([unit()] or numeric inches).
 #' @param dpi Resolution in dots per inch.
@@ -46,10 +107,10 @@ vellum_scene <- S7::new_class(
 #'                   gp = gpar(col = "steelblue", lwd = 2)))
 #' @export
 vl_scene <- function(width = 6, height = 4, dpi = 96, bg = "white") {
+  root <- .bnode(vp = viewport(name = "root"))
   vellum_scene(
     width = .as_size(width), height = .as_size(height), dpi = dpi, bg = bg,
-    root = gtree(name = "root", vp = viewport(name = "root"), children = list()),
-    focus = integer(0)
+    root = NULL, build = root, open = list(root)
   )
 }
 
@@ -58,15 +119,10 @@ vl_scene <- function(width = 6, height = 4, dpi = 96, bg = "white") {
 #' @param vp A [viewport()].
 #' @export
 push <- function(scene, vp) {
-  node <- gtree(name = vp@name, vp = vp, children = list())
-  focus <- scene@focus
-  here <- .get_at(scene@root, focus)
-  new_idx <- length(here@children) + 1L
-  scene@root <- .modify_at(scene@root, focus, function(nd) {
-    nd@children <- c(nd@children, list(node))
-    nd
-  })
-  scene@focus <- c(focus, new_idx)
+  scene <- .ensure_building(scene)
+  node <- .bnode(vp = vp)
+  .bnode_add(scene@open[[length(scene@open)]], node)
+  scene@open <- c(scene@open, list(node))
   scene
 }
 
@@ -74,10 +130,8 @@ push <- function(scene, vp) {
 #' @param grob A grob (see [grob]).
 #' @export
 draw <- function(scene, grob) {
-  scene@root <- .modify_at(scene@root, scene@focus, function(nd) {
-    nd@children <- c(nd@children, list(grob))
-    nd
-  })
+  scene <- .ensure_building(scene)
+  .bnode_add(scene@open[[length(scene@open)]], grob) # O(1) env append
   scene
 }
 
@@ -85,8 +139,9 @@ draw <- function(scene, grob) {
 #' @param n Number of viewport levels to ascend.
 #' @export
 pop <- function(scene, n = 1) {
-  k <- length(scene@focus)
-  scene@focus <- utils::head(scene@focus, max(0L, k - as.integer(n)))
+  scene <- .ensure_building(scene)
+  k <- length(scene@open)
+  scene@open <- scene@open[seq_len(max(1L, k - as.integer(n)))] # never pop the root
   scene
 }
 
@@ -110,7 +165,7 @@ render <- function(scene, path) {
 .scene_to_backend <- function(scene) {
   s <- Scene$new(.to_inches(scene@width), .to_inches(scene@height), scene@dpi,
                  .rs_col(scene@bg) %||% c(255L, 255L, 255L, 0L))
-  root <- scene@root
+  root <- .materialize(scene)
   if (!is.null(root@vp) && !is.null(root@vp@layout)) {
     .set_layout(s, root@vp@layout)
   }
@@ -249,30 +304,36 @@ S7::method(compile, gtree) <- function(node, scene) {
 #'   `vellum_scene`.
 #' @export
 node_names <- function(scene) {
+  root <- .materialize(scene)
   out <- character(0)
   walk <- function(node) {
     nm <- .node_name(node)
     if (!is.null(nm)) out[[length(out) + 1L]] <<- nm
     for (ch in .node_children(node)) walk(ch)
   }
-  for (ch in scene@root@children) walk(ch)
+  for (ch in root@children) walk(ch)
   out
 }
 
 #' @rdname node_names
 #' @export
 get_node <- function(scene, name) {
-  p <- .find_path(scene@root, name)
+  root <- .materialize(scene)
+  p <- .find_path(root, name)
   if (is.null(p)) cli::cli_abort("No node named {.val {name}}.")
-  .get_at(scene@root, p)
+  .get_at(root, p)
 }
 
 #' @rdname node_names
 #' @export
 edit_node <- function(scene, name, ...) {
-  p <- .find_path(scene@root, name)
+  root <- .materialize(scene)
+  p <- .find_path(root, name)
   if (is.null(p)) cli::cli_abort("No node named {.val {name}}.")
-  scene@root <- .modify_at(scene@root, p, function(nd) S7::set_props(nd, ...))
+  # Return an immutable (materialised) scene; the builder env is untouched.
+  scene@root <- .modify_at(root, p, function(nd) S7::set_props(nd, ...))
+  scene@build <- NULL
+  scene@open <- NULL
   scene
 }
 
