@@ -10,7 +10,7 @@
 //! The `Scene` is held in Rust and exposed to R as an external-pointer object.
 
 use extendr_api::prelude::*;
-use tiny_skia::{FillRule, PathBuilder, Pixmap, Transform};
+use tiny_skia::{Color, FillRule, Mask, PathBuilder, Pixmap, Stroke, Transform};
 
 use crate::render::{
     rect_path, Clip, ClipShape, MaskKind, MaskLayer, PdfBackend, RasterBackend, RenderBackend, ResolvedPaint,
@@ -250,6 +250,10 @@ pub struct Scene {
     /// Stack of mask indices currently being filled (nested mask compilation);
     /// while non-empty, new primitives are routed to the top mask's content.
     mask_target: Vec<usize>,
+    /// Hit-test pick id for each entry in `nodes` (parallel). Set by `set_pick`
+    /// before compiling each grob; used by `hit_test`'s colour pick-buffer.
+    picks: Vec<i32>,
+    cur_pick: i32,
 }
 
 #[extendr]
@@ -298,7 +302,15 @@ impl Scene {
             nodes: Vec::new(),
             masks: Vec::new(),
             mask_target: Vec::new(),
+            picks: Vec::new(),
+            cur_pick: -1,
         }
+    }
+
+    /// Set the hit-test pick id applied to subsequently-emitted primitives (one
+    /// per grob; the R side assigns ids in paint order). See `hit_test`.
+    fn set_pick(&mut self, id: i32) {
+        self.cur_pick = id;
     }
 
     /// Push a viewport as a child of the current one and make it current.
@@ -780,6 +792,164 @@ impl Scene {
             None => throw_r_error("pixel out of bounds"),
         }
     }
+
+    /// Hit-test: return the pick id of the topmost primitive covering device pixel
+    /// `(x, y)`, or -1 if none. Implemented as a colour pick-buffer — each node is
+    /// drawn opaque (AA off) in a colour encoding its pick id, respecting clips and
+    /// paint order, then the pixel is decoded — so it is geometry/clip/overlap
+    /// exact. Markers and text use a bounding box; lines/segments a pick band.
+    fn hit_test(&self, x: i32, y: i32) -> i32 {
+        if x < 0 || y < 0 || x as u32 >= self.w_px || y as u32 >= self.h_px {
+            return -1;
+        }
+        let resolved = self.resolve_all();
+        let mut pm = Pixmap::new(self.w_px, self.h_px).expect("pick pixmap");
+        pm.fill(Color::WHITE); // 0xFFFFFF = "no hit"
+        for (i, (vp_id, node)) in self.nodes.iter().enumerate() {
+            let id = self.picks[i];
+            if id < 0 || id > 0x00FF_FFFE {
+                continue; // unpickable / would collide with the no-hit colour
+            }
+            let rv = &resolved[*vp_id];
+            let vp = &rv.vp;
+            let t = vp.transform;
+            let mask = build_clip_mask(self.w_px, self.h_px, &rv.clip_chain);
+            let mut paint = tiny_skia::Paint::default();
+            paint.set_color(Color::from_rgba8(
+                ((id >> 16) & 255) as u8, ((id >> 8) & 255) as u8, (id & 255) as u8, 255,
+            ));
+            paint.anti_alias = false;
+            let fill = |pm: &mut Pixmap, path: &tiny_skia::Path, rule: FillRule| {
+                pm.fill_path(path, &paint, rule, t, mask.as_ref());
+            };
+            match node {
+                Node::Rect { x, y, w, h, xu, yu, wu, hu, .. } => {
+                    let (cx, cy) = (vp.x_pos(*x, *xu), vp.y_pos(*y, *yu));
+                    let (pw, ph) = (vp.x_len(*w, *wu), vp.y_len(*h, *hu));
+                    if let Some(p) = rect_path(cx - pw / 2.0, cy - ph / 2.0, pw, ph) {
+                        fill(&mut pm, &p, FillRule::Winding);
+                    }
+                }
+                Node::Rects { x, y, w, h, xu, yu, wu, hu, .. } => {
+                    let n = [x.len(), y.len(), w.len(), h.len(), xu.len(), yu.len(), wu.len(), hu.len()]
+                        .into_iter().min().unwrap_or(0);
+                    for k in 0..n {
+                        let (cx, cy) = (vp.x_pos(x[k], xu[k]), vp.y_pos(y[k], yu[k]));
+                        let (pw, ph) = (vp.x_len(w[k], wu[k]), vp.y_len(h[k], hu[k]));
+                        if let Some(p) = rect_path(cx - pw / 2.0, cy - ph / 2.0, pw, ph) {
+                            fill(&mut pm, &p, FillRule::Winding);
+                        }
+                    }
+                }
+                Node::Circle { x, y, r, xu, yu, ru, .. } => {
+                    let mut pb = PathBuilder::new();
+                    pb.push_circle(vp.x_pos(*x, *xu) as f32, vp.y_pos(*y, *yu) as f32, vp.r_len(*r, *ru) as f32);
+                    if let Some(p) = pb.finish() {
+                        fill(&mut pm, &p, FillRule::Winding);
+                    }
+                }
+                Node::Circles { x, y, r, xu, yu, ru, .. } => {
+                    let n = [x.len(), y.len(), r.len(), xu.len(), yu.len(), ru.len()].into_iter().min().unwrap_or(0);
+                    for k in 0..n {
+                        let mut pb = PathBuilder::new();
+                        pb.push_circle(vp.x_pos(x[k], xu[k]) as f32, vp.y_pos(y[k], yu[k]) as f32, vp.r_len(r[k], ru[k]) as f32);
+                        if let Some(p) = pb.finish() {
+                            fill(&mut pm, &p, FillRule::Winding);
+                        }
+                    }
+                }
+                Node::Markers { x, y, size, xu, yu, su, .. } => {
+                    let n = [x.len(), y.len(), size.len(), xu.len(), yu.len(), su.len()].into_iter().min().unwrap_or(0);
+                    for k in 0..n {
+                        let (cx, cy) = (vp.x_pos(x[k], xu[k]), vp.y_pos(y[k], yu[k]));
+                        let rr = vp.r_len(size[k], su[k]);
+                        if let Some(p) = rect_path(cx - rr, cy - rr, 2.0 * rr, 2.0 * rr) {
+                            fill(&mut pm, &p, FillRule::Winding); // bounding box covers any shape
+                        }
+                    }
+                }
+                Node::Polygon { x, y, xu, yu, .. } => {
+                    if let Some(p) = build_poly(x, y, xu, yu, vp, true) {
+                        fill(&mut pm, &p, FillRule::Winding);
+                    }
+                }
+                Node::Path { x, y, xu, yu, nper, evenodd, .. } => {
+                    if let Some(p) = build_subpaths(x, y, xu, yu, nper, vp) {
+                        fill(&mut pm, &p, if *evenodd { FillRule::EvenOdd } else { FillRule::Winding });
+                    }
+                }
+                Node::Image { x, y, w, h, xu, yu, wu, hu, .. } => {
+                    let (cx, cy) = (vp.x_pos(*x, *xu), vp.y_pos(*y, *yu));
+                    let (pw, ph) = (vp.x_len(*w, *wu), vp.y_len(*h, *hu));
+                    if let Some(p) = rect_path(cx - pw / 2.0, cy - ph / 2.0, pw, ph) {
+                        fill(&mut pm, &p, FillRule::Winding);
+                    }
+                }
+                Node::Text { x, y, xu, yu, w, h, hjust, vjust, .. } => {
+                    let (ax, ay) = (vp.x_pos(*x, *xu), vp.y_pos(*y, *yu));
+                    if let Some(p) = rect_path(ax - *hjust * *w, ay - (1.0 - *vjust) * *h, *w, *h) {
+                        fill(&mut pm, &p, FillRule::Winding); // bounding box (rotation ignored)
+                    }
+                }
+                Node::Lines { x, y, xu, yu, .. } => {
+                    if let Some(p) = build_poly(x, y, xu, yu, vp, false) {
+                        let st = Stroke { width: 4.0, ..Stroke::default() };
+                        pm.stroke_path(&p, &paint, &st, t, mask.as_ref());
+                    }
+                }
+                Node::Segments { x0, y0, x1, y1, x0u, y0u, x1u, y1u, .. } => {
+                    let n = [x0.len(), y0.len(), x1.len(), y1.len(), x0u.len(), y0u.len(), x1u.len(), y1u.len()]
+                        .into_iter().min().unwrap_or(0);
+                    let mut pb = PathBuilder::new();
+                    for k in 0..n {
+                        pb.move_to(vp.x_pos(x0[k], x0u[k]) as f32, vp.y_pos(y0[k], y0u[k]) as f32);
+                        pb.line_to(vp.x_pos(x1[k], x1u[k]) as f32, vp.y_pos(y1[k], y1u[k]) as f32);
+                    }
+                    if let Some(p) = pb.finish() {
+                        let st = Stroke { width: 4.0, ..Stroke::default() };
+                        pm.stroke_path(&p, &paint, &st, t, mask.as_ref());
+                    }
+                }
+                Node::GroupStart | Node::GroupEnd { .. } => {}
+            }
+        }
+        match pm.pixel(x as u32, y as u32) {
+            Some(px) => {
+                let c = px.demultiply();
+                if c.red() == 255 && c.green() == 255 && c.blue() == 255 {
+                    -1
+                } else {
+                    ((c.red() as i32) << 16) | ((c.green() as i32) << 8) | (c.blue() as i32)
+                }
+            }
+            None => -1,
+        }
+    }
+}
+
+/// Build the intersection clip `Mask` for a resolved clip chain (device px), or
+/// `None` when there is no clip. Mirrors the raster backend's `mask_for`.
+fn build_clip_mask(w: u32, h: u32, chain: &[ClipShape]) -> Option<Mask> {
+    if chain.is_empty() {
+        return None;
+    }
+    let mut m = Mask::new(w, h)?;
+    if let Some(p) = rect_path(0.0, 0.0, w as f64, h as f64) {
+        m.fill_path(&p, FillRule::Winding, true, Transform::identity());
+    }
+    for shape in chain {
+        match shape {
+            ClipShape::Rect { w: rw, h: rh, transform } => match rect_path(0.0, 0.0, *rw, *rh) {
+                Some(r) => m.intersect_path(&r, FillRule::Winding, true, *transform),
+                None => m.clear(),
+            },
+            ClipShape::Path { path, evenodd, transform } => {
+                let rule = if *evenodd { FillRule::EvenOdd } else { FillRule::Winding };
+                m.intersect_path(path, rule, true, *transform);
+            }
+        }
+    }
+    Some(m)
 }
 
 impl Scene {
@@ -789,7 +959,10 @@ impl Scene {
         let vp = self.current;
         match self.mask_target.last() {
             Some(&mi) => self.masks[mi].nodes.push((vp, node)),
-            None => self.nodes.push((vp, node)),
+            None => {
+                self.nodes.push((vp, node));
+                self.picks.push(self.cur_pick);
+            }
         }
     }
 

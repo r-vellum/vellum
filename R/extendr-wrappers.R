@@ -22,6 +22,11 @@ rs_attractor <- function(kind, n, a, b, c, d, x0, y0) .Call(wrap__rs_attractor, 
 #'(npc == native) is created as viewport 0.
 #'}
 #'
+#'\subsection{Method `set_pick`}{
+#'Set the hit-test pick id applied to subsequently-emitted primitives (one
+#'per grob; the R side assigns ids in paint order). See `hit_test`.
+#'}
+#'
 #'\subsection{Method `push_viewport`}{
 #'Push a viewport as a child of the current one and make it current.
 #'Returns the new viewport's id. If `lrow`/`lcol` are >= 0 the viewport is
@@ -152,9 +157,19 @@ rs_attractor <- function(kind, n, a, b, c, d, x0, y0) .Call(wrap__rs_attractor, 
 #'Render and return the RGBA of device pixel `(x, y)` as `c(r, g, b, a)`.
 #'}
 #'
+#'\subsection{Method `hit_test`}{
+#'Hit-test: return the pick id of the topmost primitive covering device pixel
+#'`(x, y)`, or -1 if none. Implemented as a colour pick-buffer — each node is
+#'drawn opaque (AA off) in a colour encoding its pick id, respecting clips and
+#'paint order, then the pixel is decoded — so it is geometry/clip/overlap
+#'exact. Markers and text use a bounding box; lines/segments a pick band.
+#'}
+#'
 Scene <- new.env(parent = emptyenv())
 
 Scene$new <- function(width, height, dpi, bg) .Call(wrap__Scene__new, width, height, dpi, bg)
+
+Scene$set_pick <- function(id) .Call(wrap__Scene__set_pick, self, id)
 
 Scene$push_viewport <- function(cx, cy, w, h, cxu, cyu, wu, hu, xscale, yscale, angle, clip, lrow, lcol, lrowspan, lcolspan, fill, col, lwd, alpha, stroke) .Call(wrap__Scene__push_viewport, self, cx, cy, w, h, cxu, cyu, wu, hu, xscale, yscale, angle, clip, lrow, lcol, lrowspan, lcolspan, fill, col, lwd, alpha, stroke)
 
@@ -215,6 +230,8 @@ Scene$rgba <- function() .Call(wrap__Scene__rgba, self)
 Scene$content_bbox <- function() .Call(wrap__Scene__content_bbox, self)
 
 Scene$pixel <- function(x, y) .Call(wrap__Scene__pixel, self, x, y)
+
+Scene$hit_test <- function(x, y) .Call(wrap__Scene__hit_test, self, x, y)
 
 #' @export
 `$.Scene` <- function (self, name) { func <- Scene[[name]]; environment(func) <- environment(); func }

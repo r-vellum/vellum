@@ -399,6 +399,64 @@ S7::method(compile, gtree) <- function(node, scene) {
   scene$pop_viewport(1L)
 }
 
+# --- hit-testing ------------------------------------------------------------
+
+#' Hit-test a scene
+#'
+#' Find the topmost node drawn under a point — the picking primitive the retained
+#' scene graph enables (base grid offers only `grid.locator()`). The scene is
+#' compiled into a colour pick-buffer (each grob drawn in a colour encoding its
+#' id, respecting clipping and paint order), so the result is geometry-, clip- and
+#' overlap-exact. Markers and text are matched by their bounding box; lines and
+#' segments by a small pick band.
+#'
+#' @param scene A [vl_scene()].
+#' @param x,y Query point, in `units`: `"npc"` (default; the page, `0..1` with y
+#'   up) or `"px"` (device pixels, top-left origin, y down).
+#' @param units `"npc"` or `"px"`.
+#' @return The hit node's `name` (character); `NA_character_` if the topmost grob
+#'   there is unnamed; or `NULL` if nothing is drawn at the point.
+#' @export
+hit_test <- function(scene, x, y, units = c("npc", "px")) {
+  units <- match.arg(units)
+  s <- Scene$new(.to_inches(scene@width), .to_inches(scene@height), scene@dpi,
+                 .rs_col(scene@bg) %||% c(255L, 255L, 255L, 0L))
+  reg <- new.env(parent = emptyenv())
+  reg$n <- 0L
+  reg$names <- list()
+  .compile_pick(s, .materialize(scene), reg)
+  d <- s$dim()
+  if (units == "npc") {
+    px <- x * d[1]
+    py <- (1 - y) * d[2] # npc y is up; device y is down
+  } else {
+    px <- x
+    py <- y
+  }
+  id <- s$hit_test(as.integer(round(px)), as.integer(round(py)))
+  if (id < 0L) {
+    return(NULL)
+  }
+  reg$names[[id + 1L]] # name, or NA_character_ for an unnamed grob
+}
+
+# Compile for picking: like the render compile, but assign each leaf grob a
+# sequential pick id (paint order) and record its name, so hit_test can map the
+# pick-buffer colour back to a node. Masks are ignored (content is drawn plainly).
+.compile_pick <- function(scene, node, reg) {
+  if (S7::S7_inherits(node, gtree)) {
+    .push_vp(scene, node@vp)
+    for (ch in node@children) .compile_pick(scene, ch, reg)
+    scene$pop_viewport(1L)
+  } else {
+    id <- reg$n
+    reg$n <- id + 1L
+    reg$names[[id + 1L]] <- .node_name(node) %||% NA_character_
+    scene$set_pick(id)
+    compile(node, scene)
+  }
+}
+
 # --- editing ----------------------------------------------------------------
 
 #' Inspect and edit a scene by node name

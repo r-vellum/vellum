@@ -19,6 +19,11 @@ Create a scene \code{width} x \code{height} inches at \code{dpi}, with backgroun
 (npc == native) is created as viewport 0.
 }
 
+\subsection{Method \code{set_pick}}{
+Set the hit-test pick id applied to subsequently-emitted primitives (one
+per grob; the R side assigns ids in paint order). See \code{hit_test}.
+}
+
 \subsection{Method \code{push_viewport}}{
 Push a viewport as a child of the current one and make it current.
 Returns the new viewport's id. If \code{lrow}/\code{lcol} are >= 0 the viewport is
@@ -147,6 +152,14 @@ if nothing was drawn. Used to measure a grob's extent (grobwidth/height).
 
 \subsection{Method \code{pixel}}{
 Render and return the RGBA of device pixel \verb{(x, y)} as \code{c(r, g, b, a)}.
+}
+
+\subsection{Method \code{hit_test}}{
+Hit-test: return the pick id of the topmost primitive covering device pixel
+\verb{(x, y)}, or -1 if none. Implemented as a colour pick-buffer — each node is
+drawn opaque (AA off) in a colour encoding its pick id, respecting clips and
+paint order, then the pixel is decoded — so it is geometry/clip/overlap
+exact. Markers and text use a bounding box; lines/segments a pick band.
 }
 }
 
