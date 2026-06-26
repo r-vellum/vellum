@@ -396,9 +396,9 @@ S7::method(compile, gtree) <- function(node, scene) {
     idx <- scene$mask_begin(m$code)        # route mask grobs into the mask
     for (g in m$grobs) compile(g, scene)
     scene$mask_end()
-    scene$group_start()                    # the masked content as an isolated layer
+    scene$group_start(idx)                 # mask installed up front; content is isolated
     for (child in node@children) compile(child, scene)
-    scene$group_end(idx)
+    scene$group_end()
   } else {
     for (child in node@children) compile(child, scene)
   }

@@ -4,7 +4,7 @@
 #' string, using the same shaping (\pkg{textshaping}/HarfBuzz + \pkg{systemfonts})
 #' the renderer uses, so measurements match drawn text. Device-independent (does
 #' not need an open scene). Vectorised over `label`. (Named `vl_*` to avoid masking
-#' [grDevices::strwidth()].)
+#' `grDevices::strwidth()`.)
 #'
 #' @param label Character vector of strings to measure.
 #' @param family Font family (e.g. `"sans"`, `"serif"`, `"mono"`, or a specific

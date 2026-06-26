@@ -200,11 +200,13 @@ enum Node {
         xu: Unit, yu: Unit, wu: Unit, hu: Unit,
         interpolate: bool,
     },
-    /// Opens an isolated compositing layer (paired with `GroupEnd`).
-    GroupStart,
-    /// Closes the layer and composites it, optionally through mask `mask` (an
-    /// index into `Scene::masks`).
-    GroupEnd { mask: Option<usize> },
+    /// Opens an isolated compositing layer (paired with `GroupEnd`), optionally
+    /// modulated by mask `mask` (an index into `Scene::masks`). The mask is
+    /// attached at the start because PDF must install its soft mask before the
+    /// masked content is drawn.
+    GroupStart { mask: Option<usize> },
+    /// Closes the layer and composites it.
+    GroupEnd,
 }
 
 impl Node {
@@ -220,7 +222,7 @@ impl Node {
             | Node::Segments { gp, .. }
             | Node::Path { gp, .. }
             | Node::Text { gp, .. } => gp,
-            Node::Image { .. } | Node::GroupStart | Node::GroupEnd { .. } => {
+            Node::Image { .. } | Node::GroupStart { .. } | Node::GroupEnd => {
                 unreachable!("handled before gpar resolution")
             }
         }
@@ -662,18 +664,18 @@ impl Scene {
         self.mask_target.pop();
     }
 
-    /// Open an isolated compositing group. Routed through `emit_node` so a group
+    /// Open an isolated compositing group, modulated by mask index `mask`
+    /// (negative = no mask, just isolation). Routed through `emit_node` so a group
     /// nested inside a mask (a mask grob that itself masks a viewport) lands in
     /// the same node list as its content, keeping markers and content in sync.
-    fn group_start(&mut self) {
-        self.emit_node(Node::GroupStart);
+    fn group_start(&mut self, mask: i32) {
+        let mask = if mask >= 0 { Some(mask as usize) } else { None };
+        self.emit_node(Node::GroupStart { mask });
     }
 
-    /// Close the group, compositing it through mask index `mask` (negative = no
-    /// mask, just isolation).
-    fn group_end(&mut self, mask: i32) {
-        let mask = if mask >= 0 { Some(mask as usize) } else { None };
-        self.emit_node(Node::GroupEnd { mask });
+    /// Close the most recently opened group.
+    fn group_end(&mut self) {
+        self.emit_node(Node::GroupEnd);
     }
 
     /// Number of primitives currently in the scene.
@@ -917,7 +919,7 @@ impl Scene {
                         pm.stroke_path(&p, &paint, &st, t, mask.as_ref());
                     }
                 }
-                Node::GroupStart | Node::GroupEnd { .. } => {}
+                Node::GroupStart { .. } | Node::GroupEnd => {}
             }
         }
         match pm.pixel(x as u32, y as u32) {
@@ -1113,20 +1115,17 @@ impl Scene {
     fn render_nodes<B: RenderBackend>(&self, b: &mut B, resolved: &[ResolvedVp], nodes: &[(usize, Node)]) {
         for (vp_id, node) in nodes {
             match node {
-                Node::GroupStart => {
-                    b.begin_group();
+                Node::GroupStart { mask } => {
+                    let ml = mask.and_then(|m| self.masks.get(m)).map(|md| {
+                        let mut mb = RasterBackend::new(self.w_px, self.h_px, Rgba { r: 0, g: 0, b: 0, a: 0 });
+                        self.render_nodes(&mut mb, resolved, &md.nodes);
+                        MaskLayer { pixmap: mb.into_pixmap(), kind: md.kind }
+                    });
+                    b.begin_group(ml);
                     continue;
                 }
-                Node::GroupEnd { mask } => {
-                    match mask.and_then(|m| self.masks.get(m)) {
-                        Some(md) => {
-                            let mut mb = RasterBackend::new(self.w_px, self.h_px, Rgba { r: 0, g: 0, b: 0, a: 0 });
-                            self.render_nodes(&mut mb, resolved, &md.nodes);
-                            let mpm = mb.into_pixmap();
-                            b.end_group(Some(MaskLayer { pixmap: &mpm, kind: md.kind }));
-                        }
-                        None => b.end_group(None),
-                    }
+                Node::GroupEnd => {
+                    b.end_group();
                     continue;
                 }
                 // Images carry no gpar; resolve geometry and draw directly.
@@ -1419,7 +1418,7 @@ impl Scene {
                         fill_then_stroke(b, &path, &gp, t, &clip, vp, rule);
                     }
                 }
-                Node::Image { .. } | Node::GroupStart | Node::GroupEnd { .. } => unreachable!("handled above"),
+                Node::Image { .. } | Node::GroupStart { .. } | Node::GroupEnd => unreachable!("handled above"),
             }
         }
     }

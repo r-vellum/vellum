@@ -45,7 +45,7 @@ A numeric vector (one per \code{label}) of widths/heights in \code{unit}.
 string, using the same shaping (\pkg{textshaping}/HarfBuzz + \pkg{systemfonts})
 the renderer uses, so measurements match drawn text. Device-independent (does
 not need an open scene). Vectorised over \code{label}. (Named \verb{vl_*} to avoid masking
-\code{\link[grDevices:strwidth]{grDevices::strwidth()}}.)
+\code{grDevices::strwidth()}.)
 }
 \examples{
 vl_strwidth(c("short", "a longer label"), fontsize = 14)
