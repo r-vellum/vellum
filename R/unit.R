@@ -57,6 +57,11 @@ unit <- function(values, units = "npc", data = NULL) {
 # `Unit::from_code` in `src/rust/src/units.rs`.
 .unit_codes <- c(npc = 0L, native = 1L, mm = 2L, `in` = 3L, pt = 4L, null = 5L)
 
+# The units a primitive coordinate / gradient / pattern may use: every code
+# above except the layout-only "null". Single source of truth for that whitelist
+# (used by paint.R). Derived units (cm/char/strwidth/...) resolve to these.
+.coord_units <- setdiff(names(.unit_codes), "null")
+
 new_unit <- function(value = double(), unit = integer()) {
   vctrs::new_rcrd(list(value = value, unit = unit), class = "vellum_unit")
 }

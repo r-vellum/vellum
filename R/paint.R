@@ -39,7 +39,6 @@ radial_gradient <- function(colours, stops = NULL, cx = 0.5, cy = 0.5, r = 0.5,
   .new_gradient("radial", colours, stops, c(cx, cy, r), units, extend)
 }
 
-.gradient_units <- c("npc", "native", "mm", "in", "pt")
 .gradient_extend <- c("pad", "repeat", "reflect")
 
 .new_gradient <- function(kind, colours, stops, coords, units, extend) {
@@ -53,7 +52,7 @@ radial_gradient <- function(colours, stops = NULL, cx = 0.5, cy = 0.5, r = 0.5,
   if (length(stops) != n) {
     cli::cli_abort("{.arg stops} must have one offset per colour ({n}).")
   }
-  units <- match.arg(units, .gradient_units)
+  units <- match.arg(units, .coord_units)
   extend <- match.arg(extend, .gradient_extend)
   if (!all(is.finite(coords))) {
     cli::cli_abort("Gradient coordinates must be finite.")
@@ -130,7 +129,7 @@ print.vellum_gradient <- function(x, ...) {
 #' @export
 pattern <- function(grob, width = 0.1, height = 0.1, x = 0.5, y = 0.5,
                     units = "npc", extend = "repeat") {
-  units <- match.arg(units, .gradient_units)
+  units <- match.arg(units, .coord_units)
   extend <- match.arg(extend, .gradient_extend)
   if (!all(is.finite(c(width, height, x, y)))) {
     cli::cli_abort("Pattern geometry must be finite.")

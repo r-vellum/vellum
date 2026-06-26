@@ -291,25 +291,26 @@ S7::method(compile, grob_polygon) <- function(node, scene) {
   })
 }
 
-S7::method(compile, grob_circle) <- function(node, scene) {
+# circles and points compile identically (a batched circle draw); they differ
+# only in where the radius comes from and its default unit (npc vs mm).
+.compile_circles <- function(node, scene, radius, rdefault) {
   .with_vp(node, scene, {
-    n <- vctrs::vec_size_common(node@x, node@y, node@r)
-    ex <- .coord(node@x, "npc", n); ey <- .coord(node@y, "npc", n); er <- .coord(node@r, "npc", n)
+    n <- vctrs::vec_size_common(node@x, node@y, radius)
+    ex <- .coord(node@x, "npc", n); ey <- .coord(node@y, "npc", n)
+    er <- .coord(radius, rdefault, n)
     g <- .gp4(node@gp, scene)
     scene$circles(ex$value, ey$value, er$value, ex$code, ey$code, er$code,
                   g$fill, g$col, g$lwd, g$alpha, g$stroke)
   })
 }
 
+S7::method(compile, grob_circle) <- function(node, scene) {
+  .compile_circles(node, scene, node@r, "npc")
+}
+
 S7::method(compile, grob_points) <- function(node, scene) {
-  .with_vp(node, scene, {
-    n <- vctrs::vec_size_common(node@x, node@y, node@size)
-    ex <- .coord(node@x, "npc", n); ey <- .coord(node@y, "npc", n); es <- .coord(node@size, "mm", n)
-    g <- .gp4(node@gp, scene)
-    # Points are circles whose radius carries the marker size; batched.
-    scene$circles(ex$value, ey$value, es$value, ex$code, ey$code, es$code,
-                  g$fill, g$col, g$lwd, g$alpha, g$stroke)
-  })
+  # Points are circles whose radius carries the marker size (in mm).
+  .compile_circles(node, scene, node@size, "mm")
 }
 
 S7::method(compile, grob_segments) <- function(node, scene) {
@@ -422,6 +423,50 @@ edit_node <- function(scene, name, ...) {
 }
 
 # --- internal helpers -------------------------------------------------------
+
+`%||%` <- function(a, b) if (is.null(a)) b else a
+
+# Backend value encoders: turn R colours / numbers into the form the Rust side
+# expects. Shared by the compile path, paint.R, and text.R.
+
+# Concrete colour -> length-4 integer RGBA, or NULL ("no paint" / transparent).
+.rs_col <- function(x) {
+  if (is.null(x) || length(x) != 1L || is.na(x)) {
+    return(NULL)
+  }
+  as.integer(grDevices::col2rgb(x, alpha = TRUE)[, 1L])
+}
+
+# Tri-state colour encoding for the backend:
+#   NULL  -> NULL        (inherit)
+#   NA    -> integer(0)  (explicit "no paint")
+#   colour-> int[4]      (set)
+.rs_col_inh <- function(x) {
+  if (is.null(x)) {
+    return(NULL)
+  }
+  if (length(x) != 1L) {
+    stop("a colour must be a single value, `NA` (none), or `NULL` (inherit)", call. = FALSE)
+  }
+  if (is.na(x)) {
+    return(integer(0))
+  }
+  as.integer(grDevices::col2rgb(x, alpha = TRUE)[, 1L])
+}
+
+# Tri-state numeric encoding: NULL/NA -> NA_real_ (inherit); else the value.
+.rs_num_inh <- function(x) {
+  if (is.null(x)) {
+    return(NA_real_)
+  }
+  if (length(x) != 1L) {
+    stop("`lwd`/`alpha` must be a single number or `NULL` (inherit)", call. = FALSE)
+  }
+  if (is.na(x)) {
+    return(NA_real_)
+  }
+  as.numeric(x)
+}
 
 # Optionally push a grob's own viewport, run `expr`, then pop.
 .with_vp <- function(node, scene, expr) {

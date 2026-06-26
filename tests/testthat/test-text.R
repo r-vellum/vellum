@@ -7,39 +7,42 @@ test_that("rs_strwidth matches textshaping (fidelity) and scales", {
 })
 
 test_that("empty or NA labels are a no-op", {
-  s <- rs_scene(1, 1, dpi = 50)
-  rs_text(s, "")
-  rs_text(s, NA)
-  rs_text(s, "   ") # whitespace shapes to space glyphs with no outline
-  expect_equal(s$len(), 1L) # only the whitespace one adds a (blank) node
+  # "" and NA shape to nothing; whitespace shapes to (blank) space glyphs and
+  # still emits one node.
+  s <- vl_scene(1, 1, dpi = 50) |>
+    draw(text_grob("")) |>
+    draw(text_grob(NA)) |>
+    draw(text_grob("   "))
+  expect_equal(scene_len(s), 1L)
 })
 
-test_that("rs_text adds a node and paints ink, leaving the background intact", {
-  s <- rs_scene(width = 2, height = 1, dpi = 100, bg = "white")
-  rs_text(s, "ABC", x = 0.5, y = 0.5, fontsize = 40, col = "black")
-  expect_equal(s$len(), 1L)
-  r <- rs_raster(s) # dim c(4, w, h)
+test_that("a text grob adds a node and paints ink, leaving the background intact", {
+  s <- vl_scene(width = 2, height = 1, dpi = 100, bg = "white") |>
+    draw(text_grob("ABC", x = 0.5, y = 0.5, gp = gpar(fontsize = 40, col = "black")))
+  expect_equal(scene_len(s), 1L)
+  r <- scene_raster(s) # dim c(4, w, h)
   expect_equal(dim(r), c(4L, 200L, 100L))
   expect_lt(min(r[1, , ]), 100L) # dark ink somewhere
   expect_equal(r[1:3, 1, 1], c(255L, 255L, 255L)) # corner still white
 })
 
 test_that("text colour reaches the raster", {
-  s <- rs_scene(width = 2, height = 1, dpi = 100, bg = "white")
-  rs_text(s, "ABC", fontsize = 40, col = "red")
-  r <- rs_raster(s)
+  s <- vl_scene(width = 2, height = 1, dpi = 100, bg = "white") |>
+    draw(text_grob("ABC", gp = gpar(fontsize = 40, col = "red")))
+  r <- scene_raster(s)
   green <- r[2, , ]
   idx <- which(green == min(green), arr.ind = TRUE)[1, ]
-  px <- r[, idx[1], idx[2]]
-  expect_gt(px[1], px[2]) # red dominates green
-  expect_gt(px[1], px[3]) # red dominates blue
+  p <- r[, idx[1], idx[2]]
+  expect_gt(p[1], p[2]) # red dominates green
+  expect_gt(p[1], p[3]) # red dominates blue
 })
 
 test_that("justification places text on the correct side of the anchor", {
   inked_x <- function(hjust) {
-    s <- rs_scene(width = 3, height = 1, dpi = 100, bg = "white")
-    rs_text(s, "WORD", x = 0.5, y = 0.5, hjust = hjust, fontsize = 30, col = "black")
-    red <- rs_raster(s)[1, , ]
+    s <- vl_scene(width = 3, height = 1, dpi = 100, bg = "white") |>
+      draw(text_grob("WORD", x = 0.5, y = 0.5, just = as.character(hjust),
+                     gp = gpar(fontsize = 30, col = "black")))
+    red <- scene_raster(s)[1, , ]
     which(apply(red, 1, min) < 100) # x columns containing ink
   }
   anchor_px <- 150 # x = 0.5 of a 300px-wide device

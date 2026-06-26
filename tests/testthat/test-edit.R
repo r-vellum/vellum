@@ -1,5 +1,3 @@
-px <- function(scene, x, y) rs_pixel(.scene_to_backend(scene), x, y)
-
 test_that("node_names lists named grobs", {
   s <- vl_scene() |>
     draw(rect_grob(name = "bg")) |>

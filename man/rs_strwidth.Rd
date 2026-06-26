@@ -24,7 +24,7 @@ rs_strheight(
 )
 }
 \arguments{
-\item{label}{A single string to draw.}
+\item{label}{A single string to measure.}
 
 \item{family}{Font family (e.g. \code{"sans"}, \code{"serif"}, \code{"mono"}, or a specific
 family name). \code{""} uses the system default.}
@@ -44,5 +44,6 @@ The text width as a single number in \code{unit}.
 }
 \description{
 Returns the rendered width of a string for layout purposes, using the same
-shaping as \code{\link[=rs_text]{rs_text()}}. Device-independent (does not need an open scene).
+shaping (\pkg{textshaping}/HarfBuzz + \pkg{systemfonts}) the renderer uses, so
+measurements match drawn text. Device-independent (does not need an open scene).
 }

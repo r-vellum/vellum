@@ -32,7 +32,6 @@ Collate:
     'datashade.R'
     'extendr-wrappers.R'
     'paint.R'
-    'scene.R'
     'text.R'
     'unit.R'
     'vellum-package.R'

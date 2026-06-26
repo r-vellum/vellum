@@ -1,5 +1,4 @@
-# Probe a compiled S7 scene at the pixel level.
-px <- function(scene, x, y) rs_pixel(.scene_to_backend(scene), x, y)
+# Probe a compiled S7 scene at the pixel level (px() lives in helper-probe.R).
 
 test_that("a filled rect renders via the S7 API", {
   s <- vl_scene(width = 1, height = 1, dpi = 100, bg = "white") |>

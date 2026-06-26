@@ -1,6 +1,6 @@
-# Tiling-pattern fills. Raster probes use the low-level rs_* API + rs_pixel;
-# SVG asserts the <pattern>/<image> structure; PDF checks the average-colour
-# fallback renders.
+# Tiling-pattern fills. Raster probes build a scene with the public API and read
+# pixels via px(); SVG asserts the <pattern>/<image> structure; PDF checks the
+# average-colour fallback renders.
 
 test_that("pattern() builds and validates", {
   p <- pattern(circle_grob(r = 0.3), width = 0.2, height = 0.2)
@@ -10,30 +10,30 @@ test_that("pattern() builds and validates", {
 })
 
 test_that("a pattern tiles its grob across the fill (raster)", {
-  s <- rs_scene(width = 1, height = 1, dpi = 100, bg = "white")
   tile <- list(
     rect_grob(gp = gpar(fill = "red", col = NA)),
     circle_grob(r = 0.3, gp = gpar(fill = "white", col = NA))
   )
-  rs_rect(s, x = 0.5, y = 0.5, width = 1, height = 1, col = NA,
-          fill = pattern(tile, width = 0.2, height = 0.2))
+  s <- vl_scene(width = 1, height = 1, dpi = 100, bg = "white") |>
+    draw(rect_grob(gp = gpar(col = NA, fill = pattern(tile, width = 0.2, height = 0.2))))
   # Cell is 0.2 npc = 20 px, centred on the page -> a tile centre sits at the
   # page centre (white dot); a tile corner is the red background.
-  centre <- rs_pixel(s, 50, 50)
-  corner <- rs_pixel(s, 41, 41)
+  centre <- px(s, 50, 50)
+  corner <- px(s, 41, 41)
   expect_true(all(centre[1:3] > 230L)) # white dot
   expect_equal(corner[1:3], c(255L, 0L, 0L)) # red bg
 })
 
 test_that("pattern alpha fades the tile (raster)", {
-  s <- rs_scene(width = 1, height = 1, dpi = 100, bg = "white")
-  rs_rect(s, x = 0.5, y = 0.5, width = 1, height = 1, col = NA, alpha = 0.5,
-          fill = pattern(rect_grob(gp = gpar(fill = "red", col = NA)),
-                         width = 0.5, height = 0.5))
-  px <- rs_pixel(s, 50, 50)
-  expect_equal(px[4], 255L) # opaque page
+  s <- vl_scene(width = 1, height = 1, dpi = 100, bg = "white") |>
+    draw(rect_grob(gp = gpar(
+      col = NA, alpha = 0.5,
+      fill = pattern(rect_grob(gp = gpar(fill = "red", col = NA)), width = 0.5, height = 0.5)
+    )))
+  p <- px(s, 50, 50)
+  expect_equal(p[4], 255L) # opaque page
   # 50% red over white -> pink
-  expect_true(px[1] > 240L && abs(px[2] - 127L) < 12L && abs(px[3] - 127L) < 12L)
+  expect_true(p[1] > 240L && abs(p[2] - 127L) < 12L && abs(p[3] - 127L) < 12L)
 })
 
 test_that("SVG emits a <pattern> with an embedded image", {
