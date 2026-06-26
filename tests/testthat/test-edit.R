@@ -8,6 +8,35 @@ test_that("node_names lists named grobs", {
   expect_equal(node_names(s), c("bg", "dot"))
 })
 
+test_that("scenes are immutable values: branching does not alias (copy-on-write)", {
+  # Two grobs drawn onto the same base must not contaminate each other or the base.
+  s1 <- push(vl_scene(), viewport(name = "vp1"))
+  a <- draw(s1, rect_grob(name = "A"))
+  b <- draw(s1, rect_grob(name = "B"))
+  expect_equal(node_names(s1), "vp1")
+  expect_equal(node_names(a), c("vp1", "A"))
+  expect_equal(node_names(b), c("vp1", "B"))
+})
+
+test_that("branching diverges correctly across push/pop", {
+  base <- vl_scene() |>
+    draw(rect_grob(name = "R0")) |>
+    push(viewport(name = "P")) |>
+    draw(rect_grob(name = "R1"))
+  b1 <- base |> draw(rect_grob(name = "X")) |> pop() |> draw(rect_grob(name = "topX"))
+  b2 <- base |> draw(rect_grob(name = "Y"))
+  expect_equal(node_names(base), c("R0", "P", "R1"))
+  expect_equal(node_names(b1), c("R0", "P", "R1", "X", "topX"))
+  expect_equal(node_names(b2), c("R0", "P", "R1", "Y"))
+  expect_equal(node_names(base), c("R0", "P", "R1")) # base still intact after both branches
+})
+
+test_that("pop(n) never ascends past the root and ignores n < 0", {
+  s <- vl_scene() |> push(viewport(name = "p")) |> pop(5) |> draw(rect_grob(name = "g"))
+  expect_equal(node_names(s), c("p", "g")) # 'g' lands at the root, not in a phantom frame
+  expect_no_error(.scene_to_backend(vl_scene() |> push(viewport()) |> pop(-1)))
+})
+
 test_that("get_node returns the named grob; missing errors", {
   s <- vl_scene() |> draw(rect_grob(name = "bg", gp = gpar(fill = "red")))
   expect_equal(get_node(s, "bg")@gp@fill, "red")

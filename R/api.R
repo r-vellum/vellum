@@ -16,6 +16,22 @@ gtree <- S7::new_class(
 # tree is held in a fast mutable form (`build` = a root "build node", `open` = the
 # stack of open ancestors); it is materialised to an immutable `root` gtree lazily
 # (at render/edit/query). Exactly one of `build`/`root` is non-NULL.
+#
+# The build tree is mutated in place for O(1) appends, but each scene value must
+# still behave as immutable (the pipe may branch: `b <- push(...); x <- draw(b);
+# y <- draw(b)`). All the per-value builder state lives in one list property,
+# `bstate = list(build, open, ocount, gen)`, so a mutating op is a single S7
+# property write (S7 `@<-` validation is the hot-path cost). `build` (the root
+# build node) is shared by reference across scene values for O(1) appends;
+# `open`/`ocount`/`gen` are the cheap per-value bits.
+#
+# Ownership is tracked with a generation token: a scene owns its build tree iff
+# `bstate$gen == build$owner_gen`. Exactly one scene (the latest mutation) owns
+# it; mutating any other (stale) scene first forks an independent copy of its own
+# view (copy-on-write). `ocount` records, per open-stack node, how many children
+# belong to *this* scene's view — appends only grow the child dict, so a stale
+# scene's view is the recorded prefix of each open node. Exactly one of
+# `bstate`/`root` is non-NULL.
 vellum_scene <- S7::new_class(
   "vellum_scene", package = "vellum",
   properties = list(
@@ -24,8 +40,7 @@ vellum_scene <- S7::new_class(
     dpi = S7::new_property(S7::class_double, default = 96),
     bg = S7::new_property(S7::class_any, default = "white"),
     root = S7::new_property(S7::class_any, default = NULL),
-    build = S7::new_property(S7::class_any, default = NULL),
-    open = S7::new_property(S7::class_any, default = NULL)
+    bstate = S7::new_property(S7::class_any, default = NULL)
   )
 )
 
@@ -43,16 +58,33 @@ vellum_scene <- S7::new_class(
   e
 }
 .is_bnode <- function(x) is.environment(x) && isTRUE(x$is_bnode)
+.bnode_kid <- function(node, i) get(as.character(i), envir = node$kids)
 .bnode_add <- function(node, child) {
   node$n <- node$n + 1L
   assign(as.character(node$n), child, envir = node$kids)
   invisible()
 }
-# Materialise a build node into an immutable gtree (children recurse / pass through).
-.bnode_to_gtree <- function(node) {
-  children <- lapply(seq_len(node$n), function(i) {
-    c <- get(as.character(i), envir = node$kids)
-    if (.is_bnode(c)) .bnode_to_gtree(c) else c
+# Index (1-based) of `child` among `parent`'s first `lim` children, by identity.
+.bnode_index_of <- function(parent, child, lim) {
+  for (j in seq_len(lim)) if (identical(.bnode_kid(parent, j), child)) return(j)
+  NA_integer_
+}
+
+# Materialise a build node into an immutable gtree. `depth` is the node's index
+# on the open path (NA once off it): an open-path node is capped to its view
+# count `ocount[depth]` (a stale scene sees a prefix); off-path subtrees are
+# fully frozen (all children).
+.bnode_to_gtree <- function(node, open, ocount, depth) {
+  on_path <- !is.na(depth)
+  cap <- if (on_path) ocount[[depth]] else node$n
+  nextnode <- if (on_path && depth < length(open)) open[[depth + 1L]] else NULL
+  children <- lapply(seq_len(cap), function(i) {
+    ch <- .bnode_kid(node, i)
+    if (!.is_bnode(ch)) {
+      return(ch)
+    }
+    nd <- if (!is.null(nextnode) && identical(ch, nextnode)) depth + 1L else NA_integer_
+    .bnode_to_gtree(ch, open, ocount, nd)
   })
   gtree(name = node$vp@name, vp = node$vp, children = children)
 }
@@ -63,27 +95,57 @@ vellum_scene <- S7::new_class(
   node
 }
 
-# The immutable root gtree for a scene (materialising the build tree if needed).
+# A fresh build-state list: a root build node, its open stack, the per-node view
+# counts, and the ownership generation. `owner_gen` is stamped on the build node.
+.bstate_new <- function(build, open, ocount, gen) {
+  build$owner_gen <- gen
+  list(build = build, open = open, ocount = ocount, gen = gen)
+}
+
+# The immutable root gtree for a scene's view (materialising the build tree if
+# needed), honouring this scene's per-open-node child counts (`ocount`).
 .materialize <- function(scene) {
   if (!is.null(scene@root)) {
     return(scene@root)
   }
-  if (!is.null(scene@build)) {
-    return(.bnode_to_gtree(scene@build))
+  bs <- scene@bstate
+  if (is.null(bs)) {
+    return(gtree(name = "root", vp = viewport(name = "root"), children = list()))
   }
-  gtree(name = "root", vp = viewport(name = "root"), children = list())
+  .bnode_to_gtree(bs$build, bs$open, bs$ocount, 1L)
 }
 
-# Ensure the scene is in building mode (reopening a materialised one if needed).
+# Fork an independent copy of a stale scene's *own view* (copy-on-write), so the
+# subsequent in-place mutation can't corrupt scenes that branched earlier. Owner
+# scenes (the common linear-pipe case) never reach here.
+.fork <- function(scene) {
+  bs <- scene@bstate
+  idx <- vapply(
+    seq_len(length(bs$open) - 1L),
+    function(i) .bnode_index_of(bs$open[[i]], bs$open[[i + 1L]], bs$ocount[[i]]),
+    integer(1)
+  )
+  root <- .gtree_to_bnode(.materialize(scene)) # deep copy of this scene's view
+  open <- vector("list", length(idx) + 1L)
+  open[[1L]] <- root
+  for (j in seq_along(idx)) open[[j + 1L]] <- .bnode_kid(open[[j]], idx[[j]])
+  scene@root <- NULL
+  scene@bstate <- .bstate_new(root, open, vapply(open, function(b) b$n, integer(1)), 0)
+  scene
+}
+
+# Put the scene into building mode and guarantee it owns its build tree (forking
+# a stale handle first). All mutating ops (push/draw/pop) go through this; it
+# returns a scene whose `@bstate` is present and owned.
 .ensure_building <- function(scene) {
-  if (!is.null(scene@build)) {
+  bs <- scene@bstate
+  if (is.null(bs)) { # materialised -> reopen a fresh, owned build tree
+    br <- .gtree_to_bnode(.materialize(scene))
+    scene@root <- NULL
+    scene@bstate <- .bstate_new(br, list(br), br$n, 0)
     return(scene)
   }
-  br <- .gtree_to_bnode(.materialize(scene))
-  scene@build <- br
-  scene@open <- list(br)
-  scene@root <- NULL
-  scene
+  if (identical(bs$gen, bs$build$owner_gen)) scene else .fork(scene)
 }
 
 # --- scene construction + functional builder --------------------------------
@@ -110,8 +172,17 @@ vl_scene <- function(width = 6, height = 4, dpi = 96, bg = "white") {
   root <- .bnode(vp = viewport(name = "root"))
   vellum_scene(
     width = .as_size(width), height = .as_size(height), dpi = dpi, bg = bg,
-    root = NULL, build = root, open = list(root)
+    root = NULL, bstate = .bstate_new(root, list(root), 0L, 0)
   )
+}
+
+# Bump the ownership generation on `bs` (in place on the shared build node) and
+# return the updated bstate list. The single per-op S7 write is `@bstate <-`.
+.bstate_claim <- function(bs) {
+  g <- bs$build$owner_gen + 1
+  bs$build$owner_gen <- g
+  bs$gen <- g
+  bs
 }
 
 #' @rdname vl_scene
@@ -120,9 +191,15 @@ vl_scene <- function(width = 6, height = 4, dpi = 96, bg = "white") {
 #' @export
 push <- function(scene, vp) {
   scene <- .ensure_building(scene)
+  bs <- scene@bstate
+  k <- length(bs$open)
+  cur <- bs$open[[k]]
   node <- .bnode(vp = vp)
-  .bnode_add(scene@open[[length(scene@open)]], node)
-  scene@open <- c(scene@open, list(node))
+  .bnode_add(cur, node)
+  bs$ocount[k] <- cur$n # parent now has this child in our view
+  bs$open <- c(bs$open, list(node))
+  bs$ocount <- c(bs$ocount, 0L)
+  scene@bstate <- .bstate_claim(bs)
   scene
 }
 
@@ -131,7 +208,12 @@ push <- function(scene, vp) {
 #' @export
 draw <- function(scene, grob) {
   scene <- .ensure_building(scene)
-  .bnode_add(scene@open[[length(scene@open)]], grob) # O(1) env append
+  bs <- scene@bstate
+  k <- length(bs$open)
+  cur <- bs$open[[k]]
+  .bnode_add(cur, grob) # O(1) env append
+  bs$ocount[k] <- cur$n
+  scene@bstate <- .bstate_claim(bs)
   scene
 }
 
@@ -140,8 +222,12 @@ draw <- function(scene, grob) {
 #' @export
 pop <- function(scene, n = 1) {
   scene <- .ensure_building(scene)
-  k <- length(scene@open)
-  scene@open <- scene@open[seq_len(max(1L, k - as.integer(n)))] # never pop the root
+  bs <- scene@bstate
+  k <- length(bs$open)
+  keep <- max(1L, k - max(0L, as.integer(n))) # never pop the root; ignore n < 0
+  bs$open <- bs$open[seq_len(keep)]
+  bs$ocount <- bs$ocount[seq_len(keep)]
+  scene@bstate <- .bstate_claim(bs)
   scene
 }
 
@@ -305,14 +391,13 @@ S7::method(compile, gtree) <- function(node, scene) {
 #' @export
 node_names <- function(scene) {
   root <- .materialize(scene)
-  out <- character(0)
+  # Recurse returning each subtree's names, concatenated — avoids growing a
+  # vector one element at a time via `<<-` (that is O(n^2) over the tree).
   walk <- function(node) {
     nm <- .node_name(node)
-    if (!is.null(nm)) out[[length(out) + 1L]] <<- nm
-    for (ch in .node_children(node)) walk(ch)
+    c(if (!is.null(nm)) nm else character(0), unlist(lapply(.node_children(node), walk), use.names = FALSE))
   }
-  for (ch in root@children) walk(ch)
-  out
+  unlist(lapply(root@children, walk), use.names = FALSE) %||% character(0)
 }
 
 #' @rdname node_names
@@ -332,8 +417,7 @@ edit_node <- function(scene, name, ...) {
   if (is.null(p)) cli::cli_abort("No node named {.val {name}}.")
   # Return an immutable (materialised) scene; the builder env is untouched.
   scene@root <- .modify_at(root, p, function(nd) S7::set_props(nd, ...))
-  scene@build <- NULL
-  scene@open <- NULL
+  scene@bstate <- NULL
   scene
 }
 
@@ -426,7 +510,16 @@ edit_node <- function(scene, name, ...) {
   v <- if (length(just) > 1) .just1(just[2], vmap) else 0.5
   c(h, v)
 }
-.just1 <- function(j, map) if (j %in% names(map)) unname(map[j]) else suppressWarnings(as.numeric(j))
+.just1 <- function(j, map) {
+  if (j %in% names(map)) {
+    return(unname(map[j]))
+  }
+  v <- suppressWarnings(as.numeric(j))
+  if (is.na(v)) {
+    cli::cli_abort("Invalid {.arg just} value {.val {j}}; use {.or {names(map)}} or a number in [0, 1].")
+  }
+  v
+}
 
 # Tree navigation over the immutable gtree.
 .node_children <- function(node) if (S7::S7_inherits(node, gtree)) node@children else list()

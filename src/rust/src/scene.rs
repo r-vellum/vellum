@@ -567,11 +567,15 @@ impl Scene {
         let gp = PartialGpar::from_robj(&rnull(), &col, &rnull(), &alpha, &rnull());
         let nlab = [x.len(), y.len(), xu.len(), yu.len(), rot.len(), w.len(), h.len(), nper.len(), label.len()]
             .into_iter().min().unwrap_or(0);
+        // All glyph arrays are parallel; clamp the per-label slice to the shortest
+        // so a (mis-sized, direct-FFI) call can't panic on an out-of-range slice.
+        let gmax = [gid.len(), gx.len(), gy.len(), gsize.len(), gpath.len(), gface.len()]
+            .into_iter().min().unwrap_or(0);
         let mut off = 0usize;
         for i in 0..nlab {
             let cnt = nper[i].max(0) as usize;
-            let lo = off.min(gid.len());
-            let hi = (off + cnt).min(gid.len());
+            let lo = off.min(gmax);
+            let hi = (off + cnt).min(gmax);
             off = hi;
             self.emit_node(Node::Text {
                 x: x[i], y: y[i], xu: Unit::from_code(xu[i]), yu: Unit::from_code(yu[i]),

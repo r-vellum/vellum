@@ -37,3 +37,11 @@ test_that("lwd inherits from the enclosing viewport", {
   }
   expect_gt(band(10), band(2))
 })
+
+test_that("an unrecognized text justification errors instead of silently becoming NA", {
+  s <- vl_scene(1, 1, dpi = 50) |> draw(text_grob("x", just = "frobnicate"))
+  expect_error(.scene_to_backend(s), "just")
+  # named and numeric justifications still work
+  expect_no_error(.scene_to_backend(vl_scene(1, 1, dpi = 50) |> draw(text_grob("x", just = "left"))))
+  expect_no_error(.scene_to_backend(vl_scene(1, 1, dpi = 50) |> draw(text_grob("x", just = c("0.2", "0.8")))))
+})
