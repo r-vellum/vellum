@@ -37,6 +37,34 @@ test_that("text colour reaches the raster", {
   expect_gt(p[1], p[3]) # red dominates blue
 })
 
+test_that("the shape cache is transparent: cold and warm renders are identical", {
+  clear <- function() rm(
+    list = setdiff(ls(.shape_cache, all.names = TRUE), ".n"), envir = .shape_cache
+  )
+  scene <- function() {
+    vl_scene(2, 1, dpi = 100, bg = "white") |>
+      draw(text_grob(c("Ab", "Ab", "cD"), x = c(0.2, 0.5, 0.8), y = 0.5, gp = gpar(fontsize = 24)))
+  }
+  clear()
+  cold <- scene_raster(scene()) # populates the cache (one shape per distinct label)
+  warm <- scene_raster(scene()) # all cache hits
+  expect_identical(cold, warm)
+})
+
+test_that("the shape cache keys on size (no cross-size collision)", {
+  # Same string at two sizes must produce different ink widths -> the cache key
+  # includes size (otherwise the second render would reuse the first's glyphs).
+  ink_w <- function(sz) {
+    red <- scene_raster(
+      vl_scene(3, 1, dpi = 100, bg = "white") |>
+        draw(text_grob("WW", x = 0.5, y = 0.5, gp = gpar(fontsize = sz, col = "black")))
+    )[1, , ]
+    cols <- which(apply(red, 1, min) < 100)
+    if (length(cols)) diff(range(cols)) else 0
+  }
+  expect_gt(ink_w(40), ink_w(12))
+})
+
 test_that("justification places text on the correct side of the anchor", {
   inked_x <- function(hjust) {
     s <- vl_scene(width = 3, height = 1, dpi = 100, bg = "white") |>

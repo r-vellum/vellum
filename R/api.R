@@ -429,12 +429,27 @@ edit_node <- function(scene, name, ...) {
 # Backend value encoders: turn R colours / numbers into the form the Rust side
 # expects. Shared by the compile path, paint.R, and text.R.
 
+# PERF-7: colour parsing memo. `col2rgb` is called once per drawn grob's col/fill;
+# a plot with many same-coloured elements re-parses the same string repeatedly.
+# Memoise the (deterministic) parse, keyed by type + value so an integer palette
+# index and a same-looking string never collide.
+.col_cache <- new.env(parent = emptyenv())
+.col2rgba <- function(x) {
+  key <- paste0(typeof(x), as.character(x))
+  v <- .col_cache[[key]]
+  if (is.null(v)) {
+    v <- as.integer(grDevices::col2rgb(x, alpha = TRUE)[, 1L])
+    .col_cache[[key]] <- v
+  }
+  v
+}
+
 # Concrete colour -> length-4 integer RGBA, or NULL ("no paint" / transparent).
 .rs_col <- function(x) {
   if (is.null(x) || length(x) != 1L || is.na(x)) {
     return(NULL)
   }
-  as.integer(grDevices::col2rgb(x, alpha = TRUE)[, 1L])
+  .col2rgba(x)
 }
 
 # Tri-state colour encoding for the backend:
@@ -451,7 +466,7 @@ edit_node <- function(scene, name, ...) {
   if (is.na(x)) {
     return(integer(0))
   }
-  as.integer(grDevices::col2rgb(x, alpha = TRUE)[, 1L])
+  .col2rgba(x)
 }
 
 # Tri-state numeric encoding: NULL/NA -> NA_real_ (inherit); else the value.
