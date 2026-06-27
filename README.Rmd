@@ -14,7 +14,7 @@ knitr::opts_chunk$set(
 )
 ```
 
-# vellum
+# vellum <img src="man/figures/logo.png" align="right" height="138" alt="" />
 
 <!-- badges: start -->
 [![Lifecycle: experimental](https://img.shields.io/badge/lifecycle-experimental-orange.svg)](https://lifecycle.r-lib.org/articles/stages.html#experimental)
@@ -25,9 +25,9 @@ with a **Rust** backend. You describe a scene with a small, declarative R API;
 the scene graph, unit/layout engine, and rendering all run in Rust; and the same
 scene renders to **PNG, SVG, or PDF**.
 
-It is the *foundation layer* a grammar of graphics builds on — the way grid
-underlies ggplot2 — not a plotting package itself. A Vega-style grammar package on
-top is in design.
+It is the *foundation layer* a grammar of graphics builds on, the way grid
+underlies ggplot2. It is not a plotting package itself; a Vega-style grammar
+package on top is in design.
 
 ```{r hello}
 library(vellum)
@@ -44,9 +44,9 @@ vl_scene(width = 5, height = 2.4, bg = "white") |>
 
 ![](man/figures/README-hello.png)
 
-A scene is built functionally — `vl_scene()` then a pipeline of `push()` /
-`draw()` / `pop()` over an immutable tree — and rendered with `render()`, which
-picks the backend from the file extension.
+A scene is built functionally: `vl_scene()` followed by a pipeline of `push()`,
+`draw()`, and `pop()` over an immutable tree. It is rendered with `render()`,
+which picks the backend from the file extension.
 
 ## What sets it apart
 
@@ -55,18 +55,18 @@ picks the backend from the file extension.
   [krilla](https://github.com/LaurenzV/krilla) for PDF) and is byte-stable, so
   output is reproducible and snapshot-testable.
 - **One scene, three backends.** The *same* scene renders to PNG, SVG, and PDF
-  with consistent geometry — `render(scene, "plot.svg")`,
+  with consistent geometry, via `render(scene, "plot.svg")` or
   `render(scene, "plot.pdf")`.
 - **A retained scene graph, not immediate-mode drawing.** Because the scene is
   kept (not drawn-and-forgotten), vellum offers capabilities grid does not:
-  **hit-testing** (`hit_test()` — pick the topmost grob under a point), a
+  **hit-testing** (`hit_test()` picks the topmost grob under a point), a
   content-hash render cache, and named, **editable** nodes
   (`node_names()` / `get_node()` / `edit_node()`).
 - **A modern paint model across all backends.** Linear & radial **gradients**,
   tiling **patterns**, alpha/luminance **masks**, and group opacity
   (`viewport(alpha=)`).
 - **Built-in big-data aggregation.** `datashade()` bins millions of points into a
-  density raster in one pass — no overplotting, no giant files.
+  density raster in one pass, with no overplotting and no giant files.
 - **Device-independent, faithful text.** Shaping via
   [textshaping](https://github.com/r-lib/textshaping) /
   [systemfonts](https://github.com/r-lib/systemfonts) (the same stack as
@@ -76,7 +76,7 @@ picks the backend from the file extension.
   arbitrary-path clipping, and a row/column layout solver with `"null"` (flexible)
   tracks.
 - **Grid interop.** `as_vellum()` / `render_grid()` render an existing grid grob
-  tree — including **ggplot2** and **lattice** — through the vellum backend.
+  tree, including **ggplot2** and **lattice**, through the vellum backend.
 
 ## Installation
 
@@ -92,7 +92,7 @@ pak::pak("schochastics/vellum")
 
 ### The paint model
 
-Gradients, a tiling pattern, and a mask — composed with viewports:
+Gradients, a tiling pattern, and a mask, composed with viewports:
 
 ```{r paint}
 tile <- list(rect_grob(gp = gpar(fill = "#ecf0f1", col = NA)),
@@ -142,6 +142,12 @@ vl_scene(4.5, 3, bg = "white") |>
 
 ### A million points with `datashade()`
 
+`datashade()` aggregates the points into a grid the size of the output raster,
+counts how many land in each cell, and colours each cell by that count. Because
+the work scales with the number of pixels rather than the number of points, it
+draws millions of points quickly, shows true density instead of the solid blob
+that overplotting produces, and keeps the output file small.
+
 ```{r datashade}
 set.seed(2)
 n <- 1e6
@@ -169,7 +175,7 @@ render(s, "out.pdf") # vector   (krilla)
 ## Relationship to grid and ggplot2
 
 vellum sits at grid's level of the stack: units, viewports, grobs, layout, and
-rendering — but with a Rust scene graph, multi-backend output, hit-testing, and a
+rendering, but with a Rust scene graph, multi-backend output, hit-testing, and a
 modern paint model. It is **not** a grammar of graphics (no scales, stats, geoms,
 or facets). A separate, Vega-leaning grammar package that compiles to vellum is in
 design; until then, `as_vellum()` / `render_grid()` let you render existing grid /
