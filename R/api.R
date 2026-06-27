@@ -321,6 +321,70 @@ S7::method(as.raster, vellum_scene) <- function(x, ...) {
   structure(t(m), class = "raster") # [y, x]; row 1 = top
 }
 
+#' Display a scene in the active graphics device
+#'
+#' `display()` renders `scene` and draws it into the current graphics device,
+#' fitting it while preserving the scene's aspect ratio. Interactively this is the
+#' RStudio / Positron **Plots** pane; inside a knitr / Quarto chunk it becomes the
+#' chunk's figure (it draws to the chunk's device). This is the seam any package
+#' built on vellum can call to *show* output instead of writing a file: `scene` is
+#' coerced via [as_vellum_scene()], so it also accepts e.g. a grammar's plot spec.
+#'
+#' Auto-printing a scene at the console (or calling `plot()` on it) draws it the
+#' same way. The scene is re-rendered at roughly the device's pixel density so it
+#' stays crisp.
+#'
+#' @param scene A [vl_scene()] or anything with an [as_vellum_scene()] method.
+#' @param ... Unused.
+#' @return The (coerced) scene, invisibly.
+#' @examples
+#' \dontrun{
+#' vl_scene(4, 3) |>
+#'   draw(circle_grob(r = 0.3, gp = gpar(fill = "tomato", col = NA))) |>
+#'   display()
+#' }
+#' @export
+display <- function(scene, ...) {
+  scene <- as_vellum_scene(scene)
+  # Draw into the active device interactively (the pane auto-opens on first plot)
+  # or whenever a device is already open (an explicit png()/pdf(), or a knitr
+  # chunk). Otherwise no-op, so sourced scripts / R CMD check don't spawn a stray
+  # `Rplots.pdf`.
+  if (!interactive() && grDevices::dev.cur() == 1L) {
+    return(invisible(scene))
+  }
+  win <- .to_inches(scene@width)
+  hin <- .to_inches(scene@height)
+  # Fit within the device preserving the authored aspect ratio, and re-render at
+  # the device's pixel density (bounded) so the drawn raster stays crisp.
+  fit <- tryCatch({
+    din <- grDevices::dev.size("in")
+    dpx <- grDevices::dev.size("px")
+    dev_dpi <- dpx[1] / din[1]
+    scale <- min(din[1] / win, din[2] / hin)
+    list(scale = scale, dpi = max(72, min(round(scale * dev_dpi), 300)))
+  }, error = function(e) list(scale = 1, dpi = scene@dpi))
+  r <- as.raster(S7::set_props(scene, dpi = fit$dpi))
+  grid::grid.newpage()
+  grid::grid.raster(r,
+    width = grid::unit(win * fit$scale, "in"),
+    height = grid::unit(hin * fit$scale, "in"),
+    interpolate = TRUE
+  )
+  invisible(scene)
+}
+
+# Auto-print (type a scene at the console) and plot() both display it, like
+# ggplot2's print method. Registered at load via S7::methods_register().
+S7::method(print, vellum_scene) <- function(x, ...) {
+  display(x)
+  invisible(x)
+}
+S7::method(plot, vellum_scene) <- function(x, y, ...) {
+  display(x)
+  invisible(x)
+}
+
 # Render-result cache (FW4). A vellum_scene is immutable (every push/draw/pop
 # returns a new object), and the compiled backend `Scene` is logically immutable
 # once built — only an internal pixmap cache mutates, and the vector backends read
