@@ -21,6 +21,7 @@ test_that("PDF clipping and nested viewports render without error", {
 
 test_that("PDF soft masks clip content (rasterized check)", {
   skip_if(unname(Sys.which("pdftoppm")) == "", "pdftoppm not available")
+  skip_if_not_installed("png")
   f <- withr::local_tempfile(fileext = ".pdf")
   # Orange page rect masked to a centred r=0.4npc circle over a black background.
   s <- vl_scene(2, 2, dpi = 90, bg = "black") |>

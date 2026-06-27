@@ -8,6 +8,7 @@ test_that("as_vellum_scene() is identity on a vellum_scene", {
 })
 
 test_that("render() dispatches an arbitrary object through as_vellum_scene()", {
+  skip_if_not_installed("png")
   # A stand-in for a downstream grammar spec: a foreign S7 class that knows how to
   # compile itself into a vellum scene. (The method registers on the package
   # generic for this test-local class; harmless to leave registered.)

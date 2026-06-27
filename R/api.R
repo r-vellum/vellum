@@ -283,6 +283,44 @@ render <- function(scene, path, text = c("native", "outline")) {
   invisible(path)
 }
 
+#' Read a rendered scene back as pixels
+#'
+#' `scene_raster()` renders `scene` and returns its pixels as an integer array
+#' with dimensions `c(channel, x, y)` — RGBA channels in `0:255`, top-left origin,
+#' `y` increasing downward. This is the form most convenient for probing or
+#' testing (e.g. `scene_raster(s)[1, x, y]` is the red value at pixel `(x, y)`).
+#'
+#' An [grDevices::as.raster()] method returns the same image as a `raster` object
+#' (a character matrix of hex colours), drawable with [graphics::plot()] or
+#' [grid::rasterGrob()].
+#'
+#' @param scene A [vl_scene()] (or anything with an [as_vellum_scene()] method).
+#' @return `scene_raster()`: an integer array of dimension `c(4, width, height)`.
+#'   The `as.raster()` method: a `raster` (character matrix, `c(height, width)`).
+#' @examples
+#' s <- vl_scene(2, 1, bg = "white") |>
+#'   draw(circle_grob(r = 0.3, gp = gpar(fill = "red", col = NA)))
+#' dim(scene_raster(s)) # c(4, width_px, height_px)
+#' @importFrom grDevices as.raster
+#' @export
+scene_raster <- function(scene) {
+  s <- .scene_to_backend(as_vellum_scene(scene))
+  d <- s$dim()
+  array(s$rgba(), dim = c(4L, d[1], d[2]))
+}
+
+# as.raster() method for vellum_scene (documented in scene_raster() above).
+# Registered at load via S7::methods_register(); no roxygen export needed (and a
+# bare \usage would trip R CMD check, since `as.raster` is an existing generic).
+S7::method(as.raster, vellum_scene) <- function(x, ...) {
+  arr <- scene_raster(x)
+  w <- dim(arr)[2]
+  h <- dim(arr)[3]
+  hex <- grDevices::rgb(arr[1, , ], arr[2, , ], arr[3, , ], arr[4, , ], maxColorValue = 255)
+  m <- matrix(hex, nrow = w, ncol = h) # [x, y]
+  structure(t(m), class = "raster") # [y, x]; row 1 = top
+}
+
 # Render-result cache (FW4). A vellum_scene is immutable (every push/draw/pop
 # returns a new object), and the compiled backend `Scene` is logically immutable
 # once built — only an internal pixmap cache mutates, and the vector backends read

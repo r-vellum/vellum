@@ -4,12 +4,8 @@
 
 px <- function(scene, x, y) .scene_to_backend(scene)$pixel(as.integer(x), as.integer(y))
 
-# Whole image as an integer array, dim c(4, width, height) (channels, x, y).
-scene_raster <- function(scene) {
-  s <- .scene_to_backend(scene)
-  d <- s$dim()
-  array(s$rgba(), dim = c(4L, d[1], d[2]))
-}
+# `scene_raster()` is now an exported package function (channels x x y array);
+# tests use it directly.
 
 scene_dim <- function(scene) .scene_to_backend(scene)$dim()
 

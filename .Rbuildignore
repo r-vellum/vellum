@@ -8,3 +8,6 @@
 ^\.github$
 ^DESIGN\.md$
 ^PERFORMANCE\.md$
+^_docs$
+^README\.Rmd$
+^check\.log$

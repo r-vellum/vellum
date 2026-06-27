@@ -6,7 +6,17 @@
 \alias{vellum-package}
 \title{vellum: A Low-Level Graphics Framework with a Rust Backend}
 \description{
-A grid-like low-level graphics system for R whose scene graph, unit/layout engine, and rendering run in a Rust backend. See DESIGN.md.
+\if{html}{\figure{logo.png}{options: style='float: right' alt='logo' width='120'}}
+
+A grid-like low-level graphics system for R whose scene graph, unit/layout engine, and rendering run in a Rust backend.
+}
+\seealso{
+Useful links:
+\itemize{
+  \item \url{https://github.com/schochastics/vellum}
+  \item Report bugs at \url{https://github.com/schochastics/vellum/issues}
+}
+
 }
 \author{
 \strong{Maintainer}: David Schoch \email{david.schoch@cynkra.com}
