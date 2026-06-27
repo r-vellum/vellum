@@ -19,7 +19,8 @@ Suggests:
     testthat (>= 3.0.0),
     withr,
     ggplot2,
-    png
+    png,
+    base64enc
 Config/testthat/edition: 3
 Imports:
     cli,

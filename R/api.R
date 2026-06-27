@@ -496,8 +496,11 @@ S7::method(compile, gtree) <- function(node, scene) {
   .push_vp(scene, node@vp)
   mask <- if (!is.null(node@vp)) node@vp@mask else NULL
   alpha <- if (!is.null(node@vp)) node@vp@alpha else NULL
-  # A group (isolated layer) is needed for a mask and/or a sub-1 group opacity.
-  if (!is.null(mask) || (!is.null(alpha) && alpha < 1)) {
+  blend <- if (!is.null(node@vp)) node@vp@blend else NULL
+  blend_code <- if (is.null(blend)) 0L else .blend_codes[[blend]]
+  # A group (isolated layer) is needed for a mask, a sub-1 group opacity, and/or a
+  # non-normal blend mode.
+  if (!is.null(mask) || (!is.null(alpha) && alpha < 1) || blend_code != 0L) {
     idx <- -1L
     if (!is.null(mask)) {
       m <- .normalize_mask(mask)
@@ -505,7 +508,8 @@ S7::method(compile, gtree) <- function(node, scene) {
       for (g in m$grobs) compile(g, scene)
       scene$mask_end()
     }
-    scene$group_start(idx, alpha %||% 1)   # mask + opacity installed up front; content isolated
+    # mask + opacity + blend installed up front; content drawn into an isolated layer
+    scene$group_start(idx, alpha %||% 1, blend_code)
     for (child in node@children) compile(child, scene)
     scene$group_end()
   } else {

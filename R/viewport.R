@@ -24,6 +24,13 @@
 #'   composited as a single isolated layer at this opacity, so overlapping
 #'   elements do not accumulate (unlike per-element `gpar(alpha=)`). `NULL`
 #'   (default) means fully opaque.
+#' @param blend Optional blend mode for compositing the viewport's contents (as an
+#'   isolated layer) onto the backdrop below it. One of `"normal"` (default),
+#'   `"multiply"`, `"screen"`, `"overlay"`, `"darken"`, `"lighten"`,
+#'   `"color-dodge"`, `"color-burn"`, `"hard-light"`, `"soft-light"`,
+#'   `"difference"`, `"exclusion"`, `"hue"`, `"saturation"`, `"color"`, or
+#'   `"luminosity"` (the CSS `mix-blend-mode` set). `NULL`/`"normal"` is ordinary
+#'   over-compositing.
 #' @param name Optional name (for [edit_node()]).
 #' @return A `viewport` object.
 #' @examples
@@ -33,7 +40,7 @@ viewport <- function(x = 0.5, y = 0.5, width = 1, height = 1,
                      xscale = c(0, 1), yscale = c(0, 1), angle = 0, clip = FALSE,
                      gp = gpar(), layout = NULL,
                      row = NULL, col = NULL, rowspan = 1, colspan = 1,
-                     mask = NULL, alpha = NULL, name = NULL) {
+                     mask = NULL, alpha = NULL, blend = NULL, name = NULL) {
   .check_cell <- function(v, arg) {
     if (!is.null(v) && (length(v) != 1L || is.na(v) || v < 1)) {
       cli::cli_abort("{.arg {arg}} must be a single positive integer (1-based) or NULL.")
@@ -44,14 +51,26 @@ viewport <- function(x = 0.5, y = 0.5, width = 1, height = 1,
   if (!is.null(alpha) && (length(alpha) != 1L || is.na(alpha) || alpha < 0 || alpha > 1)) {
     cli::cli_abort("{.arg alpha} must be a single number in {.val {c(0, 1)}} or NULL.")
   }
+  if (!is.null(blend)) {
+    blend <- match.arg(as.character(blend), names(.blend_codes))
+  }
   class_viewport(
     x = as_unit(x), y = as_unit(y), width = as_unit(width), height = as_unit(height),
     xscale = as.numeric(xscale), yscale = as.numeric(yscale),
     angle = as.numeric(angle), clip = clip, gp = gp, layout = layout,
     row = row, col = col, rowspan = as.integer(rowspan), colspan = as.integer(colspan),
-    mask = mask, alpha = alpha, name = name
+    mask = mask, alpha = alpha, blend = blend, name = name
   )
 }
+
+# Blend-mode codes. Part of the R<->Rust ABI: MUST match `BlendKind::from_code`
+# in `src/rust/src/render.rs`.
+.blend_codes <- c(
+  normal = 0L, multiply = 1L, screen = 2L, overlay = 3L, darken = 4L, lighten = 5L,
+  `color-dodge` = 6L, `color-burn` = 7L, `hard-light` = 8L, `soft-light` = 9L,
+  difference = 10L, exclusion = 11L, hue = 12L, saturation = 13L, color = 14L,
+  luminosity = 15L
+)
 
 class_viewport <- S7::new_class(
   "class_viewport", package = "vellum",
@@ -70,6 +89,7 @@ class_viewport <- S7::new_class(
     colspan = S7::new_property(S7::class_integer, default = 1L),
     mask = S7::new_property(S7::class_any, default = NULL),
     alpha = S7::new_property(S7::class_any, default = NULL),
+    blend = S7::new_property(S7::class_any, default = NULL),
     name = S7::new_property(S7::class_any, default = NULL)
   )
 )

@@ -22,6 +22,7 @@ viewport(
   colspan = 1,
   mask = NULL,
   alpha = NULL,
+  blend = NULL,
   name = NULL
 )
 
@@ -56,6 +57,14 @@ mask modulates their visibility.}
 composited as a single isolated layer at this opacity, so overlapping
 elements do not accumulate (unlike per-element \code{gpar(alpha=)}). \code{NULL}
 (default) means fully opaque.}
+
+\item{blend}{Optional blend mode for compositing the viewport's contents (as an
+isolated layer) onto the backdrop below it. One of \code{"normal"} (default),
+\code{"multiply"}, \code{"screen"}, \code{"overlay"}, \code{"darken"}, \code{"lighten"},
+\code{"color-dodge"}, \code{"color-burn"}, \code{"hard-light"}, \code{"soft-light"},
+\code{"difference"}, \code{"exclusion"}, \code{"hue"}, \code{"saturation"}, \code{"color"}, or
+\code{"luminosity"} (the CSS \code{mix-blend-mode} set). \code{NULL}/\code{"normal"} is ordinary
+over-compositing.}
 
 \item{name}{Optional name (for \code{\link[=edit_node]{edit_node()}}).}
 

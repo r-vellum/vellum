@@ -69,3 +69,19 @@ test_that("render() rejects unknown output formats", {
   f <- withr::local_tempfile(fileext = ".bmp")
   expect_error(render(vl_scene(), f), "Unsupported")
 })
+
+test_that("SVG image colour survives under fully-transparent texels", {
+  # A transparent-but-red texel must keep its RGB in the embedded PNG (straight,
+  # not premultiplied) so scaled/interpolated edges don't fringe to black.
+  skip_if_not_installed("png")
+  skip_if_not_installed("base64enc")
+  img <- matrix("#FF000000", 2, 2) # red, alpha 0
+  f <- withr::local_tempfile(fileext = ".svg")
+  render(vl_scene(1, 1, dpi = 50, bg = "white") |> draw(raster_grob(img)), f)
+  svg <- paste(readLines(f), collapse = "")
+  b64 <- sub("^base64,", "", regmatches(svg, regexpr("base64,[A-Za-z0-9+/=]+", svg)))
+  tmp <- withr::local_tempfile(fileext = ".png")
+  writeBin(base64enc::base64decode(b64), tmp)
+  arr <- png::readPNG(tmp) # h x w x 4, 0..1
+  expect_equal(round(arr[1, 1, ], 3), c(1, 0, 0, 0)) # red preserved, alpha 0
+})

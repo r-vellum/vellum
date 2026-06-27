@@ -131,6 +131,53 @@ pub struct MaskLayer {
     pub kind: MaskKind,
 }
 
+/// How a group composites onto the backdrop below it (the CSS `mix-blend-mode` /
+/// PDF separable+non-separable set, supported by all three backends). `Normal` is
+/// ordinary source-over and is the no-op default.
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub enum BlendKind {
+    Normal, Multiply, Screen, Overlay, Darken, Lighten, ColorDodge, ColorBurn,
+    HardLight, SoftLight, Difference, Exclusion, Hue, Saturation, Color, Luminosity,
+}
+
+impl BlendKind {
+    /// Codes match `.blend_codes` in R (the R<->Rust ABI).
+    pub fn from_code(c: i32) -> BlendKind {
+        use BlendKind::*;
+        match c {
+            1 => Multiply, 2 => Screen, 3 => Overlay, 4 => Darken, 5 => Lighten,
+            6 => ColorDodge, 7 => ColorBurn, 8 => HardLight, 9 => SoftLight,
+            10 => Difference, 11 => Exclusion, 12 => Hue, 13 => Saturation,
+            14 => Color, 15 => Luminosity, _ => Normal,
+        }
+    }
+
+    fn to_skia(self) -> tiny_skia::BlendMode {
+        use tiny_skia::BlendMode as B;
+        use BlendKind::*;
+        match self {
+            Normal => B::SourceOver, Multiply => B::Multiply, Screen => B::Screen,
+            Overlay => B::Overlay, Darken => B::Darken, Lighten => B::Lighten,
+            ColorDodge => B::ColorDodge, ColorBurn => B::ColorBurn, HardLight => B::HardLight,
+            SoftLight => B::SoftLight, Difference => B::Difference, Exclusion => B::Exclusion,
+            Hue => B::Hue, Saturation => B::Saturation, Color => B::Color, Luminosity => B::Luminosity,
+        }
+    }
+
+    /// CSS `mix-blend-mode` keyword, or `None` for `Normal` (omit the attribute).
+    fn svg(self) -> Option<&'static str> {
+        use BlendKind::*;
+        Some(match self {
+            Normal => return None,
+            Multiply => "multiply", Screen => "screen", Overlay => "overlay",
+            Darken => "darken", Lighten => "lighten", ColorDodge => "color-dodge",
+            ColorBurn => "color-burn", HardLight => "hard-light", SoftLight => "soft-light",
+            Difference => "difference", Exclusion => "exclusion", Hue => "hue",
+            Saturation => "saturation", Color => "color", Luminosity => "luminosity",
+        })
+    }
+}
+
 /// A drawing target. The walk calls these in paint order. `begin_group` /
 /// `end_group` bracket an isolated compositing layer; the optional `mask` (handed
 /// to `begin_group`, since PDF must install its soft mask *before* the content)
@@ -139,7 +186,7 @@ pub trait RenderBackend {
     fn fill_path(&mut self, path: &Path, transform: Transform, paint: &ResolvedPaint, rule: FillRule, clip: &Clip);
     fn stroke_path(&mut self, path: &Path, transform: Transform, color: Rgba, stroke: &StrokeStyle, clip: &Clip);
     fn draw_text(&mut self, run: &TextRun, transform: Transform, clip: &Clip);
-    fn begin_group(&mut self, mask: Option<MaskLayer>, alpha: f32);
+    fn begin_group(&mut self, mask: Option<MaskLayer>, alpha: f32, blend: BlendKind);
     fn end_group(&mut self);
 
     /// Draw a straight-RGBA image (`iw` x `ih`, top-left origin) into a `w` x `h`
@@ -306,6 +353,26 @@ fn pixmap_from_straight(tile: &[u8], tw: u32, th: u32) -> Option<Pixmap> {
     Some(pm)
 }
 
+/// Encode straight (un-premultiplied) RGBA to PNG. Unlike round-tripping through a
+/// premultiplied `Pixmap` (which zeroes RGB wherever alpha is 0), this preserves
+/// the colour under fully-transparent texels — so the SVG `<image>` shows no
+/// fringing when a pattern/raster with transparent edges is scaled/interpolated.
+fn straight_png(rgba: &[u8], w: u32, h: u32) -> Option<Vec<u8>> {
+    let n = (w as usize).checked_mul(h as usize)?;
+    if w == 0 || h == 0 || rgba.len() < n * 4 {
+        return None;
+    }
+    let mut out = Vec::new();
+    {
+        let mut enc = png::Encoder::new(&mut out, w, h);
+        enc.set_color(png::ColorType::Rgba);
+        enc.set_depth(png::BitDepth::Eight);
+        let mut writer = enc.write_header().ok()?;
+        writer.write_image_data(&rgba[..n * 4]).ok()?;
+    }
+    Some(out)
+}
+
 /// The tile -> local-px transform: scale the `tw` x `th` tile into a `w` x `h`
 /// cell centred at `(x, y)`. The backend's draw transform then maps local->device.
 fn pattern_transform(tw: u32, th: u32, x: f64, y: f64, w: f64, h: f64) -> Transform {
@@ -334,10 +401,11 @@ pub struct RasterBackend {
     /// A stack of draw targets: `targets[0]` is the page; `begin_group` pushes an
     /// isolated layer that drawing then targets until `end_group` composites it.
     targets: Vec<Pixmap>,
-    /// Per-open-group mask and opacity (parallel to the layer stack above the
-    /// page); applied when the group closes.
+    /// Per-open-group mask, opacity, and blend mode (parallel to the layer stack
+    /// above the page); applied when the group closes.
     group_masks: Vec<Option<MaskLayer>>,
     group_alpha: Vec<f32>,
+    group_blend: Vec<BlendKind>,
     /// Bounded LRU of compiled clip masks (most-recent first). tiny-skia requires
     /// a clip `Mask` to match the target pixmap size, so each entry is page-sized
     /// and cannot be shrunk to a bounding box; instead we cap how many stay
@@ -361,7 +429,15 @@ impl RasterBackend {
         if bg.a != 0 {
             pm.fill(bg.to_skia());
         }
-        RasterBackend { targets: vec![pm], group_masks: Vec::new(), group_alpha: Vec::new(), clip_cache: Vec::new(), w, h }
+        RasterBackend {
+            targets: vec![pm],
+            group_masks: Vec::new(),
+            group_alpha: Vec::new(),
+            group_blend: Vec::new(),
+            clip_cache: Vec::new(),
+            w,
+            h,
+        }
     }
 
     pub fn into_pixmap(mut self) -> Pixmap {
@@ -565,17 +641,19 @@ impl RenderBackend for RasterBackend {
         }
     }
 
-    fn begin_group(&mut self, mask: Option<MaskLayer>, alpha: f32) {
-        // A transparent isolated layer; subsequent drawing targets it. The mask
-        // and opacity are held until the group closes.
+    fn begin_group(&mut self, mask: Option<MaskLayer>, alpha: f32, blend: BlendKind) {
+        // A transparent isolated layer; subsequent drawing targets it. The mask,
+        // opacity, and blend mode are held until the group closes.
         self.targets.push(Pixmap::new(self.w, self.h).expect("non-zero layer dimensions"));
         self.group_masks.push(mask);
         self.group_alpha.push(alpha);
+        self.group_blend.push(blend);
     }
 
     fn end_group(&mut self) {
         let mask = self.group_masks.pop().flatten();
         let alpha = self.group_alpha.pop().unwrap_or(1.0);
+        let blend = self.group_blend.pop().unwrap_or(BlendKind::Normal);
         let layer = match self.targets.pop() {
             Some(l) if !self.targets.is_empty() => l,
             other => {
@@ -587,9 +665,14 @@ impl RenderBackend for RasterBackend {
             }
         };
         let m = mask.map(|ml| Mask::from_pixmap(ml.pixmap.as_ref(), skia_masktype(ml.kind)));
-        // Compositing the layer as a whole at `alpha` is what makes group opacity
-        // differ from per-element alpha: overlaps inside the layer don't compound.
-        let paint = tiny_skia::PixmapPaint { opacity: alpha.clamp(0.0, 1.0), ..Default::default() };
+        // Compositing the layer as a whole at `alpha` (and through `blend`) is what
+        // makes group opacity/blend differ from per-element: overlaps inside the
+        // layer don't compound, and the blend is against the backdrop below.
+        let paint = tiny_skia::PixmapPaint {
+            opacity: alpha.clamp(0.0, 1.0),
+            blend_mode: blend.to_skia(),
+            ..Default::default()
+        };
         self.target().draw_pixmap(0, 0, layer.as_ref(), &paint, Transform::identity(), m.as_ref());
     }
 
@@ -681,6 +764,7 @@ pub struct SvgBackend {
     groups: Vec<String>,
     group_masks: Vec<Option<MaskLayer>>,
     group_alpha: Vec<f32>,
+    group_blend: Vec<BlendKind>,
     clip_attrs: HashMap<usize, String>,
     /// Deduplicates gradient/pattern `<defs>` by content signature so repeated
     /// identical fills reference one def instead of emitting N copies.
@@ -710,6 +794,7 @@ impl SvgBackend {
             groups: Vec::new(),
             group_masks: Vec::new(),
             group_alpha: Vec::new(),
+            group_blend: Vec::new(),
             clip_attrs: HashMap::new(),
             def_ids: HashMap::new(),
             next_clip: 0,
@@ -782,7 +867,7 @@ impl SvgBackend {
                 let id = match self.def_ids.get(&key) {
                     Some(id) => id.clone(),
                     None => {
-                        let png = pixmap_from_straight(tile, *tw, *th).and_then(|pm| pm.encode_png().ok());
+                        let png = straight_png(tile, *tw, *th);
                         let href = match png {
                             Some(bytes) => format!("data:image/png;base64,{}", b64(&bytes)),
                             None => return String::from("fill=\"none\""),
@@ -982,15 +1067,17 @@ impl RenderBackend for SvgBackend {
         self.emit(&element, clip);
     }
 
-    fn begin_group(&mut self, mask: Option<MaskLayer>, alpha: f32) {
+    fn begin_group(&mut self, mask: Option<MaskLayer>, alpha: f32, blend: BlendKind) {
         self.groups.push(String::new());
         self.group_masks.push(mask);
         self.group_alpha.push(alpha);
+        self.group_blend.push(blend);
     }
 
     fn end_group(&mut self) {
         let mask = self.group_masks.pop().flatten();
         let alpha = self.group_alpha.pop().unwrap_or(1.0);
+        let blend = self.group_blend.pop().unwrap_or(BlendKind::Normal);
         let inner = self.groups.pop().unwrap_or_default();
         // SVG masks are luminance-based; bake the chosen coverage into a grayscale
         // image (gray == coverage) so a single luminance mask serves both kinds.
@@ -1016,11 +1103,16 @@ impl RenderBackend for SvgBackend {
         } else {
             String::new()
         };
-        self.out().push_str(&format!("<g{mask_attr}{opacity_attr}>{inner}</g>"));
+        // Group blend is CSS `mix-blend-mode` (blends the group against the backdrop).
+        let blend_attr = match blend.svg() {
+            Some(mode) => format!(" style=\"mix-blend-mode:{mode}\""),
+            None => String::new(),
+        };
+        self.out().push_str(&format!("<g{mask_attr}{opacity_attr}{blend_attr}>{inner}</g>"));
     }
 
     fn draw_image(&mut self, rgba: &[u8], iw: u32, ih: u32, x: f64, y: f64, w: f64, h: f64, interpolate: bool, transform: Transform, clip: &Clip) {
-        let png = match pixmap_from_straight(rgba, iw, ih).and_then(|pm| pm.encode_png().ok()) {
+        let png = match straight_png(rgba, iw, ih) {
             Some(b) => b,
             None => return,
         };
@@ -1191,6 +1283,7 @@ fn xml_escape(s: &str) -> String {
 use krilla::color::rgb;
 use krilla::geom::{Path as KPath, PathBuilder as KPathBuilder, Point as KPoint, Size as KSize, Transform as KTransform};
 use krilla::image::Image as KImage;
+use krilla::blend::BlendMode as KBlend;
 use krilla::mask::{Mask as KMask, MaskType as KMaskType};
 use krilla::num::NormalizedF32;
 use krilla::paint::{
@@ -1200,6 +1293,19 @@ use krilla::paint::{
 };
 use krilla::surface::Surface;
 use krilla::text::{Font, GlyphId, KrillaGlyph};
+
+/// Map a blend mode to krilla's, or `None` for `Normal` (skip the state push).
+fn krilla_blend(b: BlendKind) -> Option<KBlend> {
+    use BlendKind::*;
+    Some(match b {
+        Normal => return None,
+        Multiply => KBlend::Multiply, Screen => KBlend::Screen, Overlay => KBlend::Overlay,
+        Darken => KBlend::Darken, Lighten => KBlend::Lighten, ColorDodge => KBlend::ColorDodge,
+        ColorBurn => KBlend::ColorBurn, HardLight => KBlend::HardLight, SoftLight => KBlend::SoftLight,
+        Difference => KBlend::Difference, Exclusion => KBlend::Exclusion, Hue => KBlend::Hue,
+        Saturation => KBlend::Saturation, Color => KBlend::Color, Luminosity => KBlend::Luminosity,
+    })
+}
 
 /// Draws onto a krilla PDF surface. Geometry is converted from `tiny_skia`
 /// types; everything is drawn in device pixels and a single root scale
@@ -1464,7 +1570,7 @@ impl RenderBackend for PdfBackend<'_, '_> {
     // unifies alpha/luminance kinds and avoids premultiplied-color pitfalls. The
     // mask stream is drawn in device px, matching the root px->pt scale that is on
     // the surface stack throughout the walk, so it aligns with the content.
-    fn begin_group(&mut self, mask: Option<MaskLayer>, alpha: f32) {
+    fn begin_group(&mut self, mask: Option<MaskLayer>, alpha: f32, blend: BlendKind) {
         let mut pushes = 0usize;
         if let Some(ml) = mask {
             let (w, h) = (ml.pixmap.width(), ml.pixmap.height());
@@ -1480,6 +1586,11 @@ impl RenderBackend for PdfBackend<'_, '_> {
                 self.surface.push_mask(KMask::new(stream, KMaskType::Luminosity));
                 pushes += 1;
             }
+        }
+        // Group blend: blends the group's content against the backdrop below it.
+        if let Some(kb) = krilla_blend(blend) {
+            self.surface.push_blend_mode(kb);
+            pushes += 1;
         }
         // Group opacity: an isolated transparency group composited at `alpha`.
         if alpha < 1.0 {

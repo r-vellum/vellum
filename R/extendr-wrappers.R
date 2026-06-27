@@ -112,9 +112,10 @@ rs_attractor <- function(kind, n, a, b, c, d, x0, y0) .Call(wrap__rs_attractor, 
 #'
 #'\subsection{Method `group_start`}{
 #'Open an isolated compositing group, modulated by mask index `mask`
-#'(negative = no mask, just isolation). Routed through `emit_node` so a group
-#'nested inside a mask (a mask grob that itself masks a viewport) lands in
-#'the same node list as its content, keeping markers and content in sync.
+#'(negative = no mask, just isolation), group opacity `alpha`, and blend mode
+#'`blend` (a code; 0 = normal). Routed through `emit_node` so a group nested
+#'inside a mask (a mask grob that itself masks a viewport) lands in the same
+#'node list as its content, keeping markers and content in sync.
 #'}
 #'
 #'\subsection{Method `group_end`}{
@@ -215,7 +216,7 @@ Scene$mask_begin <- function(kind) .Call(wrap__Scene__mask_begin, self, kind)
 
 Scene$mask_end <- function() .Call(wrap__Scene__mask_end, self)
 
-Scene$group_start <- function(mask, alpha) .Call(wrap__Scene__group_start, self, mask, alpha)
+Scene$group_start <- function(mask, alpha, blend) .Call(wrap__Scene__group_start, self, mask, alpha, blend)
 
 Scene$group_end <- function() .Call(wrap__Scene__group_end, self)
 

@@ -16,7 +16,7 @@ use extendr_api::prelude::*;
 use tiny_skia::{Color, FillRule, Mask, PathBuilder, Pixmap, Stroke, Transform};
 
 use crate::render::{
-    rect_path, roundrect_path, Clip, ClipShape, MaskKind, MaskLayer, PdfBackend, RasterBackend, RenderBackend,
+    rect_path, roundrect_path, BlendKind, Clip, ClipShape, MaskKind, MaskLayer, PdfBackend, RasterBackend, RenderBackend,
     ResolvedPaint, StrokeStyle, SvgBackend, TextRun,
 };
 
@@ -203,10 +203,10 @@ enum Node {
         interpolate: bool,
     },
     /// Opens an isolated compositing layer (paired with `GroupEnd`), optionally
-    /// modulated by mask `mask` (an index into `Scene::masks`) and composited at
-    /// group opacity `alpha` (1.0 = opaque). The mask/opacity are attached at the
-    /// start because PDF must install them before the masked content is drawn.
-    GroupStart { mask: Option<usize>, alpha: f32 },
+    /// modulated by mask `mask` (an index into `Scene::masks`), composited at group
+    /// opacity `alpha` (1.0 = opaque) and blend mode `blend`. The mask/opacity/blend
+    /// are attached at the start because PDF must install them before the content.
+    GroupStart { mask: Option<usize>, alpha: f32, blend: BlendKind },
     /// Closes the layer and composites it.
     GroupEnd,
 }
@@ -697,12 +697,17 @@ impl Scene {
     }
 
     /// Open an isolated compositing group, modulated by mask index `mask`
-    /// (negative = no mask, just isolation). Routed through `emit_node` so a group
-    /// nested inside a mask (a mask grob that itself masks a viewport) lands in
-    /// the same node list as its content, keeping markers and content in sync.
-    fn group_start(&mut self, mask: i32, alpha: f64) {
+    /// (negative = no mask, just isolation), group opacity `alpha`, and blend mode
+    /// `blend` (a code; 0 = normal). Routed through `emit_node` so a group nested
+    /// inside a mask (a mask grob that itself masks a viewport) lands in the same
+    /// node list as its content, keeping markers and content in sync.
+    fn group_start(&mut self, mask: i32, alpha: f64, blend: i32) {
         let mask = if mask >= 0 { Some(mask as usize) } else { None };
-        self.emit_node(Node::GroupStart { mask, alpha: alpha.clamp(0.0, 1.0) as f32 });
+        self.emit_node(Node::GroupStart {
+            mask,
+            alpha: alpha.clamp(0.0, 1.0) as f32,
+            blend: BlendKind::from_code(blend),
+        });
     }
 
     /// Close the most recently opened group.
@@ -1166,13 +1171,13 @@ impl Scene {
     fn render_nodes<B: RenderBackend>(&self, b: &mut B, resolved: &[ResolvedVp], nodes: &[(usize, Node)]) {
         for (vp_id, node) in nodes {
             match node {
-                Node::GroupStart { mask, alpha } => {
+                Node::GroupStart { mask, alpha, blend } => {
                     let ml = mask.and_then(|m| self.masks.get(m)).map(|md| {
                         let mut mb = RasterBackend::new(self.w_px, self.h_px, Rgba { r: 0, g: 0, b: 0, a: 0 });
                         self.render_nodes(&mut mb, resolved, &md.nodes);
                         MaskLayer { pixmap: mb.into_pixmap(), kind: md.kind }
                     });
-                    b.begin_group(ml, *alpha);
+                    b.begin_group(ml, *alpha, *blend);
                     continue;
                 }
                 Node::GroupEnd => {

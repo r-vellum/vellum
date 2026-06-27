@@ -573,6 +573,7 @@ dependencies = [
  "base64",
  "extendr-api",
  "krilla",
+ "png 0.18.1",
  "skrifa 0.31.3",
  "tiny-skia",
 ]

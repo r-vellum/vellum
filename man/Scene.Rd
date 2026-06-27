@@ -106,9 +106,10 @@ Stop routing primitives into the most recent mask.
 
 \subsection{Method \code{group_start}}{
 Open an isolated compositing group, modulated by mask index \code{mask}
-(negative = no mask, just isolation). Routed through \code{emit_node} so a group
-nested inside a mask (a mask grob that itself masks a viewport) lands in
-the same node list as its content, keeping markers and content in sync.
+(negative = no mask, just isolation), group opacity \code{alpha}, and blend mode
+\code{blend} (a code; 0 = normal). Routed through \code{emit_node} so a group nested
+inside a mask (a mask grob that itself masks a viewport) lands in the same
+node list as its content, keeping markers and content in sync.
 }
 
 \subsection{Method \code{group_end}}{
