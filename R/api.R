@@ -237,6 +237,29 @@ pop <- function(scene, n = 1) {
   scene
 }
 
+#' Coerce an object to a vellum scene
+#'
+#' The extensible seam a higher-level package (e.g. a grammar layer) implements to
+#' compile its own plot object into a [vl_scene()]. [render()] coerces its input
+#' through this generic, so `render(x, path)` works for any `x` that has an
+#' `as_vellum_scene()` method. An identity method for `vellum_scene` is provided.
+#'
+#' This is the stable *compiler-backend* entry point: downstream packages should
+#' target `as_vellum_scene()` (and the exported grob/viewport/unit constructors)
+#' rather than vellum's internal `compile()` / `.scene_to_backend()` helpers.
+#'
+#' @param x An object to coerce: a `vellum_scene`, or a type a downstream package
+#'   has taught to compile by defining an `as_vellum_scene()` method.
+#' @param ... Passed on to methods.
+#' @return A `vellum_scene`.
+#' @examples
+#' sc <- vl_scene()
+#' identical(as_vellum_scene(sc), sc) # the identity method returns its input
+#' @export
+as_vellum_scene <- S7::new_generic("as_vellum_scene", "x")
+
+S7::method(as_vellum_scene, vellum_scene) <- function(x, ...) x
+
 #' @rdname vl_scene
 #' @param path Output file path; the format is taken from the extension (`.png`,
 #'   `.svg`, or `.pdf`).
@@ -248,6 +271,7 @@ pop <- function(scene, n = 1) {
 #' @export
 render <- function(scene, path, text = c("native", "outline")) {
   text <- match.arg(text)
+  scene <- as_vellum_scene(scene)
   s <- .scene_to_backend(scene)
   ext <- tolower(tools::file_ext(path))
   switch(ext,
