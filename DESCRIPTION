@@ -4,8 +4,7 @@ Version: 0.0.0.9000
 Authors@R: 
     person("David", "Schoch", , "david.schoch@cynkra.com", role = c("aut", "cre"))
 Description: A grid-like low-level graphics system for R whose scene
-    graph, unit/layout engine, and rendering run in a Rust backend. See
-    DESIGN.md.
+    graph, unit/layout engine, and rendering run in a Rust backend.
 License: MIT + file LICENSE
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
