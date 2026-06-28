@@ -3,6 +3,7 @@
 S3method("$",Scene)
 S3method("[[",Scene)
 S3method(format,vellum_unit)
+S3method(grid::makeContent,vellum_scene_grob)
 S3method(print,vellum_gradient)
 S3method(print,vellum_mask)
 S3method(print,vellum_pattern)

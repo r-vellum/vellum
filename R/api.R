@@ -335,8 +335,11 @@ S7::method(as.raster, vellum_scene) <- function(x, ...) {
 #' To fill the window (no letterbox margins, like ggplot2) the scene is re-rendered
 #' at the device's size and pixel density, so its relative (`npc`/`native`/layout)
 #' content reflows to the window and absolute (`mm`/`in`/`pt`) content keeps its
-#' physical size. Use `render()` to write the scene at its *authored* width/height.
-#' Auto-printing a scene at the console (or calling `plot()` on it) displays it.
+#' physical size. It draws through a grid grob that re-rasterizes on every draw, so
+#' **resizing the Plots pane re-renders the scene crisply** at the new size (round
+#' markers stay round) rather than stretching one bitmap. Use `render()` to write
+#' the scene at its *authored* width/height. Auto-printing a scene at the console
+#' (or calling `plot()` on it) displays it.
 #'
 #' @param scene A [vl_scene()] or anything with an [as_vellum_scene()] method.
 #' @param ... Unused.
@@ -357,24 +360,37 @@ display <- function(scene, ...) {
   if (!interactive() && grDevices::dev.cur() == 1L) {
     return(invisible(scene))
   }
-  # Re-render at the device's size + pixel density so the scene fills the window
-  # (no letterbox) and stays crisp. Fall back to the authored size if there is no
-  # device to query.
-  fit <- tryCatch({
-    din <- grDevices::dev.size("in")
-    dpx <- grDevices::dev.size("px")
-    list(win = din[1], hin = din[2], dpi = max(72, min(round(dpx[1] / din[1]), 300)))
-  }, error = function(e) {
-    list(win = .to_inches(scene@width), hin = .to_inches(scene@height), dpi = scene@dpi)
-  })
-  s2 <- S7::set_props(scene, width = unit(fit$win, "in"), height = unit(fit$hin, "in"), dpi = fit$dpi)
   grid::grid.newpage()
-  grid::grid.raster(as.raster(s2),
-    width = grid::unit(1, "npc"),
-    height = grid::unit(1, "npc"),
-    interpolate = TRUE
-  )
+  grid::grid.draw(.scene_grob(scene))
   invisible(scene)
+}
+
+# A grid grob that re-rasterizes the scene to the drawing region's *current* size
+# on every draw. grid calls makeContent() on each draw — including Plots-pane
+# resize, which replays the display list — so the scene is re-rendered crisply at
+# the new size and aspect, instead of the engine stretching one fixed bitmap
+# (which distorts circles and blurs on resize). This is the mechanism ggplot2 /
+# gtable use to stay sharp on resize.
+.scene_grob <- function(scene) {
+  grid::gTree(scene = scene, cl = "vellum_scene_grob")
+}
+
+#' @exportS3Method grid::makeContent
+makeContent.vellum_scene_grob <- function(x) {
+  w_in <- grid::convertWidth(grid::unit(1, "npc"), "inches", valueOnly = TRUE)
+  h_in <- grid::convertHeight(grid::unit(1, "npc"), "inches", valueOnly = TRUE)
+  if (!is.finite(w_in) || w_in <= 0) w_in <- .to_inches(x$scene@width)
+  if (!is.finite(h_in) || h_in <= 0) h_in <- .to_inches(x$scene@height)
+  dpi <- tryCatch({
+    d <- grDevices::dev.size("in")
+    p <- grDevices::dev.size("px")
+    max(72, min(round(p[1] / d[1]), 300))
+  }, error = function(e) x$scene@dpi)
+  s2 <- S7::set_props(x$scene, width = unit(w_in, "in"), height = unit(h_in, "in"), dpi = dpi)
+  grid::setChildren(x, grid::gList(
+    grid::rasterGrob(as.raster(s2), width = grid::unit(1, "npc"),
+                     height = grid::unit(1, "npc"), interpolate = TRUE)
+  ))
 }
 
 # Auto-print (type a scene at the console) and plot() both display it, like

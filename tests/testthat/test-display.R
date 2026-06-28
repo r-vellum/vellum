@@ -36,6 +36,33 @@ test_that("display() fills the device at any aspect (reflow, no letterbox)", {
   expect_true(edges_filled(800, 300)) # wide: previously letterboxed left/right
 })
 
+test_that("display() re-renders on resize so round markers stay round", {
+  # Resizing the Plots pane replays the display list. A static bitmap would be
+  # stretched (distorting circles); our makeContent grob re-renders at the new
+  # size instead. Simulate a resize with recordPlot()/replayPlot() at a new aspect.
+  skip_if_not_installed("png")
+  s <- vl_scene(4, 4, bg = "white") |>
+    push(viewport(xscale = c(0, 10), yscale = c(0, 10))) |>
+    draw(points_grob(unit(5, "native"), unit(5, "native"),
+                     size = unit(6, "mm"), gp = gpar(fill = "red", col = NA)))
+  f1 <- tempfile(fileext = ".png")
+  f2 <- tempfile(fileext = ".png")
+  grDevices::png(f1, 400, 400)
+  grDevices::dev.control(displaylist = "enable")
+  display(s)
+  p <- grDevices::recordPlot()
+  grDevices::dev.off()
+  grDevices::png(f2, 800, 300) # "resize" to a very different aspect
+  grDevices::replayPlot(p)
+  grDevices::dev.off()
+  img <- png::readPNG(f2)
+  red <- which(img[, , 1] > 0.7 & img[, , 2] < 0.3, arr.ind = TRUE)
+  expect_gt(nrow(red), 0)
+  wpx <- diff(range(red[, 2]))
+  hpx <- diff(range(red[, 1]))
+  expect_lt(abs(wpx - hpx), 4) # round, not stretched into an ellipse
+})
+
 test_that("print() and plot() dispatch to display()", {
   f <- withr::local_tempfile(fileext = ".png")
   grDevices::png(f)

@@ -26,8 +26,11 @@ also accepts e.g. a grammar's plot spec.
 To fill the window (no letterbox margins, like ggplot2) the scene is re-rendered
 at the device's size and pixel density, so its relative (\code{npc}/\code{native}/layout)
 content reflows to the window and absolute (\code{mm}/\verb{in}/\code{pt}) content keeps its
-physical size. Use \code{render()} to write the scene at its \emph{authored} width/height.
-Auto-printing a scene at the console (or calling \code{plot()} on it) displays it.
+physical size. It draws through a grid grob that re-rasterizes on every draw, so
+\strong{resizing the Plots pane re-renders the scene crisply} at the new size (round
+markers stay round) rather than stretching one bitmap. Use \code{render()} to write
+the scene at its \emph{authored} width/height. Auto-printing a scene at the console
+(or calling \code{plot()} on it) displays it.
 }
 \examples{
 \dontrun{
