@@ -325,16 +325,18 @@ S7::method(as.raster, vellum_scene) <- function(x, ...) {
 
 #' Display a scene in the active graphics device
 #'
-#' `display()` renders `scene` and draws it into the current graphics device,
-#' fitting it while preserving the scene's aspect ratio. Interactively this is the
-#' RStudio / Positron **Plots** pane; inside a knitr / Quarto chunk it becomes the
-#' chunk's figure (it draws to the chunk's device). This is the seam any package
-#' built on vellum can call to *show* output instead of writing a file: `scene` is
-#' coerced via [as_vellum_scene()], so it also accepts e.g. a grammar's plot spec.
+#' `display()` re-renders `scene` to fill the current graphics device and draws it
+#' there. Interactively this is the RStudio / Positron **Plots** pane; inside a
+#' knitr / Quarto chunk it becomes the chunk's figure (it draws to the chunk's
+#' device). This is the seam any package built on vellum can call to *show* output
+#' instead of writing a file: `scene` is coerced via [as_vellum_scene()], so it
+#' also accepts e.g. a grammar's plot spec.
 #'
-#' Auto-printing a scene at the console (or calling `plot()` on it) draws it the
-#' same way. The scene is re-rendered at roughly the device's pixel density so it
-#' stays crisp.
+#' To fill the window (no letterbox margins, like ggplot2) the scene is re-rendered
+#' at the device's size and pixel density, so its relative (`npc`/`native`/layout)
+#' content reflows to the window and absolute (`mm`/`in`/`pt`) content keeps its
+#' physical size. Use `render()` to write the scene at its *authored* width/height.
+#' Auto-printing a scene at the console (or calling `plot()` on it) displays it.
 #'
 #' @param scene A [vl_scene()] or anything with an [as_vellum_scene()] method.
 #' @param ... Unused.
@@ -355,22 +357,21 @@ display <- function(scene, ...) {
   if (!interactive() && grDevices::dev.cur() == 1L) {
     return(invisible(scene))
   }
-  win <- .to_inches(scene@width)
-  hin <- .to_inches(scene@height)
-  # Fit within the device preserving the authored aspect ratio, and re-render at
-  # the device's pixel density (bounded) so the drawn raster stays crisp.
+  # Re-render at the device's size + pixel density so the scene fills the window
+  # (no letterbox) and stays crisp. Fall back to the authored size if there is no
+  # device to query.
   fit <- tryCatch({
     din <- grDevices::dev.size("in")
     dpx <- grDevices::dev.size("px")
-    dev_dpi <- dpx[1] / din[1]
-    scale <- min(din[1] / win, din[2] / hin)
-    list(scale = scale, dpi = max(72, min(round(scale * dev_dpi), 300)))
-  }, error = function(e) list(scale = 1, dpi = scene@dpi))
-  r <- as.raster(S7::set_props(scene, dpi = fit$dpi))
+    list(win = din[1], hin = din[2], dpi = max(72, min(round(dpx[1] / din[1]), 300)))
+  }, error = function(e) {
+    list(win = .to_inches(scene@width), hin = .to_inches(scene@height), dpi = scene@dpi)
+  })
+  s2 <- S7::set_props(scene, width = unit(fit$win, "in"), height = unit(fit$hin, "in"), dpi = fit$dpi)
   grid::grid.newpage()
-  grid::grid.raster(r,
-    width = grid::unit(win * fit$scale, "in"),
-    height = grid::unit(hin * fit$scale, "in"),
+  grid::grid.raster(as.raster(s2),
+    width = grid::unit(1, "npc"),
+    height = grid::unit(1, "npc"),
     interpolate = TRUE
   )
   invisible(scene)

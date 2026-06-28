@@ -19,6 +19,23 @@ test_that("display() draws the scene into the active device (asymmetric, no shea
   expect_gt(min(img[25, 270, 1:3]), 0.8) # top-right white (not mirrored/tiled)
 })
 
+test_that("display() fills the device at any aspect (reflow, no letterbox)", {
+  skip_if_not_installed("png")
+  s <- vl_scene(6, 4, bg = "white") |> # 6:4 authored aspect
+    draw(rect_grob(gp = gpar(fill = "steelblue", col = NA)))
+  edges_filled <- function(W, H) {
+    f <- tempfile(fileext = ".png")
+    grDevices::png(f, W, H)
+    display(s)
+    grDevices::dev.off()
+    img <- png::readPNG(f) # [H, W, c]; steelblue has low red, white is high red
+    max(img[1, , 1]) < 0.7 && max(img[H, , 1]) < 0.7 && # top, bottom rows
+      max(img[, 1, 1]) < 0.7 && max(img[, W, 1]) < 0.7 # left, right cols
+  }
+  expect_true(edges_filled(500, 500)) # square: previously letterboxed top/bottom
+  expect_true(edges_filled(800, 300)) # wide: previously letterboxed left/right
+})
+
 test_that("print() and plot() dispatch to display()", {
   f <- withr::local_tempfile(fileext = ".png")
   grDevices::png(f)

@@ -15,17 +15,19 @@ display(scene, ...)
 The (coerced) scene, invisibly.
 }
 \description{
-\code{display()} renders \code{scene} and draws it into the current graphics device,
-fitting it while preserving the scene's aspect ratio. Interactively this is the
-RStudio / Positron \strong{Plots} pane; inside a knitr / Quarto chunk it becomes the
-chunk's figure (it draws to the chunk's device). This is the seam any package
-built on vellum can call to \emph{show} output instead of writing a file: \code{scene} is
-coerced via \code{\link[=as_vellum_scene]{as_vellum_scene()}}, so it also accepts e.g. a grammar's plot spec.
+\code{display()} re-renders \code{scene} to fill the current graphics device and draws it
+there. Interactively this is the RStudio / Positron \strong{Plots} pane; inside a
+knitr / Quarto chunk it becomes the chunk's figure (it draws to the chunk's
+device). This is the seam any package built on vellum can call to \emph{show} output
+instead of writing a file: \code{scene} is coerced via \code{\link[=as_vellum_scene]{as_vellum_scene()}}, so it
+also accepts e.g. a grammar's plot spec.
 }
 \details{
-Auto-printing a scene at the console (or calling \code{plot()} on it) draws it the
-same way. The scene is re-rendered at roughly the device's pixel density so it
-stays crisp.
+To fill the window (no letterbox margins, like ggplot2) the scene is re-rendered
+at the device's size and pixel density, so its relative (\code{npc}/\code{native}/layout)
+content reflows to the window and absolute (\code{mm}/\verb{in}/\code{pt}) content keeps its
+physical size. Use \code{render()} to write the scene at its \emph{authored} width/height.
+Auto-printing a scene at the console (or calling \code{plot()} on it) displays it.
 }
 \examples{
 \dontrun{
