@@ -312,13 +312,15 @@ scene_raster <- function(scene) {
 # as.raster() method for vellum_scene (documented in scene_raster() above).
 # Registered at load via S7::methods_register(); no roxygen export needed (and a
 # bare \usage would trip R CMD check, since `as.raster` is an existing generic).
+#
+# Build the raster via base as.raster() on a numeric [h, w, 4] array rather than
+# hand-rolling a character matrix: a hand-built matrix is column-major, but a
+# `raster` object's storage is what grid::grid.raster() reads (effectively
+# row-major), so a hand-rolled one renders sheared. Let base as.raster() lay it
+# out correctly. (Probe pixels with scene_raster(), not by indexing this object.)
 S7::method(as.raster, vellum_scene) <- function(x, ...) {
-  arr <- scene_raster(x)
-  w <- dim(arr)[2]
-  h <- dim(arr)[3]
-  hex <- grDevices::rgb(arr[1, , ], arr[2, , ], arr[3, , ], arr[4, , ], maxColorValue = 255)
-  m <- matrix(hex, nrow = w, ncol = h) # [x, y]
-  structure(t(m), class = "raster") # [y, x]; row 1 = top
+  arr <- scene_raster(x) # [channel, x, y], 0:255
+  grDevices::as.raster(aperm(arr, c(3, 2, 1)) / 255) # -> [y, x, channel] in 0..1
 }
 
 #' Display a scene in the active graphics device

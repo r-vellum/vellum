@@ -18,14 +18,26 @@ test_that("scene_raster() dispatches through as_vellum_scene()", {
   expect_equal(r[1:3, 25, 25], c(0L, 0L, 255L))
 })
 
-test_that("as.raster() returns a grDevices raster oriented top-left", {
-  # top half red, bottom half white -> raster row 1 (top) is red
-  s <- vl_scene(1, 2, dpi = 50, bg = "white") |>
-    draw(rect_grob(y = 0.75, height = 0.5, gp = gpar(fill = "red", col = NA)))
+test_that("as.raster() renders correctly via grid (no shear/tiling)", {
+  skip_if_not_installed("png")
+  # An ASYMMETRIC scene (one corner marked) so a transpose/shear/stride bug in the
+  # raster layout would change the output, not just a symmetric blob. We render the
+  # raster back through grid::grid.raster() — the real consumer — and check pixels.
+  s <- vl_scene(4, 2, dpi = 100, bg = "white") |>
+    draw(rect_grob(x = 0.1, y = 0.85, width = 0.16, height = 0.24,
+                   gp = gpar(fill = "red", col = NA))) # top-LEFT block
   ras <- as.raster(s)
   expect_s3_class(ras, "raster")
-  expect_equal(dim(ras), c(100L, 50L)) # c(height, width)
-  m <- unclass(ras) # plain matrix [row = y (top->bottom), col = x]
-  expect_match(m[5, 25], "^#FF0000") # near the top -> red
-  expect_match(m[95, 25], "^#FFFFFF") # near the bottom -> white
+  expect_equal(dim(ras), c(200L, 400L)) # c(height, width)
+
+  f <- withr::local_tempfile(fileext = ".png")
+  grDevices::png(f, width = 400, height = 200)
+  grid::grid.newpage()
+  grid::grid.raster(ras, width = grid::unit(1, "npc"), height = grid::unit(1, "npc"))
+  grDevices::dev.off()
+  img <- png::readPNG(f) # [h, w, c]
+  expect_gt(img[30, 40, 1], 0.8) # top-left IS red: high red...
+  expect_lt(img[30, 40, 3], 0.2) # ...low blue
+  expect_gt(min(img[170, 360, 1:3]), 0.8) # bottom-right is white (not tiled/sheared)
+  expect_gt(min(img[30, 360, 1:3]), 0.8) # top-right is white (would be red if mirrored)
 })

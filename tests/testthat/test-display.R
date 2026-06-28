@@ -1,17 +1,22 @@
 # display(): draw a scene into the active graphics device (the RStudio/Positron
 # Plots pane interactively, or any open device — png()/pdf()/knitr chunk).
 
-test_that("display() draws the scene into the active device", {
+test_that("display() draws the scene into the active device (asymmetric, no shear)", {
   skip_if_not_installed("png")
   f <- withr::local_tempfile(fileext = ".png")
-  grDevices::png(f, width = 200, height = 150)
-  s <- vl_scene(2, 1.5, bg = "white") |>
-    draw(circle_grob(r = 0.3, gp = gpar(fill = "red", col = NA)))
+  grDevices::png(f, width = 300, height = 150)
+  # A top-left red block: an asymmetric target so a transpose/shear/stride bug in
+  # the draw path changes the output (a centred blob would not catch it).
+  s <- vl_scene(4, 2, bg = "white") |>
+    draw(rect_grob(x = 0.12, y = 0.82, width = 0.18, height = 0.28,
+                   gp = gpar(fill = "red", col = NA)))
   display(s)
   grDevices::dev.off()
-  img <- png::readPNG(f)
-  expect_gt(img[75, 100, 1], 0.8) # centre red: high red...
-  expect_lt(img[75, 100, 2], 0.2) # ...low green
+  img <- png::readPNG(f) # [150, 300, c]
+  expect_gt(img[25, 35, 1], 0.8) # top-left red
+  expect_lt(img[25, 35, 3], 0.2)
+  expect_gt(min(img[125, 270, 1:3]), 0.8) # bottom-right white
+  expect_gt(min(img[25, 270, 1:3]), 0.8) # top-right white (not mirrored/tiled)
 })
 
 test_that("print() and plot() dispatch to display()", {
