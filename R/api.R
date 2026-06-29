@@ -804,7 +804,8 @@ edit_node <- function(scene, name, ...) {
 .set_layout <- function(scene, layout) {
   scene$set_layout(
     vctrs::field(layout@widths, "value"), .code_names(layout@widths),
-    vctrs::field(layout@heights, "value"), .code_names(layout@heights)
+    vctrs::field(layout@heights, "value"), .code_names(layout@heights),
+    isTRUE(layout@respect)
   )
 }
 

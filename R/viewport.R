@@ -97,17 +97,30 @@ class_viewport <- S7::new_class(
 #' @rdname viewport
 #' @param widths,heights Track sizes as a [unit()] vector. Use `"null"` units for
 #'   flexible tracks that share leftover space in proportion to their value.
+#' @param respect Logical; if `TRUE`, lock the layout's aspect grid-style: one unit
+#'   of `"null"` width is forced to the same physical (device) size as one unit of
+#'   `"null"` height. The axis whose `null` unit would be larger shrinks to match
+#'   and the whole grid is centered in its parent (so absolute gutter tracks stay
+#'   attached to the flexible cells). Encode a desired cell aspect in the `null`
+#'   track weights — a cell of `null` width-weight `w` by height-weight `h` then
+#'   renders with device aspect `w:h`. Default `FALSE` (tracks just fill the
+#'   parent). This is how a fixed-aspect panel (e.g. `coord_fixed()`, maps) is
+#'   built on top of vellum.
 #' @return `grid_layout()`: a layout object.
 #' @export
-grid_layout <- function(widths = unit(1, "null"), heights = unit(1, "null")) {
+grid_layout <- function(widths = unit(1, "null"), heights = unit(1, "null"), respect = FALSE) {
   stopifnot(is_unit(widths), is_unit(heights))
-  class_grid_layout(widths = widths, heights = heights)
+  if (length(respect) != 1L || is.na(respect) || !is.logical(respect)) {
+    cli::cli_abort("{.arg respect} must be a single {.cls logical}.")
+  }
+  class_grid_layout(widths = widths, heights = heights, respect = respect)
 }
 
 class_grid_layout <- S7::new_class(
   "class_grid_layout", package = "vellum",
   properties = list(
     widths = S7::new_property(S7::new_S3_class("vellum_unit")),
-    heights = S7::new_property(S7::new_S3_class("vellum_unit"))
+    heights = S7::new_property(S7::new_S3_class("vellum_unit")),
+    respect = S7::new_property(S7::class_logical, default = FALSE)
   )
 )

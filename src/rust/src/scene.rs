@@ -35,6 +35,9 @@ enum Track {
 struct Layout {
     widths: Vec<Track>,  // columns
     heights: Vec<Track>, // rows
+    /// grid-style `respect`: equalize the physical size of a `null` width unit and
+    /// a `null` height unit, centering the grid (see `solve_layout`).
+    respect: bool,
 }
 
 /// Pixel extent of one absolute track within `total` parent pixels.
@@ -47,9 +50,9 @@ fn track_abs_px(value: f64, u: Unit, total: f64, dpi: f64) -> f64 {
     }
 }
 
-/// Solve a list of tracks against `total` pixels into cumulative edge positions
-/// (length `tracks.len() + 1`, starting at 0).
-fn solve_tracks(tracks: &[Track], total: f64, dpi: f64) -> Vec<f64> {
+/// Pixel sizes of a list of tracks within `total` parent pixels: absolute tracks
+/// measured directly, `null` tracks sharing the remainder by weight.
+fn track_sizes(tracks: &[Track], total: f64, dpi: f64) -> Vec<f64> {
     let mut sizes = vec![0.0; tracks.len()];
     let mut abs_sum = 0.0;
     let mut weight_sum = 0.0;
@@ -72,11 +75,69 @@ fn solve_tracks(tracks: &[Track], total: f64, dpi: f64) -> Vec<f64> {
             };
         }
     }
-    let mut edges = vec![0.0; tracks.len() + 1];
-    for i in 0..tracks.len() {
+    sizes
+}
+
+/// Cumulative edges (length `n + 1`, starting at 0) from track sizes.
+fn edges_of(sizes: &[f64]) -> Vec<f64> {
+    let mut edges = vec![0.0; sizes.len() + 1];
+    for i in 0..sizes.len() {
         edges[i + 1] = edges[i] + sizes[i];
     }
     edges
+}
+
+/// Total `null` weight and current `null` pixel extent of an axis.
+fn null_summary(tracks: &[Track], sizes: &[f64]) -> (f64, f64) {
+    let mut weight = 0.0;
+    let mut px = 0.0;
+    for (i, t) in tracks.iter().enumerate() {
+        if let Track::Null(w) = t {
+            weight += w.max(0.0);
+            px += sizes[i];
+        }
+    }
+    (weight, px)
+}
+
+/// Solve both axes of a layout into cell edges plus a centering offset per axis.
+///
+/// With `layout.respect`, one unit of `null` width is forced to the same physical
+/// size as one unit of `null` height (grid's `respect = TRUE`): the axis whose
+/// null unit is larger shrinks its `null` tracks to match, and the freed space
+/// centers the whole grid via the returned offset. Absolute tracks are untouched,
+/// so gutters stay attached to the panel. Without `respect` this is the plain
+/// per-axis solve (offsets 0) — byte-for-byte the previous behaviour.
+fn solve_layout(layout: &Layout, total_w: f64, total_h: f64, dpi: f64) -> (Vec<f64>, f64, Vec<f64>, f64) {
+    let mut xs = track_sizes(&layout.widths, total_w, dpi);
+    let mut ys = track_sizes(&layout.heights, total_h, dpi);
+    let (mut xoff, mut yoff) = (0.0, 0.0);
+    if layout.respect {
+        let (wweight, wpx) = null_summary(&layout.widths, &xs);
+        let (hweight, hpx) = null_summary(&layout.heights, &ys);
+        if wweight > 0.0 && hweight > 0.0 {
+            let upw = wpx / wweight; // px per null-weight-unit, x
+            let uph = hpx / hweight; // px per null-weight-unit, y
+            if upw > uph {
+                let scale = uph / upw;
+                for (i, t) in layout.widths.iter().enumerate() {
+                    if matches!(t, Track::Null(_)) {
+                        xs[i] *= scale;
+                    }
+                }
+                xoff = (total_w - xs.iter().sum::<f64>()) / 2.0;
+            } else if uph > upw {
+                let scale = upw / uph;
+                for (i, t) in layout.heights.iter().enumerate() {
+                    if matches!(t, Track::Null(_)) {
+                        ys[i] *= scale;
+                    }
+                }
+                yoff = (total_h - ys.iter().sum::<f64>()) / 2.0;
+            }
+        }
+    }
+    (edges_of(&xs), xoff, edges_of(&ys), yoff)
 }
 
 // --- viewport tree ----------------------------------------------------------
@@ -412,11 +473,13 @@ impl Scene {
 
     /// Attach a row/column layout to the current viewport. Tracks are given as
     /// parallel value + unit-code vectors; the unit `"null"` marks a flexible
-    /// track whose value is its weight.
-    fn set_layout(&mut self, wvals: &[f64], wunits: Vec<String>, hvals: &[f64], hunits: Vec<String>) {
+    /// track whose value is its weight. `respect` enables grid-style aspect
+    /// locking (equal physical size for a `null` width unit and a `null` height
+    /// unit; see `solve_layout`).
+    fn set_layout(&mut self, wvals: &[f64], wunits: Vec<String>, hvals: &[f64], hunits: Vec<String>, respect: bool) {
         let widths = build_tracks(wvals, &wunits);
         let heights = build_tracks(hvals, &hunits);
-        self.viewports[self.current].layout = Some(Layout { widths, heights });
+        self.viewports[self.current].layout = Some(Layout { widths, heights, respect });
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -1067,19 +1130,21 @@ impl Scene {
                 if row >= layout.heights.len() || col >= layout.widths.len() {
                     throw_r_error("layout row/col is out of range for the parent layout's tracks");
                 }
-                let xe = solve_tracks(&layout.widths, parent.vp.w, self.dpi);
-                let ye = solve_tracks(&layout.heights, parent.vp.h, self.dpi);
+                // `respect` may shrink the null axis and center the grid (offsets).
+                let (xe, xoff, ye, yoff) = solve_layout(layout, parent.vp.w, parent.vp.h, self.dpi);
                 let cstart = col.min(xe.len().saturating_sub(1));
                 let cend = (col + colspan).min(xe.len().saturating_sub(1));
                 let rstart = row.min(ye.len().saturating_sub(1));
                 let rend = (row + rowspan).min(ye.len().saturating_sub(1));
-                let x0 = xe.get(cstart).copied().unwrap_or(0.0);
-                let top = ye.get(rstart).copied().unwrap_or(0.0);
+                let x_lo = xe.get(cstart).copied().unwrap_or(0.0);
+                let x_hi = xe.get(cend).copied().unwrap_or(x_lo);
+                let y_lo = ye.get(rstart).copied().unwrap_or(0.0);
+                let y_hi = ye.get(rend).copied().unwrap_or(y_lo);
                 (
-                    x0,
-                    top,
-                    (xe.get(cend).copied().unwrap_or(x0) - x0).max(0.0),
-                    (ye.get(rend).copied().unwrap_or(top) - top).max(0.0),
+                    xoff + x_lo,
+                    yoff + y_lo,
+                    (x_hi - x_lo).max(0.0),
+                    (y_hi - y_lo).max(0.0),
                 )
             }
         };

@@ -26,7 +26,11 @@ viewport(
   name = NULL
 )
 
-grid_layout(widths = unit(1, "null"), heights = unit(1, "null"))
+grid_layout(
+  widths = unit(1, "null"),
+  heights = unit(1, "null"),
+  respect = FALSE
+)
 }
 \arguments{
 \item{x, y}{Centre of the viewport (\code{\link[=unit]{unit()}} or numeric, in the parent).}
@@ -70,6 +74,16 @@ over-compositing.}
 
 \item{widths, heights}{Track sizes as a \code{\link[=unit]{unit()}} vector. Use \code{"null"} units for
 flexible tracks that share leftover space in proportion to their value.}
+
+\item{respect}{Logical; if \code{TRUE}, lock the layout's aspect grid-style: one unit
+of \code{"null"} width is forced to the same physical (device) size as one unit of
+\code{"null"} height. The axis whose \code{null} unit would be larger shrinks to match
+and the whole grid is centered in its parent (so absolute gutter tracks stay
+attached to the flexible cells). Encode a desired cell aspect in the \code{null}
+track weights — a cell of \code{null} width-weight \code{w} by height-weight \code{h} then
+renders with device aspect \code{w:h}. Default \code{FALSE} (tracks just fill the
+parent). This is how a fixed-aspect panel (e.g. \code{coord_fixed()}, maps) is
+built on top of vellum.}
 }
 \value{
 A \code{viewport} object.

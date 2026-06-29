@@ -53,7 +53,9 @@ rs_attractor <- function(kind, n, a, b, c, d, x0, y0) .Call(wrap__rs_attractor, 
 #'\subsection{Method `set_layout`}{
 #'Attach a row/column layout to the current viewport. Tracks are given as
 #'parallel value + unit-code vectors; the unit `"null"` marks a flexible
-#'track whose value is its weight.
+#'track whose value is its weight. `respect` enables grid-style aspect
+#'locking (equal physical size for a `null` width unit and a `null` height
+#'unit; see `solve_layout`).
 #'}
 #'
 #'\subsection{Method `rects`}{
@@ -184,7 +186,7 @@ Scene$pop_viewport <- function(n) .Call(wrap__Scene__pop_viewport, self, n)
 
 Scene$to_root <- function() .Call(wrap__Scene__to_root, self)
 
-Scene$set_layout <- function(wvals, wunits, hvals, hunits) .Call(wrap__Scene__set_layout, self, wvals, wunits, hvals, hunits)
+Scene$set_layout <- function(wvals, wunits, hvals, hunits, respect) .Call(wrap__Scene__set_layout, self, wvals, wunits, hvals, hunits, respect)
 
 Scene$rect <- function(x, y, w, h, xu, yu, wu, hu, fill, col, lwd, alpha, stroke) .Call(wrap__Scene__rect, self, x, y, w, h, xu, yu, wu, hu, fill, col, lwd, alpha, stroke)
 

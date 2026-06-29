@@ -47,7 +47,9 @@ Move the cursor to the root viewport.
 \subsection{Method \code{set_layout}}{
 Attach a row/column layout to the current viewport. Tracks are given as
 parallel value + unit-code vectors; the unit \code{"null"} marks a flexible
-track whose value is its weight.
+track whose value is its weight. \code{respect} enables grid-style aspect
+locking (equal physical size for a \code{null} width unit and a \code{null} height
+unit; see \code{solve_layout}).
 }
 
 \subsection{Method \code{rects}}{
