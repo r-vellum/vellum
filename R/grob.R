@@ -45,6 +45,13 @@ grob_points <- S7::new_class("grob_points", parent = grob, package = "vellum",
     shape = S7::new_property(S7::class_character, default = "circle")
   ))
 
+grob_hexagon <- S7::new_class("grob_hexagon", parent = grob, package = "vellum",
+  properties = list(
+    x = .unit_prop(), y = .unit_prop(), size = .unit_prop("unit(2, \"mm\")"),
+    fill = S7::new_property(S7::class_any, default = NULL),
+    orientation = S7::new_property(S7::class_character, default = "flat")
+  ))
+
 # Marker shape names -> backend codes (must match the `markers` arm in scene.rs).
 .marker_codes <- c(circle = 0L, square = 1L, triangle = 2L, diamond = 3L, plus = 4L, cross = 5L)
 # Extension point for rich text labels (plotmath, markdown, ...). A concrete
@@ -299,6 +306,29 @@ points_grob <- function(x, y, size = unit(2, "mm"), shape = "circle",
               size = vctrs::vec_recycle(sz, n),
               shape = vctrs::vec_recycle(shape, n),
               gp = gp, name = name, vp = vp)
+}
+
+#' @rdname grob
+#' @param fill Per-hexagon fill colour(s), recycled to the number of hexagons. The
+#'   binned-count colour mesh: each hexagon is filled with its own colour in a
+#'   single batched draw. `NULL` (default) falls back to `gp$fill`. The uniform
+#'   stroke comes from `gp` (`col`/`lwd`).
+#' @param orientation Hexagon orientation: `"flat"` (default, flat top/bottom edge)
+#'   or `"pointy"` (vertex at top). `size` is the circumradius (centre to vertex).
+#' @export
+hexagon_grob <- function(x = 0.5, y = 0.5, size = unit(2, "mm"), fill = NULL,
+                         orientation = c("flat", "pointy"),
+                         gp = gpar(), name = NULL, vp = NULL) {
+  orientation <- match.arg(orientation)
+  n <- .coord_n(x, y)
+  sz <- as_unit(size, "mm")
+  .check_extent(sz, "size")
+  if (!is.null(fill)) fill <- rep_len(fill, n)
+  grob_hexagon(x = vctrs::vec_recycle(as_unit(x), n),
+               y = vctrs::vec_recycle(as_unit(y), n),
+               size = vctrs::vec_recycle(sz, n),
+               fill = fill, orientation = orientation,
+               gp = gp, name = name, vp = vp)
 }
 
 #' @rdname grob

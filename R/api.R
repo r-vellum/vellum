@@ -502,6 +502,31 @@ S7::method(compile, grob_points) <- function(node, scene) {
   }
 }
 
+S7::method(compile, grob_hexagon) <- function(node, scene) {
+  .with_vp(node, scene, {
+    n <- vctrs::vec_size_common(node@x, node@y, node@size)
+    ex <- .coord(node@x, "npc", n); ey <- .coord(node@y, "npc", n)
+    es <- .coord(node@size, "mm", n)
+    # Per-hex fill: the binned-count colour mesh. Falls back to gp$fill, then
+    # transparent. col2rgb(alpha=TRUE) flattens column-major -> per-hex RGBA
+    # contiguous (chunks of 4 on the Rust side). Fold the uniform gp$alpha into
+    # the per-hex fill alpha (the fill bypasses the shared-gpar resolve).
+    cols <- node@fill
+    if (is.null(cols)) cols <- node@gp@fill
+    if (is.null(cols)) cols <- NA
+    cols <- rep_len(cols, n)
+    cols[is.na(cols)] <- "transparent"
+    m <- grDevices::col2rgb(cols, alpha = TRUE)
+    a <- node@gp@alpha
+    if (!is.null(a) && !is.na(a)) m[4L, ] <- round(m[4L, ] * a)
+    frgba <- as.integer(m)
+    g <- .gp4(node@gp, scene)
+    scene$hexagons(ex$value, ey$value, es$value, ex$code, ey$code, es$code,
+                   frgba, identical(node@orientation, "flat"),
+                   g$col, g$lwd, g$alpha, g$stroke)
+  })
+}
+
 S7::method(compile, grob_segments) <- function(node, scene) {
   .with_vp(node, scene, {
     n <- vctrs::vec_size_common(node@x0, node@y0, node@x1, node@y1)

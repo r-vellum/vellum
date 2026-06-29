@@ -322,6 +322,28 @@ pub fn roundrect_path(x: f64, y: f64, w: f64, h: f64, r: f64) -> Option<Path> {
     pb.finish()
 }
 
+/// A regular hexagon centred at `(cx, cy)` with circumradius `r` (centre→vertex).
+/// `flat` selects orientation: flat-top (a horizontal top/bottom edge) when true,
+/// pointy-top (a vertex up/down) when false. `r <= 0` → `None`.
+pub fn hexagon_path(cx: f64, cy: f64, r: f64, flat: bool) -> Option<Path> {
+    if r <= 0.0 {
+        return None;
+    }
+    let start = if flat { 0.0 } else { std::f64::consts::FRAC_PI_6 };
+    let mut pb = PathBuilder::new();
+    for k in 0..6 {
+        let a = start + (k as f64) * std::f64::consts::FRAC_PI_3;
+        let (px, py) = ((cx + r * a.cos()) as f32, (cy + r * a.sin()) as f32);
+        if k == 0 {
+            pb.move_to(px, py);
+        } else {
+            pb.line_to(px, py);
+        }
+    }
+    pb.close();
+    pb.finish()
+}
+
 /// Render a solid AA circle of radius `r` (device px) into a tight square sprite,
 /// centred. Used to stamp large uniform point clouds instead of filling each.
 fn circle_sprite(r: f64, color: Rgba) -> Option<Pixmap> {

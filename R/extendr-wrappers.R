@@ -76,6 +76,13 @@ rs_attractor <- function(kind, n, a, b, c, d, x0, y0) .Call(wrap__rs_attractor, 
 #'faster `circles` path; this is for shape variety.)
 #'}
 #'
+#'\subsection{Method `hexagons`}{
+#'A batch of regular hexagons for hex-binning. `size` is the circumradius;
+#'`flat` picks flat-top vs pointy-top; `fill` is a flat per-hex RGBA stream
+#'(`[r,g,b,a, r,g,b,a, ...]`, one quad per hex). `col`/`lwd`/`alpha`/`stroke`
+#'give the *uniform* stroke (the gpar's fill is unused — fill is per element).
+#'}
+#'
 #'\subsection{Method `segments`}{
 #'A batch of disjoint line segments (stroke only), sharing one gpar.
 #'}
@@ -203,6 +210,8 @@ Scene$rects <- function(x, y, w, h, xu, yu, wu, hu, fill, col, lwd, alpha, strok
 Scene$circles <- function(x, y, r, xu, yu, ru, fill, col, lwd, alpha, stroke) .Call(wrap__Scene__circles, self, x, y, r, xu, yu, ru, fill, col, lwd, alpha, stroke)
 
 Scene$markers <- function(x, y, size, xu, yu, su, shape, fill, col, lwd, alpha, stroke) .Call(wrap__Scene__markers, self, x, y, size, xu, yu, su, shape, fill, col, lwd, alpha, stroke)
+
+Scene$hexagons <- function(x, y, size, xu, yu, su, fill, flat, col, lwd, alpha, stroke) .Call(wrap__Scene__hexagons, self, x, y, size, xu, yu, su, fill, flat, col, lwd, alpha, stroke)
 
 Scene$segments <- function(x0, y0, x1, y1, x0u, y0u, x1u, y1u, col, lwd, alpha, stroke, aangle, alen, aends, aclosed) .Call(wrap__Scene__segments, self, x0, y0, x1, y1, x0u, y0u, x1u, y1u, col, lwd, alpha, stroke, aangle, alen, aends, aclosed)
 

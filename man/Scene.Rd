@@ -70,6 +70,13 @@ gpar; plus/cross are stroke-only. (circle_grob / default points use the
 faster \code{circles} path; this is for shape variety.)
 }
 
+\subsection{Method \code{hexagons}}{
+A batch of regular hexagons for hex-binning. \code{size} is the circumradius;
+\code{flat} picks flat-top vs pointy-top; \code{fill} is a flat per-hex RGBA stream
+(\verb{[r,g,b,a, r,g,b,a, ...]}, one quad per hex). \code{col}/\code{lwd}/\code{alpha}/\code{stroke}
+give the \emph{uniform} stroke (the gpar's fill is unused — fill is per element).
+}
+
 \subsection{Method \code{segments}}{
 A batch of disjoint line segments (stroke only), sharing one gpar.
 }

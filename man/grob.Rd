@@ -10,6 +10,7 @@
 \alias{spline_grob}
 \alias{circle_grob}
 \alias{points_grob}
+\alias{hexagon_grob}
 \alias{segments_grob}
 \alias{path_grob}
 \alias{raster_grob}
@@ -61,6 +62,17 @@ points_grob(
   y,
   size = unit(2, "mm"),
   shape = "circle",
+  gp = gpar(),
+  name = NULL,
+  vp = NULL
+)
+
+hexagon_grob(
+  x = 0.5,
+  y = 0.5,
+  size = unit(2, "mm"),
+  fill = NULL,
+  orientation = c("flat", "pointy"),
   gp = gpar(),
   name = NULL,
   vp = NULL
@@ -135,6 +147,14 @@ text_grob(
 \item{open}{If \code{FALSE}, the spline is closed (wraps end to start).}
 
 \item{size}{Point size (\code{\link[=unit]{unit()}} or numeric).}
+
+\item{fill}{Per-hexagon fill colour(s), recycled to the number of hexagons. The
+binned-count colour mesh: each hexagon is filled with its own colour in a
+single batched draw. \code{NULL} (default) falls back to \code{gp$fill}. The uniform
+stroke comes from \code{gp} (\code{col}/\code{lwd}).}
+
+\item{orientation}{Hexagon orientation: \code{"flat"} (default, flat top/bottom edge)
+or \code{"pointy"} (vertex at top). \code{size} is the circumradius (centre to vertex).}
 
 \item{x0, y0, x1, y1}{Segment start/end coordinates (\code{\link[=unit]{unit()}} or numeric).}
 
