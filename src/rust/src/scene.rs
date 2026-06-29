@@ -15,7 +15,7 @@ use extendr_api::prelude::*;
 use tiny_skia::{Color, FillRule, Mask, PathBuilder, Pixmap, Stroke, Transform};
 
 use crate::render::{
-    hexagon_path, rect_path, roundrect_path, BlendKind, Clip, ClipShape, MaskKind, MaskLayer, PdfBackend, RasterBackend, RenderBackend,
+    hexagon_path, rect_path, roundrect_path, sector_path, BlendKind, Clip, ClipShape, MaskKind, MaskLayer, PdfBackend, RasterBackend, RenderBackend,
     ResolvedPaint, StrokeStyle, SvgBackend, TextRun,
 };
 
@@ -210,6 +210,10 @@ enum Node {
         gsize: Vec<f64>,
         gpath: Vec<String>,
         gface: Vec<u32>,
+        /// Per-glyph fill colour. **Empty** means "use the shared `gp` colour" — the
+        /// plain single-style path leaves this empty so its rendering is unchanged.
+        /// A rich (multi-run) label fills it with one `Rgba` per glyph.
+        gcol: Vec<Rgba>,
         /// Source string + font descriptor, for vector backends that emit real
         /// `<text>` / embedded glyphs rather than filled outlines.
         label: String,
@@ -247,6 +251,17 @@ enum Node {
         xu: Vec<Unit>, yu: Vec<Unit>, su: Vec<Unit>,
         fill: Vec<Rgba>,
         flat: bool,
+        gp: PartialGpar,
+    },
+    /// A batch of annular sectors: centre `(x,y)`, inner/outer radius `r0`/`r1`,
+    /// angles `theta0`/`theta1` in radians (0 at 3 o'clock, CCW). `fill` is a
+    /// **per-element** colour; `gp` supplies the uniform stroke. `r0=0` ⇒ pie slice;
+    /// `r0=r1` ⇒ an unfilled arc outline.
+    Sectors {
+        x: Vec<f64>, y: Vec<f64>, r0: Vec<f64>, r1: Vec<f64>,
+        theta0: Vec<f64>, theta1: Vec<f64>,
+        xu: Vec<Unit>, yu: Vec<Unit>, r0u: Vec<Unit>, r1u: Vec<Unit>,
+        fill: Vec<Rgba>,
         gp: PartialGpar,
     },
     /// A batch of disjoint line segments `(x0,y0)->(x1,y1)`, stroked in one pass.
@@ -293,6 +308,7 @@ impl Node {
             | Node::Circles { gp, .. }
             | Node::Markers { gp, .. }
             | Node::Hexagons { gp, .. }
+            | Node::Sectors { gp, .. }
             | Node::Segments { gp, .. }
             | Node::Path { gp, .. }
             | Node::Text { gp, .. } => gp,
@@ -622,6 +638,30 @@ impl Scene {
         });
     }
 
+    /// A batch of annular sectors (pie/donut/rose wedges). `(x,y)` is the centre,
+    /// `r0`/`r1` the inner/outer radius, `theta0`/`theta1` the start/end angle in
+    /// **radians** (0 at 3 o'clock, CCW). `fill` is a flat per-sector RGBA stream
+    /// (one quad per sector, like `hexagons`); `col`/`lwd`/`alpha`/`stroke` give the
+    /// uniform stroke. `r0=0` ⇒ pie slice; `r0=r1` ⇒ an arc outline (no fill).
+    #[allow(clippy::too_many_arguments)]
+    fn sectors(
+        &mut self, x: &[f64], y: &[f64], r0: &[f64], r1: &[f64], theta0: &[f64], theta1: &[f64],
+        xu: &[i32], yu: &[i32], r0u: &[i32], r1u: &[i32], fill: &[i32],
+        col: Robj, lwd: Robj, alpha: Robj, stroke: Robj,
+    ) {
+        let gp = PartialGpar::from_robj(&rnull(), &col, &lwd, &alpha, &stroke);
+        let fill = fill
+            .chunks_exact(4)
+            .map(|c| Rgba { r: c[0] as u8, g: c[1] as u8, b: c[2] as u8, a: c[3] as u8 })
+            .collect();
+        self.emit_node(Node::Sectors {
+            x: x.to_vec(), y: y.to_vec(), r0: r0.to_vec(), r1: r1.to_vec(),
+            theta0: theta0.to_vec(), theta1: theta1.to_vec(),
+            xu: codes(xu), yu: codes(yu), r0u: codes(r0u), r1u: codes(r1u),
+            fill, gp,
+        });
+    }
+
     /// A batch of disjoint line segments (stroke only), sharing one gpar.
     #[allow(clippy::too_many_arguments)]
     fn segments(
@@ -714,6 +754,7 @@ impl Scene {
             gsize: gsize.to_vec(),
             gpath,
             gface: gface.iter().map(|&v| v.max(0) as u32).collect(),
+            gcol: Vec::new(),
             label: label.to_string(),
             family: family.to_string(),
             face: face.to_string(),
@@ -756,6 +797,54 @@ impl Scene {
                 gsize: gsize[lo..hi].to_vec(),
                 gpath: gpath[lo..hi].to_vec(),
                 gface: gface[lo..hi].iter().map(|&v| v.max(0) as u32).collect(),
+                gcol: Vec::new(),
+                label: label[i].clone(),
+                family: family.to_string(),
+                face: face.to_string(),
+                size,
+                gp: gp.clone(),
+            });
+        }
+    }
+
+    /// Like `texts`, but with a **per-glyph** fill colour stream (`gcol`, a flat RGBA
+    /// int stream, 4 ints per glyph, parallel to the glyph arrays). Used by rich
+    /// (multi-run) labels where colour varies within a single label. Everything else
+    /// matches `texts`; the shared `col` becomes the fallback only when a glyph's
+    /// colour is absent (it never is here, but keeps the gpar resolve consistent).
+    #[allow(clippy::too_many_arguments)]
+    fn texts_rich(
+        &mut self,
+        x: &[f64], y: &[f64], xu: &[i32], yu: &[i32], rot: &[f64],
+        hjust: f64, vjust: f64, w: &[f64], h: &[f64], nper: &[i32],
+        gid: &[i32], gx: &[f64], gy: &[f64], gsize: &[f64], gpath: Vec<String>, gface: &[i32],
+        gcol: &[i32],
+        label: Vec<String>, family: &str, face: &str, size: f64, col: Robj, alpha: Robj,
+    ) {
+        let gp = PartialGpar::from_robj(&rnull(), &col, &rnull(), &alpha, &rnull());
+        let nlab = [x.len(), y.len(), xu.len(), yu.len(), rot.len(), w.len(), h.len(), nper.len(), label.len()]
+            .into_iter().min().unwrap_or(0);
+        let gmax = [gid.len(), gx.len(), gy.len(), gsize.len(), gpath.len(), gface.len(), gcol.len() / 4]
+            .into_iter().min().unwrap_or(0);
+        let mut off = 0usize;
+        for i in 0..nlab {
+            let cnt = nper[i].max(0) as usize;
+            let lo = off.min(gmax);
+            let hi = (off + cnt).min(gmax);
+            off = hi;
+            self.emit_node(Node::Text {
+                x: x[i], y: y[i], xu: Unit::from_code(xu[i]), yu: Unit::from_code(yu[i]),
+                rot: rot[i], hjust, vjust, w: w[i], h: h[i],
+                gid: gid[lo..hi].iter().map(|&v| v.max(0) as u32).collect(),
+                gx: gx[lo..hi].to_vec(),
+                gy: gy[lo..hi].to_vec(),
+                gsize: gsize[lo..hi].to_vec(),
+                gpath: gpath[lo..hi].to_vec(),
+                gface: gface[lo..hi].iter().map(|&v| v.max(0) as u32).collect(),
+                gcol: gcol[lo * 4..hi * 4]
+                    .chunks_exact(4)
+                    .map(|c| Rgba { r: c[0] as u8, g: c[1] as u8, b: c[2] as u8, a: c[3] as u8 })
+                    .collect(),
                 label: label[i].clone(),
                 family: family.to_string(),
                 face: face.to_string(),
@@ -1010,6 +1099,17 @@ impl Scene {
                     for k in 0..n {
                         let (cx, cy) = (vp.x_pos(x[k], xu[k]), vp.y_pos(y[k], yu[k]));
                         if let Some(p) = hexagon_path(cx, cy, vp.r_len(size[k], su[k]), *flat) {
+                            fill(&mut pm, &p, FillRule::Winding);
+                        }
+                    }
+                }
+                Node::Sectors { x, y, r0, r1, theta0, theta1, xu, yu, r0u, r1u, .. } => {
+                    let n = [x.len(), y.len(), r0.len(), r1.len(), theta0.len(), theta1.len(),
+                             xu.len(), yu.len(), r0u.len(), r1u.len()].into_iter().min().unwrap_or(0);
+                    for k in 0..n {
+                        let (cx, cy) = (vp.x_pos(x[k], xu[k]), vp.y_pos(y[k], yu[k]));
+                        if let Some(p) = sector_path(cx, cy, vp.r_len(r0[k], r0u[k]),
+                                                     vp.r_len(r1[k], r1u[k]), theta0[k], theta1[k]) {
                             fill(&mut pm, &p, FillRule::Winding);
                         }
                     }
@@ -1522,12 +1622,40 @@ impl Scene {
                         }
                     }
                 }
+                Node::Sectors { x, y, r0, r1, theta0, theta1, xu, yu, r0u, r1u, fill, .. } => {
+                    let n = [x.len(), y.len(), r0.len(), r1.len(), theta0.len(), theta1.len(),
+                             xu.len(), yu.len(), r0u.len(), r1u.len(), fill.len()]
+                        .into_iter().min().unwrap_or(0);
+                    let style = stroke_style(&gp, vp.dpi);
+                    let stroke = gp.col.filter(|_| style.width > 0.0);
+                    for i in 0..n {
+                        let cx = vp.x_pos(x[i], xu[i]);
+                        let cy = vp.y_pos(y[i], yu[i]);
+                        if !cx.is_finite() || !cy.is_finite() {
+                            continue; // drop NA-positioned sectors
+                        }
+                        let rr0 = vp.r_len(r0[i], r0u[i]);
+                        let rr1 = vp.r_len(r1[i], r1u[i]);
+                        if let Some(path) = sector_path(cx, cy, rr0, rr1, theta0[i], theta1[i]) {
+                            // Per-element fill; uniform stroke (matches hexagons).
+                            b.fill_path(&path, t, &ResolvedPaint::Solid(fill[i]), FillRule::Winding, &clip);
+                            if let Some(c) = stroke {
+                                b.stroke_path(&path, t, c, &style, &clip);
+                            }
+                        }
+                    }
+                }
                 Node::Text {
                     x, y, xu, yu, rot, hjust, vjust, w, h,
-                    gid, gx, gy, gsize, gpath, gface, label, family, face, size, ..
+                    gid, gx, gy, gsize, gpath, gface, gcol, label, family, face, size, ..
                 } => {
+                    // Per-glyph colours carry their own paint, so a rich label draws
+                    // even when the shared `gp.col` is "inherit/none" (the base colour
+                    // is folded into `gcol` on the R side). A plain label still needs a
+                    // resolved shared colour.
                     let color = match gp.col {
                         Some(c) => c,
+                        None if !gcol.is_empty() => Rgba { r: 0, g: 0, b: 0, a: 255 },
                         None => continue,
                     };
                     let run = TextRun {
@@ -1545,6 +1673,7 @@ impl Scene {
                         gsize,
                         gpath,
                         gface,
+                        gcolor: gcol,
                         label,
                         family,
                         face,

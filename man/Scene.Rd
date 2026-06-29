@@ -77,6 +77,14 @@ A batch of regular hexagons for hex-binning. \code{size} is the circumradius;
 give the \emph{uniform} stroke (the gpar's fill is unused — fill is per element).
 }
 
+\subsection{Method \code{sectors}}{
+A batch of annular sectors (pie/donut/rose wedges). \verb{(x,y)} is the centre,
+\code{r0}/\code{r1} the inner/outer radius, \code{theta0}/\code{theta1} the start/end angle in
+\strong{radians} (0 at 3 o'clock, CCW). \code{fill} is a flat per-sector RGBA stream
+(one quad per sector, like \code{hexagons}); \code{col}/\code{lwd}/\code{alpha}/\code{stroke} give the
+uniform stroke. \code{r0=0} ⇒ pie slice; \code{r0=r1} ⇒ an arc outline (no fill).
+}
+
 \subsection{Method \code{segments}}{
 A batch of disjoint line segments (stroke only), sharing one gpar.
 }
@@ -101,6 +109,14 @@ Add a whole batch of pre-shaped text labels in one call (one shaping pass
 on the R side, one FFI here). Glyphs are flat across all labels, split by
 \code{nper} (glyph count per label); positions/sizes/rot/labels are per-label;
 font + just + colour are shared.
+}
+
+\subsection{Method \code{texts_rich}}{
+Like \code{texts}, but with a \strong{per-glyph} fill colour stream (\code{gcol}, a flat RGBA
+int stream, 4 ints per glyph, parallel to the glyph arrays). Used by rich
+(multi-run) labels where colour varies within a single label. Everything else
+matches \code{texts}; the shared \code{col} becomes the fallback only when a glyph's
+colour is absent (it never is here, but keeps the gpar resolve consistent).
 }
 
 \subsection{Method \code{mask_begin}}{

@@ -83,6 +83,14 @@ rs_attractor <- function(kind, n, a, b, c, d, x0, y0) .Call(wrap__rs_attractor, 
 #'give the *uniform* stroke (the gpar's fill is unused — fill is per element).
 #'}
 #'
+#'\subsection{Method `sectors`}{
+#'A batch of annular sectors (pie/donut/rose wedges). `(x,y)` is the centre,
+#'`r0`/`r1` the inner/outer radius, `theta0`/`theta1` the start/end angle in
+#'**radians** (0 at 3 o'clock, CCW). `fill` is a flat per-sector RGBA stream
+#'(one quad per sector, like `hexagons`); `col`/`lwd`/`alpha`/`stroke` give the
+#'uniform stroke. `r0=0` ⇒ pie slice; `r0=r1` ⇒ an arc outline (no fill).
+#'}
+#'
 #'\subsection{Method `segments`}{
 #'A batch of disjoint line segments (stroke only), sharing one gpar.
 #'}
@@ -107,6 +115,14 @@ rs_attractor <- function(kind, n, a, b, c, d, x0, y0) .Call(wrap__rs_attractor, 
 #'on the R side, one FFI here). Glyphs are flat across all labels, split by
 #'`nper` (glyph count per label); positions/sizes/rot/labels are per-label;
 #'font + just + colour are shared.
+#'}
+#'
+#'\subsection{Method `texts_rich`}{
+#'Like `texts`, but with a **per-glyph** fill colour stream (`gcol`, a flat RGBA
+#'int stream, 4 ints per glyph, parallel to the glyph arrays). Used by rich
+#'(multi-run) labels where colour varies within a single label. Everything else
+#'matches `texts`; the shared `col` becomes the fallback only when a glyph's
+#'colour is absent (it never is here, but keeps the gpar resolve consistent).
 #'}
 #'
 #'\subsection{Method `mask_begin`}{
@@ -213,6 +229,8 @@ Scene$markers <- function(x, y, size, xu, yu, su, shape, fill, col, lwd, alpha, 
 
 Scene$hexagons <- function(x, y, size, xu, yu, su, fill, flat, col, lwd, alpha, stroke) .Call(wrap__Scene__hexagons, self, x, y, size, xu, yu, su, fill, flat, col, lwd, alpha, stroke)
 
+Scene$sectors <- function(x, y, r0, r1, theta0, theta1, xu, yu, r0u, r1u, fill, col, lwd, alpha, stroke) .Call(wrap__Scene__sectors, self, x, y, r0, r1, theta0, theta1, xu, yu, r0u, r1u, fill, col, lwd, alpha, stroke)
+
 Scene$segments <- function(x0, y0, x1, y1, x0u, y0u, x1u, y1u, col, lwd, alpha, stroke, aangle, alen, aends, aclosed) .Call(wrap__Scene__segments, self, x0, y0, x1, y1, x0u, y0u, x1u, y1u, col, lwd, alpha, stroke, aangle, alen, aends, aclosed)
 
 Scene$path <- function(x, y, xu, yu, nper, evenodd, fill, col, lwd, alpha, stroke) .Call(wrap__Scene__path, self, x, y, xu, yu, nper, evenodd, fill, col, lwd, alpha, stroke)
@@ -222,6 +240,8 @@ Scene$image <- function(rgba, iw, ih, x, y, w, h, xu, yu, wu, hu, interpolate) .
 Scene$text <- function(x, y, xu, yu, rot, hjust, vjust, w, h, gid, gx, gy, gsize, gpath, gface, label, family, face, size, col, alpha) .Call(wrap__Scene__text, self, x, y, xu, yu, rot, hjust, vjust, w, h, gid, gx, gy, gsize, gpath, gface, label, family, face, size, col, alpha)
 
 Scene$texts <- function(x, y, xu, yu, rot, hjust, vjust, w, h, nper, gid, gx, gy, gsize, gpath, gface, label, family, face, size, col, alpha) .Call(wrap__Scene__texts, self, x, y, xu, yu, rot, hjust, vjust, w, h, nper, gid, gx, gy, gsize, gpath, gface, label, family, face, size, col, alpha)
+
+Scene$texts_rich <- function(x, y, xu, yu, rot, hjust, vjust, w, h, nper, gid, gx, gy, gsize, gpath, gface, gcol, label, family, face, size, col, alpha) .Call(wrap__Scene__texts_rich, self, x, y, xu, yu, rot, hjust, vjust, w, h, nper, gid, gx, gy, gsize, gpath, gface, gcol, label, family, face, size, col, alpha)
 
 Scene$mask_begin <- function(kind) .Call(wrap__Scene__mask_begin, self, kind)
 

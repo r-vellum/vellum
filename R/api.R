@@ -527,6 +527,31 @@ S7::method(compile, grob_hexagon) <- function(node, scene) {
   })
 }
 
+S7::method(compile, grob_sector) <- function(node, scene) {
+  .with_vp(node, scene, {
+    n <- vctrs::vec_size_common(node@x, node@y, node@r0, node@r1)
+    ex <- .coord(node@x, "npc", n); ey <- .coord(node@y, "npc", n)
+    er0 <- .coord(node@r0, "native", n); er1 <- .coord(node@r1, "native", n)
+    th0 <- vctrs::vec_recycle(as.numeric(node@theta0), n)
+    th1 <- vctrs::vec_recycle(as.numeric(node@theta1), n)
+    # Per-sector fill (like hexagons): explicit `fill`, else gp$fill, else none.
+    # col2rgb(alpha=TRUE) -> contiguous RGBA quads; fold the uniform gp$alpha in.
+    cols <- node@fill
+    if (is.null(cols)) cols <- node@gp@fill
+    if (is.null(cols)) cols <- NA
+    cols <- rep_len(cols, n)
+    cols[is.na(cols)] <- "transparent"
+    m <- grDevices::col2rgb(cols, alpha = TRUE)
+    a <- node@gp@alpha
+    if (!is.null(a) && !is.na(a)) m[4L, ] <- round(m[4L, ] * a)
+    frgba <- as.integer(m)
+    g <- .gp4(node@gp, scene)
+    scene$sectors(ex$value, ey$value, er0$value, er1$value, th0, th1,
+                  ex$code, ey$code, er0$code, er1$code, frgba,
+                  g$col, g$lwd, g$alpha, g$stroke)
+  })
+}
+
 S7::method(compile, grob_segments) <- function(node, scene) {
   .with_vp(node, scene, {
     n <- vctrs::vec_size_common(node@x0, node@y0, node@x1, node@y1)
@@ -562,13 +587,26 @@ S7::method(compile, grob_raster) <- function(node, scene) {
 
 S7::method(compile, grob_text) <- function(node, scene) {
   .with_vp(node, scene, {
+    hv <- .just_to_hv(node@just)
+    # Rich (markdown) labels take the multi-run path: one styled label composed
+    # into per-glyph colour/size/baseline, drawn at each position. Plain character
+    # labels keep the fast single-style batch path unchanged.
+    if (S7::S7_inherits(node@label, vellum_label)) {
+      n <- vctrs::vec_size_common(node@x, node@y)
+      if (n == 0L) return(invisible())
+      x <- vctrs::vec_recycle(node@x, n); y <- vctrs::vec_recycle(node@y, n)
+      rot <- vctrs::vec_recycle(node@rot, n)
+      .draw_richtext_batch(scene, node@label, x, y, hv[1], hv[2], rot,
+                           node@gp@fontfamily %||% "", node@gp@fontface %||% "plain",
+                           node@gp@fontsize %||% 12, node@gp@col, node@gp@alpha)
+      return(invisible())
+    }
     labels <- .text_labels(node@label) # seam: rich labels -> strings (plain = identity)
     n <- vctrs::vec_size_common(labels, node@x, node@y)
     if (n == 0L) return(invisible())
     lab <- vctrs::vec_recycle(labels, n)
     x <- vctrs::vec_recycle(node@x, n); y <- vctrs::vec_recycle(node@y, n)
     rot <- vctrs::vec_recycle(node@rot, n)
-    hv <- .just_to_hv(node@just)
     # One shaping pass for all labels (repeats shaped once); see .draw_text_batch.
     # `col` is passed through as-is (NULL = inherit the viewport's gp$col, like
     # every other primitive; the root default is black, so plain text stays black).

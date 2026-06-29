@@ -98,6 +98,9 @@ pub struct TextRun<'a> {
     pub gsize: &'a [f64],
     pub gpath: &'a [String],
     pub gface: &'a [u32],
+    /// Per-glyph fill colour. **Empty** ⇒ every glyph uses `color` (the plain path).
+    /// Non-empty ⇒ one entry per glyph (a rich multi-run label).
+    pub gcolor: &'a [Rgba],
     pub label: &'a str,
     pub family: &'a str,
     pub face: &'a str,
@@ -339,6 +342,40 @@ pub fn hexagon_path(cx: f64, cy: f64, r: f64, flat: bool) -> Option<Path> {
         } else {
             pb.line_to(px, py);
         }
+    }
+    pb.close();
+    pb.finish()
+}
+
+/// An annular sector centred at `(cx, cy)` spanning `theta0..theta1` (radians, CCW,
+/// 0 at 3 o'clock) between inner radius `r0` and outer radius `r1`. The arc is
+/// densified into line segments (~4° each). `r0 <= 0` collapses the inner edge to
+/// the centre (a pie slice); `r0 == r1` yields a zero-area path (an arc outline when
+/// stroked). Returns `None` for a zero angular span or non-positive outer radius.
+pub fn sector_path(cx: f64, cy: f64, r0: f64, r1: f64, theta0: f64, theta1: f64) -> Option<Path> {
+    let r_out = r1.max(0.0);
+    let r_in = r0.max(0.0);
+    let dtheta = theta1 - theta0;
+    if r_out <= 0.0 || dtheta == 0.0 || !cx.is_finite() || !cy.is_finite() {
+        return None;
+    }
+    // ~4 degrees per segment, at least 2 segments across the span.
+    let segs = (dtheta.abs() / (std::f64::consts::PI / 45.0)).ceil().max(2.0) as usize;
+    let pt = |r: f64, a: f64| ((cx + r * a.cos()) as f32, (cy + r * a.sin()) as f32);
+    let mut pb = PathBuilder::new();
+    // Outer arc, theta0 -> theta1.
+    let (sx, sy) = pt(r_out, theta0);
+    pb.move_to(sx, sy);
+    for k in 1..=segs {
+        let a = theta0 + dtheta * (k as f64) / (segs as f64);
+        let (px, py) = pt(r_out, a);
+        pb.line_to(px, py);
+    }
+    // Inner arc back, theta1 -> theta0 (collapses to the centre when r_in == 0).
+    for k in 0..=segs {
+        let a = theta1 - dtheta * (k as f64) / (segs as f64);
+        let (px, py) = pt(r_in, a);
+        pb.line_to(px, py);
     }
     pb.close();
     pb.finish()
@@ -653,9 +690,14 @@ impl RenderBackend for RasterBackend {
             let ox = run.ax + run.gx[i] - run.hjust * run.w;
             let oy = run.ay - (run.gy[i] - run.vjust * run.h);
             let place = Transform::from_row(1.0, 0.0, 0.0, -1.0, ox as f32, oy as f32);
+            // Per-glyph colour for rich labels; otherwise the one shared paint.
+            let glyph_paint = match run.gcolor.get(i) {
+                Some(&c) => solid_paint(c),
+                None => paint.clone(),
+            };
             self.targets.last_mut().expect("at least the page target").fill_path(
                 &outline,
-                &paint,
+                &glyph_paint,
                 FillRule::Winding,
                 base.pre_concat(place),
                 mask.as_deref(),
@@ -1015,7 +1057,10 @@ impl RenderBackend for SvgBackend {
         if run.label.is_empty() {
             return;
         }
-        if self.outline_text {
+        // A rich (per-glyph colour) label can't be a single `<text>` element, so it
+        // always takes the outline path even when native text is otherwise preferred.
+        let rich = !run.gcolor.is_empty();
+        if self.outline_text || rich {
             // Glyph-faithful: fill the same skrifa outlines the raster backend uses,
             // each placed by the shared glyph transform — so SVG matches raster/PDF
             // exactly (no dependence on the viewer's fonts).
@@ -1035,7 +1080,12 @@ impl RenderBackend for SvgBackend {
                 let ox = run.ax + run.gx[i] - run.hjust * run.w;
                 let oy = run.ay - (run.gy[i] - run.vjust * run.h);
                 let place = base.pre_concat(Transform::from_row(1.0, 0.0, 0.0, -1.0, ox as f32, oy as f32));
-                paths.push_str(&format!("<path d=\"{}\"{}/>", path_to_d(&outline), transform_attr(place)));
+                // Per-glyph fill for rich labels; otherwise inherit the group's fill.
+                let fill_attr = match run.gcolor.get(i) {
+                    Some(&c) => format!(" fill=\"{}\" fill-opacity=\"{}\"", rgb_hex(c), opacity(c)),
+                    None => String::new(),
+                };
+                paths.push_str(&format!("<path d=\"{}\"{}{}/>", path_to_d(&outline), fill_attr, transform_attr(place)));
             }
             if !paths.is_empty() {
                 let element = format!(
@@ -1541,20 +1591,38 @@ impl RenderBackend for PdfBackend<'_, '_> {
 
         let pushes = self.push_state(base, clip);
         self.surface.set_stroke(None);
-        self.surface.set_fill(Some(Fill {
-            paint: rgb::Color::new(run.color.r, run.color.g, run.color.b).into(),
-            opacity: norm(run.color.a),
-            rule: KFillRule::NonZero,
-        }));
+        let rich = !run.gcolor.is_empty();
+        // Plain labels set the single fill once; rich labels set it per colour run.
+        if !rich {
+            self.surface.set_fill(Some(Fill {
+                paint: rgb::Color::new(run.color.r, run.color.g, run.color.b).into(),
+                opacity: norm(run.color.a),
+                rule: KFillRule::NonZero,
+            }));
+        }
 
         // Draw in runs of consecutive glyphs sharing a font AND a baseline (so a
         // line break, which changes gy, starts a new run handles font fallback too).
+        // Rich labels additionally break on a colour change so each run gets its fill.
         let mut i = 0;
         while i < n {
             let (gpath, gface, gy0) = (&run.gpath[i], run.gface[i], run.gy[i]);
+            let col0 = run.gcolor.get(i).copied();
             let mut j = i;
-            while j < n && &run.gpath[j] == gpath && run.gface[j] == gface && run.gy[j] == gy0 {
+            while j < n
+                && &run.gpath[j] == gpath
+                && run.gface[j] == gface
+                && run.gy[j] == gy0
+                && run.gcolor.get(j).copied() == col0
+            {
                 j += 1;
+            }
+            if let Some(c) = col0 {
+                self.surface.set_fill(Some(Fill {
+                    paint: rgb::Color::new(c.r, c.g, c.b).into(),
+                    opacity: norm(c.a),
+                    rule: KFillRule::NonZero,
+                }));
             }
             let start_y = (run.ay - (gy0 - run.vjust * run.h)) as f32;
             if let Some(font) = self.font_for(gpath, gface) {

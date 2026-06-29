@@ -11,6 +11,7 @@
 \alias{circle_grob}
 \alias{points_grob}
 \alias{hexagon_grob}
+\alias{sector_grob}
 \alias{segments_grob}
 \alias{path_grob}
 \alias{raster_grob}
@@ -73,6 +74,19 @@ hexagon_grob(
   size = unit(2, "mm"),
   fill = NULL,
   orientation = c("flat", "pointy"),
+  gp = gpar(),
+  name = NULL,
+  vp = NULL
+)
+
+sector_grob(
+  x = 0.5,
+  y = 0.5,
+  r0 = 0,
+  r1 = 0.5,
+  theta0 = 0,
+  theta1 = 2 * pi,
+  fill = NULL,
   gp = gpar(),
   name = NULL,
   vp = NULL
@@ -148,13 +162,18 @@ text_grob(
 
 \item{size}{Point size (\code{\link[=unit]{unit()}} or numeric).}
 
-\item{fill}{Per-hexagon fill colour(s), recycled to the number of hexagons. The
-binned-count colour mesh: each hexagon is filled with its own colour in a
-single batched draw. \code{NULL} (default) falls back to \code{gp$fill}. The uniform
-stroke comes from \code{gp} (\code{col}/\code{lwd}).}
+\item{fill}{Per-element fill colour(s), recycled to the number of sectors. \code{NULL}
+falls back to \code{gp$fill}.}
 
 \item{orientation}{Hexagon orientation: \code{"flat"} (default, flat top/bottom edge)
 or \code{"pointy"} (vertex at top). \code{size} is the circumradius (centre to vertex).}
+
+\item{r0, r1}{Inner and outer radius of each sector (\code{\link[=unit]{unit()}} or numeric;
+numeric is treated as \code{"native"}). \code{r0 = 0} gives a pie slice; \code{r0 == r1}
+gives an arc outline (stroke only, no fill).}
+
+\item{theta0, theta1}{Start and end angle of each sector, in \strong{radians}, with 0
+at 3 o'clock and increasing counter-clockwise.}
 
 \item{x0, y0, x1, y1}{Segment start/end coordinates (\code{\link[=unit]{unit()}} or numeric).}
 
@@ -186,4 +205,8 @@ Grobs are immutable value objects describing something to draw. Build them
 with the constructors below, add them to a scene with \code{\link[=draw]{draw()}}, and render
 with \code{\link[=render]{render()}}. Coordinates accept a \code{\link[=unit]{unit()}} vector or a bare numeric
 (interpreted in the \code{default_units}, usually \code{"npc"}).
+}
+\details{
+\code{sector_grob()} draws a batch of annular sectors (pie / donut / rose wedges) in a
+single call. \code{gp$fill} recycles per sector; \code{gp$col}/\code{lwd} give a uniform stroke.
 }
