@@ -507,6 +507,14 @@ S7::method(compile, grob_hexagon) <- function(node, scene) {
     n <- vctrs::vec_size_common(node@x, node@y, node@size)
     ex <- .coord(node@x, "npc", n); ey <- .coord(node@y, "npc", n)
     es <- .coord(node@size, "mm", n)
+    # Non-regular geometry: per-axis full width/height (override `size`). Empty
+    # streams signal the regular size-driven path to the Rust side.
+    if (!is.null(node@width)) {
+      ew <- .coord(node@width, "native", n); eh <- .coord(node@height, "native", n)
+    } else {
+      ew <- list(value = numeric(0), code = integer(0))
+      eh <- list(value = numeric(0), code = integer(0))
+    }
     # Per-hex fill: the binned-count colour mesh. Falls back to gp$fill, then
     # transparent. col2rgb(alpha=TRUE) flattens column-major -> per-hex RGBA
     # contiguous (chunks of 4 on the Rust side). Fold the uniform gp$alpha into
@@ -521,7 +529,8 @@ S7::method(compile, grob_hexagon) <- function(node, scene) {
     if (!is.null(a) && !is.na(a)) m[4L, ] <- round(m[4L, ] * a)
     frgba <- as.integer(m)
     g <- .gp4(node@gp, scene)
-    scene$hexagons(ex$value, ey$value, es$value, ex$code, ey$code, es$code,
+    scene$hexagons(ex$value, ey$value, es$value, ew$value, eh$value,
+                   ex$code, ey$code, es$code, ew$code, eh$code,
                    frgba, identical(node@orientation, "flat"),
                    g$col, g$lwd, g$alpha, g$stroke)
   })

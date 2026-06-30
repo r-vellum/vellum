@@ -77,10 +77,13 @@ rs_attractor <- function(kind, n, a, b, c, d, x0, y0) .Call(wrap__rs_attractor, 
 #'}
 #'
 #'\subsection{Method `hexagons`}{
-#'A batch of regular hexagons for hex-binning. `size` is the circumradius;
-#'`flat` picks flat-top vs pointy-top; `fill` is a flat per-hex RGBA stream
-#'(`[r,g,b,a, r,g,b,a, ...]`, one quad per hex). `col`/`lwd`/`alpha`/`stroke`
-#'give the *uniform* stroke (the gpar's fill is unused — fill is per element).
+#'A batch of hexagons for hex-binning. `flat` picks flat-top vs pointy-top;
+#'`fill` is a flat per-hex RGBA stream (`[r,g,b,a, r,g,b,a, ...]`, one quad per
+#'hex); `col`/`lwd`/`alpha`/`stroke` give the *uniform* stroke (the gpar's fill
+#'is unused — fill is per element). Geometry: if `w`/`h` are empty each hex is
+#'regular with circumradius `size`; otherwise `w`/`h` are the per-hex full
+#'width/height (corner-to-corner along each axis), resolved per-axis so a hex
+#'can tile a non-square lattice, and `size` is ignored.
 #'}
 #'
 #'\subsection{Method `sectors`}{
@@ -227,7 +230,7 @@ Scene$circles <- function(x, y, r, xu, yu, ru, fill, col, lwd, alpha, stroke) .C
 
 Scene$markers <- function(x, y, size, xu, yu, su, shape, fill, col, lwd, alpha, stroke) .Call(wrap__Scene__markers, self, x, y, size, xu, yu, su, shape, fill, col, lwd, alpha, stroke)
 
-Scene$hexagons <- function(x, y, size, xu, yu, su, fill, flat, col, lwd, alpha, stroke) .Call(wrap__Scene__hexagons, self, x, y, size, xu, yu, su, fill, flat, col, lwd, alpha, stroke)
+Scene$hexagons <- function(x, y, size, w, h, xu, yu, su, wu, hu, fill, flat, col, lwd, alpha, stroke) .Call(wrap__Scene__hexagons, self, x, y, size, w, h, xu, yu, su, wu, hu, fill, flat, col, lwd, alpha, stroke)
 
 Scene$sectors <- function(x, y, r0, r1, theta0, theta1, xu, yu, r0u, r1u, fill, col, lwd, alpha, stroke) .Call(wrap__Scene__sectors, self, x, y, r0, r1, theta0, theta1, xu, yu, r0u, r1u, fill, col, lwd, alpha, stroke)
 

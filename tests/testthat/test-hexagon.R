@@ -64,6 +64,31 @@ test_that("NULL fill falls back to gp$fill", {
   expect_equal(px, as.integer(grDevices::col2rgb("orange")[, 1])) # orange centre
 })
 
+test_that("width/height override size with per-axis extent (non-regular hex)", {
+  # Equal *native* width & height on a 2:1-wide panel whose scales are square
+  # (1x1): x and y resolve to different device lengths, so the flat-top
+  # silhouette comes out twice as wide as it is tall — a stretch the regular
+  # size-only path (single x-scale radius) cannot produce.
+  s <- vl_scene(4, 2, dpi = 100, bg = "white") |>
+    push(viewport(xscale = c(0, 1), yscale = c(0, 1))) |>
+    draw(hexagon_grob(unit(0.5, "native"), unit(0.5, "native"),
+                      width = unit(0.4, "native"), height = unit(0.4, "native"),
+                      orientation = "flat", gp = gpar(fill = "black", col = NA)))
+  r <- scene_raster(s) # 400 x 200 px panel, scales 1x1
+  # 0.4 native in x -> 0.4 * 400 = 160 px full width; 0.4 native in y -> 0.4 * 200
+  # = 80 px full height. Flat-top: full width == device width, full height ==
+  # device height.
+  expect_equal(.filled_w(r, 100), 160, tolerance = 2 / 160) # ~160 px (AA edge)
+  expect_equal(.filled_h(r, 200), 80, tolerance = 2 / 80)   # ~80 px (half of width)
+})
+
+test_that("width and height must be supplied together", {
+  expect_error(hexagon_grob(0.5, 0.5, width = unit(1, "native")),
+               "supplied together")
+  expect_error(hexagon_grob(0.5, 0.5, height = unit(1, "native")),
+               "supplied together")
+})
+
 test_that("per-hex fill renders to SVG and PDF without error", {
   s <- vl_scene(3, 2, dpi = 100, bg = "white") |>
     draw(hexagon_grob(x = c(0.3, 0.7), y = 0.5, size = unit(6, "mm"),

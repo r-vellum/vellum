@@ -15,7 +15,7 @@ use extendr_api::prelude::*;
 use tiny_skia::{Color, FillRule, Mask, PathBuilder, Pixmap, Stroke, Transform};
 
 use crate::render::{
-    hexagon_path, rect_path, roundrect_path, sector_path, BlendKind, Clip, ClipShape, MaskKind, MaskLayer, PdfBackend, RasterBackend, RenderBackend,
+    hexagon_path, hexagon_path_xy, rect_path, roundrect_path, sector_path, BlendKind, Clip, ClipShape, MaskKind, MaskLayer, PdfBackend, RasterBackend, RenderBackend,
     ResolvedPaint, StrokeStyle, SvgBackend, TextRun,
 };
 
@@ -243,12 +243,16 @@ enum Node {
         shape: Vec<u32>,
         gp: PartialGpar,
     },
-    /// A batch of regular hexagons (for hex-binning): `size` is the circumradius,
-    /// `flat` the orientation, and `fill` a **per-element** colour (the binned-count
-    /// colour). `gp` supplies only the uniform stroke (col/lwd/alpha).
+    /// A batch of hexagons (for hex-binning): `flat` the orientation, and `fill` a
+    /// **per-element** colour (the binned-count colour); `gp` supplies only the
+    /// uniform stroke (col/lwd/alpha). Geometry comes from one of two paths: if `w`
+    /// (and `h`) are empty, each hex is *regular* with circumradius `size`; if they
+    /// are non-empty they give the per-hex **full** width/height (corner-to-corner
+    /// along each axis), resolved per-axis so the hex can be non-regular (`size` is
+    /// then ignored).
     Hexagons {
-        x: Vec<f64>, y: Vec<f64>, size: Vec<f64>,
-        xu: Vec<Unit>, yu: Vec<Unit>, su: Vec<Unit>,
+        x: Vec<f64>, y: Vec<f64>, size: Vec<f64>, w: Vec<f64>, h: Vec<f64>,
+        xu: Vec<Unit>, yu: Vec<Unit>, su: Vec<Unit>, wu: Vec<Unit>, hu: Vec<Unit>,
         fill: Vec<Rgba>,
         flat: bool,
         gp: PartialGpar,
@@ -616,14 +620,18 @@ impl Scene {
         });
     }
 
-    /// A batch of regular hexagons for hex-binning. `size` is the circumradius;
-    /// `flat` picks flat-top vs pointy-top; `fill` is a flat per-hex RGBA stream
-    /// (`[r,g,b,a, r,g,b,a, ...]`, one quad per hex). `col`/`lwd`/`alpha`/`stroke`
-    /// give the *uniform* stroke (the gpar's fill is unused — fill is per element).
+    /// A batch of hexagons for hex-binning. `flat` picks flat-top vs pointy-top;
+    /// `fill` is a flat per-hex RGBA stream (`[r,g,b,a, r,g,b,a, ...]`, one quad per
+    /// hex); `col`/`lwd`/`alpha`/`stroke` give the *uniform* stroke (the gpar's fill
+    /// is unused — fill is per element). Geometry: if `w`/`h` are empty each hex is
+    /// regular with circumradius `size`; otherwise `w`/`h` are the per-hex full
+    /// width/height (corner-to-corner along each axis), resolved per-axis so a hex
+    /// can tile a non-square lattice, and `size` is ignored.
     #[allow(clippy::too_many_arguments)]
     fn hexagons(
-        &mut self, x: &[f64], y: &[f64], size: &[f64],
-        xu: &[i32], yu: &[i32], su: &[i32], fill: &[i32], flat: bool,
+        &mut self, x: &[f64], y: &[f64], size: &[f64], w: &[f64], h: &[f64],
+        xu: &[i32], yu: &[i32], su: &[i32], wu: &[i32], hu: &[i32],
+        fill: &[i32], flat: bool,
         col: Robj, lwd: Robj, alpha: Robj, stroke: Robj,
     ) {
         let gp = PartialGpar::from_robj(&rnull(), &col, &lwd, &alpha, &stroke);
@@ -632,8 +640,8 @@ impl Scene {
             .map(|c| Rgba { r: c[0] as u8, g: c[1] as u8, b: c[2] as u8, a: c[3] as u8 })
             .collect();
         self.emit_node(Node::Hexagons {
-            x: x.to_vec(), y: y.to_vec(), size: size.to_vec(),
-            xu: codes(xu), yu: codes(yu), su: codes(su),
+            x: x.to_vec(), y: y.to_vec(), size: size.to_vec(), w: w.to_vec(), h: h.to_vec(),
+            xu: codes(xu), yu: codes(yu), su: codes(su), wu: codes(wu), hu: codes(hu),
             fill, flat, gp,
         });
     }
@@ -1094,11 +1102,19 @@ impl Scene {
                         }
                     }
                 }
-                Node::Hexagons { x, y, size, xu, yu, su, flat, .. } => {
-                    let n = [x.len(), y.len(), size.len(), xu.len(), yu.len(), su.len()].into_iter().min().unwrap_or(0);
+                Node::Hexagons { x, y, size, w, h, xu, yu, su, wu, hu, flat, .. } => {
+                    // n excludes w/h: they are empty for the regular (size-driven) path.
+                    let n = [x.len(), y.len(), xu.len(), yu.len()].into_iter().min().unwrap_or(0);
+                    let nonreg = !w.is_empty();
                     for k in 0..n {
                         let (cx, cy) = (vp.x_pos(x[k], xu[k]), vp.y_pos(y[k], yu[k]));
-                        if let Some(p) = hexagon_path(cx, cy, vp.r_len(size[k], su[k]), *flat) {
+                        let p = if nonreg {
+                            hexagon_path_xy(cx, cy, vp.x_len(w[k], wu[k]) * 0.5,
+                                            vp.y_len(h[k], hu[k]) * 0.5, *flat)
+                        } else {
+                            hexagon_path(cx, cy, vp.r_len(size[k], su[k]), *flat)
+                        };
+                        if let Some(p) = p {
                             fill(&mut pm, &p, FillRule::Winding);
                         }
                     }
@@ -1601,19 +1617,27 @@ impl Scene {
                         }
                     }
                 }
-                Node::Hexagons { x, y, size, xu, yu, su, fill, flat, .. } => {
-                    let n = [x.len(), y.len(), size.len(), xu.len(), yu.len(), su.len(), fill.len()]
+                Node::Hexagons { x, y, size, w, h, xu, yu, su, wu, hu, fill, flat, .. } => {
+                    // n excludes w/h: they are empty for the regular (size-driven) path.
+                    let n = [x.len(), y.len(), xu.len(), yu.len(), fill.len()]
                         .into_iter().min().unwrap_or(0);
+                    let nonreg = !w.is_empty();
                     let style = stroke_style(&gp, vp.dpi);
                     let stroke = gp.col.filter(|_| style.width > 0.0);
                     for i in 0..n {
                         let cx = vp.x_pos(x[i], xu[i]);
                         let cy = vp.y_pos(y[i], yu[i]);
-                        let rr = vp.r_len(size[i], su[i]);
-                        if rr <= 0.0 || !cx.is_finite() || !cy.is_finite() {
-                            continue; // drop NA-positioned / zero-size hexes
+                        if !cx.is_finite() || !cy.is_finite() {
+                            continue; // drop NA-positioned hexes
                         }
-                        if let Some(path) = hexagon_path(cx, cy, rr, *flat) {
+                        // hexagon_path / _xy drop non-positive extents -> None.
+                        let path = if nonreg {
+                            hexagon_path_xy(cx, cy, vp.x_len(w[i], wu[i]) * 0.5,
+                                            vp.y_len(h[i], hu[i]) * 0.5, *flat)
+                        } else {
+                            hexagon_path(cx, cy, vp.r_len(size[i], su[i]), *flat)
+                        };
+                        if let Some(path) = path {
                             // Per-element fill (the binned-count colour); uniform stroke.
                             b.fill_path(&path, t, &ResolvedPaint::Solid(fill[i]), FillRule::Winding, &clip);
                             if let Some(c) = stroke {

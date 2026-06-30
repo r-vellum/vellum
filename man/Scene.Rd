@@ -71,10 +71,13 @@ faster \code{circles} path; this is for shape variety.)
 }
 
 \subsection{Method \code{hexagons}}{
-A batch of regular hexagons for hex-binning. \code{size} is the circumradius;
-\code{flat} picks flat-top vs pointy-top; \code{fill} is a flat per-hex RGBA stream
-(\verb{[r,g,b,a, r,g,b,a, ...]}, one quad per hex). \code{col}/\code{lwd}/\code{alpha}/\code{stroke}
-give the \emph{uniform} stroke (the gpar's fill is unused — fill is per element).
+A batch of hexagons for hex-binning. \code{flat} picks flat-top vs pointy-top;
+\code{fill} is a flat per-hex RGBA stream (\verb{[r,g,b,a, r,g,b,a, ...]}, one quad per
+hex); \code{col}/\code{lwd}/\code{alpha}/\code{stroke} give the \emph{uniform} stroke (the gpar's fill
+is unused — fill is per element). Geometry: if \code{w}/\code{h} are empty each hex is
+regular with circumradius \code{size}; otherwise \code{w}/\code{h} are the per-hex full
+width/height (corner-to-corner along each axis), resolved per-axis so a hex
+can tile a non-square lattice, and \code{size} is ignored.
 }
 
 \subsection{Method \code{sectors}}{

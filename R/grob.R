@@ -48,6 +48,8 @@ grob_points <- S7::new_class("grob_points", parent = grob, package = "vellum",
 grob_hexagon <- S7::new_class("grob_hexagon", parent = grob, package = "vellum",
   properties = list(
     x = .unit_prop(), y = .unit_prop(), size = .unit_prop("unit(2, \"mm\")"),
+    width = S7::new_property(S7::class_any, default = NULL),
+    height = S7::new_property(S7::class_any, default = NULL),
     fill = S7::new_property(S7::class_any, default = NULL),
     orientation = S7::new_property(S7::class_character, default = "flat")
   ))
@@ -335,18 +337,41 @@ points_grob <- function(x, y, size = unit(2, "mm"), shape = "circle",
 #'   stroke comes from `gp` (`col`/`lwd`).
 #' @param orientation Hexagon orientation: `"flat"` (default, flat top/bottom edge)
 #'   or `"pointy"` (vertex at top). `size` is the circumradius (centre to vertex).
+#' @param width,height Optional per-hexagon **full** extent (corner-to-corner) along
+#'   the x and y axis, as [unit()]s recycled like `x`/`y`. When both are supplied
+#'   they override `size`, resolved per-axis, so a hexagon can be *non-regular*
+#'   (independent horizontal and vertical extent) and tile a non-square lattice —
+#'   e.g. `width`/`height` in `"native"` units tile in data space regardless of the
+#'   device aspect. `width` is the distance between the left and right vertices (for
+#'   `"flat"`; the flat sides for `"pointy"`) and `height` the distance between the
+#'   top and bottom edges (`"flat"`; vertices for `"pointy"`). A *regular* hexagon
+#'   is `height == width * sqrt(3) / 2` (flat). Leave both `NULL` (default) to draw
+#'   a regular hexagon of circumradius `size`. Must be given together.
 #' @export
-hexagon_grob <- function(x = 0.5, y = 0.5, size = unit(2, "mm"), fill = NULL,
+hexagon_grob <- function(x = 0.5, y = 0.5, size = unit(2, "mm"),
+                         width = NULL, height = NULL, fill = NULL,
                          orientation = c("flat", "pointy"),
                          gp = gpar(), name = NULL, vp = NULL) {
   orientation <- match.arg(orientation)
   n <- .coord_n(x, y)
   sz <- as_unit(size, "mm")
   .check_extent(sz, "size")
+  if (is.null(width) != is.null(height)) {
+    cli::cli_abort("{.arg width} and {.arg height} must be supplied together.")
+  }
+  if (!is.null(width)) {
+    width <- as_unit(width, "native")
+    height <- as_unit(height, "native")
+    .check_extent(width, "width")
+    .check_extent(height, "height")
+    width <- vctrs::vec_recycle(width, n)
+    height <- vctrs::vec_recycle(height, n)
+  }
   if (!is.null(fill)) fill <- rep_len(fill, n)
   grob_hexagon(x = vctrs::vec_recycle(as_unit(x), n),
                y = vctrs::vec_recycle(as_unit(y), n),
                size = vctrs::vec_recycle(sz, n),
+               width = width, height = height,
                fill = fill, orientation = orientation,
                gp = gp, name = name, vp = vp)
 }

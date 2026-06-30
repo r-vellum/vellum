@@ -327,16 +327,53 @@ pub fn roundrect_path(x: f64, y: f64, w: f64, h: f64, r: f64) -> Option<Path> {
 
 /// A regular hexagon centred at `(cx, cy)` with circumradius `r` (centre→vertex).
 /// `flat` selects orientation: flat-top (a horizontal top/bottom edge) when true,
-/// pointy-top (a vertex up/down) when false. `r <= 0` → `None`.
+/// pointy-top (a vertex up/down) when false. `r <= 0` → `None`. A thin wrapper over
+/// [`hexagon_path_xy`] with the regular relation between the two half-extents.
 pub fn hexagon_path(cx: f64, cy: f64, r: f64, flat: bool) -> Option<Path> {
     if r <= 0.0 {
         return None;
     }
-    let start = if flat { 0.0 } else { std::f64::consts::FRAC_PI_6 };
+    let s = r * (3.0_f64).sqrt() * 0.5; // the short half-extent of a regular hex
+    if flat {
+        hexagon_path_xy(cx, cy, r, s, true)
+    } else {
+        hexagon_path_xy(cx, cy, s, r, false)
+    }
+}
+
+/// A hexagon centred at `(cx, cy)` with independent horizontal half-extent `hx`
+/// and vertical half-extent `hy` (each measured centre→edge along its own axis,
+/// so the full width is `2*hx` and the full height is `2*hy`). `flat` selects
+/// flat-top — vertices left/right at `(±hx, 0)`, horizontal edges at `±hy` — vs
+/// pointy-top — vertices top/bottom at `(0, ±hy)`, vertical edges at `±hx`. A
+/// regular hexagon is the special case `hy == hx*sqrt(3)/2` (flat) resp.
+/// `hx == hy*sqrt(3)/2` (pointy). Non-positive or non-finite extents → `None`.
+pub fn hexagon_path_xy(cx: f64, cy: f64, hx: f64, hy: f64, flat: bool) -> Option<Path> {
+    if hx <= 0.0 || hy <= 0.0 || !cx.is_finite() || !cy.is_finite() {
+        return None;
+    }
+    let corners: [(f64, f64); 6] = if flat {
+        [
+            (hx, 0.0),
+            (hx * 0.5, hy),
+            (-hx * 0.5, hy),
+            (-hx, 0.0),
+            (-hx * 0.5, -hy),
+            (hx * 0.5, -hy),
+        ]
+    } else {
+        [
+            (0.0, hy),
+            (hx, hy * 0.5),
+            (hx, -hy * 0.5),
+            (0.0, -hy),
+            (-hx, -hy * 0.5),
+            (-hx, hy * 0.5),
+        ]
+    };
     let mut pb = PathBuilder::new();
-    for k in 0..6 {
-        let a = start + (k as f64) * std::f64::consts::FRAC_PI_3;
-        let (px, py) = ((cx + r * a.cos()) as f32, (cy + r * a.sin()) as f32);
+    for (k, (dx, dy)) in corners.iter().enumerate() {
+        let (px, py) = ((cx + dx) as f32, (cy + dy) as f32);
         if k == 0 {
             pb.move_to(px, py);
         } else {

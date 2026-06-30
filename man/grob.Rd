@@ -72,6 +72,8 @@ hexagon_grob(
   x = 0.5,
   y = 0.5,
   size = unit(2, "mm"),
+  width = NULL,
+  height = NULL,
   fill = NULL,
   orientation = c("flat", "pointy"),
   gp = gpar(),
@@ -139,7 +141,16 @@ text_grob(
 \arguments{
 \item{x, y}{Coordinates (\code{\link[=unit]{unit()}} or numeric).}
 
-\item{width, height}{Sizes (\code{\link[=unit]{unit()}} or numeric).}
+\item{width, height}{Optional per-hexagon \strong{full} extent (corner-to-corner) along
+the x and y axis, as \code{\link[=unit]{unit()}}s recycled like \code{x}/\code{y}. When both are supplied
+they override \code{size}, resolved per-axis, so a hexagon can be \emph{non-regular}
+(independent horizontal and vertical extent) and tile a non-square lattice —
+e.g. \code{width}/\code{height} in \code{"native"} units tile in data space regardless of the
+device aspect. \code{width} is the distance between the left and right vertices (for
+\code{"flat"}; the flat sides for \code{"pointy"}) and \code{height} the distance between the
+top and bottom edges (\code{"flat"}; vertices for \code{"pointy"}). A \emph{regular} hexagon
+is \code{height == width * sqrt(3) / 2} (flat). Leave both \code{NULL} (default) to draw
+a regular hexagon of circumradius \code{size}. Must be given together.}
 
 \item{gp}{Graphical parameters, from \code{\link[=gpar]{gpar()}}.}
 
