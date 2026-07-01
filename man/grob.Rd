@@ -12,6 +12,7 @@
 \alias{points_grob}
 \alias{hexagon_grob}
 \alias{sector_grob}
+\alias{loop_grob}
 \alias{segments_grob}
 \alias{path_grob}
 \alias{raster_grob}
@@ -47,6 +48,8 @@ lines_grob(
   x,
   y,
   arrow = NULL,
+  start_cap = NULL,
+  end_cap = NULL,
   gp = gpar(),
   name = NULL,
   vp = NULL,
@@ -126,6 +129,21 @@ sector_grob(
   theta0 = 0,
   theta1 = 2 * pi,
   fill = NULL,
+  arrow = NULL,
+  gp = gpar(),
+  name = NULL,
+  vp = NULL,
+  id = NULL,
+  role = NULL
+)
+
+loop_grob(
+  x = 0.5,
+  y = 0.5,
+  r = unit(2, "mm"),
+  theta0 = 0,
+  theta1 = 1.5 * pi,
+  arrow = NULL,
   gp = gpar(),
   name = NULL,
   vp = NULL,
@@ -139,6 +157,8 @@ segments_grob(
   x1,
   y1,
   arrow = NULL,
+  start_cap = NULL,
+  end_cap = NULL,
   gp = gpar(),
   name = NULL,
   vp = NULL,
@@ -214,10 +234,26 @@ grid); \code{NULL} makes a single sub-path.}
 \item{role}{Optional ARIA role, emitted by the SVG backend as \verb{role=} for
 accessibility (ignored by the raster and PDF backends).}
 
-\item{r}{Radius (\code{\link[=unit]{unit()}} or numeric).}
+\item{r}{Loop radius: an \strong{absolute} \code{\link[=unit]{unit()}} (\code{mm}/\code{cm}/\verb{in}/\code{pt}; a bare
+numeric is \code{mm}), resolved to a device length \strong{at render} so it tracks a
+node's size at any page size/dpi. Recycled per loop.}
 
 \item{arrow}{An \code{\link[=arrow]{arrow()}} spec to draw heads on the line/segment ends, or
 \code{NULL} for none.}
+
+\item{start_cap, end_cap}{Optional \strong{absolute-length} \code{\link[=unit]{unit()}}s (\code{mm}/\code{cm}/
+\verb{in}/\code{pt}; a bare numeric is taken as \code{mm}) that shorten the drawn line
+inward from its start/end by that physical amount, resolved \strong{at render} in
+device space — so the gap is exact at any size, dpi, and aspect ratio, with
+no reliance on the native scale. For \code{\link[=segments_grob]{segments_grob()}} the caps are
+per-element (scalar or length-n, recycled like the coordinates); for
+\code{\link[=lines_grob]{lines_grob()}} a single (scalar) cap trims each end of the whole polyline.
+\code{NULL} (default) leaves the endpoint untouched. When an \code{\link[=arrow]{arrow()}} is also
+present its head is placed at the \emph{capped} end, so the tip lands on the
+boundary (e.g. a node marker) rather than under it. This is what lets a
+directed edge stop at a node's radius. See the acceptance notes in the
+package for the degenerate cases (a cap \code{>=} the segment length draws
+nothing; a zero-length segment is skipped).}
 
 \item{n}{Number of points to sample the curve at (flattened to a polyline).}
 
@@ -271,4 +307,18 @@ with \code{\link[=render]{render()}}. Coordinates accept a \code{\link[=unit]{un
 \details{
 \code{sector_grob()} draws a batch of annular sectors (pie / donut / rose wedges) in a
 single call. \code{gp$fill} recycles per sector; \code{gp$col}/\code{lwd} give a uniform stroke.
+
+Passing \code{r0 == r1} gives an \strong{open arc} (stroke only). Combined with an
+absolute (\code{mm}) radius at a \code{"native"} centre and an \code{\link[=arrow]{arrow()}}, this draws a
+resolution-independent directed \strong{self-loop}: the radius is resolved to a
+device length at render (like a marker \code{size}), so it tracks a node's mm radius
+at any page size or dpi. The arrowhead sits tangent to the outer arc's end (see
+\code{\link[=loop_grob]{loop_grob()}} for the convenience wrapper).
+
+\code{loop_grob()} draws directed/undirected \strong{self-loops} for node-link diagrams: an
+open arc centred at a \code{"native"} anchor \verb{(x, y)} with an absolute (mm) radius \code{r},
+from \code{theta0} to \code{theta1} (radians), optionally with an \code{\link[=arrow]{arrow()}} tangent to its
+end. It is a thin wrapper over \code{\link[=sector_grob]{sector_grob()}} with \code{r0 = r1 = r}. Because \code{r} is
+absolute and deferred to render, the loop stays proportional to the node's mm
+radius under any device size — no native-per-mm estimation.
 }

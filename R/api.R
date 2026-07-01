@@ -489,7 +489,10 @@ S7::method(compile, grob_lines) <- function(node, scene) {
   .with_vp(node, scene, {
     ex <- .coord(node@x); ey <- .coord(node@y); g <- .gp4(node@gp, scene)
     a <- .encode_arrow(node@arrow)
-    scene$lines(ex$value, ey$value, ex$code, ey$code, g$col, g$lwd, g$alpha, g$stroke,
+    sc <- .encode_cap(node@start_cap); ec <- .encode_cap(node@end_cap)
+    scene$lines(ex$value, ey$value, ex$code, ey$code,
+                sc$value, ec$value, sc$code, ec$code,
+                g$col, g$lwd, g$alpha, g$stroke,
                 a$angle, a$len, a$ends, a$closed)
   })
 }
@@ -589,9 +592,11 @@ S7::method(compile, grob_sector) <- function(node, scene) {
     if (!is.null(a) && !is.na(a)) m[4L, ] <- round(m[4L, ] * a)
     frgba <- as.integer(m)
     g <- .gp4(node@gp, scene)
+    a <- .encode_arrow(node@arrow)
     scene$sectors(ex$value, ey$value, er0$value, er1$value, th0, th1,
                   ex$code, ey$code, er0$code, er1$code, frgba,
-                  g$col, g$lwd, g$alpha, g$stroke)
+                  g$col, g$lwd, g$alpha, g$stroke,
+                  a$angle, a$len, a$ends, a$closed)
   })
 }
 
@@ -602,8 +607,11 @@ S7::method(compile, grob_segments) <- function(node, scene) {
     e1x <- .coord(node@x1, "native", n); e1y <- .coord(node@y1, "native", n)
     g <- .gp4(node@gp, scene)
     a <- .encode_arrow(node@arrow)
+    sc <- .encode_cap(node@start_cap); ec <- .encode_cap(node@end_cap)
     scene$segments(e0x$value, e0y$value, e1x$value, e1y$value,
-                   e0x$code, e0y$code, e1x$code, e1y$code, g$col, g$lwd, g$alpha, g$stroke,
+                   e0x$code, e0y$code, e1x$code, e1y$code,
+                   sc$value, ec$value, sc$code, ec$code,
+                   g$col, g$lwd, g$alpha, g$stroke,
                    a$angle, a$len, a$ends, a$closed)
   })
 }

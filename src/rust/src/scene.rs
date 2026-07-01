@@ -191,7 +191,14 @@ struct ResolvedVp {
 enum Node {
     Rect { x: f64, y: f64, w: f64, h: f64, xu: Unit, yu: Unit, wu: Unit, hu: Unit, gp: PartialGpar },
     RoundRect { x: f64, y: f64, w: f64, h: f64, r: f64, xu: Unit, yu: Unit, wu: Unit, hu: Unit, ru: Unit, gp: PartialGpar },
-    Lines { x: Vec<f64>, y: Vec<f64>, xu: Vec<Unit>, yu: Vec<Unit>, arrow: Option<Arrow>, gp: PartialGpar },
+    Lines {
+        x: Vec<f64>, y: Vec<f64>, xu: Vec<Unit>, yu: Vec<Unit>,
+        /// Optional whole-path end caps (absolute-length units): trim the first/
+        /// last vertex inward by this device length, resolved at render. `None` =
+        /// untouched. See `Segments` for the per-element form.
+        scap: Option<(f64, Unit)>, ecap: Option<(f64, Unit)>,
+        arrow: Option<Arrow>, gp: PartialGpar,
+    },
     Polygon { x: Vec<f64>, y: Vec<f64>, xu: Vec<Unit>, yu: Vec<Unit>, gp: PartialGpar },
     Circle { x: f64, y: f64, r: f64, xu: Unit, yu: Unit, ru: Unit, gp: PartialGpar },
     Text {
@@ -266,12 +273,21 @@ enum Node {
         theta0: Vec<f64>, theta1: Vec<f64>,
         xu: Vec<Unit>, yu: Vec<Unit>, r0u: Vec<Unit>, r1u: Vec<Unit>,
         fill: Vec<Rgba>,
+        /// Optional arrowhead on the outer arc's end(s) — for directed self-loops
+        /// (an open arc, `r0 == r1`, with an absolute mm radius at a native
+        /// centre). Placed tangent to the arc. `None` = no head (unchanged).
+        arrow: Option<Arrow>,
         gp: PartialGpar,
     },
     /// A batch of disjoint line segments `(x0,y0)->(x1,y1)`, stroked in one pass.
     Segments {
         x0: Vec<f64>, y0: Vec<f64>, x1: Vec<f64>, y1: Vec<f64>,
         x0u: Vec<Unit>, y0u: Vec<Unit>, x1u: Vec<Unit>, y1u: Vec<Unit>,
+        /// Optional per-element start/end caps (absolute-length units): shorten
+        /// the drawn segment inward from each end by this device length, resolved
+        /// at render. Empty = no caps (the batch is unchanged). Recycled on the R
+        /// side to the element count, so `scap.len()` is either 0 or `n`.
+        scap: Vec<f64>, ecap: Vec<f64>, scapu: Vec<Unit>, ecapu: Vec<Unit>,
         arrow: Option<Arrow>,
         gp: PartialGpar,
     },
@@ -602,12 +618,15 @@ impl Scene {
 
     #[allow(clippy::too_many_arguments)]
     fn lines(
-        &mut self, x: &[f64], y: &[f64], xu: &[i32], yu: &[i32], col: Robj, lwd: Robj, alpha: Robj, stroke: Robj,
+        &mut self, x: &[f64], y: &[f64], xu: &[i32], yu: &[i32],
+        scap: &[f64], ecap: &[f64], scapu: &[i32], ecapu: &[i32],
+        col: Robj, lwd: Robj, alpha: Robj, stroke: Robj,
         aangle: f64, alen: f64, aends: i32, aclosed: bool,
     ) {
         let gp = PartialGpar::from_robj(&rnull(), &col, &lwd, &alpha, &stroke);
         self.emit_node(Node::Lines {
             x: x.to_vec(), y: y.to_vec(), xu: codes(xu), yu: codes(yu),
+            scap: cap_scalar(scap, scapu), ecap: cap_scalar(ecap, ecapu),
             arrow: arrow_from(aangle, alen, aends, aclosed), gp,
         });
     }
@@ -705,10 +724,12 @@ impl Scene {
     /// (one quad per sector, like `hexagons`); `col`/`lwd`/`alpha`/`stroke` give the
     /// uniform stroke. `r0=0` ⇒ pie slice; `r0=r1` ⇒ an arc outline (no fill).
     #[allow(clippy::too_many_arguments)]
+    #[allow(clippy::too_many_arguments)]
     fn sectors(
         &mut self, x: &[f64], y: &[f64], r0: &[f64], r1: &[f64], theta0: &[f64], theta1: &[f64],
         xu: &[i32], yu: &[i32], r0u: &[i32], r1u: &[i32], fill: &[i32],
         col: Robj, lwd: Robj, alpha: Robj, stroke: Robj,
+        aangle: f64, alen: f64, aends: i32, aclosed: bool,
     ) {
         let gp = PartialGpar::from_robj(&rnull(), &col, &lwd, &alpha, &stroke);
         let fill = fill
@@ -719,7 +740,7 @@ impl Scene {
             x: x.to_vec(), y: y.to_vec(), r0: r0.to_vec(), r1: r1.to_vec(),
             theta0: theta0.to_vec(), theta1: theta1.to_vec(),
             xu: codes(xu), yu: codes(yu), r0u: codes(r0u), r1u: codes(r1u),
-            fill, gp,
+            fill, arrow: arrow_from(aangle, alen, aends, aclosed), gp,
         });
     }
 
@@ -728,6 +749,7 @@ impl Scene {
     fn segments(
         &mut self, x0: &[f64], y0: &[f64], x1: &[f64], y1: &[f64],
         x0u: &[i32], y0u: &[i32], x1u: &[i32], y1u: &[i32],
+        scap: &[f64], ecap: &[f64], scapu: &[i32], ecapu: &[i32],
         col: Robj, lwd: Robj, alpha: Robj, stroke: Robj,
         aangle: f64, alen: f64, aends: i32, aclosed: bool,
     ) {
@@ -735,6 +757,7 @@ impl Scene {
         self.emit_node(Node::Segments {
             x0: x0.to_vec(), y0: y0.to_vec(), x1: x1.to_vec(), y1: y1.to_vec(),
             x0u: codes(x0u), y0u: codes(y0u), x1u: codes(x1u), y1u: codes(y1u),
+            scap: scap.to_vec(), ecap: ecap.to_vec(), scapu: codes(scapu), ecapu: codes(ecapu),
             arrow: arrow_from(aangle, alen, aends, aclosed), gp,
         });
     }
@@ -1614,26 +1637,46 @@ impl Scene {
                         fill_then_stroke(b, &path, &gp, t, &clip, vp, FillRule::Winding);
                     }
                 }
-                Node::Lines { x, y, xu, yu, arrow, .. } => {
-                    if let (Some(path), Some(col)) = (build_poly(x, y, xu, yu, vp, false), gp.col) {
-                        let style = stroke_style(&gp, vp.dpi);
-                        if style.width > 0.0 {
-                            b.stroke_lines(&path, t, col, &style, &clip);
-                        }
-                        if let Some(a) = arrow {
-                            let n = x.len().min(y.len()).min(xu.len()).min(yu.len());
-                            if n >= 2 {
-                                let pt = |i: usize| (vp.x_pos(x[i], xu[i]) as f32, vp.y_pos(y[i], yu[i]) as f32);
+                Node::Lines { x, y, xu, yu, scap, ecap, arrow, .. } => {
+                    if let Some(col) = gp.col {
+                        let n = x.len().min(y.len()).min(xu.len()).min(yu.len());
+                        if n >= 2 {
+                            // Resolve to local px, then trim the whole-path ends by any
+                            // absolute caps (arrow heads then land on the capped ends).
+                            let mut pts: Vec<(f32, f32)> = (0..n)
+                                .map(|i| (vp.x_pos(x[i], xu[i]) as f32, vp.y_pos(y[i], yu[i]) as f32))
+                                .collect();
+                            let sc = scap.map_or(0.0, |(v, u)| vp.x_len(v.max(0.0), u));
+                            let ec = ecap.map_or(0.0, |(v, u)| vp.x_len(v.max(0.0), u));
+                            if sc > 0.0 || ec > 0.0 {
+                                trim_poly_ends(&mut pts, sc, ec);
+                            }
+                            let style = stroke_style(&gp, vp.dpi);
+                            if let Some(path) = build_poly_px(&pts, false) {
+                                if style.width > 0.0 {
+                                    b.stroke_lines(&path, t, col, &style, &clip);
+                                }
+                            }
+                            if let Some(a) = arrow {
+                                let finite = |q: (f32, f32)| q.0.is_finite() && q.1.is_finite();
                                 let mut ends = Vec::new();
                                 if a.ends & 2 != 0 {
-                                    let (ex, ey) = pt(n - 1);
-                                    let (qx, qy) = pt(n - 2);
-                                    ends.push((ex, ey, (ex - qx) as f64, (ey - qy) as f64));
+                                    if let Some(z) = pts.iter().rposition(|&q| finite(q)) {
+                                        if let Some(w) = (0..z).rev().find(|&j| finite(pts[j])) {
+                                            let (ex, ey) = pts[z];
+                                            let (qx, qy) = pts[w];
+                                            ends.push((ex, ey, (ex - qx) as f64, (ey - qy) as f64));
+                                        }
+                                    }
                                 }
                                 if a.ends & 1 != 0 {
-                                    let (sx, sy) = pt(0);
-                                    let (qx, qy) = pt(1);
-                                    ends.push((sx, sy, (sx - qx) as f64, (sy - qy) as f64));
+                                    if let Some(a0) = pts.iter().position(|&q| finite(q)) {
+                                        if let Some(b0) = (a0 + 1..pts.len()).find(|&j| finite(pts[j])) {
+                                            let (sx, sy) = pts[a0];
+                                            let (qx, qy) = pts[b0];
+                                            ends.push((sx, sy, (sx - qx) as f64, (sy - qy) as f64));
+                                        }
+                                    }
                                 }
                                 draw_arrows(b, a, &ends, col, &style, t, &clip, vp.dpi);
                             }
@@ -1835,12 +1878,15 @@ impl Scene {
                         }
                     }
                 }
-                Node::Sectors { x, y, r0, r1, theta0, theta1, xu, yu, r0u, r1u, fill, .. } => {
+                Node::Sectors { x, y, r0, r1, theta0, theta1, xu, yu, r0u, r1u, fill, arrow, .. } => {
                     let n = [x.len(), y.len(), r0.len(), r1.len(), theta0.len(), theta1.len(),
                              xu.len(), yu.len(), r0u.len(), r1u.len(), fill.len()]
                         .into_iter().min().unwrap_or(0);
                     let style = stroke_style(&gp, vp.dpi);
                     let stroke = gp.col.filter(|_| style.width > 0.0);
+                    // Arrowheads (directed self-loops) accumulate across the batch and
+                    // are drawn once at the end, tangent to each outer arc's end(s).
+                    let mut ends: Vec<(f32, f32, f64, f64)> = Vec::new();
                     for i in 0..n {
                         let cx = vp.x_pos(x[i], xu[i]);
                         let cy = vp.y_pos(y[i], yu[i]);
@@ -1855,6 +1901,28 @@ impl Scene {
                             if let Some(c) = stroke {
                                 b.stroke_path(&path, t, c, &style, &clip);
                             }
+                        }
+                        if let Some(a) = arrow {
+                            // Endpoints and travel-tangent of the outer arc in local px.
+                            // The path is (cx + r cos θ, cy + r sin θ), so the forward
+                            // tangent is sgn·(-sin θ, cos θ); the arrowhead direction for
+                            // the "last" end points forward, "first" points backward.
+                            let (t0, t1) = (theta0[i], theta1[i]);
+                            let sgn = if t1 >= t0 { 1.0 } else { -1.0 };
+                            let outer = rr1.max(rr0);
+                            if a.ends & 2 != 0 {
+                                let (px, py) = ((cx + outer * t1.cos()) as f32, (cy + outer * t1.sin()) as f32);
+                                ends.push((px, py, sgn * -t1.sin(), sgn * t1.cos()));
+                            }
+                            if a.ends & 1 != 0 {
+                                let (px, py) = ((cx + outer * t0.cos()) as f32, (cy + outer * t0.sin()) as f32);
+                                ends.push((px, py, sgn * t0.sin(), sgn * -t0.cos()));
+                            }
+                        }
+                    }
+                    if let (Some(a), Some(col)) = (arrow, gp.col) {
+                        if !ends.is_empty() {
+                            draw_arrows(b, a, &ends, col, &style, t, &clip, vp.dpi);
                         }
                     }
                 }
@@ -1895,21 +1963,39 @@ impl Scene {
                     };
                     b.draw_text(&run, t, &clip);
                 }
-                Node::Segments { x0, y0, x1, y1, x0u, y0u, x1u, y1u, arrow, .. } => {
+                Node::Segments { x0, y0, x1, y1, x0u, y0u, x1u, y1u, scap, ecap, scapu, ecapu, arrow, .. } => {
                     if let Some(col) = gp.col {
                         let style = stroke_style(&gp, vp.dpi);
                         let n = [x0.len(), y0.len(), x1.len(), y1.len(), x0u.len(), y0u.len(), x1u.len(), y1u.len()]
                             .into_iter().min().unwrap_or(0);
+                        let has_caps = !scap.is_empty() || !ecap.is_empty();
+                        // Resolve each segment's (possibly capped) endpoints once, so the
+                        // stroke and the arrowhead share the same capped end. A segment is
+                        // dropped when a coordinate is non-finite (an R `NA`), or when caps
+                        // shorten it away entirely.
+                        let mut segs: Vec<(f32, f32, f32, f32)> = Vec::with_capacity(n);
+                        for i in 0..n {
+                            let (sx, sy) = (vp.x_pos(x0[i], x0u[i]) as f32, vp.y_pos(y0[i], y0u[i]) as f32);
+                            let (ex, ey) = (vp.x_pos(x1[i], x1u[i]) as f32, vp.y_pos(y1[i], y1u[i]) as f32);
+                            if !(sx.is_finite() && sy.is_finite() && ex.is_finite() && ey.is_finite()) {
+                                continue;
+                            }
+                            if has_caps {
+                                let sc = cap_len_px(scap, scapu, i, vp);
+                                let ec = cap_len_px(ecap, ecapu, i, vp);
+                                match cap_segment(sx, sy, ex, ey, sc, ec) {
+                                    Some(p) => segs.push(p),
+                                    None => continue,
+                                }
+                            } else {
+                                segs.push((sx, sy, ex, ey));
+                            }
+                        }
                         if style.width > 0.0 {
                             let mut pb = PathBuilder::new();
-                            for i in 0..n {
-                                let (sx, sy) = (vp.x_pos(x0[i], x0u[i]) as f32, vp.y_pos(y0[i], y0u[i]) as f32);
-                                let (ex, ey) = (vp.x_pos(x1[i], x1u[i]) as f32, vp.y_pos(y1[i], y1u[i]) as f32);
-                                // Skip a segment with a non-finite endpoint (an R `NA`).
-                                if sx.is_finite() && sy.is_finite() && ex.is_finite() && ey.is_finite() {
-                                    pb.move_to(sx, sy);
-                                    pb.line_to(ex, ey);
-                                }
+                            for &(sx, sy, ex, ey) in &segs {
+                                pb.move_to(sx, sy);
+                                pb.line_to(ex, ey);
                             }
                             if let Some(path) = pb.finish() {
                                 b.stroke_lines(&path, t, col, &style, &clip);
@@ -1917,9 +2003,7 @@ impl Scene {
                         }
                         if let Some(a) = arrow {
                             let mut ends = Vec::new();
-                            for i in 0..n {
-                                let (sx, sy) = (vp.x_pos(x0[i], x0u[i]) as f32, vp.y_pos(y0[i], y0u[i]) as f32);
-                                let (ex, ey) = (vp.x_pos(x1[i], x1u[i]) as f32, vp.y_pos(y1[i], y1u[i]) as f32);
+                            for &(sx, sy, ex, ey) in &segs {
                                 if a.ends & 2 != 0 {
                                     ends.push((ex, ey, (ex - sx) as f64, (ey - sy) as f64));
                                 }
@@ -2109,15 +2193,21 @@ fn build_poly(x: &[f64], y: &[f64], xu: &[Unit], yu: &[Unit], vp: &Vp, close: bo
     if n < 2 {
         return None;
     }
-    // A non-finite coordinate (an R `NA`/`NaN`) breaks the line, matching grid:
-    // the polyline splits into independent sub-paths, and for a polygon each run
-    // of finite points becomes its own closed sub-polygon.
+    let pts: Vec<(f32, f32)> = (0..n)
+        .map(|i| (vp.x_pos(x[i], xu[i]) as f32, vp.y_pos(y[i], yu[i]) as f32))
+        .collect();
+    build_poly_px(&pts, close)
+}
+
+/// Build a polyline/polygon path from points already resolved to local pixels.
+/// A non-finite point (an R `NA`/`NaN`) breaks the line, matching grid: the
+/// polyline splits into independent sub-paths, and for a polygon each run of
+/// finite points becomes its own closed sub-polygon.
+fn build_poly_px(pts: &[(f32, f32)], close: bool) -> Option<tiny_skia::Path> {
     let mut pb = PathBuilder::new();
     let mut open = false; // a sub-path is currently being built
     let mut run = 0; // points in the current sub-path
-    for i in 0..n {
-        let px = vp.x_pos(x[i], xu[i]) as f32;
-        let py = vp.y_pos(y[i], yu[i]) as f32;
+    for &(px, py) in pts {
         if px.is_finite() && py.is_finite() {
             if open {
                 pb.line_to(px, py);
@@ -2138,6 +2228,76 @@ fn build_poly(x: &[f64], y: &[f64], xu: &[Unit], yu: &[Unit], vp: &Vp, close: bo
         pb.close();
     }
     pb.finish()
+}
+
+/// Resolve an absolute-length cap (validated absolute on the R side) to a device
+/// length in local pixels — the same resolution `size`/`r` use, so the gap is
+/// exact for any dpi/page size. A negative value clamps to 0.
+fn cap_len_px(cap: &[f64], capu: &[Unit], i: usize, vp: &Vp) -> f64 {
+    if cap.is_empty() {
+        return 0.0;
+    }
+    let idx = if i < cap.len() { i } else { cap.len() - 1 };
+    let u = capu.get(idx).copied().unwrap_or(Unit::Mm);
+    vp.x_len(cap[idx].max(0.0), u)
+}
+
+/// Shorten a segment inward from each end by `sc`/`ec` device pixels. Returns the
+/// capped endpoints, or `None` when the segment should not be drawn: a zero-
+/// length segment (direction undefined) or a cap that consumes the whole length
+/// (clamp to nothing rather than inverting the direction).
+fn cap_segment(sx: f32, sy: f32, ex: f32, ey: f32, sc: f64, ec: f64) -> Option<(f32, f32, f32, f32)> {
+    let dx = (ex - sx) as f64;
+    let dy = (ey - sy) as f64;
+    let len = (dx * dx + dy * dy).sqrt();
+    if len < 1e-9 || sc + ec >= len {
+        return None;
+    }
+    let (ux, uy) = (dx / len, dy / len);
+    Some((
+        sx + (sc * ux) as f32,
+        sy + (sc * uy) as f32,
+        ex - (ec * ux) as f32,
+        ey - (ec * uy) as f32,
+    ))
+}
+
+/// Move point `from` toward `toward` by `cap` device pixels, clamped so it never
+/// overshoots `toward`. `None` when the two points coincide (no direction).
+fn move_toward(from: (f32, f32), toward: (f32, f32), cap: f64) -> Option<(f32, f32)> {
+    let dx = (toward.0 - from.0) as f64;
+    let dy = (toward.1 - from.1) as f64;
+    let len = (dx * dx + dy * dy).sqrt();
+    if len < 1e-9 {
+        return None;
+    }
+    let d = cap.min(len);
+    Some((from.0 + (d * dx / len) as f32, from.1 + (d * dy / len) as f32))
+}
+
+/// Trim the whole-polyline ends (first/last finite vertices) inward by the given
+/// caps, along the direction of the first/last segment. Interior vertices and
+/// NA-split sub-path joins are untouched. Mutates `pts` (already in local px).
+fn trim_poly_ends(pts: &mut [(f32, f32)], sc: f64, ec: f64) {
+    let finite = |q: (f32, f32)| q.0.is_finite() && q.1.is_finite();
+    if sc > 0.0 {
+        if let Some(a) = pts.iter().position(|&q| finite(q)) {
+            if let Some(b) = (a + 1..pts.len()).find(|&j| finite(pts[j])) {
+                if let Some(np) = move_toward(pts[a], pts[b], sc) {
+                    pts[a] = np;
+                }
+            }
+        }
+    }
+    if ec > 0.0 {
+        if let Some(z) = pts.iter().rposition(|&q| finite(q)) {
+            if let Some(w) = (0..z).rev().find(|&j| finite(pts[j])) {
+                if let Some(np) = move_toward(pts[z], pts[w], ec) {
+                    pts[z] = np;
+                }
+            }
+        }
+    }
 }
 
 fn build_tracks(vals: &[f64], units: &[String]) -> Vec<Track> {
@@ -2172,6 +2332,12 @@ fn rnull() -> Robj {
 /// Decode a slice of integer unit codes from R into `Unit`s (per element).
 fn codes(c: &[i32]) -> Vec<Unit> {
     c.iter().map(|&v| Unit::from_code(v)).collect()
+}
+
+/// Decode a scalar cap (value + code) from the parallel FFI streams: `None` when
+/// empty (no cap), else the first element. Used by `lines` (whole-path caps).
+fn cap_scalar(value: &[f64], code: &[i32]) -> Option<(f64, Unit)> {
+    value.first().map(|&v| (v, code.first().map(|&c| Unit::from_code(c)).unwrap_or(Unit::Mm)))
 }
 
 /// Convert a (finite, positive) dimension in pixels to a `u32`, at least 1 and
