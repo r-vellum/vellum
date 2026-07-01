@@ -331,6 +331,43 @@ struct MaskDef {
     nodes: Vec<(usize, Node)>,
 }
 
+/// Per-node semantic metadata (Feature: per-element identity). Carried alongside
+/// each drawn node and emitted by vector backends (SVG `data-*`/`role`) for
+/// interactivity, accessibility, and testing. Empty fields are omitted.
+#[derive(Clone, Default, Debug)]
+struct NodeMeta {
+    id: String,
+    role: String,
+    name: String,
+}
+
+impl NodeMeta {
+    fn is_empty(&self) -> bool {
+        self.id.is_empty() && self.role.is_empty() && self.name.is_empty()
+    }
+    /// Pre-formatted SVG attributes (`data-vellum-*` + ARIA `role`) for this node.
+    fn svg_attrs(&self) -> String {
+        let mut s = String::new();
+        if !self.id.is_empty() {
+            s.push_str(&format!("data-vellum-id=\"{}\"", xml_attr_escape(&self.id)));
+        }
+        if !self.name.is_empty() {
+            if !s.is_empty() { s.push(' '); }
+            s.push_str(&format!("data-vellum-name=\"{}\"", xml_attr_escape(&self.name)));
+        }
+        if !self.role.is_empty() {
+            if !s.is_empty() { s.push(' '); }
+            s.push_str(&format!("role=\"{}\"", xml_attr_escape(&self.role)));
+        }
+        s
+    }
+}
+
+/// Minimal escaping for a string placed inside a double-quoted XML attribute.
+fn xml_attr_escape(s: &str) -> String {
+    s.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;").replace('"', "&quot;")
+}
+
 /// A drawing scene held in the Rust backend. Internal: the public R API is the
 /// S7 layer (`vl_scene()`, grobs, `render()`), which compiles to this object.
 #[extendr]
@@ -352,6 +389,10 @@ pub struct Scene {
     /// before compiling each grob; used by `hit_test`'s colour pick-buffer.
     picks: Vec<i32>,
     cur_pick: i32,
+    /// Semantic metadata for each entry in `nodes` (parallel). Set by `set_meta`
+    /// before compiling each grob; emitted by vector backends as `data-*`/`role`.
+    meta: Vec<NodeMeta>,
+    cur_meta: NodeMeta,
 }
 
 #[extendr]
@@ -402,6 +443,8 @@ impl Scene {
             mask_target: Vec::new(),
             picks: Vec::new(),
             cur_pick: -1,
+            meta: Vec::new(),
+            cur_meta: NodeMeta::default(),
         }
     }
 
@@ -409,6 +452,16 @@ impl Scene {
     /// per grob; the R side assigns ids in paint order). See `hit_test`.
     fn set_pick(&mut self, id: i32) {
         self.cur_pick = id;
+    }
+
+    /// Set the semantic metadata applied to subsequently-emitted primitives (one
+    /// per grob). Empty strings clear a field. Emitted by vector backends.
+    fn set_meta(&mut self, id: &str, role: &str, name: &str) {
+        self.cur_meta = NodeMeta {
+            id: id.to_string(),
+            role: role.to_string(),
+            name: name.to_string(),
+        };
     }
 
     /// Push a viewport as a child of the current one and make it current.
@@ -911,26 +964,32 @@ impl Scene {
         self.dpi
     }
 
-    /// Render the scene to a PNG file.
-    fn render_png(&self, path: &str) {
-        let pm = self.rasterize();
-        if let Err(e) = pm.save_png(path) {
+    /// Render the scene to a PNG file. Returns any degradation warnings (none for
+    /// the raster backend today; uniform with the SVG/PDF signatures).
+    fn render_png(&self, path: &str) -> Vec<String> {
+        let mut b = RasterBackend::new(self.w_px, self.h_px, self.bg);
+        let warnings = self.render_to(&mut b);
+        if let Err(e) = b.into_pixmap().save_png(path) {
             throw_r_error(format!("failed to write PNG: {e}"));
         }
+        warnings
     }
 
     /// Render the scene to an SVG file. `outline_text` emits glyph outlines
     /// instead of selectable `<text>` (pixel-faithful, matches raster/PDF).
-    fn render_svg(&self, path: &str, outline_text: bool) {
+    /// Returns any degradation warnings.
+    fn render_svg(&self, path: &str, outline_text: bool) -> Vec<String> {
         let mut b = SvgBackend::new(self.w_px, self.h_px, self.bg, outline_text);
-        self.render_to(&mut b);
+        let warnings = self.render_to(&mut b);
         if let Err(e) = std::fs::write(path, b.into_string()) {
             throw_r_error(format!("failed to write SVG: {e}"));
         }
+        warnings
     }
 
-    /// Render the scene to a PDF file.
-    fn render_pdf(&self, path: &str) {
+    /// Render the scene to a PDF file. Returns any degradation warnings (e.g. a
+    /// tiling pattern or mask the PDF walk could not honour).
+    fn render_pdf(&self, path: &str) -> Vec<String> {
         let scale = 72.0 / self.dpi as f32;
         let w_pt = self.w_px as f32 * scale;
         let h_pt = self.h_px as f32 * scale;
@@ -943,11 +1002,11 @@ impl Scene {
         let mut surface = page.surface();
         // One root transform maps device pixels -> PDF points.
         surface.push_transform(&krilla::geom::Transform::from_scale(scale, scale));
-        {
+        let warnings = {
             let mut b = PdfBackend::new(&mut surface);
             b.fill_background(self.w_px, self.h_px, self.bg);
-            self.render_to(&mut b);
-        }
+            self.render_to(&mut b)
+        };
         surface.pop();
         surface.finish();
         page.finish();
@@ -959,6 +1018,7 @@ impl Scene {
             }
             Err(e) => throw_r_error(format!("failed to serialize PDF: {e}")),
         }
+        warnings
     }
 
     /// Render and return the whole image as row-major RGBA bytes
@@ -999,6 +1059,82 @@ impl Scene {
         } else {
             Vec::new()
         }
+    }
+
+    /// Resolved per-viewport geometry for the debug overlay / `why_size()`. Runs
+    /// the layout pass and returns, per viewport (row = viewport id), its parent
+    /// id, local pixel size, affine transform (`c(sx, ky, kx, sy, tx, ty)` mapping
+    /// local px -> device px), solved layout track edges (local px, plus the
+    /// `respect` centering offset), and the device-px bbox of its innermost clip.
+    /// R joins this with the viewport names it recorded during compilation.
+    fn resolved_geometry(&self) -> List {
+        let resolved = self.resolve_all();
+        let n = resolved.len();
+        let mut id = Vec::with_capacity(n);
+        let mut parent = Vec::with_capacity(n);
+        let mut w_px = Vec::with_capacity(n);
+        let mut h_px = Vec::with_capacity(n);
+        let mut transform: Vec<Robj> = Vec::with_capacity(n);
+        let mut has_layout = Vec::with_capacity(n);
+        let mut xedges: Vec<Robj> = Vec::with_capacity(n);
+        let mut yedges: Vec<Robj> = Vec::with_capacity(n);
+        let mut xoff = Vec::with_capacity(n);
+        let mut yoff = Vec::with_capacity(n);
+        let mut has_clip = Vec::with_capacity(n);
+        let mut clip: Vec<Robj> = Vec::with_capacity(n);
+        for (i, rv) in resolved.iter().enumerate() {
+            id.push(i as i32);
+            parent.push(self.viewports[i].parent.map(|p| p as i32).unwrap_or(-1));
+            let vp = &rv.vp;
+            w_px.push(vp.w);
+            h_px.push(vp.h);
+            let t = vp.transform;
+            transform.push(Robj::from(vec![
+                t.sx as f64, t.ky as f64, t.kx as f64, t.sy as f64, t.tx as f64, t.ty as f64,
+            ]));
+            match &self.viewports[i].layout {
+                Some(layout) => {
+                    let (xe, xo, ye, yo) = solve_layout(layout, vp.w, vp.h, self.dpi);
+                    has_layout.push(1i32);
+                    xedges.push(Robj::from(xe));
+                    yedges.push(Robj::from(ye));
+                    xoff.push(xo);
+                    yoff.push(yo);
+                }
+                None => {
+                    has_layout.push(0i32);
+                    xedges.push(Robj::from(Vec::<f64>::new()));
+                    yedges.push(Robj::from(Vec::<f64>::new()));
+                    xoff.push(0.0);
+                    yoff.push(0.0);
+                }
+            }
+            match rv.clip_chain.last() {
+                Some(shape) => {
+                    let (x0, y0, x1, y1) = clip_shape_bbox(shape);
+                    has_clip.push(1i32);
+                    clip.push(Robj::from(vec![x0, y0, x1, y1]));
+                }
+                None => {
+                    has_clip.push(0i32);
+                    clip.push(Robj::from(Vec::<f64>::new()));
+                }
+            }
+        }
+        list!(
+            id = id,
+            parent = parent,
+            w_px = w_px,
+            h_px = h_px,
+            transform = List::from_values(transform),
+            has_layout = has_layout,
+            xedges = List::from_values(xedges),
+            yedges = List::from_values(yedges),
+            xoff = xoff,
+            yoff = yoff,
+            has_clip = has_clip,
+            clip = List::from_values(clip)
+        )
     }
 
     /// Render and return the RGBA of device pixel `(x, y)` as `c(r, g, b, a)`.
@@ -1189,6 +1325,45 @@ impl Scene {
     }
 }
 
+/// Axis-aligned device-px bounding box `(min_x, min_y, max_x, max_y)` of a clip
+/// shape (its local rect/path corners mapped through its own transform). Used by
+/// `resolved_geometry` to draw the clip region in the debug overlay.
+fn clip_shape_bbox(shape: &ClipShape) -> (f64, f64, f64, f64) {
+    let (corners, t) = match shape {
+        ClipShape::Rect { w, h, transform } => {
+            (vec![(0.0, 0.0), (*w, 0.0), (*w, *h), (0.0, *h)], *transform)
+        }
+        ClipShape::Path { path, transform, .. } => {
+            let b = path.bounds();
+            (
+                vec![
+                    (b.left() as f64, b.top() as f64),
+                    (b.right() as f64, b.top() as f64),
+                    (b.right() as f64, b.bottom() as f64),
+                    (b.left() as f64, b.bottom() as f64),
+                ],
+                *transform,
+            )
+        }
+    };
+    let map = |x: f64, y: f64| {
+        (
+            t.sx as f64 * x + t.kx as f64 * y + t.tx as f64,
+            t.ky as f64 * x + t.sy as f64 * y + t.ty as f64,
+        )
+    };
+    let (mut minx, mut miny, mut maxx, mut maxy) =
+        (f64::INFINITY, f64::INFINITY, f64::NEG_INFINITY, f64::NEG_INFINITY);
+    for (x, y) in corners {
+        let (dx, dy) = map(x, y);
+        minx = minx.min(dx);
+        miny = miny.min(dy);
+        maxx = maxx.max(dx);
+        maxy = maxy.max(dy);
+    }
+    (minx, miny, maxx, maxy)
+}
+
 /// Build the intersection clip `Mask` for a resolved clip chain (device px), or
 /// `None` when there is no clip. Mirrors the raster backend's `mask_for`.
 fn build_clip_mask(w: u32, h: u32, chain: &[ClipShape]) -> Option<Mask> {
@@ -1224,6 +1399,7 @@ impl Scene {
             None => {
                 self.nodes.push((vp, node));
                 self.picks.push(self.cur_pick);
+                self.meta.push(self.cur_meta.clone());
             }
         }
     }
@@ -1360,21 +1536,31 @@ impl Scene {
     /// Walk the resolved scene in paint order, emitting each primitive through a
     /// [`RenderBackend`]. Geometry resolution (transform, clip, gpar, path) is
     /// shared; only the per-primitive draw calls are backend-specific.
-    fn render_to<B: RenderBackend>(&self, b: &mut B) {
+    fn render_to<B: RenderBackend>(&self, b: &mut B) -> Vec<String> {
         let resolved = self.resolve_all();
-        self.render_nodes(b, &resolved, &self.nodes);
+        self.render_nodes(b, &resolved, &self.nodes, Some(&self.meta));
+        b.take_warnings()
     }
 
     /// Render an ordered node list (the scene, or a mask's content) onto `b`.
     /// Group markers open/close isolated layers; a closing mask is rasterized
-    /// (always to a `RasterBackend`) and handed to `end_group`.
-    fn render_nodes<B: RenderBackend>(&self, b: &mut B, resolved: &[ResolvedVp], nodes: &[(usize, Node)]) {
-        for (vp_id, node) in nodes {
+    /// (always to a `RasterBackend`) and handed to `end_group`. `meta`, when given,
+    /// is parallel to `nodes`: each non-empty entry brackets its primitive with
+    /// `begin_node`/`end_node` so vector backends can attach semantic attributes
+    /// (mask content is drawn without metadata).
+    fn render_nodes<B: RenderBackend>(&self, b: &mut B, resolved: &[ResolvedVp], nodes: &[(usize, Node)], meta: Option<&[NodeMeta]>) {
+        for (i, (vp_id, node)) in nodes.iter().enumerate() {
+            let attrs = meta
+                .and_then(|m| m.get(i))
+                .filter(|md| !md.is_empty())
+                .map(|md| md.svg_attrs())
+                .unwrap_or_default();
+            let has_meta = !attrs.is_empty();
             match node {
                 Node::GroupStart { mask, alpha, blend } => {
                     let ml = mask.and_then(|m| self.masks.get(m)).map(|md| {
                         let mut mb = RasterBackend::new(self.w_px, self.h_px, Rgba { r: 0, g: 0, b: 0, a: 0 });
-                        self.render_nodes(&mut mb, resolved, &md.nodes);
+                        self.render_nodes(&mut mb, resolved, &md.nodes, None);
                         MaskLayer { pixmap: mb.into_pixmap(), kind: md.kind }
                     });
                     b.begin_group(ml, *alpha, *blend);
@@ -1393,7 +1579,9 @@ impl Scene {
                     let cy = vp.y_pos(*y, *yu);
                     let pw = vp.x_len(*w, *wu);
                     let ph = vp.y_len(*h, *hu);
+                    if has_meta { b.begin_node(&attrs); }
                     b.draw_image(rgba, *iw, *ih, cx, cy, pw, ph, *interpolate, vp.transform, &clip);
+                    if has_meta { b.end_node(); }
                     continue;
                 }
                 _ => {}
@@ -1405,6 +1593,7 @@ impl Scene {
             let t = vp.transform;
             let clip = Clip { id: *vp_id, shapes: &rv.clip_chain };
 
+            if has_meta { b.begin_node(&attrs); }
             match node {
                 Node::Rect { x, y, w, h, xu, yu, wu, hu, .. } => {
                     let cx = vp.x_pos(*x, *xu);
@@ -1750,6 +1939,7 @@ impl Scene {
                 }
                 Node::Image { .. } | Node::GroupStart { .. } | Node::GroupEnd => unreachable!("handled above"),
             }
+            if has_meta { b.end_node(); }
         }
     }
 }

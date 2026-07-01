@@ -32,8 +32,22 @@ test_that("arithmetic: scalar scale, same-unit add/sub, unary minus", {
   expect_equal(format(unit(10, "pt") / 2), "5pt")
   expect_equal(format(unit(2, "npc") + unit(1, "npc")), "3npc")
   expect_equal(format(-unit(4, "mm")), "-4mm")
-  # mixed units cannot be added
+  # a normalised/native unit mixed with an absolute one is genuinely deferred
   expect_error(unit(1, "npc") + unit(1, "mm"), "same unit")
+  expect_error(unit(1, "native") - unit(2, "pt"), "absolute")
+})
+
+test_that("absolute-unit arithmetic resolves to mm at construction", {
+  # mm/in/pt (and cm, which is already mm) combine across codes -> mm
+  expect_equal(format(unit(10, "mm") + unit(1, "in")), "35.4mm")
+  expect_equal(format(unit(2, "cm") - unit(5, "mm")), "15mm")
+  expect_equal(vctrs::field(unit(0, "pt") + unit(72, "pt"), "value"), 72) # same-code stays pt
+  expect_equal(vctrs::field(unit(0, "pt") + unit(72, "pt"), "unit"), 4L)
+  # vectorised + recycled
+  expect_equal(
+    format(unit(c(1, 2), "in") + unit(1, "mm")),
+    c("26.4mm", "51.8mm")
+  )
 })
 
 test_that("derived units resolve to absolute millimetres at construction", {

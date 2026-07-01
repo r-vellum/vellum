@@ -41,6 +41,13 @@ Supported units:
 Font- and string-relative units are resolved to absolute millimetres at
 construction (text metrics are available device-independently), so a stored
 \code{unit} only ever holds one of the core backend units.
+
+Arithmetic: \code{+} and \code{-} combine two units of the \emph{same} code, or two
+\emph{absolute} units (\code{"mm"}/\code{"cm"}/\code{"in"}/\code{"pt"}), which resolve to \code{"mm"}
+immediately (e.g. \code{unit(10, "mm") + unit(1, "in")} is \verb{35.4mm}).
+\code{unit * scalar} scales. Mixing a normalised/native unit with an absolute one
+(e.g. \code{unit(1, "npc") - unit(2, "mm")}) is genuinely deferred and errors —
+compose such offsets at the viewport/native level or pre-resolve to \code{"mm"}.
 }
 \examples{
 unit(1:3, "native")

@@ -16,7 +16,9 @@ datashade(
   how = c("eq_hist", "log", "cbrt", "linear"),
   interpolate = FALSE,
   name = NULL,
-  vp = NULL
+  vp = NULL,
+  id = NULL,
+  role = NULL
 )
 }
 \arguments{
@@ -37,7 +39,7 @@ datashader's default, reveals structure across orders of magnitude), \code{"log"
 
 \item{interpolate}{Passed to \code{\link[=raster_grob]{raster_grob()}}; \code{FALSE} keeps hard bin edges.}
 
-\item{name, vp}{Passed to \code{\link[=raster_grob]{raster_grob()}}.}
+\item{name, vp, id, role}{Passed to \code{\link[=raster_grob]{raster_grob()}} (see \link{grob}).}
 }
 \value{
 A \link{grob} (a raster), drawable with \code{\link[=draw]{draw()}}.

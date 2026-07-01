@@ -24,7 +24,7 @@
 #'   datashader's default, reveals structure across orders of magnitude), `"log"`,
 #'   `"cbrt"` (cube root), or `"linear"`.
 #' @param interpolate Passed to [raster_grob()]; `FALSE` keeps hard bin edges.
-#' @param name,vp Passed to [raster_grob()].
+#' @param name,vp,id,role Passed to [raster_grob()] (see [grob]).
 #' @return A [grob][grob] (a raster), drawable with [draw()].
 #' @examples
 #' set.seed(1)
@@ -39,7 +39,7 @@ datashade <- function(x, y, weight = NULL, width = 600L, height = 400L,
                       xlim = NULL, ylim = NULL,
                       colors = c("#deebf7", "#08306b"),
                       how = c("eq_hist", "log", "cbrt", "linear"),
-                      interpolate = FALSE, name = NULL, vp = NULL) {
+                      interpolate = FALSE, name = NULL, vp = NULL, id = NULL, role = NULL) {
   how <- match.arg(how)
   x <- as.double(x)
   y <- as.double(y)
@@ -63,7 +63,7 @@ datashade <- function(x, y, weight = NULL, width = 600L, height = 400L,
     shade[nz] <- grDevices::rgb(cols[, 1], cols[, 2], cols[, 3], maxColorValue = 255)
   }
   img <- matrix(shade, nrow = height, ncol = width, byrow = TRUE)
-  raster_grob(img, interpolate = interpolate, name = name, vp = vp)
+  raster_grob(img, interpolate = interpolate, name = name, vp = vp, id = id, role = role)
 }
 
 # Resolve a limit pair, defaulting to the finite data range; widen a degenerate

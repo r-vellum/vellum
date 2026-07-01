@@ -25,7 +25,7 @@ draw(scene, grob)
 
 pop(scene, n = 1)
 
-render(scene, path, text = c("native", "outline"))
+render(scene, path, text = c("native", "outline"), debug = FALSE)
 }
 \arguments{
 \item{width, height}{Page size (\code{\link[=unit]{unit()}} or numeric inches).}
@@ -57,6 +57,11 @@ viewport; inherited by everything drawn (e.g. a default \code{col}/\code{fontsiz
 selectable \verb{<text>} referencing system fonts, \code{"outline"} emits glyph
 outlines (pixel-faithful, identical to the raster/PDF backends, but not
 selectable). Ignored for PNG/PDF.}
+
+\item{debug}{If \code{TRUE}, overlay a layout-debug skeleton on the output: each
+viewport region (outlined and labelled by name), its layout track boundaries,
+and its clip region. Built from the resolved scene with \code{\link[=why_size]{why_size()}}; useful
+for understanding why elements land where they do. Default \code{FALSE}.}
 }
 \value{
 \code{vl_scene()}, \code{push()}, \code{draw()}, \code{pop()}: a \code{vellum_scene}.

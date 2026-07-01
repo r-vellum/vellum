@@ -267,20 +267,41 @@ S7::method(as_vellum_scene, vellum_scene) <- function(x, ...) x
 #'   selectable `<text>` referencing system fonts, `"outline"` emits glyph
 #'   outlines (pixel-faithful, identical to the raster/PDF backends, but not
 #'   selectable). Ignored for PNG/PDF.
+#' @param debug If `TRUE`, overlay a layout-debug skeleton on the output: each
+#'   viewport region (outlined and labelled by name), its layout track boundaries,
+#'   and its clip region. Built from the resolved scene with [why_size()]; useful
+#'   for understanding why elements land where they do. Default `FALSE`.
 #' @return `render()`: `path`, invisibly.
 #' @export
-render <- function(scene, path, text = c("native", "outline")) {
+render <- function(scene, path, text = c("native", "outline"), debug = FALSE) {
   text <- match.arg(text)
   scene <- as_vellum_scene(scene)
-  s <- .scene_to_backend(scene)
+  s <- .scene_to_backend(scene, debug = debug)
   ext <- tolower(tools::file_ext(path))
-  switch(ext,
+  warns <- switch(ext,
     png = s$render_png(path),
     svg = s$render_svg(path, identical(text, "outline")),
     pdf = s$render_pdf(path),
     cli::cli_abort("Unsupported output format {.val {ext}}; use .png, .svg, or .pdf.")
   )
+  .emit_degrade_warnings(warns)
   invisible(path)
+}
+
+# Surface backend degradation warnings (e.g. a PDF pattern/mask that couldn't be
+# honoured) as one R warning, unless the user has opted out. The successor-note
+# principle: an unsupported feature should fail *visibly*, not silently degrade.
+.emit_degrade_warnings <- function(warns) {
+  if (length(warns) && isTRUE(getOption("vellum.warn_on_degrade", TRUE))) {
+    msgs <- as.character(warns)
+    names(msgs) <- rep("*", length(msgs))
+    cli::cli_warn(c(
+      "This render could not be fully reproduced on the target backend:",
+      msgs,
+      i = "Silence with {.code options(vellum.warn_on_degrade = FALSE)}."
+    ))
+  }
+  invisible()
 }
 
 #' Read a rendered scene back as pixels
@@ -408,12 +429,25 @@ S7::method(plot, vellum_scene) <- function(x, y, ...) {
 # (A content-hash render cache was tried and removed: hashing the materialized
 # tree on every call cost more than it saved — it scaled with grob count, and the
 # common single-render and `display()`-resize paths never reused an entry.)
-.scene_to_backend <- function(scene) {
+.scene_to_backend <- function(scene, debug = FALSE) {
   s <- Scene$new(.to_inches(scene@width), .to_inches(scene@height), scene@dpi,
                  .rs_col(scene@bg) %||% c(255L, 255L, 255L, 0L))
   # Compile the root as a gtree so the root viewport's gp / scales / clip / layout
   # / mask all apply (it is pushed like any viewport), not just its layout.
-  compile(.materialize(scene), s)
+  if (debug) {
+    # Capture the id<->name map for each pushed viewport (via `.push_vp`), then
+    # draw the layout-debug overlay on top of the compiled content.
+    reg <- new.env(parent = emptyenv())
+    reg$items <- list()
+    old <- .debug_state$reg
+    .debug_state$reg <- reg
+    on.exit(.debug_state$reg <- old, add = TRUE)
+    compile(.materialize(scene), s)
+    .debug_state$reg <- old
+    .draw_debug_overlay(s, reg$items)
+  } else {
+    compile(.materialize(scene), s)
+  }
   s
 }
 
@@ -816,13 +850,32 @@ edit_node <- function(scene, name, ...) {
   as.numeric(x)
 }
 
-# Optionally push a grob's own viewport, run `expr`, then pop.
+# Optionally push a grob's own viewport, run `expr`, then pop. Also attaches the
+# grob's semantic metadata (id/role/name) to the primitives `expr` emits, so the
+# SVG backend can tag them; cleared afterwards so it never leaks to a later node.
 .with_vp <- function(node, scene, expr) {
+  .set_meta(scene, node)
   has_vp <- !is.null(node@vp)
   if (has_vp) .push_vp(scene, node@vp)
   force(expr)
   if (has_vp) scene$pop_viewport(1L)
+  scene$set_meta("", "", "")
   invisible()
+}
+
+# Push a grob's id/role/name as the metadata for its upcoming primitives.
+.set_meta <- function(scene, node) {
+  id <- if ("id" %in% S7::prop_names(node)) node@id else NULL
+  role <- if ("role" %in% S7::prop_names(node)) node@role else NULL
+  scene$set_meta(.meta_str(id), .meta_str(role), .meta_str(.node_name(node)))
+}
+
+# A single metadata string for the backend: "" when absent/NA (= no attribute);
+# a length->1 value takes its first element (grob-level identity for now).
+.meta_str <- function(x) {
+  if (is.null(x) || length(x) == 0L) return("")
+  x <- x[[1L]]
+  if (is.na(x)) "" else as.character(x)
 }
 
 # Encode a gpar's drawing fields for the backend. `fill` may be a colour, a
@@ -842,13 +895,19 @@ edit_node <- function(scene, name, ...) {
   # clip may be TRUE/FALSE (rect) or a path-like grob (arbitrary clip path).
   clip_grob <- if (S7::S7_inherits(vp@clip, grob)) vp@clip else NULL
   clip_flag <- if (is.null(clip_grob)) isTRUE(vp@clip) else TRUE
-  scene$push_viewport(
+  vid <- scene$push_viewport(
     cx$value, cy$value, cw$value, ch$value, cx$code, cy$code, cw$code, ch$code,
     as.numeric(vp@xscale), as.numeric(vp@yscale), vp@angle, clip_flag,
     lrow, lcol, vp@rowspan, vp@colspan,
     .encode_paint(vp@gp@fill, scene), .rs_col_inh(vp@gp@col), .rs_num_inh(vp@gp@lwd), .rs_num_inh(vp@gp@alpha),
     .encode_stroke(vp@gp)
   )
+  # Debug capture: record this viewport's backend id, name, and node for the
+  # layout-debug overlay / why_size() (only active during a debug render).
+  if (!is.null(.debug_state$reg)) {
+    reg <- .debug_state$reg
+    reg$items[[length(reg$items) + 1L]] <- list(id = vid, name = vp@name, vp = vp)
+  }
   if (!is.null(clip_grob)) {
     cp <- .clip_path_of(clip_grob)
     scene$set_clip_path(cp$x, cp$y, cp$xcode, cp$ycode, cp$nper, cp$evenodd)

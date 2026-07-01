@@ -25,7 +25,9 @@ rect_grob(
   height = 1,
   gp = gpar(),
   name = NULL,
-  vp = NULL
+  vp = NULL,
+  id = NULL,
+  role = NULL
 )
 
 roundrect_grob(
@@ -36,14 +38,34 @@ roundrect_grob(
   r = 0.1,
   gp = gpar(),
   name = NULL,
-  vp = NULL
+  vp = NULL,
+  id = NULL,
+  role = NULL
 )
 
-lines_grob(x, y, arrow = NULL, gp = gpar(), name = NULL, vp = NULL)
+lines_grob(
+  x,
+  y,
+  arrow = NULL,
+  gp = gpar(),
+  name = NULL,
+  vp = NULL,
+  id = NULL,
+  role = NULL
+)
 
-polygon_grob(x, y, gp = gpar(), name = NULL, vp = NULL)
+polygon_grob(x, y, gp = gpar(), name = NULL, vp = NULL, id = NULL, role = NULL)
 
-bezier_grob(x, y, n = 60, gp = gpar(), name = NULL, vp = NULL)
+bezier_grob(
+  x,
+  y,
+  n = 60,
+  gp = gpar(),
+  name = NULL,
+  vp = NULL,
+  id = NULL,
+  role = NULL
+)
 
 spline_grob(
   x,
@@ -53,10 +75,21 @@ spline_grob(
   open = TRUE,
   gp = gpar(),
   name = NULL,
-  vp = NULL
+  vp = NULL,
+  id = NULL,
+  role = NULL
 )
 
-circle_grob(x = 0.5, y = 0.5, r = 0.25, gp = gpar(), name = NULL, vp = NULL)
+circle_grob(
+  x = 0.5,
+  y = 0.5,
+  r = 0.25,
+  gp = gpar(),
+  name = NULL,
+  vp = NULL,
+  id = NULL,
+  role = NULL
+)
 
 points_grob(
   x,
@@ -65,7 +98,9 @@ points_grob(
   shape = "circle",
   gp = gpar(),
   name = NULL,
-  vp = NULL
+  vp = NULL,
+  id = NULL,
+  role = NULL
 )
 
 hexagon_grob(
@@ -78,7 +113,9 @@ hexagon_grob(
   orientation = c("flat", "pointy"),
   gp = gpar(),
   name = NULL,
-  vp = NULL
+  vp = NULL,
+  id = NULL,
+  role = NULL
 )
 
 sector_grob(
@@ -91,7 +128,9 @@ sector_grob(
   fill = NULL,
   gp = gpar(),
   name = NULL,
-  vp = NULL
+  vp = NULL,
+  id = NULL,
+  role = NULL
 )
 
 segments_grob(
@@ -102,7 +141,9 @@ segments_grob(
   arrow = NULL,
   gp = gpar(),
   name = NULL,
-  vp = NULL
+  vp = NULL,
+  id = NULL,
+  role = NULL
 )
 
 path_grob(
@@ -112,7 +153,8 @@ path_grob(
   rule = c("winding", "evenodd"),
   gp = gpar(),
   name = NULL,
-  vp = NULL
+  vp = NULL,
+  role = NULL
 )
 
 raster_grob(
@@ -124,7 +166,9 @@ raster_grob(
   interpolate = TRUE,
   gp = gpar(),
   name = NULL,
-  vp = NULL
+  vp = NULL,
+  id = NULL,
+  role = NULL
 )
 
 text_grob(
@@ -135,7 +179,9 @@ text_grob(
   rot = 0,
   gp = gpar(),
   name = NULL,
-  vp = NULL
+  vp = NULL,
+  id = NULL,
+  role = NULL
 )
 }
 \arguments{
@@ -157,6 +203,16 @@ a regular hexagon of circumradius \code{size}. Must be given together.}
 \item{name}{Optional name (for \code{\link[=edit_node]{edit_node()}}).}
 
 \item{vp}{Optional \code{\link[=viewport]{viewport()}} to draw this grob inside.}
+
+\item{id}{For most grobs, an optional semantic identifier emitted by the SVG
+backend as \code{data-vellum-id} (for interactivity, accessibility, and testing;
+ignored by raster/PDF). \strong{For \code{path_grob} only}, \code{id} instead groups points
+(one value per point) into closed sub-paths: all points sharing an \code{id} form
+one sub-path (so a hole is a separate \code{id}), in first-appearance order (à la
+grid); \code{NULL} makes a single sub-path.}
+
+\item{role}{Optional ARIA role, emitted by the SVG backend as \verb{role=} for
+accessibility (ignored by the raster and PDF backends).}
 
 \item{r}{Radius (\code{\link[=unit]{unit()}} or numeric).}
 
@@ -187,11 +243,6 @@ gives an arc outline (stroke only, no fill).}
 at 3 o'clock and increasing counter-clockwise.}
 
 \item{x0, y0, x1, y1}{Segment start/end coordinates (\code{\link[=unit]{unit()}} or numeric).}
-
-\item{id}{Optional vector (one per point) grouping points into closed
-sub-paths: all points sharing an \code{id} form one sub-path (so a hole is a
-separate \code{id}), grouped in first-appearance order \(à la grid\). \code{NULL}
-makes a single sub-path.}
 
 \item{rule}{Fill rule: \code{"winding"} (non-zero, default) or \code{"evenodd"}.}
 

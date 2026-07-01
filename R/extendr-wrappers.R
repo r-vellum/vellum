@@ -30,6 +30,11 @@ rs_attractor <- function(kind, n, a, b, c, d, x0, y0) .Call(wrap__rs_attractor, 
 #'per grob; the R side assigns ids in paint order). See `hit_test`.
 #'}
 #'
+#'\subsection{Method `set_meta`}{
+#'Set the semantic metadata applied to subsequently-emitted primitives (one
+#'per grob). Empty strings clear a field. Emitted by vector backends.
+#'}
+#'
 #'\subsection{Method `push_viewport`}{
 #'Push a viewport as a child of the current one and make it current.
 #'Returns the new viewport's id. If `lrow`/`lcol` are >= 0 the viewport is
@@ -163,16 +168,19 @@ rs_attractor <- function(kind, n, a, b, c, d, x0, y0) .Call(wrap__rs_attractor, 
 #'}
 #'
 #'\subsection{Method `render_png`}{
-#'Render the scene to a PNG file.
+#'Render the scene to a PNG file. Returns any degradation warnings (none for
+#'the raster backend today; uniform with the SVG/PDF signatures).
 #'}
 #'
 #'\subsection{Method `render_svg`}{
 #'Render the scene to an SVG file. `outline_text` emits glyph outlines
 #'instead of selectable `<text>` (pixel-faithful, matches raster/PDF).
+#'Returns any degradation warnings.
 #'}
 #'
 #'\subsection{Method `render_pdf`}{
-#'Render the scene to a PDF file.
+#'Render the scene to a PDF file. Returns any degradation warnings (e.g. a
+#'tiling pattern or mask the PDF walk could not honour).
 #'}
 #'
 #'\subsection{Method `rgba`}{
@@ -184,6 +192,15 @@ rs_attractor <- function(kind, n, a, b, c, d, x0, y0) .Call(wrap__rs_attractor, 
 #'Render and return the tight bounding box of non-transparent content as
 #'`c(min_x, min_y, max_x, max_y)` (device px, inclusive), or an empty vector
 #'if nothing was drawn. Used to measure a grob's extent (grobwidth/height).
+#'}
+#'
+#'\subsection{Method `resolved_geometry`}{
+#'Resolved per-viewport geometry for the debug overlay / `why_size()`. Runs
+#'the layout pass and returns, per viewport (row = viewport id), its parent
+#'id, local pixel size, affine transform (`c(sx, ky, kx, sy, tx, ty)` mapping
+#'local px -> device px), solved layout track edges (local px, plus the
+#'`respect` centering offset), and the device-px bbox of its innermost clip.
+#'R joins this with the viewport names it recorded during compilation.
 #'}
 #'
 #'\subsection{Method `pixel`}{
@@ -203,6 +220,8 @@ Scene <- new.env(parent = emptyenv())
 Scene$new <- function(width, height, dpi, bg) .Call(wrap__Scene__new, width, height, dpi, bg)
 
 Scene$set_pick <- function(id) .Call(wrap__Scene__set_pick, self, id)
+
+Scene$set_meta <- function(id, role, name) .Call(wrap__Scene__set_meta, self, id, role, name)
 
 Scene$push_viewport <- function(cx, cy, w, h, cxu, cyu, wu, hu, xscale, yscale, angle, clip, lrow, lcol, lrowspan, lcolspan, fill, col, lwd, alpha, stroke) .Call(wrap__Scene__push_viewport, self, cx, cy, w, h, cxu, cyu, wu, hu, xscale, yscale, angle, clip, lrow, lcol, lrowspan, lcolspan, fill, col, lwd, alpha, stroke)
 
@@ -269,6 +288,8 @@ Scene$render_pdf <- function(path) .Call(wrap__Scene__render_pdf, self, path)
 Scene$rgba <- function() .Call(wrap__Scene__rgba, self)
 
 Scene$content_bbox <- function() .Call(wrap__Scene__content_bbox, self)
+
+Scene$resolved_geometry <- function() .Call(wrap__Scene__resolved_geometry, self)
 
 Scene$pixel <- function(x, y) .Call(wrap__Scene__pixel, self, x, y)
 

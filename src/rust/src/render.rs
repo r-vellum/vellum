@@ -239,6 +239,21 @@ pub trait RenderBackend {
     {
         self.stroke_path(path, transform, color, stroke, clip);
     }
+
+    /// Collect and clear any degradation warnings accumulated during the walk —
+    /// features this backend could not fully honour (e.g. a PDF tiling pattern it
+    /// had to drop). The render path surfaces these to the user as one R warning.
+    /// Default: none (the backend rendered everything it was asked to).
+    fn take_warnings(&mut self) -> Vec<String> {
+        Vec::new()
+    }
+
+    /// Bracket the next primitive's output with semantic metadata (a pre-formatted
+    /// attribute string, e.g. SVG `data-*`/`role`; empty = none). The SVG backend
+    /// wraps the node in a `<g …>`; raster/PDF ignore it. Always paired with
+    /// `end_node`.
+    fn begin_node(&mut self, _attrs: &str) {}
+    fn end_node(&mut self) {}
 }
 
 /// One unit circle (origin, radius 1) reused with a per-element affine transform.
@@ -875,6 +890,11 @@ pub struct SvgBackend {
     /// When true, text is emitted as filled glyph `<path>` outlines (pixel-faithful,
     /// matching raster/PDF) instead of selectable `<text>` (renderer-shaped).
     outline_text: bool,
+    /// Per-node metadata buffers (`begin_node`/`end_node`): a stack of partial
+    /// buffers that drawing appends to, and a parallel stack of the wrapping `<g>`
+    /// attributes (`None` = this node carried no metadata, so no buffer was pushed).
+    node_stack: Vec<String>,
+    node_open: Vec<Option<String>>,
 }
 
 impl SvgBackend {
@@ -901,6 +921,8 @@ impl SvgBackend {
             next_clip: 0,
             next_grad: 0,
             outline_text,
+            node_stack: Vec::new(),
+            node_open: Vec::new(),
         }
     }
 
@@ -918,12 +940,15 @@ impl SvgBackend {
         id
     }
 
-    /// The buffer currently receiving output: the innermost open group, else the
-    /// document body.
+    /// The buffer currently receiving output: an open per-node metadata buffer
+    /// (innermost), else the innermost open compositing group, else the body.
     fn out(&mut self) -> &mut String {
-        match self.groups.last_mut() {
-            Some(b) => b,
-            None => &mut self.body,
+        if !self.node_stack.is_empty() {
+            self.node_stack.last_mut().unwrap()
+        } else if !self.groups.is_empty() {
+            self.groups.last_mut().unwrap()
+        } else {
+            &mut self.body
         }
     }
 
@@ -1236,6 +1261,25 @@ impl RenderBackend for SvgBackend {
         );
         self.emit(&element, clip);
     }
+
+    // Per-node semantic metadata: route this node's elements into a fresh buffer,
+    // then wrap them in a `<g …>` carrying the attributes. A node with no metadata
+    // pushes `None` (no buffer) so the common case is free of an extra group.
+    fn begin_node(&mut self, attrs: &str) {
+        if attrs.is_empty() {
+            self.node_open.push(None);
+        } else {
+            self.node_stack.push(String::new());
+            self.node_open.push(Some(attrs.to_string()));
+        }
+    }
+
+    fn end_node(&mut self) {
+        if let Some(Some(attrs)) = self.node_open.pop() {
+            let inner = self.node_stack.pop().unwrap_or_default();
+            self.out().push_str(&format!("<g {attrs}>{inner}</g>"));
+        }
+    }
 }
 
 /// Encode a mask raster as an opaque grayscale PNG where each pixel's gray level
@@ -1425,11 +1469,23 @@ pub struct PdfBackend<'a, 'b> {
     /// For each open group, how many `surface.pop()`s `end_group` must issue
     /// (1 if it installed a soft mask, 0 otherwise).
     group_pushes: Vec<usize>,
+    /// Degradation messages: features this PDF walk could not honour (a dropped
+    /// tiling pattern, a skipped mask). Surfaced to the user as one R warning.
+    warnings: Vec<String>,
 }
 
 impl<'a, 'b> PdfBackend<'a, 'b> {
     pub fn new(surface: &'a mut Surface<'b>) -> Self {
-        PdfBackend { surface, fonts: HashMap::new(), group_pushes: Vec::new() }
+        PdfBackend { surface, fonts: HashMap::new(), group_pushes: Vec::new(), warnings: Vec::new() }
+    }
+
+    /// Record a degradation, de-duplicated (the same gap usually recurs across
+    /// many primitives; the user needs to hear it once).
+    fn warn(&mut self, msg: impl Into<String>) {
+        let msg = msg.into();
+        if !self.warnings.contains(&msg) {
+            self.warnings.push(msg);
+        }
     }
 
     /// Fill the page with the background colour (device-px page rect).
@@ -1544,7 +1600,10 @@ impl RenderBackend for PdfBackend<'_, '_> {
                         };
                         (KPaint::from(pat), NormalizedF32::new(opacity.clamp(0.0, 1.0)).unwrap_or(NormalizedF32::ONE))
                     }
-                    _ => return,
+                    _ => {
+                        self.warn("a tiling-pattern fill could not be rendered to PDF (degenerate tile or cell size); the shape was left unfilled");
+                        return;
+                    }
                 }
             }
         };
@@ -1712,6 +1771,8 @@ impl RenderBackend for PdfBackend<'_, '_> {
                 };
                 self.surface.push_mask(KMask::new(stream, KMaskType::Luminosity));
                 pushes += 1;
+            } else {
+                self.warn("a viewport mask could not be applied to PDF (degenerate mask size); the group was drawn unmasked");
             }
         }
         // Group blend: blends the group's content against the backdrop below it.
@@ -1752,6 +1813,10 @@ impl RenderBackend for PdfBackend<'_, '_> {
         let n = self.push_state(place, clip);
         self.surface.draw_image(img, size);
         self.pop_state(n);
+    }
+
+    fn take_warnings(&mut self) -> Vec<String> {
+        std::mem::take(&mut self.warnings)
     }
 }
 

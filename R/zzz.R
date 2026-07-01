@@ -12,4 +12,11 @@
   }))
   # Register S7 methods (compile generic etc.) so dispatch works once installed.
   S7::methods_register()
+  # Default options. `vellum.warn_on_degrade`: warn (once per render) when a
+  # backend cannot fully honour the scene (e.g. a PDF pattern/mask it dropped).
+  op <- options()
+  defaults <- list(vellum.warn_on_degrade = TRUE)
+  toset <- !(names(defaults) %in% names(op))
+  if (any(toset)) options(defaults[toset])
+  invisible()
 }

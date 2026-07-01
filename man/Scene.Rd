@@ -24,6 +24,11 @@ Set the hit-test pick id applied to subsequently-emitted primitives (one
 per grob; the R side assigns ids in paint order). See \code{hit_test}.
 }
 
+\subsection{Method \code{set_meta}}{
+Set the semantic metadata applied to subsequently-emitted primitives (one
+per grob). Empty strings clear a field. Emitted by vector backends.
+}
+
 \subsection{Method \code{push_viewport}}{
 Push a viewport as a child of the current one and make it current.
 Returns the new viewport's id. If \code{lrow}/\code{lcol} are >= 0 the viewport is
@@ -157,16 +162,19 @@ Device resolution in dots per inch.
 }
 
 \subsection{Method \code{render_png}}{
-Render the scene to a PNG file.
+Render the scene to a PNG file. Returns any degradation warnings (none for
+the raster backend today; uniform with the SVG/PDF signatures).
 }
 
 \subsection{Method \code{render_svg}}{
 Render the scene to an SVG file. \code{outline_text} emits glyph outlines
 instead of selectable \verb{<text>} (pixel-faithful, matches raster/PDF).
+Returns any degradation warnings.
 }
 
 \subsection{Method \code{render_pdf}}{
-Render the scene to a PDF file.
+Render the scene to a PDF file. Returns any degradation warnings (e.g. a
+tiling pattern or mask the PDF walk could not honour).
 }
 
 \subsection{Method \code{rgba}}{
@@ -178,6 +186,15 @@ Render and return the whole image as row-major RGBA bytes
 Render and return the tight bounding box of non-transparent content as
 \code{c(min_x, min_y, max_x, max_y)} (device px, inclusive), or an empty vector
 if nothing was drawn. Used to measure a grob's extent (grobwidth/height).
+}
+
+\subsection{Method \code{resolved_geometry}}{
+Resolved per-viewport geometry for the debug overlay / \code{why_size()}. Runs
+the layout pass and returns, per viewport (row = viewport id), its parent
+id, local pixel size, affine transform (\code{c(sx, ky, kx, sy, tx, ty)} mapping
+local px -> device px), solved layout track edges (local px, plus the
+\code{respect} centering offset), and the device-px bbox of its innermost clip.
+R joins this with the viewport names it recorded during compilation.
 }
 
 \subsection{Method \code{pixel}}{

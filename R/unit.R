@@ -16,6 +16,13 @@
 #' construction (text metrics are available device-independently), so a stored
 #' `unit` only ever holds one of the core backend units.
 #'
+#' Arithmetic: `+` and `-` combine two units of the *same* code, or two
+#' *absolute* units (`"mm"`/`"cm"`/`"in"`/`"pt"`), which resolve to `"mm"`
+#' immediately (e.g. `unit(10, "mm") + unit(1, "in")` is `35.4mm`).
+#' `unit * scalar` scales. Mixing a normalised/native unit with an absolute one
+#' (e.g. `unit(1, "npc") - unit(2, "mm")`) is genuinely deferred and errors —
+#' compose such offsets at the viewport/native level or pre-resolve to `"mm"`.
+#'
 #' @param values Numeric vector of magnitudes.
 #' @param units Character vector of unit names, recycled against `values`.
 #' @param data Optional list supplying context for derived units:
@@ -167,18 +174,44 @@ vec_arith.numeric.vellum_unit <- function(op, x, y, ...) {
 #' @export
 #' @method vec_arith.vellum_unit vellum_unit
 vec_arith.vellum_unit.vellum_unit <- function(op, x, y, ...) {
+  if (!op %in% c("+", "-")) {
+    vctrs::stop_incompatible_op(op, x, y)
+  }
   rc <- vctrs::vec_recycle_common(x, y)
   x <- rc[[1L]]
   y <- rc[[2L]]
-  if (!identical(vctrs::field(x, "unit"), vctrs::field(y, "unit"))) {
-    cli::cli_abort("Can only add or subtract {.cls unit}s with the same unit.")
+  xu <- vctrs::field(x, "unit")
+  yu <- vctrs::field(y, "unit")
+  if (identical(xu, yu)) {
+    # Same code on both sides: add/subtract values, keep the code.
+    xv <- vctrs::field(x, "value")
+    yv <- vctrs::field(y, "value")
+    return(new_unit(if (op == "+") xv + yv else xv - yv, xu))
   }
-  u <- vctrs::field(x, "unit")
-  switch(op,
-    "+" = new_unit(vctrs::field(x, "value") + vctrs::field(y, "value"), u),
-    "-" = new_unit(vctrs::field(x, "value") - vctrs::field(y, "value"), u),
-    vctrs::stop_incompatible_op(op, x, y)
-  )
+  # Mixed codes: only resolvable now if *both* sides are absolute (mm/in/pt) —
+  # convert to a common base (mm) and resolve eagerly. Anything else (npc,
+  # native) stays genuinely deferred and is not representable in the flat
+  # (value, code) unit, so it errors. See DESIGN.md §4.2.
+  abs_codes <- unname(.unit_codes[c("mm", "in", "pt")])
+  if (all(xu %in% abs_codes) && all(yu %in% abs_codes)) {
+    xv <- .abs_to_mm(vctrs::field(x, "value"), xu)
+    yv <- .abs_to_mm(vctrs::field(y, "value"), yu)
+    out <- if (op == "+") xv + yv else xv - yv
+    return(new_unit(out, rep(.unit_codes[["mm"]], length(out))))
+  }
+  cli::cli_abort(c(
+    "Can only add or subtract {.cls unit}s with the same unit, or two absolute units ({.val mm}/{.val cm}/{.val in}/{.val pt}).",
+    i = "Compose mixed offsets at the viewport/native level, or pre-resolve to {.val mm}."
+  ))
+}
+
+# Convert an absolute unit vector (codes mm/in/pt) to millimetres, element-wise.
+.abs_to_mm <- function(value, code) {
+  factor <- rep(NA_real_, length(value))
+  factor[code == .unit_codes[["mm"]]] <- 1
+  factor[code == .unit_codes[["in"]]] <- 25.4
+  factor[code == .unit_codes[["pt"]]] <- 25.4 / 72
+  value * factor
 }
 #' @export
 #' @method vec_arith.vellum_unit MISSING
