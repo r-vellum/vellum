@@ -160,6 +160,8 @@ vec_arith.vellum_unit.numeric <- function(op, x, y, ...) {
   switch(op,
     "*" = new_unit(vctrs::field(x, "value") * y, vctrs::field(x, "unit")),
     "/" = new_unit(vctrs::field(x, "value") / y, vctrs::field(x, "unit")),
+    "+" = ,
+    "-" = .abort_unit_scalar(op),
     vctrs::stop_incompatible_op(op, x, y)
   )
 }
@@ -168,8 +170,18 @@ vec_arith.vellum_unit.numeric <- function(op, x, y, ...) {
 vec_arith.numeric.vellum_unit <- function(op, x, y, ...) {
   switch(op,
     "*" = new_unit(x * vctrs::field(y, "value"), vctrs::field(y, "unit")),
+    "+" = ,
+    "-" = .abort_unit_scalar(op),
     vctrs::stop_incompatible_op(op, x, y)
   )
+}
+# `+`/`-` between a unit and a bare number is ambiguous (which unit is the scalar
+# in?), so it errors — but with a hint, not a bare vctrs incompatibility message.
+.abort_unit_scalar <- function(op) {
+  cli::cli_abort(c(
+    "Can't {op} a {.cls unit} and a bare number.",
+    i = "Wrap the number in {.fn unit} (e.g. {.code unit(5, \"mm\") {op} unit(3, \"mm\")}), or scale with {.code *}."
+  ))
 }
 #' @export
 #' @method vec_arith.vellum_unit vellum_unit
@@ -207,6 +219,9 @@ vec_arith.vellum_unit.vellum_unit <- function(op, x, y, ...) {
 
 # Convert an absolute unit vector (codes mm/in/pt) to millimetres, element-wise.
 .abs_to_mm <- function(value, code) {
+  if (length(value) && any(!is.finite(value))) {
+    cli::cli_abort("Can't resolve a {.cls unit} with a non-finite value ({.val NA}/{.val NaN}/{.val Inf}).")
+  }
   factor <- rep(NA_real_, length(value))
   factor[code == .unit_codes[["mm"]]] <- 1
   factor[code == .unit_codes[["in"]]] <- 25.4

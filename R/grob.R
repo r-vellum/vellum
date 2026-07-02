@@ -188,6 +188,17 @@ roundrect_grob <- function(x = 0.5, y = 0.5, width = 1, height = 1, r = 0.1,
   invisible(u)
 }
 
+# A numeric angle/parameter vector must be finite (no NA/NaN/Inf). Non-finite
+# angles otherwise reach the backend and, for arc/sector spans, blow up the
+# segment count (see the render-time clamp in `sector_path`). Named cli error.
+.check_finite_num <- function(v, arg) {
+  v <- as.numeric(v)
+  if (length(v) && any(!is.finite(v))) {
+    cli::cli_abort("{.arg {arg}} must be finite (no {.val NA}/{.val NaN}/{.val Inf}).")
+  }
+  invisible(v)
+}
+
 #' @rdname grob
 #' @param arrow An [arrow()] spec to draw heads on the line/segment ends, or
 #'   `NULL` for none.
@@ -485,6 +496,8 @@ hexagon_grob <- function(x = 0.5, y = 0.5, size = unit(2, "mm"),
 sector_grob <- function(x = 0.5, y = 0.5, r0 = 0, r1 = 0.5, theta0 = 0, theta1 = 2 * pi,
                         fill = NULL, arrow = NULL, gp = gpar(), name = NULL, vp = NULL, id = NULL, role = NULL) {
   n <- .common_n(x, y, r0, r1, theta0, theta1)
+  .check_finite_num(theta0, "theta0")
+  .check_finite_num(theta1, "theta1")
   if (!is.null(fill)) fill <- rep_len(fill, n)
   grob_sector(
     x = vctrs::vec_recycle(as_unit(x), n),
@@ -524,7 +537,8 @@ sector_grob <- function(x = 0.5, y = 0.5, r0 = 0, r1 = 0.5, theta0 = 0, theta1 =
 #' @export
 loop_grob <- function(x = 0.5, y = 0.5, size = unit(4, "mm"), foot = unit(0, "mm"),
                       angle = 0, width = 1, arrow = NULL, gp = gpar(), name = NULL, vp = NULL, id = NULL, role = NULL) {
-  n <- .common_n(x, y, size, foot, angle)
+  n <- .common_n(x, y, size, foot, angle, width)
+  .check_finite_num(angle, "angle")
   sz <- .check_cap(as_unit(size, "mm"), "size")
   ft <- .check_cap(as_unit(foot, "mm"), "foot")
   grob_loop(

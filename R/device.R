@@ -223,10 +223,19 @@ render_grid <- function(x, path, width = 7, height = 7, dpi = 96, bg = "white",
   rep(1L, n)
 }
 
+# Group point indices by `id` in FIRST-APPEARANCE order (grid's convention), so a
+# per-group gpar is recycled across groups in the same order grid draws them.
+# `split()` would reorder by sorted id, mismatching gpar for non-ascending ids.
+.gv_id_groups <- function(id) {
+  ug <- unique(id)
+  lapply(ug, function(u) which(id == u))
+}
+
 .gv_polyline <- function(g, gp, acc) {
   loc <- .gv_xy(g$x, g$y)
   id <- .gv_ids(g, length(loc$x))
-  for (j in seq_along(grp <- split(seq_along(loc$x), id))) {
+  grp <- .gv_id_groups(id)
+  for (j in seq_along(grp)) {
     k <- grp[[j]]
     if (length(k) >= 2L) .gv_emit(acc, lines_grob(.in(loc$x[k]), .in(loc$y[k]), arrow = .gv_arrow(g$arrow), gp = .gv_gpar_at(gp, j)))
   }
@@ -245,7 +254,8 @@ render_grid <- function(x, path, width = 7, height = 7, dpi = 96, bg = "white",
 .gv_polygon <- function(g, gp, acc) {
   loc <- .gv_xy(g$x, g$y)
   id <- .gv_ids(g, length(loc$x))
-  for (j in seq_along(grp <- split(seq_along(loc$x), id))) {
+  grp <- .gv_id_groups(id)
+  for (j in seq_along(grp)) {
     k <- grp[[j]]
     if (length(k) >= 3L) .gv_emit(acc, polygon_grob(.in(loc$x[k]), .in(loc$y[k]), gp = .gv_gpar_at(gp, j)))
   }
@@ -289,7 +299,7 @@ render_grid <- function(x, path, width = 7, height = 7, dpi = 96, bg = "white",
   just <- .gv_just_names(g$just, g$hjust, g$vjust)
   for (idx in .gv_groups(gp, n)) {
     .gv_emit(acc, text_grob(lab[idx], .in(loc$x[idx]), .in(loc$y[idx]), just = just,
-                            rot = rep_len(rot, n)[idx[1]], gp = .gv_gpar_at(gp, idx[1])))
+                            rot = rep_len(rot, n)[idx], gp = .gv_gpar_at(gp, idx[1])))
   }
 }
 

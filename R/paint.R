@@ -276,7 +276,15 @@ print.vellum_mask <- function(x, ...) {
     return(NULL)
   }
   if (is.numeric(x)) {
-    return(as.integer(x))
+    v <- as.integer(x)
+    ok <- unique(unname(table))
+    if (any(is.na(v)) || !all(v %in% ok)) {
+      cli::cli_abort(c(
+        "{.arg {arg}} code must be one of {.val {ok}}.",
+        i = "Or use a name: {.or {names(table)}}."
+      ))
+    }
+    return(v)
   }
   code <- table[match.arg(as.character(x), names(table))]
   unname(as.integer(code))

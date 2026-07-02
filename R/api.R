@@ -227,6 +227,7 @@ draw <- function(scene, grob) {
 #' @param n Number of viewport levels to ascend.
 #' @export
 pop <- function(scene, n = 1) {
+  .check_count(n, "n")
   scene <- .ensure_building(scene)
   bs <- scene@bstate
   k <- length(bs$open)
@@ -235,6 +236,17 @@ pop <- function(scene, n = 1) {
   bs$ocount <- bs$ocount[seq_len(keep)]
   scene@bstate <- .bstate_claim(bs)
   scene
+}
+
+# A count argument must be a single finite number (NA/NaN/Inf, non-scalar, or
+# non-numeric error with a named message). Negative values are tolerated by the
+# caller (clamped) — this only rejects the cases that would fail cryptically
+# downstream (e.g. `seq_len(NA)`). Mirrors `.check_cell`'s style.
+.check_count <- function(n, arg) {
+  if (!is.numeric(n) || length(n) != 1L || !is.finite(n)) {
+    cli::cli_abort("{.arg {arg}} must be a single finite number.")
+  }
+  invisible(n)
 }
 
 #' Coerce an object to a vellum scene
@@ -985,6 +997,16 @@ edit_node <- function(scene, name, ...) {
 .just_to_hv <- function(just) {
   hmap <- c(left = 0, centre = 0.5, center = 0.5, right = 1)
   vmap <- c(bottom = 0, centre = 0.5, center = 0.5, top = 1)
+  # A single vertical-only name ("top"/"bottom") sets vjust and centres h; a single
+  # horizontal-only name sets hjust and centres v (grid's single-`just` semantics).
+  if (length(just) == 1L && is.character(just)) {
+    if (just %in% c("top", "bottom")) {
+      return(c(0.5, .just1(just, vmap)))
+    }
+    if (just %in% c("left", "right")) {
+      return(c(.just1(just, hmap), 0.5))
+    }
+  }
   h <- .just1(just[1], hmap)
   v <- if (length(just) > 1) .just1(just[2], vmap) else 0.5
   c(h, v)
