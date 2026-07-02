@@ -153,6 +153,15 @@ node list as its content, keeping markers and content in sync.
 Close the most recently opened group.
 }
 
+\subsection{Method \code{subraster_start}}{
+Open a repaint boundary for the current subtree, tagged with content id
+\code{nid} (a per-subtree token from R). See \code{Node::SubrasterStart}.
+}
+
+\subsection{Method \code{subraster_end}}{
+Close the most recently opened repaint boundary.
+}
+
 \subsection{Method \code{len}}{
 Number of primitives currently in the scene.
 }

@@ -23,7 +23,8 @@ viewport(
   mask = NULL,
   alpha = NULL,
   blend = NULL,
-  name = NULL
+  name = NULL,
+  cache = FALSE
 )
 
 grid_layout(
@@ -71,6 +72,17 @@ isolated layer) onto the backdrop below it. One of \code{"normal"} (default),
 over-compositing.}
 
 \item{name}{Optional name (for \code{\link[=edit_node]{edit_node()}}).}
+
+\item{cache}{Repaint boundary (\code{TRUE}/\code{FALSE}, default \code{FALSE}). Flag this
+viewport's subtree as a cached sub-raster: on render it is rasterised once to
+its own layer and, on later renders where the subtree is \strong{unchanged}, the
+cached pixels are composited instead of re-drawing the subtree. This makes
+partial redraw cheap — highlight/hover (\code{\link[=edit_node]{edit_node()}} one element and
+re-render) or animation (one subtree changes, others static) re-rasterise
+only what changed. Raster/\code{\link[=display]{display()}} only; SVG/PDF ignore it and render the
+subtree as vector (no fidelity loss). Ignored when the viewport also sets a
+non-normal \code{blend} (a blend needs the live backdrop). See
+\code{\link[=vl_clear_render_cache]{vl_clear_render_cache()}}.}
 
 \item{widths, heights}{Track sizes as a \code{\link[=unit]{unit()}} vector. Use \code{"null"} units for
 flexible tracks that share leftover space in proportion to their value.}

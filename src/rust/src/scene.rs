@@ -21,6 +21,104 @@ use crate::render::{
 };
 
 use crate::color::{opt_color, Gpar, GparAcc, Lty, Paint, PartialGpar, Rgba};
+
+// --- repaint-boundary (FW4c) sub-raster cache -------------------------------
+// Persistent (thread-local, process-lifetime) memo of a `cache = TRUE`
+// viewport's rasterised subtree, keyed on the subtree content-identity token
+// (`nid`, from R) plus everything else that determines the produced pixels given
+// fixed subtree content: the boundary's resolved device transform, a fingerprint
+// of its (rectangular) clip chain, the page size, and the dpi. Mirrors the glyph
+// cache (font.rs). A captured layer is page-sized (position baked), so a moved
+// boundary keys differently and re-renders, while an unchanged, unmoved boundary
+// hits across renders — what makes highlight/animation partial redraw cheap.
+#[derive(PartialEq, Eq, Hash, Clone)]
+struct SubKey {
+    nid: u64,
+    tx: [u32; 6],
+    clip: u64,
+    w: u32,
+    h: u32,
+    dpi: u64,
+}
+
+thread_local! {
+    static SUBRASTER_CACHE: RefCell<HashMap<SubKey, Pixmap>> = RefCell::new(HashMap::new());
+    static SUBRASTER_STATS: RefCell<(i64, i64)> = RefCell::new((0, 0)); // (hits, misses)
+}
+/// Max cached sub-rasters resident at once; each is a page-sized RGBA layer.
+const SUBRASTER_CAP: usize = 32;
+
+// Exact fingerprint of a rectangular clip chain, or `None` if the chain contains
+// an arbitrary *path* clip. A path-clipped boundary is left uncached (rendered
+// inline) rather than risk a fingerprint collision — path-clipped repaint
+// boundaries are a rare edge and correctness beats the optimisation there.
+fn rect_clip_fingerprint(shapes: &[ClipShape]) -> Option<u64> {
+    use std::hash::{Hash, Hasher};
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    for s in shapes {
+        match s {
+            ClipShape::Rect { w, h, transform } => {
+                0u8.hash(&mut hasher);
+                w.to_bits().hash(&mut hasher);
+                h.to_bits().hash(&mut hasher);
+                for f in [transform.sx, transform.ky, transform.kx, transform.sy, transform.tx, transform.ty] {
+                    f.to_bits().hash(&mut hasher);
+                }
+            }
+            ClipShape::Path { .. } => return None, // uncacheable boundary
+        }
+    }
+    Some(hasher.finish())
+}
+
+fn subraster_key(nid: f64, t: &Transform, clip: &[ClipShape], w: u32, h: u32, dpi: f64) -> Option<SubKey> {
+    Some(SubKey {
+        nid: nid.to_bits(),
+        tx: [t.sx.to_bits(), t.ky.to_bits(), t.kx.to_bits(), t.sy.to_bits(), t.tx.to_bits(), t.ty.to_bits()],
+        clip: rect_clip_fingerprint(clip)?,
+        w,
+        h,
+        dpi: dpi.to_bits(),
+    })
+}
+
+fn subraster_get(key: &SubKey) -> Option<Pixmap> {
+    SUBRASTER_CACHE.with(|c| {
+        let hit = c.borrow().get(key).cloned();
+        SUBRASTER_STATS.with(|s| {
+            let mut st = s.borrow_mut();
+            if hit.is_some() {
+                st.0 += 1;
+            } else {
+                st.1 += 1;
+            }
+        });
+        hit
+    })
+}
+
+fn subraster_put(key: SubKey, pm: Pixmap) {
+    SUBRASTER_CACHE.with(|c| {
+        let mut m = c.borrow_mut();
+        if m.len() >= SUBRASTER_CAP {
+            m.clear(); // crude memory backstop, like the glyph/shape caches
+        }
+        m.insert(key, pm);
+    });
+}
+
+/// Empty the repaint-boundary sub-raster cache and reset its hit/miss counters.
+pub fn clear_subraster_cache() {
+    SUBRASTER_CACHE.with(|c| c.borrow_mut().clear());
+    SUBRASTER_STATS.with(|s| *s.borrow_mut() = (0, 0));
+}
+
+/// `c(hits, misses, resident_entries)` for the sub-raster cache (tests/diagnostics).
+pub fn subraster_stats() -> Vec<i64> {
+    let (h, m) = SUBRASTER_STATS.with(|s| *s.borrow());
+    let len = SUBRASTER_CACHE.with(|c| c.borrow().len()) as i64;
+    vec![h, m, len]
+}
 use crate::units::{rotation_about, Unit, Vp};
 
 // --- layout ----------------------------------------------------------------
@@ -338,6 +436,14 @@ enum Node {
     GroupStart { mask: Option<usize>, alpha: f32, blend: BlendKind },
     /// Closes the layer and composites it.
     GroupEnd,
+    /// Opens a repaint boundary (paired with `SubrasterEnd`): the raster backend
+    /// caches the enclosed subtree's rasterisation keyed on `nid` (a per-subtree
+    /// content-identity token from R) plus the boundary's resolved transform/clip
+    /// and page size/dpi, and reuses it on later renders when unchanged. Vector
+    /// backends ignore it and render the subtree inline (staying vector).
+    SubrasterStart { nid: f64 },
+    /// Closes the repaint boundary; the captured layer is memoised and composited.
+    SubrasterEnd,
 }
 
 impl Node {
@@ -357,7 +463,8 @@ impl Node {
             | Node::Loop { gp, .. }
             | Node::Path { gp, .. }
             | Node::Text { gp, .. } => gp,
-            Node::Image { .. } | Node::GroupStart { .. } | Node::GroupEnd => {
+            Node::Image { .. } | Node::GroupStart { .. } | Node::GroupEnd
+            | Node::SubrasterStart { .. } | Node::SubrasterEnd => {
                 unreachable!("handled before gpar resolution")
             }
         }
@@ -1029,6 +1136,17 @@ impl Scene {
         self.emit_node(Node::GroupEnd);
     }
 
+    /// Open a repaint boundary for the current subtree, tagged with content id
+    /// `nid` (a per-subtree token from R). See `Node::SubrasterStart`.
+    fn subraster_start(&mut self, nid: f64) {
+        self.emit_node(Node::SubrasterStart { nid });
+    }
+
+    /// Close the most recently opened repaint boundary.
+    fn subraster_end(&mut self) {
+        self.emit_node(Node::SubrasterEnd);
+    }
+
     /// Number of primitives currently in the scene.
     fn len(&self) -> i32 {
         self.nodes.len() as i32
@@ -1414,7 +1532,8 @@ impl Scene {
                         pm.stroke_path(&p, &paint, &st, t, mask.as_ref());
                     }
                 }
-                Node::GroupStart { .. } | Node::GroupEnd => {}
+                Node::GroupStart { .. } | Node::GroupEnd
+                | Node::SubrasterStart { .. } | Node::SubrasterEnd => {}
             }
         }
         match pm.pixel(x as u32, y as u32) {
@@ -1667,7 +1786,21 @@ impl Scene {
     /// `begin_node`/`end_node` so vector backends can attach semantic attributes
     /// (mask content is drawn without metadata).
     fn render_nodes<B: RenderBackend>(&self, b: &mut B, resolved: &[ResolvedVp], nodes: &[(usize, Node)], meta: Option<&[NodeMeta]>) {
+        // Repaint-boundary state (raster backend only): `skip_depth > 0` means we
+        // are skipping a cached subtree whose pixels were already composited from
+        // the cache; `sub_stack` holds, per open (miss) boundary, its cache key —
+        // or `None` for a path-clipped boundary rendered inline (see subraster_key).
+        let mut skip_depth = 0usize;
+        let mut sub_stack: Vec<Option<SubKey>> = Vec::new();
         for (i, (vp_id, node)) in nodes.iter().enumerate() {
+            if skip_depth > 0 {
+                match node {
+                    Node::SubrasterStart { .. } => skip_depth += 1,
+                    Node::SubrasterEnd => skip_depth -= 1,
+                    _ => {}
+                }
+                continue;
+            }
             let attrs = meta
                 .and_then(|m| m.get(i))
                 .filter(|md| !md.is_empty())
@@ -1675,6 +1808,36 @@ impl Scene {
                 .unwrap_or_default();
             let has_meta = !attrs.is_empty();
             match node {
+                Node::SubrasterStart { nid } => {
+                    // Vector backends ignore the boundary (render subtree inline).
+                    if b.caches_subrasters() {
+                        let rv = &resolved[*vp_id];
+                        match subraster_key(*nid, &rv.vp.transform, &rv.clip_chain, self.w_px, self.h_px, self.dpi) {
+                            None => sub_stack.push(None), // path-clipped: inline, no capture
+                            Some(key) => {
+                                if let Some(pm) = subraster_get(&key) {
+                                    b.composite_subraster(&pm); // hit: reuse; skip the subtree
+                                    skip_depth = 1;
+                                } else {
+                                    b.subraster_begin(); // miss: capture into a fresh layer
+                                    sub_stack.push(Some(key));
+                                }
+                            }
+                        }
+                    }
+                    continue;
+                }
+                Node::SubrasterEnd => {
+                    if b.caches_subrasters() {
+                        if let Some(Some(key)) = sub_stack.pop() {
+                            if let Some(pm) = b.subraster_end() {
+                                subraster_put(key, pm.clone());
+                                b.composite_subraster(&pm);
+                            }
+                        }
+                    }
+                    continue;
+                }
                 Node::GroupStart { mask, alpha, blend } => {
                     let ml = mask.and_then(|m| self.masks.get(m)).map(|md| {
                         let mut mb = RasterBackend::new(self.w_px, self.h_px, Rgba { r: 0, g: 0, b: 0, a: 0 });
@@ -2198,7 +2361,8 @@ impl Scene {
                         fill_then_stroke(b, &path, &gp, t, &clip, vp, rule);
                     }
                 }
-                Node::Image { .. } | Node::GroupStart { .. } | Node::GroupEnd => unreachable!("handled above"),
+                Node::Image { .. } | Node::GroupStart { .. } | Node::GroupEnd
+                | Node::SubrasterStart { .. } | Node::SubrasterEnd => unreachable!("handled above"),
             }
             if has_meta { b.end_node(); }
         }

@@ -11,6 +11,12 @@ rs_backend_info <- function() .Call(wrap__rs_backend_info)
 #' Empty the persistent glyph-outline cache (font bytes + extracted outlines).
 rs_clear_glyph_cache <- function() .Call(wrap__rs_clear_glyph_cache)
 
+#' Empty the repaint-boundary sub-raster cache (FW4c) and reset its counters.
+rs_clear_subraster_cache <- function() .Call(wrap__rs_clear_subraster_cache)
+
+#' Sub-raster cache stats: `c(hits, misses, resident_entries)` (tests/diagnostics).
+rs_subraster_stats <- function() .Call(wrap__rs_subraster_stats)
+
 rs_aggregate_2d <- function(x, y, w, nx, ny, x0, x1, y0, y1) .Call(wrap__rs_aggregate_2d, x, y, w, nx, ny, x0, x1, y0, y1)
 
 rs_attractor <- function(kind, n, a, b, c, d, x0, y0) .Call(wrap__rs_attractor, kind, n, a, b, c, d, x0, y0)
@@ -159,6 +165,15 @@ rs_attractor <- function(kind, n, a, b, c, d, x0, y0) .Call(wrap__rs_attractor, 
 #'Close the most recently opened group.
 #'}
 #'
+#'\subsection{Method `subraster_start`}{
+#'Open a repaint boundary for the current subtree, tagged with content id
+#'`nid` (a per-subtree token from R). See `Node::SubrasterStart`.
+#'}
+#'
+#'\subsection{Method `subraster_end`}{
+#'Close the most recently opened repaint boundary.
+#'}
+#'
 #'\subsection{Method `len`}{
 #'Number of primitives currently in the scene.
 #'}
@@ -278,6 +293,10 @@ Scene$mask_end <- function() .Call(wrap__Scene__mask_end, self)
 Scene$group_start <- function(mask, alpha, blend) .Call(wrap__Scene__group_start, self, mask, alpha, blend)
 
 Scene$group_end <- function() .Call(wrap__Scene__group_end, self)
+
+Scene$subraster_start <- function(nid) .Call(wrap__Scene__subraster_start, self, nid)
+
+Scene$subraster_end <- function() .Call(wrap__Scene__subraster_end, self)
 
 Scene$len <- function() .Call(wrap__Scene__len, self)
 

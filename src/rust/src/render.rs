@@ -192,6 +192,22 @@ pub trait RenderBackend {
     fn begin_group(&mut self, mask: Option<MaskLayer>, alpha: f32, blend: BlendKind);
     fn end_group(&mut self);
 
+    /// Repaint boundaries (FW4c). `caches_subrasters` is `true` only for the
+    /// raster backend; vector backends leave it `false` and render a
+    /// `cache = TRUE` viewport's subtree inline (so SVG/PDF stay vector). When
+    /// `true`, the walk brackets a boundary's subtree with `subraster_begin`
+    /// (push a fresh isolated layer) … `subraster_end` (pop and return it, so the
+    /// walk can memoise it), and composites a cached/captured layer with
+    /// `composite_subraster` (page-sized, at identity — position is baked in).
+    fn caches_subrasters(&self) -> bool {
+        false
+    }
+    fn subraster_begin(&mut self) {}
+    fn subraster_end(&mut self) -> Option<Pixmap> {
+        None
+    }
+    fn composite_subraster(&mut self, _pm: &Pixmap) {}
+
     /// Draw a straight-RGBA image (`iw` x `ih`, top-left origin) into a `w` x `h`
     /// (local px) cell centred at `(x, y)`, mapped to device by `transform`.
     #[allow(clippy::too_many_arguments)]
@@ -794,6 +810,30 @@ impl RenderBackend for RasterBackend {
             ..Default::default()
         };
         self.target().draw_pixmap(0, 0, layer.as_ref(), &paint, Transform::identity(), m.as_ref());
+    }
+
+    // Repaint boundaries: like begin/end_group but without mask/opacity/blend, and
+    // the layer is returned (not composited) so the walk can memoise it and then
+    // composite it here at identity. Source-over compositing is associative, so a
+    // captured-then-composited layer is byte-identical to drawing the subtree inline.
+    fn caches_subrasters(&self) -> bool {
+        true
+    }
+
+    fn subraster_begin(&mut self) {
+        self.targets.push(Pixmap::new(self.w, self.h).expect("non-zero layer dimensions"));
+    }
+
+    fn subraster_end(&mut self) -> Option<Pixmap> {
+        if self.targets.len() <= 1 {
+            return None; // never pop the base page target (unbalanced)
+        }
+        self.targets.pop()
+    }
+
+    fn composite_subraster(&mut self, pm: &Pixmap) {
+        let paint = tiny_skia::PixmapPaint::default();
+        self.target().draw_pixmap(0, 0, pm.as_ref(), &paint, Transform::identity(), None);
     }
 
     fn draw_circles(

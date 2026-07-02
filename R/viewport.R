@@ -32,6 +32,16 @@
 #'   `"luminosity"` (the CSS `mix-blend-mode` set). `NULL`/`"normal"` is ordinary
 #'   over-compositing.
 #' @param name Optional name (for [edit_node()]).
+#' @param cache Repaint boundary (`TRUE`/`FALSE`, default `FALSE`). Flag this
+#'   viewport's subtree as a cached sub-raster: on render it is rasterised once to
+#'   its own layer and, on later renders where the subtree is **unchanged**, the
+#'   cached pixels are composited instead of re-drawing the subtree. This makes
+#'   partial redraw cheap — highlight/hover ([edit_node()] one element and
+#'   re-render) or animation (one subtree changes, others static) re-rasterise
+#'   only what changed. Raster/[display()] only; SVG/PDF ignore it and render the
+#'   subtree as vector (no fidelity loss). Ignored when the viewport also sets a
+#'   non-normal `blend` (a blend needs the live backdrop). See
+#'   [vl_clear_render_cache()].
 #' @return A `viewport` object.
 #' @examples
 #' viewport(xscale = c(0, 10), yscale = c(0, 100))
@@ -40,7 +50,8 @@ viewport <- function(x = 0.5, y = 0.5, width = 1, height = 1,
                      xscale = c(0, 1), yscale = c(0, 1), angle = 0, clip = FALSE,
                      gp = gpar(), layout = NULL,
                      row = NULL, col = NULL, rowspan = 1, colspan = 1,
-                     mask = NULL, alpha = NULL, blend = NULL, name = NULL) {
+                     mask = NULL, alpha = NULL, blend = NULL, name = NULL,
+                     cache = FALSE) {
   .check_cell <- function(v, arg) {
     if (!is.null(v) && (length(v) != 1L || is.na(v) || v < 1)) {
       cli::cli_abort("{.arg {arg}} must be a single positive integer (1-based) or NULL.")
@@ -54,12 +65,15 @@ viewport <- function(x = 0.5, y = 0.5, width = 1, height = 1,
   if (!is.null(blend)) {
     blend <- match.arg(as.character(blend), names(.blend_codes))
   }
+  if (length(cache) != 1L || is.na(cache) || !is.logical(cache)) {
+    cli::cli_abort("{.arg cache} must be a single {.cls logical}.")
+  }
   class_viewport(
     x = as_unit(x), y = as_unit(y), width = as_unit(width), height = as_unit(height),
     xscale = as.numeric(xscale), yscale = as.numeric(yscale),
     angle = as.numeric(angle), clip = clip, gp = gp, layout = layout,
     row = row, col = col, rowspan = as.integer(rowspan), colspan = as.integer(colspan),
-    mask = mask, alpha = alpha, blend = blend, name = name
+    mask = mask, alpha = alpha, blend = blend, name = name, cache = cache
   )
 }
 
@@ -90,7 +104,8 @@ class_viewport <- S7::new_class(
     mask = S7::new_property(S7::class_any, default = NULL),
     alpha = S7::new_property(S7::class_any, default = NULL),
     blend = S7::new_property(S7::class_any, default = NULL),
-    name = S7::new_property(S7::class_any, default = NULL)
+    name = S7::new_property(S7::class_any, default = NULL),
+    cache = S7::new_property(S7::class_logical, default = FALSE)
   )
 )
 

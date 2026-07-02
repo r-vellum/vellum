@@ -19,6 +19,18 @@ fn rs_clear_glyph_cache() {
     font::clear_glyph_cache();
 }
 
+/// Empty the repaint-boundary sub-raster cache (FW4c) and reset its counters.
+#[extendr]
+fn rs_clear_subraster_cache() {
+    scene::clear_subraster_cache();
+}
+
+/// Sub-raster cache stats: `c(hits, misses, resident_entries)` (tests/diagnostics).
+#[extendr]
+fn rs_subraster_stats() -> Vec<i32> {
+    scene::subraster_stats().into_iter().map(|v| v as i32).collect()
+}
+
 // Macro to generate exports.
 // This ensures exported functions are registered with R.
 // See corresponding C code in `entrypoint.c`.
@@ -26,6 +38,8 @@ extendr_module! {
     mod vellum;
     fn rs_backend_info;
     fn rs_clear_glyph_cache;
+    fn rs_clear_subraster_cache;
+    fn rs_subraster_stats;
     use scene;
     use aggregate;
 }

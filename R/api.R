@@ -4,11 +4,17 @@ NULL
 # --- containers -------------------------------------------------------------
 
 # A named subtree: its own viewport plus ordered children (grobs / gtrees).
+# `nid` is a per-subtree content-identity token (see `.new_scene_id`) used by the
+# repaint-boundary sub-raster cache (FW4c): it is stamped at materialisation and
+# re-stamped for every node on an `edit_node` path, so an unchanged subtree keeps
+# its `nid` across an edit (structural sharing) while a changed one gets a fresh
+# one. `NULL` -> the subtree is not sub-raster-cacheable.
 gtree <- S7::new_class(
   "gtree", parent = grob, package = "vellum",
   properties = list(
     vp = S7::new_property(S7::class_any, default = NULL),
-    children = S7::new_property(S7::class_list, default = list())
+    children = S7::new_property(S7::class_list, default = list()),
+    nid = S7::new_property(S7::class_any, default = NULL)
   )
 )
 
@@ -106,7 +112,9 @@ vellum_scene <- S7::new_class(
     nd <- if (!is.null(nextnode) && identical(ch, nextnode)) depth + 1L else NA_integer_
     .bnode_to_gtree(ch, open, ocount, nd)
   })
-  gtree(name = node$vp@name, vp = node$vp, children = children)
+  # Stamp a per-subtree identity token (FW4c). Memoised with the tree by
+  # `.materialize_cached`, so it is stable across renders at a fixed scene cid.
+  gtree(name = node$vp@name, vp = node$vp, children = children, nid = .new_scene_id())
 }
 # Reopen an immutable gtree into a build tree (for drawing after edit/render).
 .gtree_to_bnode <- function(g) {
@@ -530,13 +538,15 @@ S7::method(plot, vellum_scene) <- function(x, y, ...) {
   root
 }
 
-# Empty both memos and reset counters/LRU order.
+# Empty both memos and reset counters/LRU order, plus the Rust repaint-boundary
+# sub-raster cache (FW4c).
 .render_cache_reset <- function() {
   rm(list = ls(.render_cache, all.names = TRUE), envir = .render_cache)
   rm(list = ls(.mtl_cache, all.names = TRUE), envir = .mtl_cache)
   .render_cache$.order <- character(0)
   .render_cache$.hits <- 0L
   .render_cache$.misses <- 0L
+  rs_clear_subraster_cache()
   invisible()
 }
 
@@ -563,18 +573,22 @@ vl_clear_render_cache <- function() {
 # scene's object-identity token. A single render costs one O(1) key lookup + one
 # compile; a repeat of the same content at the same device size reuses the
 # compiled Scene (and, via the Scene's own lazy pixmap memo, its rasterisation).
-.scene_to_backend <- function(scene, debug = FALSE) {
-  # Read the id from whichever carrier is active, requiring the "exactly one of
-  # bstate/root" invariant to hold — a scene with both set (or neither) has been
-  # mutated outside the builder API (a raw `set_props(root=)`), so it is not
-  # trustworthy: return NULL and render it fresh rather than risk a stale hit.
-  cid <- if (!is.null(scene@bstate) && is.null(scene@root)) {
+# The scene's content-identity token, or NULL if it is not cacheable. Requires
+# the "exactly one of bstate/root" invariant to hold — a scene with both set (or
+# neither) has been mutated outside the builder API (a raw `set_props(root=)`), so
+# it is untrustworthy: NULL, render it fresh rather than risk a stale hit.
+.scene_cid <- function(scene) {
+  if (!is.null(scene@bstate) && is.null(scene@root)) {
     scene@bstate$cid
   } else if (is.null(scene@bstate) && !is.null(scene@root)) {
     scene@cid
   } else {
     NULL
   }
+}
+
+.scene_to_backend <- function(scene, debug = FALSE) {
+  cid <- .scene_cid(scene)
   # Bypass for debug overlays, when disabled, or when the scene carries no id
   # (foreign-built / raw `set_props`) — compute fresh rather than risk a stale
   # hit. Absent id => never cached (fail-safe), so it can only under-hit.
@@ -855,6 +869,14 @@ S7::method(compile, gtree) <- function(node, scene) {
   alpha <- if (!is.null(node@vp)) node@vp@alpha else NULL
   blend <- if (!is.null(node@vp)) node@vp@blend else NULL
   blend_code <- if (is.null(blend)) 0L else .blend_codes[[blend]]
+  # Repaint boundary (FW4c): bracket the subtree so the raster backend can cache
+  # its sub-raster, keyed on the subtree `nid`. Requires a normal blend (a blend
+  # composites against the live backdrop, which a captured transparent layer
+  # lacks) and a known nid (a cacheable scene). Ignored by SVG/PDF (they render
+  # the subtree as vector). The bracket is outermost, so it captures whatever the
+  # subtree draws, including its own mask/opacity group compositing below.
+  cached <- !is.null(node@vp) && isTRUE(node@vp@cache) && blend_code == 0L && !is.null(node@nid)
+  if (cached) scene$subraster_start(node@nid)
   # A group (isolated layer) is needed for a mask, a sub-1 group opacity, and/or a
   # non-normal blend mode.
   if (!is.null(mask) || (!is.null(alpha) && alpha < 1) || blend_code != 0L) {
@@ -872,6 +894,7 @@ S7::method(compile, gtree) <- function(node, scene) {
   } else {
     for (child in node@children) compile(child, scene)
   }
+  if (cached) scene$subraster_end()
   scene$pop_viewport(1L)
 }
 
@@ -970,7 +993,9 @@ get_node <- function(scene, name) {
 #' @rdname node_names
 #' @export
 edit_node <- function(scene, name, ...) {
-  root <- .materialize(scene)
+  # Reuse the memoised materialised tree (same gtree objects, so unchanged
+  # subtrees keep their `nid` across the edit -> repaint-boundary cache hits).
+  root <- .materialize_cached(scene, .scene_cid(scene))
   p <- .find_path(root, name)
   if (is.null(p)) cli::cli_abort("No node named {.val {name}}.")
   # Return an immutable (materialised) scene; the builder env is untouched. The
@@ -1186,9 +1211,16 @@ edit_node <- function(scene, name, ...) {
   .get_at(node@children[[path[[1]]]], path[-1])
 }
 .modify_at <- function(node, path, f) {
-  if (length(path) == 0L) return(f(node))
+  if (length(path) == 0L) return(.restamp_nid(f(node)))
   i <- path[[1]]
   node@children[[i]] <- .modify_at(node@children[[i]], path[-1], f)
+  # Re-stamp every rebuilt gtree on the path (its subtree content changed), so a
+  # cached repaint boundary on/above the edit invalidates while unchanged
+  # off-path siblings keep their `nid` (structural sharing) and stay cached.
+  .restamp_nid(node)
+}
+.restamp_nid <- function(node) {
+  if (S7::S7_inherits(node, gtree)) node@nid <- .new_scene_id()
   node
 }
 .find_path <- function(node, name) {
