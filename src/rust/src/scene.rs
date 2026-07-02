@@ -308,6 +308,9 @@ enum Node {
         x: Vec<f64>, y: Vec<f64>, xu: Vec<Unit>, yu: Vec<Unit>,
         size: Vec<f64>, su: Vec<Unit>, foot: Vec<f64>, fu: Vec<Unit>,
         angle: Vec<f64>,
+        /// Lateral petal scale (dimensionless, per element): multiplies the
+        /// teardrop's half-width so a loop can be narrowed without shortening it.
+        width: Vec<f64>,
         arrow: Option<Arrow>,
         gp: PartialGpar,
     },
@@ -791,7 +794,7 @@ impl Scene {
     /// A batch of self-loops (cubic-Bézier teardrops). See `Node::Loop`.
     #[allow(clippy::too_many_arguments)]
     fn add_loop(
-        &mut self, x: &[f64], y: &[f64], size: &[f64], foot: &[f64], angle: &[f64],
+        &mut self, x: &[f64], y: &[f64], size: &[f64], foot: &[f64], angle: &[f64], width: &[f64],
         xu: &[i32], yu: &[i32], su: &[i32], fu: &[i32],
         col: Robj, lwd: Robj, alpha: Robj, stroke: Robj,
         aangle: f64, alen: f64, aends: i32, aclosed: bool,
@@ -800,7 +803,7 @@ impl Scene {
         self.emit_node(Node::Loop {
             x: x.to_vec(), y: y.to_vec(), xu: codes(xu), yu: codes(yu),
             size: size.to_vec(), su: codes(su), foot: foot.to_vec(), fu: codes(fu),
-            angle: angle.to_vec(),
+            angle: angle.to_vec(), width: width.to_vec(),
             arrow: arrow_from(aangle, alen, aends, aclosed), gp,
         });
     }
@@ -1374,13 +1377,13 @@ impl Scene {
                         pm.stroke_path(&p, &paint, &st, t, mask.as_ref());
                     }
                 }
-                Node::Loop { x, y, xu, yu, size, su, foot, fu, angle, .. } => {
+                Node::Loop { x, y, xu, yu, size, su, foot, fu, angle, width, .. } => {
                     let n = [x.len(), y.len(), xu.len(), yu.len(), size.len(), su.len(),
-                             foot.len(), fu.len(), angle.len()].into_iter().min().unwrap_or(0);
+                             foot.len(), fu.len(), angle.len(), width.len()].into_iter().min().unwrap_or(0);
                     let mut pb = PathBuilder::new();
                     for k in 0..n {
                         let (cx, cy) = (vp.x_pos(x[k], xu[k]), vp.y_pos(y[k], yu[k]));
-                        let cp = loop_control_points(cx, cy, vp.x_len(size[k], su[k]), vp.x_len(foot[k], fu[k]), angle[k]);
+                        let cp = loop_control_points(cx, cy, vp.x_len(size[k], su[k]), vp.x_len(foot[k], fu[k]), angle[k], width[k]);
                         pb.move_to(cp[0].0, cp[0].1);
                         pb.cubic_to(cp[1].0, cp[1].1, cp[2].0, cp[2].1, cp[3].0, cp[3].1);
                     }
@@ -2086,11 +2089,11 @@ impl Scene {
                         }
                     }
                 }
-                Node::Loop { x, y, xu, yu, size, su, foot, fu, angle, arrow, .. } => {
+                Node::Loop { x, y, xu, yu, size, su, foot, fu, angle, width, arrow, .. } => {
                     if let Some(col) = gp.col {
                         let style = stroke_style(&gp, vp.dpi);
                         let n = [x.len(), y.len(), xu.len(), yu.len(), size.len(), su.len(),
-                                 foot.len(), fu.len(), angle.len()].into_iter().min().unwrap_or(0);
+                                 foot.len(), fu.len(), angle.len(), width.len()].into_iter().min().unwrap_or(0);
                         let mut ends: Vec<(f32, f32, f64, f64)> = Vec::new();
                         for i in 0..n {
                             let cx = vp.x_pos(x[i], xu[i]);
@@ -2100,7 +2103,7 @@ impl Scene {
                             }
                             let s = vp.x_len(size[i], su[i]); // mm -> device px
                             let f = vp.x_len(foot[i], fu[i]);
-                            let cp = loop_control_points(cx, cy, s, f, angle[i]);
+                            let cp = loop_control_points(cx, cy, s, f, angle[i], width[i]);
                             if style.width > 0.0 {
                                 let mut pb = PathBuilder::new();
                                 pb.move_to(cp[0].0, cp[0].1);
@@ -2465,18 +2468,20 @@ fn offset_polyline(pts: &mut [(f32, f32)], o: f64) {
 /// The four device-px control points of a self-loop's cubic-Bézier teardrop
 /// (igraph's `loop()` shape): it leaves and re-enters the vertex `(cx, cy)`,
 /// bulging out to extent `s` along `angle` (radians), with the two feet placed on
-/// the node boundary at radius `foot` (0 = both at the vertex). Control points in
+/// the node boundary at radius `foot` (0 = both at the vertex). `width` scales only
+/// the lateral (perpendicular) component of the lobes, narrowing the petal's waist
+/// without changing its length (`width = 1` is the full teardrop). Control points in
 /// the local frame (axis = +x) — feet along the ±lobe direction, lobes at igraph's
-/// `(0.4s, ±0.2s)` — are rotated by `angle` about the vertex and translated to it.
-fn loop_control_points(cx: f64, cy: f64, s: f64, foot: f64, angle: f64) -> [(f32, f32); 4] {
+/// `(0.4s, ±0.2s·width)` — are rotated by `angle` about the vertex and translated to it.
+fn loop_control_points(cx: f64, cy: f64, s: f64, foot: f64, angle: f64, width: f64) -> [(f32, f32); 4] {
     // Unit direction of the lobe (0.4, 0.2): the feet sit on the boundary there.
     let inv = 1.0 / (0.4f64 * 0.4 + 0.2 * 0.2).sqrt();
     let (fdx, fdy) = (0.4 * inv, 0.2 * inv);
     let local = [
-        (foot * fdx, foot * fdy),  // P0 — leaving foot
-        (0.4 * s, 0.2 * s),        // P1
-        (0.4 * s, -0.2 * s),       // P2
-        (foot * fdx, -foot * fdy), // P3 — returning foot
+        (foot * fdx, foot * fdy),   // P0 — leaving foot
+        (0.4 * s, 0.2 * s * width), // P1 — lateral offset scaled by width
+        (0.4 * s, -0.2 * s * width),// P2
+        (foot * fdx, -foot * fdy),  // P3 — returning foot
     ];
     let (ca, sa) = (angle.cos(), angle.sin());
     let mut out = [(0.0f32, 0.0f32); 4];

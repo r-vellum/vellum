@@ -259,7 +259,7 @@ Scene$sectors <- function(x, y, r0, r1, theta0, theta1, xu, yu, r0u, r1u, fill, 
 
 Scene$segments <- function(x0, y0, x1, y1, x0u, y0u, x1u, y1u, scap, ecap, scapu, ecapu, off, offu, col, lwd, alpha, stroke, aangle, alen, aends, aclosed) .Call(wrap__Scene__segments, self, x0, y0, x1, y1, x0u, y0u, x1u, y1u, scap, ecap, scapu, ecapu, off, offu, col, lwd, alpha, stroke, aangle, alen, aends, aclosed)
 
-Scene$add_loop <- function(x, y, size, foot, angle, xu, yu, su, fu, col, lwd, alpha, stroke, aangle, alen, aends, aclosed) .Call(wrap__Scene__add_loop, self, x, y, size, foot, angle, xu, yu, su, fu, col, lwd, alpha, stroke, aangle, alen, aends, aclosed)
+Scene$add_loop <- function(x, y, size, foot, angle, width, xu, yu, su, fu, col, lwd, alpha, stroke, aangle, alen, aends, aclosed) .Call(wrap__Scene__add_loop, self, x, y, size, foot, angle, width, xu, yu, su, fu, col, lwd, alpha, stroke, aangle, alen, aends, aclosed)
 
 Scene$path <- function(x, y, xu, yu, nper, evenodd, fill, col, lwd, alpha, stroke) .Call(wrap__Scene__path, self, x, y, xu, yu, nper, evenodd, fill, col, lwd, alpha, stroke)
 

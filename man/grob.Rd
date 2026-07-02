@@ -144,6 +144,7 @@ loop_grob(
   size = unit(4, "mm"),
   foot = unit(0, "mm"),
   angle = 0,
+  width = 1,
   arrow = NULL,
   gp = gpar(),
   name = NULL,
@@ -317,6 +318,12 @@ keeps hard pixel edges.}
 \code{"right"}, \code{"bottom"}, \code{"top"}) or numbers in \verb{[0, 1]}.}
 
 \item{rot}{Rotation in degrees, counter-clockwise.}
+
+\item{width}{Lateral petal scale, a dimensionless ratio in \verb{(0, 1]} (recycled per
+loop). \code{1} (default) is the full teardrop; smaller values narrow the petal's
+\strong{waist} without shortening it (its \code{angle}-wise bulge stays \code{0.3 * size}), so
+several loops crammed into a tight angular gap on one vertex stay skinny enough
+not to overlap — the igraph "narrowing" factor.}
 }
 \value{
 A grob object.

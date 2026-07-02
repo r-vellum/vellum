@@ -118,6 +118,7 @@ grob_loop <- S7::new_class("grob_loop", parent = grob, package = "vellum",
     x = .unit_prop(), y = .unit_prop(),
     size = .unit_prop("unit(4, \"mm\")"), foot = .unit_prop("unit(0, \"mm\")"),
     angle = S7::new_property(S7::class_double, default = 0),
+    width = S7::new_property(S7::class_double, default = 1),
     arrow = S7::new_property(S7::class_any, default = NULL)
   ))
 grob_path <- S7::new_class("grob_path", parent = grob, package = "vellum",
@@ -508,6 +509,11 @@ sector_grob <- function(x = 0.5, y = 0.5, r0 = 0, r1 = 0.5, theta0 = 0, theta1 =
 #'   the marker. Recycled per loop.
 #' @param angle Outward direction of the loop in **radians** (which way the teardrop
 #'   bulges away from the vertex, e.g. away from the layout centroid).
+#' @param width Lateral petal scale, a dimensionless ratio in `(0, 1]` (recycled per
+#'   loop). `1` (default) is the full teardrop; smaller values narrow the petal's
+#'   **waist** without shortening it (its `angle`-wise bulge stays `0.3 * size`), so
+#'   several loops crammed into a tight angular gap on one vertex stay skinny enough
+#'   not to overlap — the igraph "narrowing" factor.
 #' @details
 #' `loop_grob()` draws **self-loops** for node-link diagrams as an igraph-style cubic
 #' **Bézier teardrop**: it leaves the vertex `(x, y)` (a `"native"` anchor), bulges
@@ -517,7 +523,7 @@ sector_grob <- function(x = 0.5, y = 0.5, r0 = 0, r1 = 0.5, theta0 = 0, theta1 =
 #' mm node markers — no native-per-mm estimation, exact at any figure size/dpi.
 #' @export
 loop_grob <- function(x = 0.5, y = 0.5, size = unit(4, "mm"), foot = unit(0, "mm"),
-                      angle = 0, arrow = NULL, gp = gpar(), name = NULL, vp = NULL, id = NULL, role = NULL) {
+                      angle = 0, width = 1, arrow = NULL, gp = gpar(), name = NULL, vp = NULL, id = NULL, role = NULL) {
   n <- .common_n(x, y, size, foot, angle)
   sz <- .check_cap(as_unit(size, "mm"), "size")
   ft <- .check_cap(as_unit(foot, "mm"), "foot")
@@ -527,6 +533,7 @@ loop_grob <- function(x = 0.5, y = 0.5, size = unit(4, "mm"), foot = unit(0, "mm
     size = vctrs::vec_recycle(sz, n),
     foot = vctrs::vec_recycle(ft, n),
     angle = vctrs::vec_recycle(as.numeric(angle), n),
+    width = vctrs::vec_recycle(as.numeric(width), n),
     arrow = arrow, gp = gp, name = name, vp = vp, id = id, role = role
   )
 }

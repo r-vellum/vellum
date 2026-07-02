@@ -79,6 +79,57 @@ test_that("a positive foot lifts the feet off the vertex onto the boundary", {
   expect_false(at_vertex(unit(8, "mm")))
 })
 
+# Max inked extent of a loop, measured along the loop axis (`along = TRUE`) and
+# perpendicular to it (`along = FALSE`), relative to the centre. For angle = 0 the
+# axis is +x, so `along` scans row cy and perpendicular scans the y-spread.
+extent <- function(s, w, along) {
+  c0 <- as.integer(w / 2)
+  devs <- integer(0)
+  for (x in 1:(w - 1)) for (y in 1:(w - 1)) {
+    if (px(s, x, y)[1] < 128L) {
+      devs <- c(devs, if (along) x - c0 else abs(y - c0))
+    }
+  }
+  if (length(devs)) max(devs) else NA_integer_
+}
+
+test_that("width narrows the petal's waist without shortening it", {
+  full <- vl_scene(3, 3, dpi = 100, bg = "white") |>
+    draw(loop_grob(0.5, 0.5, size = unit(24, "mm"), angle = 0, width = 1,
+                   gp = gpar(col = "black", lwd = 2)))
+  thin <- vl_scene(3, 3, dpi = 100, bg = "white") |>
+    draw(loop_grob(0.5, 0.5, size = unit(24, "mm"), angle = 0, width = 0.3,
+                   gp = gpar(col = "black", lwd = 2)))
+  # Length along the axis is unchanged (~0.3*size); lateral spread scales ~width.
+  expect_equal(extent(thin, 300, along = TRUE), extent(full, 300, along = TRUE), tolerance = 0.1)
+  expect_lt(extent(thin, 300, along = FALSE), extent(full, 300, along = FALSE) * 0.55)
+})
+
+test_that("vector width narrows each loop in a batch independently", {
+  s <- vl_scene(3, 3, dpi = 100, bg = "white") |>
+    draw(loop_grob(x = c(0.25, 0.75), y = c(0.5, 0.5), size = unit(16, "mm"),
+                   angle = 0, width = c(1, 0.25), gp = gpar(col = "black", lwd = 2)))
+  # spread around each vertex (device x = 75 and 225): the second is much skinnier.
+  spread <- function(cx) {
+    devs <- integer(0)
+    for (x in (cx - 30):(cx + 30)) for (y in 100:200) {
+      if (px(s, x, y)[1] < 128L) devs <- c(devs, abs(y - 150))
+    }
+    if (length(devs)) max(devs) else 0L
+  }
+  expect_gt(spread(75), spread(225) * 1.6)
+})
+
+test_that("width = 1 (default) renders byte-for-byte like before", {
+  a <- scene_raster(vl_scene(3, 3, dpi = 100, bg = "white") |>
+    draw(loop_grob(0.5, 0.5, size = unit(20, "mm"), angle = 0.7,
+      arrow = arrow(), gp = gpar(col = "black", lwd = 2))))
+  b <- scene_raster(vl_scene(3, 3, dpi = 100, bg = "white") |>
+    draw(loop_grob(0.5, 0.5, size = unit(20, "mm"), angle = 0.7, width = 1,
+      arrow = arrow(), gp = gpar(col = "black", lwd = 2))))
+  expect_identical(a, b)
+})
+
 test_that("loop_grob requires absolute size/foot", {
   expect_error(loop_grob(0.5, 0.5, size = unit(0.2, "native")), "absolute")
   expect_error(loop_grob(0.5, 0.5, size = unit(-1, "mm")), "non-negative")
