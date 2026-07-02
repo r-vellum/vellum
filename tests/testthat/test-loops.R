@@ -1,66 +1,87 @@
-# Feature B (B2): resolution-independent self-loops. `loop_grob()` / an open-arc
-# `sector_grob()` with an absolute (mm) radius at a "native" centre draws a loop
-# whose size tracks a node's mm radius at any page size/dpi, with an optional
-# arrowhead tangent to the arc end (directed loops). See the vellumplot handover.
+# Feature D: `loop_grob()` draws a self-loop as an igraph-style cubic-Bézier
+# **teardrop** (not a ring), sized in mm at a native anchor and resolved in device
+# space — so it tracks an mm node at any figure size/dpi. See handover-2.
 px <- function(scene, x, y) .scene_to_backend(scene)$pixel(x, y)
 
-# Rightmost inked column on a given device row (radius probe along +x from centre).
-last_ink_x <- function(s, y, w) {
-  hit <- which(vapply(1:(w - 1), function(x) px(s, x, y)[1] < 128L, logical(1)))
-  if (length(hit)) max(hit) else NA_integer_
+# Rightmost inked column relative to the centre, on the centre row of a wxw page.
+reach <- function(s, w) {
+  cy <- as.integer(w / 2)
+  hit <- which(vapply(1:(w - 1), function(x) px(s, x, cy)[1] < 128L, logical(1)))
+  if (length(hit)) max(hit) - w / 2 else NA_integer_
 }
 
-test_that("a loop's mm radius is resolved at a native centre, resolution independent", {
-  # square page; centre native (0.5,0.5) -> device (w/2, w/2); r = 20mm.
-  radius_px <- function(dpi) {
-    w <- as.integer(3 * dpi)
-    s <- vl_scene(3, 3, dpi = dpi, bg = "white") |>
-      draw(loop_grob(0.5, 0.5, r = unit(20, "mm"), theta0 = 0, theta1 = 2 * pi,
-                     gp = gpar(col = "black", lwd = 2)))
-    last_ink_x(s, as.integer(w / 2), w) - w / 2 # arc reaches centre + r along +x
-  }
-  r1 <- radius_px(100)
-  r2 <- radius_px(200)
-  expect_equal(r2 / r1, 2, tolerance = 0.03) # twice the px at twice the dpi
-  expect_equal(r1 / 100 * 25.4, 20, tolerance = 1) # ~20mm physical
-})
-
-test_that("a loop is an open arc: its centre is empty (stroke only)", {
+test_that("a loop is a teardrop through the vertex, not a hollow ring", {
   s <- vl_scene(3, 3, dpi = 100, bg = "white") |>
-    draw(loop_grob(0.5, 0.5, r = unit(20, "mm"), theta0 = 0, theta1 = 1.5 * pi,
+    draw(loop_grob(0.5, 0.5, size = unit(20, "mm"), angle = 0,
                    gp = gpar(col = "black", lwd = 2)))
-  expect_equal(px(s, 150, 150)[1:3], c(255L, 255L, 255L)) # hollow centre
+  # foot = 0 ⇒ both feet at the vertex, so the curve passes through it (a ring
+  # would leave the centre empty). The teardrop bulges out along +x to ~0.3*size.
+  expect_lt(px(s, 150, 150)[1], 128L) # vertex is inked (feet meet there)
+  expect_equal(reach(s, 300), 0.3 * (20 / 25.4 * 100), tolerance = 0.1) # 0.3*size px
 })
 
-test_that("a directed loop adds an arrowhead at the arc end", {
-  mk <- function(arr) {
-    vl_scene(3, 3, dpi = 100, bg = "white") |>
-      draw(loop_grob(0.5, 0.5, r = unit(20, "mm"), theta0 = 0, theta1 = 1.5 * pi,
-        arrow = arr, gp = gpar(col = "black", lwd = 2)))
-  }
-  bare <- mk(NULL)
-  head <- mk(arrow(type = "closed", length = unit(6, "mm")))
-  # The arc's theta1 = 1.5*pi end is at ~device (150, 150 - 20mm) = (150, ~71)
-  # (local frame is y-down). Count dark px in a box around it: the arrowhead fills
-  # extra ink the bare arc does not.
-  dark <- function(s) sum(vapply(seq(118, 150), function(x)
-    sum(vapply(seq(55, 90), function(y) px(s, x, y)[1] < 128L, logical(1))), integer(1)))
+test_that("the teardrop is a fixed physical size (resolution independent)", {
+  r1 <- reach(vl_scene(3, 3, dpi = 100, bg = "white") |>
+    draw(loop_grob(0.5, 0.5, size = unit(20, "mm"), gp = gpar(col = "black", lwd = 2))), 300)
+  r2 <- reach(vl_scene(3, 3, dpi = 200, bg = "white") |>
+    draw(loop_grob(0.5, 0.5, size = unit(20, "mm"), gp = gpar(col = "black", lwd = 2))), 600)
+  expect_equal(r2 / r1, 2, tolerance = 0.05) # twice the px at twice the dpi
+})
+
+test_that("angle rotates the loop's outward direction", {
+  right <- vl_scene(3, 3, dpi = 100, bg = "white") |>
+    draw(loop_grob(0.5, 0.5, size = unit(20, "mm"), angle = 0, gp = gpar(col = "black", lwd = 2)))
+  left <- vl_scene(3, 3, dpi = 100, bg = "white") |>
+    draw(loop_grob(0.5, 0.5, size = unit(20, "mm"), angle = pi, gp = gpar(col = "black", lwd = 2)))
+  expect_gt(reach(right, 300), 15L) # bulges to the right (+x)
+  expect_lte(reach(left, 300), 2L) # angle=pi bulges to the left, ~nothing right of centre
+})
+
+test_that("nested loops (growing size) give concentric teardrops", {
+  small <- vl_scene(3, 3, dpi = 100, bg = "white") |>
+    draw(loop_grob(0.5, 0.5, size = unit(15, "mm"), gp = gpar(col = "black", lwd = 2)))
+  big <- vl_scene(3, 3, dpi = 100, bg = "white") |>
+    draw(loop_grob(0.5, 0.5, size = unit(30, "mm"), gp = gpar(col = "black", lwd = 2)))
+  expect_gt(reach(big, 300), reach(small, 300) + 10L)
+})
+
+test_that("a batch of loops draws each at its own anchor", {
+  s <- vl_scene(3, 3, dpi = 100, bg = "white") |>
+    draw(loop_grob(x = c(0.25, 0.75), y = c(0.5, 0.5), size = unit(12, "mm"),
+                   gp = gpar(col = "black", lwd = 2)))
+  # two vertices, at device x = 75 and 225, both on row y=150.
+  expect_lt(px(s, 75, 150)[1], 128L)
+  expect_lt(px(s, 225, 150)[1], 128L)
+})
+
+test_that("a directed loop puts an arrowhead near the returning foot", {
+  mk <- function(arr, foot) vl_scene(3, 3, dpi = 100, bg = "white") |>
+    draw(loop_grob(0.5, 0.5, size = unit(20, "mm"), foot = foot, angle = 0,
+                   arrow = arr, gp = gpar(col = "black", lwd = 2)))
+  bare <- mk(NULL, unit(0, "mm"))
+  head <- mk(arrow(type = "closed", length = unit(6, "mm")), unit(0, "mm"))
+  # The returning foot is near the vertex (150,150); the head adds ink around it.
+  dark <- function(s) sum(vapply(seq(140, 168), function(x)
+    sum(vapply(seq(136, 164), function(y) px(s, x, y)[1] < 128L, logical(1))), integer(1)))
   expect_gt(dark(head), dark(bare))
 })
 
-test_that("sector_grob open arc + arrow is the underlying primitive", {
-  # r0 == r1 (open arc), absolute mm radius, with an arrow: same as loop_grob.
-  s <- vl_scene(3, 3, dpi = 100, bg = "white") |>
-    draw(sector_grob(0.5, 0.5, r0 = unit(20, "mm"), r1 = unit(20, "mm"),
-      theta0 = 0, theta1 = pi, arrow = arrow(type = "closed"),
-      gp = gpar(col = "black", lwd = 2)))
-  expect_equal(px(s, 150, 150)[1:3], c(255L, 255L, 255L)) # open (no fill)
-  expect_lt(px(s, 228, 150)[1], 128L) # arc ink at radius +20mm (~79px) along +x
+test_that("a positive foot lifts the feet off the vertex onto the boundary", {
+  # foot = 8mm (~31px): the feet sit on the boundary, so the exact vertex pixel is
+  # no longer on the curve (with foot = 0 it is).
+  at_vertex <- function(foot) {
+    s <- vl_scene(3, 3, dpi = 100, bg = "white") |>
+      draw(loop_grob(0.5, 0.5, size = unit(20, "mm"), foot = foot, angle = 0,
+                     gp = gpar(col = "black", lwd = 2)))
+    px(s, 150, 150)[1] < 128L
+  }
+  expect_true(at_vertex(unit(0, "mm")))
+  expect_false(at_vertex(unit(8, "mm")))
 })
 
-test_that("loop_grob requires an absolute radius", {
-  expect_error(loop_grob(0.5, 0.5, r = unit(0.2, "native")), "absolute")
-  expect_error(loop_grob(0.5, 0.5, r = unit(-1, "mm")), "non-negative")
-  g <- loop_grob(0.5, 0.5, r = 3) # bare numeric -> mm
-  expect_true(S7::S7_inherits(g, grob_sector))
+test_that("loop_grob requires absolute size/foot", {
+  expect_error(loop_grob(0.5, 0.5, size = unit(0.2, "native")), "absolute")
+  expect_error(loop_grob(0.5, 0.5, size = unit(-1, "mm")), "non-negative")
+  g <- loop_grob(0.5, 0.5, size = 4) # bare numeric -> mm
+  expect_true(S7::S7_inherits(g, grob_loop))
 })

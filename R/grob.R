@@ -41,7 +41,8 @@ grob_lines <- S7::new_class("grob_lines", parent = grob, package = "vellum",
   properties = list(x = .unit_prop(), y = .unit_prop(),
                     arrow = S7::new_property(S7::class_any, default = NULL),
                     start_cap = S7::new_property(S7::class_any, default = NULL),
-                    end_cap = S7::new_property(S7::class_any, default = NULL)))
+                    end_cap = S7::new_property(S7::class_any, default = NULL),
+                    offset = S7::new_property(S7::class_any, default = NULL)))
 grob_polygon <- S7::new_class("grob_polygon", parent = grob, package = "vellum",
   properties = list(x = .unit_prop(), y = .unit_prop()))
 grob_circle <- S7::new_class("grob_circle", parent = grob, package = "vellum",
@@ -109,7 +110,16 @@ grob_segments <- S7::new_class("grob_segments", parent = grob, package = "vellum
   properties = list(x0 = .unit_prop(), y0 = .unit_prop(), x1 = .unit_prop(), y1 = .unit_prop(),
                     arrow = S7::new_property(S7::class_any, default = NULL),
                     start_cap = S7::new_property(S7::class_any, default = NULL),
-                    end_cap = S7::new_property(S7::class_any, default = NULL)))
+                    end_cap = S7::new_property(S7::class_any, default = NULL),
+                    offset = S7::new_property(S7::class_any, default = NULL)))
+
+grob_loop <- S7::new_class("grob_loop", parent = grob, package = "vellum",
+  properties = list(
+    x = .unit_prop(), y = .unit_prop(),
+    size = .unit_prop("unit(4, \"mm\")"), foot = .unit_prop("unit(0, \"mm\")"),
+    angle = S7::new_property(S7::class_double, default = 0),
+    arrow = S7::new_property(S7::class_any, default = NULL)
+  ))
 grob_path <- S7::new_class("grob_path", parent = grob, package = "vellum",
   properties = list(
     x = .unit_prop(), y = .unit_prop(),
@@ -193,28 +203,41 @@ roundrect_grob <- function(x = 0.5, y = 0.5, width = 1, height = 1, r = 0.1,
 #'   directed edge stop at a node's radius. See the acceptance notes in the
 #'   package for the degenerate cases (a cap `>=` the segment length draws
 #'   nothing; a zero-length segment is skipped).
+#' @param offset Optional **absolute-length** [unit()] (`mm`/`cm`/`in`/`pt`; a bare
+#'   numeric is `mm`) that shifts the line **perpendicular** to its own direction by
+#'   that physical amount, resolved **at render** in device space. The sign picks
+#'   the side (`+` left of the direction of travel, `−` right). For
+#'   [segments_grob()] it is per-element (scalar or length-n) — passing a vector
+#'   spreads parallel/reciprocal edges by a fixed physical spacing that tracks mm
+#'   node sizes at any figure size; for [lines_grob()] a single (scalar) offset
+#'   rigidly translates the whole polyline along the perpendicular of its overall
+#'   direction. Applied **before** `start_cap`/`end_cap` and the arrowhead (offset,
+#'   then cap, then head). `NULL`/`0` (default) leaves the geometry untouched.
 #' @export
-lines_grob <- function(x, y, arrow = NULL, start_cap = NULL, end_cap = NULL,
+lines_grob <- function(x, y, arrow = NULL, start_cap = NULL, end_cap = NULL, offset = NULL,
                        gp = gpar(), name = NULL, vp = NULL, id = NULL, role = NULL) {
   n <- .coord_n(x, y)
   start_cap <- .check_cap(start_cap, "start_cap", scalar = TRUE)
   end_cap <- .check_cap(end_cap, "end_cap", scalar = TRUE)
+  offset <- .check_cap(offset, "offset", scalar = TRUE, nonneg = FALSE)
   grob_lines(x = vctrs::vec_recycle(as_unit(x, "native"), n),
              y = vctrs::vec_recycle(as_unit(y, "native"), n),
-             arrow = arrow, start_cap = start_cap, end_cap = end_cap,
+             arrow = arrow, start_cap = start_cap, end_cap = end_cap, offset = offset,
              gp = gp, name = name, vp = vp, id = id, role = role)
 }
 
-# Validate a cap argument: NULL passes through; otherwise it must resolve to an
-# absolute unit (mm/cm/in/pt — derived kinds already resolve to mm) and be
-# non-negative. `scalar = TRUE` (lines: caps trim the whole path ends) requires a
-# single value; segments allow a length-n vector (recycled by the caller).
-.check_cap <- function(cap, arg, scalar = FALSE) {
+# Validate a cap/offset argument: NULL passes through; otherwise it must resolve
+# to an absolute unit (mm/cm/in/pt — derived kinds already resolve to mm).
+# `scalar = TRUE` (lines: whole-path amount) requires a single value; segments
+# allow a length-n vector (recycled by the caller). `nonneg = TRUE` (caps, radii)
+# rejects negatives; `nonneg = FALSE` (a signed perpendicular `offset`) allows
+# them — the sign picks the side.
+.check_cap <- function(cap, arg, scalar = FALSE, nonneg = TRUE) {
   if (is.null(cap)) {
     return(NULL)
   }
   cap <- as_unit(cap, "mm")
-  .check_extent(cap, arg)
+  if (nonneg) .check_extent(cap, arg)
   abs_codes <- unname(.unit_codes[c("mm", "in", "pt")])
   if (!all(vctrs::field(cap, "unit") %in% abs_codes)) {
     cli::cli_abort(c(
@@ -452,11 +475,11 @@ hexagon_grob <- function(x = 0.5, y = 0.5, size = unit(2, "mm"),
 #' single call. `gp$fill` recycles per sector; `gp$col`/`lwd` give a uniform stroke.
 #'
 #' Passing `r0 == r1` gives an **open arc** (stroke only). Combined with an
-#' absolute (`mm`) radius at a `"native"` centre and an [arrow()], this draws a
-#' resolution-independent directed **self-loop**: the radius is resolved to a
-#' device length at render (like a marker `size`), so it tracks a node's mm radius
-#' at any page size or dpi. The arrowhead sits tangent to the outer arc's end (see
-#' [loop_grob()] for the convenience wrapper).
+#' absolute (`mm`) radius at a `"native"` centre and an [arrow()], the radius is
+#' resolved to a device length at render (like a marker `size`), so the arc tracks
+#' an mm size at any page size or dpi; the arrowhead sits tangent to the outer arc's
+#' end. (For node-link **self-loops**, prefer [loop_grob()] — a teardrop, not a
+#' ring.)
 #' @export
 sector_grob <- function(x = 0.5, y = 0.5, r0 = 0, r1 = 0.5, theta0 = 0, theta1 = 2 * pi,
                         fill = NULL, arrow = NULL, gp = gpar(), name = NULL, vp = NULL, id = NULL, role = NULL) {
@@ -474,40 +497,58 @@ sector_grob <- function(x = 0.5, y = 0.5, r0 = 0, r1 = 0.5, theta0 = 0, theta1 =
 }
 
 #' @rdname grob
-#' @param r Loop radius: an **absolute** [unit()] (`mm`/`cm`/`in`/`pt`; a bare
-#'   numeric is `mm`), resolved to a device length **at render** so it tracks a
-#'   node's size at any page size/dpi. Recycled per loop.
+#' @param size Loop extent: an **absolute** [unit()] (`mm`/`cm`/`in`/`pt`; a bare
+#'   numeric is `mm`), resolved to a device length **at render** so the loop tracks
+#'   a node's mm size at any page size/dpi. Nested loops on one vertex pass growing
+#'   `size` (same `x`/`y`/`angle`) for concentric teardrops. Recycled per loop.
+#' @param foot Node radius the loop's two **feet** attach at (an **absolute**
+#'   [unit()]; `0` = both feet at the vertex, like igraph). A positive `foot` puts
+#'   the feet on the node's boundary so the loop visibly leaves and re-enters the
+#'   node edge, and a directed loop's head lands on the boundary rather than under
+#'   the marker. Recycled per loop.
+#' @param angle Outward direction of the loop in **radians** (which way the teardrop
+#'   bulges away from the vertex, e.g. away from the layout centroid).
 #' @details
-#' `loop_grob()` draws directed/undirected **self-loops** for node-link diagrams: an
-#' open arc centred at a `"native"` anchor `(x, y)` with an absolute (mm) radius `r`,
-#' from `theta0` to `theta1` (radians), optionally with an [arrow()] tangent to its
-#' end. It is a thin wrapper over [sector_grob()] with `r0 = r1 = r`. Because `r` is
-#' absolute and deferred to render, the loop stays proportional to the node's mm
-#' radius under any device size — no native-per-mm estimation.
+#' `loop_grob()` draws **self-loops** for node-link diagrams as an igraph-style cubic
+#' **Bézier teardrop**: it leaves the vertex `(x, y)` (a `"native"` anchor), bulges
+#' out to `size` along `angle`, and returns, with an optional [arrow()] head tangent
+#' to the curve at the returning foot. `size` and `foot` are absolute and resolved to
+#' device px **at render**, so the loop is a fixed physical size that scales with the
+#' mm node markers — no native-per-mm estimation, exact at any figure size/dpi.
 #' @export
-loop_grob <- function(x = 0.5, y = 0.5, r = unit(2, "mm"), theta0 = 0, theta1 = 1.5 * pi,
-                      arrow = NULL, gp = gpar(), name = NULL, vp = NULL, id = NULL, role = NULL) {
-  ru <- .check_cap(as_unit(r, "mm"), "r")
-  sector_grob(x = x, y = y, r0 = ru, r1 = ru, theta0 = theta0, theta1 = theta1,
-              arrow = arrow, gp = gp, name = name, vp = vp, id = id, role = role)
+loop_grob <- function(x = 0.5, y = 0.5, size = unit(4, "mm"), foot = unit(0, "mm"),
+                      angle = 0, arrow = NULL, gp = gpar(), name = NULL, vp = NULL, id = NULL, role = NULL) {
+  n <- .common_n(x, y, size, foot, angle)
+  sz <- .check_cap(as_unit(size, "mm"), "size")
+  ft <- .check_cap(as_unit(foot, "mm"), "foot")
+  grob_loop(
+    x = vctrs::vec_recycle(as_unit(x), n),
+    y = vctrs::vec_recycle(as_unit(y), n),
+    size = vctrs::vec_recycle(sz, n),
+    foot = vctrs::vec_recycle(ft, n),
+    angle = vctrs::vec_recycle(as.numeric(angle), n),
+    arrow = arrow, gp = gp, name = name, vp = vp, id = id, role = role
+  )
 }
 
 #' @rdname grob
 #' @param x0,y0,x1,y1 Segment start/end coordinates ([unit()] or numeric).
 #' @export
 segments_grob <- function(x0, y0, x1, y1, arrow = NULL, start_cap = NULL, end_cap = NULL,
-                          gp = gpar(), name = NULL, vp = NULL, id = NULL, role = NULL) {
+                          offset = NULL, gp = gpar(), name = NULL, vp = NULL, id = NULL, role = NULL) {
   n <- .common_n(x0, y0, x1, y1)
   start_cap <- .check_cap(start_cap, "start_cap")
   end_cap <- .check_cap(end_cap, "end_cap")
+  offset <- .check_cap(offset, "offset", nonneg = FALSE)
   if (!is.null(start_cap)) start_cap <- vctrs::vec_recycle(start_cap, n)
   if (!is.null(end_cap)) end_cap <- vctrs::vec_recycle(end_cap, n)
+  if (!is.null(offset)) offset <- vctrs::vec_recycle(offset, n)
   grob_segments(
     x0 = vctrs::vec_recycle(as_unit(x0, "native"), n),
     y0 = vctrs::vec_recycle(as_unit(y0, "native"), n),
     x1 = vctrs::vec_recycle(as_unit(x1, "native"), n),
     y1 = vctrs::vec_recycle(as_unit(y1, "native"), n),
-    arrow = arrow, start_cap = start_cap, end_cap = end_cap,
+    arrow = arrow, start_cap = start_cap, end_cap = end_cap, offset = offset,
     gp = gp, name = name, vp = vp, id = id, role = role
   )
 }

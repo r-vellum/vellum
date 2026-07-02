@@ -50,6 +50,7 @@ lines_grob(
   arrow = NULL,
   start_cap = NULL,
   end_cap = NULL,
+  offset = NULL,
   gp = gpar(),
   name = NULL,
   vp = NULL,
@@ -140,9 +141,9 @@ sector_grob(
 loop_grob(
   x = 0.5,
   y = 0.5,
-  r = unit(2, "mm"),
-  theta0 = 0,
-  theta1 = 1.5 * pi,
+  size = unit(4, "mm"),
+  foot = unit(0, "mm"),
+  angle = 0,
   arrow = NULL,
   gp = gpar(),
   name = NULL,
@@ -159,6 +160,7 @@ segments_grob(
   arrow = NULL,
   start_cap = NULL,
   end_cap = NULL,
+  offset = NULL,
   gp = gpar(),
   name = NULL,
   vp = NULL,
@@ -234,9 +236,7 @@ grid); \code{NULL} makes a single sub-path.}
 \item{role}{Optional ARIA role, emitted by the SVG backend as \verb{role=} for
 accessibility (ignored by the raster and PDF backends).}
 
-\item{r}{Loop radius: an \strong{absolute} \code{\link[=unit]{unit()}} (\code{mm}/\code{cm}/\verb{in}/\code{pt}; a bare
-numeric is \code{mm}), resolved to a device length \strong{at render} so it tracks a
-node's size at any page size/dpi. Recycled per loop.}
+\item{r}{Radius (\code{\link[=unit]{unit()}} or numeric).}
 
 \item{arrow}{An \code{\link[=arrow]{arrow()}} spec to draw heads on the line/segment ends, or
 \code{NULL} for none.}
@@ -255,6 +255,17 @@ directed edge stop at a node's radius. See the acceptance notes in the
 package for the degenerate cases (a cap \code{>=} the segment length draws
 nothing; a zero-length segment is skipped).}
 
+\item{offset}{Optional \strong{absolute-length} \code{\link[=unit]{unit()}} (\code{mm}/\code{cm}/\verb{in}/\code{pt}; a bare
+numeric is \code{mm}) that shifts the line \strong{perpendicular} to its own direction by
+that physical amount, resolved \strong{at render} in device space. The sign picks
+the side (\code{+} left of the direction of travel, \verb{−} right). For
+\code{\link[=segments_grob]{segments_grob()}} it is per-element (scalar or length-n) — passing a vector
+spreads parallel/reciprocal edges by a fixed physical spacing that tracks mm
+node sizes at any figure size; for \code{\link[=lines_grob]{lines_grob()}} a single (scalar) offset
+rigidly translates the whole polyline along the perpendicular of its overall
+direction. Applied \strong{before} \code{start_cap}/\code{end_cap} and the arrowhead (offset,
+then cap, then head). \code{NULL}/\code{0} (default) leaves the geometry untouched.}
+
 \item{n}{Number of points to sample the curve at (flattened to a polyline).}
 
 \item{shape}{Marker shape(s): \code{"circle"} (default), \code{"square"}, \code{"triangle"},
@@ -263,7 +274,10 @@ nothing; a zero-length segment is skipped).}
 
 \item{open}{If \code{FALSE}, the spline is closed (wraps end to start).}
 
-\item{size}{Point size (\code{\link[=unit]{unit()}} or numeric).}
+\item{size}{Loop extent: an \strong{absolute} \code{\link[=unit]{unit()}} (\code{mm}/\code{cm}/\verb{in}/\code{pt}; a bare
+numeric is \code{mm}), resolved to a device length \strong{at render} so the loop tracks
+a node's mm size at any page size/dpi. Nested loops on one vertex pass growing
+\code{size} (same \code{x}/\code{y}/\code{angle}) for concentric teardrops. Recycled per loop.}
 
 \item{fill}{Per-element fill colour(s), recycled to the number of sectors. \code{NULL}
 falls back to \code{gp$fill}.}
@@ -277,6 +291,15 @@ gives an arc outline (stroke only, no fill).}
 
 \item{theta0, theta1}{Start and end angle of each sector, in \strong{radians}, with 0
 at 3 o'clock and increasing counter-clockwise.}
+
+\item{foot}{Node radius the loop's two \strong{feet} attach at (an \strong{absolute}
+\code{\link[=unit]{unit()}}; \code{0} = both feet at the vertex, like igraph). A positive \code{foot} puts
+the feet on the node's boundary so the loop visibly leaves and re-enters the
+node edge, and a directed loop's head lands on the boundary rather than under
+the marker. Recycled per loop.}
+
+\item{angle}{Outward direction of the loop in \strong{radians} (which way the teardrop
+bulges away from the vertex, e.g. away from the layout centroid).}
 
 \item{x0, y0, x1, y1}{Segment start/end coordinates (\code{\link[=unit]{unit()}} or numeric).}
 
@@ -309,16 +332,16 @@ with \code{\link[=render]{render()}}. Coordinates accept a \code{\link[=unit]{un
 single call. \code{gp$fill} recycles per sector; \code{gp$col}/\code{lwd} give a uniform stroke.
 
 Passing \code{r0 == r1} gives an \strong{open arc} (stroke only). Combined with an
-absolute (\code{mm}) radius at a \code{"native"} centre and an \code{\link[=arrow]{arrow()}}, this draws a
-resolution-independent directed \strong{self-loop}: the radius is resolved to a
-device length at render (like a marker \code{size}), so it tracks a node's mm radius
-at any page size or dpi. The arrowhead sits tangent to the outer arc's end (see
-\code{\link[=loop_grob]{loop_grob()}} for the convenience wrapper).
+absolute (\code{mm}) radius at a \code{"native"} centre and an \code{\link[=arrow]{arrow()}}, the radius is
+resolved to a device length at render (like a marker \code{size}), so the arc tracks
+an mm size at any page size or dpi; the arrowhead sits tangent to the outer arc's
+end. (For node-link \strong{self-loops}, prefer \code{\link[=loop_grob]{loop_grob()}} — a teardrop, not a
+ring.)
 
-\code{loop_grob()} draws directed/undirected \strong{self-loops} for node-link diagrams: an
-open arc centred at a \code{"native"} anchor \verb{(x, y)} with an absolute (mm) radius \code{r},
-from \code{theta0} to \code{theta1} (radians), optionally with an \code{\link[=arrow]{arrow()}} tangent to its
-end. It is a thin wrapper over \code{\link[=sector_grob]{sector_grob()}} with \code{r0 = r1 = r}. Because \code{r} is
-absolute and deferred to render, the loop stays proportional to the node's mm
-radius under any device size — no native-per-mm estimation.
+\code{loop_grob()} draws \strong{self-loops} for node-link diagrams as an igraph-style cubic
+\strong{Bézier teardrop}: it leaves the vertex \verb{(x, y)} (a \code{"native"} anchor), bulges
+out to \code{size} along \code{angle}, and returns, with an optional \code{\link[=arrow]{arrow()}} head tangent
+to the curve at the returning foot. \code{size} and \code{foot} are absolute and resolved to
+device px \strong{at render}, so the loop is a fixed physical size that scales with the
+mm node markers — no native-per-mm estimation, exact at any figure size/dpi.
 }

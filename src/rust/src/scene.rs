@@ -197,6 +197,10 @@ enum Node {
         /// last vertex inward by this device length, resolved at render. `None` =
         /// untouched. See `Segments` for the per-element form.
         scap: Option<(f64, Unit)>, ecap: Option<(f64, Unit)>,
+        /// Optional signed perpendicular offset (absolute unit): rigidly translate
+        /// the whole polyline sideways by this device length along the normal of
+        /// its overall (chord) direction. `None` = untouched.
+        off: Option<(f64, Unit)>,
         arrow: Option<Arrow>, gp: PartialGpar,
     },
     Polygon { x: Vec<f64>, y: Vec<f64>, xu: Vec<Unit>, yu: Vec<Unit>, gp: PartialGpar },
@@ -288,6 +292,22 @@ enum Node {
         /// at render. Empty = no caps (the batch is unchanged). Recycled on the R
         /// side to the element count, so `scap.len()` is either 0 or `n`.
         scap: Vec<f64>, ecap: Vec<f64>, scapu: Vec<Unit>, ecapu: Vec<Unit>,
+        /// Optional per-element signed perpendicular offset (absolute unit): shift
+        /// both endpoints sideways by this device length along the segment's left
+        /// normal, applied *before* the caps/arrow. Empty = none; else length `n`.
+        off: Vec<f64>, offu: Vec<Unit>,
+        arrow: Option<Arrow>,
+        gp: PartialGpar,
+    },
+    /// A batch of igraph-style self-loops: a cubic-Bézier teardrop per element,
+    /// leaving/re-entering the vertex `(x,y)`, sized by an absolute `size` (and
+    /// `foot` = the node radius the feet attach at), bulging along `angle` (rad),
+    /// with an optional arrowhead tangent to the returning foot. All lengths are
+    /// resolved to device px at render, so the loop tracks an mm node at any size.
+    Loop {
+        x: Vec<f64>, y: Vec<f64>, xu: Vec<Unit>, yu: Vec<Unit>,
+        size: Vec<f64>, su: Vec<Unit>, foot: Vec<f64>, fu: Vec<Unit>,
+        angle: Vec<f64>,
         arrow: Option<Arrow>,
         gp: PartialGpar,
     },
@@ -330,6 +350,7 @@ impl Node {
             | Node::Hexagons { gp, .. }
             | Node::Sectors { gp, .. }
             | Node::Segments { gp, .. }
+            | Node::Loop { gp, .. }
             | Node::Path { gp, .. }
             | Node::Text { gp, .. } => gp,
             Node::Image { .. } | Node::GroupStart { .. } | Node::GroupEnd => {
@@ -617,9 +638,11 @@ impl Scene {
     }
 
     #[allow(clippy::too_many_arguments)]
+    #[allow(clippy::too_many_arguments)]
     fn lines(
         &mut self, x: &[f64], y: &[f64], xu: &[i32], yu: &[i32],
         scap: &[f64], ecap: &[f64], scapu: &[i32], ecapu: &[i32],
+        off: &[f64], offu: &[i32],
         col: Robj, lwd: Robj, alpha: Robj, stroke: Robj,
         aangle: f64, alen: f64, aends: i32, aclosed: bool,
     ) {
@@ -627,6 +650,7 @@ impl Scene {
         self.emit_node(Node::Lines {
             x: x.to_vec(), y: y.to_vec(), xu: codes(xu), yu: codes(yu),
             scap: cap_scalar(scap, scapu), ecap: cap_scalar(ecap, ecapu),
+            off: cap_scalar(off, offu),
             arrow: arrow_from(aangle, alen, aends, aclosed), gp,
         });
     }
@@ -750,6 +774,7 @@ impl Scene {
         &mut self, x0: &[f64], y0: &[f64], x1: &[f64], y1: &[f64],
         x0u: &[i32], y0u: &[i32], x1u: &[i32], y1u: &[i32],
         scap: &[f64], ecap: &[f64], scapu: &[i32], ecapu: &[i32],
+        off: &[f64], offu: &[i32],
         col: Robj, lwd: Robj, alpha: Robj, stroke: Robj,
         aangle: f64, alen: f64, aends: i32, aclosed: bool,
     ) {
@@ -758,6 +783,24 @@ impl Scene {
             x0: x0.to_vec(), y0: y0.to_vec(), x1: x1.to_vec(), y1: y1.to_vec(),
             x0u: codes(x0u), y0u: codes(y0u), x1u: codes(x1u), y1u: codes(y1u),
             scap: scap.to_vec(), ecap: ecap.to_vec(), scapu: codes(scapu), ecapu: codes(ecapu),
+            off: off.to_vec(), offu: codes(offu),
+            arrow: arrow_from(aangle, alen, aends, aclosed), gp,
+        });
+    }
+
+    /// A batch of self-loops (cubic-Bézier teardrops). See `Node::Loop`.
+    #[allow(clippy::too_many_arguments)]
+    fn add_loop(
+        &mut self, x: &[f64], y: &[f64], size: &[f64], foot: &[f64], angle: &[f64],
+        xu: &[i32], yu: &[i32], su: &[i32], fu: &[i32],
+        col: Robj, lwd: Robj, alpha: Robj, stroke: Robj,
+        aangle: f64, alen: f64, aends: i32, aclosed: bool,
+    ) {
+        let gp = PartialGpar::from_robj(&rnull(), &col, &lwd, &alpha, &stroke);
+        self.emit_node(Node::Loop {
+            x: x.to_vec(), y: y.to_vec(), xu: codes(xu), yu: codes(yu),
+            size: size.to_vec(), su: codes(su), foot: foot.to_vec(), fu: codes(fu),
+            angle: angle.to_vec(),
             arrow: arrow_from(aangle, alen, aends, aclosed), gp,
         });
     }
@@ -1331,6 +1374,21 @@ impl Scene {
                         pm.stroke_path(&p, &paint, &st, t, mask.as_ref());
                     }
                 }
+                Node::Loop { x, y, xu, yu, size, su, foot, fu, angle, .. } => {
+                    let n = [x.len(), y.len(), xu.len(), yu.len(), size.len(), su.len(),
+                             foot.len(), fu.len(), angle.len()].into_iter().min().unwrap_or(0);
+                    let mut pb = PathBuilder::new();
+                    for k in 0..n {
+                        let (cx, cy) = (vp.x_pos(x[k], xu[k]), vp.y_pos(y[k], yu[k]));
+                        let cp = loop_control_points(cx, cy, vp.x_len(size[k], su[k]), vp.x_len(foot[k], fu[k]), angle[k]);
+                        pb.move_to(cp[0].0, cp[0].1);
+                        pb.cubic_to(cp[1].0, cp[1].1, cp[2].0, cp[2].1, cp[3].0, cp[3].1);
+                    }
+                    if let Some(p) = pb.finish() {
+                        let st = Stroke { width: 4.0, ..Stroke::default() };
+                        pm.stroke_path(&p, &paint, &st, t, mask.as_ref());
+                    }
+                }
                 Node::GroupStart { .. } | Node::GroupEnd => {}
             }
         }
@@ -1637,15 +1695,20 @@ impl Scene {
                         fill_then_stroke(b, &path, &gp, t, &clip, vp, FillRule::Winding);
                     }
                 }
-                Node::Lines { x, y, xu, yu, scap, ecap, arrow, .. } => {
+                Node::Lines { x, y, xu, yu, scap, ecap, off, arrow, .. } => {
                     if let Some(col) = gp.col {
                         let n = x.len().min(y.len()).min(xu.len()).min(yu.len());
                         if n >= 2 {
-                            // Resolve to local px, then trim the whole-path ends by any
-                            // absolute caps (arrow heads then land on the capped ends).
+                            // Resolve to local px, rigidly translate the whole polyline by
+                            // any perpendicular offset (along its chord normal), then trim
+                            // the ends by any absolute caps (heads land on the capped ends).
                             let mut pts: Vec<(f32, f32)> = (0..n)
                                 .map(|i| (vp.x_pos(x[i], xu[i]) as f32, vp.y_pos(y[i], yu[i]) as f32))
                                 .collect();
+                            if let Some((v, u)) = off {
+                                let o = vp.x_len(*v, *u); // signed
+                                offset_polyline(&mut pts, o);
+                            }
                             let sc = scap.map_or(0.0, |(v, u)| vp.x_len(v.max(0.0), u));
                             let ec = ecap.map_or(0.0, |(v, u)| vp.x_len(v.max(0.0), u));
                             if sc > 0.0 || ec > 0.0 {
@@ -1963,22 +2026,30 @@ impl Scene {
                     };
                     b.draw_text(&run, t, &clip);
                 }
-                Node::Segments { x0, y0, x1, y1, x0u, y0u, x1u, y1u, scap, ecap, scapu, ecapu, arrow, .. } => {
+                Node::Segments { x0, y0, x1, y1, x0u, y0u, x1u, y1u, scap, ecap, scapu, ecapu, off, offu, arrow, .. } => {
                     if let Some(col) = gp.col {
                         let style = stroke_style(&gp, vp.dpi);
                         let n = [x0.len(), y0.len(), x1.len(), y1.len(), x0u.len(), y0u.len(), x1u.len(), y1u.len()]
                             .into_iter().min().unwrap_or(0);
                         let has_caps = !scap.is_empty() || !ecap.is_empty();
-                        // Resolve each segment's (possibly capped) endpoints once, so the
-                        // stroke and the arrowhead share the same capped end. A segment is
-                        // dropped when a coordinate is non-finite (an R `NA`), or when caps
-                        // shorten it away entirely.
+                        let has_off = !off.is_empty();
+                        // Resolve each segment's endpoints once, so the stroke and the
+                        // arrowhead share the same geometry. Order per the handover:
+                        // perpendicular offset first, then caps, then the arrow along the
+                        // shifted+capped direction. A segment is dropped when a coordinate
+                        // is non-finite (an R `NA`) or when caps shorten it away entirely.
                         let mut segs: Vec<(f32, f32, f32, f32)> = Vec::with_capacity(n);
                         for i in 0..n {
-                            let (sx, sy) = (vp.x_pos(x0[i], x0u[i]) as f32, vp.y_pos(y0[i], y0u[i]) as f32);
-                            let (ex, ey) = (vp.x_pos(x1[i], x1u[i]) as f32, vp.y_pos(y1[i], y1u[i]) as f32);
+                            let (mut sx, mut sy) = (vp.x_pos(x0[i], x0u[i]) as f32, vp.y_pos(y0[i], y0u[i]) as f32);
+                            let (mut ex, mut ey) = (vp.x_pos(x1[i], x1u[i]) as f32, vp.y_pos(y1[i], y1u[i]) as f32);
                             if !(sx.is_finite() && sy.is_finite() && ex.is_finite() && ey.is_finite()) {
                                 continue;
+                            }
+                            if has_off {
+                                // signed offset — keep the sign (no `.max(0)` clamp).
+                                let o = off_len_px(off, offu, i, vp);
+                                let (a, b, c, d) = offset_segment(sx, sy, ex, ey, o);
+                                sx = a; sy = b; ex = c; ey = d;
                             }
                             if has_caps {
                                 let sc = cap_len_px(scap, scapu, i, vp);
@@ -2012,6 +2083,48 @@ impl Scene {
                                 }
                             }
                             draw_arrows(b, a, &ends, col, &style, t, &clip, vp.dpi);
+                        }
+                    }
+                }
+                Node::Loop { x, y, xu, yu, size, su, foot, fu, angle, arrow, .. } => {
+                    if let Some(col) = gp.col {
+                        let style = stroke_style(&gp, vp.dpi);
+                        let n = [x.len(), y.len(), xu.len(), yu.len(), size.len(), su.len(),
+                                 foot.len(), fu.len(), angle.len()].into_iter().min().unwrap_or(0);
+                        let mut ends: Vec<(f32, f32, f64, f64)> = Vec::new();
+                        for i in 0..n {
+                            let cx = vp.x_pos(x[i], xu[i]);
+                            let cy = vp.y_pos(y[i], yu[i]);
+                            if !cx.is_finite() || !cy.is_finite() {
+                                continue;
+                            }
+                            let s = vp.x_len(size[i], su[i]); // mm -> device px
+                            let f = vp.x_len(foot[i], fu[i]);
+                            let cp = loop_control_points(cx, cy, s, f, angle[i]);
+                            if style.width > 0.0 {
+                                let mut pb = PathBuilder::new();
+                                pb.move_to(cp[0].0, cp[0].1);
+                                pb.cubic_to(cp[1].0, cp[1].1, cp[2].0, cp[2].1, cp[3].0, cp[3].1);
+                                if let Some(path) = pb.finish() {
+                                    b.stroke_path(&path, t, col, &style, &clip);
+                                }
+                            }
+                            if let Some(a) = arrow {
+                                // Head at the returning foot (P3), tangent = 3·(P3−P2) ∝ P3−P2.
+                                if a.ends & 2 != 0 {
+                                    ends.push((cp[3].0, cp[3].1,
+                                               (cp[3].0 - cp[2].0) as f64, (cp[3].1 - cp[2].1) as f64));
+                                }
+                                if a.ends & 1 != 0 {
+                                    ends.push((cp[0].0, cp[0].1,
+                                               (cp[0].0 - cp[1].0) as f64, (cp[0].1 - cp[1].1) as f64));
+                                }
+                            }
+                        }
+                        if let Some(a) = arrow {
+                            if !ends.is_empty() {
+                                draw_arrows(b, a, &ends, col, &style, t, &clip, vp.dpi);
+                            }
                         }
                     }
                 }
@@ -2298,6 +2411,80 @@ fn trim_poly_ends(pts: &mut [(f32, f32)], sc: f64, ec: f64) {
             }
         }
     }
+}
+
+/// Resolve a signed perpendicular offset (absolute unit) to a device length in
+/// local px. Unlike `cap_len_px` this keeps the sign — it selects the side.
+fn off_len_px(off: &[f64], offu: &[Unit], i: usize, vp: &Vp) -> f64 {
+    if off.is_empty() {
+        return 0.0;
+    }
+    let idx = if i < off.len() { i } else { off.len() - 1 };
+    let u = offu.get(idx).copied().unwrap_or(Unit::Mm);
+    vp.x_len(off[idx], u) // signed; do NOT clamp
+}
+
+/// Shift a segment sideways by `o` device px along its left normal `n̂ = (-û_y, û_x)`.
+/// A zero-length segment has no direction, so it is returned unchanged.
+fn offset_segment(sx: f32, sy: f32, ex: f32, ey: f32, o: f64) -> (f32, f32, f32, f32) {
+    let dx = (ex - sx) as f64;
+    let dy = (ey - sy) as f64;
+    let len = (dx * dx + dy * dy).sqrt();
+    if len < 1e-9 {
+        return (sx, sy, ex, ey);
+    }
+    let (ox, oy) = ((o * -dy / len) as f32, (o * dx / len) as f32);
+    (sx + ox, sy + oy, ex + ox, ey + oy)
+}
+
+/// Rigidly translate a whole polyline sideways by `o` device px along the normal of
+/// its chord (first finite → last finite vertex). Non-finite points are left as-is
+/// (they act as NA breaks). No-ops when the chord has no direction.
+fn offset_polyline(pts: &mut [(f32, f32)], o: f64) {
+    let finite = |q: (f32, f32)| q.0.is_finite() && q.1.is_finite();
+    let a = match pts.iter().position(|&q| finite(q)) {
+        Some(a) => a,
+        None => return,
+    };
+    let z = pts.iter().rposition(|&q| finite(q)).unwrap_or(a);
+    let dx = (pts[z].0 - pts[a].0) as f64;
+    let dy = (pts[z].1 - pts[a].1) as f64;
+    let len = (dx * dx + dy * dy).sqrt();
+    if len < 1e-9 {
+        return;
+    }
+    let (ox, oy) = ((o * -dy / len) as f32, (o * dx / len) as f32);
+    for p in pts.iter_mut() {
+        if finite(*p) {
+            p.0 += ox;
+            p.1 += oy;
+        }
+    }
+}
+
+/// The four device-px control points of a self-loop's cubic-Bézier teardrop
+/// (igraph's `loop()` shape): it leaves and re-enters the vertex `(cx, cy)`,
+/// bulging out to extent `s` along `angle` (radians), with the two feet placed on
+/// the node boundary at radius `foot` (0 = both at the vertex). Control points in
+/// the local frame (axis = +x) — feet along the ±lobe direction, lobes at igraph's
+/// `(0.4s, ±0.2s)` — are rotated by `angle` about the vertex and translated to it.
+fn loop_control_points(cx: f64, cy: f64, s: f64, foot: f64, angle: f64) -> [(f32, f32); 4] {
+    // Unit direction of the lobe (0.4, 0.2): the feet sit on the boundary there.
+    let inv = 1.0 / (0.4f64 * 0.4 + 0.2 * 0.2).sqrt();
+    let (fdx, fdy) = (0.4 * inv, 0.2 * inv);
+    let local = [
+        (foot * fdx, foot * fdy),  // P0 — leaving foot
+        (0.4 * s, 0.2 * s),        // P1
+        (0.4 * s, -0.2 * s),       // P2
+        (foot * fdx, -foot * fdy), // P3 — returning foot
+    ];
+    let (ca, sa) = (angle.cos(), angle.sin());
+    let mut out = [(0.0f32, 0.0f32); 4];
+    for (k, &(px, py)) in local.iter().enumerate() {
+        // Rotate in device (y-down) space, consistent with `sector`'s cos/sin use.
+        out[k] = ((cx + px * ca - py * sa) as f32, (cy + px * sa + py * ca) as f32);
+    }
+    out
 }
 
 fn build_tracks(vals: &[f64], units: &[String]) -> Vec<Track> {

@@ -97,6 +97,10 @@ uniform stroke. \code{r0=0} ⇒ pie slice; \code{r0=r1} ⇒ an arc outline (no f
 A batch of disjoint line segments (stroke only), sharing one gpar.
 }
 
+\subsection{Method \code{add_loop}}{
+A batch of self-loops (cubic-Bézier teardrops). See \code{Node::Loop}.
+}
+
 \subsection{Method \code{path}}{
 A general path. \code{nper} gives the number of points in each closed sub-path
 (so holes are sub-paths under the even-odd or winding rule).

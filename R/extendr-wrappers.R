@@ -103,6 +103,10 @@ rs_attractor <- function(kind, n, a, b, c, d, x0, y0) .Call(wrap__rs_attractor, 
 #'A batch of disjoint line segments (stroke only), sharing one gpar.
 #'}
 #'
+#'\subsection{Method `add_loop`}{
+#'A batch of self-loops (cubic-Bézier teardrops). See `Node::Loop`.
+#'}
+#'
 #'\subsection{Method `path`}{
 #'A general path. `nper` gives the number of points in each closed sub-path
 #'(so holes are sub-paths under the even-odd or winding rule).
@@ -237,7 +241,7 @@ Scene$rect <- function(x, y, w, h, xu, yu, wu, hu, fill, col, lwd, alpha, stroke
 
 Scene$roundrect <- function(x, y, w, h, r, xu, yu, wu, hu, ru, fill, col, lwd, alpha, stroke) .Call(wrap__Scene__roundrect, self, x, y, w, h, r, xu, yu, wu, hu, ru, fill, col, lwd, alpha, stroke)
 
-Scene$lines <- function(x, y, xu, yu, scap, ecap, scapu, ecapu, col, lwd, alpha, stroke, aangle, alen, aends, aclosed) .Call(wrap__Scene__lines, self, x, y, xu, yu, scap, ecap, scapu, ecapu, col, lwd, alpha, stroke, aangle, alen, aends, aclosed)
+Scene$lines <- function(x, y, xu, yu, scap, ecap, scapu, ecapu, off, offu, col, lwd, alpha, stroke, aangle, alen, aends, aclosed) .Call(wrap__Scene__lines, self, x, y, xu, yu, scap, ecap, scapu, ecapu, off, offu, col, lwd, alpha, stroke, aangle, alen, aends, aclosed)
 
 Scene$polygon <- function(x, y, xu, yu, fill, col, lwd, alpha, stroke) .Call(wrap__Scene__polygon, self, x, y, xu, yu, fill, col, lwd, alpha, stroke)
 
@@ -253,7 +257,9 @@ Scene$hexagons <- function(x, y, size, w, h, xu, yu, su, wu, hu, fill, flat, col
 
 Scene$sectors <- function(x, y, r0, r1, theta0, theta1, xu, yu, r0u, r1u, fill, col, lwd, alpha, stroke, aangle, alen, aends, aclosed) .Call(wrap__Scene__sectors, self, x, y, r0, r1, theta0, theta1, xu, yu, r0u, r1u, fill, col, lwd, alpha, stroke, aangle, alen, aends, aclosed)
 
-Scene$segments <- function(x0, y0, x1, y1, x0u, y0u, x1u, y1u, scap, ecap, scapu, ecapu, col, lwd, alpha, stroke, aangle, alen, aends, aclosed) .Call(wrap__Scene__segments, self, x0, y0, x1, y1, x0u, y0u, x1u, y1u, scap, ecap, scapu, ecapu, col, lwd, alpha, stroke, aangle, alen, aends, aclosed)
+Scene$segments <- function(x0, y0, x1, y1, x0u, y0u, x1u, y1u, scap, ecap, scapu, ecapu, off, offu, col, lwd, alpha, stroke, aangle, alen, aends, aclosed) .Call(wrap__Scene__segments, self, x0, y0, x1, y1, x0u, y0u, x1u, y1u, scap, ecap, scapu, ecapu, off, offu, col, lwd, alpha, stroke, aangle, alen, aends, aclosed)
+
+Scene$add_loop <- function(x, y, size, foot, angle, xu, yu, su, fu, col, lwd, alpha, stroke, aangle, alen, aends, aclosed) .Call(wrap__Scene__add_loop, self, x, y, size, foot, angle, xu, yu, su, fu, col, lwd, alpha, stroke, aangle, alen, aends, aclosed)
 
 Scene$path <- function(x, y, xu, yu, nper, evenodd, fill, col, lwd, alpha, stroke) .Call(wrap__Scene__path, self, x, y, xu, yu, nper, evenodd, fill, col, lwd, alpha, stroke)
 

@@ -490,8 +490,9 @@ S7::method(compile, grob_lines) <- function(node, scene) {
     ex <- .coord(node@x); ey <- .coord(node@y); g <- .gp4(node@gp, scene)
     a <- .encode_arrow(node@arrow)
     sc <- .encode_cap(node@start_cap); ec <- .encode_cap(node@end_cap)
+    of <- .encode_cap(node@offset)
     scene$lines(ex$value, ey$value, ex$code, ey$code,
-                sc$value, ec$value, sc$code, ec$code,
+                sc$value, ec$value, sc$code, ec$code, of$value, of$code,
                 g$col, g$lwd, g$alpha, g$stroke,
                 a$angle, a$len, a$ends, a$closed)
   })
@@ -600,6 +601,21 @@ S7::method(compile, grob_sector) <- function(node, scene) {
   })
 }
 
+S7::method(compile, grob_loop) <- function(node, scene) {
+  .with_vp(node, scene, {
+    n <- vctrs::vec_size_common(node@x, node@y, node@size, node@foot)
+    ex <- .coord(node@x, "npc", n); ey <- .coord(node@y, "npc", n)
+    es <- .coord(node@size, "mm", n); ef <- .coord(node@foot, "mm", n)
+    ang <- vctrs::vec_recycle(as.numeric(node@angle), n)
+    g <- .gp4(node@gp, scene)
+    a <- .encode_arrow(node@arrow)
+    scene$add_loop(ex$value, ey$value, es$value, ef$value, ang,
+                   ex$code, ey$code, es$code, ef$code,
+                   g$col, g$lwd, g$alpha, g$stroke,
+                   a$angle, a$len, a$ends, a$closed)
+  })
+}
+
 S7::method(compile, grob_segments) <- function(node, scene) {
   .with_vp(node, scene, {
     n <- vctrs::vec_size_common(node@x0, node@y0, node@x1, node@y1)
@@ -608,9 +624,10 @@ S7::method(compile, grob_segments) <- function(node, scene) {
     g <- .gp4(node@gp, scene)
     a <- .encode_arrow(node@arrow)
     sc <- .encode_cap(node@start_cap); ec <- .encode_cap(node@end_cap)
+    of <- .encode_cap(node@offset)
     scene$segments(e0x$value, e0y$value, e1x$value, e1y$value,
                    e0x$code, e0y$code, e1x$code, e1y$code,
-                   sc$value, ec$value, sc$code, ec$code,
+                   sc$value, ec$value, sc$code, ec$code, of$value, of$code,
                    g$col, g$lwd, g$alpha, g$stroke,
                    a$angle, a$len, a$ends, a$closed)
   })
