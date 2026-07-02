@@ -9,6 +9,7 @@
 //!
 //! The `Scene` is held in Rust and exposed to R as an external-pointer object.
 
+use std::cell::{Ref, RefCell};
 use std::collections::HashMap;
 
 use extendr_api::prelude::*;
@@ -433,6 +434,15 @@ pub struct Scene {
     /// before compiling each grob; emitted by vector backends as `data-*`/`role`.
     meta: Vec<NodeMeta>,
     cur_meta: NodeMeta,
+    /// Lazy full-page raster memo (see `cached_pixmap`). A compiled `Scene` is
+    /// immutable after building — every method below is `&self` and none mutate
+    /// the drawn content — so this needs no invalidation. The R side keys a
+    /// compiled `Scene` on an object-identity token and reuses it across renders,
+    /// so this memo makes a repeated rasterisation (a `display()` redraw at the
+    /// same size, an animation frame replayed) free. INVARIANT: do not add a
+    /// method that mutates `nodes`/`viewports`/`masks` after compilation without
+    /// clearing this cache first.
+    raster_cache: RefCell<Option<Pixmap>>,
 }
 
 #[extendr]
@@ -485,6 +495,7 @@ impl Scene {
             cur_pick: -1,
             meta: Vec::new(),
             cur_meta: NodeMeta::default(),
+            raster_cache: RefCell::new(None),
         }
     }
 
@@ -1036,11 +1047,22 @@ impl Scene {
     /// Render the scene to a PNG file. Returns any degradation warnings (none for
     /// the raster backend today; uniform with the SVG/PDF signatures).
     fn render_png(&self, path: &str) -> Vec<String> {
+        // Reuse the memoised pixmap when present (a repeat render of a cached
+        // Scene); otherwise rasterise — capturing degradation warnings — and fill
+        // the memo. On a hit the warnings were already surfaced by the cold call.
+        if self.raster_cache.borrow().is_some() {
+            if let Err(e) = self.raster_cache.borrow().as_ref().unwrap().save_png(path) {
+                throw_r_error(format!("failed to write PNG: {e}"));
+            }
+            return Vec::new();
+        }
         let mut b = RasterBackend::new(self.w_px, self.h_px, self.bg);
         let warnings = self.render_to(&mut b);
-        if let Err(e) = b.into_pixmap().save_png(path) {
+        let pm = b.into_pixmap();
+        if let Err(e) = pm.save_png(path) {
             throw_r_error(format!("failed to write PNG: {e}"));
         }
+        *self.raster_cache.borrow_mut() = Some(pm);
         warnings
     }
 
@@ -1093,7 +1115,7 @@ impl Scene {
     /// Render and return the whole image as row-major RGBA bytes
     /// `[r, g, b, a, ...]` (top-left origin, x fastest).
     fn rgba(&self) -> Vec<i32> {
-        let pm = self.rasterize();
+        let pm = self.cached_pixmap();
         let mut out = Vec::with_capacity((self.w_px as usize) * (self.h_px as usize) * 4);
         for p in pm.pixels() {
             let c = p.demultiply();
@@ -1109,7 +1131,7 @@ impl Scene {
     /// `c(min_x, min_y, max_x, max_y)` (device px, inclusive), or an empty vector
     /// if nothing was drawn. Used to measure a grob's extent (grobwidth/height).
     fn content_bbox(&self) -> Vec<i32> {
-        let pm = self.rasterize();
+        let pm = self.cached_pixmap();
         let w = self.w_px as usize;
         let (mut minx, mut miny, mut maxx, mut maxy) = (usize::MAX, usize::MAX, 0usize, 0usize);
         let mut any = false;
@@ -1208,10 +1230,10 @@ impl Scene {
 
     /// Render and return the RGBA of device pixel `(x, y)` as `c(r, g, b, a)`.
     fn pixel(&self, x: i32, y: i32) -> Vec<i32> {
-        let pm = self.rasterize();
         if x < 0 || y < 0 || x as u32 >= self.w_px || y as u32 >= self.h_px {
             throw_r_error("pixel out of bounds");
         }
+        let pm = self.cached_pixmap();
         match pm.pixel(x as u32, y as u32) {
             Some(p) => {
                 let c = p.demultiply();
@@ -1616,11 +1638,17 @@ impl Scene {
         }
     }
 
-    /// Render the whole page to a pixmap.
-    fn rasterize(&self) -> Pixmap {
-        let mut b = RasterBackend::new(self.w_px, self.h_px, self.bg);
-        self.render_to(&mut b);
-        b.into_pixmap()
+    /// Rasterise the whole page once and memoise it; subsequent calls return the
+    /// stored pixmap (see the `raster_cache` field invariant). The raster backend
+    /// produces no degradation warnings, so none are surfaced here (unlike
+    /// `render_svg`/`render_pdf`, which build their own backend to keep warnings).
+    fn cached_pixmap(&self) -> Ref<'_, Pixmap> {
+        if self.raster_cache.borrow().is_none() {
+            let mut b = RasterBackend::new(self.w_px, self.h_px, self.bg);
+            self.render_to(&mut b);
+            *self.raster_cache.borrow_mut() = Some(b.into_pixmap());
+        }
+        Ref::map(self.raster_cache.borrow(), |o| o.as_ref().unwrap())
     }
 
     /// Walk the resolved scene in paint order, emitting each primitive through a

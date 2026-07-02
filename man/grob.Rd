@@ -210,16 +210,17 @@ text_grob(
 \arguments{
 \item{x, y}{Coordinates (\code{\link[=unit]{unit()}} or numeric).}
 
-\item{width, height}{Optional per-hexagon \strong{full} extent (corner-to-corner) along
-the x and y axis, as \code{\link[=unit]{unit()}}s recycled like \code{x}/\code{y}. When both are supplied
-they override \code{size}, resolved per-axis, so a hexagon can be \emph{non-regular}
-(independent horizontal and vertical extent) and tile a non-square lattice —
-e.g. \code{width}/\code{height} in \code{"native"} units tile in data space regardless of the
-device aspect. \code{width} is the distance between the left and right vertices (for
-\code{"flat"}; the flat sides for \code{"pointy"}) and \code{height} the distance between the
-top and bottom edges (\code{"flat"}; vertices for \code{"pointy"}). A \emph{regular} hexagon
-is \code{height == width * sqrt(3) / 2} (flat). Leave both \code{NULL} (default) to draw
-a regular hexagon of circumradius \code{size}. Must be given together.}
+\item{width, height}{Grob size (\code{\link[=unit]{unit()}} or numeric), recycled like \code{x}/\code{y}.
+For most grobs the drawn rectangle size. For \code{\link[=hexagon_grob]{hexagon_grob()}}, the optional
+per-hexagon \strong{full} corner-to-corner extent along x/y: when both are given
+they override \code{size} (resolved per-axis, so a hexagon can be \emph{non-regular}
+and tile a non-square lattice — e.g. \code{"native"} units tile in data space
+regardless of device aspect); a \emph{regular} flat hexagon is
+\code{height == width * sqrt(3) / 2}; leave both \code{NULL} to use circumradius
+\code{size}; must be given together. For \code{\link[=loop_grob]{loop_grob()}}, \code{width} is instead a
+dimensionless lateral petal scale in \verb{(0, 1]} (recycled per loop): \code{1}
+(default) is the full teardrop, smaller narrows the petal's \strong{waist}
+without shortening it (the igraph "narrowing" factor).}
 
 \item{gp}{Graphical parameters, from \code{\link[=gpar]{gpar()}}.}
 
@@ -318,12 +319,6 @@ keeps hard pixel edges.}
 \code{"right"}, \code{"bottom"}, \code{"top"}) or numbers in \verb{[0, 1]}.}
 
 \item{rot}{Rotation in degrees, counter-clockwise.}
-
-\item{width}{Lateral petal scale, a dimensionless ratio in \verb{(0, 1]} (recycled per
-loop). \code{1} (default) is the full teardrop; smaller values narrow the petal's
-\strong{waist} without shortening it (its \code{angle}-wise bulge stays \code{0.3 * size}), so
-several loops crammed into a tight angular gap on one vertex stay skinny enough
-not to overlap — the igraph "narrowing" factor.}
 }
 \value{
 A grob object.

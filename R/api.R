@@ -40,9 +40,29 @@ vellum_scene <- S7::new_class(
     dpi = S7::new_property(S7::class_double, default = 96),
     bg = S7::new_property(S7::class_any, default = "white"),
     root = S7::new_property(S7::class_any, default = NULL),
-    bstate = S7::new_property(S7::class_any, default = NULL)
+    bstate = S7::new_property(S7::class_any, default = NULL),
+    # Content-identity token for the render cache (see `.new_scene_id`). Lives in
+    # `bstate$cid` while building; here only once materialised (by `edit_node`).
+    # `NULL` -> the scene is not cacheable (foreign-built / raw `set_props`).
+    cid = S7::new_property(S7::class_any, default = NULL)
   )
 )
+
+# --- content-identity token (object-identity render cache) -------------------
+# A strictly-monotonic per-content-version id, stamped into the *content carrier*
+# (the build-state list, or the scene's `cid` property once materialised) at
+# every content mutation, so it changes whenever the drawn content changes but
+# survives a device-only edit (a `display()` resize's
+# `set_props(width=, height=, dpi=)`). The render cache keys on it in O(1) — a
+# scalar read, not the O(grobs) tree hash that sank the reverted FW4 cache. A
+# double counter is exact to 2^53, far beyond any session's mutation count.
+.id_counter <- new.env(parent = emptyenv())
+.id_counter$n <- 0
+.new_scene_id <- function() {
+  n <- .id_counter$n + 1
+  .id_counter$n <- n
+  n
+}
 
 # --- mutable build tree (O(1) append) ---------------------------------------
 # A "build node" is an environment with the viewport plus a child dictionary
@@ -99,12 +119,13 @@ vellum_scene <- S7::new_class(
 # counts, and the ownership generation. `owner_gen` is stamped on the build node.
 .bstate_new <- function(build, open, ocount, gen) {
   build$owner_gen <- gen
-  list(build = build, open = open, ocount = ocount, gen = gen)
+  list(build = build, open = open, ocount = ocount, gen = gen, cid = .new_scene_id())
 }
 
 # The immutable root gtree for a scene's view (materialising the build tree if
 # needed), honouring this scene's per-open-node child counts (`ocount`).
 .materialize <- function(scene) {
+  .mtl_count$n <- .mtl_count$n + 1L # instrumentation: build->gtree walks (see tests)
   if (!is.null(scene@root)) {
     return(scene@root)
   }
@@ -188,6 +209,7 @@ vl_scene <- function(width = 6, height = 4, dpi = 96, bg = "white",
   g <- bs$build$owner_gen + 1
   bs$build$owner_gen <- g
   bs$gen <- g
+  bs$cid <- .new_scene_id() # content changed -> new identity for the render cache
   bs
 }
 
@@ -437,15 +459,145 @@ S7::method(plot, vellum_scene) <- function(x, y, ...) {
   invisible(x)
 }
 
-# Compile an immutable scene onto a fresh backend `Scene` (write-only target).
-# (A content-hash render cache was tried and removed: hashing the materialized
-# tree on every call cost more than it saved — it scaled with grob count, and the
-# common single-render and `display()`-resize paths never reused an entry.)
+# --- object-identity render cache -------------------------------------------
+# Keyed on the content-identity token (`.new_scene_id`), so a repeat render of an
+# unchanged scene (multi-format export, `display()` redraw / resize-return-to-a-
+# prior-size, animation replay) reuses the compiled backend `Scene` — while a
+# single render pays only an O(1) key lookup, not the O(grobs) content hash the
+# reverted FW4 cache computed on every call (DESIGN.md FW4). Two memos:
+#   * `.render_cache`  key = (cid, w_in, h_in, dpi, bg)  -> compiled Scene (LRU)
+#   * `.mtl_cache`     key = cid                          -> materialised gtree
+# The materialise memo is device-independent, so a genuine resize (new size ->
+# compiled-Scene miss) still skips the build->gtree walk. Both are transparent (a
+# hit is byte-identical to a miss) and disabled by `options(vellum.cache=FALSE)`.
+.render_cache <- new.env(parent = emptyenv())
+.render_cache$.order <- character(0) # LRU access order, oldest first
+.render_cache$.hits <- 0L
+.render_cache$.misses <- 0L
+.mtl_cache <- new.env(parent = emptyenv())
+.mtl_count <- new.env(parent = emptyenv()) # `.materialize` call counter (tests)
+.mtl_count$n <- 0L
+
+.render_cache_cap <- function() {
+  cap <- suppressWarnings(as.integer(getOption("vellum.cache_size", 8L)))
+  if (is.na(cap) || cap < 1L) 8L else cap
+}
+
+.render_key <- function(cid, w_in, h_in, dpi, bg) {
+  paste0(cid, "|", w_in, "x", h_in, "@", dpi, "|", paste(bg, collapse = ","))
+}
+
+# LRU lookup: on a hit, promote the key to most-recent and count it.
+.render_cache_get <- function(key) {
+  hit <- .render_cache[[key]]
+  if (!is.null(hit)) {
+    .render_cache$.order <- c(setdiff(.render_cache$.order, key), key)
+    .render_cache$.hits <- .render_cache$.hits + 1L
+  }
+  hit
+}
+
+# LRU insert: evict oldest until under cap, then store as most-recent.
+.render_cache_put <- function(key, value) {
+  cap <- .render_cache_cap()
+  ord <- setdiff(.render_cache$.order, key)
+  while (length(ord) >= cap) {
+    old <- ord[[1L]]
+    ord <- ord[-1L]
+    if (exists(old, envir = .render_cache, inherits = FALSE)) rm(list = old, envir = .render_cache)
+  }
+  assign(key, value, envir = .render_cache)
+  .render_cache$.order <- c(ord, key)
+  .render_cache$.misses <- .render_cache$.misses + 1L
+  invisible()
+}
+
+# Materialise the scene's tree, memoised on its content id (device-independent).
+.materialize_cached <- function(scene, cid) {
+  if (is.null(cid)) {
+    return(.materialize(scene))
+  }
+  k <- as.character(cid)
+  hit <- .mtl_cache[[k]]
+  if (!is.null(hit)) {
+    return(hit)
+  }
+  root <- .materialize(scene)
+  if (length(ls(.mtl_cache)) > .render_cache_cap() * 2L) { # crude bound; refs are cheap
+    rm(list = ls(.mtl_cache, all.names = TRUE), envir = .mtl_cache)
+  }
+  assign(k, root, envir = .mtl_cache)
+  root
+}
+
+# Empty both memos and reset counters/LRU order.
+.render_cache_reset <- function() {
+  rm(list = ls(.render_cache, all.names = TRUE), envir = .render_cache)
+  rm(list = ls(.mtl_cache, all.names = TRUE), envir = .mtl_cache)
+  .render_cache$.order <- character(0)
+  .render_cache$.hits <- 0L
+  .render_cache$.misses <- 0L
+  invisible()
+}
+
+#' Clear the render cache
+#'
+#' vellum memoises compiled scenes keyed on an object-identity token so repeat
+#' renders of an unchanged scene (multi-format export, a `display()` resize back
+#' to a prior size, or animation replaying a fixed set of frames) are cheap. The
+#' cache is transparent — a cached render is byte-identical to an uncached one —
+#' and bounded (`options(vellum.cache_size=)`, default 8), so you rarely need
+#' this; it is provided to reclaim memory or to force a cold render in
+#' benchmarks. Disable caching entirely with `options(vellum.cache = FALSE)`.
+#'
+#' @return `NULL`, invisibly.
+#' @examples
+#' vl_clear_render_cache()
+#' @export
+vl_clear_render_cache <- function() {
+  .render_cache_reset()
+  invisible(NULL)
+}
+
+# Compile an immutable scene onto a fresh backend `Scene`, memoised on the
+# scene's object-identity token. A single render costs one O(1) key lookup + one
+# compile; a repeat of the same content at the same device size reuses the
+# compiled Scene (and, via the Scene's own lazy pixmap memo, its rasterisation).
 .scene_to_backend <- function(scene, debug = FALSE) {
+  # Read the id from whichever carrier is active, requiring the "exactly one of
+  # bstate/root" invariant to hold — a scene with both set (or neither) has been
+  # mutated outside the builder API (a raw `set_props(root=)`), so it is not
+  # trustworthy: return NULL and render it fresh rather than risk a stale hit.
+  cid <- if (!is.null(scene@bstate) && is.null(scene@root)) {
+    scene@bstate$cid
+  } else if (is.null(scene@bstate) && !is.null(scene@root)) {
+    scene@cid
+  } else {
+    NULL
+  }
+  # Bypass for debug overlays, when disabled, or when the scene carries no id
+  # (foreign-built / raw `set_props`) — compute fresh rather than risk a stale
+  # hit. Absent id => never cached (fail-safe), so it can only under-hit.
+  if (debug || is.null(cid) || !isTRUE(getOption("vellum.cache", TRUE))) {
+    return(.compile_backend(scene, debug = debug, cid = NULL))
+  }
+  key <- .render_key(cid, .to_inches(scene@width), .to_inches(scene@height),
+                     scene@dpi, .rs_col(scene@bg) %||% c(255L, 255L, 255L, 0L))
+  hit <- .render_cache_get(key)
+  if (!is.null(hit)) {
+    return(hit)
+  }
+  s <- .compile_backend(scene, cid = cid)
+  .render_cache_put(key, s)
+  s
+}
+
+.compile_backend <- function(scene, debug = FALSE, cid = NULL) {
   s <- Scene$new(.to_inches(scene@width), .to_inches(scene@height), scene@dpi,
                  .rs_col(scene@bg) %||% c(255L, 255L, 255L, 0L))
   # Compile the root as a gtree so the root viewport's gp / scales / clip / layout
   # / mask all apply (it is pushed like any viewport), not just its layout.
+  root <- .materialize_cached(scene, cid)
   if (debug) {
     # Capture the id<->name map for each pushed viewport (via `.push_vp`), then
     # draw the layout-debug overlay on top of the compiled content.
@@ -454,11 +606,11 @@ S7::method(plot, vellum_scene) <- function(x, y, ...) {
     old <- .debug_state$reg
     .debug_state$reg <- reg
     on.exit(.debug_state$reg <- old, add = TRUE)
-    compile(.materialize(scene), s)
+    compile(root, s)
     .debug_state$reg <- old
     .draw_debug_overlay(s, reg$items)
   } else {
-    compile(.materialize(scene), s)
+    compile(root, s)
   }
   s
 }
@@ -821,10 +973,11 @@ edit_node <- function(scene, name, ...) {
   root <- .materialize(scene)
   p <- .find_path(root, name)
   if (is.null(p)) cli::cli_abort("No node named {.val {name}}.")
-  # Return an immutable (materialised) scene; the builder env is untouched.
-  scene@root <- .modify_at(root, p, function(nd) S7::set_props(nd, ...))
-  scene@bstate <- NULL
-  scene
+  # Return an immutable (materialised) scene; the builder env is untouched. The
+  # id lives in `@cid` now that there is no `bstate` carrier (one write).
+  S7::set_props(scene,
+    root = .modify_at(root, p, function(nd) S7::set_props(nd, ...)),
+    bstate = NULL, cid = .new_scene_id())
 }
 
 # --- internal helpers -------------------------------------------------------

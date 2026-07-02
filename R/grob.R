@@ -143,7 +143,17 @@ grob_raster <- S7::new_class("grob_raster", parent = grob, package = "vellum",
 
 #' @rdname grob
 #' @param x,y Coordinates ([unit()] or numeric).
-#' @param width,height Sizes ([unit()] or numeric).
+#' @param width,height Grob size ([unit()] or numeric), recycled like `x`/`y`.
+#'   For most grobs the drawn rectangle size. For [hexagon_grob()], the optional
+#'   per-hexagon **full** corner-to-corner extent along x/y: when both are given
+#'   they override `size` (resolved per-axis, so a hexagon can be *non-regular*
+#'   and tile a non-square lattice — e.g. `"native"` units tile in data space
+#'   regardless of device aspect); a *regular* flat hexagon is
+#'   `height == width * sqrt(3) / 2`; leave both `NULL` to use circumradius
+#'   `size`; must be given together. For [loop_grob()], `width` is instead a
+#'   dimensionless lateral petal scale in `(0, 1]` (recycled per loop): `1`
+#'   (default) is the full teardrop, smaller narrows the petal's **waist**
+#'   without shortening it (the igraph "narrowing" factor).
 #' @param gp Graphical parameters, from [gpar()].
 #' @param name Optional name (for [edit_node()]).
 #' @param vp Optional [viewport()] to draw this grob inside.
@@ -435,16 +445,6 @@ points_grob <- function(x, y, size = unit(2, "mm"), shape = "circle",
 #'   stroke comes from `gp` (`col`/`lwd`).
 #' @param orientation Hexagon orientation: `"flat"` (default, flat top/bottom edge)
 #'   or `"pointy"` (vertex at top). `size` is the circumradius (centre to vertex).
-#' @param width,height Optional per-hexagon **full** extent (corner-to-corner) along
-#'   the x and y axis, as [unit()]s recycled like `x`/`y`. When both are supplied
-#'   they override `size`, resolved per-axis, so a hexagon can be *non-regular*
-#'   (independent horizontal and vertical extent) and tile a non-square lattice —
-#'   e.g. `width`/`height` in `"native"` units tile in data space regardless of the
-#'   device aspect. `width` is the distance between the left and right vertices (for
-#'   `"flat"`; the flat sides for `"pointy"`) and `height` the distance between the
-#'   top and bottom edges (`"flat"`; vertices for `"pointy"`). A *regular* hexagon
-#'   is `height == width * sqrt(3) / 2` (flat). Leave both `NULL` (default) to draw
-#'   a regular hexagon of circumradius `size`. Must be given together.
 #' @export
 hexagon_grob <- function(x = 0.5, y = 0.5, size = unit(2, "mm"),
                          width = NULL, height = NULL, fill = NULL,
@@ -522,11 +522,6 @@ sector_grob <- function(x = 0.5, y = 0.5, r0 = 0, r1 = 0.5, theta0 = 0, theta1 =
 #'   the marker. Recycled per loop.
 #' @param angle Outward direction of the loop in **radians** (which way the teardrop
 #'   bulges away from the vertex, e.g. away from the layout centroid).
-#' @param width Lateral petal scale, a dimensionless ratio in `(0, 1]` (recycled per
-#'   loop). `1` (default) is the full teardrop; smaller values narrow the petal's
-#'   **waist** without shortening it (its `angle`-wise bulge stays `0.3 * size`), so
-#'   several loops crammed into a tight angular gap on one vertex stay skinny enough
-#'   not to overlap — the igraph "narrowing" factor.
 #' @details
 #' `loop_grob()` draws **self-loops** for node-link diagrams as an igraph-style cubic
 #' **Bézier teardrop**: it leaves the vertex `(x, y)` (a `"native"` anchor), bulges
