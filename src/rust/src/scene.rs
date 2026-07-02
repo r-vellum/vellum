@@ -1490,6 +1490,12 @@ impl Scene {
 
     /// Resolve every viewport (transform, size, accumulated gpar, clip mask).
     /// DFS from the root guarantees a parent is resolved before its children.
+    ///
+    /// Recomputed on each of `render_to`/`pixel`/`resolved_geometry` rather than
+    /// memoised: a `Scene` is built once per compile and then queried once per
+    /// operation, so there is no intra-`Scene` reuse to cache today. If a
+    /// display/grammar layer ever issues several queries against one `Scene`, add an
+    /// interior-mutability (`OnceCell`) cache here — the method already takes `&self`.
     fn resolve_all(&self) -> Vec<ResolvedVp> {
         let n = self.viewports.len();
         let mut out: Vec<Option<ResolvedVp>> = vec![None; n];
@@ -1827,7 +1833,10 @@ impl Scene {
                         }
                         b.draw_circles(&cx, &cy, &rr, rf.as_ref(), stroke.map(|c| (c, stroke_style(&gp, vp.dpi))), t, &clip);
                     } else {
-                        // Gradient/pattern fill: build each circle in local px.
+                        // Gradient/pattern fill: build each circle in local px. (Not a
+                        // candidate for the unit-path+transform reuse the solid Rects/
+                        // Markers fast paths use — a gradient is resolved in local px,
+                        // so the fill is position-dependent, not transform-invariant.)
                         let style = stroke_style(&gp, vp.dpi);
                         for i in 0..n {
                             let cx = vp.x_pos(x[i], xu[i]);
@@ -1849,7 +1858,18 @@ impl Scene {
                 Node::Markers { x, y, size, xu, yu, su, shape, .. } => {
                     let n = [x.len(), y.len(), size.len(), xu.len(), yu.len(), su.len(), shape.len()]
                         .into_iter().min().unwrap_or(0);
+                    let lwd = gp.lwd_px(vp.dpi);
+                    let stroke = gp.col.filter(|_| lwd > 0.0);
+                    let rf = gp.fill.as_ref().map(|p| resolve_paint(p, vp));
+                    let solid = matches!(gp.fill, Some(Paint::Solid(_)) | None);
                     let style = stroke_style(&gp, vp.dpi);
+                    // Fast path: a solid (transform-invariant) fill with no stroke
+                    // reuses one unit shape per marker kind, placed by an affine
+                    // transform — mirrors the Rects fast path and is pixel-identical.
+                    // Stroked / gradient / line-glyph (plus, cross) markers keep the
+                    // per-element build below (a scaled stroke would distort).
+                    let fast = solid && stroke.is_none();
+                    let mut unit_cache: [Option<tiny_skia::Path>; 4] = [None, None, None, None];
                     for i in 0..n {
                         let cx = vp.x_pos(x[i], xu[i]);
                         let cy = vp.y_pos(y[i], yu[i]);
@@ -1858,12 +1878,22 @@ impl Scene {
                         if rr <= 0.0 || !cx.is_finite() || !cy.is_finite() {
                             continue;
                         }
+                        let sh = shape[i];
+                        if fast && sh != 4 && sh != 5 {
+                            if let Some(rp) = &rf {
+                                let slot = match sh { 1 => 1, 2 => 2, 3 => 3, _ => 0 };
+                                let unit = unit_cache[slot].get_or_insert_with(|| unit_marker(sh));
+                                let tr = t.pre_concat(Transform::from_row(rr as f32, 0.0, 0.0, rr as f32, cx as f32, cy as f32));
+                                b.fill_path(unit, tr, rp, FillRule::Winding, &clip);
+                            }
+                            continue;
+                        }
                         let (cxf, cyf, rrf) = (cx as f32, cy as f32, rr as f32);
                         let mut pb = PathBuilder::new();
-                        match shape[i] {
+                        match sh {
                             // plus / cross: stroke-only line glyphs (no fill)
                             4 | 5 => {
-                                if shape[i] == 4 {
+                                if sh == 4 {
                                     pb.move_to(cxf, cyf - rrf);
                                     pb.line_to(cxf, cyf + rrf);
                                     pb.move_to(cxf - rrf, cyf);
@@ -2104,6 +2134,9 @@ impl Scene {
                             let s = vp.x_len(size[i], su[i]); // mm -> device px
                             let f = vp.x_len(foot[i], fu[i]);
                             let cp = loop_control_points(cx, cy, s, f, angle[i], width[i]);
+                            // Per-element path build: a loop is a distinct Bézier
+                            // teardrop (position/size-dependent control points) and
+                            // stroke-only, so unit-path+transform reuse doesn't apply.
                             if style.width > 0.0 {
                                 let mut pb = PathBuilder::new();
                                 pb.move_to(cp[0].0, cp[0].1);
@@ -2148,6 +2181,40 @@ impl Scene {
 /// batched-rect solid fast path.
 fn unit_rect() -> tiny_skia::Path {
     rect_path(-0.5, -0.5, 1.0, 1.0).expect("unit rect path")
+}
+
+/// A unit marker fill-shape centred at the origin with half-extent 1, scaled by the
+/// per-element radius and placed by an affine transform in the Markers solid-fill
+/// fast path (mirrors `unit_rect`). `shape`: 1=square, 2=triangle, 3=diamond, else
+/// circle. Line glyphs (plus/cross = 4/5) are stroke-only and built per element.
+fn unit_marker(shape: u32) -> tiny_skia::Path {
+    let mut pb = PathBuilder::new();
+    match shape {
+        1 => {
+            pb.move_to(-1.0, -1.0);
+            pb.line_to(1.0, -1.0);
+            pb.line_to(1.0, 1.0);
+            pb.line_to(-1.0, 1.0);
+            pb.close();
+        }
+        2 => {
+            pb.move_to(0.0, -1.0);
+            pb.line_to(0.866, 0.5);
+            pb.line_to(-0.866, 0.5);
+            pb.close();
+        }
+        3 => {
+            pb.move_to(0.0, -1.0);
+            pb.line_to(1.0, 0.0);
+            pb.line_to(0.0, 1.0);
+            pb.line_to(-1.0, 0.0);
+            pb.close();
+        }
+        _ => {
+            pb.push_circle(0.0, 0.0, 1.0);
+        }
+    }
+    pb.finish().expect("unit marker path")
 }
 
 /// Build a multi-subpath device path: `nper[k]` consecutive points form one

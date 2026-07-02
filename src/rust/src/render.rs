@@ -408,11 +408,15 @@ pub fn sector_path(cx: f64, cy: f64, r0: f64, r1: f64, theta0: f64, theta1: f64)
     let r_out = r1.max(0.0);
     let r_in = r0.max(0.0);
     let dtheta = theta1 - theta0;
-    if r_out <= 0.0 || dtheta == 0.0 || !cx.is_finite() || !cy.is_finite() {
+    if r_out <= 0.0 || dtheta == 0.0 || !dtheta.is_finite() || !cx.is_finite() || !cy.is_finite() {
         return None;
     }
-    // ~4 degrees per segment, at least 2 segments across the span.
-    let segs = (dtheta.abs() / (std::f64::consts::PI / 45.0)).ceil().max(2.0) as usize;
+    // ~4 degrees per segment, at least 2 segments across the span. Cap the count so
+    // an extreme span (should already be rejected R-side as non-finite/huge, but be
+    // defensive) can't blow up the allocation / loop.
+    const MAX_SECTOR_SEGS: usize = 4096;
+    let segs = ((dtheta.abs() / (std::f64::consts::PI / 45.0)).ceil().max(2.0) as usize)
+        .min(MAX_SECTOR_SEGS);
     let pt = |r: f64, a: f64| ((cx + r * a.cos()) as f32, (cy + r * a.sin()) as f32);
     let mut pb = PathBuilder::new();
     // Outer arc, theta0 -> theta1.
@@ -928,6 +932,11 @@ impl SvgBackend {
 
     /// Return the id of a `<defs>` entry with signature `key`, emitting it via
     /// `make(id)` the first time and reusing it afterwards.
+    ///
+    /// The `key` is a `format!` string (callers include the serialized stops /
+    /// tile-`Rc` pointer + geometry). A struct/`Rc`-keyed map would avoid the string
+    /// alloc, but the key cost is dwarfed by the surrounding SVG serialization, so it
+    /// is intentionally left as-is.
     fn intern_def(&mut self, key: String, make: impl FnOnce(&str) -> String) -> String {
         if let Some(id) = self.def_ids.get(&key) {
             return id.clone();
@@ -1583,8 +1592,11 @@ impl RenderBackend for PdfBackend<'_, '_> {
             // cell, anchored at the cell's top-left (matching raster/SVG).
             ResolvedPaint::Pattern { tile, tw, th, x, y, w, h, opacity, .. } => {
                 match KSize::from_wh(*w as f32, *h as f32) {
-                    Some(cell) if tile.len() == (*tw as usize) * (*th as usize) * 4 => {
-                        let img = KImage::from_rgba8(tile.to_vec(), *tw, *th);
+                    // `>=` for parity with the raster/SVG tile checks (which accept a
+                    // buffer at least the required size, not exactly it).
+                    Some(cell) if tile.len() >= (*tw as usize) * (*th as usize) * 4 => {
+                        let n = (*tw as usize) * (*th as usize) * 4;
+                        let img = KImage::from_rgba8(tile[..n].to_vec(), *tw, *th);
                         let stream = {
                             let mut sb = self.surface.stream_builder();
                             let mut surf = sb.surface();
