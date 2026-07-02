@@ -59,18 +59,18 @@ which picks the backend from the file extension.
   `render(scene, "plot.pdf")`.
 - **A retained scene graph, not immediate-mode drawing.** Because the scene is
   kept (not drawn-and-forgotten), vellum offers capabilities grid does not:
-  **hit-testing** (`hit_test()` picks the topmost grob under a point), a
-  content-hash render cache, and named, **editable** nodes
-  (`node_names()` / `get_node()` / `edit_node()`).
+  **hit-testing** (`hit_test()` picks the topmost grob under a point) and named,
+  **editable** nodes (`node_names()` / `get_node()` / `edit_node()`).
 - **A modern paint model across all backends.** Linear & radial **gradients**,
   tiling **patterns**, alpha/luminance **masks**, and group opacity
   (`viewport(alpha=)`).
 - **Built-in big-data aggregation.** `datashade()` bins millions of points into a
   density raster in one pass, with no overplotting and no giant files.
-- **Device-independent, faithful text.** Shaping via
-  [textshaping](https://github.com/r-lib/textshaping) /
-  [systemfonts](https://github.com/r-lib/systemfonts) (the same stack as
-  ragg/svglite), with per-glyph fallback, justification, and rotation.
+- **Device-independent, faithful text.** Shaping runs through
+  [textshaping](https://github.com/r-lib/textshaping) (which sits on
+  [systemfonts](https://github.com/r-lib/systemfonts)) — the same stack as
+  ragg/svglite — with per-glyph fallback, justification, rotation, and
+  Markdown-style rich labels (`md()`: bold/italic, super/subscript, coloured spans).
 - **Vectorised primitives and a flex layout engine.** Batched
   rects/circles/points/segments/text, nested viewports with rotation and
   arbitrary-path clipping, and a row/column layout solver with `"null"` (flexible)
