@@ -31,6 +31,12 @@ physical size. It draws through a grid grob that re-rasterizes on every draw, so
 markers stay round) rather than stretching one bitmap. Use \code{render()} to write
 the scene at its \emph{authored} width/height. Auto-printing a scene at the console
 (or calling \code{plot()} on it) displays it.
+
+Inside a knitr / Quarto chunk the chunk's \code{dpi} option wins, so
+\code{knitr::opts_chunk$set(dpi = 200)} yields a genuine 200-dpi figure even on
+knitr's default \code{dev = "png"} device (which misreports its pixel density);
+outside knitting the scene's authored \code{\link[=vl_scene]{vl_scene()}} \code{dpi} is honored unless the
+live device reports a trustworthy higher density (e.g. a resized Plots pane).
 }
 \examples{
 \dontrun{

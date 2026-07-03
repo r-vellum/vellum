@@ -63,6 +63,71 @@ test_that("display() re-renders on resize so round markers stay round", {
   expect_lt(abs(wpx - hpx), 4) # round, not stretched into an ellipse
 })
 
+# A detail-rich scene whose render sharpness scales with the dpi it is rasterized
+# at. Measures a Laplacian-energy proxy (mean squared 2nd-difference over the
+# greyscale image): a genuine high-dpi render has ~an order of magnitude more of
+# it than a low-dpi render upscaled to the same pixel size.
+.dpi_probe_scene <- function() {
+  s <- vl_scene(7, 5, bg = "white", dpi = 96)
+  set.seed(1)
+  for (i in seq_len(120)) {
+    s <- draw(s, circle_grob(x = stats::runif(1), y = stats::runif(1), r = 0.015,
+                             gp = gpar(fill = "tomato", col = "black")))
+  }
+  s
+}
+.sharpness <- function(f) {
+  img <- png::readPNG(f)
+  g <- apply(img[, , 1:3, drop = FALSE], c(1, 2), mean)
+  dx <- diff(g, differences = 2)
+  dy <- diff(t(g), differences = 2)
+  (mean(dx^2) + mean(dy^2)) * 1e4
+}
+
+test_that("display() honors the authored dpi on a device that misreports px size", {
+  # grDevices::png (knitr's default device) pins dev.size('px') to size_in*72 and
+  # ignores its own res=, so a naive px/in ratio always yields 72. The display
+  # path must distrust that and render at the scene's authored dpi instead of
+  # clamping detail to 72 and upscaling a soft bitmap.
+  skip_if_not_installed("png")
+  s <- .dpi_probe_scene()
+  lo <- S7::set_props(s, dpi = 72)
+  hi <- S7::set_props(s, dpi = 200)
+  render_sharp <- function(scene) {
+    f <- withr::local_tempfile(fileext = ".png")
+    grDevices::png(f, 7, 5, "in", res = 200) # emits 1400x1000 regardless of content dpi
+    display(scene)
+    grDevices::dev.off()
+    .sharpness(f)
+  }
+  # Same emitted pixel size; the dpi=200 scene carries genuinely more detail.
+  expect_gt(render_sharp(hi), render_sharp(lo) * 3)
+})
+
+test_that("display() lets the knitr chunk dpi win when knitting", {
+  skip_if_not_installed("png")
+  s <- S7::set_props(.dpi_probe_scene(), dpi = 72) # authored low; chunk asks high
+  withr::local_options(knitr.in.progress = TRUE)
+  # Stub knitr::opts_current$get('dpi') -> 200 without a full knit.
+  local_mocked_bindings(
+    opts_current = list(get = function(name, ...) if (identical(name, "dpi")) 200 else NULL),
+    .package = "knitr"
+  )
+  f_knit <- withr::local_tempfile(fileext = ".png")
+  grDevices::png(f_knit, 7, 5, "in", res = 200)
+  display(s)
+  grDevices::dev.off()
+  sharp_knit <- .sharpness(f_knit)
+
+  # Same scene, no knit context: falls back to the authored dpi (72) -> softer.
+  withr::local_options(knitr.in.progress = NULL)
+  f_plain <- withr::local_tempfile(fileext = ".png")
+  grDevices::png(f_plain, 7, 5, "in", res = 200)
+  display(s)
+  grDevices::dev.off()
+  expect_gt(sharp_knit, .sharpness(f_plain) * 3)
+})
+
 test_that("print() and plot() dispatch to display()", {
   f <- withr::local_tempfile(fileext = ".png")
   grDevices::png(f)

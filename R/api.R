@@ -404,6 +404,12 @@ S7::method(as.raster, vellum_scene) <- function(x, ...) {
 #' the scene at its *authored* width/height. Auto-printing a scene at the console
 #' (or calling `plot()` on it) displays it.
 #'
+#' Inside a knitr / Quarto chunk the chunk's `dpi` option wins, so
+#' `knitr::opts_chunk$set(dpi = 200)` yields a genuine 200-dpi figure even on
+#' knitr's default `dev = "png"` device (which misreports its pixel density);
+#' outside knitting the scene's authored [vl_scene()] `dpi` is honored unless the
+#' live device reports a trustworthy higher density (e.g. a resized Plots pane).
+#'
 #' @param scene A [vl_scene()] or anything with an [as_vellum_scene()] method.
 #' @param ... Unused.
 #' @return The (coerced) scene, invisibly.
@@ -444,11 +450,22 @@ makeContent.vellum_scene_grob <- function(x) {
   h_in <- grid::convertHeight(grid::unit(1, "npc"), "inches", valueOnly = TRUE)
   if (!is.finite(w_in) || w_in <= 0) w_in <- .to_inches(x$scene@width)
   if (!is.finite(h_in) || h_in <= 0) h_in <- .to_inches(x$scene@height)
-  dpi <- tryCatch({
+  # Pick the dpi to re-render at. Priority: (1) the knitr/Quarto chunk dpi the
+  # user set and expects to win; (2) the live device's pixel density, but only
+  # when it's trustworthy; (3) the scene's authored dpi. grDevices::png (knitr's
+  # default device) hard-wires dev.size("px") to size_in * 72 and ignores its own
+  # res=, so the ratio pins at 72 there regardless of the real resolution — treat
+  # a ratio of 72 as "device misreports" and fall through to the authored dpi
+  # rather than clamping the render to 72 and upscaling a soft bitmap.
+  knit_dpi <- if (isTRUE(getOption("knitr.in.progress")))
+    knitr::opts_current$get("dpi") else NULL
+  dev_dpi <- tryCatch({
     d <- grDevices::dev.size("in")
     p <- grDevices::dev.size("px")
-    max(72, min(round(p[1] / d[1]), 300))
-  }, error = function(e) x$scene@dpi)
+    r <- round(p[1] / d[1])
+    if (r <= 72) NA_real_ else min(r, 300)
+  }, error = function(e) NA_real_)
+  dpi <- knit_dpi %||% (if (is.na(dev_dpi)) x$scene@dpi else max(72, dev_dpi))
   s2 <- S7::set_props(x$scene, width = unit(w_in, "in"), height = unit(h_in, "in"), dpi = dpi)
   grid::setChildren(x, grid::gList(
     grid::rasterGrob(as.raster(s2), width = grid::unit(1, "npc"),
