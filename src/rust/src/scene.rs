@@ -550,7 +550,15 @@ pub struct Scene {
     /// method that mutates `nodes`/`viewports`/`masks` after compilation without
     /// clearing this cache first.
     raster_cache: RefCell<Option<Pixmap>>,
+    /// Total glyphs across all text nodes, accumulated at compile. Drives the
+    /// glyph-bitmap fast path's per-render threshold (see `cached_pixmap`/`render_png`).
+    text_glyphs: usize,
 }
+
+/// Enable the glyph-bitmap fast path once a render draws at least this many
+/// glyphs (auto mode): the per-glyph sprite cache pays off for dense text and is
+/// pointless for a handful of labels. Mirrors the marker-sprite `SPRITE_MIN`.
+const GLYPH_BITMAP_MIN: usize = 2_000;
 
 #[extendr]
 impl Scene {
@@ -603,6 +611,18 @@ impl Scene {
             meta: Vec::new(),
             cur_meta: NodeMeta::default(),
             raster_cache: RefCell::new(None),
+            text_glyphs: 0,
+        }
+    }
+
+    /// Whether the page backend should enable the glyph-bitmap fast path for this
+    /// render: mode 2 (on) always, mode 1 (auto) above the glyph threshold, mode 0
+    /// (off) never. Read from the thread-local mode set by R per render.
+    fn want_bitmap_text(&self) -> bool {
+        match crate::font::glyph_bitmap_mode() {
+            2 => true,
+            1 => self.text_glyphs >= GLYPH_BITMAP_MIN,
+            _ => false,
         }
     }
 
@@ -1036,6 +1056,7 @@ impl Scene {
             let lo = off.min(gmax);
             let hi = (off + cnt).min(gmax);
             off = hi;
+            self.text_glyphs += hi - lo; // drives the glyph-bitmap threshold
             self.emit_node(Node::Text {
                 x: x[i], y: y[i], xu: Unit::from_code(xu[i]), yu: Unit::from_code(yu[i]),
                 rot: rot[i], hjust, vjust, w: w[i], h: h[i],
@@ -1080,6 +1101,7 @@ impl Scene {
             let lo = off.min(gmax);
             let hi = (off + cnt).min(gmax);
             off = hi;
+            self.text_glyphs += hi - lo; // drives the glyph-bitmap threshold
             self.emit_node(Node::Text {
                 x: x[i], y: y[i], xu: Unit::from_code(xu[i]), yu: Unit::from_code(yu[i]),
                 rot: rot[i], hjust, vjust, w: w[i], h: h[i],
@@ -1175,6 +1197,7 @@ impl Scene {
             return Vec::new();
         }
         let mut b = RasterBackend::new(self.w_px, self.h_px, self.bg);
+        b.set_bitmap_text(self.want_bitmap_text());
         let warnings = self.render_to(&mut b);
         let pm = b.into_pixmap();
         if let Err(e) = pm.save_png(path) {
@@ -1764,6 +1787,7 @@ impl Scene {
     fn cached_pixmap(&self) -> Ref<'_, Pixmap> {
         if self.raster_cache.borrow().is_none() {
             let mut b = RasterBackend::new(self.w_px, self.h_px, self.bg);
+            b.set_bitmap_text(self.want_bitmap_text());
             self.render_to(&mut b);
             *self.raster_cache.borrow_mut() = Some(b.into_pixmap());
         }

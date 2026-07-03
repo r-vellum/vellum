@@ -11,7 +11,7 @@ use std::rc::Rc;
 use tiny_skia::{FilterQuality, FillRule, Mask, Paint, Path, PathBuilder, Pixmap, Stroke, StrokeDash, Transform};
 
 use crate::color::{Extend, LineCap, LineJoin, Rgba, Stop};
-use crate::font::glyph_outline_cached;
+use crate::font::{glyph_outline_cached, glyph_sprite_cached, PHASE_X, PHASE_Y};
 use crate::units::rotation_about;
 
 /// Resolved stroke style handed to `stroke_path`: width + dash (device px, on/off,
@@ -546,6 +546,10 @@ pub struct RasterBackend {
     clip_cache: Vec<(usize, Option<Rc<Mask>>)>,
     w: u32,
     h: u32,
+    /// Glyph-bitmap fast path enabled? Set only on the page backend (never on
+    /// mask/measurement backends — a colour-baked sprite would corrupt what a
+    /// luminance mask reads). See `draw_text`.
+    bitmap_text: bool,
 }
 
 /// Max page-sized clip masks kept resident at once (see `clip_cache`).
@@ -568,7 +572,13 @@ impl RasterBackend {
             clip_cache: Vec::new(),
             w,
             h,
+            bitmap_text: false,
         }
+    }
+
+    /// Enable the glyph-bitmap fast path for this backend (page backend only).
+    pub fn set_bitmap_text(&mut self, on: bool) {
+        self.bitmap_text = on;
     }
 
     pub fn into_pixmap(mut self) -> Pixmap {
@@ -748,6 +758,14 @@ impl RenderBackend for RasterBackend {
         } else {
             transform
         };
+        // Glyph-bitmap fast path (FW: high-distinct-label text). Legal only when
+        // `base` is a pure translation — rotated text OR a rotated/scaled viewport
+        // both make it non-translation, and must fall back to the exact outline
+        // fill (which also keeps SVG/PDF and small renders byte-identical). Large
+        // glyphs stay exact (quantisation is visible there; per-blit cost grows).
+        const GLYPH_SPRITE_MAX_PX: f64 = 40.0;
+        let sprite_ok = self.bitmap_text
+            && base.sx == 1.0 && base.sy == 1.0 && base.kx == 0.0 && base.ky == 0.0;
         let n = run.gid.len()
             .min(run.gx.len())
             .min(run.gy.len())
@@ -755,12 +773,37 @@ impl RenderBackend for RasterBackend {
             .min(run.gpath.len())
             .min(run.gface.len());
         for i in 0..n {
+            let ox = run.ax + run.gx[i] - run.hjust * run.w;
+            let oy = run.ay - (run.gy[i] - run.vjust * run.h);
+            if sprite_ok && run.gsize[i] <= GLYPH_SPRITE_MAX_PX {
+                // Device pen; quantise the fraction to a sub-pixel phase, carrying
+                // a round-up into the integer cell (round(f*N)==N means f≈1.0).
+                let px = base.tx as f64 + ox;
+                let py = base.ty as f64 + oy;
+                let mut ix = px.floor() as i32;
+                let mut iy = py.floor() as i32;
+                let mut qx = ((px - ix as f64) * PHASE_X as f64).round() as i32;
+                if qx >= PHASE_X as i32 { ix += 1; qx = 0; }
+                let mut qy = ((py - iy as f64) * PHASE_Y as f64).round() as i32;
+                if qy >= PHASE_Y as i32 { iy += 1; qy = 0; }
+                let c = run.gcolor.get(i).copied().unwrap_or(run.color);
+                let cc = [c.r, c.g, c.b, c.a];
+                if let Some(sprite) = glyph_sprite_cached(
+                    &run.gpath[i], run.gface[i], run.gid[i], run.gsize[i] as f32, cc, qx as u8, qy as u8,
+                ) {
+                    let pmp = tiny_skia::PixmapPaint::default();
+                    self.targets.last_mut().expect("at least the page target").draw_pixmap(
+                        ix + sprite.dx, iy + sprite.dy, sprite.pixmap.as_ref(), &pmp,
+                        Transform::identity(), mask.as_deref(),
+                    );
+                    continue;
+                }
+                // sprite None (whitespace / oversize) -> fall through to exact fill.
+            }
             let outline = match glyph_outline_cached(&run.gpath[i], run.gface[i], run.gid[i], run.gsize[i] as f32) {
                 Some(p) => p,
                 None => continue,
             };
-            let ox = run.ax + run.gx[i] - run.hjust * run.w;
-            let oy = run.ay - (run.gy[i] - run.vjust * run.h);
             let place = Transform::from_row(1.0, 0.0, 0.0, -1.0, ox as f32, oy as f32);
             // Per-glyph colour for rich labels; otherwise the one shared paint.
             let glyph_paint = match run.gcolor.get(i) {

@@ -25,6 +25,21 @@ fn rs_clear_subraster_cache() {
     scene::clear_subraster_cache();
 }
 
+/// Set the glyph-bitmap cache mode.
+/// @param mode Integer: 0 = off, 1 = auto (threshold), 2 = on.
+/// @keywords internal
+#[extendr]
+fn rs_set_glyph_bitmap_mode(mode: i32) {
+    font::set_glyph_bitmap_mode(mode);
+}
+
+/// Glyph sprite cache stats: `c(hits, misses, resident)` (tests/diagnostics).
+#[extendr]
+fn rs_glyph_sprite_stats() -> Vec<i32> {
+    let (h, m, n) = font::glyph_sprite_stats();
+    vec![h as i32, m as i32, n as i32]
+}
+
 /// Sub-raster cache stats: `c(hits, misses, resident_entries)` (tests/diagnostics).
 #[extendr]
 fn rs_subraster_stats() -> Vec<i32> {
@@ -40,6 +55,8 @@ extendr_module! {
     fn rs_clear_glyph_cache;
     fn rs_clear_subraster_cache;
     fn rs_subraster_stats;
+    fn rs_set_glyph_bitmap_mode;
+    fn rs_glyph_sprite_stats;
     use scene;
     use aggregate;
 }

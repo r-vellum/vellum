@@ -587,7 +587,17 @@ vl_clear_render_cache <- function() {
   }
 }
 
+# Map `options(vellum.glyph_bitmap)` to the Rust mode code (0 off / 1 auto / 2 on).
+.glyph_bitmap_code <- function() {
+  switch(as.character(getOption("vellum.glyph_bitmap", "auto")),
+    off = 0L, on = 2L, auto = 1L, 1L)
+}
+
 .scene_to_backend <- function(scene, debug = FALSE) {
+  # Push the glyph-bitmap mode for this render (a thread-local read by the raster
+  # backend when it rasterises). Cheap; set every call so the option is honoured
+  # even on a render-cache hit (same Scene, possibly a new option value).
+  rs_set_glyph_bitmap_mode(.glyph_bitmap_code())
   cid <- .scene_cid(scene)
   # Bypass for debug overlays, when disabled, or when the scene carries no id
   # (foreign-built / raw `set_props`) — compute fresh rather than risk a stale

@@ -17,6 +17,14 @@ rs_clear_subraster_cache <- function() .Call(wrap__rs_clear_subraster_cache)
 #' Sub-raster cache stats: `c(hits, misses, resident_entries)` (tests/diagnostics).
 rs_subraster_stats <- function() .Call(wrap__rs_subraster_stats)
 
+#' Set the glyph-bitmap cache mode.
+#' @param mode Integer: 0 = off, 1 = auto (threshold), 2 = on.
+#' @keywords internal
+rs_set_glyph_bitmap_mode <- function(mode) .Call(wrap__rs_set_glyph_bitmap_mode, mode)
+
+#' Glyph sprite cache stats: `c(hits, misses, resident)` (tests/diagnostics).
+rs_glyph_sprite_stats <- function() .Call(wrap__rs_glyph_sprite_stats)
+
 rs_aggregate_2d <- function(x, y, w, nx, ny, x0, x1, y0, y1) .Call(wrap__rs_aggregate_2d, x, y, w, nx, ny, x0, x1, y0, y1)
 
 rs_attractor <- function(kind, n, a, b, c, d, x0, y0) .Call(wrap__rs_attractor, kind, n, a, b, c, d, x0, y0)
@@ -29,6 +37,12 @@ rs_attractor <- function(kind, n, a, b, c, d, x0, y0) .Call(wrap__rs_attractor, 
 #'Create a scene `width` x `height` inches at `dpi`, with background `bg`
 #'(a length-4 integer RGBA vector). A root viewport covering the whole page
 #'(npc == native) is created as viewport 0.
+#'}
+#'
+#'\subsection{Method `want_bitmap_text`}{
+#'Whether the page backend should enable the glyph-bitmap fast path for this
+#'render: mode 2 (on) always, mode 1 (auto) above the glyph threshold, mode 0
+#'(off) never. Read from the thread-local mode set by R per render.
 #'}
 #'
 #'\subsection{Method `set_pick`}{
@@ -237,6 +251,8 @@ rs_attractor <- function(kind, n, a, b, c, d, x0, y0) .Call(wrap__rs_attractor, 
 Scene <- new.env(parent = emptyenv())
 
 Scene$new <- function(width, height, dpi, bg) .Call(wrap__Scene__new, width, height, dpi, bg)
+
+Scene$want_bitmap_text <- function() .Call(wrap__Scene__want_bitmap_text, self)
 
 Scene$set_pick <- function(id) .Call(wrap__Scene__set_pick, self, id)
 

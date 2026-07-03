@@ -19,6 +19,12 @@ Create a scene \code{width} x \code{height} inches at \code{dpi}, with backgroun
 (npc == native) is created as viewport 0.
 }
 
+\subsection{Method \code{want_bitmap_text}}{
+Whether the page backend should enable the glyph-bitmap fast path for this
+render: mode 2 (on) always, mode 1 (auto) above the glyph threshold, mode 0
+(off) never. Read from the thread-local mode set by R per render.
+}
+
 \subsection{Method \code{set_pick}}{
 Set the hit-test pick id applied to subsequently-emitted primitives (one
 per grob; the R side assigns ids in paint order). See \code{hit_test}.
