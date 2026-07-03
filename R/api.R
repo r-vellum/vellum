@@ -651,9 +651,12 @@ S7::method(compile, grob_rect) <- function(node, scene) {
     ex <- .coord(node@x, "npc", n); ey <- .coord(node@y, "npc", n)
     ew <- .coord(node@width, "npc", n); eh <- .coord(node@height, "npc", n)
     g <- .gp4(node@gp, scene)
+    sk <- .encode_sketch(node@sketch)
     # One batched call (one shared gpar) instead of a per-element FFI loop.
     scene$rects(ex$value, ey$value, ew$value, eh$value,
-                ex$code, ey$code, ew$code, eh$code, g$fill, g$col, g$lwd, g$alpha, g$stroke)
+                ex$code, ey$code, ew$code, eh$code, g$fill, g$col, g$lwd, g$alpha, g$stroke,
+                sk$roughness, sk$bowing, sk$fill_style, sk$fill_weight, sk$hachure_angle,
+                sk$hachure_gap, sk$curve_tightness, sk$disable_multi, sk$preserve, sk$seed)
   })
 }
 
@@ -679,35 +682,44 @@ S7::method(compile, grob_lines) <- function(node, scene) {
     a <- .encode_arrow(node@arrow)
     sc <- .encode_cap(node@start_cap); ec <- .encode_cap(node@end_cap)
     of <- .encode_cap(node@offset)
+    sk <- .encode_sketch(node@sketch)
     scene$lines(ex$value, ey$value, ex$code, ey$code,
                 sc$value, ec$value, sc$code, ec$code, of$value, of$code,
                 g$col, g$lwd, g$alpha, g$stroke,
-                a$angle, a$len, a$ends, a$closed)
+                a$angle, a$len, a$ends, a$closed,
+                sk$roughness, sk$bowing, sk$fill_style, sk$fill_weight, sk$hachure_angle,
+                sk$hachure_gap, sk$curve_tightness, sk$disable_multi, sk$preserve, sk$seed)
   })
 }
 
 S7::method(compile, grob_polygon) <- function(node, scene) {
   .with_vp(node, scene, {
     ex <- .coord(node@x); ey <- .coord(node@y); g <- .gp4(node@gp, scene)
-    scene$polygon(ex$value, ey$value, ex$code, ey$code, g$fill, g$col, g$lwd, g$alpha, g$stroke)
+    sk <- .encode_sketch(node@sketch)
+    scene$polygon(ex$value, ey$value, ex$code, ey$code, g$fill, g$col, g$lwd, g$alpha, g$stroke,
+                  sk$roughness, sk$bowing, sk$fill_style, sk$fill_weight, sk$hachure_angle,
+                  sk$hachure_gap, sk$curve_tightness, sk$disable_multi, sk$preserve, sk$seed)
   })
 }
 
 # circles and points compile identically (a batched circle draw); they differ
 # only in where the radius comes from and its default unit (npc vs mm).
-.compile_circles <- function(node, scene, radius, rdefault) {
+.compile_circles <- function(node, scene, radius, rdefault, sketch = NULL) {
   .with_vp(node, scene, {
     n <- vctrs::vec_size_common(node@x, node@y, radius)
     ex <- .coord(node@x, "npc", n); ey <- .coord(node@y, "npc", n)
     er <- .coord(radius, rdefault, n)
     g <- .gp4(node@gp, scene)
+    sk <- .encode_sketch(sketch)
     scene$circles(ex$value, ey$value, er$value, ex$code, ey$code, er$code,
-                  g$fill, g$col, g$lwd, g$alpha, g$stroke)
+                  g$fill, g$col, g$lwd, g$alpha, g$stroke,
+                  sk$roughness, sk$bowing, sk$fill_style, sk$fill_weight, sk$hachure_angle,
+                  sk$hachure_gap, sk$curve_tightness, sk$disable_multi, sk$preserve, sk$seed)
   })
 }
 
 S7::method(compile, grob_circle) <- function(node, scene) {
-  .compile_circles(node, scene, node@r, "npc")
+  .compile_circles(node, scene, node@r, "npc", node@sketch)
 }
 
 S7::method(compile, grob_points) <- function(node, scene) {
@@ -827,8 +839,11 @@ S7::method(compile, grob_path) <- function(node, scene) {
     n <- vctrs::vec_size_common(node@x, node@y)
     ex <- .coord(node@x, "native", n); ey <- .coord(node@y, "native", n)
     g <- .gp4(node@gp, scene)
+    sk <- .encode_sketch(node@sketch)
     scene$path(ex$value, ey$value, ex$code, ey$code, as.integer(node@nper),
-               identical(node@rule, "evenodd"), g$fill, g$col, g$lwd, g$alpha, g$stroke)
+               identical(node@rule, "evenodd"), g$fill, g$col, g$lwd, g$alpha, g$stroke,
+               sk$roughness, sk$bowing, sk$fill_style, sk$fill_weight, sk$hachure_angle,
+               sk$hachure_gap, sk$curve_tightness, sk$disable_multi, sk$preserve, sk$seed)
   })
 }
 

@@ -5,6 +5,7 @@ mod color;
 mod font;
 mod render;
 mod scene;
+mod sketch;
 mod units;
 
 /// Backend identity and build info (internal diagnostic).
