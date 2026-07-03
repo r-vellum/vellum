@@ -35,7 +35,8 @@ grob_roundrect <- S7::new_class("grob_roundrect", parent = grob, package = "vell
   properties = list(
     x = .unit_prop(), y = .unit_prop(),
     width = .unit_prop("unit(1, \"npc\")"), height = .unit_prop("unit(1, \"npc\")"),
-    r = .unit_prop("unit(0.1, \"npc\")")
+    r = .unit_prop("unit(0.1, \"npc\")"),
+    sketch = S7::new_property(S7::class_any, default = NULL)
   )
 )
 grob_lines <- S7::new_class("grob_lines", parent = grob, package = "vellum",
@@ -54,7 +55,8 @@ grob_circle <- S7::new_class("grob_circle", parent = grob, package = "vellum",
 grob_points <- S7::new_class("grob_points", parent = grob, package = "vellum",
   properties = list(
     x = .unit_prop(), y = .unit_prop(), size = .unit_prop("unit(2, \"mm\")"),
-    shape = S7::new_property(S7::class_character, default = "circle")
+    shape = S7::new_property(S7::class_character, default = "circle"),
+    sketch = S7::new_property(S7::class_any, default = NULL)
   ))
 
 grob_hexagon <- S7::new_class("grob_hexagon", parent = grob, package = "vellum",
@@ -73,7 +75,8 @@ grob_sector <- S7::new_class("grob_sector", parent = grob, package = "vellum",
     theta0 = S7::new_property(S7::class_double, default = 0),
     theta1 = S7::new_property(S7::class_double, default = 0),
     fill = S7::new_property(S7::class_any, default = NULL),
-    arrow = S7::new_property(S7::class_any, default = NULL)
+    arrow = S7::new_property(S7::class_any, default = NULL),
+    sketch = S7::new_property(S7::class_any, default = NULL)
   ))
 
 # Marker shape names -> backend codes (must match the `markers` arm in scene.rs).
@@ -115,7 +118,8 @@ grob_segments <- S7::new_class("grob_segments", parent = grob, package = "vellum
                     arrow = S7::new_property(S7::class_any, default = NULL),
                     start_cap = S7::new_property(S7::class_any, default = NULL),
                     end_cap = S7::new_property(S7::class_any, default = NULL),
-                    offset = S7::new_property(S7::class_any, default = NULL)))
+                    offset = S7::new_property(S7::class_any, default = NULL),
+                    sketch = S7::new_property(S7::class_any, default = NULL)))
 
 grob_loop <- S7::new_class("grob_loop", parent = grob, package = "vellum",
   properties = list(
@@ -181,7 +185,7 @@ rect_grob <- function(x = 0.5, y = 0.5, width = 1, height = 1,
 #'   stay circular on non-square rectangles; clamped to half the shorter side.
 #' @export
 roundrect_grob <- function(x = 0.5, y = 0.5, width = 1, height = 1, r = 0.1,
-                           gp = gpar(), name = NULL, vp = NULL, id = NULL, role = NULL) {
+                           sketch = NULL, gp = gpar(), name = NULL, vp = NULL, id = NULL, role = NULL) {
   w <- as_unit(width)
   h <- as_unit(height)
   rr <- as_unit(r)
@@ -189,7 +193,7 @@ roundrect_grob <- function(x = 0.5, y = 0.5, width = 1, height = 1, r = 0.1,
   .check_extent(h, "height")
   .check_extent(rr, "r")
   grob_roundrect(x = as_unit(x), y = as_unit(y), width = w, height = h, r = rr,
-                 gp = gp, name = name, vp = vp, id = id, role = role)
+                 sketch = sketch, gp = gp, name = name, vp = vp, id = id, role = role)
 }
 
 # An extent (width/height/radius/size) must be non-negative. Checks the resolved
@@ -504,7 +508,7 @@ circle_grob <- function(x = 0.5, y = 0.5, r = 0.25, sketch = NULL, gp = gpar(), 
 #'   `gp$fill` (and outline `gp$col`); `"plus"`/`"cross"` are stroke-only.
 #' @export
 points_grob <- function(x, y, size = unit(2, "mm"), shape = "circle",
-                        gp = gpar(), name = NULL, vp = NULL, id = NULL, role = NULL) {
+                        sketch = NULL, gp = gpar(), name = NULL, vp = NULL, id = NULL, role = NULL) {
   n <- .coord_n(x, y)
   sz <- as_unit(size, "mm")
   .check_extent(sz, "size")
@@ -517,7 +521,7 @@ points_grob <- function(x, y, size = unit(2, "mm"), shape = "circle",
               y = vctrs::vec_recycle(as_unit(y), n),
               size = vctrs::vec_recycle(sz, n),
               shape = vctrs::vec_recycle(shape, n),
-              gp = gp, name = name, vp = vp, id = id, role = role)
+              sketch = sketch, gp = gp, name = name, vp = vp, id = id, role = role)
 }
 
 #' @rdname grob
@@ -576,7 +580,7 @@ hexagon_grob <- function(x = 0.5, y = 0.5, size = unit(2, "mm"),
 #' ring.)
 #' @export
 sector_grob <- function(x = 0.5, y = 0.5, r0 = 0, r1 = 0.5, theta0 = 0, theta1 = 2 * pi,
-                        fill = NULL, arrow = NULL, gp = gpar(), name = NULL, vp = NULL, id = NULL, role = NULL) {
+                        fill = NULL, arrow = NULL, sketch = NULL, gp = gpar(), name = NULL, vp = NULL, id = NULL, role = NULL) {
   n <- .common_n(x, y, r0, r1, theta0, theta1)
   .check_finite_num(theta0, "theta0")
   .check_finite_num(theta1, "theta1")
@@ -588,7 +592,7 @@ sector_grob <- function(x = 0.5, y = 0.5, r0 = 0, r1 = 0.5, theta0 = 0, theta1 =
     r1 = vctrs::vec_recycle(as_unit(r1, "native"), n),
     theta0 = vctrs::vec_recycle(as.numeric(theta0), n),
     theta1 = vctrs::vec_recycle(as.numeric(theta1), n),
-    fill = fill, arrow = arrow, gp = gp, name = name, vp = vp, id = id, role = role
+    fill = fill, arrow = arrow, sketch = sketch, gp = gp, name = name, vp = vp, id = id, role = role
   )
 }
 
@@ -633,7 +637,7 @@ loop_grob <- function(x = 0.5, y = 0.5, size = unit(4, "mm"), foot = unit(0, "mm
 #' @param x0,y0,x1,y1 Segment start/end coordinates ([unit()] or numeric).
 #' @export
 segments_grob <- function(x0, y0, x1, y1, arrow = NULL, start_cap = NULL, end_cap = NULL,
-                          offset = NULL, gp = gpar(), name = NULL, vp = NULL, id = NULL, role = NULL) {
+                          offset = NULL, sketch = NULL, gp = gpar(), name = NULL, vp = NULL, id = NULL, role = NULL) {
   n <- .common_n(x0, y0, x1, y1)
   start_cap <- .check_cap(start_cap, "start_cap")
   end_cap <- .check_cap(end_cap, "end_cap")
@@ -647,7 +651,7 @@ segments_grob <- function(x0, y0, x1, y1, arrow = NULL, start_cap = NULL, end_ca
     x1 = vctrs::vec_recycle(as_unit(x1, "native"), n),
     y1 = vctrs::vec_recycle(as_unit(y1, "native"), n),
     arrow = arrow, start_cap = start_cap, end_cap = end_cap, offset = offset,
-    gp = gp, name = name, vp = vp, id = id, role = role
+    sketch = sketch, gp = gp, name = name, vp = vp, id = id, role = role
   )
 }
 

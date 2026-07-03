@@ -75,6 +75,23 @@ test_that("sketch works on every supported grob", {
   base(polygon_grob(c(0.2, 0.8, 0.5), c(0.2, 0.3, 0.9), gp = gpar(fill = "gold", col = "black"), sketch = sketch(seed = 1)))
   base(lines_grob(c(0.1, 0.5, 0.9), c(0.1, 0.8, 0.2), gp = gpar(col = "seagreen", lwd = 2), sketch = sketch(seed = 1)))
   base(path_grob(c(0.2, 0.8, 0.8, 0.2), c(0.2, 0.2, 0.8, 0.8), gp = gpar(fill = "plum", col = "black"), sketch = sketch(seed = 1)))
+  # SK7-SK10:
+  base(segments_grob(c(0.1, 0.2), c(0.1, 0.9), c(0.9, 0.8), c(0.9, 0.1), gp = gpar(col = "grey30", lwd = 2), sketch = sketch(seed = 1)))
+  base(sector_grob(x = 0.5, y = 0.5, r0 = 0, r1 = 0.4, theta0 = 0, theta1 = 4, fill = "tomato", gp = gpar(col = "black"), sketch = sketch(seed = 1)))
+  base(roundrect_grob(width = 0.6, height = 0.5, r = 0.1, gp = gpar(fill = "mediumpurple", col = "black"), sketch = sketch(seed = 1)))
+  for (shp in c("square", "triangle", "diamond", "plus", "cross")) {
+    base(points_grob(0.5, 0.5, size = unit(6, "mm"), shape = shp, gp = gpar(fill = "seagreen", col = "black", lwd = 1.5), sketch = sketch(seed = 1)))
+  }
+})
+
+test_that("sketched gridlines wobble (segments != crisp)", {
+  mk <- function(sk) {
+    vl_scene(1, 1, dpi = 100, bg = "white") |>
+      draw(segments_grob(x0 = rep(0.1, 3), y0 = c(0.2, 0.5, 0.8),
+                         x1 = rep(0.9, 3), y1 = c(0.2, 0.5, 0.8),
+                         gp = gpar(col = "black", lwd = 2), sketch = sk))
+  }
+  expect_false(identical(scene_raster(mk(NULL)), scene_raster(mk(sketch(roughness = 2, seed = 1)))))
 })
 
 test_that("sketch renders on all three backends", {

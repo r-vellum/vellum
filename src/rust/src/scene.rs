@@ -289,7 +289,7 @@ struct ResolvedVp {
 #[derive(Clone, Debug)]
 enum Node {
     Rect { x: f64, y: f64, w: f64, h: f64, xu: Unit, yu: Unit, wu: Unit, hu: Unit, gp: PartialGpar },
-    RoundRect { x: f64, y: f64, w: f64, h: f64, r: f64, xu: Unit, yu: Unit, wu: Unit, hu: Unit, ru: Unit, gp: PartialGpar },
+    RoundRect { x: f64, y: f64, w: f64, h: f64, r: f64, xu: Unit, yu: Unit, wu: Unit, hu: Unit, ru: Unit, sketch: Option<crate::sketch::SketchOpts>, gp: PartialGpar },
     Lines {
         x: Vec<f64>, y: Vec<f64>, xu: Vec<Unit>, yu: Vec<Unit>,
         /// Optional whole-path end caps (absolute-length units): trim the first/
@@ -360,6 +360,7 @@ enum Node {
         x: Vec<f64>, y: Vec<f64>, size: Vec<f64>,
         xu: Vec<Unit>, yu: Vec<Unit>, su: Vec<Unit>,
         shape: Vec<u32>,
+        sketch: Option<crate::sketch::SketchOpts>,
         gp: PartialGpar,
     },
     /// A batch of hexagons (for hex-binning): `flat` the orientation, and `fill` a
@@ -389,6 +390,7 @@ enum Node {
         /// (an open arc, `r0 == r1`, with an absolute mm radius at a native
         /// centre). Placed tangent to the arc. `None` = no head (unchanged).
         arrow: Option<Arrow>,
+        sketch: Option<crate::sketch::SketchOpts>,
         gp: PartialGpar,
     },
     /// A batch of disjoint line segments `(x0,y0)->(x1,y1)`, stroked in one pass.
@@ -405,6 +407,7 @@ enum Node {
         /// normal, applied *before* the caps/arrow. Empty = none; else length `n`.
         off: Vec<f64>, offu: Vec<Unit>,
         arrow: Option<Arrow>,
+        sketch: Option<crate::sketch::SketchOpts>,
         gp: PartialGpar,
     },
     /// A batch of igraph-style self-loops: a cubic-Bézier teardrop per element,
@@ -771,8 +774,16 @@ impl Scene {
     }
 
     #[allow(clippy::too_many_arguments)]
-    fn roundrect(&mut self, x: f64, y: f64, w: f64, h: f64, r: f64, xu: i32, yu: i32, wu: i32, hu: i32, ru: i32, fill: Robj, col: Robj, lwd: Robj, alpha: Robj, stroke: Robj) {
+    fn roundrect(&mut self, x: f64, y: f64, w: f64, h: f64, r: f64, xu: i32, yu: i32, wu: i32, hu: i32, ru: i32, fill: Robj, col: Robj, lwd: Robj, alpha: Robj, stroke: Robj,
+        sroughness: f64, sbowing: f64, sfill_style: i32, sfill_weight: f64,
+        shachure_angle: f64, shachure_gap: f64, scurve_tightness: f64,
+        sdisable_multi: bool, spreserve: bool, sseed: f64,
+    ) {
         let gp = PartialGpar::from_robj(&fill, &col, &lwd, &alpha, &stroke);
+        let sketch = sketch_from(
+            sroughness, sbowing, sfill_style, sfill_weight, shachure_angle,
+            shachure_gap, scurve_tightness, sdisable_multi, spreserve, sseed,
+        );
         self.emit_node(Node::RoundRect {
             x,
             y,
@@ -784,6 +795,7 @@ impl Scene {
             wu: Unit::from_code(wu),
             hu: Unit::from_code(hu),
             ru: Unit::from_code(ru),
+            sketch,
             gp,
         });
     }
@@ -890,12 +902,19 @@ impl Scene {
         &mut self, x: &[f64], y: &[f64], size: &[f64],
         xu: &[i32], yu: &[i32], su: &[i32], shape: &[i32],
         fill: Robj, col: Robj, lwd: Robj, alpha: Robj, stroke: Robj,
+        sroughness: f64, sbowing: f64, sfill_style: i32, sfill_weight: f64,
+        shachure_angle: f64, shachure_gap: f64, scurve_tightness: f64,
+        sdisable_multi: bool, spreserve: bool, sseed: f64,
     ) {
         let gp = PartialGpar::from_robj(&fill, &col, &lwd, &alpha, &stroke);
+        let sketch = sketch_from(
+            sroughness, sbowing, sfill_style, sfill_weight, shachure_angle,
+            shachure_gap, scurve_tightness, sdisable_multi, spreserve, sseed,
+        );
         self.emit_node(Node::Markers {
             x: x.to_vec(), y: y.to_vec(), size: size.to_vec(),
             xu: codes(xu), yu: codes(yu), su: codes(su),
-            shape: shape.iter().map(|&v| v.max(0) as u32).collect(), gp,
+            shape: shape.iter().map(|&v| v.max(0) as u32).collect(), sketch, gp,
         });
     }
 
@@ -937,17 +956,24 @@ impl Scene {
         xu: &[i32], yu: &[i32], r0u: &[i32], r1u: &[i32], fill: &[i32],
         col: Robj, lwd: Robj, alpha: Robj, stroke: Robj,
         aangle: f64, alen: f64, aends: i32, aclosed: bool,
+        sroughness: f64, sbowing: f64, sfill_style: i32, sfill_weight: f64,
+        shachure_angle: f64, shachure_gap: f64, scurve_tightness: f64,
+        sdisable_multi: bool, spreserve: bool, sseed: f64,
     ) {
         let gp = PartialGpar::from_robj(&rnull(), &col, &lwd, &alpha, &stroke);
         let fill = fill
             .chunks_exact(4)
             .map(|c| Rgba { r: c[0] as u8, g: c[1] as u8, b: c[2] as u8, a: c[3] as u8 })
             .collect();
+        let sketch = sketch_from(
+            sroughness, sbowing, sfill_style, sfill_weight, shachure_angle,
+            shachure_gap, scurve_tightness, sdisable_multi, spreserve, sseed,
+        );
         self.emit_node(Node::Sectors {
             x: x.to_vec(), y: y.to_vec(), r0: r0.to_vec(), r1: r1.to_vec(),
             theta0: theta0.to_vec(), theta1: theta1.to_vec(),
             xu: codes(xu), yu: codes(yu), r0u: codes(r0u), r1u: codes(r1u),
-            fill, arrow: arrow_from(aangle, alen, aends, aclosed), gp,
+            fill, arrow: arrow_from(aangle, alen, aends, aclosed), sketch, gp,
         });
     }
 
@@ -960,14 +986,21 @@ impl Scene {
         off: &[f64], offu: &[i32],
         col: Robj, lwd: Robj, alpha: Robj, stroke: Robj,
         aangle: f64, alen: f64, aends: i32, aclosed: bool,
+        sroughness: f64, sbowing: f64, sfill_style: i32, sfill_weight: f64,
+        shachure_angle: f64, shachure_gap: f64, scurve_tightness: f64,
+        sdisable_multi: bool, spreserve: bool, sseed: f64,
     ) {
         let gp = PartialGpar::from_robj(&rnull(), &col, &lwd, &alpha, &stroke);
+        let sketch = sketch_from(
+            sroughness, sbowing, sfill_style, sfill_weight, shachure_angle,
+            shachure_gap, scurve_tightness, sdisable_multi, spreserve, sseed,
+        );
         self.emit_node(Node::Segments {
             x0: x0.to_vec(), y0: y0.to_vec(), x1: x1.to_vec(), y1: y1.to_vec(),
             x0u: codes(x0u), y0u: codes(y0u), x1u: codes(x1u), y1u: codes(y1u),
             scap: scap.to_vec(), ecap: ecap.to_vec(), scapu: codes(scapu), ecapu: codes(ecapu),
             off: off.to_vec(), offu: codes(offu),
-            arrow: arrow_from(aangle, alen, aends, aclosed), gp,
+            arrow: arrow_from(aangle, alen, aends, aclosed), sketch, gp,
         });
     }
 
@@ -1959,13 +1992,18 @@ impl Scene {
                         fill_then_stroke(b, &path, &gp, t, &clip, vp, FillRule::Winding);
                     }
                 }
-                Node::RoundRect { x, y, w, h, r, xu, yu, wu, hu, ru, .. } => {
+                Node::RoundRect { x, y, w, h, r, xu, yu, wu, hu, ru, sketch, .. } => {
                     let cx = vp.x_pos(*x, *xu);
                     let cy = vp.y_pos(*y, *yu);
                     let pw = vp.x_len(*w, *wu);
                     let ph = vp.y_len(*h, *hu);
                     let pr = vp.r_len(*r, *ru); // isotropic radius (npc -> min side)
-                    if let Some(path) = roundrect_path(cx - pw / 2.0, cy - ph / 2.0, pw, ph, pr) {
+                    if let Some(sk) = sketch {
+                        let ring = roundrect_ring(cx - pw / 2.0, cy - ph / 2.0, pw, ph, pr);
+                        let o = resolve_sketch(sk, &gp, vp.dpi);
+                        let s = crate::sketch::closed_curve(&ring, &o, gp.fill.is_some());
+                        paint_sketch(b, &s, &gp, t, &clip, vp, o.fill_weight);
+                    } else if let Some(path) = roundrect_path(cx - pw / 2.0, cy - ph / 2.0, pw, ph, pr) {
                         fill_then_stroke(b, &path, &gp, t, &clip, vp, FillRule::Winding);
                     }
                 }
@@ -2176,9 +2214,63 @@ impl Scene {
                         }
                     }
                 }
-                Node::Markers { x, y, size, xu, yu, su, shape, .. } => {
+                Node::Markers { x, y, size, xu, yu, su, shape, sketch, .. } => {
                     let n = [x.len(), y.len(), size.len(), xu.len(), yu.len(), su.len(), shape.len()]
                         .into_iter().min().unwrap_or(0);
+                    if let Some(sk) = sketch {
+                        // Per-marker hand-drawn geometry: circle -> rough ellipse;
+                        // square/triangle/diamond -> rough polygon; plus/cross ->
+                        // rough stroke arms. Per-element seed.
+                        let o = resolve_sketch(sk, &gp, vp.dpi);
+                        let col = gp.col;
+                        let style = stroke_style(&gp, vp.dpi);
+                        for i in 0..n {
+                            let cx = vp.x_pos(x[i], xu[i]);
+                            let cy = vp.y_pos(y[i], yu[i]);
+                            let rr = vp.r_len(size[i], su[i]);
+                            if rr <= 0.0 || !cx.is_finite() || !cy.is_finite() {
+                                continue;
+                            }
+                            let mut oi = o.clone();
+                            oi.seed = o.seed.wrapping_add(i as u64);
+                            match shape[i] {
+                                4 | 5 => {
+                                    // plus / cross: two stroke arms
+                                    let arms: [[(f64, f64); 2]; 2] = if shape[i] == 4 {
+                                        [[(cx - rr, cy), (cx + rr, cy)], [(cx, cy - rr), (cx, cy + rr)]]
+                                    } else {
+                                        [[(cx - rr, cy - rr), (cx + rr, cy + rr)],
+                                         [(cx - rr, cy + rr), (cx + rr, cy - rr)]]
+                                    };
+                                    if let Some(c) = col {
+                                        if style.width > 0.0 {
+                                            for arm in arms.iter() {
+                                                let s = crate::sketch::polyline(arm, &oi);
+                                                for p in &s.stroke {
+                                                    b.stroke_path(p, t, c, &style, &clip);
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                                0 => {
+                                    let s = crate::sketch::ellipse(cx, cy, rr * 2.0, rr * 2.0, &oi, gp.fill.is_some());
+                                    paint_sketch(b, &s, &gp, t, &clip, vp, oi.fill_weight);
+                                }
+                                sh => {
+                                    let ring: Vec<(f64, f64)> = match sh {
+                                        1 => vec![(cx - rr, cy - rr), (cx + rr, cy - rr), (cx + rr, cy + rr), (cx - rr, cy + rr)],
+                                        2 => vec![(cx, cy - rr), (cx + 0.866 * rr, cy + 0.5 * rr), (cx - 0.866 * rr, cy + 0.5 * rr)],
+                                        _ => vec![(cx, cy - rr), (cx + rr, cy), (cx, cy + rr), (cx - rr, cy)],
+                                    };
+                                    let s = crate::sketch::rings(&[ring], &oi, gp.fill.is_some());
+                                    paint_sketch(b, &s, &gp, t, &clip, vp, oi.fill_weight);
+                                }
+                            }
+                        }
+                        if has_meta { b.end_node(); }
+                        continue;
+                    }
                     let lwd = gp.lwd_px(vp.dpi);
                     let stroke = gp.col.filter(|_| lwd > 0.0);
                     let rf = gp.fill.as_ref().map(|p| resolve_paint(p, vp));
@@ -2295,10 +2387,38 @@ impl Scene {
                         }
                     }
                 }
-                Node::Sectors { x, y, r0, r1, theta0, theta1, xu, yu, r0u, r1u, fill, arrow, .. } => {
+                Node::Sectors { x, y, r0, r1, theta0, theta1, xu, yu, r0u, r1u, fill, arrow, sketch, .. } => {
                     let n = [x.len(), y.len(), r0.len(), r1.len(), theta0.len(), theta1.len(),
                              xu.len(), yu.len(), r0u.len(), r1u.len(), fill.len()]
                         .into_iter().min().unwrap_or(0);
+                    if let Some(sk) = sketch {
+                        // Hand-drawn pie/donut wedges: per-element fill colour, curve-fit
+                        // outline, hachure interior. Arrows (self-loops) are ignored here.
+                        let o = resolve_sketch(sk, &gp, vp.dpi);
+                        for i in 0..n {
+                            let cx = vp.x_pos(x[i], xu[i]);
+                            let cy = vp.y_pos(y[i], yu[i]);
+                            if !cx.is_finite() || !cy.is_finite() {
+                                continue;
+                            }
+                            let rr0 = vp.r_len(r0[i], r0u[i]);
+                            let rr1 = vp.r_len(r1[i], r1u[i]);
+                            let (lo, hi) = (rr0.min(rr1), rr0.max(rr1));
+                            let ring = wedge_ring(cx, cy, lo, hi, theta0[i], theta1[i]);
+                            if ring.len() < 3 {
+                                continue;
+                            }
+                            let mut gp2 = gp.clone();
+                            gp2.fill = Some(Paint::Solid(fill[i]));
+                            let want_fill = (hi - lo).abs() > 0.5;
+                            let mut oi = o.clone();
+                            oi.seed = o.seed.wrapping_add(i as u64);
+                            let s = crate::sketch::closed_curve(&ring, &oi, want_fill);
+                            paint_sketch(b, &s, &gp2, t, &clip, vp, oi.fill_weight);
+                        }
+                        if has_meta { b.end_node(); }
+                        continue;
+                    }
                     let style = stroke_style(&gp, vp.dpi);
                     let stroke = gp.col.filter(|_| style.width > 0.0);
                     // Arrowheads (directed self-loops) accumulate across the batch and
@@ -2380,7 +2500,35 @@ impl Scene {
                     };
                     b.draw_text(&run, t, &clip);
                 }
-                Node::Segments { x0, y0, x1, y1, x0u, y0u, x1u, y1u, scap, ecap, scapu, ecapu, off, offu, arrow, .. } => {
+                Node::Segments { x0, y0, x1, y1, x0u, y0u, x1u, y1u, scap, ecap, scapu, ecapu, off, offu, arrow, sketch, .. } => {
+                    if let Some(sk) = sketch {
+                        // Hand-drawn: rough each segment (ignores offset/caps/arrow —
+                        // §4 exception 4). Per-segment seed so they don't look cloned.
+                        if let Some(col) = gp.col {
+                            let style = stroke_style(&gp, vp.dpi);
+                            if style.width > 0.0 {
+                                let n = [x0.len(), y0.len(), x1.len(), y1.len(),
+                                         x0u.len(), y0u.len(), x1u.len(), y1u.len()]
+                                    .into_iter().min().unwrap_or(0);
+                                let o = resolve_sketch(sk, &gp, vp.dpi);
+                                for i in 0..n {
+                                    let a = (vp.x_pos(x0[i], x0u[i]), vp.y_pos(y0[i], y0u[i]));
+                                    let bpt = (vp.x_pos(x1[i], x1u[i]), vp.y_pos(y1[i], y1u[i]));
+                                    if !(a.0.is_finite() && a.1.is_finite() && bpt.0.is_finite() && bpt.1.is_finite()) {
+                                        continue;
+                                    }
+                                    let mut oi = o.clone();
+                                    oi.seed = o.seed.wrapping_add(i as u64);
+                                    let s = crate::sketch::polyline(&[a, bpt], &oi);
+                                    for p in &s.stroke {
+                                        b.stroke_path(p, t, col, &style, &clip);
+                                    }
+                                }
+                            }
+                        }
+                        if has_meta { b.end_node(); }
+                        continue;
+                    }
                     if let Some(col) = gp.col {
                         let style = stroke_style(&gp, vp.dpi);
                         let n = [x0.len(), y0.len(), x1.len(), y1.len(), x0u.len(), y0u.len(), x1u.len(), y1u.len()]
@@ -2785,6 +2933,53 @@ fn draw_sketch_rings<B: RenderBackend>(
     let o = resolve_sketch(sk, gp, vp.dpi);
     let s = crate::sketch::rings(rings, &o, gp.fill.is_some());
     paint_sketch(b, &s, gp, t, clip, vp, o.fill_weight);
+}
+
+/// Sample `n` points along an arc (0 at 3 o'clock, CCW), inclusive of both ends.
+fn arc_pts(cx: f64, cy: f64, r: f64, t0: f64, t1: f64, n: usize) -> Vec<(f64, f64)> {
+    let n = n.max(2);
+    (0..=n)
+        .map(|k| {
+            let a = t0 + (t1 - t0) * (k as f64 / n as f64);
+            (cx + r * a.cos(), cy + r * a.sin())
+        })
+        .collect()
+}
+
+/// The closed outline of an annular sector as a point ring (local px): outer arc
+/// forward, then the inner arc back — or the centre for a pie slice (`r0 == 0`).
+fn wedge_ring(cx: f64, cy: f64, r0: f64, r1: f64, t0: f64, t1: f64) -> Vec<(f64, f64)> {
+    // Sample density scales with the arc span (≥ ~8 points, ~1 per 6°).
+    let span = (t1 - t0).abs();
+    let n = ((span / (std::f64::consts::PI / 30.0)).ceil() as usize).clamp(8, 180);
+    let mut ring = arc_pts(cx, cy, r1, t0, t1, n);
+    if r0 > 0.0 {
+        ring.extend(arc_pts(cx, cy, r0, t1, t0, n));
+    } else {
+        ring.push((cx, cy));
+    }
+    ring
+}
+
+/// The closed outline of a rounded rectangle as a point ring (local px): straight
+/// edges (as their endpoints) joined by sampled quarter-circle corners. Fed to
+/// `closed_curve`, so straight runs stay straight and corners stay round.
+fn roundrect_ring(x0: f64, y0: f64, w: f64, h: f64, r: f64) -> Vec<(f64, f64)> {
+    let r = r.min(w / 2.0).min(h / 2.0).max(0.0);
+    let (x1, y1) = (x0 + w, y0 + h);
+    if r <= 0.0 {
+        return vec![(x0, y0), (x1, y0), (x1, y1), (x0, y1)];
+    }
+    let c = 5usize; // points per corner
+    let mut ring = Vec::new();
+    // Corners centre + angle range (y grows downward in local px). Go clockwise.
+    // top-left corner arc (from 180° to 270°)
+    let pi = std::f64::consts::PI;
+    ring.extend(arc_pts(x0 + r, y0 + r, r, pi, 1.5 * pi, c));
+    ring.extend(arc_pts(x1 - r, y0 + r, r, 1.5 * pi, 2.0 * pi, c)); // top-right
+    ring.extend(arc_pts(x1 - r, y1 - r, r, 0.0, 0.5 * pi, c)); // bottom-right
+    ring.extend(arc_pts(x0 + r, y1 - r, r, 0.5 * pi, pi, c)); // bottom-left
+    ring
 }
 
 /// Append one arrowhead at `(px, py)` whose line travels in direction `(dx, dy)`

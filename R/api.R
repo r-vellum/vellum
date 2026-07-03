@@ -667,11 +667,14 @@ S7::method(compile, grob_roundrect) <- function(node, scene) {
     ew <- .coord(node@width, "npc", n); eh <- .coord(node@height, "npc", n)
     er <- .coord(node@r, "npc", n)
     g <- .gp4(node@gp, scene)
+    sk <- .encode_sketch(node@sketch)
     # Rounded rects are typically few (keys/labels); one FFI call each, shared gpar.
     for (i in seq_len(n)) {
       scene$roundrect(ex$value[i], ey$value[i], ew$value[i], eh$value[i], er$value[i],
                       ex$code[i], ey$code[i], ew$code[i], eh$code[i], er$code[i],
-                      g$fill, g$col, g$lwd, g$alpha, g$stroke)
+                      g$fill, g$col, g$lwd, g$alpha, g$stroke,
+                      sk$roughness, sk$bowing, sk$fill_style, sk$fill_weight, sk$hachure_angle,
+                      sk$hachure_gap, sk$curve_tightness, sk$disable_multi, sk$preserve, sk$seed)
     }
   })
 }
@@ -727,15 +730,18 @@ S7::method(compile, grob_points) <- function(node, scene) {
   if (all(codes == 0L)) {
     # All circles: the batched circle path (radius carries marker size, sprite
     # fast-path for dense clouds).
-    .compile_circles(node, scene, node@size, "mm")
+    .compile_circles(node, scene, node@size, "mm", node@sketch)
   } else {
     .with_vp(node, scene, {
       n <- vctrs::vec_size_common(node@x, node@y, node@size)
       ex <- .coord(node@x, "npc", n); ey <- .coord(node@y, "npc", n); es <- .coord(node@size, "mm", n)
       g <- .gp4(node@gp, scene)
+      sk <- .encode_sketch(node@sketch)
       scene$markers(ex$value, ey$value, es$value, ex$code, ey$code, es$code,
                     vctrs::vec_recycle(as.integer(codes), n),
-                    g$fill, g$col, g$lwd, g$alpha, g$stroke)
+                    g$fill, g$col, g$lwd, g$alpha, g$stroke,
+                    sk$roughness, sk$bowing, sk$fill_style, sk$fill_weight, sk$hachure_angle,
+                    sk$hachure_gap, sk$curve_tightness, sk$disable_multi, sk$preserve, sk$seed)
     })
   }
 }
@@ -794,10 +800,13 @@ S7::method(compile, grob_sector) <- function(node, scene) {
     frgba <- as.integer(m)
     g <- .gp4(node@gp, scene)
     a <- .encode_arrow(node@arrow)
+    sk <- .encode_sketch(node@sketch)
     scene$sectors(ex$value, ey$value, er0$value, er1$value, th0, th1,
                   ex$code, ey$code, er0$code, er1$code, frgba,
                   g$col, g$lwd, g$alpha, g$stroke,
-                  a$angle, a$len, a$ends, a$closed)
+                  a$angle, a$len, a$ends, a$closed,
+                  sk$roughness, sk$bowing, sk$fill_style, sk$fill_weight, sk$hachure_angle,
+                  sk$hachure_gap, sk$curve_tightness, sk$disable_multi, sk$preserve, sk$seed)
   })
 }
 
@@ -826,11 +835,14 @@ S7::method(compile, grob_segments) <- function(node, scene) {
     a <- .encode_arrow(node@arrow)
     sc <- .encode_cap(node@start_cap); ec <- .encode_cap(node@end_cap)
     of <- .encode_cap(node@offset)
+    sk <- .encode_sketch(node@sketch)
     scene$segments(e0x$value, e0y$value, e1x$value, e1y$value,
                    e0x$code, e0y$code, e1x$code, e1y$code,
                    sc$value, ec$value, sc$code, ec$code, of$value, of$code,
                    g$col, g$lwd, g$alpha, g$stroke,
-                   a$angle, a$len, a$ends, a$closed)
+                   a$angle, a$len, a$ends, a$closed,
+                   sk$roughness, sk$bowing, sk$fill_style, sk$fill_weight, sk$hachure_angle,
+                   sk$hachure_gap, sk$curve_tightness, sk$disable_multi, sk$preserve, sk$seed)
   })
 }
 

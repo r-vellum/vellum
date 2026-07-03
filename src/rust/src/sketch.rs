@@ -359,6 +359,44 @@ pub fn ellipse(cx: f64, cy: f64, w: f64, h: f64, o: &SketchOpts, want_fill: bool
     }
 }
 
+/// A hand-drawn closed shape from an arbitrary point ring, drawn as a jittered
+/// Catmull-Rom curve (like [`ellipse`]) — used for sectors and rounded rects,
+/// where sampling the true outline (arcs + straight runs) and curve-fitting it
+/// keeps straight runs straight and corners round while everything wobbles.
+/// Collinear input points stay ~straight under the fit; densely-sampled arcs
+/// stay round. `pts` is the crisp outline in local px.
+pub fn closed_curve(pts: &[Pt], o: &SketchOpts, want_fill: bool) -> Sketched {
+    if pts.len() < 3 {
+        return Sketched { stroke: Vec::new(), fill_sketch: Vec::new(), fill_solid: None };
+    }
+    let mut rng = Rng::new(o.seed);
+    let pass = |rng: &mut Rng| -> Vec<Pt> {
+        pts.iter()
+            .map(|&(x, y)| {
+                (
+                    x + rng.offset_sym(o.max_offset, o.roughness, 1.0),
+                    y + rng.offset_sym(o.max_offset, o.roughness, 1.0),
+                )
+            })
+            .collect()
+    };
+    let mut stroke = Vec::new();
+    if let Some(path) = curve_path_closed(&pass(&mut rng), o.curve_tightness) {
+        stroke.push(path);
+    }
+    if !o.disable_multi_stroke {
+        if let Some(path) = curve_path_closed(&pass(&mut rng), o.curve_tightness) {
+            stroke.push(path);
+        }
+    }
+    let (fill_sketch, fill_solid) = if want_fill {
+        fill_for(&[pts.to_vec()], o, &mut rng)
+    } else {
+        (Vec::new(), None)
+    };
+    Sketched { stroke, fill_sketch, fill_solid }
+}
+
 /// Build the crisp closed region (one multi-subpath path) for solid fill.
 fn crisp_region(input: &[Vec<Pt>]) -> Option<Path> {
     let mut pb = PathBuilder::new();

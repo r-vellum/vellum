@@ -53,3 +53,53 @@ scene <- scene |>
 render(scene, "sketch.png")
 render(scene, "sketch.svg")
 render(scene, "sketch.pdf")
+
+# ---------------------------------------------------------------------------
+# Every geometry element can be hand-drawn (SK7-SK10): sketchy gridlines
+# (segments), pie/donut wedges (sectors), rounded panels (roundrect), and the
+# full marker vocabulary (points) — the pieces a grammar needs for a fully
+# hand-drawn plot.
+# ---------------------------------------------------------------------------
+
+elems <- vl_scene(width = unit(7, "in"), height = unit(4, "in"), dpi = 150) |>
+  push(viewport())
+
+# gridlines as sketchy segments
+elems <- elems |>
+  draw(segments_grob(
+    x0 = rep(0.04, 4), y0 = seq(0.58, 0.94, length.out = 4),
+    x1 = rep(0.30, 4), y1 = seq(0.58, 0.94, length.out = 4),
+    gp = gpar(col = "grey40", lwd = 1.5), sketch = sketch(seed = 1)
+  )) |>
+  draw(segments_grob(
+    x0 = seq(0.06, 0.28, length.out = 4), y0 = rep(0.55, 4),
+    x1 = seq(0.06, 0.28, length.out = 4), y1 = rep(0.97, 4),
+    gp = gpar(col = "grey40", lwd = 1.5), sketch = sketch(seed = 2)
+  )) |>
+  draw(text_grob("segments", x = 0.17, y = 0.50, gp = gpar(fontsize = 10)))
+
+# a pie from two sectors
+elems <- elems |>
+  draw(sector_grob(x = 0.52, y = 0.76, r0 = 0, r1 = 0.16, theta0 = 0, theta1 = 1.4,
+                   fill = "tomato", gp = gpar(col = "black", lwd = 1.5), sketch = sketch(seed = 3))) |>
+  draw(sector_grob(x = 0.52, y = 0.76, r0 = 0, r1 = 0.16, theta0 = 1.4, theta1 = 2 * pi,
+                   fill = "gold", gp = gpar(col = "black", lwd = 1.5), sketch = sketch(seed = 4))) |>
+  draw(text_grob("sectors", x = 0.52, y = 0.50, gp = gpar(fontsize = 10)))
+
+# a rounded panel
+elems <- elems |>
+  draw(roundrect_grob(x = 0.84, y = 0.76, width = 0.24, height = 0.32, r = 0.05,
+                      gp = gpar(fill = "mediumpurple", col = "black", lwd = 2),
+                      sketch = sketch(fill_style = "hachure", seed = 5))) |>
+  draw(text_grob("roundrect", x = 0.84, y = 0.50, gp = gpar(fontsize = 10)))
+
+# the marker vocabulary
+elems <- elems |>
+  draw(points_grob(
+    x = seq(0.12, 0.88, length.out = 5), y = rep(0.22, 5), size = unit(6, "mm"),
+    shape = c("square", "triangle", "diamond", "plus", "cross"),
+    gp = gpar(fill = "seagreen", col = "black", lwd = 1.5), sketch = sketch(seed = 6)
+  )) |>
+  draw(text_grob("markers", x = 0.5, y = 0.07, gp = gpar(fontsize = 10)))
+
+render(elems, "sketch-elements.png")

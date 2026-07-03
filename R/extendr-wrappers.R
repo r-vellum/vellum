@@ -270,7 +270,7 @@ Scene$set_layout <- function(wvals, wunits, hvals, hunits, respect) .Call(wrap__
 
 Scene$rect <- function(x, y, w, h, xu, yu, wu, hu, fill, col, lwd, alpha, stroke) .Call(wrap__Scene__rect, self, x, y, w, h, xu, yu, wu, hu, fill, col, lwd, alpha, stroke)
 
-Scene$roundrect <- function(x, y, w, h, r, xu, yu, wu, hu, ru, fill, col, lwd, alpha, stroke) .Call(wrap__Scene__roundrect, self, x, y, w, h, r, xu, yu, wu, hu, ru, fill, col, lwd, alpha, stroke)
+Scene$roundrect <- function(x, y, w, h, r, xu, yu, wu, hu, ru, fill, col, lwd, alpha, stroke, sroughness, sbowing, sfill_style, sfill_weight, shachure_angle, shachure_gap, scurve_tightness, sdisable_multi, spreserve, sseed) .Call(wrap__Scene__roundrect, self, x, y, w, h, r, xu, yu, wu, hu, ru, fill, col, lwd, alpha, stroke, sroughness, sbowing, sfill_style, sfill_weight, shachure_angle, shachure_gap, scurve_tightness, sdisable_multi, spreserve, sseed)
 
 Scene$lines <- function(x, y, xu, yu, scap, ecap, scapu, ecapu, off, offu, col, lwd, alpha, stroke, aangle, alen, aends, aclosed, sroughness, sbowing, sfill_style, sfill_weight, shachure_angle, shachure_gap, scurve_tightness, sdisable_multi, spreserve, sseed) .Call(wrap__Scene__lines, self, x, y, xu, yu, scap, ecap, scapu, ecapu, off, offu, col, lwd, alpha, stroke, aangle, alen, aends, aclosed, sroughness, sbowing, sfill_style, sfill_weight, shachure_angle, shachure_gap, scurve_tightness, sdisable_multi, spreserve, sseed)
 
@@ -282,13 +282,13 @@ Scene$rects <- function(x, y, w, h, xu, yu, wu, hu, fill, col, lwd, alpha, strok
 
 Scene$circles <- function(x, y, r, xu, yu, ru, fill, col, lwd, alpha, stroke, sroughness, sbowing, sfill_style, sfill_weight, shachure_angle, shachure_gap, scurve_tightness, sdisable_multi, spreserve, sseed) .Call(wrap__Scene__circles, self, x, y, r, xu, yu, ru, fill, col, lwd, alpha, stroke, sroughness, sbowing, sfill_style, sfill_weight, shachure_angle, shachure_gap, scurve_tightness, sdisable_multi, spreserve, sseed)
 
-Scene$markers <- function(x, y, size, xu, yu, su, shape, fill, col, lwd, alpha, stroke) .Call(wrap__Scene__markers, self, x, y, size, xu, yu, su, shape, fill, col, lwd, alpha, stroke)
+Scene$markers <- function(x, y, size, xu, yu, su, shape, fill, col, lwd, alpha, stroke, sroughness, sbowing, sfill_style, sfill_weight, shachure_angle, shachure_gap, scurve_tightness, sdisable_multi, spreserve, sseed) .Call(wrap__Scene__markers, self, x, y, size, xu, yu, su, shape, fill, col, lwd, alpha, stroke, sroughness, sbowing, sfill_style, sfill_weight, shachure_angle, shachure_gap, scurve_tightness, sdisable_multi, spreserve, sseed)
 
 Scene$hexagons <- function(x, y, size, w, h, xu, yu, su, wu, hu, fill, flat, col, lwd, alpha, stroke) .Call(wrap__Scene__hexagons, self, x, y, size, w, h, xu, yu, su, wu, hu, fill, flat, col, lwd, alpha, stroke)
 
-Scene$sectors <- function(x, y, r0, r1, theta0, theta1, xu, yu, r0u, r1u, fill, col, lwd, alpha, stroke, aangle, alen, aends, aclosed) .Call(wrap__Scene__sectors, self, x, y, r0, r1, theta0, theta1, xu, yu, r0u, r1u, fill, col, lwd, alpha, stroke, aangle, alen, aends, aclosed)
+Scene$sectors <- function(x, y, r0, r1, theta0, theta1, xu, yu, r0u, r1u, fill, col, lwd, alpha, stroke, aangle, alen, aends, aclosed, sroughness, sbowing, sfill_style, sfill_weight, shachure_angle, shachure_gap, scurve_tightness, sdisable_multi, spreserve, sseed) .Call(wrap__Scene__sectors, self, x, y, r0, r1, theta0, theta1, xu, yu, r0u, r1u, fill, col, lwd, alpha, stroke, aangle, alen, aends, aclosed, sroughness, sbowing, sfill_style, sfill_weight, shachure_angle, shachure_gap, scurve_tightness, sdisable_multi, spreserve, sseed)
 
-Scene$segments <- function(x0, y0, x1, y1, x0u, y0u, x1u, y1u, scap, ecap, scapu, ecapu, off, offu, col, lwd, alpha, stroke, aangle, alen, aends, aclosed) .Call(wrap__Scene__segments, self, x0, y0, x1, y1, x0u, y0u, x1u, y1u, scap, ecap, scapu, ecapu, off, offu, col, lwd, alpha, stroke, aangle, alen, aends, aclosed)
+Scene$segments <- function(x0, y0, x1, y1, x0u, y0u, x1u, y1u, scap, ecap, scapu, ecapu, off, offu, col, lwd, alpha, stroke, aangle, alen, aends, aclosed, sroughness, sbowing, sfill_style, sfill_weight, shachure_angle, shachure_gap, scurve_tightness, sdisable_multi, spreserve, sseed) .Call(wrap__Scene__segments, self, x0, y0, x1, y1, x0u, y0u, x1u, y1u, scap, ecap, scapu, ecapu, off, offu, col, lwd, alpha, stroke, aangle, alen, aends, aclosed, sroughness, sbowing, sfill_style, sfill_weight, shachure_angle, shachure_gap, scurve_tightness, sdisable_multi, spreserve, sseed)
 
 Scene$add_loop <- function(x, y, size, foot, angle, width, xu, yu, su, fu, col, lwd, alpha, stroke, aangle, alen, aends, aclosed) .Call(wrap__Scene__add_loop, self, x, y, size, foot, angle, width, xu, yu, su, fu, col, lwd, alpha, stroke, aangle, alen, aends, aclosed)
 
