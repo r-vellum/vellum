@@ -27,7 +27,8 @@ grob <- S7::new_class(
 grob_rect <- S7::new_class("grob_rect", parent = grob, package = "vellum",
   properties = list(
     x = .unit_prop(), y = .unit_prop(),
-    width = .unit_prop("unit(1, \"npc\")"), height = .unit_prop("unit(1, \"npc\")")
+    width = .unit_prop("unit(1, \"npc\")"), height = .unit_prop("unit(1, \"npc\")"),
+    sketch = S7::new_property(S7::class_any, default = NULL)
   )
 )
 grob_roundrect <- S7::new_class("grob_roundrect", parent = grob, package = "vellum",
@@ -42,11 +43,14 @@ grob_lines <- S7::new_class("grob_lines", parent = grob, package = "vellum",
                     arrow = S7::new_property(S7::class_any, default = NULL),
                     start_cap = S7::new_property(S7::class_any, default = NULL),
                     end_cap = S7::new_property(S7::class_any, default = NULL),
-                    offset = S7::new_property(S7::class_any, default = NULL)))
+                    offset = S7::new_property(S7::class_any, default = NULL),
+                    sketch = S7::new_property(S7::class_any, default = NULL)))
 grob_polygon <- S7::new_class("grob_polygon", parent = grob, package = "vellum",
-  properties = list(x = .unit_prop(), y = .unit_prop()))
+  properties = list(x = .unit_prop(), y = .unit_prop(),
+                    sketch = S7::new_property(S7::class_any, default = NULL)))
 grob_circle <- S7::new_class("grob_circle", parent = grob, package = "vellum",
-  properties = list(x = .unit_prop(), y = .unit_prop(), r = .unit_prop("unit(0.25, \"npc\")")))
+  properties = list(x = .unit_prop(), y = .unit_prop(), r = .unit_prop("unit(0.25, \"npc\")"),
+                    sketch = S7::new_property(S7::class_any, default = NULL)))
 grob_points <- S7::new_class("grob_points", parent = grob, package = "vellum",
   properties = list(
     x = .unit_prop(), y = .unit_prop(), size = .unit_prop("unit(2, \"mm\")"),
@@ -125,7 +129,8 @@ grob_path <- S7::new_class("grob_path", parent = grob, package = "vellum",
   properties = list(
     x = .unit_prop(), y = .unit_prop(),
     nper = S7::new_property(S7::class_integer, default = integer(0)),
-    rule = S7::new_property(S7::class_character, default = "winding")
+    rule = S7::new_property(S7::class_character, default = "winding"),
+    sketch = S7::new_property(S7::class_any, default = NULL)
   )
 )
 grob_raster <- S7::new_class("grob_raster", parent = grob, package = "vellum",
@@ -161,13 +166,13 @@ grob_raster <- S7::new_class("grob_raster", parent = grob, package = "vellum",
 #'   accessibility (ignored by the raster and PDF backends).
 #' @export
 rect_grob <- function(x = 0.5, y = 0.5, width = 1, height = 1,
-                      gp = gpar(), name = NULL, vp = NULL, id = NULL, role = NULL) {
+                      sketch = NULL, gp = gpar(), name = NULL, vp = NULL, id = NULL, role = NULL) {
   w <- as_unit(width)
   h <- as_unit(height)
   .check_extent(w, "width")
   .check_extent(h, "height")
   grob_rect(x = as_unit(x), y = as_unit(y), width = w, height = h,
-            gp = gp, name = name, vp = vp, id = id, role = role)
+            sketch = sketch, gp = gp, name = name, vp = vp, id = id, role = role)
 }
 
 #' @rdname grob
@@ -235,9 +240,10 @@ roundrect_grob <- function(x = 0.5, y = 0.5, width = 1, height = 1, r = 0.1,
 #'   rigidly translates the whole polyline along the perpendicular of its overall
 #'   direction. Applied **before** `start_cap`/`end_cap` and the arrowhead (offset,
 #'   then cap, then head). `NULL`/`0` (default) leaves the geometry untouched.
+#' @param sketch Optional [sketch()] spec for a hand-drawn look; `NULL` = crisp.
 #' @export
 lines_grob <- function(x, y, arrow = NULL, start_cap = NULL, end_cap = NULL, offset = NULL,
-                       gp = gpar(), name = NULL, vp = NULL, id = NULL, role = NULL) {
+                       sketch = NULL, gp = gpar(), name = NULL, vp = NULL, id = NULL, role = NULL) {
   n <- .coord_n(x, y)
   start_cap <- .check_cap(start_cap, "start_cap", scalar = TRUE)
   end_cap <- .check_cap(end_cap, "end_cap", scalar = TRUE)
@@ -245,7 +251,7 @@ lines_grob <- function(x, y, arrow = NULL, start_cap = NULL, end_cap = NULL, off
   grob_lines(x = vctrs::vec_recycle(as_unit(x, "native"), n),
              y = vctrs::vec_recycle(as_unit(y, "native"), n),
              arrow = arrow, start_cap = start_cap, end_cap = end_cap, offset = offset,
-             gp = gp, name = name, vp = vp, id = id, role = role)
+             sketch = sketch, gp = gp, name = name, vp = vp, id = id, role = role)
 }
 
 # Validate a cap/offset argument: NULL passes through; otherwise it must resolve
@@ -307,6 +313,82 @@ arrow <- function(angle = 30, length = unit(0.25, "in"),
        closed = identical(a$type, "closed"))
 }
 
+# Fill-style names -> the integer codes `sketch.rs` decodes (FillStyle::from_code).
+.sketch_fill_codes <- c(solid = 0L, hachure = 1L, crosshatch = 2L, zigzag = 3L, dots = 4L)
+
+#' Hand-drawn ("sketch") rendering
+#'
+#' Attach to a grob's `sketch` argument to render it in a hand-drawn, sketchy
+#' style (the [Rough.js](https://roughjs.com) look): wobbly outlines and hachure
+#' fills. Supported by [rect_grob()], [polygon_grob()], [lines_grob()], and
+#' [circle_grob()]. Output is deterministic given `seed`.
+#'
+#' Sketch is a deliberate exception to vellum's crisp, fidelity-first defaults —
+#' see `vignette` / `_docs/DESIGN-ROUGHR.md`. Text is never sketched.
+#'
+#' @param roughness Wobble amount (`>= 0`; `0` is nearly crisp, `1` the default
+#'   hand-drawn look, higher is wilder).
+#' @param bowing How much straight edges bow (0 disables bowing).
+#' @param fill_style One of `"hachure"` (default), `"solid"`, `"crosshatch"`,
+#'   `"zigzag"`, `"dots"`. Non-solid styles paint the fill colour as line work.
+#' @param fill_weight Stroke width of fill/hachure lines, in `lwd` units
+#'   (1 == 1/96 inch); `NULL` derives it from the grob's `lwd`.
+#' @param hachure_angle Hachure line angle in degrees.
+#' @param hachure_gap Gap between hachure lines, in `lwd` units; `NULL` = auto.
+#' @param curve_tightness Curve fit tightness for round shapes (circles, arcs).
+#' @param disable_multi_stroke If `TRUE`, draw single (not doubled) outline
+#'   strokes — a cleaner, less sketchy line.
+#' @param preserve_vertices If `TRUE`, keep shape vertices exact (only edges wobble).
+#' @param seed Integer seed for the wobble (same seed => identical output).
+#' @return A `vellum_sketch` object for a grob's `sketch` argument.
+#' @examples
+#' rect_grob(gp = gpar(fill = "steelblue", col = "black"), sketch = sketch())
+#' @export
+sketch <- function(roughness = 1, bowing = 1,
+                   fill_style = c("hachure", "solid", "crosshatch", "zigzag", "dots"),
+                   fill_weight = NULL, hachure_angle = -41, hachure_gap = NULL,
+                   curve_tightness = 0, disable_multi_stroke = FALSE,
+                   preserve_vertices = FALSE, seed = 1L) {
+  fill_style <- match.arg(fill_style)
+  if (!is.numeric(roughness) || length(roughness) != 1L || is.na(roughness) || roughness < 0) {
+    cli::cli_abort("{.arg roughness} must be a single number >= 0.")
+  }
+  structure(
+    list(
+      roughness = as.numeric(roughness)[1], bowing = as.numeric(bowing)[1],
+      fill_style = fill_style,
+      fill_weight = if (is.null(fill_weight)) -1 else as.numeric(fill_weight)[1],
+      hachure_angle = as.numeric(hachure_angle)[1],
+      hachure_gap = if (is.null(hachure_gap)) -1 else as.numeric(hachure_gap)[1],
+      curve_tightness = as.numeric(curve_tightness)[1],
+      disable_multi_stroke = isTRUE(disable_multi_stroke),
+      preserve_vertices = isTRUE(preserve_vertices),
+      seed = as.numeric(seed)[1]
+    ),
+    class = "vellum_sketch"
+  )
+}
+
+# Encode a sketch (or NULL) into the scalars the backend takes. `roughness = -1`
+# is the "no sketch" sentinel (sketch_from returns None), so a scene without any
+# sketch is byte-for-byte unchanged.
+.encode_sketch <- function(s) {
+  if (is.null(s)) {
+    return(list(roughness = -1, bowing = 0, fill_style = 0L, fill_weight = -1,
+                hachure_angle = 0, hachure_gap = -1, curve_tightness = 0,
+                disable_multi = FALSE, preserve = FALSE, seed = 1))
+  }
+  if (!inherits(s, "vellum_sketch")) {
+    cli::cli_abort("{.arg sketch} must be a {.fn sketch} object or {.code NULL}.")
+  }
+  list(roughness = s$roughness, bowing = s$bowing,
+       fill_style = unname(.sketch_fill_codes[[s$fill_style]]),
+       fill_weight = s$fill_weight, hachure_angle = s$hachure_angle,
+       hachure_gap = s$hachure_gap, curve_tightness = s$curve_tightness,
+       disable_multi = s$disable_multi_stroke, preserve = s$preserve_vertices,
+       seed = s$seed)
+}
+
 # Encode a cap unit (or NULL) into the parallel (value, code) streams the backend
 # resolves. `NULL` -> empty streams, the backend's "no cap" signal (so a scene
 # without caps is byte-for-byte unchanged). Caps are validated absolute upstream,
@@ -320,11 +402,11 @@ arrow <- function(angle = 30, length = unit(0.25, "in"),
 
 #' @rdname grob
 #' @export
-polygon_grob <- function(x, y, gp = gpar(), name = NULL, vp = NULL, id = NULL, role = NULL) {
+polygon_grob <- function(x, y, sketch = NULL, gp = gpar(), name = NULL, vp = NULL, id = NULL, role = NULL) {
   n <- .coord_n(x, y)
   grob_polygon(x = vctrs::vec_recycle(as_unit(x, "native"), n),
                y = vctrs::vec_recycle(as_unit(y, "native"), n),
-               gp = gp, name = name, vp = vp, id = id, role = role)
+               sketch = sketch, gp = gp, name = name, vp = vp, id = id, role = role)
 }
 
 # Decompose a curve coordinate into (values, single unit name). Flattening is a
@@ -405,14 +487,14 @@ spline_grob <- function(x, y, shape = 1, n = 20, open = TRUE, gp = gpar(), name 
 #' @rdname grob
 #' @param r Radius ([unit()] or numeric).
 #' @export
-circle_grob <- function(x = 0.5, y = 0.5, r = 0.25, gp = gpar(), name = NULL, vp = NULL, id = NULL, role = NULL) {
+circle_grob <- function(x = 0.5, y = 0.5, r = 0.25, sketch = NULL, gp = gpar(), name = NULL, vp = NULL, id = NULL, role = NULL) {
   n <- .common_n(x, y, r)
   ru <- as_unit(r)
   .check_extent(ru, "r")
   grob_circle(x = vctrs::vec_recycle(as_unit(x), n),
               y = vctrs::vec_recycle(as_unit(y), n),
               r = vctrs::vec_recycle(ru, n),
-              gp = gp, name = name, vp = vp, id = id, role = role)
+              sketch = sketch, gp = gp, name = name, vp = vp, id = id, role = role)
 }
 
 #' @rdname grob
@@ -579,7 +661,7 @@ segments_grob <- function(x0, y0, x1, y1, arrow = NULL, start_cap = NULL, end_ca
 #' @param rule Fill rule: `"winding"` (non-zero, default) or `"evenodd"`.
 #' @export
 path_grob <- function(x, y, id = NULL, rule = c("winding", "evenodd"),
-                      gp = gpar(), name = NULL, vp = NULL, role = NULL) {
+                      sketch = NULL, gp = gpar(), name = NULL, vp = NULL, role = NULL) {
   rule <- match.arg(rule)
   n <- .coord_n(x, y)
   xu <- vctrs::vec_recycle(as_unit(x, "native"), n)
@@ -594,7 +676,8 @@ path_grob <- function(x, y, id = NULL, rule = c("winding", "evenodd"),
     nper <- tabulate(grp)
   }
   grob_path(
-    x = xu, y = yu, nper = as.integer(nper), rule = rule, gp = gp, name = name, vp = vp, role = role
+    x = xu, y = yu, nper = as.integer(nper), rule = rule,
+    sketch = sketch, gp = gp, name = name, vp = vp, role = role
   )
 }
 

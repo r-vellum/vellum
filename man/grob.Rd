@@ -24,6 +24,7 @@ rect_grob(
   y = 0.5,
   width = 1,
   height = 1,
+  sketch = NULL,
   gp = gpar(),
   name = NULL,
   vp = NULL,
@@ -51,6 +52,7 @@ lines_grob(
   start_cap = NULL,
   end_cap = NULL,
   offset = NULL,
+  sketch = NULL,
   gp = gpar(),
   name = NULL,
   vp = NULL,
@@ -58,7 +60,16 @@ lines_grob(
   role = NULL
 )
 
-polygon_grob(x, y, gp = gpar(), name = NULL, vp = NULL, id = NULL, role = NULL)
+polygon_grob(
+  x,
+  y,
+  sketch = NULL,
+  gp = gpar(),
+  name = NULL,
+  vp = NULL,
+  id = NULL,
+  role = NULL
+)
 
 bezier_grob(
   x,
@@ -88,6 +99,7 @@ circle_grob(
   x = 0.5,
   y = 0.5,
   r = 0.25,
+  sketch = NULL,
   gp = gpar(),
   name = NULL,
   vp = NULL,
@@ -174,6 +186,7 @@ path_grob(
   y,
   id = NULL,
   rule = c("winding", "evenodd"),
+  sketch = NULL,
   gp = gpar(),
   name = NULL,
   vp = NULL,
@@ -221,6 +234,8 @@ regardless of device aspect); a \emph{regular} flat hexagon is
 dimensionless lateral petal scale in \verb{(0, 1]} (recycled per loop): \code{1}
 (default) is the full teardrop, smaller narrows the petal's \strong{waist}
 without shortening it (the igraph "narrowing" factor).}
+
+\item{sketch}{Optional \code{\link[=sketch]{sketch()}} spec for a hand-drawn look; \code{NULL} = crisp.}
 
 \item{gp}{Graphical parameters, from \code{\link[=gpar]{gpar()}}.}
 

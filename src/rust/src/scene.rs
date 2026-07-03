@@ -300,10 +300,17 @@ enum Node {
         /// the whole polyline sideways by this device length along the normal of
         /// its overall (chord) direction. `None` = untouched.
         off: Option<(f64, Unit)>,
-        arrow: Option<Arrow>, gp: PartialGpar,
+        arrow: Option<Arrow>,
+        /// Optional hand-drawn (sketch) rendering; `None` = crisp. See `sketch.rs`.
+        sketch: Option<crate::sketch::SketchOpts>,
+        gp: PartialGpar,
     },
-    Polygon { x: Vec<f64>, y: Vec<f64>, xu: Vec<Unit>, yu: Vec<Unit>, gp: PartialGpar },
-    Circle { x: f64, y: f64, r: f64, xu: Unit, yu: Unit, ru: Unit, gp: PartialGpar },
+    Polygon {
+        x: Vec<f64>, y: Vec<f64>, xu: Vec<Unit>, yu: Vec<Unit>,
+        sketch: Option<crate::sketch::SketchOpts>,
+        gp: PartialGpar,
+    },
+    Circle { x: f64, y: f64, r: f64, xu: Unit, yu: Unit, ru: Unit, sketch: Option<crate::sketch::SketchOpts>, gp: PartialGpar },
     Text {
         x: f64,
         y: f64,
@@ -336,6 +343,7 @@ enum Node {
     Rects {
         x: Vec<f64>, y: Vec<f64>, w: Vec<f64>, h: Vec<f64>,
         xu: Vec<Unit>, yu: Vec<Unit>, wu: Vec<Unit>, hu: Vec<Unit>,
+        sketch: Option<crate::sketch::SketchOpts>,
         gp: PartialGpar,
     },
     /// A batch of circles sharing one gpar (also serves `points`). Markers with a
@@ -343,6 +351,7 @@ enum Node {
     Circles {
         x: Vec<f64>, y: Vec<f64>, r: Vec<f64>,
         xu: Vec<Unit>, yu: Vec<Unit>, ru: Vec<Unit>,
+        sketch: Option<crate::sketch::SketchOpts>,
         gp: PartialGpar,
     },
     /// A batch of point markers with per-element `shape` codes (0 circle, 1 square,
@@ -419,6 +428,7 @@ enum Node {
         x: Vec<f64>, y: Vec<f64>, xu: Vec<Unit>, yu: Vec<Unit>,
         nper: Vec<usize>,
         evenodd: bool,
+        sketch: Option<crate::sketch::SketchOpts>,
         gp: PartialGpar,
     },
     /// A straight-RGBA image (`iw` x `ih`, top-left) filling a `w` x `h` cell
@@ -786,26 +796,44 @@ impl Scene {
         off: &[f64], offu: &[i32],
         col: Robj, lwd: Robj, alpha: Robj, stroke: Robj,
         aangle: f64, alen: f64, aends: i32, aclosed: bool,
+        sroughness: f64, sbowing: f64, sfill_style: i32, sfill_weight: f64,
+        shachure_angle: f64, shachure_gap: f64, scurve_tightness: f64,
+        sdisable_multi: bool, spreserve: bool, sseed: f64,
     ) {
         let gp = PartialGpar::from_robj(&rnull(), &col, &lwd, &alpha, &stroke);
+        let sketch = sketch_from(
+            sroughness, sbowing, sfill_style, sfill_weight, shachure_angle,
+            shachure_gap, scurve_tightness, sdisable_multi, spreserve, sseed,
+        );
         self.emit_node(Node::Lines {
             x: x.to_vec(), y: y.to_vec(), xu: codes(xu), yu: codes(yu),
             scap: cap_scalar(scap, scapu), ecap: cap_scalar(ecap, ecapu),
             off: cap_scalar(off, offu),
-            arrow: arrow_from(aangle, alen, aends, aclosed), gp,
+            arrow: arrow_from(aangle, alen, aends, aclosed), sketch, gp,
         });
     }
 
     #[allow(clippy::too_many_arguments)]
-    fn polygon(&mut self, x: &[f64], y: &[f64], xu: &[i32], yu: &[i32], fill: Robj, col: Robj, lwd: Robj, alpha: Robj, stroke: Robj) {
+    #[allow(clippy::too_many_arguments)]
+    fn polygon(
+        &mut self, x: &[f64], y: &[f64], xu: &[i32], yu: &[i32],
+        fill: Robj, col: Robj, lwd: Robj, alpha: Robj, stroke: Robj,
+        sroughness: f64, sbowing: f64, sfill_style: i32, sfill_weight: f64,
+        shachure_angle: f64, shachure_gap: f64, scurve_tightness: f64,
+        sdisable_multi: bool, spreserve: bool, sseed: f64,
+    ) {
         let gp = PartialGpar::from_robj(&fill, &col, &lwd, &alpha, &stroke);
-        self.emit_node(Node::Polygon { x: x.to_vec(), y: y.to_vec(), xu: codes(xu), yu: codes(yu), gp });
+        let sketch = sketch_from(
+            sroughness, sbowing, sfill_style, sfill_weight, shachure_angle,
+            shachure_gap, scurve_tightness, sdisable_multi, spreserve, sseed,
+        );
+        self.emit_node(Node::Polygon { x: x.to_vec(), y: y.to_vec(), xu: codes(xu), yu: codes(yu), sketch, gp });
     }
 
     #[allow(clippy::too_many_arguments)]
     fn circle(&mut self, x: f64, y: f64, r: f64, xu: i32, yu: i32, ru: i32, fill: Robj, col: Robj, lwd: Robj, alpha: Robj, stroke: Robj) {
         let gp = PartialGpar::from_robj(&fill, &col, &lwd, &alpha, &stroke);
-        self.emit_node(Node::Circle { x, y, r, xu: Unit::from_code(xu), yu: Unit::from_code(yu), ru: Unit::from_code(ru), gp });
+        self.emit_node(Node::Circle { x, y, r, xu: Unit::from_code(xu), yu: Unit::from_code(yu), ru: Unit::from_code(ru), sketch: None, gp });
     }
 
     /// A whole batch of rectangles in one call, sharing one gpar. Coordinates and
@@ -815,11 +843,18 @@ impl Scene {
         &mut self, x: &[f64], y: &[f64], w: &[f64], h: &[f64],
         xu: &[i32], yu: &[i32], wu: &[i32], hu: &[i32],
         fill: Robj, col: Robj, lwd: Robj, alpha: Robj, stroke: Robj,
+        sroughness: f64, sbowing: f64, sfill_style: i32, sfill_weight: f64,
+        shachure_angle: f64, shachure_gap: f64, scurve_tightness: f64,
+        sdisable_multi: bool, spreserve: bool, sseed: f64,
     ) {
         let gp = PartialGpar::from_robj(&fill, &col, &lwd, &alpha, &stroke);
+        let sketch = sketch_from(
+            sroughness, sbowing, sfill_style, sfill_weight, shachure_angle,
+            shachure_gap, scurve_tightness, sdisable_multi, spreserve, sseed,
+        );
         self.emit_node(Node::Rects {
             x: x.to_vec(), y: y.to_vec(), w: w.to_vec(), h: h.to_vec(),
-            xu: codes(xu), yu: codes(yu), wu: codes(wu), hu: codes(hu), gp,
+            xu: codes(xu), yu: codes(yu), wu: codes(wu), hu: codes(hu), sketch, gp,
         });
     }
 
@@ -830,11 +865,18 @@ impl Scene {
         &mut self, x: &[f64], y: &[f64], r: &[f64],
         xu: &[i32], yu: &[i32], ru: &[i32],
         fill: Robj, col: Robj, lwd: Robj, alpha: Robj, stroke: Robj,
+        sroughness: f64, sbowing: f64, sfill_style: i32, sfill_weight: f64,
+        shachure_angle: f64, shachure_gap: f64, scurve_tightness: f64,
+        sdisable_multi: bool, spreserve: bool, sseed: f64,
     ) {
         let gp = PartialGpar::from_robj(&fill, &col, &lwd, &alpha, &stroke);
+        let sketch = sketch_from(
+            sroughness, sbowing, sfill_style, sfill_weight, shachure_angle,
+            shachure_gap, scurve_tightness, sdisable_multi, spreserve, sseed,
+        );
         self.emit_node(Node::Circles {
             x: x.to_vec(), y: y.to_vec(), r: r.to_vec(),
-            xu: codes(xu), yu: codes(yu), ru: codes(ru), gp,
+            xu: codes(xu), yu: codes(yu), ru: codes(ru), sketch, gp,
         });
     }
 
@@ -949,15 +991,23 @@ impl Scene {
     /// A general path. `nper` gives the number of points in each closed sub-path
     /// (so holes are sub-paths under the even-odd or winding rule).
     #[allow(clippy::too_many_arguments)]
+    #[allow(clippy::too_many_arguments)]
     fn path(
         &mut self, x: &[f64], y: &[f64], xu: &[i32], yu: &[i32], nper: &[i32],
         evenodd: bool, fill: Robj, col: Robj, lwd: Robj, alpha: Robj, stroke: Robj,
+        sroughness: f64, sbowing: f64, sfill_style: i32, sfill_weight: f64,
+        shachure_angle: f64, shachure_gap: f64, scurve_tightness: f64,
+        sdisable_multi: bool, spreserve: bool, sseed: f64,
     ) {
         let gp = PartialGpar::from_robj(&fill, &col, &lwd, &alpha, &stroke);
+        let sketch = sketch_from(
+            sroughness, sbowing, sfill_style, sfill_weight, shachure_angle,
+            shachure_gap, scurve_tightness, sdisable_multi, spreserve, sseed,
+        );
         self.emit_node(Node::Path {
             x: x.to_vec(), y: y.to_vec(), xu: codes(xu), yu: codes(yu),
             nper: nper.iter().map(|&v| v.max(0) as usize).collect(),
-            evenodd, gp,
+            evenodd, sketch, gp,
         });
     }
 
@@ -1919,8 +1969,10 @@ impl Scene {
                         fill_then_stroke(b, &path, &gp, t, &clip, vp, FillRule::Winding);
                     }
                 }
-                Node::Lines { x, y, xu, yu, scap, ecap, off, arrow, .. } => {
-                    if let Some(col) = gp.col {
+                Node::Lines { x, y, xu, yu, scap, ecap, off, arrow, sketch, .. } => {
+                    if let Some(sk) = sketch {
+                        draw_sketch_polyline(b, x, y, xu, yu, &gp, sk, t, &clip, vp);
+                    } else if let Some(col) = gp.col {
                         let n = x.len().min(y.len()).min(xu.len()).min(yu.len());
                         if n >= 2 {
                             // Resolve to local px, rigidly translate the whole polyline by
@@ -1970,24 +2022,58 @@ impl Scene {
                         }
                     }
                 }
-                Node::Polygon { x, y, xu, yu, .. } => {
-                    if let Some(path) = build_poly(x, y, xu, yu, vp, true) {
+                Node::Polygon { x, y, xu, yu, sketch, .. } => {
+                    if let Some(sk) = sketch {
+                        let n = x.len().min(y.len()).min(xu.len()).min(yu.len());
+                        let ring: Vec<(f64, f64)> = (0..n)
+                            .map(|i| (vp.x_pos(x[i], xu[i]), vp.y_pos(y[i], yu[i])))
+                            .filter(|p| p.0.is_finite() && p.1.is_finite())
+                            .collect();
+                        if ring.len() >= 2 {
+                            draw_sketch_rings(b, &[ring], &gp, sk, t, &clip, vp);
+                        }
+                    } else if let Some(path) = build_poly(x, y, xu, yu, vp, true) {
                         fill_then_stroke(b, &path, &gp, t, &clip, vp, FillRule::Winding);
                     }
                 }
-                Node::Circle { x, y, r, xu, yu, ru, .. } => {
+                Node::Circle { x, y, r, xu, yu, ru, sketch, .. } => {
                     let cx = vp.x_pos(*x, *xu);
                     let cy = vp.y_pos(*y, *yu);
                     let rr = vp.r_len(*r, *ru);
-                    let mut pb = PathBuilder::new();
-                    pb.push_circle(cx as f32, cy as f32, rr as f32);
-                    if let Some(path) = pb.finish() {
-                        fill_then_stroke(b, &path, &gp, t, &clip, vp, FillRule::Winding);
+                    if let Some(sk) = sketch {
+                        let o = resolve_sketch(sk, &gp, vp.dpi);
+                        let s = crate::sketch::ellipse(cx, cy, rr * 2.0, rr * 2.0, &o, gp.fill.is_some());
+                        paint_sketch(b, &s, &gp, t, &clip, vp, o.fill_weight);
+                    } else {
+                        let mut pb = PathBuilder::new();
+                        pb.push_circle(cx as f32, cy as f32, rr as f32);
+                        if let Some(path) = pb.finish() {
+                            fill_then_stroke(b, &path, &gp, t, &clip, vp, FillRule::Winding);
+                        }
                     }
                 }
-                Node::Rects { x, y, w, h, xu, yu, wu, hu, .. } => {
+                Node::Rects { x, y, w, h, xu, yu, wu, hu, sketch, .. } => {
                     let n = [x.len(), y.len(), w.len(), h.len(), xu.len(), yu.len(), wu.len(), hu.len()]
                         .into_iter().min().unwrap_or(0);
+                    if let Some(sk) = sketch {
+                        // Per-element sketch (the batched fast paths don't apply —
+                        // every rect is unique wobbly geometry). See DESIGN §4 ex.5.
+                        for i in 0..n {
+                            let cx = vp.x_pos(x[i], xu[i]);
+                            let cy = vp.y_pos(y[i], yu[i]);
+                            let pw = vp.x_len(w[i], wu[i]);
+                            let ph = vp.y_len(h[i], hu[i]);
+                            if pw <= 0.0 || ph <= 0.0 {
+                                continue;
+                            }
+                            let (x0, y0) = (cx - pw / 2.0, cy - ph / 2.0);
+                            let (x1, y1) = (cx + pw / 2.0, cy + ph / 2.0);
+                            let ring = vec![(x0, y0), (x1, y0), (x1, y1), (x0, y1)];
+                            let mut ski = sk.clone();
+                            ski.seed = sk.seed.wrapping_add(i as u64);
+                            draw_sketch_rings(b, &[ring], &gp, &ski, t, &clip, vp);
+                        }
+                    } else {
                     let lwd = gp.lwd_px(vp.dpi);
                     let stroke = gp.col.filter(|_| lwd > 0.0);
                     let rf = gp.fill.as_ref().map(|p| resolve_paint(p, vp)); // resolve gradient/pattern geom once
@@ -2028,10 +2114,30 @@ impl Scene {
                             }
                         }
                     }
+                    }
                 }
-                Node::Circles { x, y, r, xu, yu, ru, .. } => {
+                Node::Circles { x, y, r, xu, yu, ru, sketch, .. } => {
                     let n = [x.len(), y.len(), r.len(), xu.len(), yu.len(), ru.len()]
                         .into_iter().min().unwrap_or(0);
+                    if let Some(sk) = sketch {
+                        // Per-element sketch (batched fast paths don't apply); vary the
+                        // seed per element so many circles don't look mechanically cloned.
+                        let o = resolve_sketch(sk, &gp, vp.dpi);
+                        for i in 0..n {
+                            let cx = vp.x_pos(x[i], xu[i]);
+                            let cy = vp.y_pos(y[i], yu[i]);
+                            let rr = vp.r_len(r[i], ru[i]);
+                            if rr <= 0.0 {
+                                continue;
+                            }
+                            let mut oi = o.clone();
+                            oi.seed = o.seed.wrapping_add(i as u64);
+                            let s = crate::sketch::ellipse(cx, cy, rr * 2.0, rr * 2.0, &oi, gp.fill.is_some());
+                            paint_sketch(b, &s, &gp, t, &clip, vp, oi.fill_weight);
+                        }
+                        if has_meta { b.end_node(); }
+                        continue;
+                    }
                     let lwd = gp.lwd_px(vp.dpi);
                     let stroke = gp.col.filter(|_| lwd > 0.0);
                     let rf = gp.fill.as_ref().map(|p| resolve_paint(p, vp));
@@ -2379,8 +2485,28 @@ impl Scene {
                         }
                     }
                 }
-                Node::Path { x, y, xu, yu, nper, evenodd, .. } => {
-                    if let Some(path) = build_subpaths(x, y, xu, yu, nper, vp) {
+                Node::Path { x, y, xu, yu, nper, evenodd, sketch, .. } => {
+                    if let Some(sk) = sketch {
+                        // Resolve each sub-path to a ring of local-px points.
+                        let mut rings: Vec<Vec<(f64, f64)>> = Vec::new();
+                        let mut i = 0usize;
+                        for &cnt in nper {
+                            let end = i + cnt;
+                            if cnt >= 2 && end <= x.len() && end <= y.len() && end <= xu.len() && end <= yu.len() {
+                                let ring: Vec<(f64, f64)> = (i..end)
+                                    .map(|k| (vp.x_pos(x[k], xu[k]), vp.y_pos(y[k], yu[k])))
+                                    .filter(|p| p.0.is_finite() && p.1.is_finite())
+                                    .collect();
+                                if ring.len() >= 2 {
+                                    rings.push(ring);
+                                }
+                            }
+                            i = end;
+                        }
+                        if !rings.is_empty() {
+                            draw_sketch_rings(b, &rings, &gp, sk, t, &clip, vp);
+                        }
+                    } else if let Some(path) = build_subpaths(x, y, xu, yu, nper, vp) {
                         let rule = if *evenodd { FillRule::EvenOdd } else { FillRule::Winding };
                         fill_then_stroke(b, &path, &gp, t, &clip, vp, rule);
                     }
@@ -2530,6 +2656,135 @@ fn arrow_from(angle: f64, len_in: f64, ends: i32, closed: bool) -> Option<Arrow>
         return None;
     }
     Some(Arrow { angle, len: len_in, ends: (ends.clamp(0, 3)) as u8, closed })
+}
+
+/// Decode the per-grob sketch options from FFI scalars, or `None` when there is
+/// no sketch (sentinel: `roughness < 0`). Mirrors `arrow_from`. `fill_weight` and
+/// `hachure_gap` arrive in "lwd" units (1 == 1/96 inch), or `<= 0` for auto; they
+/// are resolved to device px per-render in [`resolve_sketch`].
+#[allow(clippy::too_many_arguments)]
+fn sketch_from(
+    roughness: f64, bowing: f64, fill_style: i32, fill_weight: f64,
+    hachure_angle: f64, hachure_gap: f64, curve_tightness: f64,
+    disable_multi: bool, preserve: bool, seed: f64,
+) -> Option<crate::sketch::SketchOpts> {
+    if !(roughness >= 0.0) || !roughness.is_finite() {
+        return None;
+    }
+    Some(crate::sketch::SketchOpts {
+        roughness,
+        bowing,
+        fill_style: crate::sketch::FillStyle::from_code(fill_style.max(0) as u32),
+        fill_weight,
+        hachure_angle,
+        hachure_gap,
+        curve_tightness,
+        curve_step_count: 9.0,
+        disable_multi_stroke: disable_multi,
+        preserve_vertices: preserve,
+        max_offset: 2.0,
+        seed: if seed.is_finite() && seed >= 0.0 { seed as u64 } else { 1 },
+    })
+}
+
+/// Resolve sketch options to device pixels for a given render (dpi + gpar): the
+/// wobble amplitude and any explicit fill weight / hachure gap scale with dpi so
+/// the look is resolution-independent; an auto fill weight derives from `lwd`.
+fn resolve_sketch(o: &crate::sketch::SketchOpts, gp: &Gpar, dpi: f64) -> crate::sketch::SketchOpts {
+    let s = dpi / 96.0;
+    let mut r = o.clone();
+    r.max_offset = o.max_offset * s;
+    r.fill_weight = if o.fill_weight > 0.0 {
+        o.fill_weight * s
+    } else {
+        (gp.lwd_px(dpi) as f64 * 0.5).max(0.5 * s)
+    };
+    if o.hachure_gap > 0.0 {
+        r.hachure_gap = o.hachure_gap * s;
+    }
+    r
+}
+
+/// Paint a generated [`crate::sketch::Sketched`] through the backend: the solid
+/// fill region (or hachure lines in the fill colour) first, then the wobbly
+/// outline in `col`/`lwd`. Hachure lines are supported only for a solid fill
+/// colour; a gradient/pattern fill degrades to a solid region fill.
+fn paint_sketch<B: RenderBackend>(
+    b: &mut B, s: &crate::sketch::Sketched, gp: &Gpar, t: Transform, clip: &Clip, vp: &Vp,
+    fill_weight: f64,
+) {
+    if let Some(fill) = &gp.fill {
+        let hachure_col = if s.fill_sketch.is_empty() {
+            None
+        } else {
+            match fill {
+                Paint::Solid(c) => Some(*c),
+                _ => None,
+            }
+        };
+        match hachure_col {
+            Some(c) => {
+                let mut style = stroke_style(gp, vp.dpi);
+                style.width = fill_weight.max(0.1) as f32;
+                style.dash = Vec::new();
+                for p in &s.fill_sketch {
+                    b.stroke_path(p, t, c, &style, clip);
+                }
+            }
+            None => {
+                if let Some(region) = &s.fill_solid {
+                    b.fill_path(region, t, &resolve_paint(fill, vp), FillRule::Winding, clip);
+                }
+            }
+        }
+    }
+    if let Some(col) = gp.col {
+        let style = stroke_style(gp, vp.dpi);
+        if style.width > 0.0 {
+            for p in &s.stroke {
+                b.stroke_path(p, t, col, &style, clip);
+            }
+        }
+    }
+}
+
+/// Draw a hand-drawn (sketch) polyline (open path) in `col`/`lwd`. SK1: ignores
+/// per-line offset/caps/arrows (documented) — the wobble is the whole point.
+#[allow(clippy::too_many_arguments)]
+fn draw_sketch_polyline<B: RenderBackend>(
+    b: &mut B, x: &[f64], y: &[f64], xu: &[Unit], yu: &[Unit], gp: &Gpar,
+    sk: &crate::sketch::SketchOpts, t: Transform, clip: &Clip, vp: &Vp,
+) {
+    let Some(col) = gp.col else {
+        return;
+    };
+    let n = x.len().min(y.len()).min(xu.len()).min(yu.len());
+    let pts: Vec<(f64, f64)> = (0..n)
+        .map(|i| (vp.x_pos(x[i], xu[i]), vp.y_pos(y[i], yu[i])))
+        .filter(|p| p.0.is_finite() && p.1.is_finite())
+        .collect();
+    if pts.len() < 2 {
+        return;
+    }
+    let o = resolve_sketch(sk, gp, vp.dpi);
+    let s = crate::sketch::polyline(&pts, &o);
+    let style = stroke_style(gp, vp.dpi);
+    if style.width > 0.0 {
+        for p in &s.stroke {
+            b.stroke_path(p, t, col, &style, clip);
+        }
+    }
+}
+
+/// Draw a hand-drawn (sketch) closed shape from one or more rings (already in
+/// local px). Handles outline + fill (hachure or solid).
+fn draw_sketch_rings<B: RenderBackend>(
+    b: &mut B, rings: &[Vec<(f64, f64)>], gp: &Gpar,
+    sk: &crate::sketch::SketchOpts, t: Transform, clip: &Clip, vp: &Vp,
+) {
+    let o = resolve_sketch(sk, gp, vp.dpi);
+    let s = crate::sketch::rings(rings, &o, gp.fill.is_some());
+    paint_sketch(b, &s, gp, t, clip, vp, o.fill_weight);
 }
 
 /// Append one arrowhead at `(px, py)` whose line travels in direction `(dx, dy)`

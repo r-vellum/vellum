@@ -272,15 +272,15 @@ Scene$rect <- function(x, y, w, h, xu, yu, wu, hu, fill, col, lwd, alpha, stroke
 
 Scene$roundrect <- function(x, y, w, h, r, xu, yu, wu, hu, ru, fill, col, lwd, alpha, stroke) .Call(wrap__Scene__roundrect, self, x, y, w, h, r, xu, yu, wu, hu, ru, fill, col, lwd, alpha, stroke)
 
-Scene$lines <- function(x, y, xu, yu, scap, ecap, scapu, ecapu, off, offu, col, lwd, alpha, stroke, aangle, alen, aends, aclosed) .Call(wrap__Scene__lines, self, x, y, xu, yu, scap, ecap, scapu, ecapu, off, offu, col, lwd, alpha, stroke, aangle, alen, aends, aclosed)
+Scene$lines <- function(x, y, xu, yu, scap, ecap, scapu, ecapu, off, offu, col, lwd, alpha, stroke, aangle, alen, aends, aclosed, sroughness, sbowing, sfill_style, sfill_weight, shachure_angle, shachure_gap, scurve_tightness, sdisable_multi, spreserve, sseed) .Call(wrap__Scene__lines, self, x, y, xu, yu, scap, ecap, scapu, ecapu, off, offu, col, lwd, alpha, stroke, aangle, alen, aends, aclosed, sroughness, sbowing, sfill_style, sfill_weight, shachure_angle, shachure_gap, scurve_tightness, sdisable_multi, spreserve, sseed)
 
-Scene$polygon <- function(x, y, xu, yu, fill, col, lwd, alpha, stroke) .Call(wrap__Scene__polygon, self, x, y, xu, yu, fill, col, lwd, alpha, stroke)
+Scene$polygon <- function(x, y, xu, yu, fill, col, lwd, alpha, stroke, sroughness, sbowing, sfill_style, sfill_weight, shachure_angle, shachure_gap, scurve_tightness, sdisable_multi, spreserve, sseed) .Call(wrap__Scene__polygon, self, x, y, xu, yu, fill, col, lwd, alpha, stroke, sroughness, sbowing, sfill_style, sfill_weight, shachure_angle, shachure_gap, scurve_tightness, sdisable_multi, spreserve, sseed)
 
 Scene$circle <- function(x, y, r, xu, yu, ru, fill, col, lwd, alpha, stroke) .Call(wrap__Scene__circle, self, x, y, r, xu, yu, ru, fill, col, lwd, alpha, stroke)
 
-Scene$rects <- function(x, y, w, h, xu, yu, wu, hu, fill, col, lwd, alpha, stroke) .Call(wrap__Scene__rects, self, x, y, w, h, xu, yu, wu, hu, fill, col, lwd, alpha, stroke)
+Scene$rects <- function(x, y, w, h, xu, yu, wu, hu, fill, col, lwd, alpha, stroke, sroughness, sbowing, sfill_style, sfill_weight, shachure_angle, shachure_gap, scurve_tightness, sdisable_multi, spreserve, sseed) .Call(wrap__Scene__rects, self, x, y, w, h, xu, yu, wu, hu, fill, col, lwd, alpha, stroke, sroughness, sbowing, sfill_style, sfill_weight, shachure_angle, shachure_gap, scurve_tightness, sdisable_multi, spreserve, sseed)
 
-Scene$circles <- function(x, y, r, xu, yu, ru, fill, col, lwd, alpha, stroke) .Call(wrap__Scene__circles, self, x, y, r, xu, yu, ru, fill, col, lwd, alpha, stroke)
+Scene$circles <- function(x, y, r, xu, yu, ru, fill, col, lwd, alpha, stroke, sroughness, sbowing, sfill_style, sfill_weight, shachure_angle, shachure_gap, scurve_tightness, sdisable_multi, spreserve, sseed) .Call(wrap__Scene__circles, self, x, y, r, xu, yu, ru, fill, col, lwd, alpha, stroke, sroughness, sbowing, sfill_style, sfill_weight, shachure_angle, shachure_gap, scurve_tightness, sdisable_multi, spreserve, sseed)
 
 Scene$markers <- function(x, y, size, xu, yu, su, shape, fill, col, lwd, alpha, stroke) .Call(wrap__Scene__markers, self, x, y, size, xu, yu, su, shape, fill, col, lwd, alpha, stroke)
 
@@ -292,7 +292,7 @@ Scene$segments <- function(x0, y0, x1, y1, x0u, y0u, x1u, y1u, scap, ecap, scapu
 
 Scene$add_loop <- function(x, y, size, foot, angle, width, xu, yu, su, fu, col, lwd, alpha, stroke, aangle, alen, aends, aclosed) .Call(wrap__Scene__add_loop, self, x, y, size, foot, angle, width, xu, yu, su, fu, col, lwd, alpha, stroke, aangle, alen, aends, aclosed)
 
-Scene$path <- function(x, y, xu, yu, nper, evenodd, fill, col, lwd, alpha, stroke) .Call(wrap__Scene__path, self, x, y, xu, yu, nper, evenodd, fill, col, lwd, alpha, stroke)
+Scene$path <- function(x, y, xu, yu, nper, evenodd, fill, col, lwd, alpha, stroke, sroughness, sbowing, sfill_style, sfill_weight, shachure_angle, shachure_gap, scurve_tightness, sdisable_multi, spreserve, sseed) .Call(wrap__Scene__path, self, x, y, xu, yu, nper, evenodd, fill, col, lwd, alpha, stroke, sroughness, sbowing, sfill_style, sfill_weight, shachure_angle, shachure_gap, scurve_tightness, sdisable_multi, spreserve, sseed)
 
 Scene$image <- function(rgba, iw, ih, x, y, w, h, xu, yu, wu, hu, interpolate) .Call(wrap__Scene__image, self, rgba, iw, ih, x, y, w, h, xu, yu, wu, hu, interpolate)
 
