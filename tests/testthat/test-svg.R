@@ -84,6 +84,22 @@ test_that("a data-key never leaks from a keyed grob onto a later keyless grob", 
   expect_true(all(all_keys == 'data-key="a"'))
 })
 
+test_that("single-shape grobs (path/lines/polygon) carry a data-key when keyed", {
+  mk <- function(g) {
+    g@keys <- "feat1"
+    scene_svg(vl_scene(1, 1, dpi = 100) |> draw(g))
+  }
+  expect_match(mk(path_grob(c(.2, .8, .8), c(.2, .2, .8), gp = gpar(fill = "red"))),
+               'data-key="feat1"')
+  expect_match(mk(polygon_grob(c(.2, .8, .8), c(.2, .2, .8), gp = gpar(fill = "red"))),
+               'data-key="feat1"')
+  expect_match(mk(lines_grob(c(.2, .8), c(.2, .8), gp = gpar(col = "black", lwd = 2))),
+               'data-key="feat1"')
+  # unkeyed single-shape grobs emit no data-key (unchanged output)
+  expect_no_match(scene_svg(vl_scene(1, 1, dpi = 100) |>
+    draw(path_grob(c(.2, .8, .8), c(.2, .2, .8), gp = gpar(fill = "red")))), "data-key")
+})
+
 test_that("a named viewport becomes a <g data-vellum-panel> group", {
   s <- vl_scene(1, 1, dpi = 100) |>
     push(viewport(width = 0.8, height = 0.8, name = "panel-1-1")) |>

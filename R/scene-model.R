@@ -5,9 +5,14 @@
 # render never calls this, and grobs without `key`/`meta` still appear (geometry
 # only), so nothing here changes what is drawn.
 
-# Marks whose grobs carry per-element identity (the batched builders that accept
-# `key=`). These map 1:1 to the Rust `element_table()` node kinds, in the same
-# paint order, so the semantic (R) and geometry (Rust) tables zip positionally.
+# Marks whose grobs carry per-element identity, mapped to the Rust
+# `element_table()` node kinds so the semantic (R) and geometry (Rust) tables zip
+# positionally, in paint order. Two families:
+#   * batched (rect/point/circle/hexagon/sector/segment) — one row per element,
+#     always (keys may be NA), mirroring the batched arms of `element_table()`.
+#   * single-shape (path/lines/polygon) — one row per grob, and only when keyed
+#     (mirroring `element_table()`'s `key.is_some()` guard); a single sf feature's
+#     polygon/linestring is one such element.
 .sm_mark_of <- function(node) {
   if (S7::S7_inherits(node, grob_rect)) "rect"
   else if (S7::S7_inherits(node, grob_points)) "point"
@@ -15,12 +20,25 @@
   else if (S7::S7_inherits(node, grob_hexagon)) "hexagon"
   else if (S7::S7_inherits(node, grob_sector)) "sector"
   else if (S7::S7_inherits(node, grob_segments)) "segment"
+  else if (S7::S7_inherits(node, grob_path)) "path"
+  else if (S7::S7_inherits(node, grob_lines)) "line"
+  else if (S7::S7_inherits(node, grob_polygon)) "polygon"
   else NA_character_
 }
 
-# Element count of a keyable grob (its recycled common length).
+.SM_SINGLE <- c("path", "line", "polygon")
+
+# Element count of a batched keyable grob (its recycled common length).
 .sm_n <- function(node) {
   if (S7::S7_inherits(node, grob_segments)) .vsize(node@x0) else .vsize(node@x)
+}
+
+# The single data key of a single-shape grob (first key), or NA when unkeyed.
+.sm_key1 <- function(node) {
+  k <- node@keys
+  if (is.null(k) || length(k) == 0L) return(NA_character_)
+  k <- as.character(k[[1L]])
+  if (is.na(k) || !nzchar(k)) NA_character_ else k
 }
 
 #' A serializable, per-element model of a scene
@@ -59,16 +77,26 @@ scene_model <- function(scene) {
     }
     mark <- .sm_mark_of(node)
     if (is.na(mark)) return(invisible())
-    n <- .sm_n(node)
-    if (n == 0L) return(invisible())
-    keys <- if (is.null(node@keys)) {
-      rep(NA_character_, n)
+    if (mark %in% .SM_SINGLE) {
+      # A single-shape mark: one element, and only in scene_model when keyed
+      # (element_table() skips unkeyed paths/lines/polygons).
+      key1 <- .sm_key1(node)
+      if (is.na(key1)) return(invisible())
+      n <- 1L
+      keys <- key1
+      meta <- if (is.null(node@meta)) vector("list", 1L) else node@meta[1L]
     } else {
-      k <- as.character(node@keys)
-      k[!nzchar(k)] <- NA_character_
-      rep_len(k, n)
+      n <- .sm_n(node)
+      if (n == 0L) return(invisible())
+      keys <- if (is.null(node@keys)) {
+        rep(NA_character_, n)
+      } else {
+        k <- as.character(node@keys)
+        k[!nzchar(k)] <- NA_character_
+        rep_len(k, n)
+      }
+      meta <- if (is.null(node@meta)) vector("list", n) else rep_len(node@meta, n)
     }
-    meta <- if (is.null(node@meta)) vector("list", n) else rep_len(node@meta, n)
     id <- .meta_str(node@id)
     id <- if (nzchar(id)) id else NA_character_
     nm <- .node_name(node) %||% NA_character_

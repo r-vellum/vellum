@@ -57,6 +57,22 @@ test_that("scene_model() yields a geometry table even without keys/meta", {
   expect_true(all(vapply(m$elements$meta, is.null, logical(1))))
 })
 
+test_that("scene_model() includes keyed single-shape marks (path) but not unkeyed ones", {
+  keyed <- path_grob(c(.2, .8, .8), c(.2, .2, .8), gp = gpar(fill = "red"))
+  keyed@keys <- "county-a"
+  keyed@meta <- list(list(tooltip = "County A"))
+  sc <- vl_scene(2, 2, dpi = 100) |>
+    draw(keyed) |>
+    draw(path_grob(c(.1, .3, .3), c(.1, .1, .3), gp = gpar(fill = "blue"))) # unkeyed
+  m <- scene_model(sc)
+  kr <- m$elements[!is.na(m$elements$key), ]
+  expect_equal(nrow(kr), 1L)
+  expect_equal(kr$key, "county-a")
+  expect_equal(kr$mark, "path")
+  expect_equal(kr$meta[[1]]$tooltip, "County A")
+  expect_true(kr$x1 > kr$x0 && kr$y1 > kr$y0) # a resolved bbox
+})
+
 test_that("scene_model() of an empty scene has zero elements and panels", {
   m <- scene_model(vl_scene(2, 2, dpi = 100))
   expect_equal(nrow(m$elements), 0L)

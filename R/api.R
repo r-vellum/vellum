@@ -727,7 +727,8 @@ S7::method(compile, grob_lines) <- function(node, scene) {
                 g$col, g$lwd, g$alpha, g$stroke,
                 a$angle, a$len, a$ends, a$closed,
                 sk$roughness, sk$bowing, sk$fill_style, sk$fill_weight, sk$hachure_angle,
-                sk$hachure_gap, sk$curve_tightness, sk$disable_multi, sk$preserve, sk$seed)
+                sk$hachure_gap, sk$curve_tightness, sk$disable_multi, sk$preserve, sk$seed,
+                .key1(node))
   })
 }
 
@@ -737,7 +738,8 @@ S7::method(compile, grob_polygon) <- function(node, scene) {
     sk <- .encode_sketch(node@sketch)
     scene$polygon(ex$value, ey$value, ex$code, ey$code, g$fill, g$col, g$lwd, g$alpha, g$stroke,
                   sk$roughness, sk$bowing, sk$fill_style, sk$fill_weight, sk$hachure_angle,
-                  sk$hachure_gap, sk$curve_tightness, sk$disable_multi, sk$preserve, sk$seed)
+                  sk$hachure_gap, sk$curve_tightness, sk$disable_multi, sk$preserve, sk$seed,
+                  .key1(node))
   })
 }
 
@@ -896,7 +898,8 @@ S7::method(compile, grob_path) <- function(node, scene) {
     scene$path(ex$value, ey$value, ex$code, ey$code, as.integer(node@nper),
                identical(node@rule, "evenodd"), g$fill, g$col, g$lwd, g$alpha, g$stroke,
                sk$roughness, sk$bowing, sk$fill_style, sk$fill_weight, sk$hachure_angle,
-               sk$hachure_gap, sk$curve_tightness, sk$disable_multi, sk$preserve, sk$seed)
+               sk$hachure_gap, sk$curve_tightness, sk$disable_multi, sk$preserve, sk$seed,
+               .key1(node))
   })
 }
 
@@ -1206,6 +1209,15 @@ edit_node <- function(scene, name, ...) {
   k <- as.character(k)
   k[is.na(k)] <- ""
   rep_len(k, n)
+}
+
+# The single data key of a single-element shape grob (path/lines/polygon):
+# "" when absent (the backend then emits no `data-key`). Takes the first key.
+.key1 <- function(node) {
+  k <- if ("keys" %in% S7::prop_names(node)) node@keys else NULL
+  if (is.null(k) || length(k) == 0L) return("")
+  k <- as.character(k[[1L]])
+  if (is.na(k)) "" else k
 }
 
 # Encode a gpar's drawing fields for the backend. `fill` may be a colour, a

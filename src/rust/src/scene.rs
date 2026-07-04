@@ -304,11 +304,16 @@ enum Node {
         /// Optional hand-drawn (sketch) rendering; `None` = crisp. See `sketch.rs`.
         sketch: Option<crate::sketch::SketchOpts>,
         gp: PartialGpar,
+        /// Optional data key for this single element (interactivity): emitted as
+        /// `data-key` in SVG. `None` = none. See `Rects.keys` for the batched form.
+        key: Option<String>,
     },
     Polygon {
         x: Vec<f64>, y: Vec<f64>, xu: Vec<Unit>, yu: Vec<Unit>,
         sketch: Option<crate::sketch::SketchOpts>,
         gp: PartialGpar,
+        /// Optional data key (see `Lines.key`).
+        key: Option<String>,
     },
     Circle { x: f64, y: f64, r: f64, xu: Unit, yu: Unit, ru: Unit, sketch: Option<crate::sketch::SketchOpts>, gp: PartialGpar },
     Text {
@@ -450,6 +455,8 @@ enum Node {
         evenodd: bool,
         sketch: Option<crate::sketch::SketchOpts>,
         gp: PartialGpar,
+        /// Optional data key (see `Lines.key`) — e.g. one sf feature's polygon.
+        key: Option<String>,
     },
     /// A straight-RGBA image (`iw` x `ih`, top-left) filling a `w` x `h` cell
     /// centred at `(x, y)`. Carries no gpar (handled in the walk's pre-pass).
@@ -835,6 +842,7 @@ impl Scene {
         sroughness: f64, sbowing: f64, sfill_style: i32, sfill_weight: f64,
         shachure_angle: f64, shachure_gap: f64, scurve_tightness: f64,
         sdisable_multi: bool, spreserve: bool, sseed: f64,
+        key: String,
     ) {
         let gp = PartialGpar::from_robj(&rnull(), &col, &lwd, &alpha, &stroke);
         let sketch = sketch_from(
@@ -846,6 +854,7 @@ impl Scene {
             scap: cap_scalar(scap, scapu), ecap: cap_scalar(ecap, ecapu),
             off: cap_scalar(off, offu),
             arrow: arrow_from(aangle, alen, aends, aclosed), sketch, gp,
+            key: opt_key(key),
         });
     }
 
@@ -857,13 +866,14 @@ impl Scene {
         sroughness: f64, sbowing: f64, sfill_style: i32, sfill_weight: f64,
         shachure_angle: f64, shachure_gap: f64, scurve_tightness: f64,
         sdisable_multi: bool, spreserve: bool, sseed: f64,
+        key: String,
     ) {
         let gp = PartialGpar::from_robj(&fill, &col, &lwd, &alpha, &stroke);
         let sketch = sketch_from(
             sroughness, sbowing, sfill_style, sfill_weight, shachure_angle,
             shachure_gap, scurve_tightness, sdisable_multi, spreserve, sseed,
         );
-        self.emit_node(Node::Polygon { x: x.to_vec(), y: y.to_vec(), xu: codes(xu), yu: codes(yu), sketch, gp });
+        self.emit_node(Node::Polygon { x: x.to_vec(), y: y.to_vec(), xu: codes(xu), yu: codes(yu), sketch, gp, key: opt_key(key) });
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -1067,6 +1077,7 @@ impl Scene {
         sroughness: f64, sbowing: f64, sfill_style: i32, sfill_weight: f64,
         shachure_angle: f64, shachure_gap: f64, scurve_tightness: f64,
         sdisable_multi: bool, spreserve: bool, sseed: f64,
+        key: String,
     ) {
         let gp = PartialGpar::from_robj(&fill, &col, &lwd, &alpha, &stroke);
         let sketch = sketch_from(
@@ -1077,6 +1088,7 @@ impl Scene {
             x: x.to_vec(), y: y.to_vec(), xu: codes(xu), yu: codes(yu),
             nper: nper.iter().map(|&v| v.max(0) as usize).collect(),
             evenodd, sketch, gp,
+            key: opt_key(key),
         });
     }
 
@@ -1537,10 +1549,11 @@ impl Scene {
             }
             let vp = &resolved[*vp_id].vp;
             let cur_panel = panel_stack.last().cloned().unwrap_or_default();
-            // Emit one row per element of the six keyable batched marks.
-            let mut emit = |i: usize, keys: &[String], lx0: f64, ly0: f64, lx1: f64, ly1: f64| {
+            // Emit one row per drawn element (batched marks: one per element;
+            // single-shape marks: one per grob).
+            let mut emit = |k: Option<&str>, lx0: f64, ly0: f64, lx1: f64, ly1: f64| {
                 let bb = dev_bbox(vp, lx0, ly0, lx1, ly1);
-                key.push(key_at(keys, i).unwrap_or("").to_string());
+                key.push(k.unwrap_or("").to_string());
                 panel.push(cur_panel.clone());
                 x0.push(bb.0); y0.push(bb.1); x1.push(bb.2); y1.push(bb.3);
             };
@@ -1550,7 +1563,7 @@ impl Scene {
                     for i in 0..n {
                         let cx = vp.x_pos(x[i], xu[i]); let cy = vp.y_pos(y[i], yu[i]);
                         let pw = vp.x_len(w[i], wu[i]); let ph = vp.y_len(h[i], hu[i]);
-                        emit(i, keys, cx - pw / 2.0, cy - ph / 2.0, cx + pw / 2.0, cy + ph / 2.0);
+                        emit(key_at(keys, i), cx - pw / 2.0, cy - ph / 2.0, cx + pw / 2.0, cy + ph / 2.0);
                     }
                 }
                 Node::Circles { x, y, r, xu, yu, ru, keys, .. } => {
@@ -1558,7 +1571,7 @@ impl Scene {
                     for i in 0..n {
                         let cx = vp.x_pos(x[i], xu[i]); let cy = vp.y_pos(y[i], yu[i]);
                         let rr = vp.r_len(r[i], ru[i]);
-                        emit(i, keys, cx - rr, cy - rr, cx + rr, cy + rr);
+                        emit(key_at(keys, i), cx - rr, cy - rr, cx + rr, cy + rr);
                     }
                 }
                 Node::Markers { x, y, size, xu, yu, su, keys, .. } => {
@@ -1566,7 +1579,7 @@ impl Scene {
                     for i in 0..n {
                         let cx = vp.x_pos(x[i], xu[i]); let cy = vp.y_pos(y[i], yu[i]);
                         let rr = vp.r_len(size[i], su[i]);
-                        emit(i, keys, cx - rr, cy - rr, cx + rr, cy + rr);
+                        emit(key_at(keys, i), cx - rr, cy - rr, cx + rr, cy + rr);
                     }
                 }
                 Node::Hexagons { x, y, size, w, h, xu, yu, su, wu, hu, keys, .. } => {
@@ -1580,7 +1593,7 @@ impl Scene {
                             let rr = vp.r_len(size[i], su[i]);
                             (rr, rr)
                         };
-                        emit(i, keys, cx - hw, cy - hh, cx + hw, cy + hh);
+                        emit(key_at(keys, i), cx - hw, cy - hh, cx + hw, cy + hh);
                     }
                 }
                 Node::Sectors { x, y, r0, r1, xu, yu, r0u, r1u, keys, .. } => {
@@ -1588,7 +1601,7 @@ impl Scene {
                     for i in 0..n {
                         let cx = vp.x_pos(x[i], xu[i]); let cy = vp.y_pos(y[i], yu[i]);
                         let rr = vp.r_len(r1[i], r1u[i]).max(vp.r_len(r0[i], r0u[i]));
-                        emit(i, keys, cx - rr, cy - rr, cx + rr, cy + rr);
+                        emit(key_at(keys, i), cx - rr, cy - rr, cx + rr, cy + rr);
                     }
                 }
                 Node::Segments { x0: sx0, y0: sy0, x1: sx1, y1: sy1, x0u, y0u, x1u, y1u, keys, .. } => {
@@ -1596,7 +1609,25 @@ impl Scene {
                     for i in 0..n {
                         let ax = vp.x_pos(sx0[i], x0u[i]); let ay = vp.y_pos(sy0[i], y0u[i]);
                         let bx = vp.x_pos(sx1[i], x1u[i]); let by = vp.y_pos(sy1[i], y1u[i]);
-                        emit(i, keys, ax.min(bx), ay.min(by), ax.max(bx), ay.max(by));
+                        emit(key_at(keys, i), ax.min(bx), ay.min(by), ax.max(bx), ay.max(by));
+                    }
+                }
+                // Single-shape keyable marks (one row per grob): a Path (e.g. one
+                // sf polygon feature, holes and all), a Polygon, or a Lines poly.
+                // Emit only when keyed; bbox = the extent of all its vertices.
+                Node::Path { x, y, xu, yu, key, .. } if key.is_some() => {
+                    if let Some(bb) = vertex_bbox(vp, x, y, xu, yu) {
+                        emit(key.as_deref(), bb.0, bb.1, bb.2, bb.3);
+                    }
+                }
+                Node::Polygon { x, y, xu, yu, key, .. } if key.is_some() => {
+                    if let Some(bb) = vertex_bbox(vp, x, y, xu, yu) {
+                        emit(key.as_deref(), bb.0, bb.1, bb.2, bb.3);
+                    }
+                }
+                Node::Lines { x, y, xu, yu, key, .. } if key.is_some() => {
+                    if let Some(bb) = vertex_bbox(vp, x, y, xu, yu) {
+                        emit(key.as_deref(), bb.0, bb.1, bb.2, bb.3);
                     }
                 }
                 _ => {}
@@ -2172,7 +2203,8 @@ impl Scene {
                         fill_then_stroke(b, &path, &gp, t, &clip, vp, FillRule::Winding);
                     }
                 }
-                Node::Lines { x, y, xu, yu, scap, ecap, off, arrow, sketch, .. } => {
+                Node::Lines { x, y, xu, yu, scap, ecap, off, arrow, sketch, key, .. } => {
+                    b.set_element_key(key.as_deref());
                     if let Some(sk) = sketch {
                         draw_sketch_polyline(b, x, y, xu, yu, &gp, sk, t, &clip, vp);
                     } else if let Some(col) = gp.col {
@@ -2225,7 +2257,8 @@ impl Scene {
                         }
                     }
                 }
-                Node::Polygon { x, y, xu, yu, sketch, .. } => {
+                Node::Polygon { x, y, xu, yu, sketch, key, .. } => {
+                    b.set_element_key(key.as_deref());
                     if let Some(sk) = sketch {
                         let n = x.len().min(y.len()).min(xu.len()).min(yu.len());
                         let ring: Vec<(f64, f64)> = (0..n)
@@ -2835,7 +2868,8 @@ impl Scene {
                         }
                     }
                 }
-                Node::Path { x, y, xu, yu, nper, evenodd, sketch, .. } => {
+                Node::Path { x, y, xu, yu, nper, evenodd, sketch, key, .. } => {
+                    b.set_element_key(key.as_deref());
                     if let Some(sk) = sketch {
                         // Resolve each sub-path to a ring of local-px points.
                         let mut rings: Vec<Vec<(f64, f64)>> = Vec::new();
@@ -3469,6 +3503,45 @@ fn key_at(keys: &[String], i: usize) -> Option<&str> {
     match keys.get(i) {
         Some(k) if !k.is_empty() => Some(k.as_str()),
         _ => None,
+    }
+}
+
+/// A single-element node's optional data key: an empty string (the "no key" FFI
+/// sentinel) becomes `None`.
+fn opt_key(key: String) -> Option<String> {
+    if key.is_empty() {
+        None
+    } else {
+        Some(key)
+    }
+}
+
+/// Device-px bbox of a vertex list resolved through a viewport (min/max over the
+/// finite points; NA/NaN vertices — e.g. sf line separators — are skipped).
+/// `None` when there are no finite vertices.
+fn vertex_bbox(vp: &Vp, x: &[f64], y: &[f64], xu: &[Unit], yu: &[Unit]) -> Option<(f64, f64, f64, f64)> {
+    let n = [x.len(), y.len(), xu.len(), yu.len()].into_iter().min().unwrap_or(0);
+    let mut x0 = f64::INFINITY;
+    let mut y0 = f64::INFINITY;
+    let mut x1 = f64::NEG_INFINITY;
+    let mut y1 = f64::NEG_INFINITY;
+    let mut any = false;
+    for i in 0..n {
+        let px = vp.x_pos(x[i], xu[i]);
+        let py = vp.y_pos(y[i], yu[i]);
+        if !px.is_finite() || !py.is_finite() {
+            continue;
+        }
+        any = true;
+        x0 = x0.min(px);
+        y0 = y0.min(py);
+        x1 = x1.max(px);
+        y1 = y1.max(py);
+    }
+    if any {
+        Some((x0, y0, x1, y1))
+    } else {
+        None
     }
 }
 
