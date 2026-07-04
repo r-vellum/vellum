@@ -2350,9 +2350,13 @@ impl Scene {
                     let rf = gp.fill.as_ref().map(|p| resolve_paint(p, vp));
                     // Solid/no fill normally hands the whole batch to `draw_circles`
                     // (which may sprite-stamp on raster), but that can't tag individual
-                    // elements — so when the batch carries data keys we fall back to a
-                    // per-element build (the interactivity opt-in; moderate `n`).
-                    if matches!(gp.fill, Some(Paint::Solid(_)) | None) && keys.is_empty() {
+                    // elements — so when the batch carries data keys *and the backend
+                    // emits them* (SVG) we fall back to a per-element build (moderate
+                    // `n`). Raster/PDF ignore keys, so they keep the fast path and stay
+                    // pixel-identical whether or not the scene is keyed.
+                    if matches!(gp.fill, Some(Paint::Solid(_)) | None)
+                        && (keys.is_empty() || !b.wants_element_keys())
+                    {
                         let mut cx = Vec::with_capacity(n);
                         let mut cy = Vec::with_capacity(n);
                         let mut rr = Vec::with_capacity(n);
@@ -2745,8 +2749,10 @@ impl Scene {
                             }
                         }
                         if style.width > 0.0 {
-                            if keys.is_empty() {
+                            if keys.is_empty() || !b.wants_element_keys() {
                                 // Fast path: all segments in one combined stroke.
+                                // (Also taken by raster/PDF for keyed batches — they
+                                // ignore keys, so they stay pixel-identical.)
                                 let mut pb = PathBuilder::new();
                                 for &(sx, sy, ex, ey, _) in &segs {
                                     pb.move_to(sx, sy);

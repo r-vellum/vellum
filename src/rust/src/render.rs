@@ -281,6 +281,15 @@ pub trait RenderBackend {
     /// raster/PDF ignore it.
     fn begin_panel(&mut self, _name: &str) {}
     fn end_panel(&mut self) {}
+
+    /// Whether this backend emits per-element `data-key` attributes (only the SVG
+    /// backend does). When false, the batched fast paths (solid circles, combined
+    /// segments) stay on their fast path even for a keyed node — the keys would be
+    /// ignored anyway — so raster/PDF output is pixel-identical whether or not a
+    /// scene carries interactivity keys.
+    fn wants_element_keys(&self) -> bool {
+        false
+    }
 }
 
 /// One unit circle (origin, radius 1) reused with a per-element affine transform.
@@ -1397,6 +1406,10 @@ impl RenderBackend for SvgBackend {
 
     fn set_element_key(&mut self, key: Option<&str>) {
         self.cur_element_key = key.map(|s| s.to_string());
+    }
+
+    fn wants_element_keys(&self) -> bool {
+        true
     }
 
     // A named panel group: route the enclosed nodes into a fresh buffer, then wrap
