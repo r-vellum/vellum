@@ -13,6 +13,15 @@ NULL
 # `id`/`role` are optional semantic metadata: a stable identifier and an ARIA
 # role, emitted by the SVG backend as `data-vellum-id` / `role` for interactivity,
 # accessibility, and testing. They are ignored by the raster and PDF backends.
+#
+# `keys`/`meta` are optional PER-ELEMENT metadata for batched grobs (interactivity
+# foundation, see `_docs/DESIGN-INTERACTIVITY.md`). `keys` is a character vector,
+# one data key per drawn element (recycled to the element count like `fill`),
+# emitted by the SVG backend as `data-key` on each primitive — the join key a host
+# uses to map a hover/click back to a datum. `meta` is a free-form per-element list
+# (e.g. tooltip text / field values) that never crosses to the backend; it rides
+# on the R scene and surfaces via [scene_model()]. Both default `NULL` (absent), so
+# a scene without interactivity is byte-for-byte unchanged and pays nothing.
 grob <- S7::new_class(
   "grob", package = "vellum", abstract = TRUE,
   properties = list(
@@ -20,9 +29,28 @@ grob <- S7::new_class(
     gp   = S7::new_property(gpar, default = quote(gpar())),
     vp   = S7::new_property(S7::class_any, default = NULL),
     id   = S7::new_property(S7::class_any, default = NULL),
-    role = S7::new_property(S7::class_any, default = NULL)
+    role = S7::new_property(S7::class_any, default = NULL),
+    keys = S7::new_property(S7::class_any, default = NULL),
+    meta = S7::new_property(S7::class_any, default = NULL)
   )
 )
+
+# Recycle a per-element `key` vector to `n` (coerced to character); NULL -> NULL
+# so an absent key emits no `data-key` and costs nothing.
+.recycle_keys <- function(key, n) {
+  if (is.null(key)) return(NULL)
+  rep_len(as.character(key), n)
+}
+
+# Recycle a per-element `meta` list to `n`. `meta` is a list of records (one per
+# element); a length-1 list is recycled to every element. NULL -> NULL.
+.recycle_meta <- function(meta, n) {
+  if (is.null(meta)) return(NULL)
+  if (!is.list(meta)) {
+    cli::cli_abort("{.arg meta} must be a list, one entry (record) per element.")
+  }
+  rep_len(meta, n)
+}
 
 grob_rect <- S7::new_class("grob_rect", parent = grob, package = "vellum",
   properties = list(
@@ -170,13 +198,16 @@ grob_raster <- S7::new_class("grob_raster", parent = grob, package = "vellum",
 #'   accessibility (ignored by the raster and PDF backends).
 #' @export
 rect_grob <- function(x = 0.5, y = 0.5, width = 1, height = 1,
-                      sketch = NULL, gp = gpar(), name = NULL, vp = NULL, id = NULL, role = NULL) {
+                      sketch = NULL, gp = gpar(), name = NULL, vp = NULL, id = NULL, role = NULL,
+                      key = NULL, meta = NULL) {
   w <- as_unit(width)
   h <- as_unit(height)
   .check_extent(w, "width")
   .check_extent(h, "height")
+  n <- .common_n(x, y, w, h)
   grob_rect(x = as_unit(x), y = as_unit(y), width = w, height = h,
-            sketch = sketch, gp = gp, name = name, vp = vp, id = id, role = role)
+            sketch = sketch, gp = gp, name = name, vp = vp, id = id, role = role,
+            keys = .recycle_keys(key, n), meta = .recycle_meta(meta, n))
 }
 
 #' @rdname grob
@@ -491,14 +522,16 @@ spline_grob <- function(x, y, shape = 1, n = 20, open = TRUE, gp = gpar(), name 
 #' @rdname grob
 #' @param r Radius ([unit()] or numeric).
 #' @export
-circle_grob <- function(x = 0.5, y = 0.5, r = 0.25, sketch = NULL, gp = gpar(), name = NULL, vp = NULL, id = NULL, role = NULL) {
+circle_grob <- function(x = 0.5, y = 0.5, r = 0.25, sketch = NULL, gp = gpar(), name = NULL, vp = NULL, id = NULL, role = NULL,
+                        key = NULL, meta = NULL) {
   n <- .common_n(x, y, r)
   ru <- as_unit(r)
   .check_extent(ru, "r")
   grob_circle(x = vctrs::vec_recycle(as_unit(x), n),
               y = vctrs::vec_recycle(as_unit(y), n),
               r = vctrs::vec_recycle(ru, n),
-              sketch = sketch, gp = gp, name = name, vp = vp, id = id, role = role)
+              sketch = sketch, gp = gp, name = name, vp = vp, id = id, role = role,
+              keys = .recycle_keys(key, n), meta = .recycle_meta(meta, n))
 }
 
 #' @rdname grob
@@ -508,7 +541,8 @@ circle_grob <- function(x = 0.5, y = 0.5, r = 0.25, sketch = NULL, gp = gpar(), 
 #'   `gp$fill` (and outline `gp$col`); `"plus"`/`"cross"` are stroke-only.
 #' @export
 points_grob <- function(x, y, size = unit(2, "mm"), shape = "circle",
-                        sketch = NULL, gp = gpar(), name = NULL, vp = NULL, id = NULL, role = NULL) {
+                        sketch = NULL, gp = gpar(), name = NULL, vp = NULL, id = NULL, role = NULL,
+                        key = NULL, meta = NULL) {
   n <- .coord_n(x, y)
   sz <- as_unit(size, "mm")
   .check_extent(sz, "size")
@@ -521,7 +555,8 @@ points_grob <- function(x, y, size = unit(2, "mm"), shape = "circle",
               y = vctrs::vec_recycle(as_unit(y), n),
               size = vctrs::vec_recycle(sz, n),
               shape = vctrs::vec_recycle(shape, n),
-              sketch = sketch, gp = gp, name = name, vp = vp, id = id, role = role)
+              sketch = sketch, gp = gp, name = name, vp = vp, id = id, role = role,
+              keys = .recycle_keys(key, n), meta = .recycle_meta(meta, n))
 }
 
 #' @rdname grob
@@ -535,7 +570,8 @@ points_grob <- function(x, y, size = unit(2, "mm"), shape = "circle",
 hexagon_grob <- function(x = 0.5, y = 0.5, size = unit(2, "mm"),
                          width = NULL, height = NULL, fill = NULL,
                          orientation = c("flat", "pointy"),
-                         gp = gpar(), name = NULL, vp = NULL, id = NULL, role = NULL) {
+                         gp = gpar(), name = NULL, vp = NULL, id = NULL, role = NULL,
+                         key = NULL, meta = NULL) {
   orientation <- match.arg(orientation)
   n <- .coord_n(x, y)
   sz <- as_unit(size, "mm")
@@ -557,7 +593,8 @@ hexagon_grob <- function(x = 0.5, y = 0.5, size = unit(2, "mm"),
                size = vctrs::vec_recycle(sz, n),
                width = width, height = height,
                fill = fill, orientation = orientation,
-               gp = gp, name = name, vp = vp, id = id, role = role)
+               gp = gp, name = name, vp = vp, id = id, role = role,
+               keys = .recycle_keys(key, n), meta = .recycle_meta(meta, n))
 }
 
 #' @rdname grob
@@ -580,7 +617,8 @@ hexagon_grob <- function(x = 0.5, y = 0.5, size = unit(2, "mm"),
 #' ring.)
 #' @export
 sector_grob <- function(x = 0.5, y = 0.5, r0 = 0, r1 = 0.5, theta0 = 0, theta1 = 2 * pi,
-                        fill = NULL, arrow = NULL, sketch = NULL, gp = gpar(), name = NULL, vp = NULL, id = NULL, role = NULL) {
+                        fill = NULL, arrow = NULL, sketch = NULL, gp = gpar(), name = NULL, vp = NULL, id = NULL, role = NULL,
+                        key = NULL, meta = NULL) {
   n <- .common_n(x, y, r0, r1, theta0, theta1)
   .check_finite_num(theta0, "theta0")
   .check_finite_num(theta1, "theta1")
@@ -592,7 +630,8 @@ sector_grob <- function(x = 0.5, y = 0.5, r0 = 0, r1 = 0.5, theta0 = 0, theta1 =
     r1 = vctrs::vec_recycle(as_unit(r1, "native"), n),
     theta0 = vctrs::vec_recycle(as.numeric(theta0), n),
     theta1 = vctrs::vec_recycle(as.numeric(theta1), n),
-    fill = fill, arrow = arrow, sketch = sketch, gp = gp, name = name, vp = vp, id = id, role = role
+    fill = fill, arrow = arrow, sketch = sketch, gp = gp, name = name, vp = vp, id = id, role = role,
+    keys = .recycle_keys(key, n), meta = .recycle_meta(meta, n)
   )
 }
 
@@ -637,7 +676,8 @@ loop_grob <- function(x = 0.5, y = 0.5, size = unit(4, "mm"), foot = unit(0, "mm
 #' @param x0,y0,x1,y1 Segment start/end coordinates ([unit()] or numeric).
 #' @export
 segments_grob <- function(x0, y0, x1, y1, arrow = NULL, start_cap = NULL, end_cap = NULL,
-                          offset = NULL, sketch = NULL, gp = gpar(), name = NULL, vp = NULL, id = NULL, role = NULL) {
+                          offset = NULL, sketch = NULL, gp = gpar(), name = NULL, vp = NULL, id = NULL, role = NULL,
+                          key = NULL, meta = NULL) {
   n <- .common_n(x0, y0, x1, y1)
   start_cap <- .check_cap(start_cap, "start_cap")
   end_cap <- .check_cap(end_cap, "end_cap")
@@ -651,7 +691,8 @@ segments_grob <- function(x0, y0, x1, y1, arrow = NULL, start_cap = NULL, end_ca
     x1 = vctrs::vec_recycle(as_unit(x1, "native"), n),
     y1 = vctrs::vec_recycle(as_unit(y1, "native"), n),
     arrow = arrow, start_cap = start_cap, end_cap = end_cap, offset = offset,
-    sketch = sketch, gp = gp, name = name, vp = vp, id = id, role = role
+    sketch = sketch, gp = gp, name = name, vp = vp, id = id, role = role,
+    keys = .recycle_keys(key, n), meta = .recycle_meta(meta, n)
   )
 }
 
@@ -663,6 +704,16 @@ segments_grob <- function(x0, y0, x1, y1, arrow = NULL, start_cap = NULL, end_ca
 #'   one sub-path (so a hole is a separate `id`), in first-appearance order (à la
 #'   grid); `NULL` makes a single sub-path.
 #' @param rule Fill rule: `"winding"` (non-zero, default) or `"evenodd"`.
+#' @param key Optional per-element data key(s) for the batched marks
+#'   (`points_grob`, `circle_grob`, `rect_grob`, `segments_grob`, `hexagon_grob`,
+#'   `sector_grob`), recycled to the element count like `fill`. Emitted by the SVG
+#'   backend as `data-key` on each element and surfaced by [scene_model()] — the
+#'   join key a host uses to map an interaction back to a datum. `NULL` (default)
+#'   emits nothing (a static render is unchanged). Ignored by raster/PDF.
+#' @param meta Optional free-form per-element metadata for the batched marks: a
+#'   list with one entry (record) per element (recycled), e.g. tooltip text or
+#'   field values. It never reaches the backend (nothing drawn changes); it rides
+#'   on the scene and is returned by [scene_model()]. `NULL` (default) = none.
 #' @export
 path_grob <- function(x, y, id = NULL, rule = c("winding", "evenodd"),
                       sketch = NULL, gp = gpar(), name = NULL, vp = NULL, role = NULL) {

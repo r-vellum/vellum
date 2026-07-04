@@ -330,6 +330,24 @@ render <- function(scene, path, text = c("native", "outline"), debug = FALSE) {
   invisible(path)
 }
 
+#' Render a scene to an SVG string
+#'
+#' Like [render()] with an `.svg` path, but returns the SVG document as a
+#' character string instead of writing a file. This is the in-memory entry point
+#' for hosting a scene interactively (an htmlwidget embeds the markup directly)
+#' and for tests that assert on emitted attributes such as `data-key`.
+#'
+#' @inheritParams render
+#' @return A length-1 character vector: the SVG document.
+#' @seealso [render()], [scene_model()]
+#' @export
+scene_svg <- function(scene, text = c("native", "outline")) {
+  text <- match.arg(text)
+  scene <- as_vellum_scene(scene)
+  s <- .scene_to_backend(scene)
+  s$render_svg_string(identical(text, "outline"))
+}
+
 # Surface backend degradation warnings (e.g. a PDF pattern/mask that couldn't be
 # honoured) as one R warning, unless the user has opted out. The successor-note
 # principle: an unsupported feature should fail *visibly*, not silently degrade.
@@ -673,7 +691,8 @@ S7::method(compile, grob_rect) <- function(node, scene) {
     scene$rects(ex$value, ey$value, ew$value, eh$value,
                 ex$code, ey$code, ew$code, eh$code, g$fill, g$col, g$lwd, g$alpha, g$stroke,
                 sk$roughness, sk$bowing, sk$fill_style, sk$fill_weight, sk$hachure_angle,
-                sk$hachure_gap, sk$curve_tightness, sk$disable_multi, sk$preserve, sk$seed)
+                sk$hachure_gap, sk$curve_tightness, sk$disable_multi, sk$preserve, sk$seed,
+                .keys_vec(node, n))
   })
 }
 
@@ -734,7 +753,8 @@ S7::method(compile, grob_polygon) <- function(node, scene) {
     scene$circles(ex$value, ey$value, er$value, ex$code, ey$code, er$code,
                   g$fill, g$col, g$lwd, g$alpha, g$stroke,
                   sk$roughness, sk$bowing, sk$fill_style, sk$fill_weight, sk$hachure_angle,
-                  sk$hachure_gap, sk$curve_tightness, sk$disable_multi, sk$preserve, sk$seed)
+                  sk$hachure_gap, sk$curve_tightness, sk$disable_multi, sk$preserve, sk$seed,
+                  .keys_vec(node, n))
   })
 }
 
@@ -758,7 +778,8 @@ S7::method(compile, grob_points) <- function(node, scene) {
                     vctrs::vec_recycle(as.integer(codes), n),
                     g$fill, g$col, g$lwd, g$alpha, g$stroke,
                     sk$roughness, sk$bowing, sk$fill_style, sk$fill_weight, sk$hachure_angle,
-                    sk$hachure_gap, sk$curve_tightness, sk$disable_multi, sk$preserve, sk$seed)
+                    sk$hachure_gap, sk$curve_tightness, sk$disable_multi, sk$preserve, sk$seed,
+                    .keys_vec(node, n))
     })
   }
 }
@@ -793,7 +814,8 @@ S7::method(compile, grob_hexagon) <- function(node, scene) {
     scene$hexagons(ex$value, ey$value, es$value, ew$value, eh$value,
                    ex$code, ey$code, es$code, ew$code, eh$code,
                    frgba, identical(node@orientation, "flat"),
-                   g$col, g$lwd, g$alpha, g$stroke)
+                   g$col, g$lwd, g$alpha, g$stroke,
+                   .keys_vec(node, n))
   })
 }
 
@@ -823,7 +845,8 @@ S7::method(compile, grob_sector) <- function(node, scene) {
                   g$col, g$lwd, g$alpha, g$stroke,
                   a$angle, a$len, a$ends, a$closed,
                   sk$roughness, sk$bowing, sk$fill_style, sk$fill_weight, sk$hachure_angle,
-                  sk$hachure_gap, sk$curve_tightness, sk$disable_multi, sk$preserve, sk$seed)
+                  sk$hachure_gap, sk$curve_tightness, sk$disable_multi, sk$preserve, sk$seed,
+                  .keys_vec(node, n))
   })
 }
 
@@ -859,7 +882,8 @@ S7::method(compile, grob_segments) <- function(node, scene) {
                    g$col, g$lwd, g$alpha, g$stroke,
                    a$angle, a$len, a$ends, a$closed,
                    sk$roughness, sk$bowing, sk$fill_style, sk$fill_weight, sk$hachure_angle,
-                   sk$hachure_gap, sk$curve_tightness, sk$disable_multi, sk$preserve, sk$seed)
+                   sk$hachure_gap, sk$curve_tightness, sk$disable_multi, sk$preserve, sk$seed,
+                   .keys_vec(node, n))
   })
 }
 
@@ -919,6 +943,11 @@ S7::method(compile, grob_text) <- function(node, scene) {
 
 S7::method(compile, gtree) <- function(node, scene) {
   .push_vp(scene, node@vp)
+  # A named viewport becomes an addressable `<g data-vellum-panel>` in the SVG
+  # (a host targets it for pan/zoom); costs nothing on other backends or when
+  # unnamed. Bracket the whole subtree, outside any mask/opacity group.
+  panel <- .panel_name(node@vp)
+  if (!is.null(panel)) scene$begin_panel(panel)
   mask <- if (!is.null(node@vp)) node@vp@mask else NULL
   alpha <- if (!is.null(node@vp)) node@vp@alpha else NULL
   blend <- if (!is.null(node@vp)) node@vp@blend else NULL
@@ -949,7 +978,22 @@ S7::method(compile, gtree) <- function(node, scene) {
     for (child in node@children) compile(child, scene)
   }
   if (cached) scene$subraster_end()
+  if (!is.null(panel)) scene$end_panel()
   scene$pop_viewport(1L)
+}
+
+# The panel name of a viewport for `data-vellum-panel` emission: its non-empty
+# `name`, else NULL (no panel group). NULL vp / unnamed vp -> NULL (no-op). The
+# reserved auto-name "root" (the scene's implicit top viewport) is excluded, so a
+# plain scene emits no panel group and stays byte-for-byte unchanged; only
+# explicitly named viewports (e.g. a grammar's "panel-1-1") become panels.
+.panel_name <- function(vp) {
+  if (is.null(vp)) return(NULL)
+  nm <- vp@name
+  if (is.null(nm) || length(nm) == 0L || is.na(nm[[1]]) || !nzchar(nm[[1]])) return(NULL)
+  nm <- as.character(nm[[1]])
+  if (identical(nm, "root")) return(NULL)
+  nm
 }
 
 # --- hit-testing ------------------------------------------------------------
@@ -1126,8 +1170,11 @@ edit_node <- function(scene, name, ...) {
 .with_vp <- function(node, scene, expr) {
   .set_meta(scene, node)
   has_vp <- !is.null(node@vp)
+  panel <- if (has_vp) .panel_name(node@vp) else NULL
   if (has_vp) .push_vp(scene, node@vp)
+  if (!is.null(panel)) scene$begin_panel(panel)
   force(expr)
+  if (!is.null(panel)) scene$end_panel()
   if (has_vp) scene$pop_viewport(1L)
   scene$set_meta("", "", "")
   invisible()
@@ -1146,6 +1193,19 @@ edit_node <- function(scene, name, ...) {
   if (is.null(x) || length(x) == 0L) return("")
   x <- x[[1L]]
   if (is.na(x)) "" else as.character(x)
+}
+
+# Per-element data keys for a batched grob, aligned to its `n` elements. Returns
+# `character(0)` when the grob carries no keys (the backend then emits no
+# `data-key`, so a non-interactive scene is byte-for-byte unchanged); otherwise a
+# length-`n` character vector with "" for NA/absent entries (no attribute emitted
+# for those elements).
+.keys_vec <- function(node, n) {
+  k <- if ("keys" %in% S7::prop_names(node)) node@keys else NULL
+  if (is.null(k)) return(character(0))
+  k <- as.character(k)
+  k[is.na(k)] <- ""
+  rep_len(k, n)
 }
 
 # Encode a gpar's drawing fields for the backend. `fill` may be a colour, a

@@ -40,6 +40,7 @@ Collate:
     'device.R'
     'extendr-wrappers.R'
     'paint.R'
+    'scene-model.R'
     'style.R'
     'text.R'
     'unit.R'

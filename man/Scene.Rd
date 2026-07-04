@@ -159,6 +159,16 @@ node list as its content, keeping markers and content in sync.
 Close the most recently opened group.
 }
 
+\subsection{Method \code{begin_panel}}{
+Open a named panel group around the following nodes (paired with
+\code{end_panel}). The SVG backend wraps them in \verb{<g data-vellum-panel="name">};
+other backends ignore it. Emitted by the R compiler for named viewports.
+}
+
+\subsection{Method \code{end_panel}}{
+Close the most recently opened panel group.
+}
+
 \subsection{Method \code{subraster_start}}{
 Open a repaint boundary for the current subtree, tagged with content id
 \code{nid} (a per-subtree token from R). See \code{Node::SubrasterStart}.
@@ -191,6 +201,14 @@ instead of selectable \verb{<text>} (pixel-faithful, matches raster/PDF).
 Returns any degradation warnings.
 }
 
+\subsection{Method \code{render_svg_string}}{
+Render the scene and return the SVG document as a string (rather than
+writing it to a file). Same output as \code{render_svg}; the interactivity
+layer needs the markup in-memory to embed it in an htmlwidget, and tests
+use it to assert on emitted attributes. Degradation warnings are dropped
+here (the file path surfaces them); callers wanting them use \code{render_svg}.
+}
+
 \subsection{Method \code{render_pdf}}{
 Render the scene to a PDF file. Returns any degradation warnings (e.g. a
 tiling pattern or mask the PDF walk could not honour).
@@ -214,6 +232,18 @@ id, local pixel size, affine transform (\code{c(sx, ky, kx, sy, tx, ty)} mapping
 local px -> device px), solved layout track edges (local px, plus the
 \code{respect} centering offset), and the device-px bbox of its innermost clip.
 R joins this with the viewport names it recorded during compilation.
+}
+
+\subsection{Method \code{element_table}}{
+Per-element device-px bounding boxes for the batched mark nodes (the ones
+that can carry data keys): rects, circles, points/markers, hexagons,
+sectors, segments. Rows are emitted in paint order (the compiler's DFS),
+one per drawn element — the same order and count the R grammar enumerates,
+so \code{scene_model()} zips this with R-side semantics positionally (and
+cross-checks the \code{key} column). Columns: \code{key} ("" = none), enclosing
+\code{panel} ("" = none), and device-px bbox \verb{x0,y0,x1,y1} (y-down). Sector boxes
+use the outer-radius disk and hexagon boxes the circumscribed extent — safe
+over-approximations sufficient for a spatial index.
 }
 
 \subsection{Method \code{pixel}}{

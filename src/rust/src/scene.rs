@@ -345,6 +345,10 @@ enum Node {
         xu: Vec<Unit>, yu: Vec<Unit>, wu: Vec<Unit>, hu: Vec<Unit>,
         sketch: Option<crate::sketch::SketchOpts>,
         gp: PartialGpar,
+        /// Optional per-element data keys (interactivity): empty = none, else
+        /// length `n`. Emitted as `data-key` on each rect in the SVG backend;
+        /// ignored by raster/PDF.
+        keys: Vec<String>,
     },
     /// A batch of circles sharing one gpar (also serves `points`). Markers with a
     /// solid/no fill take a fast path (one path, per-element transform).
@@ -353,6 +357,10 @@ enum Node {
         xu: Vec<Unit>, yu: Vec<Unit>, ru: Vec<Unit>,
         sketch: Option<crate::sketch::SketchOpts>,
         gp: PartialGpar,
+        /// Per-element data keys (see `Rects.keys`). Non-empty forces the
+        /// per-element emission path (the batched `draw_circles` fast path can't
+        /// tag individual elements).
+        keys: Vec<String>,
     },
     /// A batch of point markers with per-element `shape` codes (0 circle, 1 square,
     /// 2 triangle, 3 diamond, 4 plus, 5 cross); `size` is the marker radius.
@@ -362,6 +370,8 @@ enum Node {
         shape: Vec<u32>,
         sketch: Option<crate::sketch::SketchOpts>,
         gp: PartialGpar,
+        /// Per-element data keys (see `Rects.keys`).
+        keys: Vec<String>,
     },
     /// A batch of hexagons (for hex-binning): `flat` the orientation, and `fill` a
     /// **per-element** colour (the binned-count colour); `gp` supplies only the
@@ -376,6 +386,8 @@ enum Node {
         fill: Vec<Rgba>,
         flat: bool,
         gp: PartialGpar,
+        /// Per-element data keys (see `Rects.keys`).
+        keys: Vec<String>,
     },
     /// A batch of annular sectors: centre `(x,y)`, inner/outer radius `r0`/`r1`,
     /// angles `theta0`/`theta1` in radians (0 at 3 o'clock, CCW). `fill` is a
@@ -392,6 +404,8 @@ enum Node {
         arrow: Option<Arrow>,
         sketch: Option<crate::sketch::SketchOpts>,
         gp: PartialGpar,
+        /// Per-element data keys (see `Rects.keys`).
+        keys: Vec<String>,
     },
     /// A batch of disjoint line segments `(x0,y0)->(x1,y1)`, stroked in one pass.
     Segments {
@@ -409,6 +423,9 @@ enum Node {
         arrow: Option<Arrow>,
         sketch: Option<crate::sketch::SketchOpts>,
         gp: PartialGpar,
+        /// Per-element data keys (see `Rects.keys`). Non-empty forces per-segment
+        /// emission (the batch is otherwise stroked as one combined path).
+        keys: Vec<String>,
     },
     /// A batch of igraph-style self-loops: a cubic-Bézier teardrop per element,
     /// leaving/re-entering the vertex `(x,y)`, sized by an absolute `size` (and
@@ -457,6 +474,12 @@ enum Node {
     SubrasterStart { nid: f64 },
     /// Closes the repaint boundary; the captured layer is memoised and composited.
     SubrasterEnd,
+    /// Opens a named panel group (paired with `PanelEnd`): the SVG backend wraps the
+    /// enclosed nodes in `<g data-vellum-panel="name">` so a host can target the
+    /// panel (e.g. for pan/zoom); raster/PDF ignore it. Emitted for named viewports.
+    PanelStart { name: String },
+    /// Closes the named panel group.
+    PanelEnd,
 }
 
 impl Node {
@@ -477,7 +500,8 @@ impl Node {
             | Node::Path { gp, .. }
             | Node::Text { gp, .. } => gp,
             Node::Image { .. } | Node::GroupStart { .. } | Node::GroupEnd
-            | Node::SubrasterStart { .. } | Node::SubrasterEnd => {
+            | Node::SubrasterStart { .. } | Node::SubrasterEnd
+            | Node::PanelStart { .. } | Node::PanelEnd => {
                 unreachable!("handled before gpar resolution")
             }
         }
@@ -858,6 +882,7 @@ impl Scene {
         sroughness: f64, sbowing: f64, sfill_style: i32, sfill_weight: f64,
         shachure_angle: f64, shachure_gap: f64, scurve_tightness: f64,
         sdisable_multi: bool, spreserve: bool, sseed: f64,
+        keys: Vec<String>,
     ) {
         let gp = PartialGpar::from_robj(&fill, &col, &lwd, &alpha, &stroke);
         let sketch = sketch_from(
@@ -867,6 +892,7 @@ impl Scene {
         self.emit_node(Node::Rects {
             x: x.to_vec(), y: y.to_vec(), w: w.to_vec(), h: h.to_vec(),
             xu: codes(xu), yu: codes(yu), wu: codes(wu), hu: codes(hu), sketch, gp,
+            keys,
         });
     }
 
@@ -880,6 +906,7 @@ impl Scene {
         sroughness: f64, sbowing: f64, sfill_style: i32, sfill_weight: f64,
         shachure_angle: f64, shachure_gap: f64, scurve_tightness: f64,
         sdisable_multi: bool, spreserve: bool, sseed: f64,
+        keys: Vec<String>,
     ) {
         let gp = PartialGpar::from_robj(&fill, &col, &lwd, &alpha, &stroke);
         let sketch = sketch_from(
@@ -889,6 +916,7 @@ impl Scene {
         self.emit_node(Node::Circles {
             x: x.to_vec(), y: y.to_vec(), r: r.to_vec(),
             xu: codes(xu), yu: codes(yu), ru: codes(ru), sketch, gp,
+            keys,
         });
     }
 
@@ -905,6 +933,7 @@ impl Scene {
         sroughness: f64, sbowing: f64, sfill_style: i32, sfill_weight: f64,
         shachure_angle: f64, shachure_gap: f64, scurve_tightness: f64,
         sdisable_multi: bool, spreserve: bool, sseed: f64,
+        keys: Vec<String>,
     ) {
         let gp = PartialGpar::from_robj(&fill, &col, &lwd, &alpha, &stroke);
         let sketch = sketch_from(
@@ -915,6 +944,7 @@ impl Scene {
             x: x.to_vec(), y: y.to_vec(), size: size.to_vec(),
             xu: codes(xu), yu: codes(yu), su: codes(su),
             shape: shape.iter().map(|&v| v.max(0) as u32).collect(), sketch, gp,
+            keys,
         });
     }
 
@@ -931,6 +961,7 @@ impl Scene {
         xu: &[i32], yu: &[i32], su: &[i32], wu: &[i32], hu: &[i32],
         fill: &[i32], flat: bool,
         col: Robj, lwd: Robj, alpha: Robj, stroke: Robj,
+        keys: Vec<String>,
     ) {
         let gp = PartialGpar::from_robj(&rnull(), &col, &lwd, &alpha, &stroke);
         let fill = fill
@@ -941,6 +972,7 @@ impl Scene {
             x: x.to_vec(), y: y.to_vec(), size: size.to_vec(), w: w.to_vec(), h: h.to_vec(),
             xu: codes(xu), yu: codes(yu), su: codes(su), wu: codes(wu), hu: codes(hu),
             fill, flat, gp,
+            keys,
         });
     }
 
@@ -959,6 +991,7 @@ impl Scene {
         sroughness: f64, sbowing: f64, sfill_style: i32, sfill_weight: f64,
         shachure_angle: f64, shachure_gap: f64, scurve_tightness: f64,
         sdisable_multi: bool, spreserve: bool, sseed: f64,
+        keys: Vec<String>,
     ) {
         let gp = PartialGpar::from_robj(&rnull(), &col, &lwd, &alpha, &stroke);
         let fill = fill
@@ -974,6 +1007,7 @@ impl Scene {
             theta0: theta0.to_vec(), theta1: theta1.to_vec(),
             xu: codes(xu), yu: codes(yu), r0u: codes(r0u), r1u: codes(r1u),
             fill, arrow: arrow_from(aangle, alen, aends, aclosed), sketch, gp,
+            keys,
         });
     }
 
@@ -989,6 +1023,7 @@ impl Scene {
         sroughness: f64, sbowing: f64, sfill_style: i32, sfill_weight: f64,
         shachure_angle: f64, shachure_gap: f64, scurve_tightness: f64,
         sdisable_multi: bool, spreserve: bool, sseed: f64,
+        keys: Vec<String>,
     ) {
         let gp = PartialGpar::from_robj(&rnull(), &col, &lwd, &alpha, &stroke);
         let sketch = sketch_from(
@@ -1001,6 +1036,7 @@ impl Scene {
             scap: scap.to_vec(), ecap: ecap.to_vec(), scapu: codes(scapu), ecapu: codes(ecapu),
             off: off.to_vec(), offu: codes(offu),
             arrow: arrow_from(aangle, alen, aends, aclosed), sketch, gp,
+            keys,
         });
     }
 
@@ -1241,6 +1277,18 @@ impl Scene {
         self.emit_node(Node::GroupEnd);
     }
 
+    /// Open a named panel group around the following nodes (paired with
+    /// `end_panel`). The SVG backend wraps them in `<g data-vellum-panel="name">`;
+    /// other backends ignore it. Emitted by the R compiler for named viewports.
+    fn begin_panel(&mut self, name: String) {
+        self.emit_node(Node::PanelStart { name });
+    }
+
+    /// Close the most recently opened panel group.
+    fn end_panel(&mut self) {
+        self.emit_node(Node::PanelEnd);
+    }
+
     /// Open a repaint boundary for the current subtree, tagged with content id
     /// `nid` (a per-subtree token from R). See `Node::SubrasterStart`.
     fn subraster_start(&mut self, nid: f64) {
@@ -1300,6 +1348,17 @@ impl Scene {
             throw_r_error(format!("failed to write SVG: {e}"));
         }
         warnings
+    }
+
+    /// Render the scene and return the SVG document as a string (rather than
+    /// writing it to a file). Same output as `render_svg`; the interactivity
+    /// layer needs the markup in-memory to embed it in an htmlwidget, and tests
+    /// use it to assert on emitted attributes. Degradation warnings are dropped
+    /// here (the file path surfaces them); callers wanting them use `render_svg`.
+    fn render_svg_string(&self, outline_text: bool) -> String {
+        let mut b = SvgBackend::new(self.w_px, self.h_px, self.bg, outline_text);
+        let _warnings = self.render_to(&mut b);
+        b.into_string()
     }
 
     /// Render the scene to a PDF file. Returns any degradation warnings (e.g. a
@@ -1450,6 +1509,100 @@ impl Scene {
             has_clip = has_clip,
             clip = List::from_values(clip)
         )
+    }
+
+    /// Per-element device-px bounding boxes for the batched mark nodes (the ones
+    /// that can carry data keys): rects, circles, points/markers, hexagons,
+    /// sectors, segments. Rows are emitted in paint order (the compiler's DFS),
+    /// one per drawn element — the same order and count the R grammar enumerates,
+    /// so `scene_model()` zips this with R-side semantics positionally (and
+    /// cross-checks the `key` column). Columns: `key` ("" = none), enclosing
+    /// `panel` ("" = none), and device-px bbox `x0,y0,x1,y1` (y-down). Sector boxes
+    /// use the outer-radius disk and hexagon boxes the circumscribed extent — safe
+    /// over-approximations sufficient for a spatial index.
+    fn element_table(&self) -> List {
+        let resolved = self.resolve_all();
+        let mut key: Vec<String> = Vec::new();
+        let mut panel: Vec<String> = Vec::new();
+        let mut x0: Vec<f64> = Vec::new();
+        let mut y0: Vec<f64> = Vec::new();
+        let mut x1: Vec<f64> = Vec::new();
+        let mut y1: Vec<f64> = Vec::new();
+        let mut panel_stack: Vec<String> = Vec::new();
+        for (vp_id, node) in self.nodes.iter() {
+            match node {
+                Node::PanelStart { name } => { panel_stack.push(name.clone()); continue; }
+                Node::PanelEnd => { panel_stack.pop(); continue; }
+                _ => {}
+            }
+            let vp = &resolved[*vp_id].vp;
+            let cur_panel = panel_stack.last().cloned().unwrap_or_default();
+            // Emit one row per element of the six keyable batched marks.
+            let mut emit = |i: usize, keys: &[String], lx0: f64, ly0: f64, lx1: f64, ly1: f64| {
+                let bb = dev_bbox(vp, lx0, ly0, lx1, ly1);
+                key.push(key_at(keys, i).unwrap_or("").to_string());
+                panel.push(cur_panel.clone());
+                x0.push(bb.0); y0.push(bb.1); x1.push(bb.2); y1.push(bb.3);
+            };
+            match node {
+                Node::Rects { x, y, w, h, xu, yu, wu, hu, keys, .. } => {
+                    let n = [x.len(), y.len(), w.len(), h.len()].into_iter().min().unwrap_or(0);
+                    for i in 0..n {
+                        let cx = vp.x_pos(x[i], xu[i]); let cy = vp.y_pos(y[i], yu[i]);
+                        let pw = vp.x_len(w[i], wu[i]); let ph = vp.y_len(h[i], hu[i]);
+                        emit(i, keys, cx - pw / 2.0, cy - ph / 2.0, cx + pw / 2.0, cy + ph / 2.0);
+                    }
+                }
+                Node::Circles { x, y, r, xu, yu, ru, keys, .. } => {
+                    let n = [x.len(), y.len(), r.len()].into_iter().min().unwrap_or(0);
+                    for i in 0..n {
+                        let cx = vp.x_pos(x[i], xu[i]); let cy = vp.y_pos(y[i], yu[i]);
+                        let rr = vp.r_len(r[i], ru[i]);
+                        emit(i, keys, cx - rr, cy - rr, cx + rr, cy + rr);
+                    }
+                }
+                Node::Markers { x, y, size, xu, yu, su, keys, .. } => {
+                    let n = [x.len(), y.len(), size.len()].into_iter().min().unwrap_or(0);
+                    for i in 0..n {
+                        let cx = vp.x_pos(x[i], xu[i]); let cy = vp.y_pos(y[i], yu[i]);
+                        let rr = vp.r_len(size[i], su[i]);
+                        emit(i, keys, cx - rr, cy - rr, cx + rr, cy + rr);
+                    }
+                }
+                Node::Hexagons { x, y, size, w, h, xu, yu, su, wu, hu, keys, .. } => {
+                    let n = [x.len(), y.len()].into_iter().min().unwrap_or(0);
+                    let nonreg = !w.is_empty();
+                    for i in 0..n {
+                        let cx = vp.x_pos(x[i], xu[i]); let cy = vp.y_pos(y[i], yu[i]);
+                        let (hw, hh) = if nonreg {
+                            (vp.x_len(w[i], wu[i]) * 0.5, vp.y_len(h[i], hu[i]) * 0.5)
+                        } else {
+                            let rr = vp.r_len(size[i], su[i]);
+                            (rr, rr)
+                        };
+                        emit(i, keys, cx - hw, cy - hh, cx + hw, cy + hh);
+                    }
+                }
+                Node::Sectors { x, y, r0, r1, xu, yu, r0u, r1u, keys, .. } => {
+                    let n = [x.len(), y.len(), r0.len(), r1.len()].into_iter().min().unwrap_or(0);
+                    for i in 0..n {
+                        let cx = vp.x_pos(x[i], xu[i]); let cy = vp.y_pos(y[i], yu[i]);
+                        let rr = vp.r_len(r1[i], r1u[i]).max(vp.r_len(r0[i], r0u[i]));
+                        emit(i, keys, cx - rr, cy - rr, cx + rr, cy + rr);
+                    }
+                }
+                Node::Segments { x0: sx0, y0: sy0, x1: sx1, y1: sy1, x0u, y0u, x1u, y1u, keys, .. } => {
+                    let n = [sx0.len(), sy0.len(), sx1.len(), sy1.len()].into_iter().min().unwrap_or(0);
+                    for i in 0..n {
+                        let ax = vp.x_pos(sx0[i], x0u[i]); let ay = vp.y_pos(sy0[i], y0u[i]);
+                        let bx = vp.x_pos(sx1[i], x1u[i]); let by = vp.y_pos(sy1[i], y1u[i]);
+                        emit(i, keys, ax.min(bx), ay.min(by), ax.max(bx), ay.max(by));
+                    }
+                }
+                _ => {}
+            }
+        }
+        list!(key = key, panel = panel, x0 = x0, y0 = y0, x1 = x1, y1 = y1)
     }
 
     /// Render and return the RGBA of device pixel `(x, y)` as `c(r, g, b, a)`.
@@ -1639,7 +1792,8 @@ impl Scene {
                     }
                 }
                 Node::GroupStart { .. } | Node::GroupEnd
-                | Node::SubrasterStart { .. } | Node::SubrasterEnd => {}
+                | Node::SubrasterStart { .. } | Node::SubrasterEnd
+                | Node::PanelStart { .. } | Node::PanelEnd => {}
             }
         }
         match pm.pixel(x as u32, y as u32) {
@@ -1958,6 +2112,14 @@ impl Scene {
                     b.end_group();
                     continue;
                 }
+                Node::PanelStart { name } => {
+                    b.begin_panel(name);
+                    continue;
+                }
+                Node::PanelEnd => {
+                    b.end_panel();
+                    continue;
+                }
                 // Images carry no gpar; resolve geometry and draw directly.
                 Node::Image { rgba, iw, ih, x, y, w, h, xu, yu, wu, hu, interpolate } => {
                     let rv = &resolved[*vp_id];
@@ -1982,6 +2144,9 @@ impl Scene {
             let clip = Clip { id: *vp_id, shapes: &rv.clip_chain };
 
             if has_meta { b.begin_node(&attrs); }
+            // Clear any per-element data key from the previous node so a keyed
+            // batch never leaks its last key onto a later, keyless node.
+            b.set_element_key(None);
             match node {
                 Node::Rect { x, y, w, h, xu, yu, wu, hu, .. } => {
                     let cx = vp.x_pos(*x, *xu);
@@ -2090,13 +2255,14 @@ impl Scene {
                         }
                     }
                 }
-                Node::Rects { x, y, w, h, xu, yu, wu, hu, sketch, .. } => {
+                Node::Rects { x, y, w, h, xu, yu, wu, hu, sketch, keys, .. } => {
                     let n = [x.len(), y.len(), w.len(), h.len(), xu.len(), yu.len(), wu.len(), hu.len()]
                         .into_iter().min().unwrap_or(0);
                     if let Some(sk) = sketch {
                         // Per-element sketch (the batched fast paths don't apply —
                         // every rect is unique wobbly geometry). See DESIGN §4 ex.5.
                         for i in 0..n {
+                            b.set_element_key(key_at(keys, i));
                             let cx = vp.x_pos(x[i], xu[i]);
                             let cy = vp.y_pos(y[i], yu[i]);
                             let pw = vp.x_len(w[i], wu[i]);
@@ -2122,6 +2288,7 @@ impl Scene {
                         if let Some(rp) = &rf {
                             let unit = unit_rect();
                             for i in 0..n {
+                                b.set_element_key(key_at(keys, i));
                                 let cx = vp.x_pos(x[i], xu[i]);
                                 let cy = vp.y_pos(y[i], yu[i]);
                                 let pw = vp.x_len(w[i], wu[i]);
@@ -2138,6 +2305,7 @@ impl Scene {
                         // that must be resolved in local px: build each rect.
                         let style = stroke_style(&gp, vp.dpi);
                         for i in 0..n {
+                            b.set_element_key(key_at(keys, i));
                             let cx = vp.x_pos(x[i], xu[i]);
                             let cy = vp.y_pos(y[i], yu[i]);
                             let pw = vp.x_len(w[i], wu[i]);
@@ -2154,7 +2322,7 @@ impl Scene {
                     }
                     }
                 }
-                Node::Circles { x, y, r, xu, yu, ru, sketch, .. } => {
+                Node::Circles { x, y, r, xu, yu, ru, sketch, keys, .. } => {
                     let n = [x.len(), y.len(), r.len(), xu.len(), yu.len(), ru.len()]
                         .into_iter().min().unwrap_or(0);
                     if let Some(sk) = sketch {
@@ -2162,6 +2330,7 @@ impl Scene {
                         // seed per element so many circles don't look mechanically cloned.
                         let o = resolve_sketch(sk, &gp, vp.dpi);
                         for i in 0..n {
+                            b.set_element_key(key_at(keys, i));
                             let cx = vp.x_pos(x[i], xu[i]);
                             let cy = vp.y_pos(y[i], yu[i]);
                             let rr = vp.r_len(r[i], ru[i]);
@@ -2179,9 +2348,11 @@ impl Scene {
                     let lwd = gp.lwd_px(vp.dpi);
                     let stroke = gp.col.filter(|_| lwd > 0.0);
                     let rf = gp.fill.as_ref().map(|p| resolve_paint(p, vp));
-                    if matches!(gp.fill, Some(Paint::Solid(_)) | None) {
-                        // Solid/no fill: resolve centres+radii to local px and hand
-                        // the batch to the backend (raster may sprite-stamp).
+                    // Solid/no fill normally hands the whole batch to `draw_circles`
+                    // (which may sprite-stamp on raster), but that can't tag individual
+                    // elements — so when the batch carries data keys we fall back to a
+                    // per-element build (the interactivity opt-in; moderate `n`).
+                    if matches!(gp.fill, Some(Paint::Solid(_)) | None) && keys.is_empty() {
                         let mut cx = Vec::with_capacity(n);
                         let mut cy = Vec::with_capacity(n);
                         let mut rr = Vec::with_capacity(n);
@@ -2192,12 +2363,12 @@ impl Scene {
                         }
                         b.draw_circles(&cx, &cy, &rr, rf.as_ref(), stroke.map(|c| (c, stroke_style(&gp, vp.dpi))), t, &clip);
                     } else {
-                        // Gradient/pattern fill: build each circle in local px. (Not a
-                        // candidate for the unit-path+transform reuse the solid Rects/
-                        // Markers fast paths use — a gradient is resolved in local px,
-                        // so the fill is position-dependent, not transform-invariant.)
+                        // Per-element build: either a gradient/pattern fill (resolved in
+                        // local px, so position-dependent) or a keyed batch that needs a
+                        // `data-key` per circle.
                         let style = stroke_style(&gp, vp.dpi);
                         for i in 0..n {
+                            b.set_element_key(key_at(keys, i));
                             let cx = vp.x_pos(x[i], xu[i]);
                             let cy = vp.y_pos(y[i], yu[i]);
                             let rr = vp.r_len(r[i], ru[i]);
@@ -2214,7 +2385,7 @@ impl Scene {
                         }
                     }
                 }
-                Node::Markers { x, y, size, xu, yu, su, shape, sketch, .. } => {
+                Node::Markers { x, y, size, xu, yu, su, shape, sketch, keys, .. } => {
                     let n = [x.len(), y.len(), size.len(), xu.len(), yu.len(), su.len(), shape.len()]
                         .into_iter().min().unwrap_or(0);
                     if let Some(sk) = sketch {
@@ -2225,6 +2396,7 @@ impl Scene {
                         let col = gp.col;
                         let style = stroke_style(&gp, vp.dpi);
                         for i in 0..n {
+                            b.set_element_key(key_at(keys, i));
                             let cx = vp.x_pos(x[i], xu[i]);
                             let cy = vp.y_pos(y[i], yu[i]);
                             let rr = vp.r_len(size[i], su[i]);
@@ -2284,6 +2456,7 @@ impl Scene {
                     let fast = solid && stroke.is_none();
                     let mut unit_cache: [Option<tiny_skia::Path>; 4] = [None, None, None, None];
                     for i in 0..n {
+                        b.set_element_key(key_at(keys, i));
                         let cx = vp.x_pos(x[i], xu[i]);
                         let cy = vp.y_pos(y[i], yu[i]);
                         let rr = vp.r_len(size[i], su[i]);
@@ -2358,7 +2531,7 @@ impl Scene {
                         }
                     }
                 }
-                Node::Hexagons { x, y, size, w, h, xu, yu, su, wu, hu, fill, flat, .. } => {
+                Node::Hexagons { x, y, size, w, h, xu, yu, su, wu, hu, fill, flat, keys, .. } => {
                     // n excludes w/h: they are empty for the regular (size-driven) path.
                     let n = [x.len(), y.len(), xu.len(), yu.len(), fill.len()]
                         .into_iter().min().unwrap_or(0);
@@ -2366,6 +2539,7 @@ impl Scene {
                     let style = stroke_style(&gp, vp.dpi);
                     let stroke = gp.col.filter(|_| style.width > 0.0);
                     for i in 0..n {
+                        b.set_element_key(key_at(keys, i));
                         let cx = vp.x_pos(x[i], xu[i]);
                         let cy = vp.y_pos(y[i], yu[i]);
                         if !cx.is_finite() || !cy.is_finite() {
@@ -2387,7 +2561,7 @@ impl Scene {
                         }
                     }
                 }
-                Node::Sectors { x, y, r0, r1, theta0, theta1, xu, yu, r0u, r1u, fill, arrow, sketch, .. } => {
+                Node::Sectors { x, y, r0, r1, theta0, theta1, xu, yu, r0u, r1u, fill, arrow, sketch, keys, .. } => {
                     let n = [x.len(), y.len(), r0.len(), r1.len(), theta0.len(), theta1.len(),
                              xu.len(), yu.len(), r0u.len(), r1u.len(), fill.len()]
                         .into_iter().min().unwrap_or(0);
@@ -2396,6 +2570,7 @@ impl Scene {
                         // outline, hachure interior. Arrows (self-loops) are ignored here.
                         let o = resolve_sketch(sk, &gp, vp.dpi);
                         for i in 0..n {
+                            b.set_element_key(key_at(keys, i));
                             let cx = vp.x_pos(x[i], xu[i]);
                             let cy = vp.y_pos(y[i], yu[i]);
                             if !cx.is_finite() || !cy.is_finite() {
@@ -2425,6 +2600,7 @@ impl Scene {
                     // are drawn once at the end, tangent to each outer arc's end(s).
                     let mut ends: Vec<(f32, f32, f64, f64)> = Vec::new();
                     for i in 0..n {
+                        b.set_element_key(key_at(keys, i));
                         let cx = vp.x_pos(x[i], xu[i]);
                         let cy = vp.y_pos(y[i], yu[i]);
                         if !cx.is_finite() || !cy.is_finite() {
@@ -2457,6 +2633,7 @@ impl Scene {
                             }
                         }
                     }
+                    b.set_element_key(None); // arrowheads are batch decoration, unkeyed
                     if let (Some(a), Some(col)) = (arrow, gp.col) {
                         if !ends.is_empty() {
                             draw_arrows(b, a, &ends, col, &style, t, &clip, vp.dpi);
@@ -2500,7 +2677,7 @@ impl Scene {
                     };
                     b.draw_text(&run, t, &clip);
                 }
-                Node::Segments { x0, y0, x1, y1, x0u, y0u, x1u, y1u, scap, ecap, scapu, ecapu, off, offu, arrow, sketch, .. } => {
+                Node::Segments { x0, y0, x1, y1, x0u, y0u, x1u, y1u, scap, ecap, scapu, ecapu, off, offu, arrow, sketch, keys, .. } => {
                     if let Some(sk) = sketch {
                         // Hand-drawn: rough each segment (ignores offset/caps/arrow —
                         // §4 exception 4). Per-segment seed so they don't look cloned.
@@ -2512,6 +2689,7 @@ impl Scene {
                                     .into_iter().min().unwrap_or(0);
                                 let o = resolve_sketch(sk, &gp, vp.dpi);
                                 for i in 0..n {
+                                    b.set_element_key(key_at(keys, i));
                                     let a = (vp.x_pos(x0[i], x0u[i]), vp.y_pos(y0[i], y0u[i]));
                                     let bpt = (vp.x_pos(x1[i], x1u[i]), vp.y_pos(y1[i], y1u[i]));
                                     if !(a.0.is_finite() && a.1.is_finite() && bpt.0.is_finite() && bpt.1.is_finite()) {
@@ -2540,7 +2718,9 @@ impl Scene {
                         // perpendicular offset first, then caps, then the arrow along the
                         // shifted+capped direction. A segment is dropped when a coordinate
                         // is non-finite (an R `NA`) or when caps shorten it away entirely.
-                        let mut segs: Vec<(f32, f32, f32, f32)> = Vec::with_capacity(n);
+                        // Each seg carries its originating element index so a keyed
+                        // batch can tag every segment with its own `data-key`.
+                        let mut segs: Vec<(f32, f32, f32, f32, usize)> = Vec::with_capacity(n);
                         for i in 0..n {
                             let (mut sx, mut sy) = (vp.x_pos(x0[i], x0u[i]) as f32, vp.y_pos(y0[i], y0u[i]) as f32);
                             let (mut ex, mut ey) = (vp.x_pos(x1[i], x1u[i]) as f32, vp.y_pos(y1[i], y1u[i]) as f32);
@@ -2557,26 +2737,42 @@ impl Scene {
                                 let sc = cap_len_px(scap, scapu, i, vp);
                                 let ec = cap_len_px(ecap, ecapu, i, vp);
                                 match cap_segment(sx, sy, ex, ey, sc, ec) {
-                                    Some(p) => segs.push(p),
+                                    Some((a, b, c, d)) => segs.push((a, b, c, d, i)),
                                     None => continue,
                                 }
                             } else {
-                                segs.push((sx, sy, ex, ey));
+                                segs.push((sx, sy, ex, ey, i));
                             }
                         }
                         if style.width > 0.0 {
-                            let mut pb = PathBuilder::new();
-                            for &(sx, sy, ex, ey) in &segs {
-                                pb.move_to(sx, sy);
-                                pb.line_to(ex, ey);
-                            }
-                            if let Some(path) = pb.finish() {
-                                b.stroke_lines(&path, t, col, &style, &clip);
+                            if keys.is_empty() {
+                                // Fast path: all segments in one combined stroke.
+                                let mut pb = PathBuilder::new();
+                                for &(sx, sy, ex, ey, _) in &segs {
+                                    pb.move_to(sx, sy);
+                                    pb.line_to(ex, ey);
+                                }
+                                if let Some(path) = pb.finish() {
+                                    b.stroke_lines(&path, t, col, &style, &clip);
+                                }
+                            } else {
+                                // Keyed: stroke each segment on its own so it can carry
+                                // its `data-key` (the interactivity opt-in).
+                                for &(sx, sy, ex, ey, gi) in &segs {
+                                    b.set_element_key(key_at(keys, gi));
+                                    let mut pb = PathBuilder::new();
+                                    pb.move_to(sx, sy);
+                                    pb.line_to(ex, ey);
+                                    if let Some(path) = pb.finish() {
+                                        b.stroke_lines(&path, t, col, &style, &clip);
+                                    }
+                                }
+                                b.set_element_key(None);
                             }
                         }
                         if let Some(a) = arrow {
                             let mut ends = Vec::new();
-                            for &(sx, sy, ex, ey) in &segs {
+                            for &(sx, sy, ex, ey, _) in &segs {
                                 if a.ends & 2 != 0 {
                                     ends.push((ex, ey, (ex - sx) as f64, (ey - sy) as f64));
                                 }
@@ -2660,7 +2856,8 @@ impl Scene {
                     }
                 }
                 Node::Image { .. } | Node::GroupStart { .. } | Node::GroupEnd
-                | Node::SubrasterStart { .. } | Node::SubrasterEnd => unreachable!("handled above"),
+                | Node::SubrasterStart { .. } | Node::SubrasterEnd
+                | Node::PanelStart { .. } | Node::PanelEnd => unreachable!("handled above"),
             }
             if has_meta { b.end_node(); }
         }
@@ -3257,6 +3454,38 @@ fn rnull() -> Robj {
 /// Decode a slice of integer unit codes from R into `Unit`s (per element).
 fn codes(c: &[i32]) -> Vec<Unit> {
     c.iter().map(|&v| Unit::from_code(v)).collect()
+}
+
+/// The per-element data key at index `i`, or `None` when the batch carries no
+/// keys (or `i` is out of range, or the key is empty). Used by the render loop to
+/// tag each drawn element with `data-key` in the SVG backend.
+fn key_at(keys: &[String], i: usize) -> Option<&str> {
+    match keys.get(i) {
+        Some(k) if !k.is_empty() => Some(k.as_str()),
+        _ => None,
+    }
+}
+
+/// Map a local-pixel axis-aligned bbox through a viewport's affine transform to a
+/// device-pixel bbox (the min/max of the four mapped corners; handles rotation).
+fn dev_bbox(vp: &Vp, lx0: f64, ly0: f64, lx1: f64, ly1: f64) -> (f64, f64, f64, f64) {
+    let t = vp.transform;
+    let (sx, ky, kx, sy, tx, ty) =
+        (t.sx as f64, t.ky as f64, t.kx as f64, t.sy as f64, t.tx as f64, t.ty as f64);
+    let corners = [(lx0, ly0), (lx1, ly0), (lx1, ly1), (lx0, ly1)];
+    let mut dx0 = f64::INFINITY;
+    let mut dy0 = f64::INFINITY;
+    let mut dx1 = f64::NEG_INFINITY;
+    let mut dy1 = f64::NEG_INFINITY;
+    for (px, py) in corners {
+        let dx = sx * px + kx * py + tx;
+        let dy = ky * px + sy * py + ty;
+        dx0 = dx0.min(dx);
+        dy0 = dy0.min(dy);
+        dx1 = dx1.max(dx);
+        dy1 = dy1.max(dy);
+    }
+    (dx0, dy0, dx1, dy1)
 }
 
 /// Decode a scalar cap (value + code) from the parallel FFI streams: `None` when

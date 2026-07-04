@@ -270,6 +270,17 @@ pub trait RenderBackend {
     /// `end_node`.
     fn begin_node(&mut self, _attrs: &str) {}
     fn end_node(&mut self) {}
+
+    /// Set the per-element data key for the *next* primitive emitted (a batched
+    /// node calls this before each element). The SVG backend splices it in as a
+    /// `data-key="…"` attribute; raster/PDF ignore it. `None` clears it.
+    fn set_element_key(&mut self, _key: Option<&str>) {}
+
+    /// Open a named panel group around the following primitives (paired with
+    /// `end_panel`). The SVG backend wraps them in `<g data-vellum-panel="name">`;
+    /// raster/PDF ignore it.
+    fn begin_panel(&mut self, _name: &str) {}
+    fn end_panel(&mut self) {}
 }
 
 /// One unit circle (origin, radius 1) reused with a per-element affine transform.
@@ -982,6 +993,9 @@ pub struct SvgBackend {
     /// attributes (`None` = this node carried no metadata, so no buffer was pushed).
     node_stack: Vec<String>,
     node_open: Vec<Option<String>>,
+    /// Per-element data key for the next primitive (`set_element_key`); spliced
+    /// into the emitted element as `data-key="…"`. `None` = no attribute.
+    cur_element_key: Option<String>,
 }
 
 impl SvgBackend {
@@ -1010,6 +1024,7 @@ impl SvgBackend {
             outline_text,
             node_stack: Vec::new(),
             node_open: Vec::new(),
+            cur_element_key: None,
         }
     }
 
@@ -1127,8 +1142,15 @@ impl SvgBackend {
     /// would double-transform the clip region.
     fn emit(&mut self, element: &str, clip: &Clip) {
         let attr = self.clip_attr(clip);
+        // Splice a per-element `data-key` into the shape element's opening tag when
+        // one is set (kept, not cleared, so a fill+stroke pair for one element both
+        // carry it; the batched render loop clears it when the node ends).
+        let element = match &self.cur_element_key {
+            Some(k) => splice_data_key(element, k),
+            None => element.to_string(),
+        };
         let wrapped = if attr.is_empty() {
-            element.to_string()
+            element
         } else {
             format!("<g{attr}>{element}</g>")
         };
@@ -1372,6 +1394,43 @@ impl RenderBackend for SvgBackend {
             self.out().push_str(&format!("<g {attrs}>{inner}</g>"));
         }
     }
+
+    fn set_element_key(&mut self, key: Option<&str>) {
+        self.cur_element_key = key.map(|s| s.to_string());
+    }
+
+    // A named panel group: route the enclosed nodes into a fresh buffer, then wrap
+    // them in `<g data-vellum-panel="…">`. Reuses the node-metadata buffer stack
+    // (identical mechanism), so panels and per-node `<g>`s nest correctly. The
+    // wrapper carries no transform — elements keep their baked device-space
+    // transforms, matching the clip-`<g>` invariant.
+    fn begin_panel(&mut self, name: &str) {
+        self.node_stack.push(String::new());
+        self.node_open.push(Some(format!("data-vellum-panel=\"{}\"", xml_escape(name))));
+    }
+
+    fn end_panel(&mut self) {
+        if let Some(Some(attrs)) = self.node_open.pop() {
+            let inner = self.node_stack.pop().unwrap_or_default();
+            self.out().push_str(&format!("<g {attrs}>{inner}</g>"));
+        }
+    }
+}
+
+/// Insert a `data-key="…"` attribute into a shape element's opening tag, right
+/// after the tag name (so it lands inside `<tag …>`). Used by `SvgBackend::emit`
+/// to tag individual elements of a batched primitive for interactivity.
+fn splice_data_key(element: &str, key: &str) -> String {
+    // The opening tag name runs from the leading `<` to the first space, `/`, or
+    // `>`; splice the attribute there.
+    let at = element
+        .find([' ', '/', '>'])
+        .unwrap_or(element.len());
+    let mut s = String::with_capacity(element.len() + key.len() + 12);
+    s.push_str(&element[..at]);
+    s.push_str(&format!(" data-key=\"{}\"", xml_escape(key)));
+    s.push_str(&element[at..]);
+    s
 }
 
 /// Encode a mask raster as an opaque grayscale PNG where each pixel's gray level

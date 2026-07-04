@@ -179,6 +179,16 @@ rs_attractor <- function(kind, n, a, b, c, d, x0, y0) .Call(wrap__rs_attractor, 
 #'Close the most recently opened group.
 #'}
 #'
+#'\subsection{Method `begin_panel`}{
+#'Open a named panel group around the following nodes (paired with
+#'`end_panel`). The SVG backend wraps them in `<g data-vellum-panel="name">`;
+#'other backends ignore it. Emitted by the R compiler for named viewports.
+#'}
+#'
+#'\subsection{Method `end_panel`}{
+#'Close the most recently opened panel group.
+#'}
+#'
 #'\subsection{Method `subraster_start`}{
 #'Open a repaint boundary for the current subtree, tagged with content id
 #'`nid` (a per-subtree token from R). See `Node::SubrasterStart`.
@@ -211,6 +221,14 @@ rs_attractor <- function(kind, n, a, b, c, d, x0, y0) .Call(wrap__rs_attractor, 
 #'Returns any degradation warnings.
 #'}
 #'
+#'\subsection{Method `render_svg_string`}{
+#'Render the scene and return the SVG document as a string (rather than
+#'writing it to a file). Same output as `render_svg`; the interactivity
+#'layer needs the markup in-memory to embed it in an htmlwidget, and tests
+#'use it to assert on emitted attributes. Degradation warnings are dropped
+#'here (the file path surfaces them); callers wanting them use `render_svg`.
+#'}
+#'
 #'\subsection{Method `render_pdf`}{
 #'Render the scene to a PDF file. Returns any degradation warnings (e.g. a
 #'tiling pattern or mask the PDF walk could not honour).
@@ -234,6 +252,18 @@ rs_attractor <- function(kind, n, a, b, c, d, x0, y0) .Call(wrap__rs_attractor, 
 #'local px -> device px), solved layout track edges (local px, plus the
 #'`respect` centering offset), and the device-px bbox of its innermost clip.
 #'R joins this with the viewport names it recorded during compilation.
+#'}
+#'
+#'\subsection{Method `element_table`}{
+#'Per-element device-px bounding boxes for the batched mark nodes (the ones
+#'that can carry data keys): rects, circles, points/markers, hexagons,
+#'sectors, segments. Rows are emitted in paint order (the compiler's DFS),
+#'one per drawn element — the same order and count the R grammar enumerates,
+#'so `scene_model()` zips this with R-side semantics positionally (and
+#'cross-checks the `key` column). Columns: `key` ("" = none), enclosing
+#'`panel` ("" = none), and device-px bbox `x0,y0,x1,y1` (y-down). Sector boxes
+#'use the outer-radius disk and hexagon boxes the circumscribed extent — safe
+#'over-approximations sufficient for a spatial index.
 #'}
 #'
 #'\subsection{Method `pixel`}{
@@ -278,17 +308,17 @@ Scene$polygon <- function(x, y, xu, yu, fill, col, lwd, alpha, stroke, sroughnes
 
 Scene$circle <- function(x, y, r, xu, yu, ru, fill, col, lwd, alpha, stroke) .Call(wrap__Scene__circle, self, x, y, r, xu, yu, ru, fill, col, lwd, alpha, stroke)
 
-Scene$rects <- function(x, y, w, h, xu, yu, wu, hu, fill, col, lwd, alpha, stroke, sroughness, sbowing, sfill_style, sfill_weight, shachure_angle, shachure_gap, scurve_tightness, sdisable_multi, spreserve, sseed) .Call(wrap__Scene__rects, self, x, y, w, h, xu, yu, wu, hu, fill, col, lwd, alpha, stroke, sroughness, sbowing, sfill_style, sfill_weight, shachure_angle, shachure_gap, scurve_tightness, sdisable_multi, spreserve, sseed)
+Scene$rects <- function(x, y, w, h, xu, yu, wu, hu, fill, col, lwd, alpha, stroke, sroughness, sbowing, sfill_style, sfill_weight, shachure_angle, shachure_gap, scurve_tightness, sdisable_multi, spreserve, sseed, keys) .Call(wrap__Scene__rects, self, x, y, w, h, xu, yu, wu, hu, fill, col, lwd, alpha, stroke, sroughness, sbowing, sfill_style, sfill_weight, shachure_angle, shachure_gap, scurve_tightness, sdisable_multi, spreserve, sseed, keys)
 
-Scene$circles <- function(x, y, r, xu, yu, ru, fill, col, lwd, alpha, stroke, sroughness, sbowing, sfill_style, sfill_weight, shachure_angle, shachure_gap, scurve_tightness, sdisable_multi, spreserve, sseed) .Call(wrap__Scene__circles, self, x, y, r, xu, yu, ru, fill, col, lwd, alpha, stroke, sroughness, sbowing, sfill_style, sfill_weight, shachure_angle, shachure_gap, scurve_tightness, sdisable_multi, spreserve, sseed)
+Scene$circles <- function(x, y, r, xu, yu, ru, fill, col, lwd, alpha, stroke, sroughness, sbowing, sfill_style, sfill_weight, shachure_angle, shachure_gap, scurve_tightness, sdisable_multi, spreserve, sseed, keys) .Call(wrap__Scene__circles, self, x, y, r, xu, yu, ru, fill, col, lwd, alpha, stroke, sroughness, sbowing, sfill_style, sfill_weight, shachure_angle, shachure_gap, scurve_tightness, sdisable_multi, spreserve, sseed, keys)
 
-Scene$markers <- function(x, y, size, xu, yu, su, shape, fill, col, lwd, alpha, stroke, sroughness, sbowing, sfill_style, sfill_weight, shachure_angle, shachure_gap, scurve_tightness, sdisable_multi, spreserve, sseed) .Call(wrap__Scene__markers, self, x, y, size, xu, yu, su, shape, fill, col, lwd, alpha, stroke, sroughness, sbowing, sfill_style, sfill_weight, shachure_angle, shachure_gap, scurve_tightness, sdisable_multi, spreserve, sseed)
+Scene$markers <- function(x, y, size, xu, yu, su, shape, fill, col, lwd, alpha, stroke, sroughness, sbowing, sfill_style, sfill_weight, shachure_angle, shachure_gap, scurve_tightness, sdisable_multi, spreserve, sseed, keys) .Call(wrap__Scene__markers, self, x, y, size, xu, yu, su, shape, fill, col, lwd, alpha, stroke, sroughness, sbowing, sfill_style, sfill_weight, shachure_angle, shachure_gap, scurve_tightness, sdisable_multi, spreserve, sseed, keys)
 
-Scene$hexagons <- function(x, y, size, w, h, xu, yu, su, wu, hu, fill, flat, col, lwd, alpha, stroke) .Call(wrap__Scene__hexagons, self, x, y, size, w, h, xu, yu, su, wu, hu, fill, flat, col, lwd, alpha, stroke)
+Scene$hexagons <- function(x, y, size, w, h, xu, yu, su, wu, hu, fill, flat, col, lwd, alpha, stroke, keys) .Call(wrap__Scene__hexagons, self, x, y, size, w, h, xu, yu, su, wu, hu, fill, flat, col, lwd, alpha, stroke, keys)
 
-Scene$sectors <- function(x, y, r0, r1, theta0, theta1, xu, yu, r0u, r1u, fill, col, lwd, alpha, stroke, aangle, alen, aends, aclosed, sroughness, sbowing, sfill_style, sfill_weight, shachure_angle, shachure_gap, scurve_tightness, sdisable_multi, spreserve, sseed) .Call(wrap__Scene__sectors, self, x, y, r0, r1, theta0, theta1, xu, yu, r0u, r1u, fill, col, lwd, alpha, stroke, aangle, alen, aends, aclosed, sroughness, sbowing, sfill_style, sfill_weight, shachure_angle, shachure_gap, scurve_tightness, sdisable_multi, spreserve, sseed)
+Scene$sectors <- function(x, y, r0, r1, theta0, theta1, xu, yu, r0u, r1u, fill, col, lwd, alpha, stroke, aangle, alen, aends, aclosed, sroughness, sbowing, sfill_style, sfill_weight, shachure_angle, shachure_gap, scurve_tightness, sdisable_multi, spreserve, sseed, keys) .Call(wrap__Scene__sectors, self, x, y, r0, r1, theta0, theta1, xu, yu, r0u, r1u, fill, col, lwd, alpha, stroke, aangle, alen, aends, aclosed, sroughness, sbowing, sfill_style, sfill_weight, shachure_angle, shachure_gap, scurve_tightness, sdisable_multi, spreserve, sseed, keys)
 
-Scene$segments <- function(x0, y0, x1, y1, x0u, y0u, x1u, y1u, scap, ecap, scapu, ecapu, off, offu, col, lwd, alpha, stroke, aangle, alen, aends, aclosed, sroughness, sbowing, sfill_style, sfill_weight, shachure_angle, shachure_gap, scurve_tightness, sdisable_multi, spreserve, sseed) .Call(wrap__Scene__segments, self, x0, y0, x1, y1, x0u, y0u, x1u, y1u, scap, ecap, scapu, ecapu, off, offu, col, lwd, alpha, stroke, aangle, alen, aends, aclosed, sroughness, sbowing, sfill_style, sfill_weight, shachure_angle, shachure_gap, scurve_tightness, sdisable_multi, spreserve, sseed)
+Scene$segments <- function(x0, y0, x1, y1, x0u, y0u, x1u, y1u, scap, ecap, scapu, ecapu, off, offu, col, lwd, alpha, stroke, aangle, alen, aends, aclosed, sroughness, sbowing, sfill_style, sfill_weight, shachure_angle, shachure_gap, scurve_tightness, sdisable_multi, spreserve, sseed, keys) .Call(wrap__Scene__segments, self, x0, y0, x1, y1, x0u, y0u, x1u, y1u, scap, ecap, scapu, ecapu, off, offu, col, lwd, alpha, stroke, aangle, alen, aends, aclosed, sroughness, sbowing, sfill_style, sfill_weight, shachure_angle, shachure_gap, scurve_tightness, sdisable_multi, spreserve, sseed, keys)
 
 Scene$add_loop <- function(x, y, size, foot, angle, width, xu, yu, su, fu, col, lwd, alpha, stroke, aangle, alen, aends, aclosed) .Call(wrap__Scene__add_loop, self, x, y, size, foot, angle, width, xu, yu, su, fu, col, lwd, alpha, stroke, aangle, alen, aends, aclosed)
 
@@ -310,6 +340,10 @@ Scene$group_start <- function(mask, alpha, blend) .Call(wrap__Scene__group_start
 
 Scene$group_end <- function() .Call(wrap__Scene__group_end, self)
 
+Scene$begin_panel <- function(name) .Call(wrap__Scene__begin_panel, self, name)
+
+Scene$end_panel <- function() .Call(wrap__Scene__end_panel, self)
+
 Scene$subraster_start <- function(nid) .Call(wrap__Scene__subraster_start, self, nid)
 
 Scene$subraster_end <- function() .Call(wrap__Scene__subraster_end, self)
@@ -324,6 +358,8 @@ Scene$render_png <- function(path) .Call(wrap__Scene__render_png, self, path)
 
 Scene$render_svg <- function(path, outline_text) .Call(wrap__Scene__render_svg, self, path, outline_text)
 
+Scene$render_svg_string <- function(outline_text) .Call(wrap__Scene__render_svg_string, self, outline_text)
+
 Scene$render_pdf <- function(path) .Call(wrap__Scene__render_pdf, self, path)
 
 Scene$rgba <- function() .Call(wrap__Scene__rgba, self)
@@ -331,6 +367,8 @@ Scene$rgba <- function() .Call(wrap__Scene__rgba, self)
 Scene$content_bbox <- function() .Call(wrap__Scene__content_bbox, self)
 
 Scene$resolved_geometry <- function() .Call(wrap__Scene__resolved_geometry, self)
+
+Scene$element_table <- function() .Call(wrap__Scene__element_table, self)
 
 Scene$pixel <- function(x, y) .Call(wrap__Scene__pixel, self, x, y)
 

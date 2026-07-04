@@ -29,7 +29,9 @@ rect_grob(
   name = NULL,
   vp = NULL,
   id = NULL,
-  role = NULL
+  role = NULL,
+  key = NULL,
+  meta = NULL
 )
 
 roundrect_grob(
@@ -105,7 +107,9 @@ circle_grob(
   name = NULL,
   vp = NULL,
   id = NULL,
-  role = NULL
+  role = NULL,
+  key = NULL,
+  meta = NULL
 )
 
 points_grob(
@@ -118,7 +122,9 @@ points_grob(
   name = NULL,
   vp = NULL,
   id = NULL,
-  role = NULL
+  role = NULL,
+  key = NULL,
+  meta = NULL
 )
 
 hexagon_grob(
@@ -133,7 +139,9 @@ hexagon_grob(
   name = NULL,
   vp = NULL,
   id = NULL,
-  role = NULL
+  role = NULL,
+  key = NULL,
+  meta = NULL
 )
 
 sector_grob(
@@ -150,7 +158,9 @@ sector_grob(
   name = NULL,
   vp = NULL,
   id = NULL,
-  role = NULL
+  role = NULL,
+  key = NULL,
+  meta = NULL
 )
 
 loop_grob(
@@ -182,7 +192,9 @@ segments_grob(
   name = NULL,
   vp = NULL,
   id = NULL,
-  role = NULL
+  role = NULL,
+  key = NULL,
+  meta = NULL
 )
 
 path_grob(
@@ -256,6 +268,18 @@ grid); \code{NULL} makes a single sub-path.}
 
 \item{role}{Optional ARIA role, emitted by the SVG backend as \verb{role=} for
 accessibility (ignored by the raster and PDF backends).}
+
+\item{key}{Optional per-element data key(s) for the batched marks
+(\code{points_grob}, \code{circle_grob}, \code{rect_grob}, \code{segments_grob}, \code{hexagon_grob},
+\code{sector_grob}), recycled to the element count like \code{fill}. Emitted by the SVG
+backend as \code{data-key} on each element and surfaced by \code{\link[=scene_model]{scene_model()}} — the
+join key a host uses to map an interaction back to a datum. \code{NULL} (default)
+emits nothing (a static render is unchanged). Ignored by raster/PDF.}
+
+\item{meta}{Optional free-form per-element metadata for the batched marks: a
+list with one entry (record) per element (recycled), e.g. tooltip text or
+field values. It never reaches the backend (nothing drawn changes); it rides
+on the scene and is returned by \code{\link[=scene_model]{scene_model()}}. \code{NULL} (default) = none.}
 
 \item{r}{Radius (\code{\link[=unit]{unit()}} or numeric).}
 

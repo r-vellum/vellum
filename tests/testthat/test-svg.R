@@ -16,6 +16,94 @@ test_that("render() writes an SVG with the expected shape elements", {
   expect_match(svg, 'stroke="#0000ff"') # blue stroke
 })
 
+test_that("scene_svg() returns the SVG as a string, matching render()", {
+  s <- vl_scene(1, 1, dpi = 100, bg = "white") |>
+    draw(rect_grob(x = 0.5, y = 0.5, width = 0.5, height = 0.5,
+                   gp = gpar(fill = "red")))
+  svg <- scene_svg(s)
+  expect_type(svg, "character")
+  expect_length(svg, 1L)
+  expect_match(svg, "^<\\?xml")
+  expect_match(svg, "<path")
+  expect_match(svg, 'fill="#ff0000"')
+  # same document as writing to a file (modulo a trailing newline, which
+  # readLines()/paste() in svg_of() drops)
+  expect_identical(sub("\n$", "", svg), svg_of(s))
+})
+
+test_that("per-element keys emit a data-key on each batched primitive", {
+  # points (circle fast path)
+  s <- vl_scene(1, 1, dpi = 100) |>
+    draw(points_grob(c(0.3, 0.6, 0.9), 0.5, size = unit(4, "mm"),
+                     gp = gpar(fill = "red"), key = c("a", "b", "c")))
+  svg <- scene_svg(s)
+  expect_match(svg, 'data-key="a"')
+  expect_match(svg, 'data-key="b"')
+  expect_match(svg, 'data-key="c"')
+
+  # rects
+  s2 <- vl_scene(1, 1, dpi = 100) |>
+    draw(rect_grob(x = c(0.3, 0.7), y = 0.5, width = 0.2, height = 0.2,
+                   gp = gpar(fill = "blue"), key = c("r1", "r2")))
+  expect_match(scene_svg(s2), 'data-key="r1"')
+  expect_match(scene_svg(s2), 'data-key="r2"')
+
+  # segments (combined path is split per-element when keyed)
+  s3 <- vl_scene(1, 1, dpi = 100) |>
+    draw(segments_grob(c(0.1, 0.5), c(0.1, 0.5), c(0.4, 0.9), c(0.4, 0.9),
+                       gp = gpar(col = "black", lwd = 2), key = c("s1", "s2")))
+  expect_match(scene_svg(s3), 'data-key="s1"')
+  expect_match(scene_svg(s3), 'data-key="s2"')
+
+  # markers (non-circle shapes)
+  s4 <- vl_scene(1, 1, dpi = 100) |>
+    draw(points_grob(c(0.3, 0.7), 0.5, shape = c("square", "triangle"),
+                     size = unit(4, "mm"), gp = gpar(fill = "green"), key = c("m1", "m2")))
+  expect_match(scene_svg(s4), 'data-key="m1"')
+  expect_match(scene_svg(s4), 'data-key="m2"')
+})
+
+test_that("keys are gated: no keys => no data-key attribute (unchanged output)", {
+  keyed <- vl_scene(1, 1, dpi = 100) |>
+    draw(points_grob(c(0.3, 0.6), 0.5, gp = gpar(fill = "red"), key = c("a", "b")))
+  keyless <- vl_scene(1, 1, dpi = 100) |>
+    draw(points_grob(c(0.3, 0.6), 0.5, gp = gpar(fill = "red")))
+  expect_match(scene_svg(keyed), "data-key")
+  expect_no_match(scene_svg(keyless), "data-key")
+})
+
+test_that("a data-key never leaks from a keyed grob onto a later keyless grob", {
+  s <- vl_scene(1, 1, dpi = 100) |>
+    draw(points_grob(0.3, 0.5, gp = gpar(fill = "red"), key = "a")) |>
+    draw(rect_grob(x = 0.7, y = 0.5, width = 0.2, height = 0.2, gp = gpar(fill = "blue")))
+  svg <- scene_svg(s)
+  # the point carries the key; the rect (drawn after) must not inherit it —
+  # i.e. every data-key in the document is ="a" (none leaked onto the rect).
+  all_keys <- regmatches(svg, gregexpr('data-key="[^"]*"', svg))[[1]]
+  expect_match(svg, 'data-key="a"')
+  expect_true(all(all_keys == 'data-key="a"'))
+})
+
+test_that("a named viewport becomes a <g data-vellum-panel> group", {
+  s <- vl_scene(1, 1, dpi = 100) |>
+    push(viewport(width = 0.8, height = 0.8, name = "panel-1-1")) |>
+    draw(rect_grob(gp = gpar(fill = "red")))
+  svg <- scene_svg(s)
+  expect_match(svg, '<g data-vellum-panel="panel-1-1">')
+})
+
+test_that("unnamed and root viewports emit no panel group (unchanged output)", {
+  # unnamed pushed viewport
+  s <- vl_scene(1, 1, dpi = 100) |>
+    push(viewport(width = 0.8, height = 0.8)) |>
+    draw(rect_grob(gp = gpar(fill = "red")))
+  expect_no_match(scene_svg(s), "data-vellum-panel")
+  # a plain scene (only the implicit "root" viewport) — never a panel group
+  s2 <- vl_scene(1, 1, dpi = 100) |>
+    draw(rect_grob(gp = gpar(fill = "red")))
+  expect_no_match(scene_svg(s2), "data-vellum-panel")
+})
+
 test_that("clipped viewports emit a clipPath and reference it", {
   s <- vl_scene(1, 1, dpi = 100) |>
     push(viewport(width = 0.5, height = 0.5, clip = TRUE)) |>
