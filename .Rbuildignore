@@ -11,3 +11,6 @@
 ^_docs$
 ^README\.Rmd$
 ^check\.log$
+^_pkgdown\.yml$
+^pkgdown$
+^docs$
