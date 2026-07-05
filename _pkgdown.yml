@@ -77,6 +77,7 @@ articles:
   contents:
   - scene-and-paint
   - retained-mode
+  - datashading
 - title: Interop
   navbar: Interop
   contents:
