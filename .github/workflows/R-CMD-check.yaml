@@ -1,9 +1,12 @@
 # Workflow derived from https://github.com/r-lib/actions/tree/v2/examples
-# Need help debugging build failures? Start at https://github.com/r-lib/actions#where-to-find-help
+# vellum bundles a Rust crate (extendr), so the `setup-rust-toolchain` step
+# provides the compiler its backend needs; everything else is the standard
+# r-lib R-CMD-check flow.
 on:
   push:
     branches: [main, master]
   pull_request:
+  workflow_dispatch:
 
 name: R-CMD-check.yaml
 
@@ -21,36 +24,32 @@ jobs:
         config:
           - {os: macos-latest,   r: 'release'}
           - {os: windows-latest, r: 'release'}
-          - {os: ubuntu-latest,   r: 'devel', http-user-agent: 'release'}
-          - {os: ubuntu-latest,   r: 'release'}
-          - {os: ubuntu-latest,   r: 'oldrel-1'}
+          - {os: ubuntu-latest,  r: 'devel', http-user-agent: 'release'}
+          - {os: ubuntu-latest,  r: 'release'}
+          - {os: ubuntu-latest,  r: 'oldrel-1'}
 
     env:
       GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
       R_KEEP_PKG_SOURCE: yes
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v4
 
-      - uses: r-lib/actions/setup-pandoc@v2
-
-      - name: Set up Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
+      # Rust compiler for vellum's backend (SystemRequirements: Cargo, rustc).
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
 
       # R on Windows uses the GNU (UCRT) toolchain, so cargo must target it.
       - name: Add Windows GNU Rust target
         if: runner.os == 'Windows'
         run: rustup target add x86_64-pc-windows-gnu
 
-      - name: Print toolchain versions
-        run: |
-          rustc --version
-          cargo --version
+      - uses: r-lib/actions/setup-pandoc@v2
 
       - uses: r-lib/actions/setup-r@v2
         with:
           r-version: ${{ matrix.config.r }}
           http-user-agent: ${{ matrix.config.http-user-agent }}
+          use-public-rspm: true
 
       - uses: r-lib/actions/setup-r-dependencies@v2
         with:

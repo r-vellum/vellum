@@ -49,15 +49,11 @@ home:
 navbar:
   structure:
     left: [intro, articles, reference, news]
-    right: [search, vellum, quill, gloss, github]
+    right: [search, quill, gloss, scriptorium, github]
   components:
     intro:
       text: Get started
       href: articles/vellum.html
-    vellum:
-      icon: fa-scroll
-      href: https://schochastics.github.io/vellum/
-      aria-label: vellum
     quill:
       icon: fa-feather-pointed
       href: https://schochastics.github.io/quill/
@@ -66,6 +62,10 @@ navbar:
       icon: fa-highlighter
       href: https://schochastics.github.io/gloss/
       aria-label: gloss
+    scriptorium:
+      icon: fa-book
+      href: https://schochastics.github.io/scriptorium/
+      aria-label: scriptorium
     github:
       icon: fa-github
       href: https://github.com/schochastics/vellum

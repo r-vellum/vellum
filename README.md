@@ -5,8 +5,7 @@
 
 <!-- badges: start -->
 
-[![Lifecycle:
-experimental](https://img.shields.io/badge/lifecycle-experimental-orange.svg)](https://lifecycle.r-lib.org/articles/stages.html#experimental)
+[![R-CMD-check](https://github.com/schochastics/vellum/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/schochastics/vellum/actions/workflows/R-CMD-check.yaml)
 <!-- badges: end -->
 
 **vellum** is a low-level graphics framework for R, in the spirit of
@@ -15,8 +14,9 @@ declarative R API; the scene graph, unit/layout engine, and rendering
 all run in Rust; and the same scene renders to **PNG, SVG, or PDF**.
 
 It is the *foundation layer* a grammar of graphics builds on, the way
-grid underlies ggplot2. It is not a plotting package itself; a
-Vega-style grammar package on top is in design.
+grid underlies ggplot2. It is not a plotting package itself; the
+[quill](https://github.com/schochastics/quill) grammar of graphics is
+built on top of it.
 
 ``` r
 library(vellum)
@@ -172,10 +172,26 @@ render(s, "out.pdf") # vector   (krilla)
 vellum sits at grid’s level of the stack: units, viewports, grobs,
 layout, and rendering, but with a Rust scene graph, multi-backend
 output, hit-testing, and a modern paint model. It is **not** a grammar
-of graphics (no scales, stats, geoms, or facets). A separate,
-Vega-leaning grammar package that compiles to vellum is in design; until
-then, `as_vellum()` / `render_grid()` let you render existing grid /
-ggplot2 / lattice output through the vellum backend.
+of graphics (no scales, stats, geoms, or facets) — that is
+[quill](https://github.com/schochastics/quill), which compiles a plot
+spec into a vellum scene. To render *existing* grid / ggplot2 / lattice
+output through the vellum backend, use `as_vellum()` / `render_grid()`.
+
+## The vellum ecosystem
+
+vellum is the backend of a small ecosystem of packages that share its
+scene model:
+
+- **[vellum](https://github.com/schochastics/vellum)** — the parchment:
+  the low-level graphics backend (this package).
+- **[quill](https://github.com/schochastics/quill)** — the pen: a
+  pipe-first grammar of graphics that compiles a plot spec into a vellum
+  scene.
+- **[gloss](https://github.com/schochastics/gloss)** — the gloss:
+  client-side interactive HTML widgets for vellum scenes and quill
+  plots.
+- **[scriptorium](https://github.com/schochastics/scriptorium)** —
+  installs and loads the whole ecosystem in one step.
 
 ## Development
 
