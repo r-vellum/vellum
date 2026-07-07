@@ -1,0 +1,223 @@
+---
+title: "The scene contract: what quill and gloss depend on"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{The scene contract: what quill and gloss depend on}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r}
+#| include: false
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  fig.width = 5,
+  fig.height = 3,
+  dpi = 96,
+  dev = "png"
+)
+library(vellum)
+```
+
+vellum is the backend for a small ecosystem: [quill](https://schochastics.github.io/quill/)
+compiles a grammar of graphics *into* a vellum scene, and
+[gloss](https://schochastics.github.io/gloss/) turns a rendered scene into an
+interactive HTML widget. Both bind to a narrow seam — `scene_model()`,
+`scene_svg()`, and the per-element metadata that rides on grobs. Because the
+three packages are version-locked and co-released, a change to that seam can
+break the layers above it silently.
+
+**This article is the authoritative description of that seam.** If you are
+building on vellum, or changing vellum's output, this is the contract to hold
+to. (It supersedes the internal design note `_docs/DESIGN-INTERACTIVITY.md`,
+which is kept only as history.)
+
+## The seam, in one picture
+
+```
+  quill  ──compiles a plot to grobs carrying──▶  key / meta / id / role
+                                                        │
+  vellum  ──renders──▶  scene_svg()   (data-key, data-vellum-*, role attrs)
+                        scene_model()  (per-element table: identity + bbox)
+                                                        │
+  gloss  ──reads scene_svg() + scene_model()──▶  hover / select / brush / link
+```
+
+Everything below the grammar is *pure metadata*: a static PNG/SVG render never
+calls `scene_model()`, and a grob without a `key`/`meta` still draws exactly as
+before. Nothing here changes what is painted.
+
+## Carrying identity on a grob
+
+The batched mark constructors — `points_grob()`, `circle_grob()`, `rect_grob()`,
+`segments_grob()`, `hexagon_grob()`, `sector_grob()` — take two optional
+per-element arguments:
+
+- `key`: a character vector of **data keys**, one per element (recycled). This
+  is the join key a host uses to tie an on-screen element back to a datum.
+- `meta`: a list of **free-form per-element records** (recycled), e.g. a tooltip
+  string or field values.
+
+Every grob also takes `id` and `role` (a single value per grob) for semantic
+identity and accessibility.
+
+```{r}
+#| label: build
+s <- vl_scene(5, 3, bg = "white") |>
+  draw(points_grob(
+    x    = c(0.25, 0.5, 0.75),
+    y    = c(0.4, 0.7, 0.4),
+    size = unit(6, "mm"),
+    gp   = gpar(fill = "#3498db", col = NA),
+    key  = c("a", "b", "c"),
+    meta = list(
+      list(tooltip = "first"),
+      list(tooltip = "second"),
+      list(tooltip = "third")
+    )
+  ))
+s
+```
+
+(Each batched grob carries one graphical style; the grammar layer above vellum
+emits one grob per style bucket, so a scatter with three colours is three
+`points_grob()`s. The `key`/`meta` machinery is per element regardless.)
+
+## `scene_model()` — the per-element table
+
+`scene_model()` walks the rendered scene and returns a list of **two data
+frames**.
+
+```{r}
+#| label: model
+m <- scene_model(s)
+names(m)
+```
+
+### `elements`
+
+One row per drawn element of the *keyable* marks, **in paint order**:
+
+```{r}
+#| label: elements
+str(m$elements)
+```
+
+The columns are the contract:
+
+| column | type | meaning |
+|---|---|---|
+| `key` | character | the data key (`NA` if the element was drawn without one) |
+| `mark` | character | the mark kind (see vocabulary below) |
+| `id` | character | the grob `id` (`NA` if unset) |
+| `name` | character | the grob `name` (`NA` if unset) |
+| `panel` | character | the enclosing named panel (`NA` if none) |
+| `x0, y0, x1, y1` | numeric | device-pixel bounding box |
+| `x, y` | numeric | element centre, `(x0+x1)/2, (y0+y1)/2` |
+| `w, h` | numeric | element size, `x1-x0, y1-y0` |
+| `meta` | list | the free-form per-element record (list-column) |
+
+The `mark` vocabulary is a closed set:
+`rect`, `point`, `circle`, `hexagon`, `sector`, `segment`, `path`, `line`,
+`polygon`.
+
+Two families produce these rows:
+
+- **Batched marks** (`rect`, `point`, `circle`, `hexagon`, `sector`, `segment`)
+  emit **one row per element, always** — even when unkeyed (then `key` is `NA`).
+- **Single-shape marks** (`path`, `line`, `polygon`) emit **one row per grob, and
+  only when keyed**. An unkeyed path/line/polygon is geometry-only and does not
+  appear in the table. (A single `sf` feature — one polygon or linestring — is
+  exactly one such element.) These constructors do not take a `key` argument; the
+  grammar keys them by setting the grob's `keys` slot, which is how a single sf
+  feature becomes addressable.
+
+### `panels`
+
+One row per **named panel** (a named viewport becomes an addressable panel), with
+the bounding box of that panel's elements:
+
+```{r}
+#| label: panels
+str(m$panels)
+```
+
+Columns: `name`, `x0`, `y0`, `x1`, `y1`.
+
+### The `meta` key vocabulary
+
+vellum treats `meta` as opaque: it is a free-form list, recycled to the element
+count and carried through untouched — vellum does **not** name or validate its
+keys. The following key names are **conventions** the grammar (quill) writes and
+the widget (gloss) reads. Documenting them here keeps the three layers in step;
+they are not enforced by vellum.
+
+| `meta` key | written by | read by | purpose |
+|---|---|---|---|
+| `tooltip` | quill `tooltip=` | gloss | hover tooltip text (falls back to `key`) |
+| `data_id` | quill `data_id=` | (becomes the `key`) | the data key for an element |
+| `hover_group` | quill `hover_group=` | gloss | co-highlight a group on hover |
+| `hover_color` | quill mark aesthetic | gloss | per-element hover outline colour |
+| `selected_color` | quill mark aesthetic | gloss | per-element selection colour |
+| `legend` | quill legend keying | gloss | the series a mark belongs to |
+| `legend_for` | quill legend keying | gloss | the series a legend swatch drives (`"<aes>:<level>"`) |
+
+If you add a convention, add it here.
+
+## `scene_svg()` — the emitted attributes
+
+`scene_svg()` returns the same scene as an SVG string. Interactivity rides on SVG
+attributes; the raster and PDF backends ignore all of them.
+
+```{r}
+#| label: svg
+svg <- scene_svg(s)
+# the data-key attributes on the three points:
+regmatches(svg, gregexpr('data-key="[^"]*"', svg))[[1]]
+```
+
+Four attribute mechanisms, each emitted only when its source is set:
+
+| attribute | source | scope | set from |
+|---|---|---|---|
+| `data-key` | grob `key` | per element | `points_grob(key=)` etc. |
+| `data-vellum-id` | grob `id` | per grob/node | `*_grob(id=)` |
+| `data-vellum-name` | grob `name` | per grob/node | `*_grob(name=)` |
+| `role` | grob `role` | per grob/node | `*_grob(role=)` |
+| `data-vellum-panel` | named viewport | wrapping `<g>` | `viewport(name=)` |
+
+An empty/`NULL` source emits **no attribute**, so a scene that declares no
+interactivity is byte-for-byte identical to one built before any of this existed.
+
+## Invariants the contract guarantees
+
+These are the properties quill and gloss are entitled to rely on, and that
+vellum's own tests (`tests/testthat/test-contract.R`) pin down:
+
+1. **Paint order.** `scene_model()$elements` is in draw order, and the SVG emits
+   elements in the same order. A host can zip the SVG DOM and the table
+   positionally.
+2. **Semantic/geometry agreement.** `scene_model()` builds the identity columns
+   from the R grob tree and the geometry columns from the compiled backend, then
+   asserts they enumerate the same elements: the element counts must match and
+   the `key` column must be identical at every position. A mismatch is a hard
+   error (a compiler bug), never a silent mis-join.
+3. **Additivity.** `key`/`meta`/`id`/`role` never change what is drawn. A render
+   with no keys is identical to the same scene without the machinery, on every
+   backend.
+4. **Stable `id` join key.** A grob's `id` surfaces as `data-vellum-id` in the
+   SVG *and* is the join key quill records in its provenance table, so a widget
+   can map an SVG node to the grammar record that produced it.
+
+## For contributors
+
+If you change any of the following, update this article and the contract tests
+in the same commit, and expect to co-release quill and gloss:
+
+- the `elements`/`panels` column set or types,
+- the `mark` vocabulary,
+- which marks are keyable, or the batched-vs-single-shape rule,
+- the SVG attribute names, or when they are emitted,
+- the reserved `meta` key vocabulary.
+```

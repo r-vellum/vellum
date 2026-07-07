@@ -83,6 +83,10 @@ articles:
   contents:
   - coming-from-grid
   - grid-interop
+- title: The ecosystem contract
+  navbar: Contract
+  contents:
+  - scene-contract
 
 reference:
 - title: Building & rendering scenes

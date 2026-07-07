@@ -2,6 +2,8 @@
 ^\.vscode$
 ^src/\.cargo$
 ^src/rust/vendor$
+^tools/vendor\.sh$
+^tools/UPGRADING-crates\.md$
 ^src/rust/target$
 ^src/Makevars$
 ^src/Makevars\.win$
