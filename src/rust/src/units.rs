@@ -12,7 +12,7 @@ use tiny_skia::Transform;
 /// Coordinate systems supported for primitive coordinates (M1/M2). The flexible
 /// `null` unit lives only in layout track sizes, not here.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Unit {
+pub enum UnitKind {
     /// Normalised parent coordinates: 0 = bottom/left, 1 = top/right.
     Npc,
     /// User coordinates relative to the viewport's `xscale`/`yscale`.
@@ -22,40 +22,73 @@ pub enum Unit {
     Pt,
 }
 
+/// A coordinate unit: a base coordinate system plus an optional absolute offset
+/// in millimetres — the compound `native + mm` / `npc + mm` unit (B1). The base
+/// resolves against the viewport; the offset is added as a device length, so a
+/// data or panel anchor can be nudged by an exact physical distance regardless
+/// of the scale or aspect. `off_mm == 0.0` is the ordinary single-code unit.
+#[derive(Clone, Copy, Debug)]
+pub struct Unit {
+    pub kind: UnitKind,
+    pub off_mm: f64,
+}
+
+/// Decode an integer base-unit code from R (npc=0, native=1, mm=2, in=3, pt=4).
+/// These codes are part of the R<->Rust ABI and MUST match `.unit_codes` in
+/// `R/unit.R`. Unknown codes fall back to npc.
+fn kind_from_code(code: i32) -> UnitKind {
+    match code {
+        1 => UnitKind::Native,
+        2 => UnitKind::Mm,
+        3 => UnitKind::Inch,
+        4 => UnitKind::Pt,
+        _ => UnitKind::Npc,
+    }
+}
+
+/// Length of one absolute base unit in device pixels, if the base is absolute.
+fn abs_px(kind: UnitKind, value: f64, dpi: f64) -> Option<f64> {
+    match kind {
+        UnitKind::Mm => Some(value / 25.4 * dpi),
+        UnitKind::Inch => Some(value * dpi),
+        UnitKind::Pt => Some(value / 72.0 * dpi),
+        _ => None,
+    }
+}
+
 impl Unit {
-    /// Parse a unit string. Unknown strings fall back to `Npc`; callers validate
-    /// on the R side, so this is only a safety net.
+    /// A unit with no absolute offset (the ordinary single-code case).
+    pub const fn plain(kind: UnitKind) -> Unit {
+        Unit { kind, off_mm: 0.0 }
+    }
+
+    /// Parse a unit string (base only; an offset is not encodable in a string).
+    /// Unknown strings fall back to `Npc`; callers validate on the R side, so
+    /// this is only a safety net.
     pub fn parse(s: &str) -> Unit {
-        match s {
-            "native" => Unit::Native,
-            "mm" => Unit::Mm,
-            "in" | "inch" | "inches" => Unit::Inch,
-            "pt" | "points" => Unit::Pt,
-            _ => Unit::Npc,
-        }
+        let kind = match s {
+            "native" => UnitKind::Native,
+            "mm" => UnitKind::Mm,
+            "in" | "inch" | "inches" => UnitKind::Inch,
+            "pt" | "points" => UnitKind::Pt,
+            _ => UnitKind::Npc,
+        };
+        Unit::plain(kind)
     }
 
-    /// Decode an integer unit code from R. These codes are part of the R<->Rust
-    /// ABI and MUST match `.unit_codes` in `R/unit.R`
-    /// (npc=0, native=1, mm=2, in=3, pt=4). Unknown codes fall back to npc.
+    /// Decode an integer base code from R, with no offset.
     pub fn from_code(code: i32) -> Unit {
-        match code {
-            1 => Unit::Native,
-            2 => Unit::Mm,
-            3 => Unit::Inch,
-            4 => Unit::Pt,
-            _ => Unit::Npc,
-        }
+        Unit::plain(kind_from_code(code))
     }
 
-    /// Length of one absolute unit in device pixels, if this unit is absolute.
-    fn abs_px(self, value: f64, dpi: f64) -> Option<f64> {
-        match self {
-            Unit::Mm => Some(value / 25.4 * dpi),
-            Unit::Inch => Some(value * dpi),
-            Unit::Pt => Some(value / 72.0 * dpi),
-            _ => None,
-        }
+    /// Decode a base code plus an absolute mm offset — the compound-unit ABI.
+    pub fn from_code_off(code: i32, off_mm: f64) -> Unit {
+        Unit { kind: kind_from_code(code), off_mm }
+    }
+
+    /// This unit's absolute offset in device pixels.
+    fn off_px(self, dpi: f64) -> f64 {
+        self.off_mm / 25.4 * dpi
     }
 }
 
@@ -73,61 +106,78 @@ pub struct Vp {
 }
 
 impl Vp {
+    // The `*_base` helpers resolve the base code with no offset; the public
+    // resolvers add the unit's absolute mm offset (`off_px`) exactly once, so a
+    // compound `native + mm` lands `off_mm` past its data/panel anchor. Every
+    // caller passes a `Unit`, so the offset rides through unchanged.
+
+    fn x_len_base(&self, value: f64, kind: UnitKind) -> f64 {
+        if let Some(px) = abs_px(kind, value, self.dpi) {
+            return px;
+        }
+        match kind {
+            UnitKind::Npc => value * self.w,
+            UnitKind::Native => value / span(self.xscale) * self.w,
+            _ => unreachable!("absolute handled above"),
+        }
+    }
+
+    fn y_len_base(&self, value: f64, kind: UnitKind) -> f64 {
+        if let Some(px) = abs_px(kind, value, self.dpi) {
+            return px;
+        }
+        match kind {
+            UnitKind::Npc => value * self.h,
+            UnitKind::Native => value / span(self.yscale) * self.h,
+            _ => unreachable!("absolute handled above"),
+        }
+    }
+
     /// X position in local pixels (from the left edge). For `native` this
     /// accounts for the scale's origin; for npc/absolute, position == length.
     pub fn x_pos(&self, value: f64, u: Unit) -> f64 {
-        match u {
-            Unit::Native => (value - self.xscale.0) / span(self.xscale) * self.w,
-            _ => self.x_len(value, u),
-        }
+        let base = match u.kind {
+            UnitKind::Native => (value - self.xscale.0) / span(self.xscale) * self.w,
+            _ => self.x_len_base(value, u.kind),
+        };
+        base + u.off_px(self.dpi)
     }
 
     /// Y position in local pixels (flips R's bottom-left convention into the
     /// local top-left frame). For `native` this accounts for the scale origin.
+    /// A positive mm offset moves *up* (R's y-up), so it is added before the flip.
     pub fn y_pos(&self, value: f64, u: Unit) -> f64 {
-        let from_bottom = match u {
-            Unit::Native => (value - self.yscale.0) / span(self.yscale) * self.h,
-            _ => self.y_len(value, u),
+        let from_bottom = match u.kind {
+            UnitKind::Native => (value - self.yscale.0) / span(self.yscale) * self.h,
+            _ => self.y_len_base(value, u.kind),
         };
-        self.h - from_bottom
+        self.h - (from_bottom + u.off_px(self.dpi))
     }
 
     /// Horizontal length in local pixels.
     pub fn x_len(&self, value: f64, u: Unit) -> f64 {
-        if let Some(px) = u.abs_px(value, self.dpi) {
-            return px;
-        }
-        match u {
-            Unit::Npc => value * self.w,
-            Unit::Native => value / span(self.xscale) * self.w,
-            _ => unreachable!("absolute handled above"),
-        }
+        self.x_len_base(value, u.kind) + u.off_px(self.dpi)
     }
 
     /// Vertical length in local pixels.
     pub fn y_len(&self, value: f64, u: Unit) -> f64 {
-        if let Some(px) = u.abs_px(value, self.dpi) {
-            return px;
-        }
-        match u {
-            Unit::Npc => value * self.h,
-            Unit::Native => value / span(self.yscale) * self.h,
-            _ => unreachable!("absolute handled above"),
-        }
+        self.y_len_base(value, u.kind) + u.off_px(self.dpi)
     }
 
     /// Radius-like length: npc is taken against the smaller viewport dimension
     /// (snpc-style) so circles stay round; native uses the x scale. Kept as a
     /// single-unit resolver — radii must not be split per axis.
     pub fn r_len(&self, value: f64, u: Unit) -> f64 {
-        if let Some(px) = u.abs_px(value, self.dpi) {
-            return px;
-        }
-        match u {
-            Unit::Npc => value * self.w.min(self.h),
-            Unit::Native => value / span(self.xscale) * self.w,
-            _ => unreachable!("absolute handled above"),
-        }
+        let base = if let Some(px) = abs_px(u.kind, value, self.dpi) {
+            px
+        } else {
+            match u.kind {
+                UnitKind::Npc => value * self.w.min(self.h),
+                UnitKind::Native => value / span(self.xscale) * self.w,
+                _ => unreachable!("absolute handled above"),
+            }
+        };
+        base + u.off_px(self.dpi)
     }
 }
 

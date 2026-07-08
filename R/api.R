@@ -689,7 +689,8 @@ S7::method(compile, grob_rect) <- function(node, scene) {
     sk <- .encode_sketch(node@sketch)
     # One batched call (one shared gpar) instead of a per-element FFI loop.
     scene$rects(ex$value, ey$value, ew$value, eh$value,
-                ex$code, ey$code, ew$code, eh$code, g$fill, g$col, g$lwd, g$alpha, g$stroke,
+                ex$code, ex$offset, ey$code, ey$offset, ew$code, ew$offset, eh$code, eh$offset,
+                g$fill, g$col, g$lwd, g$alpha, g$stroke,
                 sk$roughness, sk$bowing, sk$fill_style, sk$fill_weight, sk$hachure_angle,
                 sk$hachure_gap, sk$curve_tightness, sk$disable_multi, sk$preserve, sk$seed,
                 .keys_vec(node, n))
@@ -707,7 +708,8 @@ S7::method(compile, grob_roundrect) <- function(node, scene) {
     # Rounded rects are typically few (keys/labels); one FFI call each, shared gpar.
     for (i in seq_len(n)) {
       scene$roundrect(ex$value[i], ey$value[i], ew$value[i], eh$value[i], er$value[i],
-                      ex$code[i], ey$code[i], ew$code[i], eh$code[i], er$code[i],
+                      ex$code[i], ex$offset[i], ey$code[i], ey$offset[i], ew$code[i], ew$offset[i],
+                      eh$code[i], eh$offset[i], er$code[i], er$offset[i],
                       g$fill, g$col, g$lwd, g$alpha, g$stroke,
                       sk$roughness, sk$bowing, sk$fill_style, sk$fill_weight, sk$hachure_angle,
                       sk$hachure_gap, sk$curve_tightness, sk$disable_multi, sk$preserve, sk$seed)
@@ -722,7 +724,7 @@ S7::method(compile, grob_lines) <- function(node, scene) {
     sc <- .encode_cap(node@start_cap); ec <- .encode_cap(node@end_cap)
     of <- .encode_cap(node@offset)
     sk <- .encode_sketch(node@sketch)
-    scene$lines(ex$value, ey$value, ex$code, ey$code,
+    scene$lines(ex$value, ey$value, ex$code, ex$offset, ey$code, ey$offset,
                 sc$value, ec$value, sc$code, ec$code, of$value, of$code,
                 g$col, g$lwd, g$alpha, g$stroke,
                 a$angle, a$len, a$ends, a$closed,
@@ -736,7 +738,7 @@ S7::method(compile, grob_polygon) <- function(node, scene) {
   .with_vp(node, scene, {
     ex <- .coord(node@x); ey <- .coord(node@y); g <- .gp4(node@gp, scene)
     sk <- .encode_sketch(node@sketch)
-    scene$polygon(ex$value, ey$value, ex$code, ey$code, g$fill, g$col, g$lwd, g$alpha, g$stroke,
+    scene$polygon(ex$value, ey$value, ex$code, ex$offset, ey$code, ey$offset, g$fill, g$col, g$lwd, g$alpha, g$stroke,
                   sk$roughness, sk$bowing, sk$fill_style, sk$fill_weight, sk$hachure_angle,
                   sk$hachure_gap, sk$curve_tightness, sk$disable_multi, sk$preserve, sk$seed,
                   .key1(node))
@@ -752,7 +754,7 @@ S7::method(compile, grob_polygon) <- function(node, scene) {
     er <- .coord(radius, rdefault, n)
     g <- .gp4(node@gp, scene)
     sk <- .encode_sketch(sketch)
-    scene$circles(ex$value, ey$value, er$value, ex$code, ey$code, er$code,
+    scene$circles(ex$value, ey$value, er$value, ex$code, ex$offset, ey$code, ey$offset, er$code, er$offset,
                   g$fill, g$col, g$lwd, g$alpha, g$stroke,
                   sk$roughness, sk$bowing, sk$fill_style, sk$fill_weight, sk$hachure_angle,
                   sk$hachure_gap, sk$curve_tightness, sk$disable_multi, sk$preserve, sk$seed,
@@ -776,7 +778,7 @@ S7::method(compile, grob_points) <- function(node, scene) {
       ex <- .coord(node@x, "npc", n); ey <- .coord(node@y, "npc", n); es <- .coord(node@size, "mm", n)
       g <- .gp4(node@gp, scene)
       sk <- .encode_sketch(node@sketch)
-      scene$markers(ex$value, ey$value, es$value, ex$code, ey$code, es$code,
+      scene$markers(ex$value, ey$value, es$value, ex$code, ex$offset, ey$code, ey$offset, es$code, es$offset,
                     vctrs::vec_recycle(as.integer(codes), n),
                     g$fill, g$col, g$lwd, g$alpha, g$stroke,
                     sk$roughness, sk$bowing, sk$fill_style, sk$fill_weight, sk$hachure_angle,
@@ -796,8 +798,8 @@ S7::method(compile, grob_hexagon) <- function(node, scene) {
     if (!is.null(node@width)) {
       ew <- .coord(node@width, "native", n); eh <- .coord(node@height, "native", n)
     } else {
-      ew <- list(value = numeric(0), code = integer(0))
-      eh <- list(value = numeric(0), code = integer(0))
+      ew <- list(value = numeric(0), code = integer(0), offset = numeric(0))
+      eh <- list(value = numeric(0), code = integer(0), offset = numeric(0))
     }
     # Per-hex fill: the binned-count colour mesh. Falls back to gp$fill, then
     # transparent. col2rgb(alpha=TRUE) flattens column-major -> per-hex RGBA
@@ -814,7 +816,8 @@ S7::method(compile, grob_hexagon) <- function(node, scene) {
     frgba <- as.integer(m)
     g <- .gp4(node@gp, scene)
     scene$hexagons(ex$value, ey$value, es$value, ew$value, eh$value,
-                   ex$code, ey$code, es$code, ew$code, eh$code,
+                   ex$code, ex$offset, ey$code, ey$offset, es$code, es$offset,
+                   ew$code, ew$offset, eh$code, eh$offset,
                    frgba, identical(node@orientation, "flat"),
                    g$col, g$lwd, g$alpha, g$stroke,
                    .keys_vec(node, n))
@@ -843,7 +846,7 @@ S7::method(compile, grob_sector) <- function(node, scene) {
     a <- .encode_arrow(node@arrow)
     sk <- .encode_sketch(node@sketch)
     scene$sectors(ex$value, ey$value, er0$value, er1$value, th0, th1,
-                  ex$code, ey$code, er0$code, er1$code, frgba,
+                  ex$code, ex$offset, ey$code, ey$offset, er0$code, er0$offset, er1$code, er1$offset, frgba,
                   g$col, g$lwd, g$alpha, g$stroke,
                   a$angle, a$len, a$ends, a$closed,
                   sk$roughness, sk$bowing, sk$fill_style, sk$fill_weight, sk$hachure_angle,
@@ -862,7 +865,7 @@ S7::method(compile, grob_loop) <- function(node, scene) {
     g <- .gp4(node@gp, scene)
     a <- .encode_arrow(node@arrow)
     scene$add_loop(ex$value, ey$value, es$value, ef$value, ang, wid,
-                   ex$code, ey$code, es$code, ef$code,
+                   ex$code, ex$offset, ey$code, ey$offset, es$code, es$offset, ef$code, ef$offset,
                    g$col, g$lwd, g$alpha, g$stroke,
                    a$angle, a$len, a$ends, a$closed)
   })
@@ -879,7 +882,7 @@ S7::method(compile, grob_segments) <- function(node, scene) {
     of <- .encode_cap(node@offset)
     sk <- .encode_sketch(node@sketch)
     scene$segments(e0x$value, e0y$value, e1x$value, e1y$value,
-                   e0x$code, e0y$code, e1x$code, e1y$code,
+                   e0x$code, e0x$offset, e0y$code, e0y$offset, e1x$code, e1x$offset, e1y$code, e1y$offset,
                    sc$value, ec$value, sc$code, ec$code, of$value, of$code,
                    g$col, g$lwd, g$alpha, g$stroke,
                    a$angle, a$len, a$ends, a$closed,
@@ -895,7 +898,7 @@ S7::method(compile, grob_path) <- function(node, scene) {
     ex <- .coord(node@x, "native", n); ey <- .coord(node@y, "native", n)
     g <- .gp4(node@gp, scene)
     sk <- .encode_sketch(node@sketch)
-    scene$path(ex$value, ey$value, ex$code, ey$code, as.integer(node@nper),
+    scene$path(ex$value, ey$value, ex$code, ex$offset, ey$code, ey$offset, as.integer(node@nper),
                identical(node@rule, "evenodd"), g$fill, g$col, g$lwd, g$alpha, g$stroke,
                sk$roughness, sk$bowing, sk$fill_style, sk$fill_weight, sk$hachure_angle,
                sk$hachure_gap, sk$curve_tightness, sk$disable_multi, sk$preserve, sk$seed,
@@ -909,7 +912,8 @@ S7::method(compile, grob_raster) <- function(node, scene) {
     ew <- .coord(node@width, "npc", 1); eh <- .coord(node@height, "npc", 1)
     scene$image(node@rgba, node@iw, node@ih,
                 ex$value, ey$value, ew$value, eh$value,
-                ex$code, ey$code, ew$code, eh$code, isTRUE(node@interpolate))
+                ex$code, ex$offset, ey$code, ey$offset, ew$code, ew$offset, eh$code, eh$offset,
+                isTRUE(node@interpolate))
   })
 }
 
@@ -1238,7 +1242,8 @@ edit_node <- function(scene, name, ...) {
   clip_grob <- if (S7::S7_inherits(vp@clip, grob)) vp@clip else NULL
   clip_flag <- if (is.null(clip_grob)) isTRUE(vp@clip) else TRUE
   vid <- scene$push_viewport(
-    cx$value, cy$value, cw$value, ch$value, cx$code, cy$code, cw$code, ch$code,
+    cx$value, cy$value, cw$value, ch$value,
+    cx$code, cx$offset, cy$code, cy$offset, cw$code, cw$offset, ch$code, ch$offset,
     as.numeric(vp@xscale), as.numeric(vp@yscale), vp@angle, clip_flag,
     lrow, lcol, vp@rowspan, vp@colspan,
     .encode_paint(vp@gp@fill, scene), .rs_col_inh(vp@gp@col), .rs_num_inh(vp@gp@lwd), .rs_num_inh(vp@gp@alpha),
@@ -1252,7 +1257,7 @@ edit_node <- function(scene, name, ...) {
   }
   if (!is.null(clip_grob)) {
     cp <- .clip_path_of(clip_grob)
-    scene$set_clip_path(cp$x, cp$y, cp$xcode, cp$ycode, cp$nper, cp$evenodd)
+    scene$set_clip_path(cp$x, cp$y, cp$xcode, cp$xoff, cp$ycode, cp$yoff, cp$nper, cp$evenodd)
   }
   if (!is.null(vp@layout)) .set_layout(scene, vp@layout)
 }
@@ -1262,12 +1267,14 @@ edit_node <- function(scene, name, ...) {
 .clip_path_of <- function(g) {
   if (S7::S7_inherits(g, grob_path)) {
     ex <- .coord(g@x, "native"); ey <- .coord(g@y, "native")
-    list(x = ex$value, y = ey$value, xcode = ex$code, ycode = ey$code,
+    list(x = ex$value, y = ey$value, xcode = ex$code, xoff = ex$offset,
+         ycode = ey$code, yoff = ey$offset,
          nper = as.integer(g@nper), evenodd = identical(g@rule, "evenodd"))
   } else if (S7::S7_inherits(g, grob_polygon)) {
     n <- vctrs::vec_size_common(g@x, g@y)
     ex <- .coord(g@x, "native", n); ey <- .coord(g@y, "native", n)
-    list(x = ex$value, y = ey$value, xcode = ex$code, ycode = ey$code,
+    list(x = ex$value, y = ey$value, xcode = ex$code, xoff = ex$offset,
+         ycode = ey$code, yoff = ey$offset,
          nper = as.integer(n), evenodd = FALSE)
   } else {
     cli::cli_abort("A viewport {.arg clip} grob must be a {.fn polygon_grob} or {.fn path_grob}.")

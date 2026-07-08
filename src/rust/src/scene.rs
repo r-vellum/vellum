@@ -119,7 +119,7 @@ pub fn subraster_stats() -> Vec<i64> {
     let len = SUBRASTER_CACHE.with(|c| c.borrow().len()) as i64;
     vec![h, m, len]
 }
-use crate::units::{rotation_about, Unit, Vp};
+use crate::units::{rotation_about, Unit, UnitKind, Vp};
 
 // --- layout ----------------------------------------------------------------
 
@@ -141,11 +141,11 @@ struct Layout {
 
 /// Pixel extent of one absolute track within `total` parent pixels.
 fn track_abs_px(value: f64, u: Unit, total: f64, dpi: f64) -> f64 {
-    match u {
-        Unit::Npc | Unit::Native => value * total,
-        Unit::Mm => value / 25.4 * dpi,
-        Unit::Inch => value * dpi,
-        Unit::Pt => value / 72.0 * dpi,
+    match u.kind {
+        UnitKind::Npc | UnitKind::Native => value * total,
+        UnitKind::Mm => value / 25.4 * dpi,
+        UnitKind::Inch => value * dpi,
+        UnitKind::Pt => value / 72.0 * dpi,
     }
 }
 
@@ -627,10 +627,10 @@ impl Scene {
                 cy: 0.5,
                 w: 1.0,
                 h: 1.0,
-                cxu: Unit::Npc,
-                cyu: Unit::Npc,
-                wu: Unit::Npc,
-                hu: Unit::Npc,
+                cxu: Unit::plain(UnitKind::Npc),
+                cyu: Unit::plain(UnitKind::Npc),
+                wu: Unit::plain(UnitKind::Npc),
+                hu: Unit::plain(UnitKind::Npc),
             },
             xscale: (0.0, 1.0),
             yscale: (0.0, 1.0),
@@ -698,9 +698,13 @@ impl Scene {
         w: f64,
         h: f64,
         cxu: i32,
+        cxoff: f64,
         cyu: i32,
+        cyoff: f64,
         wu: i32,
+        woff: f64,
         hu: i32,
+        hoff: f64,
         xscale: &[f64],
         yscale: &[f64],
         angle: f64,
@@ -728,10 +732,10 @@ impl Scene {
                 cy,
                 w,
                 h,
-                cxu: Unit::from_code(cxu),
-                cyu: Unit::from_code(cyu),
-                wu: Unit::from_code(wu),
-                hu: Unit::from_code(hu),
+                cxu: Unit::from_code_off(cxu, cxoff),
+                cyu: Unit::from_code_off(cyu, cyoff),
+                wu: Unit::from_code_off(wu, woff),
+                hu: Unit::from_code_off(hu, hoff),
             }
         };
         let id = self.viewports.len();
@@ -754,9 +758,9 @@ impl Scene {
 
     /// Attach an arbitrary clip path (in the current viewport's coordinates) to
     /// the current viewport; `nper` gives the point count of each closed sub-path.
-    fn set_clip_path(&mut self, x: &[f64], y: &[f64], xu: &[i32], yu: &[i32], nper: &[i32], evenodd: bool) {
+    fn set_clip_path(&mut self, x: &[f64], y: &[f64], xu: &[i32], xoff: &[f64], yu: &[i32], yoff: &[f64], nper: &[i32], evenodd: bool) {
         let spec = ClipPathSpec {
-            x: x.to_vec(), y: y.to_vec(), xu: codes(xu), yu: codes(yu),
+            x: x.to_vec(), y: y.to_vec(), xu: codes_off(xu, xoff), yu: codes_off(yu, yoff),
             nper: nper.iter().map(|&v| v.max(0) as usize).collect(),
             evenodd,
         };
@@ -789,23 +793,23 @@ impl Scene {
     }
 
     #[allow(clippy::too_many_arguments)]
-    fn rect(&mut self, x: f64, y: f64, w: f64, h: f64, xu: i32, yu: i32, wu: i32, hu: i32, fill: Robj, col: Robj, lwd: Robj, alpha: Robj, stroke: Robj) {
+    fn rect(&mut self, x: f64, y: f64, w: f64, h: f64, xu: i32, xoff: f64, yu: i32, yoff: f64, wu: i32, woff: f64, hu: i32, hoff: f64, fill: Robj, col: Robj, lwd: Robj, alpha: Robj, stroke: Robj) {
         let gp = PartialGpar::from_robj(&fill, &col, &lwd, &alpha, &stroke);
         self.emit_node(Node::Rect {
             x,
             y,
             w,
             h,
-            xu: Unit::from_code(xu),
-            yu: Unit::from_code(yu),
-            wu: Unit::from_code(wu),
-            hu: Unit::from_code(hu),
+            xu: Unit::from_code_off(xu, xoff),
+            yu: Unit::from_code_off(yu, yoff),
+            wu: Unit::from_code_off(wu, woff),
+            hu: Unit::from_code_off(hu, hoff),
             gp,
         });
     }
 
     #[allow(clippy::too_many_arguments)]
-    fn roundrect(&mut self, x: f64, y: f64, w: f64, h: f64, r: f64, xu: i32, yu: i32, wu: i32, hu: i32, ru: i32, fill: Robj, col: Robj, lwd: Robj, alpha: Robj, stroke: Robj,
+    fn roundrect(&mut self, x: f64, y: f64, w: f64, h: f64, r: f64, xu: i32, xoff: f64, yu: i32, yoff: f64, wu: i32, woff: f64, hu: i32, hoff: f64, ru: i32, roff: f64, fill: Robj, col: Robj, lwd: Robj, alpha: Robj, stroke: Robj,
         sroughness: f64, sbowing: f64, sfill_style: i32, sfill_weight: f64,
         shachure_angle: f64, shachure_gap: f64, scurve_tightness: f64,
         sdisable_multi: bool, spreserve: bool, sseed: f64,
@@ -821,11 +825,11 @@ impl Scene {
             w,
             h,
             r,
-            xu: Unit::from_code(xu),
-            yu: Unit::from_code(yu),
-            wu: Unit::from_code(wu),
-            hu: Unit::from_code(hu),
-            ru: Unit::from_code(ru),
+            xu: Unit::from_code_off(xu, xoff),
+            yu: Unit::from_code_off(yu, yoff),
+            wu: Unit::from_code_off(wu, woff),
+            hu: Unit::from_code_off(hu, hoff),
+            ru: Unit::from_code_off(ru, roff),
             sketch,
             gp,
         });
@@ -834,7 +838,7 @@ impl Scene {
     #[allow(clippy::too_many_arguments)]
     #[allow(clippy::too_many_arguments)]
     fn lines(
-        &mut self, x: &[f64], y: &[f64], xu: &[i32], yu: &[i32],
+        &mut self, x: &[f64], y: &[f64], xu: &[i32], xoff: &[f64], yu: &[i32], yoff: &[f64],
         scap: &[f64], ecap: &[f64], scapu: &[i32], ecapu: &[i32],
         off: &[f64], offu: &[i32],
         col: Robj, lwd: Robj, alpha: Robj, stroke: Robj,
@@ -850,7 +854,7 @@ impl Scene {
             shachure_gap, scurve_tightness, sdisable_multi, spreserve, sseed,
         );
         self.emit_node(Node::Lines {
-            x: x.to_vec(), y: y.to_vec(), xu: codes(xu), yu: codes(yu),
+            x: x.to_vec(), y: y.to_vec(), xu: codes_off(xu, xoff), yu: codes_off(yu, yoff),
             scap: cap_scalar(scap, scapu), ecap: cap_scalar(ecap, ecapu),
             off: cap_scalar(off, offu),
             arrow: arrow_from(aangle, alen, aends, aclosed), sketch, gp,
@@ -861,7 +865,7 @@ impl Scene {
     #[allow(clippy::too_many_arguments)]
     #[allow(clippy::too_many_arguments)]
     fn polygon(
-        &mut self, x: &[f64], y: &[f64], xu: &[i32], yu: &[i32],
+        &mut self, x: &[f64], y: &[f64], xu: &[i32], xoff: &[f64], yu: &[i32], yoff: &[f64],
         fill: Robj, col: Robj, lwd: Robj, alpha: Robj, stroke: Robj,
         sroughness: f64, sbowing: f64, sfill_style: i32, sfill_weight: f64,
         shachure_angle: f64, shachure_gap: f64, scurve_tightness: f64,
@@ -873,13 +877,13 @@ impl Scene {
             sroughness, sbowing, sfill_style, sfill_weight, shachure_angle,
             shachure_gap, scurve_tightness, sdisable_multi, spreserve, sseed,
         );
-        self.emit_node(Node::Polygon { x: x.to_vec(), y: y.to_vec(), xu: codes(xu), yu: codes(yu), sketch, gp, key: opt_key(key) });
+        self.emit_node(Node::Polygon { x: x.to_vec(), y: y.to_vec(), xu: codes_off(xu, xoff), yu: codes_off(yu, yoff), sketch, gp, key: opt_key(key) });
     }
 
     #[allow(clippy::too_many_arguments)]
-    fn circle(&mut self, x: f64, y: f64, r: f64, xu: i32, yu: i32, ru: i32, fill: Robj, col: Robj, lwd: Robj, alpha: Robj, stroke: Robj) {
+    fn circle(&mut self, x: f64, y: f64, r: f64, xu: i32, xoff: f64, yu: i32, yoff: f64, ru: i32, roff: f64, fill: Robj, col: Robj, lwd: Robj, alpha: Robj, stroke: Robj) {
         let gp = PartialGpar::from_robj(&fill, &col, &lwd, &alpha, &stroke);
-        self.emit_node(Node::Circle { x, y, r, xu: Unit::from_code(xu), yu: Unit::from_code(yu), ru: Unit::from_code(ru), sketch: None, gp });
+        self.emit_node(Node::Circle { x, y, r, xu: Unit::from_code_off(xu, xoff), yu: Unit::from_code_off(yu, yoff), ru: Unit::from_code_off(ru, roff), sketch: None, gp });
     }
 
     /// A whole batch of rectangles in one call, sharing one gpar. Coordinates and
@@ -887,7 +891,7 @@ impl Scene {
     #[allow(clippy::too_many_arguments)]
     fn rects(
         &mut self, x: &[f64], y: &[f64], w: &[f64], h: &[f64],
-        xu: &[i32], yu: &[i32], wu: &[i32], hu: &[i32],
+        xu: &[i32], xoff: &[f64], yu: &[i32], yoff: &[f64], wu: &[i32], woff: &[f64], hu: &[i32], hoff: &[f64],
         fill: Robj, col: Robj, lwd: Robj, alpha: Robj, stroke: Robj,
         sroughness: f64, sbowing: f64, sfill_style: i32, sfill_weight: f64,
         shachure_angle: f64, shachure_gap: f64, scurve_tightness: f64,
@@ -901,7 +905,7 @@ impl Scene {
         );
         self.emit_node(Node::Rects {
             x: x.to_vec(), y: y.to_vec(), w: w.to_vec(), h: h.to_vec(),
-            xu: codes(xu), yu: codes(yu), wu: codes(wu), hu: codes(hu), sketch, gp,
+            xu: codes_off(xu, xoff), yu: codes_off(yu, yoff), wu: codes_off(wu, woff), hu: codes_off(hu, hoff), sketch, gp,
             keys,
         });
     }
@@ -911,7 +915,7 @@ impl Scene {
     #[allow(clippy::too_many_arguments)]
     fn circles(
         &mut self, x: &[f64], y: &[f64], r: &[f64],
-        xu: &[i32], yu: &[i32], ru: &[i32],
+        xu: &[i32], xoff: &[f64], yu: &[i32], yoff: &[f64], ru: &[i32], roff: &[f64],
         fill: Robj, col: Robj, lwd: Robj, alpha: Robj, stroke: Robj,
         sroughness: f64, sbowing: f64, sfill_style: i32, sfill_weight: f64,
         shachure_angle: f64, shachure_gap: f64, scurve_tightness: f64,
@@ -925,7 +929,7 @@ impl Scene {
         );
         self.emit_node(Node::Circles {
             x: x.to_vec(), y: y.to_vec(), r: r.to_vec(),
-            xu: codes(xu), yu: codes(yu), ru: codes(ru), sketch, gp,
+            xu: codes_off(xu, xoff), yu: codes_off(yu, yoff), ru: codes_off(ru, roff), sketch, gp,
             keys,
         });
     }
@@ -938,7 +942,7 @@ impl Scene {
     #[allow(clippy::too_many_arguments)]
     fn markers(
         &mut self, x: &[f64], y: &[f64], size: &[f64],
-        xu: &[i32], yu: &[i32], su: &[i32], shape: &[i32],
+        xu: &[i32], xoff: &[f64], yu: &[i32], yoff: &[f64], su: &[i32], soff: &[f64], shape: &[i32],
         fill: Robj, col: Robj, lwd: Robj, alpha: Robj, stroke: Robj,
         sroughness: f64, sbowing: f64, sfill_style: i32, sfill_weight: f64,
         shachure_angle: f64, shachure_gap: f64, scurve_tightness: f64,
@@ -952,7 +956,7 @@ impl Scene {
         );
         self.emit_node(Node::Markers {
             x: x.to_vec(), y: y.to_vec(), size: size.to_vec(),
-            xu: codes(xu), yu: codes(yu), su: codes(su),
+            xu: codes_off(xu, xoff), yu: codes_off(yu, yoff), su: codes_off(su, soff),
             shape: shape.iter().map(|&v| v.max(0) as u32).collect(), sketch, gp,
             keys,
         });
@@ -968,7 +972,7 @@ impl Scene {
     #[allow(clippy::too_many_arguments)]
     fn hexagons(
         &mut self, x: &[f64], y: &[f64], size: &[f64], w: &[f64], h: &[f64],
-        xu: &[i32], yu: &[i32], su: &[i32], wu: &[i32], hu: &[i32],
+        xu: &[i32], xoff: &[f64], yu: &[i32], yoff: &[f64], su: &[i32], soff: &[f64], wu: &[i32], woff: &[f64], hu: &[i32], hoff: &[f64],
         fill: &[i32], flat: bool,
         col: Robj, lwd: Robj, alpha: Robj, stroke: Robj,
         keys: Vec<String>,
@@ -980,7 +984,7 @@ impl Scene {
             .collect();
         self.emit_node(Node::Hexagons {
             x: x.to_vec(), y: y.to_vec(), size: size.to_vec(), w: w.to_vec(), h: h.to_vec(),
-            xu: codes(xu), yu: codes(yu), su: codes(su), wu: codes(wu), hu: codes(hu),
+            xu: codes_off(xu, xoff), yu: codes_off(yu, yoff), su: codes_off(su, soff), wu: codes_off(wu, woff), hu: codes_off(hu, hoff),
             fill, flat, gp,
             keys,
         });
@@ -995,7 +999,7 @@ impl Scene {
     #[allow(clippy::too_many_arguments)]
     fn sectors(
         &mut self, x: &[f64], y: &[f64], r0: &[f64], r1: &[f64], theta0: &[f64], theta1: &[f64],
-        xu: &[i32], yu: &[i32], r0u: &[i32], r1u: &[i32], fill: &[i32],
+        xu: &[i32], xoff: &[f64], yu: &[i32], yoff: &[f64], r0u: &[i32], r0off: &[f64], r1u: &[i32], r1off: &[f64], fill: &[i32],
         col: Robj, lwd: Robj, alpha: Robj, stroke: Robj,
         aangle: f64, alen: f64, aends: i32, aclosed: bool,
         sroughness: f64, sbowing: f64, sfill_style: i32, sfill_weight: f64,
@@ -1015,7 +1019,7 @@ impl Scene {
         self.emit_node(Node::Sectors {
             x: x.to_vec(), y: y.to_vec(), r0: r0.to_vec(), r1: r1.to_vec(),
             theta0: theta0.to_vec(), theta1: theta1.to_vec(),
-            xu: codes(xu), yu: codes(yu), r0u: codes(r0u), r1u: codes(r1u),
+            xu: codes_off(xu, xoff), yu: codes_off(yu, yoff), r0u: codes_off(r0u, r0off), r1u: codes_off(r1u, r1off),
             fill, arrow: arrow_from(aangle, alen, aends, aclosed), sketch, gp,
             keys,
         });
@@ -1025,7 +1029,7 @@ impl Scene {
     #[allow(clippy::too_many_arguments)]
     fn segments(
         &mut self, x0: &[f64], y0: &[f64], x1: &[f64], y1: &[f64],
-        x0u: &[i32], y0u: &[i32], x1u: &[i32], y1u: &[i32],
+        x0u: &[i32], x0off: &[f64], y0u: &[i32], y0off: &[f64], x1u: &[i32], x1off: &[f64], y1u: &[i32], y1off: &[f64],
         scap: &[f64], ecap: &[f64], scapu: &[i32], ecapu: &[i32],
         off: &[f64], offu: &[i32],
         col: Robj, lwd: Robj, alpha: Robj, stroke: Robj,
@@ -1042,7 +1046,7 @@ impl Scene {
         );
         self.emit_node(Node::Segments {
             x0: x0.to_vec(), y0: y0.to_vec(), x1: x1.to_vec(), y1: y1.to_vec(),
-            x0u: codes(x0u), y0u: codes(y0u), x1u: codes(x1u), y1u: codes(y1u),
+            x0u: codes_off(x0u, x0off), y0u: codes_off(y0u, y0off), x1u: codes_off(x1u, x1off), y1u: codes_off(y1u, y1off),
             scap: scap.to_vec(), ecap: ecap.to_vec(), scapu: codes(scapu), ecapu: codes(ecapu),
             off: off.to_vec(), offu: codes(offu),
             arrow: arrow_from(aangle, alen, aends, aclosed), sketch, gp,
@@ -1054,14 +1058,14 @@ impl Scene {
     #[allow(clippy::too_many_arguments)]
     fn add_loop(
         &mut self, x: &[f64], y: &[f64], size: &[f64], foot: &[f64], angle: &[f64], width: &[f64],
-        xu: &[i32], yu: &[i32], su: &[i32], fu: &[i32],
+        xu: &[i32], xoff: &[f64], yu: &[i32], yoff: &[f64], su: &[i32], soff: &[f64], fu: &[i32], foff: &[f64],
         col: Robj, lwd: Robj, alpha: Robj, stroke: Robj,
         aangle: f64, alen: f64, aends: i32, aclosed: bool,
     ) {
         let gp = PartialGpar::from_robj(&rnull(), &col, &lwd, &alpha, &stroke);
         self.emit_node(Node::Loop {
-            x: x.to_vec(), y: y.to_vec(), xu: codes(xu), yu: codes(yu),
-            size: size.to_vec(), su: codes(su), foot: foot.to_vec(), fu: codes(fu),
+            x: x.to_vec(), y: y.to_vec(), xu: codes_off(xu, xoff), yu: codes_off(yu, yoff),
+            size: size.to_vec(), su: codes_off(su, soff), foot: foot.to_vec(), fu: codes_off(fu, foff),
             angle: angle.to_vec(), width: width.to_vec(),
             arrow: arrow_from(aangle, alen, aends, aclosed), gp,
         });
@@ -1072,7 +1076,7 @@ impl Scene {
     #[allow(clippy::too_many_arguments)]
     #[allow(clippy::too_many_arguments)]
     fn path(
-        &mut self, x: &[f64], y: &[f64], xu: &[i32], yu: &[i32], nper: &[i32],
+        &mut self, x: &[f64], y: &[f64], xu: &[i32], xoff: &[f64], yu: &[i32], yoff: &[f64], nper: &[i32],
         evenodd: bool, fill: Robj, col: Robj, lwd: Robj, alpha: Robj, stroke: Robj,
         sroughness: f64, sbowing: f64, sfill_style: i32, sfill_weight: f64,
         shachure_angle: f64, shachure_gap: f64, scurve_tightness: f64,
@@ -1085,7 +1089,7 @@ impl Scene {
             shachure_gap, scurve_tightness, sdisable_multi, spreserve, sseed,
         );
         self.emit_node(Node::Path {
-            x: x.to_vec(), y: y.to_vec(), xu: codes(xu), yu: codes(yu),
+            x: x.to_vec(), y: y.to_vec(), xu: codes_off(xu, xoff), yu: codes_off(yu, yoff),
             nper: nper.iter().map(|&v| v.max(0) as usize).collect(),
             evenodd, sketch, gp,
             key: opt_key(key),
@@ -1097,14 +1101,14 @@ impl Scene {
     #[allow(clippy::too_many_arguments)]
     fn image(
         &mut self, rgba: &[i32], iw: i32, ih: i32,
-        x: f64, y: f64, w: f64, h: f64, xu: i32, yu: i32, wu: i32, hu: i32,
+        x: f64, y: f64, w: f64, h: f64, xu: i32, xoff: f64, yu: i32, yoff: f64, wu: i32, woff: f64, hu: i32, hoff: f64,
         interpolate: bool,
     ) {
         let bytes: Vec<u8> = rgba.iter().map(|&v| v.clamp(0, 255) as u8).collect();
         self.emit_node(Node::Image {
             rgba: bytes, iw: iw.max(0) as u32, ih: ih.max(0) as u32,
             x, y, w, h,
-            xu: Unit::from_code(xu), yu: Unit::from_code(yu), wu: Unit::from_code(wu), hu: Unit::from_code(hu),
+            xu: Unit::from_code_off(xu, xoff), yu: Unit::from_code_off(yu, yoff), wu: Unit::from_code_off(wu, woff), hu: Unit::from_code_off(hu, hoff),
             interpolate,
         });
     }
@@ -1117,7 +1121,9 @@ impl Scene {
         x: f64,
         y: f64,
         xu: i32,
+        xoff: f64,
         yu: i32,
+        yoff: f64,
         rot: f64,
         hjust: f64,
         vjust: f64,
@@ -1140,8 +1146,8 @@ impl Scene {
         self.emit_node(Node::Text {
             x,
             y,
-            xu: Unit::from_code(xu),
-            yu: Unit::from_code(yu),
+            xu: Unit::from_code_off(xu, xoff),
+            yu: Unit::from_code_off(yu, yoff),
             rot,
             hjust,
             vjust,
@@ -1169,7 +1175,7 @@ impl Scene {
     #[allow(clippy::too_many_arguments)]
     fn texts(
         &mut self,
-        x: &[f64], y: &[f64], xu: &[i32], yu: &[i32], rot: &[f64],
+        x: &[f64], y: &[f64], xu: &[i32], xoff: &[f64], yu: &[i32], yoff: &[f64], rot: &[f64],
         hjust: f64, vjust: f64, w: &[f64], h: &[f64], nper: &[i32],
         gid: &[i32], gx: &[f64], gy: &[f64], gsize: &[f64], gpath: Vec<String>, gface: &[i32],
         label: Vec<String>, family: &str, face: &str, size: f64, col: Robj, alpha: Robj,
@@ -1189,7 +1195,7 @@ impl Scene {
             off = hi;
             self.text_glyphs += hi - lo; // drives the glyph-bitmap threshold
             self.emit_node(Node::Text {
-                x: x[i], y: y[i], xu: Unit::from_code(xu[i]), yu: Unit::from_code(yu[i]),
+                x: x[i], y: y[i], xu: Unit::from_code_off(xu[i], xoff.get(i).copied().unwrap_or(0.0)), yu: Unit::from_code_off(yu[i], yoff.get(i).copied().unwrap_or(0.0)),
                 rot: rot[i], hjust, vjust, w: w[i], h: h[i],
                 gid: gid[lo..hi].iter().map(|&v| v.max(0) as u32).collect(),
                 gx: gx[lo..hi].to_vec(),
@@ -1215,7 +1221,7 @@ impl Scene {
     #[allow(clippy::too_many_arguments)]
     fn texts_rich(
         &mut self,
-        x: &[f64], y: &[f64], xu: &[i32], yu: &[i32], rot: &[f64],
+        x: &[f64], y: &[f64], xu: &[i32], xoff: &[f64], yu: &[i32], yoff: &[f64], rot: &[f64],
         hjust: f64, vjust: f64, w: &[f64], h: &[f64], nper: &[i32],
         gid: &[i32], gx: &[f64], gy: &[f64], gsize: &[f64], gpath: Vec<String>, gface: &[i32],
         gcol: &[i32],
@@ -1234,7 +1240,7 @@ impl Scene {
             off = hi;
             self.text_glyphs += hi - lo; // drives the glyph-bitmap threshold
             self.emit_node(Node::Text {
-                x: x[i], y: y[i], xu: Unit::from_code(xu[i]), yu: Unit::from_code(yu[i]),
+                x: x[i], y: y[i], xu: Unit::from_code_off(xu[i], xoff.get(i).copied().unwrap_or(0.0)), yu: Unit::from_code_off(yu[i], yoff.get(i).copied().unwrap_or(0.0)),
                 rot: rot[i], hjust, vjust, w: w[i], h: h[i],
                 gid: gid[lo..hi].iter().map(|&v| v.max(0) as u32).collect(),
                 gx: gx[lo..hi].to_vec(),
@@ -3324,7 +3330,7 @@ fn cap_len_px(cap: &[f64], capu: &[Unit], i: usize, vp: &Vp) -> f64 {
         return 0.0;
     }
     let idx = if i < cap.len() { i } else { cap.len() - 1 };
-    let u = capu.get(idx).copied().unwrap_or(Unit::Mm);
+    let u = capu.get(idx).copied().unwrap_or(Unit::plain(UnitKind::Mm));
     vp.x_len(cap[idx].max(0.0), u)
 }
 
@@ -3393,7 +3399,7 @@ fn off_len_px(off: &[f64], offu: &[Unit], i: usize, vp: &Vp) -> f64 {
         return 0.0;
     }
     let idx = if i < off.len() { i } else { off.len() - 1 };
-    let u = offu.get(idx).copied().unwrap_or(Unit::Mm);
+    let u = offu.get(idx).copied().unwrap_or(Unit::plain(UnitKind::Mm));
     vp.x_len(off[idx], u) // signed; do NOT clamp
 }
 
@@ -3496,6 +3502,11 @@ fn codes(c: &[i32]) -> Vec<Unit> {
     c.iter().map(|&v| Unit::from_code(v)).collect()
 }
 
+/// Like `codes`, but carrying a parallel per-element absolute-mm offset stream.
+fn codes_off(c: &[i32], off: &[f64]) -> Vec<Unit> {
+    c.iter().enumerate().map(|(i, &v)| Unit::from_code_off(v, off.get(i).copied().unwrap_or(0.0))).collect()
+}
+
 /// The per-element data key at index `i`, or `None` when the batch carries no
 /// keys (or `i` is out of range, or the key is empty). Used by the render loop to
 /// tag each drawn element with `data-key` in the SVG backend.
@@ -3570,7 +3581,7 @@ fn dev_bbox(vp: &Vp, lx0: f64, ly0: f64, lx1: f64, ly1: f64) -> (f64, f64, f64, 
 /// Decode a scalar cap (value + code) from the parallel FFI streams: `None` when
 /// empty (no cap), else the first element. Used by `lines` (whole-path caps).
 fn cap_scalar(value: &[f64], code: &[i32]) -> Option<(f64, Unit)> {
-    value.first().map(|&v| (v, code.first().map(|&c| Unit::from_code(c)).unwrap_or(Unit::Mm)))
+    value.first().map(|&v| (v, code.first().map(|&c| Unit::from_code(c)).unwrap_or(Unit::plain(UnitKind::Mm))))
 }
 
 /// Convert a (finite, positive) dimension in pixels to a `u32`, at least 1 and

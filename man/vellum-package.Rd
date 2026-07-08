@@ -14,6 +14,7 @@ A grid-like low-level graphics system for R whose scene graph, unit/layout engin
 Useful links:
 \itemize{
   \item \url{https://github.com/schochastics/vellum}
+  \item \url{https://schochastics.github.io/vellum/}
   \item Report bugs at \url{https://github.com/schochastics/vellum/issues}
 }
 

@@ -1,3 +1,16 @@
+# vellum 0.1.1
+
+* **Compound `native + mm` / `npc + mm` units.** A position unit combined with an
+  absolute unit now forms a compound unit — a data/panel anchor plus an exact
+  absolute offset — instead of erroring. `unit(1, "native") + unit(2, "mm")`
+  resolves to the native position shifted by exactly 2 mm at render, at any scale
+  or aspect (the offset is applied device-side after the base resolves). This is
+  the deferred "B1" route; it unlocks device-exact label nudges, halos, and
+  drop-shadow offsets in the grammar layer. Mixing two *different* position bases
+  (e.g. `npc` and `native`) still errors. Unit arithmetic scales the base and the
+  offset together. Additive change: a scene using no compound units renders
+  byte-for-byte as before.
+
 # vellum 0.1.0
 
 First release. vellum is a low-level graphics framework for R in the spirit of

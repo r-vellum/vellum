@@ -44,10 +44,14 @@ construction (text metrics are available device-independently), so a stored
 
 Arithmetic: \code{+} and \code{-} combine two units of the \emph{same} code, or two
 \emph{absolute} units (\code{"mm"}/\code{"cm"}/\code{"in"}/\code{"pt"}), which resolve to \code{"mm"}
-immediately (e.g. \code{unit(10, "mm") + unit(1, "in")} is \verb{35.4mm}).
-\code{unit * scalar} scales. Mixing a normalised/native unit with an absolute one
-(e.g. \code{unit(1, "npc") - unit(2, "mm")}) is genuinely deferred and errors —
-compose such offsets at the viewport/native level or pre-resolve to \code{"mm"}.
+immediately (e.g. \code{unit(10, "mm") + unit(1, "in")} is \verb{35.4mm}). A position
+unit (\code{"npc"}/\code{"native"}) plus an absolute unit forms a \strong{compound} unit — a
+data/panel anchor plus an exact absolute offset — e.g.
+\code{unit(1, "native") + unit(2, "mm")} is \verb{1native+2mm}: it resolves to the
+native position shifted right by exactly 2 mm at render, at any scale or
+aspect. Mixing two \emph{different} position bases (e.g. \code{"npc"} and \code{"native"})
+still errors, as it cannot be reduced to one unit. \code{unit * scalar} scales the
+base value and the offset together.
 }
 \examples{
 unit(1:3, "native")

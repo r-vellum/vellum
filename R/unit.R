@@ -18,10 +18,14 @@
 #'
 #' Arithmetic: `+` and `-` combine two units of the *same* code, or two
 #' *absolute* units (`"mm"`/`"cm"`/`"in"`/`"pt"`), which resolve to `"mm"`
-#' immediately (e.g. `unit(10, "mm") + unit(1, "in")` is `35.4mm`).
-#' `unit * scalar` scales. Mixing a normalised/native unit with an absolute one
-#' (e.g. `unit(1, "npc") - unit(2, "mm")`) is genuinely deferred and errors —
-#' compose such offsets at the viewport/native level or pre-resolve to `"mm"`.
+#' immediately (e.g. `unit(10, "mm") + unit(1, "in")` is `35.4mm`). A position
+#' unit (`"npc"`/`"native"`) plus an absolute unit forms a **compound** unit — a
+#' data/panel anchor plus an exact absolute offset — e.g.
+#' `unit(1, "native") + unit(2, "mm")` is `1native+2mm`: it resolves to the
+#' native position shifted right by exactly 2 mm at render, at any scale or
+#' aspect. Mixing two *different* position bases (e.g. `"npc"` and `"native"`)
+#' still errors, as it cannot be reduced to one unit. `unit * scalar` scales the
+#' base value and the offset together.
 #'
 #' @param values Numeric vector of magnitudes.
 #' @param units Character vector of unit names, recycled against `values`.
@@ -69,8 +73,19 @@ unit <- function(values, units = "npc", data = NULL) {
 # (used by paint.R). Derived units (cm/char/strwidth/...) resolve to these.
 .coord_units <- setdiff(names(.unit_codes), "null")
 
-new_unit <- function(value = double(), unit = integer()) {
-  vctrs::new_rcrd(list(value = value, unit = unit), class = "vellum_unit")
+# A unit vector is a vctrs record of three parallel fields: `value` (the base
+# magnitude), `unit` (the base code, see `.unit_codes`), and `offset` — an
+# absolute offset in millimetres added at render (the compound `native + mm` /
+# `npc + mm` unit). `offset` is 0 for an ordinary single-code unit; it is
+# produced only by `base ± absolute` arithmetic (see `vec_arith`).
+new_unit <- function(value = double(), unit = integer(), offset = NULL) {
+  if (is.null(offset)) {
+    offset <- rep(0, length(value))
+  }
+  vctrs::new_rcrd(
+    list(value = value, unit = unit, offset = offset),
+    class = "vellum_unit"
+  )
 }
 
 #' @rdname unit
@@ -130,7 +145,16 @@ as_unit <- function(x, default = "npc") {
 format.vellum_unit <- function(x, ...) {
   v <- vctrs::field(x, "value")
   u <- names(.unit_codes)[match(vctrs::field(x, "unit"), .unit_codes)]
-  paste0(format(v, trim = TRUE, ...), u)
+  off <- vctrs::field(x, "offset")
+  base <- paste0(format(v, trim = TRUE, ...), u)
+  # A compound unit shows its absolute mm offset, e.g. "1native+2mm".
+  has_off <- !is.na(off) & off != 0
+  sign <- ifelse(off >= 0, "+", "-")
+  base[has_off] <- paste0(
+    base[has_off], sign[has_off],
+    format(abs(off[has_off]), trim = TRUE, ...), "mm"
+  )
+  base
 }
 
 #' @export
@@ -157,9 +181,11 @@ vec_arith.vellum_unit.default <- function(op, x, y, ...) {
 #' @export
 #' @method vec_arith.vellum_unit numeric
 vec_arith.vellum_unit.numeric <- function(op, x, y, ...) {
+  # Scaling multiplies the base value *and* the absolute offset, so
+  # `2 * (unit(1, "native") + unit(3, "mm"))` is `unit(2, "native") + 6 mm`.
   switch(op,
-    "*" = new_unit(vctrs::field(x, "value") * y, vctrs::field(x, "unit")),
-    "/" = new_unit(vctrs::field(x, "value") / y, vctrs::field(x, "unit")),
+    "*" = new_unit(vctrs::field(x, "value") * y, vctrs::field(x, "unit"), vctrs::field(x, "offset") * y),
+    "/" = new_unit(vctrs::field(x, "value") / y, vctrs::field(x, "unit"), vctrs::field(x, "offset") / y),
     "+" = ,
     "-" = .abort_unit_scalar(op),
     vctrs::stop_incompatible_op(op, x, y)
@@ -169,7 +195,7 @@ vec_arith.vellum_unit.numeric <- function(op, x, y, ...) {
 #' @method vec_arith.numeric vellum_unit
 vec_arith.numeric.vellum_unit <- function(op, x, y, ...) {
   switch(op,
-    "*" = new_unit(x * vctrs::field(y, "value"), vctrs::field(y, "unit")),
+    "*" = new_unit(x * vctrs::field(y, "value"), vctrs::field(y, "unit"), x * vctrs::field(y, "offset")),
     "+" = ,
     "-" = .abort_unit_scalar(op),
     vctrs::stop_incompatible_op(op, x, y)
@@ -185,6 +211,25 @@ vec_arith.numeric.vellum_unit <- function(op, x, y, ...) {
 }
 #' @export
 #' @method vec_arith.vellum_unit vellum_unit
+# Decompose a unit vector into (position value, position code, absolute mm
+# offset), element-wise. A position unit (npc/native) contributes its value and
+# code and carries its offset; an absolute unit (mm/in/pt) has no position code
+# (NA) and folds its magnitude + any offset into the mm offset. This is the
+# normal form the compound arithmetic combines.
+.unit_parts <- function(u) {
+  v <- vctrs::field(u, "value")
+  code <- vctrs::field(u, "unit")
+  off <- vctrs::field(u, "offset")
+  abs_codes <- unname(.unit_codes[c("mm", "in", "pt")])
+  is_abs <- code %in% abs_codes
+  list(
+    pos = ifelse(is_abs, 0, v),
+    code = ifelse(is_abs, NA_integer_, code),
+    off = ifelse(is_abs, .abs_to_mm(v, code) + off, off)
+  )
+}
+#' @export
+#' @method vec_arith.vellum_unit vellum_unit
 vec_arith.vellum_unit.vellum_unit <- function(op, x, y, ...) {
   if (!op %in% c("+", "-")) {
     vctrs::stop_incompatible_op(op, x, y)
@@ -192,29 +237,41 @@ vec_arith.vellum_unit.vellum_unit <- function(op, x, y, ...) {
   rc <- vctrs::vec_recycle_common(x, y)
   x <- rc[[1L]]
   y <- rc[[2L]]
+  s <- if (op == "+") 1 else -1
   xu <- vctrs::field(x, "unit")
   yu <- vctrs::field(y, "unit")
   if (identical(xu, yu)) {
-    # Same code on both sides: add/subtract values, keep the code.
-    xv <- vctrs::field(x, "value")
-    yv <- vctrs::field(y, "value")
-    return(new_unit(if (op == "+") xv + yv else xv - yv, xu))
+    # Same code on both sides: add/subtract values (and offsets), keep the code.
+    return(new_unit(
+      vctrs::field(x, "value") + s * vctrs::field(y, "value"),
+      xu,
+      vctrs::field(x, "offset") + s * vctrs::field(y, "offset")
+    ))
   }
-  # Mixed codes: only resolvable now if *both* sides are absolute (mm/in/pt) —
-  # convert to a common base (mm) and resolve eagerly. Anything else (npc,
-  # native) stays genuinely deferred and is not representable in the flat
-  # (value, code) unit, so it errors. See DESIGN.md §4.2.
-  abs_codes <- unname(.unit_codes[c("mm", "in", "pt")])
-  if (all(xu %in% abs_codes) && all(yu %in% abs_codes)) {
-    xv <- .abs_to_mm(vctrs::field(x, "value"), xu)
-    yv <- .abs_to_mm(vctrs::field(y, "value"), yu)
-    out <- if (op == "+") xv + yv else xv - yv
-    return(new_unit(out, rep(.unit_codes[["mm"]], length(out))))
+  ax <- .unit_parts(x)
+  ay <- .unit_parts(y)
+
+  # The result's position base: whichever side has one. Two *different* position
+  # bases (npc vs native) can't be reduced to one unit and error; a position base
+  # combined with an absolute unit becomes a compound `base + mm` (B1).
+  conflict <- !is.na(ax$code) & !is.na(ay$code) & ax$code != ay$code
+  if (any(conflict)) {
+    cli::cli_abort(c(
+      "Can only add or subtract {.cls unit}s with the same base ({.val npc}/{.val native}), optionally offset by an absolute unit ({.val mm}/{.val cm}/{.val in}/{.val pt}).",
+      i = "A mix of two different position bases (e.g. {.val npc} and {.val native}) can't be reduced to one unit."
+    ))
   }
-  cli::cli_abort(c(
-    "Can only add or subtract {.cls unit}s with the same unit, or two absolute units ({.val mm}/{.val cm}/{.val in}/{.val pt}).",
-    i = "Compose mixed offsets at the viewport/native level, or pre-resolve to {.val mm}."
-  ))
+  code <- ifelse(is.na(ax$code), ay$code, ax$code)
+  pos <- ax$pos + s * ay$pos
+  off <- ax$off + s * ay$off
+  # No position base on either side => a pure absolute result, resolved to mm
+  # (the classic `unit(10,"mm") + unit(1,"in")` case, unchanged).
+  both_abs <- is.na(code)
+  new_unit(
+    ifelse(both_abs, off, pos),
+    as.integer(ifelse(both_abs, .unit_codes[["mm"]], code)),
+    ifelse(both_abs, 0, off)
+  )
 }
 
 # Convert an absolute unit vector (codes mm/in/pt) to millimetres, element-wise.
@@ -260,9 +317,11 @@ vec_arith.vellum_unit.MISSING <- function(op, x, y, ...) {
   if (is_unit(v)) {
     val <- vctrs::field(v, "value")
     code <- vctrs::field(v, "unit")
+    off <- vctrs::field(v, "offset")
   } else {
     val <- as.double(v)
     code <- rep(.unit_codes[[default]], length(val))
+    off <- rep(0, length(val))
   }
   if (any(code == .unit_codes[["null"]])) {
     stop("`null` units are only valid in layouts, not coordinates", call. = FALSE)
@@ -270,6 +329,7 @@ vec_arith.vellum_unit.MISSING <- function(op, x, y, ...) {
   if (!is.null(n)) {
     val <- vctrs::vec_recycle(val, n)
     code <- vctrs::vec_recycle(code, n)
+    off <- vctrs::vec_recycle(off, n)
   }
-  list(value = val, code = as.integer(code))
+  list(value = val, code = as.integer(code), offset = as.double(off))
 }

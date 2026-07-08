@@ -131,7 +131,8 @@ vl_strheight <- function(label, family = "", fontface = "plain",
   rot <- vctrs::vec_recycle(as.numeric(rot), n)
   # One FFI call builds one text node per label from the flat glyph arrays.
   scene$texts(
-    cx$value[drawn], cy$value[drawn], cx$code[drawn], cy$code[drawn], rot[drawn], hjust, vjust,
+    cx$value[drawn], cy$value[drawn], cx$code[drawn], cx$offset[drawn], cy$code[drawn], cy$offset[drawn],
+    rot[drawn], hjust, vjust,
     vapply(ent, `[[`, double(1), "w") * scale, vapply(ent, `[[`, double(1), "h") * scale, as.integer(nper),
     unlist(lapply(ent, `[[`, "index"), use.names = FALSE),
     unlist(lapply(ent, `[[`, "xoff"), use.names = FALSE) * scale,
@@ -360,7 +361,8 @@ md <- function(text) {
   gcol1 <- as.integer(m)
   # Replicate the composed glyph set across the drawn positions.
   scene$texts_rich(
-    cx$value[drawn], cy$value[drawn], cx$code[drawn], cy$code[drawn], rot[drawn], hjust, vjust,
+    cx$value[drawn], cy$value[drawn], cx$code[drawn], cx$offset[drawn], cy$code[drawn], cy$offset[drawn],
+    rot[drawn], hjust, vjust,
     rep(g$w * scale, np), rep(g$h * scale, np), rep(ng, np),
     rep(g$gid, np),
     rep(g$gx * scale, np),

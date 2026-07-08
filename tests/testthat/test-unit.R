@@ -32,9 +32,28 @@ test_that("arithmetic: scalar scale, same-unit add/sub, unary minus", {
   expect_equal(format(unit(10, "pt") / 2), "5pt")
   expect_equal(format(unit(2, "npc") + unit(1, "npc")), "3npc")
   expect_equal(format(-unit(4, "mm")), "-4mm")
-  # a normalised/native unit mixed with an absolute one is genuinely deferred
-  expect_error(unit(1, "npc") + unit(1, "mm"), "same unit")
-  expect_error(unit(1, "native") - unit(2, "pt"), "absolute")
+})
+
+test_that("a position base + an absolute unit makes a compound (native/npc + mm)", {
+  u <- unit(1, "native") + unit(2, "mm")
+  expect_equal(vctrs::field(u, "value"), 1)
+  expect_equal(vctrs::field(u, "unit"), 1L) # native base
+  expect_equal(vctrs::field(u, "offset"), 2) # +2mm
+  expect_equal(format(u), "1native+2mm")
+
+  # npc base, subtraction, and inch folded to mm
+  expect_equal(vctrs::field(unit(0.5, "npc") - unit(3, "mm"), "offset"), -3)
+  expect_equal(vctrs::field(unit(0, "native") + unit(1, "in"), "offset"), 25.4)
+
+  # offsets accumulate; adding another native adds the base, keeps the offset
+  expect_equal(format(unit(1, "native") + unit(2, "mm") + unit(3, "mm")), "1native+5mm")
+  expect_equal(format(unit(1, "native") + unit(2, "mm") + unit(4, "native")), "5native+2mm")
+
+  # scaling scales the base and the offset together
+  expect_equal(format(2 * (unit(1, "native") + unit(3, "mm"))), "2native+6mm")
+
+  # two *different* position bases still can't be reduced
+  expect_error(unit(1, "npc") + unit(1, "native"), "position base")
 })
 
 test_that("absolute-unit arithmetic resolves to mm at construction", {
