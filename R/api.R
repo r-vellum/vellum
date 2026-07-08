@@ -975,7 +975,13 @@ S7::method(compile, grob_text) <- function(node, scene) {
     # Rich (markdown) labels take the multi-run path: one styled label composed
     # into per-glyph colour/size/baseline, drawn at each position. Plain character
     # labels keep the fast single-style batch path unchanged.
-    if (S7::S7_inherits(node@label, vellum_label)) {
+    # Rich labels take the multi-run path: a single `vellum_label` (composed once,
+    # drawn at every position) or a list of them (one per datum). Plain character
+    # labels keep the fast single-style batch path.
+    rich <- S7::S7_inherits(node@label, vellum_label) ||
+      (is.list(node@label) && length(node@label) > 0L &&
+         all(vapply(node@label, function(l) S7::S7_inherits(l, vellum_label), logical(1))))
+    if (rich) {
       n <- vctrs::vec_size_common(node@x, node@y)
       if (n == 0L) return(invisible())
       x <- vctrs::vec_recycle(node@x, n); y <- vctrs::vec_recycle(node@y, n)

@@ -98,10 +98,45 @@ vl_strheight <- function(label, family = "", fontface = "plain",
   lapply(keys, get, envir = .shape_cache, inherits = FALSE)
 }
 
+# Line spacing as a multiple of the font size (baseline-to-baseline), matching
+# grid's default `lineheight`.
+.LINEHEIGHT <- 1.2
+
+# Compose one (possibly multi-line) plain label into a single flat glyph set.
+# Lines are split on "\n", shaped via the cache, and stacked baseline-to-baseline
+# with the lines centred symmetrically about y = 0, so a single-line label gets a
+# zero offset and is byte-for-byte identical to the pre-multi-line path. Returns
+# the same shape as a `.shape_cached` entry (w/h/n + glyph arrays), in points.
+.compose_plain <- function(label, family, italic, weight, size) {
+  if (!grepl("\n", label, fixed = TRUE)) {
+    return(.shape_cached(label, family, italic, weight, size)[[1]])
+  }
+  lines <- strsplit(label, "\n", fixed = TRUE)[[1]]
+  if (!length(lines)) lines <- ""
+  sh <- .shape_cached(lines, family, italic, weight, size)
+  nl <- length(lines)
+  lead <- size * .LINEHEIGHT
+  idx <- integer(0); xo <- numeric(0); yo <- numeric(0)
+  fs <- numeric(0); fp <- character(0); fi <- integer(0)
+  wmax <- 0; hmax <- 0
+  for (i in seq_len(nl)) {
+    e <- sh[[i]]
+    off <- ((nl - 1) / 2 - (i - 1)) * lead # line i, centred about 0 (+up)
+    if (e$n > 0L) {
+      idx <- c(idx, e$index); xo <- c(xo, e$xoff); yo <- c(yo, e$yoff + off)
+      fs <- c(fs, e$fsize); fp <- c(fp, e$fpath); fi <- c(fi, e$findex)
+    }
+    wmax <- max(wmax, e$w); hmax <- max(hmax, e$h)
+  }
+  list(w = wmax, h = (nl - 1) * lead + hmax, n = length(idx),
+       index = idx, xoff = xo, yoff = yo, fsize = fs, fpath = fp, findex = fi)
+}
+
 # Shape and emit many labels that share one font (a vectorised text grob). Unique
 # strings are shaped once via the cache (PERF-7), then one FFI call builds one
 # text node per label from the flat glyph arrays. `x`/`y` are unit vectors
-# recycled to the label count; `rot` is per-label; the rest are shared.
+# recycled to the label count; `rot` is per-label; the rest are shared. Labels may
+# contain "\n" (multi-line); each unique label is composed once.
 .draw_text_batch <- function(scene, labels, x, y, hjust, vjust, rot,
                              family, fontface, fontsize, col, alpha) {
   labels <- as.character(labels)
@@ -113,7 +148,7 @@ vl_strheight <- function(label, family = "", fontface = "plain",
   scale <- scene$dpi() / 72
   face <- .rs_face(fontface)
   uniq <- unique(labels[keep])
-  shaped <- .shape_cached(uniq, family, face$italic, face$weight, fontsize)
+  shaped <- lapply(uniq, .compose_plain, family, face$italic, face$weight, fontsize)
   umap <- match(labels, uniq)
   # Drawn labels: those kept that shaped to >= 1 glyph (drops e.g. control chars).
   drawn <- which(keep)
@@ -161,21 +196,41 @@ vl_strheight <- function(label, family = "", fontface = "plain",
 #' * `[text]{#c00}` — a coloured span (any R colour: name or hex)
 #'
 #' Spans nest (e.g. `**a^2^**`). `md()` with no markup is equivalent to the plain
-#' string. Multi-line (`\n`) is not supported in this version (single line only).
+#' string. Embedded newlines (`\n`) start a new line (stacked baseline-to-baseline).
 #'
-#' @param text A single markup string.
-#' @return A `vellum_md_label` object.
+#' `md()` is vectorised: a length-1 input returns a single `vellum_md_label`; a
+#' longer vector returns a list of them (one per element), so a `quill` mark can
+#' carry a per-datum rich label.
+#'
+#' @param text A markup string (or a character vector for per-element labels).
+#' @return A `vellum_md_label` (length-1 `text`) or a list of them (length > 1).
 #' @examples
 #' lab <- md("R^2^ = **0.91**")
+#' labs <- md(c("*a*", "**b**")) # a list of two labels
 #' @export
 md <- function(text) {
   text <- as.character(text)
-  if (length(text) != 1L) {
-    cli::cli_abort("{.fun md} expects a single string, not length {length(text)}.")
+  if (length(text) == 0L) {
+    return(list())
   }
+  if (length(text) == 1L) {
+    return(.md_one(text))
+  }
+  lapply(text, .md_one)
+}
+
+# Build one `vellum_md_label` from a single markup string, splitting on "\n" into
+# lines whose run lists are joined by a break marker (`list(brk = TRUE)`).
+.md_one <- function(text) {
   if (is.na(text)) text <- ""
-  runs <- .md_parse(text)
-  plain <- paste0(vapply(runs, `[[`, character(1), "text"), collapse = "")
+  lines <- strsplit(text, "\n", fixed = TRUE)[[1]]
+  if (!length(lines)) lines <- ""
+  runs <- list()
+  for (i in seq_along(lines)) {
+    if (i > 1L) runs[[length(runs) + 1L]] <- list(brk = TRUE)
+    runs <- c(runs, .md_parse(lines[i]))
+  }
+  plain <- paste0(vapply(runs, function(r) r$text %||% "\n", character(1)), collapse = "")
   vellum_md_label(runs = runs, text = plain)
 }
 
@@ -303,49 +358,63 @@ md <- function(text) {
 # are in points (the caller scales by dpi/72 for drawing, or converts for
 # measurement). `base_col` resolves a run's inherited colour.
 .md_compose <- function(label, family, fontface, fontsize, base_col) {
+  # Split the flat run list into lines at the `brk` markers (single-line labels
+  # yield one line and a zero line-offset, so their output is unchanged).
+  lines <- list(); cur <- list()
+  for (run in label@runs) {
+    if (isTRUE(run$brk)) { lines[[length(lines) + 1L]] <- cur; cur <- list() }
+    else cur[[length(cur) + 1L]] <- run
+  }
+  lines[[length(lines) + 1L]] <- cur
+  nl <- length(lines)
+  lead <- fontsize * .LINEHEIGHT
+
   gid <- integer(0); gx <- numeric(0); gy <- numeric(0)
   gsize <- numeric(0); gpath <- character(0); gface <- integer(0)
   cols <- character(0)
-  adv <- 0
-  top <- 0; bot <- 0
-  for (run in label@runs) {
-    if (!nzchar(run$text)) next
-    face <- .rs_face(.md_run_face(fontface, run))
-    rsize <- fontsize * run$size
-    sh <- .shape_cached(run$text, family, face$italic, face$weight, rsize)[[1]]
-    dyp <- run$dy * fontsize
-    if (sh$n > 0L) {
-      gid <- c(gid, sh$index)
-      gx <- c(gx, sh$xoff + adv)
-      gy <- c(gy, sh$yoff + dyp)
-      gsize <- c(gsize, sh$fsize)
-      gpath <- c(gpath, sh$fpath)
-      gface <- c(gface, sh$findex)
-      rc <- if (is.na(run$col)) base_col else run$col
-      cols <- c(cols, rep(rc, sh$n))
+  wmax <- 0; top <- 0; bot <- 0
+  for (li in seq_len(nl)) {
+    loff <- ((nl - 1) / 2 - (li - 1)) * lead # line baseline, centred about 0 (+up)
+    adv <- 0
+    for (run in lines[[li]]) {
+      if (!nzchar(run$text)) next
+      face <- .rs_face(.md_run_face(fontface, run))
+      rsize <- fontsize * run$size
+      sh <- .shape_cached(run$text, family, face$italic, face$weight, rsize)[[1]]
+      dyp <- run$dy * fontsize + loff
+      if (sh$n > 0L) {
+        gid <- c(gid, sh$index)
+        gx <- c(gx, sh$xoff + adv)
+        gy <- c(gy, sh$yoff + dyp)
+        gsize <- c(gsize, sh$fsize)
+        gpath <- c(gpath, sh$fpath)
+        gface <- c(gface, sh$findex)
+        rc <- if (is.na(run$col)) base_col else run$col
+        cols <- c(cols, rep(rc, sh$n))
+      }
+      adv <- adv + sh$w
+      top <- max(top, dyp + sh$h)
+      bot <- min(bot, dyp)
     }
-    adv <- adv + sh$w
-    top <- max(top, dyp + sh$h)
-    bot <- min(bot, dyp)
+    wmax <- max(wmax, adv)
   }
   list(gid = gid, gx = gx, gy = gy, gsize = gsize, gpath = gpath, gface = gface,
-       cols = cols, w = adv, h = top - bot)
+       cols = cols, w = wmax, h = top - bot)
 }
 
-# Draw a single rich (markdown) label at each of the `x`/`y` positions. The label
-# is composed once into a glyph set with per-glyph colours; positions/rot recycle
-# like the plain path. Mirrors `.draw_text_batch` but calls `texts_rich` with the
-# per-glyph colour stream.
+# Draw rich (markdown) labels at the `x`/`y` positions. `label` is either a single
+# `vellum_md_label` (composed once and drawn at every position, the legend/title
+# case) or a list of them (one per position, recycled — the per-datum mark_text
+# case). Distinct labels are composed once (deduped by plain text). Mirrors
+# `.draw_text_batch` but calls `texts_rich` with the per-glyph colour stream.
 .draw_richtext_batch <- function(scene, label, x, y, hjust, vjust, rot,
                                  family, fontface, fontsize, col, alpha) {
   base_col <- if (is.null(col) || is.na(col)) "black" else col
-  g <- .md_compose(label, family, fontface, fontsize, base_col)
-  ng <- length(g$gid)
-  if (ng == 0L) {
-    return(invisible())
-  }
   scale <- scene$dpi() / 72
   n <- vctrs::vec_size_common(x, y)
+  if (n == 0L) {
+    return(invisible())
+  }
   cx <- .coord(x, "npc", n)
   cy <- .coord(y, "npc", n)
   rot <- vctrs::vec_recycle(as.numeric(rot), n)
@@ -354,24 +423,40 @@ md <- function(text) {
   if (np == 0L) {
     return(invisible())
   }
-  # Per-glyph colour -> flat RGBA int stream (contiguous quads), with `gp$alpha`
-  # folded into the alpha channel (mirrors hexagon_grob's per-element fill).
-  m <- grDevices::col2rgb(g$cols, alpha = TRUE)
-  if (!is.null(alpha) && !is.na(alpha)) m[4L, ] <- round(m[4L, ] * alpha)
-  gcol1 <- as.integer(m)
-  # Replicate the composed glyph set across the drawn positions.
+  # One label per drawn position: a single label replicates; a list recycles.
+  labs <- if (S7::S7_inherits(label, vellum_label)) {
+    rep(list(label), np)
+  } else {
+    m <- length(label)
+    if (m == 0L) return(invisible())
+    label[((drawn - 1L) %% m) + 1L]
+  }
+  keytxt <- vapply(labs, function(l) l@text, character(1))
+  uk <- unique(keytxt)
+  comp <- lapply(uk, function(t) .md_compose(labs[[match(t, keytxt)]], family, fontface, fontsize, base_col))
+  names(comp) <- uk
+  # Concatenate the per-position glyph sets into the flat FFI arrays; `gp$alpha`
+  # folds into the per-glyph RGBA alpha channel (mirrors hexagon_grob's fill).
+  gid <- integer(0); gx <- numeric(0); gy <- numeric(0); gsize <- numeric(0)
+  gpath <- character(0); gface <- integer(0); gcol <- integer(0)
+  nper <- integer(np); w <- numeric(np); h <- numeric(np)
+  for (j in seq_len(np)) {
+    g <- comp[[keytxt[j]]]
+    ng <- length(g$gid)
+    nper[j] <- ng; w[j] <- g$w * scale; h[j] <- g$h * scale
+    if (ng > 0L) {
+      gid <- c(gid, g$gid); gx <- c(gx, g$gx * scale); gy <- c(gy, g$gy * scale)
+      gsize <- c(gsize, g$gsize * scale); gpath <- c(gpath, g$gpath); gface <- c(gface, g$gface)
+      m <- grDevices::col2rgb(g$cols, alpha = TRUE)
+      if (!is.null(alpha) && !is.na(alpha)) m[4L, ] <- round(m[4L, ] * alpha)
+      gcol <- c(gcol, as.integer(m))
+    }
+  }
   scene$texts_rich(
     cx$value[drawn], cy$value[drawn], cx$code[drawn], cx$offset[drawn], cy$code[drawn], cy$offset[drawn],
-    rot[drawn], hjust, vjust,
-    rep(g$w * scale, np), rep(g$h * scale, np), rep(ng, np),
-    rep(g$gid, np),
-    rep(g$gx * scale, np),
-    rep(g$gy * scale, np),
-    rep(g$gsize * scale, np),
-    rep(g$gpath, np),
-    rep(g$gface, np),
-    rep(gcol1, np),
-    rep(label@text, np), family, fontface, fontsize, .rs_col_inh(base_col), .rs_num_inh(alpha)
+    rot[drawn], hjust, vjust, w, h, as.integer(nper),
+    gid, gx, gy, gsize, gpath, gface, gcol,
+    keytxt, family, fontface, fontsize, .rs_col_inh(base_col), .rs_num_inh(alpha)
   )
   invisible()
 }

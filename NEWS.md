@@ -1,5 +1,12 @@
 # vellum (development version)
 
+* **Multi-line and per-datum rich text.** `text_grob()` labels may now contain
+  embedded newlines (`\n`), stacked baseline-to-baseline; `md()` gained the same
+  and is now **vectorised** — `md(x)` returns a single label for a length-1 `x` or
+  a list of labels for a vector, so a label grob can carry one distinct rich label
+  per position. Single-line, single-label output is byte-for-byte unchanged. (Rust
+  is untouched — shaping stays R-side.)
+
 * **Accessibility (a11y).** `vl_scene(title=, desc=)` and the new `describe()` setter
   attach an accessible name and long description (alt text) to a scene. When set:
   * the **SVG** backend marks the root `<svg role="img" aria-labelledby=…>` and emits

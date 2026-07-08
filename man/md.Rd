@@ -7,10 +7,10 @@
 md(text)
 }
 \arguments{
-\item{text}{A single markup string.}
+\item{text}{A markup string (or a character vector for per-element labels).}
 }
 \value{
-A \code{vellum_md_label} object.
+A \code{vellum_md_label} (length-1 \code{text}) or a list of them (length > 1).
 }
 \description{
 \code{md()} builds a styled label from a small markdown/HTML-free subset, for use as
@@ -28,8 +28,13 @@ Supported markup:
 }
 
 Spans nest (e.g. \verb{**a^2^**}). \code{md()} with no markup is equivalent to the plain
-string. Multi-line (\verb{\\n}) is not supported in this version (single line only).
+string. Embedded newlines (\verb{\\n}) start a new line (stacked baseline-to-baseline).
+
+\code{md()} is vectorised: a length-1 input returns a single \code{vellum_md_label}; a
+longer vector returns a list of them (one per element), so a \code{quill} mark can
+carry a per-datum rich label.
 }
 \examples{
 lab <- md("R^2^ = **0.91**")
+labs <- md(c("*a*", "**b**")) # a list of two labels
 }

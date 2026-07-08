@@ -143,7 +143,9 @@ S7::method(.text_labels, vellum_md_label) <- function(label) label@text
 
 grob_text <- S7::new_class("grob_text", parent = grob, package = "vellum",
   properties = list(
-    label = S7::new_property(S7::new_union(S7::class_character, vellum_label)),
+    # A plain character vector, a single rich label, or a list of rich labels
+    # (one per datum — the per-datum mark_text case).
+    label = S7::new_property(S7::new_union(S7::class_character, vellum_label, S7::class_list)),
     x = .unit_prop(), y = .unit_prop(),
     just = S7::new_property(S7::class_character, default = c("centre", "centre")),
     rot  = S7::new_property(S7::class_double, default = 0)
