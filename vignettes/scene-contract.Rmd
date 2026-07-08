@@ -202,8 +202,10 @@ A scene carries an optional accessible **name** and **description**, set with
 
 This is additive: with no title/desc the output is unchanged. The grammar layer
 (`quill`) sets these automatically from the plot's title and an auto-generated (or
-`labs(alt=)`) alt text — see quill's *Accessibility* article. Per-element `role`
-(above) is a genuine ARIA role; the interactive widget layer (`gloss`) adds
+`labs(alt=)`) alt text — see quill's [Accessibility
+article](https://schochastics.github.io/quill/articles/accessibility.html).
+Per-element `role` (above) is a genuine ARIA role; the interactive widget layer
+(`gloss`) adds
 keyboard navigation and live-region announcements on top.
 
 ## Invariants the contract guarantees
