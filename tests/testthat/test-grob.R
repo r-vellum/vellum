@@ -10,6 +10,16 @@ test_that("grob constructors coerce numerics to units and recycle", {
   expect_error(lines_grob(x = 1:3, y = 1:2), "same length")
 })
 
+test_that("point shape is validated (constructor and S7 class)", {
+  expect_error(points_grob(0.5, 0.5, shape = "star"), "shape")
+  # a bad shape reaching the class directly is caught too (was a cryptic if(NA))
+  expect_error(
+    grob_points(x = unit(0.5, "npc"), y = unit(0.5, "npc"), shape = "star"),
+    "shape"
+  )
+  expect_no_error(points_grob(c(0, 1), 0.5, shape = c("circle", "diamond")))
+})
+
 test_that("grobs carry gpar and name", {
   g <- rect_grob(gp = gpar(fill = "red", lwd = 2), name = "box")
   expect_equal(g@gp@fill, "red")

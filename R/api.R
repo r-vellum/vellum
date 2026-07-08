@@ -676,8 +676,9 @@ vl_clear_render_cache <- function() {
 
 .scene_to_backend <- function(scene, debug = FALSE) {
   # Push the glyph-bitmap mode for this render (a thread-local read by the raster
-  # backend when it rasterises). Cheap; set every call so the option is honoured
-  # even on a render-cache hit (same Scene, possibly a new option value).
+  # backend when it rasterises). Cheap, so set it every call. A cached raster is
+  # returned as-is without re-reading the mode; that is fine because the mode is a
+  # perf-only fast path with output identical to the vector text path.
   rs_set_glyph_bitmap_mode(.glyph_bitmap_code())
   cid <- .scene_cid(scene)
   # Bypass for debug overlays, when disabled, or when the scene carries no id
@@ -1200,7 +1201,7 @@ edit_node <- function(scene, name, ...) {
     return(NULL)
   }
   if (length(x) != 1L) {
-    stop("a colour must be a single value, `NA` (none), or `NULL` (inherit)", call. = FALSE)
+    cli::cli_abort("A colour must be a single value, {.code NA} (none), or {.code NULL} (inherit).")
   }
   if (is.na(x)) {
     return(integer(0))
@@ -1214,7 +1215,7 @@ edit_node <- function(scene, name, ...) {
     return(NA_real_)
   }
   if (length(x) != 1L) {
-    stop("`lwd`/`alpha` must be a single number or `NULL` (inherit)", call. = FALSE)
+    cli::cli_abort("{.arg lwd}/{.arg alpha} must be a single number or {.code NULL} (inherit).")
   }
   if (is.na(x)) {
     return(NA_real_)

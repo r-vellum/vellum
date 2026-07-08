@@ -1631,7 +1631,9 @@ fn clip_shape_d(shape: &ClipShape) -> String {
     }
 }
 
-fn xml_escape(s: &str) -> String {
+// Escape a string for XML text or a double-quoted attribute value. Shared with
+// scene.rs (the SVG identity attributes) so the two backends can't drift.
+pub(crate) fn xml_escape(s: &str) -> String {
     s.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;").replace('"', "&quot;")
 }
 

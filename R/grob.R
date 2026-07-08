@@ -85,7 +85,15 @@ grob_points <- S7::new_class("grob_points", parent = grob, package = "vellum",
     x = .unit_prop(), y = .unit_prop(), size = .unit_prop("unit(2, \"mm\")"),
     shape = S7::new_property(S7::class_character, default = "circle"),
     sketch = S7::new_property(S7::class_any, default = NULL)
-  ))
+  ),
+  # Guard the shape here too (not only in points_grob): an unknown shape reaching
+  # the compile method would otherwise map to NA and fail with a cryptic `if(NA)`.
+  validator = function(self) {
+    bad <- setdiff(unique(self@shape), names(.marker_codes))
+    if (length(bad)) {
+      sprintf("unknown point shape(s): %s", paste(bad, collapse = ", "))
+    }
+  })
 
 grob_hexagon <- S7::new_class("grob_hexagon", parent = grob, package = "vellum",
   properties = list(

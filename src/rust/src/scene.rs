@@ -16,7 +16,7 @@ use extendr_api::prelude::*;
 use tiny_skia::{Color, FillRule, Mask, PathBuilder, Pixmap, Stroke, Transform};
 
 use crate::render::{
-    hexagon_path, hexagon_path_xy, rect_path, roundrect_path, sector_path, BlendKind, Clip, ClipShape, MaskKind, MaskLayer, PdfBackend, RasterBackend, RenderBackend,
+    hexagon_path, hexagon_path_xy, rect_path, roundrect_path, sector_path, xml_escape, BlendKind, Clip, ClipShape, MaskKind, MaskLayer, PdfBackend, RasterBackend, RenderBackend,
     ResolvedPaint, StrokeStyle, SvgBackend, TextRun,
 };
 
@@ -541,23 +541,18 @@ impl NodeMeta {
     fn svg_attrs(&self) -> String {
         let mut s = String::new();
         if !self.id.is_empty() {
-            s.push_str(&format!("data-vellum-id=\"{}\"", xml_attr_escape(&self.id)));
+            s.push_str(&format!("data-vellum-id=\"{}\"", xml_escape(&self.id)));
         }
         if !self.name.is_empty() {
             if !s.is_empty() { s.push(' '); }
-            s.push_str(&format!("data-vellum-name=\"{}\"", xml_attr_escape(&self.name)));
+            s.push_str(&format!("data-vellum-name=\"{}\"", xml_escape(&self.name)));
         }
         if !self.role.is_empty() {
             if !s.is_empty() { s.push(' '); }
-            s.push_str(&format!("role=\"{}\"", xml_attr_escape(&self.role)));
+            s.push_str(&format!("role=\"{}\"", xml_escape(&self.role)));
         }
         s
     }
-}
-
-/// Minimal escaping for a string placed inside a double-quoted XML attribute.
-fn xml_attr_escape(s: &str) -> String {
-    s.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;").replace('"', "&quot;")
 }
 
 /// A drawing scene held in the Rust backend. Internal: the public R API is the
