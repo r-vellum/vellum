@@ -1,3 +1,14 @@
+# vellum (development version)
+
+* **Accessibility (a11y).** `vl_scene(title=, desc=)` and the new `describe()` setter
+  attach an accessible name and long description (alt text) to a scene. When set:
+  * the **SVG** backend marks the root `<svg role="img" aria-labelledby=…>` and emits
+    `<title>`/`<desc>` (WCAG 1.1.1);
+  * the **PDF** backend produces a **tagged PDF** — the chart is a `Figure` in the
+    structure tree carrying the description as `Alt` text.
+  Purely additive: a scene with no title/desc renders byte-for-byte as before. (Strict
+  PDF/UA-1 validation is a planned follow-up; the tag tree + Alt ship now.)
+
 # vellum 0.1.1
 
 * **Compound `native + mm` / `npc + mm` units.** A position unit combined with an

@@ -597,6 +597,13 @@ pub struct Scene {
     /// Total glyphs across all text nodes, accumulated at compile. Drives the
     /// glyph-bitmap fast path's per-render threshold (see `cached_pixmap`/`render_png`).
     text_glyphs: usize,
+    /// Scene-level accessibility: an accessible name (`a11y_title`) and long
+    /// description (`a11y_desc`), plus an id prefix to uniquify the emitted
+    /// `<title>`/`<desc>` ids. Empty => no a11y markup (output unchanged). Set from
+    /// R via `set_a11y`; consumed by the SVG (`role="img"`) and PDF (tagged) paths.
+    a11y_title: String,
+    a11y_desc: String,
+    a11y_prefix: String,
 }
 
 /// Enable the glyph-bitmap fast path once a render draws at least this many
@@ -656,7 +663,19 @@ impl Scene {
             cur_meta: NodeMeta::default(),
             raster_cache: RefCell::new(None),
             text_glyphs: 0,
+            a11y_title: String::new(),
+            a11y_desc: String::new(),
+            a11y_prefix: String::new(),
         }
+    }
+
+    /// Set the scene-level accessible name / description (a11y). Emitted by the
+    /// SVG backend (`role="img"` + `<title>`/`<desc>`) and the tagged-PDF path.
+    /// `prefix` uniquifies the SVG `<title>`/`<desc>` ids across a page.
+    fn set_a11y(&mut self, title: &str, desc: &str, prefix: &str) {
+        self.a11y_title = title.to_string();
+        self.a11y_desc = desc.to_string();
+        self.a11y_prefix = prefix.to_string();
     }
 
     /// Whether the page backend should enable the glyph-bitmap fast path for this
@@ -1361,6 +1380,7 @@ impl Scene {
     /// Returns any degradation warnings.
     fn render_svg(&self, path: &str, outline_text: bool) -> Vec<String> {
         let mut b = SvgBackend::new(self.w_px, self.h_px, self.bg, outline_text);
+        b.set_a11y(&self.a11y_title, &self.a11y_desc, &self.a11y_prefix);
         let warnings = self.render_to(&mut b);
         if let Err(e) = std::fs::write(path, b.into_string()) {
             throw_r_error(format!("failed to write SVG: {e}"));
@@ -1375,6 +1395,7 @@ impl Scene {
     /// here (the file path surfaces them); callers wanting them use `render_svg`.
     fn render_svg_string(&self, outline_text: bool) -> String {
         let mut b = SvgBackend::new(self.w_px, self.h_px, self.bg, outline_text);
+        b.set_a11y(&self.a11y_title, &self.a11y_desc, &self.a11y_prefix);
         let _warnings = self.render_to(&mut b);
         b.into_string()
     }
@@ -1394,14 +1415,41 @@ impl Scene {
         let mut surface = page.surface();
         // One root transform maps device pixels -> PDF points.
         surface.push_transform(&krilla::geom::Transform::from_scale(scale, scale));
+        // Accessibility: when the scene is described, bracket all drawn content
+        // with a tagged marker so it can be attached to a Figure (with Alt text)
+        // in the structure tree below — a tagged PDF (WCAG 1.1.1). Absent => an
+        // ordinary, untagged PDF (unchanged).
+        let alt = if !self.a11y_desc.is_empty() {
+            self.a11y_desc.as_str()
+        } else {
+            self.a11y_title.as_str()
+        };
+        let tag_id = if alt.is_empty() {
+            None
+        } else {
+            Some(surface.start_tagged(krilla::tagging::ContentTag::Other))
+        };
         let warnings = {
             let mut b = PdfBackend::new(&mut surface);
             b.fill_background(self.w_px, self.h_px, self.bg);
             self.render_to(&mut b)
         };
+        if tag_id.is_some() {
+            surface.end_tagged();
+        }
         surface.pop();
         surface.finish();
         page.finish();
+        // Attach the tagged content to a Figure(alt) in the structure tree.
+        if let Some(id) = tag_id {
+            let mut figure = krilla::tagging::TagGroup::new(
+                krilla::tagging::Tag::Figure(Some(alt.to_string())),
+            );
+            figure.push(id);
+            let mut tree = krilla::tagging::TagTree::new();
+            tree.push(figure);
+            doc.set_tag_tree(tree);
+        }
         match doc.finish() {
             Ok(bytes) => {
                 if let Err(e) = std::fs::write(path, bytes) {

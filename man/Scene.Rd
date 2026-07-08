@@ -19,6 +19,12 @@ Create a scene \code{width} x \code{height} inches at \code{dpi}, with backgroun
 (npc == native) is created as viewport 0.
 }
 
+\subsection{Method \code{set_a11y}}{
+Set the scene-level accessible name / description (a11y). Emitted by the
+SVG backend (\code{role="img"} + \verb{<title>}/\verb{<desc>}) and the tagged-PDF path.
+\code{prefix} uniquifies the SVG \verb{<title>}/\verb{<desc>} ids across a page.
+}
+
 \subsection{Method \code{want_bitmap_text}}{
 Whether the page backend should enable the glyph-bitmap fast path for this
 render: mode 2 (on) always, mode 1 (auto) above the glyph threshold, mode 0

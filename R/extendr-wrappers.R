@@ -39,6 +39,12 @@ rs_attractor <- function(kind, n, a, b, c, d, x0, y0) .Call(wrap__rs_attractor, 
 #'(npc == native) is created as viewport 0.
 #'}
 #'
+#'\subsection{Method `set_a11y`}{
+#'Set the scene-level accessible name / description (a11y). Emitted by the
+#'SVG backend (`role="img"` + `<title>`/`<desc>`) and the tagged-PDF path.
+#'`prefix` uniquifies the SVG `<title>`/`<desc>` ids across a page.
+#'}
+#'
 #'\subsection{Method `want_bitmap_text`}{
 #'Whether the page backend should enable the glyph-bitmap fast path for this
 #'render: mode 2 (on) always, mode 1 (auto) above the glyph threshold, mode 0
@@ -281,6 +287,8 @@ rs_attractor <- function(kind, n, a, b, c, d, x0, y0) .Call(wrap__rs_attractor, 
 Scene <- new.env(parent = emptyenv())
 
 Scene$new <- function(width, height, dpi, bg) .Call(wrap__Scene__new, width, height, dpi, bg)
+
+Scene$set_a11y <- function(title, desc, prefix) .Call(wrap__Scene__set_a11y, self, title, desc, prefix)
 
 Scene$want_bitmap_text <- function() .Call(wrap__Scene__want_bitmap_text, self)
 

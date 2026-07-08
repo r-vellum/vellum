@@ -190,6 +190,22 @@ Four attribute mechanisms, each emitted only when its source is set:
 An empty/`NULL` source emits **no attribute**, so a scene that declares no
 interactivity is byte-for-byte identical to one built before any of this existed.
 
+## Accessibility
+
+A scene carries an optional accessible **name** and **description**, set with
+`vl_scene(title=, desc=)` or `describe(scene, title=, desc=)`. When present:
+
+- the **SVG** root becomes `<svg role="img" aria-labelledby="…">` with `<title>`
+  and `<desc>` children (the reliable screen-reader pattern; WCAG 1.1.1);
+- the **PDF** is a **tagged PDF** — the chart is a `Figure` in the structure tree
+  whose `Alt` is the description.
+
+This is additive: with no title/desc the output is unchanged. The grammar layer
+(`quill`) sets these automatically from the plot's title and an auto-generated (or
+`labs(alt=)`) alt text — see quill's *Accessibility* article. Per-element `role`
+(above) is a genuine ARIA role; the interactive widget layer (`gloss`) adds
+keyboard navigation and live-region announcements on top.
+
 ## Invariants the contract guarantees
 
 These are the properties quill and gloss are entitled to rely on, and that

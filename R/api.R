@@ -50,9 +50,21 @@ vellum_scene <- S7::new_class(
     # Content-identity token for the render cache (see `.new_scene_id`). Lives in
     # `bstate$cid` while building; here only once materialised (by `edit_node`).
     # `NULL` -> the scene is not cacheable (foreign-built / raw `set_props`).
-    cid = S7::new_property(S7::class_any, default = NULL)
+    cid = S7::new_property(S7::class_any, default = NULL),
+    # Accessibility: an accessible name (`title`) and long description (`desc`).
+    # When set, the SVG backend emits `role="img"` + `<title>`/`<desc>` and the PDF
+    # backend tags the page as a Figure with Alt text. `a11y_prefix` uniquifies the
+    # SVG title/desc ids across a page. `NULL`/`""` -> no a11y markup (unchanged).
+    title = S7::new_property(S7::class_any, default = NULL),
+    desc = S7::new_property(S7::class_any, default = NULL),
+    a11y_prefix = S7::new_property(S7::class_any, default = NULL)
   )
 )
+
+# A per-scene id prefix so `aria-labelledby` title/desc ids don't collide when
+# several vellum SVGs share one HTML page. Stable for a given scene object
+# (stored once at construction), unique across scenes (monotonic counter).
+.new_a11y_prefix <- function() paste0("vl", .new_scene_id())
 
 # --- content-identity token (object-identity render cache) -------------------
 # A strictly-monotonic per-content-version id, stamped into the *content carrier*
@@ -194,6 +206,12 @@ vellum_scene <- S7::new_class(
 #' @param xscale,yscale Native coordinate range of the root viewport, so
 #'   `"native"` units work at the page level without an explicit [push()].
 #' @param clip Clip drawing to the page rectangle?
+#' @param title,desc Accessibility: an accessible **name** (a short title) and a
+#'   longer **description** (alt text) for the scene. When either is set, the SVG
+#'   backend emits `role="img"` + `<title>`/`<desc>` (referenced by
+#'   `aria-labelledby`) and the PDF backend tags the page as a Figure with the
+#'   description as Alt text. `NULL` (default) emits no accessibility markup, so
+#'   output is unchanged. See [describe()] to set them on an existing scene.
 #' @return `vl_scene()`, `push()`, `draw()`, `pop()`: a `vellum_scene`.
 #' @examples
 #' s <- vl_scene(width = 4, height = 3) |>
@@ -203,12 +221,39 @@ vellum_scene <- S7::new_class(
 #'                   gp = gpar(col = "steelblue", lwd = 2)))
 #' @export
 vl_scene <- function(width = 6, height = 4, dpi = 96, bg = "white",
-                     gp = gpar(), xscale = c(0, 1), yscale = c(0, 1), clip = FALSE) {
+                     gp = gpar(), xscale = c(0, 1), yscale = c(0, 1), clip = FALSE,
+                     title = NULL, desc = NULL) {
   root <- .bnode(vp = viewport(name = "root", gp = gp, xscale = xscale, yscale = yscale, clip = clip))
   vellum_scene(
     width = .as_size(width), height = .as_size(height), dpi = dpi, bg = bg,
-    root = NULL, bstate = .bstate_new(root, list(root), 0L, 0)
+    root = NULL, bstate = .bstate_new(root, list(root), 0L, 0),
+    title = title, desc = desc, a11y_prefix = .new_a11y_prefix()
   )
+}
+
+#' Set a scene's accessibility name and description
+#'
+#' Attach (or replace) an accessible **name** (`title`) and long **description**
+#' (`desc`, the alt text) on an existing scene. The SVG backend then emits
+#' `role="img"` + `<title>`/`<desc>`, and the PDF backend tags the page as a
+#' Figure with the description as Alt text — meeting WCAG 1.1.1 (text
+#' alternative). Equivalent to passing `title`/`desc` to [vl_scene()].
+#'
+#' @param scene A [vl_scene()].
+#' @param title An accessible name (short), or `NULL` to leave unset.
+#' @param desc A long description / alt text, or `NULL` to leave unset.
+#' @return The scene, with the accessibility fields set (a new value).
+#' @examples
+#' vl_scene(2, 2) |>
+#'   draw(points_grob(c(0.3, 0.7), 0.5, gp = gpar(fill = "red"))) |>
+#'   describe(title = "Two red dots", desc = "Two red points on a white field.")
+#' @export
+describe <- function(scene, title = NULL, desc = NULL) {
+  scene <- as_vellum_scene(scene)
+  # A new content-identity so the render cache recompiles with the new metadata.
+  S7::set_props(scene, title = title, desc = desc,
+                a11y_prefix = scene@a11y_prefix %||% .new_a11y_prefix(),
+                cid = .new_scene_id())
 }
 
 # Bump the ownership generation on `bs` (in place on the shared build node) and
@@ -526,8 +571,9 @@ S7::method(plot, vellum_scene) <- function(x, y, ...) {
   if (is.na(cap) || cap < 1L) 8L else cap
 }
 
-.render_key <- function(cid, w_in, h_in, dpi, bg) {
-  paste0(cid, "|", w_in, "x", h_in, "@", dpi, "|", paste(bg, collapse = ","))
+.render_key <- function(cid, w_in, h_in, dpi, bg, title = NULL, desc = NULL) {
+  paste0(cid, "|", w_in, "x", h_in, "@", dpi, "|", paste(bg, collapse = ","),
+         "|a11y:", title %||% "", "|", desc %||% "")
 }
 
 # LRU lookup: on a hit, promote the key to most-recent and count it.
@@ -641,7 +687,8 @@ vl_clear_render_cache <- function() {
     return(.compile_backend(scene, debug = debug, cid = NULL))
   }
   key <- .render_key(cid, .to_inches(scene@width), .to_inches(scene@height),
-                     scene@dpi, .rs_col(scene@bg) %||% c(255L, 255L, 255L, 0L))
+                     scene@dpi, .rs_col(scene@bg) %||% c(255L, 255L, 255L, 0L),
+                     scene@title, scene@desc)
   hit <- .render_cache_get(key)
   if (!is.null(hit)) {
     return(hit)
@@ -654,6 +701,10 @@ vl_clear_render_cache <- function() {
 .compile_backend <- function(scene, debug = FALSE, cid = NULL) {
   s <- Scene$new(.to_inches(scene@width), .to_inches(scene@height), scene@dpi,
                  .rs_col(scene@bg) %||% c(255L, 255L, 255L, 0L))
+  # Scene-level accessibility (name/description), emitted by the SVG/PDF backends.
+  if (!is.null(scene@title) || !is.null(scene@desc)) {
+    s$set_a11y(scene@title %||% "", scene@desc %||% "", scene@a11y_prefix %||% "vl")
+  }
   # Compile the root as a gtree so the root viewport's gp / scales / clip / layout
   # / mask all apply (it is pushed like any viewport), not just its layout.
   root <- .materialize_cached(scene, cid)

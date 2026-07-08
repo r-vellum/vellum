@@ -1005,6 +1005,13 @@ pub struct SvgBackend {
     /// Per-element data key for the next primitive (`set_element_key`); spliced
     /// into the emitted element as `data-key="…"`. `None` = no attribute.
     cur_element_key: Option<String>,
+    /// Scene-level accessible name / long description (a11y). When either is set,
+    /// the root `<svg>` gains `role="img"` + `aria-labelledby` and emits
+    /// `<title>`/`<desc>` children. `a11y_prefix` uniquifies their ids so several
+    /// SVGs on one page don't collide. Empty prefix + both None = unchanged output.
+    a11y_title: Option<String>,
+    a11y_desc: Option<String>,
+    a11y_prefix: String,
 }
 
 impl SvgBackend {
@@ -1034,7 +1041,19 @@ impl SvgBackend {
             node_stack: Vec::new(),
             node_open: Vec::new(),
             cur_element_key: None,
+            a11y_title: None,
+            a11y_desc: None,
+            a11y_prefix: String::new(),
         }
+    }
+
+    /// Set the scene-level accessible name (`title`) and long description
+    /// (`desc`), with an id `prefix` to uniquify their element ids. Empty strings
+    /// are treated as absent.
+    pub fn set_a11y(&mut self, title: &str, desc: &str, prefix: &str) {
+        self.a11y_title = if title.is_empty() { None } else { Some(title.to_string()) };
+        self.a11y_desc = if desc.is_empty() { None } else { Some(desc.to_string()) };
+        self.a11y_prefix = prefix.to_string();
     }
 
     /// Return the id of a `<defs>` entry with signature `key`, emitting it via
@@ -1133,12 +1152,33 @@ impl SvgBackend {
     }
 
     pub fn into_string(self) -> String {
+        // Accessibility: when a scene name/description is set, mark the root as an
+        // image with an accessible name+description via `role="img"` +
+        // `aria-labelledby`, and emit `<title>`/`<desc>` as the first children
+        // (the placement AT expects). Absent => byte-identical to before.
+        let mut svg_attrs = String::new();
+        let mut a11y_head = String::new();
+        if self.a11y_title.is_some() || self.a11y_desc.is_some() {
+            let p = &self.a11y_prefix;
+            let mut ids: Vec<String> = Vec::new();
+            if let Some(t) = &self.a11y_title {
+                ids.push(format!("{p}-t"));
+                a11y_head.push_str(&format!("<title id=\"{p}-t\">{}</title>", xml_escape(t)));
+            }
+            if let Some(d) = &self.a11y_desc {
+                ids.push(format!("{p}-d"));
+                a11y_head.push_str(&format!("<desc id=\"{p}-d\">{}</desc>", xml_escape(d)));
+            }
+            svg_attrs = format!(" role=\"img\" aria-labelledby=\"{}\"", ids.join(" "));
+        }
         format!(
             "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n\
              <svg xmlns=\"http://www.w3.org/2000/svg\" width=\"{w}\" height=\"{h}\" \
-             viewBox=\"0 0 {w} {h}\"><defs>{defs}</defs>{body}</svg>\n",
+             viewBox=\"0 0 {w} {h}\"{a}>{head}<defs>{defs}</defs>{body}</svg>\n",
             w = self.w,
             h = self.h,
+            a = svg_attrs,
+            head = a11y_head,
             defs = self.defs,
             body = self.body
         )

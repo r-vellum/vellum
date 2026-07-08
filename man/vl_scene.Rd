@@ -16,7 +16,9 @@ vl_scene(
   gp = gpar(),
   xscale = c(0, 1),
   yscale = c(0, 1),
-  clip = FALSE
+  clip = FALSE,
+  title = NULL,
+  desc = NULL
 )
 
 push(scene, vp)
@@ -41,6 +43,13 @@ viewport; inherited by everything drawn (e.g. a default \code{col}/\code{fontsiz
 \code{"native"} units work at the page level without an explicit \code{\link[=push]{push()}}.}
 
 \item{clip}{Clip drawing to the page rectangle?}
+
+\item{title, desc}{Accessibility: an accessible \strong{name} (a short title) and a
+longer \strong{description} (alt text) for the scene. When either is set, the SVG
+backend emits \code{role="img"} + \verb{<title>}/\verb{<desc>} (referenced by
+\code{aria-labelledby}) and the PDF backend tags the page as a Figure with the
+description as Alt text. \code{NULL} (default) emits no accessibility markup, so
+output is unchanged. See \code{\link[testthat:describe]{describe()}} to set them on an existing scene.}
 
 \item{scene}{A \code{\link[=vl_scene]{vl_scene()}}.}
 
