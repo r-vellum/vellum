@@ -8,10 +8,12 @@ use extendr_api::prelude::*;
 
 // Bin points `(x, y)` into an `nx` x `ny` grid over `[x0, x1] x [y0, y1]`,
 // returning the grid row-major, top-left origin (row 0 = `y1`, the top), so it
-// maps directly onto a raster image. Each in-range point adds its weight (`w`,
-// recycled / defaulting to 1) to its cell. Points outside the bounds, or with
-// non-finite coordinates, are skipped. The max edges (`x1`, `y1`) fall into the
-// last column / top row rather than spilling out. Internal — see `datashade()`.
+// maps directly onto a raster image. Each in-range point adds its weight to its
+// cell. `w` is either `NULL` (every point weighs 1) or a slice of length `n`
+// (`datashade()` recycles a scalar and rejects any other length before calling);
+// a slice of any other length is ignored defensively. Points outside the bounds,
+// or with non-finite coordinates, are skipped. The max edges (`x1`, `y1`) fall
+// into the last column / top row rather than spilling out. See `datashade()`.
 // (Plain `//` not `///`: keep this out of the generated R wrappers / Rd.)
 #[extendr]
 fn rs_aggregate_2d(x: &[f64], y: &[f64], w: Robj, nx: i32, ny: i32, x0: f64, x1: f64, y0: f64, y1: f64) -> Vec<f64> {
@@ -28,7 +30,7 @@ fn rs_aggregate_2d(x: &[f64], y: &[f64], w: Robj, nx: i32, ny: i32, x0: f64, x1:
     let sx = nx as f64 / dx;
     let sy = ny as f64 / dy;
 
-    // Optional per-point weights: a real vector of matching length, else all 1.0.
+    // Per-point weights, length-`n` (recycled/validated R-side), else all 1.0.
     let weights: Option<&[f64]> = w.as_real_slice().filter(|s| s.len() == n);
 
     for i in 0..n {

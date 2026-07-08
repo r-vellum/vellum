@@ -25,7 +25,8 @@ datashade(
 \item{x, y}{Point coordinates (plain numerics, in data space).}
 
 \item{weight}{Optional per-point weight; cells accumulate the summed weight
-instead of a plain count. \code{NULL} counts.}
+instead of a plain count. \code{NULL} counts. A scalar is recycled to every
+point; otherwise \code{weight} must be the same length as \code{x}.}
 
 \item{width, height}{Aggregation grid size in cells (= output raster pixels).}
 

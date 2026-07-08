@@ -16,7 +16,8 @@
 #'
 #' @param x,y Point coordinates (plain numerics, in data space).
 #' @param weight Optional per-point weight; cells accumulate the summed weight
-#'   instead of a plain count. `NULL` counts.
+#'   instead of a plain count. `NULL` counts. A scalar is recycled to every
+#'   point; otherwise `weight` must be the same length as `x`.
 #' @param width,height Aggregation grid size in cells (= output raster pixels).
 #' @param xlim,ylim Data range to bin over; default the finite range of `x`/`y`.
 #' @param colors Two or more colours forming the low-to-high density ramp.
@@ -50,7 +51,25 @@ datashade <- function(x, y, weight = NULL, width = 600L, height = 400L,
   height <- max(1L, as.integer(height))
   xlim <- .ds_lim(xlim, x, "xlim")
   ylim <- .ds_lim(ylim, y, "ylim")
-  w <- if (is.null(weight)) NULL else as.double(weight)
+  # Weights must line up with the points: a scalar is recycled, a full-length
+  # vector is used as-is, anything else is an error. (The Rust aggregator keeps
+  # weights only when they match the point count and would otherwise *silently*
+  # ignore a mismatched vector, so validate here.)
+  w <- if (is.null(weight)) {
+    NULL
+  } else {
+    weight <- as.double(weight)
+    if (length(weight) == 1L) {
+      rep(weight, length(x))
+    } else if (length(weight) == length(x)) {
+      weight
+    } else {
+      cli::cli_abort(c(
+        "{.arg weight} must be length 1 or the same length as {.arg x}.",
+        i = "{.arg x} has length {length(x)}, but {.arg weight} has length {length(weight)}."
+      ))
+    }
+  }
 
   counts <- rs_aggregate_2d(x, y, w, width, height, xlim[1], xlim[2], ylim[1], ylim[2])
 

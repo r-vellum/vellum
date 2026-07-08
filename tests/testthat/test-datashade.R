@@ -49,3 +49,15 @@ test_that("the how mappings all produce a valid grob", {
     expect_no_error(datashade(x, y, width = 32, height = 32, how = h))
   }
 })
+
+test_that("datashade() validates / recycles the weight vector", {
+  # a scalar weight is recycled to every point (no error)
+  expect_no_error(datashade(c(0.2, 0.8), c(0.2, 0.8), weight = 3, width = 4, height = 4))
+  # a full-length weight is accepted
+  expect_no_error(datashade(c(0.2, 0.8), c(0.2, 0.8), weight = c(1, 2), width = 4, height = 4))
+  # a wrong-length weight is a clear error, not a silent unweighted result
+  expect_error(
+    datashade(c(0.2, 0.5, 0.8), c(0.2, 0.5, 0.8), weight = c(1, 2)),
+    "weight"
+  )
+})

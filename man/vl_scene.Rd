@@ -49,7 +49,7 @@ longer \strong{description} (alt text) for the scene. When either is set, the SV
 backend emits \code{role="img"} + \verb{<title>}/\verb{<desc>} (referenced by
 \code{aria-labelledby}) and the PDF backend tags the page as a Figure with the
 description as Alt text. \code{NULL} (default) emits no accessibility markup, so
-output is unchanged. See \code{\link[testthat:describe]{describe()}} to set them on an existing scene.}
+output is unchanged. See \code{\link[=describe]{describe()}} to set them on an existing scene.}
 
 \item{scene}{A \code{\link[=vl_scene]{vl_scene()}}.}
 

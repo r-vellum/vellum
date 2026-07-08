@@ -9,6 +9,9 @@
   Purely additive: a scene with no title/desc renders byte-for-byte as before. (Strict
   PDF/UA-1 validation is a planned follow-up; the tag tree + Alt ship now.)
 
+* `datashade(weight=)` now recycles a scalar and errors on a wrong-length vector,
+  instead of silently discarding a mismatched weight and reverting to a plain count.
+
 # vellum 0.1.1
 
 * **Compound `native + mm` / `npc + mm` units.** A position unit combined with an

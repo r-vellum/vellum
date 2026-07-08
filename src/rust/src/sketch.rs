@@ -480,7 +480,9 @@ fn hachure_segments(input: &[Vec<Pt>], angle_deg: f64, gap: f64) -> Vec<(Pt, Pt)
                 xs.push(a.0 + t * (b.0 - a.0));
             }
         }
-        xs.sort_by(|p, q| p.partial_cmp(q).unwrap());
+        // total_cmp can't panic (partial_cmp().unwrap() would on a NaN). Callers
+        // pre-filter non-finite points, so this is defensive, not reachable today.
+        xs.sort_by(f64::total_cmp);
         let mut i = 0;
         while i + 1 < xs.len() {
             let p0 = unrot((xs[i], y));
