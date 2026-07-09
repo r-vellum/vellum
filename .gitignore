@@ -5,3 +5,4 @@ src/Makevars.win
 Rplots.pdf
 **/Rplots.pdf
 docs/vignettes/figure/
+docs/
