@@ -90,6 +90,14 @@ test_that("display() honors the authored dpi on a device that misreports px size
   # path must distrust that and render at the scene's authored dpi instead of
   # clamping detail to 72 and upscaling a soft bitmap.
   skip_if_not_installed("png")
+  # Pin that misreport: quartz png reports size_in*72, but cairo png (Linux)
+  # reports true px, which would (correctly, by design) let the trustworthy
+  # device density win. Mock it so this test deterministically exercises the
+  # untrustworthy-device fallback on every backend.
+  local_mocked_bindings(
+    dev.size = function(units = "in", ...) if (identical(units, "px")) c(504, 360) else c(7, 5),
+    .package = "grDevices"
+  )
   s <- .dpi_probe_scene()
   lo <- S7::set_props(s, dpi = 72)
   hi <- S7::set_props(s, dpi = 200)
@@ -106,6 +114,12 @@ test_that("display() honors the authored dpi on a device that misreports px size
 
 test_that("display() lets the knitr chunk dpi win when knitting", {
   skip_if_not_installed("png")
+  # Pin the px misreport (see the previous test) so the non-knit render falls
+  # back to the authored dpi on cairo as well as quartz.
+  local_mocked_bindings(
+    dev.size = function(units = "in", ...) if (identical(units, "px")) c(504, 360) else c(7, 5),
+    .package = "grDevices"
+  )
   s <- S7::set_props(.dpi_probe_scene(), dpi = 72) # authored low; chunk asks high
   withr::local_options(knitr.in.progress = TRUE)
   # Stub knitr::opts_current$get('dpi') -> 200 without a full knit.
