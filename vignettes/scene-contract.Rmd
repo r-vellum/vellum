@@ -1,8 +1,8 @@
 ---
-title: "The scene contract: what quill and gloss depend on"
+title: "The scene contract: what vellumplot and vellumwidget depend on"
 output: rmarkdown::html_vignette
 vignette: >
-  %\VignetteIndexEntry{The scene contract: what quill and gloss depend on}
+  %\VignetteIndexEntry{The scene contract: what vellumplot and vellumwidget depend on}
   %\VignetteEngine{knitr::rmarkdown}
   %\VignetteEncoding{UTF-8}
 ---
@@ -20,9 +20,9 @@ knitr::opts_chunk$set(
 library(vellum)
 ```
 
-vellum is the backend for a small ecosystem: [quill](https://schochastics.github.io/quill/)
+vellum is the backend for a small ecosystem: [vellumplot](https://r-vellum.github.io/vellumplot/)
 compiles a grammar of graphics *into* a vellum scene, and
-[gloss](https://schochastics.github.io/gloss/) turns a rendered scene into an
+[vellumwidget](https://r-vellum.github.io/vellumwidget/) turns a rendered scene into an
 interactive HTML widget. Both bind to a narrow seam — `scene_model()`,
 `scene_svg()`, and the per-element metadata that rides on grobs. Because the
 three packages are version-locked and co-released, a change to that seam can
@@ -36,12 +36,12 @@ which is kept only as history.)
 ## The seam, in one picture
 
 ```
-  quill  ──compiles a plot to grobs carrying──▶  key / meta / id / role
+  vellumplot  ──compiles a plot to grobs carrying──▶  key / meta / id / role
                                                         │
   vellum  ──renders──▶  scene_svg()   (data-key, data-vellum-*, role attrs)
                         scene_model()  (per-element table: identity + bbox)
                                                         │
-  gloss  ──reads scene_svg() + scene_model()──▶  hover / select / brush / link
+  vellumwidget  ──reads scene_svg() + scene_model()──▶  hover / select / brush / link
 ```
 
 Everything below the grammar is *pure metadata*: a static PNG/SVG render never
@@ -149,19 +149,19 @@ Columns: `name`, `x0`, `y0`, `x1`, `y1`.
 
 vellum treats `meta` as opaque: it is a free-form list, recycled to the element
 count and carried through untouched — vellum does **not** name or validate its
-keys. The following key names are **conventions** the grammar (quill) writes and
-the widget (gloss) reads. Documenting them here keeps the three layers in step;
+keys. The following key names are **conventions** the grammar (vellumplot) writes and
+the widget (vellumwidget) reads. Documenting them here keeps the three layers in step;
 they are not enforced by vellum.
 
 | `meta` key | written by | read by | purpose |
 |---|---|---|---|
-| `tooltip` | quill `tooltip=` | gloss | hover tooltip text (falls back to `key`) |
-| `data_id` | quill `data_id=` | (becomes the `key`) | the data key for an element |
-| `hover_group` | quill `hover_group=` | gloss | co-highlight a group on hover |
-| `hover_color` | quill mark aesthetic | gloss | per-element hover outline colour |
-| `selected_color` | quill mark aesthetic | gloss | per-element selection colour |
-| `legend` | quill legend keying | gloss | the series a mark belongs to |
-| `legend_for` | quill legend keying | gloss | the series a legend swatch drives (`"<aes>:<level>"`) |
+| `tooltip` | vellumplot `tooltip=` | vellumwidget | hover tooltip text (falls back to `key`) |
+| `data_id` | vellumplot `data_id=` | (becomes the `key`) | the data key for an element |
+| `hover_group` | vellumplot `hover_group=` | vellumwidget | co-highlight a group on hover |
+| `hover_color` | vellumplot mark aesthetic | vellumwidget | per-element hover outline colour |
+| `selected_color` | vellumplot mark aesthetic | vellumwidget | per-element selection colour |
+| `legend` | vellumplot legend keying | vellumwidget | the series a mark belongs to |
+| `legend_for` | vellumplot legend keying | vellumwidget | the series a legend swatch drives (`"<aes>:<level>"`) |
 
 If you add a convention, add it here.
 
@@ -201,16 +201,16 @@ A scene carries an optional accessible **name** and **description**, set with
   whose `Alt` is the description.
 
 This is additive: with no title/desc the output is unchanged. The grammar layer
-(`quill`) sets these automatically from the plot's title and an auto-generated (or
-`labs(alt=)`) alt text — see quill's [Accessibility
-article](https://schochastics.github.io/quill/articles/accessibility.html).
+(`vellumplot`) sets these automatically from the plot's title and an auto-generated (or
+`labs(alt=)`) alt text — see vellumplot's [Accessibility
+article](https://r-vellum.github.io/vellumplot/articles/accessibility.html).
 Per-element `role` (above) is a genuine ARIA role; the interactive widget layer
-(`gloss`) adds
+(`vellumwidget`) adds
 keyboard navigation and live-region announcements on top.
 
 ## Invariants the contract guarantees
 
-These are the properties quill and gloss are entitled to rely on, and that
+These are the properties vellumplot and vellumwidget are entitled to rely on, and that
 vellum's own tests (`tests/testthat/test-contract.R`) pin down:
 
 1. **Paint order.** `scene_model()$elements` is in draw order, and the SVG emits
@@ -225,13 +225,13 @@ vellum's own tests (`tests/testthat/test-contract.R`) pin down:
    with no keys is identical to the same scene without the machinery, on every
    backend.
 4. **Stable `id` join key.** A grob's `id` surfaces as `data-vellum-id` in the
-   SVG *and* is the join key quill records in its provenance table, so a widget
+   SVG *and* is the join key vellumplot records in its provenance table, so a widget
    can map an SVG node to the grammar record that produced it.
 
 ## For contributors
 
 If you change any of the following, update this article and the contract tests
-in the same commit, and expect to co-release quill and gloss:
+in the same commit, and expect to co-release vellumplot and vellumwidget:
 
 - the `elements`/`panels` column set or types,
 - the `mark` vocabulary,

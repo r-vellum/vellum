@@ -199,7 +199,7 @@ vl_strheight <- function(label, family = "", fontface = "plain",
 #' string. Embedded newlines (`\n`) start a new line (stacked baseline-to-baseline).
 #'
 #' `md()` is vectorised: a length-1 input returns a single `vellum_md_label`; a
-#' longer vector returns a list of them (one per element), so a `quill` mark can
+#' longer vector returns a list of them (one per element), so a `vellumplot` mark can
 #' carry a per-datum rich label.
 #'
 #' @param text A markup string (or a character vector for per-element labels).

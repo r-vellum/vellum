@@ -84,7 +84,7 @@ API, and the scene graph, unit/layout engine, and rendering all run in Rust.
   queried and edited: `node_names()` / `get_node()` / `edit_node()`,
   `hit_test()` to pick the topmost grob under a point, and `scene_model()` to
   serialize a per-element model (data keys, bounding boxes) — the foundation the
-  `quill` grammar and the `gloss` widget layer build on.
+  `vellumplot` grammar and the `vellumwidget` widget layer build on.
 
 ## Interop
 

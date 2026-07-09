@@ -31,7 +31,7 @@ Spans nest (e.g. \verb{**a^2^**}). \code{md()} with no markup is equivalent to t
 string. Embedded newlines (\verb{\\n}) start a new line (stacked baseline-to-baseline).
 
 \code{md()} is vectorised: a length-1 input returns a single \code{vellum_md_label}; a
-longer vector returns a list of them (one per element), so a \code{quill} mark can
+longer vector returns a list of them (one per element), so a \code{vellumplot} mark can
 carry a per-datum rich label.
 }
 \examples{

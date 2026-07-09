@@ -1,4 +1,4 @@
-# The ecosystem contract. vellum is the backend for quill (grammar) and gloss
+# The ecosystem contract. vellum is the backend for vellumplot (grammar) and vellumwidget
 # (widget); both bind to the shape of `scene_model()` and the SVG attributes
 # `scene_svg()` emits. These tests pin that contract so a change here fails
 # loudly (and forces a co-release) rather than silently breaking the layers

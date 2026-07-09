@@ -6,9 +6,9 @@ Authors@R:
 Description: A grid-like low-level graphics system for R whose scene
     graph, unit/layout engine, and rendering run in a Rust backend.
 License: MIT + file LICENSE
-URL: https://github.com/schochastics/vellum,
-    https://schochastics.github.io/vellum/
-BugReports: https://github.com/schochastics/vellum/issues
+URL: https://github.com/r-vellum/vellum,
+    https://r-vellum.github.io/vellum/
+BugReports: https://github.com/r-vellum/vellum/issues
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
 RoxygenNote: 8.0.0.9000

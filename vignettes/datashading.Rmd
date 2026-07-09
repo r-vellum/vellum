@@ -248,10 +248,10 @@ Rscript inst/examples/attractors.R gallery.png 1e7
 
 `datashade()` is the low-level engine: you supply the coordinates, the limits,
 and the ramp. A grammar layer on top can wire all of that up from a plot spec.
-[quill](https://schochastics.github.io/quill/) exposes it as `mark_datashade()`,
+[vellumplot](https://r-vellum.github.io/vellumplot/) exposes it as `mark_datashade()`,
 which bins straight from a data frame and fits into a normal plot with scales,
 guides, and facets. Its
-[datashading article](https://schochastics.github.io/quill/articles/datashading.html)
+[datashading article](https://r-vellum.github.io/vellumplot/articles/datashading.html)
 pushes the same engine to its limit, shading the full US Census (about 306
 million points) two ways.
 ```

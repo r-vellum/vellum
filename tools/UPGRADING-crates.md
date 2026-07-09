@@ -64,6 +64,6 @@ refresh; re-check the PDF snapshot tests after any bump.
   cover the R side only). A crate-level updater could be added.
 - No CI check that `vendor.tar.xz` matches `Cargo.lock`. A cheap guard would run
   `tools/vendor.sh`, then fail if `git status --porcelain src/rust/vendor.tar.xz`
-  is dirty — the same pattern the gloss bundle-sync job uses. (Note xz output is
+  is dirty — the same pattern the vellumwidget bundle-sync job uses. (Note xz output is
   not guaranteed byte-identical across `xz` versions, so such a check should
   compare the extracted tree, not the tarball bytes.)

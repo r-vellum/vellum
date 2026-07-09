@@ -1,10 +1,10 @@
-url: https://schochastics.github.io/vellum/
+url: https://r-vellum.github.io/vellum/
 
 template:
   bootstrap: 5
   math-rendering: mathjax
   bslib:
-    # A parchment / sepia palette echoing the vellum & quill hex logos.
+    # A parchment / sepia palette echoing the vellum & vellumplot hex logos.
     bg: "#faf5ea"
     fg: "#2c2113"
     primary: "#6b4f2c"
@@ -38,37 +38,37 @@ home:
       ecosystem:
         title: The ecosystem
         text: >
-          [vellum](https://schochastics.github.io/vellum/) · the parchment
+          [vellum](https://r-vellum.github.io/vellum/) · the parchment
           (backend)<br>
-          [quill](https://schochastics.github.io/quill/) · the pen (grammar)<br>
-          [gloss](https://schochastics.github.io/gloss/) · the gloss
+          [vellumplot](https://r-vellum.github.io/vellumplot/) · the pen (grammar)<br>
+          [vellumwidget](https://r-vellum.github.io/vellumwidget/) · the vellumwidget
           (interactivity)<br>
-          [scriptorium](https://schochastics.github.io/scriptorium/) · loads
+          [vellumverse](https://r-vellum.github.io/vellumverse/) · loads
           them together
 
 navbar:
   structure:
     left: [intro, articles, reference, news]
-    right: [search, quill, gloss, scriptorium, github]
+    right: [search, vellumplot, vellumwidget, vellumverse, github]
   components:
     intro:
       text: Get started
       href: articles/vellum.html
-    quill:
+    vellumplot:
       icon: fa-feather-pointed
-      href: https://schochastics.github.io/quill/
-      aria-label: quill
-    gloss:
+      href: https://r-vellum.github.io/vellumplot/
+      aria-label: vellumplot
+    vellumwidget:
       icon: fa-highlighter
-      href: https://schochastics.github.io/gloss/
-      aria-label: gloss
-    scriptorium:
+      href: https://r-vellum.github.io/vellumwidget/
+      aria-label: vellumwidget
+    vellumverse:
       icon: fa-book
-      href: https://schochastics.github.io/scriptorium/
-      aria-label: scriptorium
+      href: https://r-vellum.github.io/vellumverse/
+      aria-label: vellumverse
     github:
       icon: fa-github
-      href: https://github.com/schochastics/vellum
+      href: https://github.com/r-vellum/vellum
       aria-label: GitHub
 
 articles:
