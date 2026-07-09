@@ -48,9 +48,12 @@ home:
 
 navbar:
   structure:
-    left: [intro, articles, reference, news]
+    left: [intro, articles, gallery, reference, news]
     right: [search, vellumplot, vellumwidget, vellumverse, github]
   components:
+    gallery:
+      text: Gallery
+      href: https://r-vellum.github.io/vellumgallery/
     intro:
       text: Get started
       href: articles/vellum.html
