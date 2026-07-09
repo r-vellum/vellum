@@ -56,7 +56,7 @@ by rendering.}
 A \code{style} object (a subclass of \code{gpar}).
 }
 \description{
-A \code{style} bundles \code{\link[=gpar]{gpar()}} graphical parameters under an optional name so the
+A \code{style} bundles \code{\link[=vl_gpar]{vl_gpar()}} graphical parameters under an optional name so the
 same look can be reused across many viewports or grobs. A \code{style} \strong{is} a
 \code{gpar} — it carries every graphical-parameter field and obeys the same
 inheritance rules — with an added \code{name} for identification. It can therefore
@@ -72,5 +72,5 @@ rather than setting gpar fields ad hoc on every element.
 \examples{
 accent <- style(col = "firebrick", lwd = 2, name = "accent")
 # Reuse it on a viewport; children inherit unless they override.
-viewport(gp = accent)
+vl_viewport(gp = accent)
 }

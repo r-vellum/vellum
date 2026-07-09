@@ -1,5 +1,5 @@
 #!/usr/bin/env Rscript
-# Benchmark: repaint boundaries (FW4c). A `viewport(cache = TRUE)` subtree is
+# Benchmark: repaint boundaries (FW4c). A `vl_viewport(cache = TRUE)` subtree is
 # rasterised once and reused on later renders when unchanged, so a partial redraw
 # (highlight/hover: edit one element and re-render) re-rasterises only the changed
 # subtree, not the whole scene.
@@ -42,16 +42,16 @@ build <- function(n, cache) {
   bx <- runif(n)
   by <- runif(n)
   vellum::vl_scene(width, height, dpi = dpi, bg = "white") |>
-    vellum::push(vellum::viewport(cache = cache, name = "bg", xscale = c(0, 1), yscale = c(0, 1))) |>
+    vellum::push(vellum::vl_viewport(cache = cache, name = "bg", xscale = c(0, 1), yscale = c(0, 1))) |>
     vellum::draw(vellum::points_grob(
-      vellum::unit(bx, "native"), vellum::unit(by, "native"),
-      size = vellum::unit(1.5, "mm"), gp = vellum::gpar(fill = "#3a86ff30", col = NA)
+      vellum::vl_unit(bx, "native"), vellum::vl_unit(by, "native"),
+      size = vellum::vl_unit(1.5, "mm"), gp = vellum::vl_gpar(fill = "#3a86ff30", col = NA)
     )) |>
     vellum::pop() |>
-    vellum::push(vellum::viewport(cache = TRUE, name = "fg")) |>
+    vellum::push(vellum::vl_viewport(cache = TRUE, name = "fg")) |>
     vellum::draw(vellum::circle_grob(
       x = 0.5, y = 0.5, r = 0.03,
-      gp = vellum::gpar(fill = "black", col = NA), name = "dot"
+      gp = vellum::vl_gpar(fill = "black", col = NA), name = "dot"
     )) |>
     vellum::pop()
 }
@@ -60,7 +60,7 @@ build <- function(n, cache) {
 highlight_loop <- function(s, m, out) {
   cols <- grDevices::hcl.colors(m, "Reds")
   for (k in seq_len(m)) {
-    s <- vellum::edit_node(s, "dot", gp = vellum::gpar(fill = cols[k], col = NA))
+    s <- vellum::edit_node(s, "dot", gp = vellum::vl_gpar(fill = cols[k], col = NA))
     vellum::render(s, out)
   }
 }

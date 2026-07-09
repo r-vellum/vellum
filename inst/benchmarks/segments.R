@@ -50,9 +50,9 @@ vellum_png <- file.path(out_dir, "segments-vellum.png")
 t_vellum <- bench("vellum", {
   s <- vellum::vl_scene(width, height, dpi = dpi, bg = "white") |>
     vellum::draw(vellum::segments_grob(
-      vellum::unit(x0, "npc"), vellum::unit(y0, "npc"),
-      vellum::unit(x1, "npc"), vellum::unit(y1, "npc"),
-      gp = vellum::gpar(col = "darkred")
+      vellum::vl_unit(x0, "npc"), vellum::vl_unit(y0, "npc"),
+      vellum::vl_unit(x1, "npc"), vellum::vl_unit(y1, "npc"),
+      gp = vellum::vl_gpar(col = "darkred")
     ))
   vellum::render(s, vellum_png)
 })

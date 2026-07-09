@@ -1,5 +1,10 @@
 # vellum (development version)
 
+* **Breaking: renamed the grid-colliding exports to a `vl_` prefix** so
+  attaching vellum no longer masks grid: `gpar()` → `vl_gpar()`, `unit()` →
+  `vl_unit()`, `viewport()` → `vl_viewport()`, `arrow()` → `vl_arrow()`, and
+  `pattern()` → `vl_pattern()`. The old names are removed (no aliases).
+
 * **Multi-line and per-datum rich text.** `text_grob()` labels may now contain
   embedded newlines (`\n`), stacked baseline-to-baseline; `md()` gained the same
   and is now **vectorised** — `md(x)` returns a single label for a length-1 `x` or

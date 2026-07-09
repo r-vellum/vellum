@@ -25,13 +25,13 @@ nonfinite <- list(pos_inf = Inf, neg_inf = -Inf, nan = NaN, na = NA_real_)
 test_that("non-finite coordinates render gracefully across batched primitives", {
   for (bad in nonfinite) {
     prims <- list(
-      points = points_grob(c(0.5, bad), c(0.5, 0.5), size = unit(3, "mm"),
-                            gp = gpar(fill = "red")),
-      circle = circle_grob(c(0.5, bad), 0.5, r = unit(2, "mm"), gp = gpar(fill = "red")),
-      rect   = rect_grob(c(0.5, bad), 0.5, width = 0.2, height = 0.2, gp = gpar(fill = "red")),
-      seg    = segments_grob(c(0.1, bad), 0.1, 0.9, 0.9, gp = gpar(col = "black")),
-      line   = lines_grob(c(0.1, 0.4, bad, 0.9), 0.5, gp = gpar(col = "black")),
-      poly   = polygon_grob(c(0.1, 0.9, bad), c(0.1, 0.1, 0.9), gp = gpar(fill = "red"))
+      points = points_grob(c(0.5, bad), c(0.5, 0.5), size = vl_unit(3, "mm"),
+                            gp = vl_gpar(fill = "red")),
+      circle = circle_grob(c(0.5, bad), 0.5, r = vl_unit(2, "mm"), gp = vl_gpar(fill = "red")),
+      rect   = rect_grob(c(0.5, bad), 0.5, width = 0.2, height = 0.2, gp = vl_gpar(fill = "red")),
+      seg    = segments_grob(c(0.1, bad), 0.1, 0.9, 0.9, gp = vl_gpar(col = "black")),
+      line   = lines_grob(c(0.1, 0.4, bad, 0.9), 0.5, gp = vl_gpar(col = "black")),
+      poly   = polygon_grob(c(0.1, 0.9, bad), c(0.1, 0.1, 0.9), gp = vl_gpar(fill = "red"))
     )
     for (nm in names(prims)) {
       sc <- vl_scene(2, 2, dpi = 50, bg = "white") |> draw(prims[[nm]])
@@ -45,8 +45,8 @@ test_that("a non-finite bbox does not break the scene_model positional zip", {
   # and key order even when a coordinate is non-finite.
   for (bad in nonfinite) {
     sc <- vl_scene(2, 2, dpi = 50) |>
-      draw(points_grob(c(0.5, bad), c(0.5, 0.5), size = unit(3, "mm"),
-                       gp = gpar(fill = "red"), key = c("a", "b")))
+      draw(points_grob(c(0.5, bad), c(0.5, 0.5), size = vl_unit(3, "mm"),
+                       gp = vl_gpar(fill = "red"), key = c("a", "b")))
     m <- scene_model(sc)
     expect_equal(nrow(m$elements), 2L)
     expect_identical(m$elements$key, c("a", "b"))
@@ -63,12 +63,12 @@ test_that("non-finite angles and negative extents are rejected at construction",
   expect_error(sector_grob(0.5, 0.5, theta0 = 0, theta1 = NaN), "finite")
   expect_error(sector_grob(0.5, 0.5, theta0 = Inf, theta1 = 1), "finite")
   expect_error(rect_grob(0.5, 0.5, width = -1, height = 0.2), "non-negative")
-  expect_error(circle_grob(0.5, 0.5, r = unit(-2, "mm")), "non-negative")
+  expect_error(circle_grob(0.5, 0.5, r = vl_unit(-2, "mm")), "non-negative")
 })
 
 test_that("empty inputs are a no-op, not an error", {
   sc <- vl_scene(2, 2, dpi = 50) |>
-    draw(points_grob(numeric(0), numeric(0), gp = gpar(fill = "red")))
+    draw(points_grob(numeric(0), numeric(0), gp = vl_gpar(fill = "red")))
   expect_no_error(render_all(sc))
   expect_equal(nrow(scene_model(sc)$elements), 0L)
 })
@@ -78,7 +78,7 @@ test_that("a large point cloud renders without crashing the session", {
   x <- stats::runif(n)
   y <- stats::runif(n)
   sc <- vl_scene(3, 3, dpi = 72, bg = "white") |>
-    draw(points_grob(x, y, size = unit(0.5, "mm"), gp = gpar(fill = "black")))
+    draw(points_grob(x, y, size = vl_unit(0.5, "mm"), gp = vl_gpar(fill = "black")))
   expect_no_error(scene_raster(sc))
 })
 

@@ -17,7 +17,7 @@ edit_node(scene, name, ...)
 
 \item{name}{A node name (set via the \code{name} argument of a grob/viewport).}
 
-\item{...}{Properties to set, e.g. \code{gp = gpar(col = "red")}.}
+\item{...}{Properties to set, e.g. \code{gp = vl_gpar(col = "red")}.}
 }
 \value{
 \code{node_names()}: character. \code{get_node()}: a node. \code{edit_node()}: a

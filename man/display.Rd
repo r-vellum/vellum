@@ -41,7 +41,7 @@ live device reports a trustworthy higher density (e.g. a resized Plots pane).
 \examples{
 \dontrun{
 vl_scene(4, 3) |>
-  draw(circle_grob(r = 0.3, gp = gpar(fill = "tomato", col = NA))) |>
+  draw(circle_grob(r = 0.3, gp = vl_gpar(fill = "tomato", col = NA))) |>
   display()
 }
 }

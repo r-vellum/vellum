@@ -15,7 +15,7 @@ test_that(".emit_degrade_warnings warns by default and is silent when opted out"
 
 test_that("a render that the backend can fully honour emits no degradation warning", {
   # A plain fill on every backend is fully reproducible -> no warning.
-  s <- vl_scene(2, 2) |> draw(circle_grob(r = 0.3, gp = gpar(fill = "blue", col = NA)))
+  s <- vl_scene(2, 2) |> draw(circle_grob(r = 0.3, gp = vl_gpar(fill = "blue", col = NA)))
   for (ext in c("png", "svg", "pdf")) {
     f <- tempfile(fileext = paste0(".", ext))
     expect_no_warning(render(s, f))

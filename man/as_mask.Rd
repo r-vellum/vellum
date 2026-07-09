@@ -17,10 +17,10 @@ coordinate system.}
 A \code{vellum_mask} object.
 }
 \description{
-Wrap a grob (or list of grobs) as a mask for \code{viewport(mask = ...)}. The mask
+Wrap a grob (or list of grobs) as a mask for \code{vl_viewport(mask = ...)}. The mask
 content is rendered to an isolated layer; its coverage then modulates the
 visibility of the viewport's contents.
 }
 \examples{
-as_mask(circle_grob(r = 0.4, gp = gpar(fill = "white", col = NA)))
+as_mask(circle_grob(r = 0.4, gp = vl_gpar(fill = "white", col = NA)))
 }

@@ -45,7 +45,7 @@ t_grid <- bench("grid", {
 vellum_scene <- function() {
   vellum::vl_scene(width, height, dpi = dpi, bg = "white") |>
     vellum::draw(vellum::text_grob(labs, x = x, y = y,
-                                   gp = vellum::gpar(fontsize = fontsize, col = "black")))
+                                   gp = vellum::vl_gpar(fontsize = fontsize, col = "black")))
 }
 out <- file.path(out_dir, "text-vellum.png")
 

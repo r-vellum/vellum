@@ -1,4 +1,4 @@
-# Batched primitives (P1): one FFI call + one shared gpar for rect/circle/points,
+# Batched primitives (P1): one FFI call + one shared vl_gpar for rect/circle/points,
 # with a raster sprite fast path for large uniform point clouds. Probes go through
 # a compiled backend Scene in-memory.
 
@@ -7,9 +7,9 @@ px <- function(scene, x, y) .scene_to_backend(scene)$pixel(x, y)
 test_that("a multi-element rect grob draws every rectangle", {
   s <- vl_scene(1, 1, dpi = 100, bg = "white") |>
     draw(rect_grob(
-      x = unit(c(0.25, 0.75), "npc"), y = unit(c(0.25, 0.75), "npc"),
-      width = unit(0.2, "npc"), height = unit(0.2, "npc"),
-      gp = gpar(fill = "red", col = NA)
+      x = vl_unit(c(0.25, 0.75), "npc"), y = vl_unit(c(0.25, 0.75), "npc"),
+      width = vl_unit(0.2, "npc"), height = vl_unit(0.2, "npc"),
+      gp = vl_gpar(fill = "red", col = NA)
     ))
   expect_equal(px(s, 25, 75)[1:3], c(255L, 0L, 0L)) # lower-left rect (y flips)
   expect_equal(px(s, 75, 25)[1:3], c(255L, 0L, 0L)) # upper-right rect
@@ -19,8 +19,8 @@ test_that("a multi-element rect grob draws every rectangle", {
 test_that("a multi-element circle grob draws every circle", {
   s <- vl_scene(1, 1, dpi = 100, bg = "white") |>
     draw(circle_grob(
-      x = unit(c(0.3, 0.7), "npc"), y = unit(c(0.5, 0.5), "npc"),
-      r = unit(0.1, "npc"), gp = gpar(fill = "blue", col = NA)
+      x = vl_unit(c(0.3, 0.7), "npc"), y = vl_unit(c(0.5, 0.5), "npc"),
+      r = vl_unit(0.1, "npc"), gp = vl_gpar(fill = "blue", col = NA)
     ))
   expect_equal(px(s, 30, 50)[1:3], c(0L, 0L, 255L))
   expect_equal(px(s, 70, 50)[1:3], c(0L, 0L, 255L))
@@ -30,7 +30,7 @@ test_that("a multi-element circle grob draws every circle", {
 test_that("batched rects with a stroke render fill and border", {
   s <- vl_scene(1, 1, dpi = 100, bg = "white") |>
     draw(rect_grob(x = 0.5, y = 0.5, width = 0.6, height = 0.6,
-                   gp = gpar(fill = "red", col = "blue", lwd = 4)))
+                   gp = vl_gpar(fill = "red", col = "blue", lwd = 4)))
   expect_equal(px(s, 50, 50)[1:3], c(255L, 0L, 0L)) # centre: fill
   expect_equal(px(s, 50, 20)[1:3], c(0L, 0L, 255L)) # top edge (npc 0.8): border
 })
@@ -40,8 +40,8 @@ test_that("a large uniform point cloud renders via the sprite path", {
   # should paint its region and leave the corner as background.
   g <- expand.grid(x = seq(0.2, 0.8, length.out = 110), y = seq(0.2, 0.8, length.out = 110))
   s <- vl_scene(1, 1, dpi = 100, bg = "white") |>
-    draw(points_grob(unit(g$x, "npc"), unit(g$y, "npc"), size = unit(2, "mm"),
-                     gp = gpar(fill = "darkgreen", col = NA)))
+    draw(points_grob(vl_unit(g$x, "npc"), vl_unit(g$y, "npc"), size = vl_unit(2, "mm"),
+                     gp = vl_gpar(fill = "darkgreen", col = NA)))
   centre <- px(s, 50, 50)
   expect_true(centre[2] > 80L && centre[1] < 60L && centre[3] < 60L) # green-ish
   expect_equal(px(s, 3, 3)[1:3], c(255L, 255L, 255L)) # corner: background
@@ -50,15 +50,15 @@ test_that("a large uniform point cloud renders via the sprite path", {
 test_that("points with a stroke fall back to per-element drawing", {
   g <- expand.grid(x = seq(0.2, 0.8, length.out = 110), y = seq(0.2, 0.8, length.out = 110))
   s <- vl_scene(1, 1, dpi = 100, bg = "white") |>
-    draw(points_grob(unit(g$x, "npc"), unit(g$y, "npc"), size = unit(2, "mm"),
-                     gp = gpar(fill = "white", col = "black", lwd = 1)))
+    draw(points_grob(vl_unit(g$x, "npc"), vl_unit(g$y, "npc"), size = vl_unit(2, "mm"),
+                     gp = vl_gpar(fill = "white", col = "black", lwd = 1)))
   expect_no_error(.scene_to_backend(s)$pixel(50, 50))
 })
 
 test_that("a gradient-filled circle batch uses the per-element path", {
   s <- vl_scene(1, 1, dpi = 100, bg = "white") |>
     draw(circle_grob(x = 0.5, y = 0.5, r = 0.4,
-                     gp = gpar(col = NA, fill = radial_gradient(c("red", "yellow")))))
+                     gp = vl_gpar(col = NA, fill = radial_gradient(c("red", "yellow")))))
   centre <- px(s, 50, 50)
   expect_true(centre[1] > 200L && centre[2] < 80L) # red core
 })
@@ -66,9 +66,9 @@ test_that("a gradient-filled circle batch uses the per-element path", {
 test_that("the sprite path respects clipping", {
   g <- expand.grid(x = seq(0.05, 0.95, length.out = 110), y = seq(0.05, 0.95, length.out = 110))
   s <- vl_scene(1, 1, dpi = 100, bg = "white") |>
-    push(viewport(width = 0.4, height = 0.4, clip = TRUE)) |>
-    draw(points_grob(unit(g$x, "npc"), unit(g$y, "npc"), size = unit(2, "mm"),
-                     gp = gpar(fill = "darkgreen", col = NA))) |>
+    push(vl_viewport(width = 0.4, height = 0.4, clip = TRUE)) |>
+    draw(points_grob(vl_unit(g$x, "npc"), vl_unit(g$y, "npc"), size = vl_unit(2, "mm"),
+                     gp = vl_gpar(fill = "darkgreen", col = NA))) |>
     pop()
   # The viewport occupies the central 40%; outside it must stay background.
   expect_equal(px(s, 5, 5)[1:3], c(255L, 255L, 255L))
@@ -78,9 +78,9 @@ test_that("the sprite path respects clipping", {
 test_that("point markers render distinct shapes; default circle keeps the fast path", {
   shp <- function(shape, gp) {
     vl_scene(1, 1, dpi = 100, bg = "white") |>
-      draw(points_grob(unit(0.5, "npc"), unit(0.5, "npc"), size = unit(0.4, "npc"), shape = shape, gp = gp))
+      draw(points_grob(vl_unit(0.5, "npc"), vl_unit(0.5, "npc"), size = vl_unit(0.4, "npc"), shape = shape, gp = gp))
   }
-  blue <- gpar(fill = "blue", col = NA)
+  blue <- vl_gpar(fill = "blue", col = NA)
   # filled shapes paint the centre blue
   for (s in c("circle", "square", "triangle", "diamond")) {
     expect_equal(px(shp(s, blue), 50, 50)[1:3], c(0L, 0L, 255L), info = s)
@@ -89,7 +89,7 @@ test_that("point markers render distinct shapes; default circle keeps the fast p
   expect_equal(px(shp("square", blue), 12, 12)[1:3], c(0L, 0L, 255L))
   expect_equal(px(shp("circle", blue), 12, 12)[1:3], c(255L, 255L, 255L))
   # plus is stroke-only: centre inked, mid-quadrant empty
-  pl <- shp("plus", gpar(col = "black", lwd = 3))
+  pl <- shp("plus", vl_gpar(col = "black", lwd = 3))
   expect_lt(px(pl, 50, 50)[1], 128L)
   expect_equal(px(pl, 70, 30)[1:3], c(255L, 255L, 255L))
   # an unknown shape errors

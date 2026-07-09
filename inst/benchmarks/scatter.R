@@ -55,10 +55,10 @@ t_grid <- bench("grid", {
 vellum_png <- file.path(out_dir, "scatter-vellum.png")
 t_vellum <- bench("vellum", {
   s <- vellum::vl_scene(width, height, dpi = dpi, bg = "white") |>
-    vellum::push(vellum::viewport(xscale = c(0, 1), yscale = c(0, 1))) |>
+    vellum::push(vellum::vl_viewport(xscale = c(0, 1), yscale = c(0, 1))) |>
     vellum::draw(vellum::points_grob(
-      vellum::unit(x, "native"), vellum::unit(y, "native"),
-      size = vellum::unit(1, "mm"), gp = vellum::gpar(fill = col, col = NA)
+      vellum::vl_unit(x, "native"), vellum::vl_unit(y, "native"),
+      size = vellum::vl_unit(1, "mm"), gp = vellum::vl_gpar(fill = col, col = NA)
     )) |>
     vellum::pop()
   vellum::render(s, vellum_png)

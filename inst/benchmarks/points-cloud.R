@@ -49,8 +49,8 @@ vellum_png <- file.path(out_dir, "points-cloud-vellum.png")
 t_vellum <- bench("vellum", {
   s <- vellum::vl_scene(width, height, dpi = dpi, bg = "white") |>
     vellum::draw(vellum::points_grob(
-      vellum::unit(x, "npc"), vellum::unit(y, "npc"),
-      size = vellum::unit(0.5, "mm"), gp = vellum::gpar(fill = col, col = NA)
+      vellum::vl_unit(x, "npc"), vellum::vl_unit(y, "npc"),
+      size = vellum::vl_unit(0.5, "mm"), gp = vellum::vl_gpar(fill = col, col = NA)
     ))
   vellum::render(s, vellum_png)
 })

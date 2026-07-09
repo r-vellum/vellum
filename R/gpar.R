@@ -22,10 +22,10 @@
 #' @param lineheight Line-height multiple.
 #' @return A `gpar` object.
 #' @examples
-#' gpar(col = "steelblue", lwd = 2, lty = "dashed", lineend = "round")
+#' vl_gpar(col = "steelblue", lwd = 2, lty = "dashed", lineend = "round")
 #' @export
-gpar <- S7::new_class(
-  "gpar",
+vl_gpar <- S7::new_class(
+  "vl_gpar",
   package = "vellum",
   properties = list(
     col        = S7::new_property(S7::class_any, default = NULL),
@@ -58,6 +58,6 @@ gpar <- S7::new_class(
 # An S7 property typed as a `unit` vector, with a quoted default evaluated at
 # construction (so it works regardless of file collation order). Shared by grob
 # and viewport classes; lives here because gpar.R is collated first.
-.unit_prop <- function(default = "unit(0.5, \"npc\")") {
+.unit_prop <- function(default = "vl_unit(0.5, \"npc\")") {
   S7::new_property(S7::new_S3_class("vellum_unit"), default = str2lang(default))
 }

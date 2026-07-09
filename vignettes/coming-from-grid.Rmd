@@ -30,12 +30,12 @@ differently on purpose.
 | grid | vellum | notes |
 |------|--------|-------|
 | `grid.newpage()` | `vl_scene()` | vellum's scene also fixes page size, background, and dpi up front |
-| `unit(1, "native")` | `unit(1, "native")` | same idea; each element carries its own unit |
-| `viewport()` | `viewport()` | region with its own `xscale` / `yscale` |
+| `unit(1, "native")` | `vl_unit(1, "native")` | same idea; each element carries its own unit |
+| `viewport()` | `vl_viewport()` | region with its own `xscale` / `yscale` |
 | `pushViewport()` / `popViewport()` | `push()` / `pop()` | functional: they take and return a scene, no global stack |
 | `grid.rect()`, `grid.circle()`, ... | `rect_grob()`, `circle_grob()`, ... plus `draw()` | the constructor builds a value; `draw()` adds it |
 | `rectGrob()`, `gTree()` | `rect_grob()`, the scene tree | grobs are immutable S7 values |
-| `gpar()` | `gpar()` | familiar fields; `fill` also accepts gradients |
+| `gpar()` | `vl_gpar()` | familiar fields; `fill` also accepts gradients |
 | `grid.layout()` | `grid_layout()` | flexible `"null"` tracks work the same |
 | `grid.edit()` / `editGrob()` | `edit_node()` | edit by `name`; copy-on-modify, not in place |
 | `grid.grabExpr()` / display list | the retained scene | the tree is the model; nothing is replayed |
@@ -62,11 +62,11 @@ The same scene in vellum:
 ```{r}
 #| label: translation
 vl_scene(5, 3, bg = "white") |>
-  push(viewport(width = 0.8, height = 0.8,
+  push(vl_viewport(width = 0.8, height = 0.8,
                 xscale = c(0, 10), yscale = c(0, 20))) |>
-  draw(rect_grob(gp = gpar(fill = "grey97", col = "grey70"))) |>
-  draw(lines_grob(x = unit(0:10, "native"), y = unit((0:10) * 2, "native"),
-                  gp = gpar(col = "steelblue", lwd = 2))) |>
+  draw(rect_grob(gp = vl_gpar(fill = "grey97", col = "grey70"))) |>
+  draw(lines_grob(x = vl_unit(0:10, "native"), y = vl_unit((0:10) * 2, "native"),
+                  gp = vl_gpar(col = "steelblue", lwd = 2))) |>
   pop()
 ```
 
@@ -97,15 +97,15 @@ an open device.
 ### Units resolve eagerly, and mixed-unit arithmetic is restricted
 
 Because units resolve eagerly to a flat representation, vellum will *not* defer
-`unit(1, "npc") - unit(2, "mm")` the way grid does. Same-space arithmetic and
-absolute-plus-absolute both work (`unit(10, "mm") + unit(1, "in")` gives
+`vl_unit(1, "npc") - vl_unit(2, "mm")` the way grid does. Same-space arithmetic and
+absolute-plus-absolute both work (`vl_unit(10, "mm") + vl_unit(1, "in")` gives
 `35.4mm`), but mixing a relative and an absolute unit in one expression is
 reported rather than guessed.
 
 ```{r}
 #| label: unit-arith
-unit(10, "mm") + unit(1, "in") # absolute + absolute -> mm
-unit(1:3, "cm") * 2            # scaling is fine
+vl_unit(10, "mm") + vl_unit(1, "in") # absolute + absolute -> mm
+vl_unit(1:3, "cm") * 2            # scaling is fine
 ```
 
 If you have grid code that offsets a relative position by an absolute amount,
@@ -120,9 +120,9 @@ an immutable tree you can query and edit after the fact: `node_names()`,
 `grid.force()` step, and editing a node copies rather than mutating in place.
 See `vignette("retained-mode")` for what this enables.
 
-### `gpar` inherits, but there is no cascade
+### `vl_gpar` inherits, but there is no cascade
 
-`gpar()` inheritance works as in grid: a field left `NULL` is inherited from the
+`vl_gpar()` inheritance works as in grid: a field left `NULL` is inherited from the
 enclosing viewport, and `alpha` multiplies down the tree. vellum does not add a
 CSS-like cascade with selectors or theme objects at this layer; that is a
 grammar-layer concern.

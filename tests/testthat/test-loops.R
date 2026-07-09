@@ -12,8 +12,8 @@ reach <- function(s, w) {
 
 test_that("a loop is a teardrop through the vertex, not a hollow ring", {
   s <- vl_scene(3, 3, dpi = 100, bg = "white") |>
-    draw(loop_grob(0.5, 0.5, size = unit(20, "mm"), angle = 0,
-                   gp = gpar(col = "black", lwd = 2)))
+    draw(loop_grob(0.5, 0.5, size = vl_unit(20, "mm"), angle = 0,
+                   gp = vl_gpar(col = "black", lwd = 2)))
   # foot = 0 ⇒ both feet at the vertex, so the curve passes through it (a ring
   # would leave the centre empty). The teardrop bulges out along +x to ~0.3*size.
   expect_lt(px(s, 150, 150)[1], 128L) # vertex is inked (feet meet there)
@@ -22,33 +22,33 @@ test_that("a loop is a teardrop through the vertex, not a hollow ring", {
 
 test_that("the teardrop is a fixed physical size (resolution independent)", {
   r1 <- reach(vl_scene(3, 3, dpi = 100, bg = "white") |>
-    draw(loop_grob(0.5, 0.5, size = unit(20, "mm"), gp = gpar(col = "black", lwd = 2))), 300)
+    draw(loop_grob(0.5, 0.5, size = vl_unit(20, "mm"), gp = vl_gpar(col = "black", lwd = 2))), 300)
   r2 <- reach(vl_scene(3, 3, dpi = 200, bg = "white") |>
-    draw(loop_grob(0.5, 0.5, size = unit(20, "mm"), gp = gpar(col = "black", lwd = 2))), 600)
+    draw(loop_grob(0.5, 0.5, size = vl_unit(20, "mm"), gp = vl_gpar(col = "black", lwd = 2))), 600)
   expect_equal(r2 / r1, 2, tolerance = 0.05) # twice the px at twice the dpi
 })
 
 test_that("angle rotates the loop's outward direction", {
   right <- vl_scene(3, 3, dpi = 100, bg = "white") |>
-    draw(loop_grob(0.5, 0.5, size = unit(20, "mm"), angle = 0, gp = gpar(col = "black", lwd = 2)))
+    draw(loop_grob(0.5, 0.5, size = vl_unit(20, "mm"), angle = 0, gp = vl_gpar(col = "black", lwd = 2)))
   left <- vl_scene(3, 3, dpi = 100, bg = "white") |>
-    draw(loop_grob(0.5, 0.5, size = unit(20, "mm"), angle = pi, gp = gpar(col = "black", lwd = 2)))
+    draw(loop_grob(0.5, 0.5, size = vl_unit(20, "mm"), angle = pi, gp = vl_gpar(col = "black", lwd = 2)))
   expect_gt(reach(right, 300), 15L) # bulges to the right (+x)
   expect_lte(reach(left, 300), 2L) # angle=pi bulges to the left, ~nothing right of centre
 })
 
 test_that("nested loops (growing size) give concentric teardrops", {
   small <- vl_scene(3, 3, dpi = 100, bg = "white") |>
-    draw(loop_grob(0.5, 0.5, size = unit(15, "mm"), gp = gpar(col = "black", lwd = 2)))
+    draw(loop_grob(0.5, 0.5, size = vl_unit(15, "mm"), gp = vl_gpar(col = "black", lwd = 2)))
   big <- vl_scene(3, 3, dpi = 100, bg = "white") |>
-    draw(loop_grob(0.5, 0.5, size = unit(30, "mm"), gp = gpar(col = "black", lwd = 2)))
+    draw(loop_grob(0.5, 0.5, size = vl_unit(30, "mm"), gp = vl_gpar(col = "black", lwd = 2)))
   expect_gt(reach(big, 300), reach(small, 300) + 10L)
 })
 
 test_that("a batch of loops draws each at its own anchor", {
   s <- vl_scene(3, 3, dpi = 100, bg = "white") |>
-    draw(loop_grob(x = c(0.25, 0.75), y = c(0.5, 0.5), size = unit(12, "mm"),
-                   gp = gpar(col = "black", lwd = 2)))
+    draw(loop_grob(x = c(0.25, 0.75), y = c(0.5, 0.5), size = vl_unit(12, "mm"),
+                   gp = vl_gpar(col = "black", lwd = 2)))
   # two vertices, at device x = 75 and 225, both on row y=150.
   expect_lt(px(s, 75, 150)[1], 128L)
   expect_lt(px(s, 225, 150)[1], 128L)
@@ -56,10 +56,10 @@ test_that("a batch of loops draws each at its own anchor", {
 
 test_that("a directed loop puts an arrowhead near the returning foot", {
   mk <- function(arr, foot) vl_scene(3, 3, dpi = 100, bg = "white") |>
-    draw(loop_grob(0.5, 0.5, size = unit(20, "mm"), foot = foot, angle = 0,
-                   arrow = arr, gp = gpar(col = "black", lwd = 2)))
-  bare <- mk(NULL, unit(0, "mm"))
-  head <- mk(arrow(type = "closed", length = unit(6, "mm")), unit(0, "mm"))
+    draw(loop_grob(0.5, 0.5, size = vl_unit(20, "mm"), foot = foot, angle = 0,
+                   arrow = arr, gp = vl_gpar(col = "black", lwd = 2)))
+  bare <- mk(NULL, vl_unit(0, "mm"))
+  head <- mk(vl_arrow(type = "closed", length = vl_unit(6, "mm")), vl_unit(0, "mm"))
   # The returning foot is near the vertex (150,150); the head adds ink around it.
   dark <- function(s) sum(vapply(seq(140, 168), function(x)
     sum(vapply(seq(136, 164), function(y) px(s, x, y)[1] < 128L, logical(1))), integer(1)))
@@ -71,12 +71,12 @@ test_that("a positive foot lifts the feet off the vertex onto the boundary", {
   # no longer on the curve (with foot = 0 it is).
   at_vertex <- function(foot) {
     s <- vl_scene(3, 3, dpi = 100, bg = "white") |>
-      draw(loop_grob(0.5, 0.5, size = unit(20, "mm"), foot = foot, angle = 0,
-                     gp = gpar(col = "black", lwd = 2)))
+      draw(loop_grob(0.5, 0.5, size = vl_unit(20, "mm"), foot = foot, angle = 0,
+                     gp = vl_gpar(col = "black", lwd = 2)))
     px(s, 150, 150)[1] < 128L
   }
-  expect_true(at_vertex(unit(0, "mm")))
-  expect_false(at_vertex(unit(8, "mm")))
+  expect_true(at_vertex(vl_unit(0, "mm")))
+  expect_false(at_vertex(vl_unit(8, "mm")))
 })
 
 # Max inked extent of a loop, measured along the loop axis (`along = TRUE`) and
@@ -95,11 +95,11 @@ extent <- function(s, w, along) {
 
 test_that("width narrows the petal's waist without shortening it", {
   full <- vl_scene(3, 3, dpi = 100, bg = "white") |>
-    draw(loop_grob(0.5, 0.5, size = unit(24, "mm"), angle = 0, width = 1,
-                   gp = gpar(col = "black", lwd = 2)))
+    draw(loop_grob(0.5, 0.5, size = vl_unit(24, "mm"), angle = 0, width = 1,
+                   gp = vl_gpar(col = "black", lwd = 2)))
   thin <- vl_scene(3, 3, dpi = 100, bg = "white") |>
-    draw(loop_grob(0.5, 0.5, size = unit(24, "mm"), angle = 0, width = 0.3,
-                   gp = gpar(col = "black", lwd = 2)))
+    draw(loop_grob(0.5, 0.5, size = vl_unit(24, "mm"), angle = 0, width = 0.3,
+                   gp = vl_gpar(col = "black", lwd = 2)))
   # Length along the axis is unchanged (~0.3*size); lateral spread scales ~width.
   expect_equal(extent(thin, 300, along = TRUE), extent(full, 300, along = TRUE), tolerance = 0.1)
   expect_lt(extent(thin, 300, along = FALSE), extent(full, 300, along = FALSE) * 0.55)
@@ -107,8 +107,8 @@ test_that("width narrows the petal's waist without shortening it", {
 
 test_that("vector width narrows each loop in a batch independently", {
   s <- vl_scene(3, 3, dpi = 100, bg = "white") |>
-    draw(loop_grob(x = c(0.25, 0.75), y = c(0.5, 0.5), size = unit(16, "mm"),
-                   angle = 0, width = c(1, 0.25), gp = gpar(col = "black", lwd = 2)))
+    draw(loop_grob(x = c(0.25, 0.75), y = c(0.5, 0.5), size = vl_unit(16, "mm"),
+                   angle = 0, width = c(1, 0.25), gp = vl_gpar(col = "black", lwd = 2)))
   # spread around each vertex (device x = 75 and 225): the second is much skinnier.
   spread <- function(cx) {
     devs <- integer(0)
@@ -122,17 +122,17 @@ test_that("vector width narrows each loop in a batch independently", {
 
 test_that("width = 1 (default) renders byte-for-byte like before", {
   a <- scene_raster(vl_scene(3, 3, dpi = 100, bg = "white") |>
-    draw(loop_grob(0.5, 0.5, size = unit(20, "mm"), angle = 0.7,
-      arrow = arrow(), gp = gpar(col = "black", lwd = 2))))
+    draw(loop_grob(0.5, 0.5, size = vl_unit(20, "mm"), angle = 0.7,
+      arrow = vl_arrow(), gp = vl_gpar(col = "black", lwd = 2))))
   b <- scene_raster(vl_scene(3, 3, dpi = 100, bg = "white") |>
-    draw(loop_grob(0.5, 0.5, size = unit(20, "mm"), angle = 0.7, width = 1,
-      arrow = arrow(), gp = gpar(col = "black", lwd = 2))))
+    draw(loop_grob(0.5, 0.5, size = vl_unit(20, "mm"), angle = 0.7, width = 1,
+      arrow = vl_arrow(), gp = vl_gpar(col = "black", lwd = 2))))
   expect_identical(a, b)
 })
 
 test_that("loop_grob requires absolute size/foot", {
-  expect_error(loop_grob(0.5, 0.5, size = unit(0.2, "native")), "absolute")
-  expect_error(loop_grob(0.5, 0.5, size = unit(-1, "mm")), "non-negative")
+  expect_error(loop_grob(0.5, 0.5, size = vl_unit(0.2, "native")), "absolute")
+  expect_error(loop_grob(0.5, 0.5, size = vl_unit(-1, "mm")), "non-negative")
   g <- loop_grob(0.5, 0.5, size = 4) # bare numeric -> mm
   expect_true(S7::S7_inherits(g, grob_loop))
 })

@@ -9,7 +9,7 @@
 #' [raster_grob()] you draw like any other grob.
 #'
 #' The points are binned over `xlim` x `ylim` into a `width` x `height` grid, so to
-#' line the image up with data axes draw it inside a [viewport()] whose `xscale` /
+#' line the image up with data axes draw it inside a [vl_viewport()] whose `xscale` /
 #' `yscale` match `xlim` / `ylim` (it fills the viewport, npc `0..1`). For crisp
 #' bins make `width`/`height` match the viewport's pixel size and keep
 #' `interpolate = FALSE`.
@@ -33,7 +33,7 @@
 #' x <- rnorm(n); y <- x * 0.5 + rnorm(n)
 #' g <- datashade(x, y, width = 400, height = 300)
 #' s <- vl_scene(6, 4.5) |>
-#'   push(viewport(xscale = range(x), yscale = range(y))) |>
+#'   push(vl_viewport(xscale = range(x), yscale = range(y))) |>
 #'   draw(g)
 #' @export
 datashade <- function(x, y, weight = NULL, width = 600L, height = 400L,

@@ -34,7 +34,7 @@ test_that("interpolate = FALSE keeps hard pixel edges (no blend at a boundary)",
 
 test_that("the image respects clipping", {
   s <- vl_scene(2, 2, dpi = 100, bg = "white") |>
-    push(viewport(width = 0.4, height = 0.4, clip = TRUE)) |>
+    push(vl_viewport(width = 0.4, height = 0.4, clip = TRUE)) |>
     draw(raster_grob(quad_img(), interpolate = FALSE)) |>
     pop()
   expect_equal(px(s, 5, 5)[1:3], c(255L, 255L, 255L)) # outside the viewport

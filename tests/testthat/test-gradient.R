@@ -12,7 +12,7 @@ test_that("linear_gradient/radial_gradient validate their inputs", {
 
 test_that("a horizontal linear gradient blends left to right (raster)", {
   s <- vl_scene(width = 1, height = 1, dpi = 100, bg = "white") |>
-    draw(rect_grob(gp = gpar(
+    draw(rect_grob(gp = vl_gpar(
       col = NA,
       fill = linear_gradient(c("black", "white"), x1 = 0, y1 = 0.5, x2 = 1, y2 = 0.5)
     )))
@@ -28,7 +28,7 @@ test_that("a horizontal linear gradient blends left to right (raster)", {
 
 test_that("a radial gradient runs from centre colour to edge colour (raster)", {
   s <- vl_scene(width = 1, height = 1, dpi = 100, bg = "white") |>
-    draw(rect_grob(gp = gpar(
+    draw(rect_grob(gp = vl_gpar(
       col = NA,
       fill = radial_gradient(c("red", "yellow"), cx = 0.5, cy = 0.5, r = 0.5)
     )))
@@ -38,9 +38,9 @@ test_that("a radial gradient runs from centre colour to edge colour (raster)", {
   expect_true(edge[1] > 200L && edge[2] > 200L) # yellow-ish
 })
 
-test_that("gpar alpha fades a gradient's stops (raster)", {
+test_that("vl_gpar alpha fades a gradient's stops (raster)", {
   s <- vl_scene(width = 1, height = 1, dpi = 100, bg = "white") |>
-    draw(rect_grob(gp = gpar(
+    draw(rect_grob(gp = vl_gpar(
       col = NA, alpha = 0.5,
       fill = linear_gradient(c("black", "black")) # solid-black gradient at 50%
     )))
@@ -54,8 +54,8 @@ test_that("gradient geometry transforms with a nested, scaled viewport (raster)"
   # spans only that half: its white end lands at the viewport's right edge
   # (device x ~ 50), not the page's.
   s <- vl_scene(width = 1, height = 1, dpi = 100, bg = "white") |>
-    push(viewport(x = 0.25, y = 0.5, width = 0.5, height = 1)) |>
-    draw(rect_grob(gp = gpar(
+    push(vl_viewport(x = 0.25, y = 0.5, width = 0.5, height = 1)) |>
+    draw(rect_grob(gp = vl_gpar(
       col = NA,
       fill = linear_gradient(c("black", "white"), x1 = 0, y1 = 0.5, x2 = 1, y2 = 0.5)
     )))
@@ -67,10 +67,10 @@ test_that("SVG emits gradient defs referenced by the fill", {
   f <- withr::local_tempfile(fileext = ".svg")
   s <- vl_scene(1, 1, dpi = 100, bg = "white") |>
     draw(rect_grob(
-      gp = gpar(col = NA, fill = linear_gradient(c("black", "white")))
+      gp = vl_gpar(col = NA, fill = linear_gradient(c("black", "white")))
     )) |>
     draw(circle_grob(
-      r = 0.3, gp = gpar(col = NA, fill = radial_gradient(c("red", "yellow")))
+      r = 0.3, gp = vl_gpar(col = NA, fill = radial_gradient(c("red", "yellow")))
     ))
   render(s, f)
   svg <- paste(readLines(f, warn = FALSE), collapse = "\n")
@@ -84,8 +84,8 @@ test_that("SVG emits gradient defs referenced by the fill", {
 test_that("identical gradient fills share a single SVG def", {
   f <- withr::local_tempfile(fileext = ".svg")
   s <- vl_scene(1, 1, dpi = 100, bg = "white") |>
-    draw(rect_grob(x = 0.25, width = 0.4, gp = gpar(col = NA, fill = linear_gradient(c("black", "white"))))) |>
-    draw(rect_grob(x = 0.75, width = 0.4, gp = gpar(col = NA, fill = linear_gradient(c("black", "white")))))
+    draw(rect_grob(x = 0.25, width = 0.4, gp = vl_gpar(col = NA, fill = linear_gradient(c("black", "white"))))) |>
+    draw(rect_grob(x = 0.75, width = 0.4, gp = vl_gpar(col = NA, fill = linear_gradient(c("black", "white")))))
   render(s, f)
   svg <- paste(readLines(f, warn = FALSE), collapse = "\n")
   # Two shapes, one shared <linearGradient> def (deduplicated by signature).
@@ -95,8 +95,8 @@ test_that("identical gradient fills share a single SVG def", {
 test_that("PDF with gradient fills renders without error", {
   f <- withr::local_tempfile(fileext = ".pdf")
   s <- vl_scene(2, 1, dpi = 100) |>
-    draw(rect_grob(gp = gpar(col = NA, fill = linear_gradient(c("navy", "white"))))) |>
-    draw(circle_grob(r = 0.3, gp = gpar(col = NA, fill = radial_gradient(c("red", "yellow")))))
+    draw(rect_grob(gp = vl_gpar(col = NA, fill = linear_gradient(c("navy", "white"))))) |>
+    draw(circle_grob(r = 0.3, gp = vl_gpar(col = NA, fill = radial_gradient(c("red", "yellow")))))
   expect_no_error(render(s, f))
   expect_equal(rawToChar(readBin(f, "raw", 5)), "%PDF-")
 })

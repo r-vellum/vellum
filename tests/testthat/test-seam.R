@@ -15,7 +15,7 @@ test_that("render() dispatches an arbitrary object through as_vellum_scene()", {
   Spec <- S7::new_class("Spec", properties = list(fill = S7::class_character))
   S7::method(as_vellum_scene, Spec) <- function(x, ...) {
     vl_scene(2, 1, dpi = 80, bg = "white") |>
-      draw(rect_grob(gp = gpar(fill = x@fill, col = NA)))
+      draw(rect_grob(gp = vl_gpar(fill = x@fill, col = NA)))
   }
   f <- withr::local_tempfile(fileext = ".png")
   expect_no_error(render(Spec(fill = "blue"), f))

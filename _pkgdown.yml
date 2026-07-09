@@ -107,15 +107,15 @@ reference:
     The drawable primitives. Most are vectorised and batch internally.
   contents:
   - grob
-  - arrow
+  - vl_arrow
 
 - title: Units, viewports & layout
   desc: >
     Coordinate systems, nested viewports with scales, clipping and
     rotation, and the row/column layout solver.
   contents:
-  - unit
-  - viewport
+  - vl_unit
+  - vl_viewport
   - grobwidth
   - why_size
 
@@ -124,10 +124,10 @@ reference:
     The paint model shared across all backends: gradients, tiling
     patterns, masks, reusable styles, and hand-drawn rendering.
   contents:
-  - gpar
+  - vl_gpar
   - style
   - gradients
-  - pattern
+  - vl_pattern
   - as_mask
   - sketch
 

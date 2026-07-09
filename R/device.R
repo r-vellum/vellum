@@ -156,7 +156,7 @@ render_grid <- function(x, path, width = 7, height = 7, dpi = 96, bg = "white",
   loc <- grid::deviceLoc(x, y, valueOnly = TRUE)
   list(x = loc$x, y = loc$y)
 }
-.in <- function(v) unit(v, "in")
+.in <- function(v) vl_unit(v, "in")
 .cw <- function(u) grid::convertWidth(u, "in", valueOnly = TRUE)
 .ch <- function(u) grid::convertHeight(u, "in", valueOnly = TRUE)
 
@@ -330,7 +330,7 @@ render_grid <- function(x, path, width = 7, height = 7, dpi = 96, bg = "white",
   if (!is.null(ff) && is.numeric(ff)) {
     ff <- c("plain", "bold", "italic", "bold.italic")[ff]
   }
-  gpar(
+  vl_gpar(
     col = gp$col, fill = gp$fill, lwd = gp$lwd, lty = gp$lty,
     alpha = gp$alpha, lineend = gp$lineend, linejoin = gp$linejoin,
     linemitre = gp$linemitre, fontfamily = gp$fontfamily, fontface = ff,
@@ -383,13 +383,13 @@ render_grid <- function(x, path, width = 7, height = 7, dpi = 96, bg = "white",
   list(shape = shape, fill = filled)
 }
 
-# grid arrow -> vellum arrow().
+# grid arrow -> vellum vl_arrow().
 .gv_arrow <- function(a) {
   if (is.null(a)) {
     return(NULL)
   }
   ends <- c("first", "last", "both")[a$ends %||% 2L]
   type <- c("open", "closed")[a$type %||% 1L]
-  len <- tryCatch(unit(.cw(a$length), "in"), error = function(e) unit(0.1, "in"))
-  arrow(angle = a$angle %||% 30, length = len, ends = ends, type = type)
+  len <- tryCatch(vl_unit(.cw(a$length), "in"), error = function(e) vl_unit(0.1, "in"))
+  vl_arrow(angle = a$angle %||% 30, length = len, ends = ends, type = type)
 }

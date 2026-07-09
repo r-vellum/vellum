@@ -2,20 +2,20 @@
 # pixels via px(); SVG asserts the <pattern>/<image> structure; PDF checks the
 # average-colour fallback renders.
 
-test_that("pattern() builds and validates", {
-  p <- pattern(circle_grob(r = 0.3), width = 0.2, height = 0.2)
+test_that("vl_pattern() builds and validates", {
+  p <- vl_pattern(circle_grob(r = 0.3), width = 0.2, height = 0.2)
   expect_s3_class(p, "vellum_pattern")
-  expect_error(pattern(circle_grob(), width = Inf), "finite")
-  expect_error(pattern(circle_grob(), extend = "bounce"))
+  expect_error(vl_pattern(circle_grob(), width = Inf), "finite")
+  expect_error(vl_pattern(circle_grob(), extend = "bounce"))
 })
 
 test_that("a pattern tiles its grob across the fill (raster)", {
   tile <- list(
-    rect_grob(gp = gpar(fill = "red", col = NA)),
-    circle_grob(r = 0.3, gp = gpar(fill = "white", col = NA))
+    rect_grob(gp = vl_gpar(fill = "red", col = NA)),
+    circle_grob(r = 0.3, gp = vl_gpar(fill = "white", col = NA))
   )
   s <- vl_scene(width = 1, height = 1, dpi = 100, bg = "white") |>
-    draw(rect_grob(gp = gpar(col = NA, fill = pattern(tile, width = 0.2, height = 0.2))))
+    draw(rect_grob(gp = vl_gpar(col = NA, fill = vl_pattern(tile, width = 0.2, height = 0.2))))
   # Cell is 0.2 npc = 20 px, centred on the page -> a tile centre sits at the
   # page centre (white dot); a tile corner is the red background.
   centre <- px(s, 50, 50)
@@ -26,9 +26,9 @@ test_that("a pattern tiles its grob across the fill (raster)", {
 
 test_that("pattern alpha fades the tile (raster)", {
   s <- vl_scene(width = 1, height = 1, dpi = 100, bg = "white") |>
-    draw(rect_grob(gp = gpar(
+    draw(rect_grob(gp = vl_gpar(
       col = NA, alpha = 0.5,
-      fill = pattern(rect_grob(gp = gpar(fill = "red", col = NA)), width = 0.5, height = 0.5)
+      fill = vl_pattern(rect_grob(gp = vl_gpar(fill = "red", col = NA)), width = 0.5, height = 0.5)
     )))
   p <- px(s, 50, 50)
   expect_equal(p[4], 255L) # opaque page
@@ -39,8 +39,8 @@ test_that("pattern alpha fades the tile (raster)", {
 test_that("SVG emits a <pattern> with an embedded image", {
   f <- withr::local_tempfile(fileext = ".svg")
   s <- vl_scene(1, 1, dpi = 100, bg = "white") |>
-    draw(rect_grob(gp = gpar(col = NA, fill = pattern(
-      circle_grob(r = 0.3, gp = gpar(fill = "red", col = NA)),
+    draw(rect_grob(gp = vl_gpar(col = NA, fill = vl_pattern(
+      circle_grob(r = 0.3, gp = vl_gpar(fill = "red", col = NA)),
       width = 0.25, height = 0.25
     ))))
   render(s, f)
@@ -55,8 +55,8 @@ test_that("SVG emits a <pattern> with an embedded image", {
 test_that("PDF renders a pattern fill (average-colour fallback)", {
   f <- withr::local_tempfile(fileext = ".pdf")
   s <- vl_scene(2, 1, dpi = 100) |>
-    draw(rect_grob(gp = gpar(col = NA, fill = pattern(
-      circle_grob(r = 0.3, gp = gpar(fill = "red", col = NA)),
+    draw(rect_grob(gp = vl_gpar(col = NA, fill = vl_pattern(
+      circle_grob(r = 0.3, gp = vl_gpar(fill = "red", col = NA)),
       width = 0.25, height = 0.25
     ))))
   expect_no_error(render(s, f))
@@ -64,5 +64,5 @@ test_that("PDF renders a pattern fill (average-colour fallback)", {
 })
 
 test_that("a pattern used outside a render context errors clearly", {
-  expect_error(.encode_paint(pattern(circle_grob())), "scene")
+  expect_error(.encode_paint(vl_pattern(circle_grob())), "scene")
 })

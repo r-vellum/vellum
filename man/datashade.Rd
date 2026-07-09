@@ -56,7 +56,7 @@ cost from both point count and overplotting. \code{datashade()} returns a single
 }
 \details{
 The points are binned over \code{xlim} x \code{ylim} into a \code{width} x \code{height} grid, so to
-line the image up with data axes draw it inside a \code{\link[=viewport]{viewport()}} whose \code{xscale} /
+line the image up with data axes draw it inside a \code{\link[=vl_viewport]{vl_viewport()}} whose \code{xscale} /
 \code{yscale} match \code{xlim} / \code{ylim} (it fills the viewport, npc \verb{0..1}). For crisp
 bins make \code{width}/\code{height} match the viewport's pixel size and keep
 \code{interpolate = FALSE}.
@@ -67,6 +67,6 @@ n <- 1e6
 x <- rnorm(n); y <- x * 0.5 + rnorm(n)
 g <- datashade(x, y, width = 400, height = 300)
 s <- vl_scene(6, 4.5) |>
-  push(viewport(xscale = range(x), yscale = range(y))) |>
+  push(vl_viewport(xscale = range(x), yscale = range(y))) |>
   draw(g)
 }

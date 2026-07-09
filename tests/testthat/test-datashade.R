@@ -22,7 +22,7 @@ test_that("datashade returns a renderable raster grob", {
   expect_equal(g@ih, 48L)
   f <- withr::local_tempfile(fileext = ".png")
   s <- vl_scene(2, 1.5, dpi = 100) |>
-    push(viewport(xscale = c(-4, 4), yscale = c(-4, 4))) |>
+    push(vl_viewport(xscale = c(-4, 4), yscale = c(-4, 4))) |>
     draw(g)
   expect_no_error(render(s, f))
 })
@@ -34,7 +34,7 @@ test_that("a dense cluster shades while empty space stays transparent", {
   g <- datashade(x, y, width = 100, height = 100, xlim = c(-4, 4), ylim = c(-4, 4),
                  colors = c("#ffffff", "#000000"))
   s <- vl_scene(2, 2, dpi = 100, bg = "white") |>
-    push(viewport(xscale = c(-4, 4), yscale = c(-4, 4))) |>
+    push(vl_viewport(xscale = c(-4, 4), yscale = c(-4, 4))) |>
     draw(g)
   centre <- px(s, 100, 100)   # data (0,0) -> device centre: shaded (dark, high density)
   corner <- px(s, 100, 10)    # near top, away from the cluster: empty -> background

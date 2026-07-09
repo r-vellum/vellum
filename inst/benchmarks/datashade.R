@@ -45,7 +45,7 @@ vellum_png <- file.path(out_dir, "datashade-vellum.png")
 t_vellum <- bench("vellum.datashade", {
   g <- vellum::datashade(x, y, width = width * dpi, height = height * dpi, how = "eq_hist")
   s <- vellum::vl_scene(width, height, dpi = dpi, bg = "white") |>
-    vellum::push(vellum::viewport(xscale = range(x), yscale = range(y))) |>
+    vellum::push(vellum::vl_viewport(xscale = range(x), yscale = range(y))) |>
     vellum::draw(g)
   vellum::render(s, vellum_png)
 })

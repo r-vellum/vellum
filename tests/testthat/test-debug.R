@@ -1,7 +1,7 @@
 test_that("render(debug = TRUE) adds overlay content and still renders", {
   s <- vl_scene(4, 3) |>
-    push(viewport(name = "panel", width = unit(2, "in"), height = unit(1, "in"))) |>
-    draw(rect_grob(gp = gpar(fill = "grey90", col = NA)))
+    push(vl_viewport(name = "panel", width = vl_unit(2, "in"), height = vl_unit(1, "in"))) |>
+    draw(rect_grob(gp = vl_gpar(fill = "grey90", col = NA)))
   plain <- tempfile(fileext = ".png")
   dbg <- tempfile(fileext = ".png")
   on.exit(unlink(c(plain, dbg)))
@@ -17,7 +17,7 @@ test_that("render(debug = TRUE) adds overlay content and still renders", {
 
 test_that("debug overlay labels named viewports in SVG", {
   s <- vl_scene(4, 3) |>
-    push(viewport(name = "panel", width = unit(2, "in"), height = unit(1, "in")))
+    push(vl_viewport(name = "panel", width = vl_unit(2, "in"), height = vl_unit(1, "in")))
   f <- tempfile(fileext = ".svg")
   on.exit(unlink(f))
   render(s, f, debug = TRUE)
@@ -26,7 +26,7 @@ test_that("debug overlay labels named viewports in SVG", {
 
 test_that("why_size() reports a size-placed viewport's resolved extent", {
   s <- vl_scene(4, 3) |>
-    push(viewport(name = "panel", width = unit(2, "in"), height = unit(1, "in")))
+    push(vl_viewport(name = "panel", width = vl_unit(2, "in"), height = vl_unit(1, "in")))
   w <- why_size(s, "panel")
   expect_s3_class(w, "vellum_why_size")
   expect_equal(w$width_mm, 50.8, tolerance = 1e-6)  # 2 in
@@ -35,10 +35,10 @@ test_that("why_size() reports a size-placed viewport's resolved extent", {
 })
 
 test_that("why_size() names the layout track for a cell-placed viewport", {
-  lay <- grid_layout(widths = c(unit(30, "mm"), unit(1, "null")), heights = unit(1, "null"))
+  lay <- grid_layout(widths = c(vl_unit(30, "mm"), vl_unit(1, "null")), heights = vl_unit(1, "null"))
   s <- vl_scene(4, 3) |>
-    push(viewport(name = "grid", layout = lay)) |>
-    push(viewport(name = "panelB", row = 1, col = 2))
+    push(vl_viewport(name = "grid", layout = lay)) |>
+    push(vl_viewport(name = "panelB", row = 1, col = 2))
   w <- why_size(s, "panelB")
   # page 4 in = 101.6 mm; col 1 = 30 mm; col 2 (null) = 71.6 mm
   expect_equal(w$width_mm, 71.6, tolerance = 1e-3)
@@ -53,7 +53,7 @@ test_that("why_size() errors on an unknown name", {
 
 test_that("why_size() returns the documented record shape", {
   s <- vl_scene(4, 3) |>
-    push(viewport(name = "panel", width = unit(2, "in"), height = unit(1, "in")))
+    push(vl_viewport(name = "panel", width = vl_unit(2, "in"), height = vl_unit(1, "in")))
   w <- why_size(s, "panel")
   expect_named(w, c("name", "width_mm", "height_mm", "determined_by"))
   expect_match(w$determined_by, "width = 2in")

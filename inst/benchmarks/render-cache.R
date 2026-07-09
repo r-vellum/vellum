@@ -30,14 +30,14 @@ build_scene <- function(n) {
   set.seed(1)
   m <- ceiling(sqrt(n))
   s <- vellum::vl_scene(width, height, dpi = dpi, bg = "white") |>
-    vellum::push(vellum::viewport(xscale = c(0, 1), yscale = c(0, 1)))
+    vellum::push(vellum::vl_viewport(xscale = c(0, 1), yscale = c(0, 1)))
   cols <- grDevices::hcl.colors(n)
   for (i in seq_len(n)) {
     cx <- ((i - 1) %% m + 0.5) / m
     cy <- ((i - 1) %/% m + 0.5) / m
     s <- vellum::draw(s, vellum::rect_grob(
       x = cx, y = cy, width = 0.8 / m, height = 0.8 / m,
-      gp = vellum::gpar(fill = cols[i], col = NA)
+      gp = vellum::vl_gpar(fill = cols[i], col = NA)
     ))
   }
   vellum::pop(s)
@@ -88,8 +88,8 @@ cat(sprintf("   overhead: %+.1f%%\n\n", 100 * (stats::median(on) / stats::median
 # (Rust pixmap memo). Uses scene_raster (the display path) to avoid file I/O.
 cat("4. Resize simulation (device-only set_props, cycling two sizes):\n")
 vellum::vl_clear_render_cache()
-a <- S7::set_props(s, width = vellum::unit(8, "in"), height = vellum::unit(6, "in"))
-b <- S7::set_props(s, width = vellum::unit(6, "in"), height = vellum::unit(4, "in"))
+a <- S7::set_props(s, width = vellum::vl_unit(8, "in"), height = vellum::vl_unit(6, "in"))
+b <- S7::set_props(s, width = vellum::vl_unit(6, "in"), height = vellum::vl_unit(4, "in"))
 bench("size A (miss)", vellum::scene_raster(a))
 bench("size B (miss)", vellum::scene_raster(b))
 bench("size A again (hit)", vellum::scene_raster(a))

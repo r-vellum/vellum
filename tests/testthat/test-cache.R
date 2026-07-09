@@ -15,7 +15,7 @@ misses <- function() .render_cache$.misses
 
 demo_scene <- function(w = 2, h = 1, dpi = 100, col = "red") {
   vl_scene(w, h, dpi = dpi, bg = "white") |>
-    draw(circle_grob(x = 0.5, y = 0.5, r = 0.3, gp = gpar(fill = col, col = NA), name = "dot"))
+    draw(circle_grob(x = 0.5, y = 0.5, r = 0.3, gp = vl_gpar(fill = col, col = NA), name = "dot"))
 }
 
 test_that("a cached render is byte-identical to an uncached one", {
@@ -54,7 +54,7 @@ test_that("editing content produces a new key (miss), not a stale hit", {
   reset_cache()
   s <- demo_scene(col = "red")
   r_red <- scene_raster(s) # miss
-  s2 <- edit_node(s, "dot", gp = gpar(fill = "blue", col = NA))
+  s2 <- edit_node(s, "dot", gp = vl_gpar(fill = "blue", col = NA))
   r_again <- scene_raster(s) # hit: original unchanged
   r_blue <- scene_raster(s2) # miss: edited -> fresh id
   expect_identical(r_red, r_again)
@@ -67,8 +67,8 @@ test_that("editing content produces a new key (miss), not a stale hit", {
 test_that("device size participates in the key: resize misses, return-to-size hits", {
   reset_cache()
   s <- demo_scene()
-  a <- S7::set_props(s, width = unit(2, "in"), height = unit(1, "in"))
-  b <- S7::set_props(s, width = unit(3, "in"), height = unit(1, "in"))
+  a <- S7::set_props(s, width = vl_unit(2, "in"), height = vl_unit(1, "in"))
+  b <- S7::set_props(s, width = vl_unit(3, "in"), height = vl_unit(1, "in"))
   scene_raster(a) # miss (size A)
   scene_raster(b) # miss (size B)
   scene_raster(a) # hit (back to size A)
@@ -78,7 +78,7 @@ test_that("device size participates in the key: resize misses, return-to-size hi
 
 test_that("a device-only set_props preserves the content identity token", {
   s <- demo_scene()
-  s2 <- S7::set_props(s, width = unit(4, "in"), height = unit(3, "in"), dpi = 150)
+  s2 <- S7::set_props(s, width = vl_unit(4, "in"), height = vl_unit(3, "in"), dpi = 150)
   expect_identical(s2@bstate$cid, s@bstate$cid) # resize keeps identity
 })
 
@@ -95,7 +95,7 @@ test_that("a resize reuses the materialised tree (device-independent memo)", {
   reset_cache()
   s <- demo_scene()
   scene_raster(s) # 1 walk
-  scene_raster(S7::set_props(s, width = unit(3, "in"))) # new size: compiled miss, materialise hit
+  scene_raster(S7::set_props(s, width = vl_unit(3, "in"))) # new size: compiled miss, materialise hit
   expect_equal(.mtl_count$n, 1L) # still one walk
 })
 
@@ -121,7 +121,7 @@ test_that("a scene with no identity token bypasses the cache (fail-safe)", {
   base <- demo_scene()
   root <- .materialize(base)
   foreign <- vellum_scene(
-    width = unit(2, "in"), height = unit(1, "in"), dpi = 100, bg = "white",
+    width = vl_unit(2, "in"), height = vl_unit(1, "in"), dpi = 100, bg = "white",
     root = root, bstate = NULL # hand-built: no cid stamped
   )
   expect_null(foreign@cid)
@@ -134,7 +134,7 @@ test_that("a carrier-invariant violation (both root and bstate set) fails safe, 
   reset_cache()
   s <- demo_scene(col = "red")
   scene_raster(s) # cache the red scene under its bstate cid
-  blue_tree <- .materialize(edit_node(s, "dot", gp = gpar(fill = "blue", col = NA)))
+  blue_tree <- .materialize(edit_node(s, "dot", gp = vl_gpar(fill = "blue", col = NA)))
   # Unsupported: graft a new tree onto a still-building scene (both carriers set).
   bad <- S7::set_props(s, root = blue_tree)
   r <- scene_raster(bad)

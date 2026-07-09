@@ -9,7 +9,7 @@ test_that("display() draws the scene into the active device (asymmetric, no shea
   # the draw path changes the output (a centred blob would not catch it).
   s <- vl_scene(4, 2, bg = "white") |>
     draw(rect_grob(x = 0.12, y = 0.82, width = 0.18, height = 0.28,
-                   gp = gpar(fill = "red", col = NA)))
+                   gp = vl_gpar(fill = "red", col = NA)))
   display(s)
   grDevices::dev.off()
   img <- png::readPNG(f) # [150, 300, c]
@@ -22,7 +22,7 @@ test_that("display() draws the scene into the active device (asymmetric, no shea
 test_that("display() fills the device at any aspect (reflow, no letterbox)", {
   skip_if_not_installed("png")
   s <- vl_scene(6, 4, bg = "white") |> # 6:4 authored aspect
-    draw(rect_grob(gp = gpar(fill = "steelblue", col = NA)))
+    draw(rect_grob(gp = vl_gpar(fill = "steelblue", col = NA)))
   edges_filled <- function(W, H) {
     f <- tempfile(fileext = ".png")
     grDevices::png(f, W, H)
@@ -42,9 +42,9 @@ test_that("display() re-renders on resize so round markers stay round", {
   # size instead. Simulate a resize with recordPlot()/replayPlot() at a new aspect.
   skip_if_not_installed("png")
   s <- vl_scene(4, 4, bg = "white") |>
-    push(viewport(xscale = c(0, 10), yscale = c(0, 10))) |>
-    draw(points_grob(unit(5, "native"), unit(5, "native"),
-                     size = unit(6, "mm"), gp = gpar(fill = "red", col = NA)))
+    push(vl_viewport(xscale = c(0, 10), yscale = c(0, 10))) |>
+    draw(points_grob(vl_unit(5, "native"), vl_unit(5, "native"),
+                     size = vl_unit(6, "mm"), gp = vl_gpar(fill = "red", col = NA)))
   f1 <- tempfile(fileext = ".png")
   f2 <- tempfile(fileext = ".png")
   grDevices::png(f1, 400, 400)
@@ -72,7 +72,7 @@ test_that("display() re-renders on resize so round markers stay round", {
   set.seed(1)
   for (i in seq_len(120)) {
     s <- draw(s, circle_grob(x = stats::runif(1), y = stats::runif(1), r = 0.015,
-                             gp = gpar(fill = "tomato", col = "black")))
+                             gp = vl_gpar(fill = "tomato", col = "black")))
   }
   s
 }
@@ -131,7 +131,7 @@ test_that("display() lets the knitr chunk dpi win when knitting", {
 test_that("print() and plot() dispatch to display()", {
   f <- withr::local_tempfile(fileext = ".png")
   grDevices::png(f)
-  s <- vl_scene(1, 1, bg = "white") |> draw(rect_grob(gp = gpar(fill = "blue", col = NA)))
+  s <- vl_scene(1, 1, bg = "white") |> draw(rect_grob(gp = vl_gpar(fill = "blue", col = NA)))
   expect_no_error(print(s))
   expect_no_error(plot(s))
   grDevices::dev.off()
@@ -140,7 +140,7 @@ test_that("print() and plot() dispatch to display()", {
 test_that("display() coerces through as_vellum_scene()", {
   Spec3 <- S7::new_class("Spec3", properties = list())
   S7::method(as_vellum_scene, Spec3) <- function(x, ...) {
-    vl_scene(1, 1, bg = "white") |> draw(rect_grob(gp = gpar(fill = "green", col = NA)))
+    vl_scene(1, 1, bg = "white") |> draw(rect_grob(gp = vl_gpar(fill = "green", col = NA)))
   }
   f <- withr::local_tempfile(fileext = ".png")
   grDevices::png(f)

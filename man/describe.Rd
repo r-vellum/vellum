@@ -25,6 +25,6 @@ alternative). Equivalent to passing \code{title}/\code{desc} to \code{\link[=vl_
 }
 \examples{
 vl_scene(2, 2) |>
-  draw(points_grob(c(0.3, 0.7), 0.5, gp = gpar(fill = "red"))) |>
+  draw(points_grob(c(0.3, 0.7), 0.5, gp = vl_gpar(fill = "red"))) |>
   describe(title = "Two red dots", desc = "Two red points on a white field.")
 }

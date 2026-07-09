@@ -12,9 +12,9 @@ test_that("offset shifts a segment perpendicular; sign picks the side", {
   # 2x1in @ 100dpi = 200x100; horizontal segment native y=0.5 -> device y=50.
   # +10mm (~39px): left normal of a +x segment is (0,1) in y-down -> shifts down.
   pos <- vl_scene(2, 1, dpi = 100, bg = "white") |>
-    draw(segments_grob(0.1, 0.5, 0.9, 0.5, offset = unit(10, "mm"), gp = gpar(col = "black", lwd = 4)))
+    draw(segments_grob(0.1, 0.5, 0.9, 0.5, offset = vl_unit(10, "mm"), gp = vl_gpar(col = "black", lwd = 4)))
   neg <- vl_scene(2, 1, dpi = 100, bg = "white") |>
-    draw(segments_grob(0.1, 0.5, 0.9, 0.5, offset = unit(-10, "mm"), gp = gpar(col = "black", lwd = 4)))
+    draw(segments_grob(0.1, 0.5, 0.9, 0.5, offset = vl_unit(-10, "mm"), gp = vl_gpar(col = "black", lwd = 4)))
   expect_equal(px(pos, 100, 50)[1:3], c(255L, 255L, 255L)) # vacated the original line
   expect_lt(px(pos, 100, 89)[1], 128L) # +offset ~39px below
   expect_lt(px(neg, 100, 11)[1], 128L) # -offset ~39px above
@@ -25,7 +25,7 @@ test_that("the offset is an absolute physical distance (resolution independent)"
   band_mid <- function(dpi) {
     h <- as.integer(dpi)
     s <- vl_scene(2, 1, dpi = dpi, bg = "white") |>
-      draw(segments_grob(0.1, 0.5, 0.9, 0.5, offset = unit(10, "mm"), gp = gpar(col = "black", lwd = 3)))
+      draw(segments_grob(0.1, 0.5, 0.9, 0.5, offset = vl_unit(10, "mm"), gp = vl_gpar(col = "black", lwd = 3)))
     rows <- inked_rows(s, as.integer(dpi), h) # column at device x = dpi (native ~0.5)
     mean(rows) - h / 2 # px from the geometric line (device y = h/2)
   }
@@ -39,7 +39,7 @@ test_that("per-element offset shifts each segment by its own amount", {
   s <- vl_scene(2, 1, dpi = 100, bg = "white") |>
     draw(segments_grob(
       x0 = c(0.1, 0.1), y0 = c(0.5, 0.5), x1 = c(0.9, 0.9), y1 = c(0.5, 0.5),
-      offset = unit(c(-10, 10), "mm"), gp = gpar(col = "black", lwd = 4)
+      offset = vl_unit(c(-10, 10), "mm"), gp = vl_gpar(col = "black", lwd = 4)
     ))
   rows <- inked_rows(s, 100, 100)
   expect_true(any(rows < 20)) # one shifted up (~y=11)
@@ -49,9 +49,9 @@ test_that("per-element offset shifts each segment by its own amount", {
 
 test_that("offset composes with caps and arrow (offset, then cap, then head)", {
   s <- vl_scene(2, 1, dpi = 100, bg = "white") |>
-    draw(segments_grob(0.1, 0.5, 0.9, 0.5, offset = unit(10, "mm"),
-      end_cap = unit(20, "mm"), arrow = arrow(type = "closed", length = unit(6, "mm")),
-      gp = gpar(col = "black", lwd = 3)))
+    draw(segments_grob(0.1, 0.5, 0.9, 0.5, offset = vl_unit(10, "mm"),
+      end_cap = vl_unit(20, "mm"), arrow = vl_arrow(type = "closed", length = vl_unit(6, "mm")),
+      gp = vl_gpar(col = "black", lwd = 3)))
   # The whole segment sits on the shifted line (~y=89), capped ~x=101; nothing on
   # the original line, and nothing past the capped end on the shifted line.
   expect_lt(px(s, 60, 89)[1], 128L) # drawn on the shifted line
@@ -61,24 +61,24 @@ test_that("offset composes with caps and arrow (offset, then cap, then head)", {
 
 test_that("NULL/absent offset renders byte-for-byte like before", {
   a <- scene_raster(vl_scene(2, 1, dpi = 100, bg = "white") |>
-    draw(segments_grob(0.1, 0.5, 0.9, 0.5, gp = gpar(col = "black", lwd = 3))))
+    draw(segments_grob(0.1, 0.5, 0.9, 0.5, gp = vl_gpar(col = "black", lwd = 3))))
   b <- scene_raster(vl_scene(2, 1, dpi = 100, bg = "white") |>
-    draw(segments_grob(0.1, 0.5, 0.9, 0.5, offset = NULL, gp = gpar(col = "black", lwd = 3))))
+    draw(segments_grob(0.1, 0.5, 0.9, 0.5, offset = NULL, gp = vl_gpar(col = "black", lwd = 3))))
   expect_identical(a, b)
 })
 
 test_that("lines_grob offset rigidly translates the whole polyline", {
   s <- vl_scene(2, 1, dpi = 100, bg = "white") |>
-    draw(lines_grob(c(0.1, 0.5, 0.9), c(0.5, 0.5, 0.5), offset = unit(10, "mm"),
-                    gp = gpar(col = "black", lwd = 4)))
+    draw(lines_grob(c(0.1, 0.5, 0.9), c(0.5, 0.5, 0.5), offset = vl_unit(10, "mm"),
+                    gp = vl_gpar(col = "black", lwd = 4)))
   expect_equal(px(s, 100, 50)[1:3], c(255L, 255L, 255L)) # moved off the original line
   expect_lt(px(s, 100, 89)[1], 128L) # onto the shifted line
 })
 
 test_that("offset validates: absolute units only, negatives allowed, numeric = mm", {
-  expect_error(segments_grob(0, 0, 1, 1, offset = unit(0.1, "native")), "absolute")
-  expect_error(segments_grob(0, 0, 1, 1, offset = unit(0.1, "npc")), "absolute")
-  expect_s3_class(segments_grob(0, 0, 1, 1, offset = unit(-3, "mm"))@offset, "vellum_unit") # signed OK
+  expect_error(segments_grob(0, 0, 1, 1, offset = vl_unit(0.1, "native")), "absolute")
+  expect_error(segments_grob(0, 0, 1, 1, offset = vl_unit(0.1, "npc")), "absolute")
+  expect_s3_class(segments_grob(0, 0, 1, 1, offset = vl_unit(-3, "mm"))@offset, "vellum_unit") # signed OK
   expect_s3_class(segments_grob(0, 0, 1, 1, offset = 3)@offset, "vellum_unit") # bare numeric -> mm
-  expect_error(lines_grob(c(0, 1), c(0, 1), offset = unit(c(1, 2), "mm")), "single value")
+  expect_error(lines_grob(c(0, 1), c(0, 1), offset = vl_unit(c(1, 2), "mm")), "single value")
 })

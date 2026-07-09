@@ -41,8 +41,8 @@ gtree <- S7::new_class(
 vellum_scene <- S7::new_class(
   "vellum_scene", package = "vellum",
   properties = list(
-    width  = S7::new_property(S7::new_S3_class("vellum_unit"), default = quote(unit(6, "in"))),
-    height = S7::new_property(S7::new_S3_class("vellum_unit"), default = quote(unit(4, "in"))),
+    width  = S7::new_property(S7::new_S3_class("vellum_unit"), default = quote(vl_unit(6, "in"))),
+    height = S7::new_property(S7::new_S3_class("vellum_unit"), default = quote(vl_unit(4, "in"))),
     dpi = S7::new_property(S7::class_double, default = 96),
     bg = S7::new_property(S7::class_any, default = "white"),
     root = S7::new_property(S7::class_any, default = NULL),
@@ -151,7 +151,7 @@ vellum_scene <- S7::new_class(
   }
   bs <- scene@bstate
   if (is.null(bs)) {
-    return(gtree(name = "root", vp = viewport(name = "root"), children = list()))
+    return(gtree(name = "root", vp = vl_viewport(name = "root"), children = list()))
   }
   .bnode_to_gtree(bs$build, bs$open, bs$ocount, 1L)
 }
@@ -198,10 +198,10 @@ vellum_scene <- S7::new_class(
 #' a *rendered or edited* scene is an immutable value ([edit_node()] copies on
 #' modify). [render()] compiles the scene and writes the output.
 #'
-#' @param width,height Page size ([unit()] or numeric inches).
+#' @param width,height Page size ([vl_unit()] or numeric inches).
 #' @param dpi Resolution in dots per inch.
 #' @param bg Background colour (or `NA` for transparent).
-#' @param gp Page-level graphical parameters ([gpar()]) carried by the root
+#' @param gp Page-level graphical parameters ([vl_gpar()]) carried by the root
 #'   viewport; inherited by everything drawn (e.g. a default `col`/`fontsize`).
 #' @param xscale,yscale Native coordinate range of the root viewport, so
 #'   `"native"` units work at the page level without an explicit [push()].
@@ -215,15 +215,15 @@ vellum_scene <- S7::new_class(
 #' @return `vl_scene()`, `push()`, `draw()`, `pop()`: a `vellum_scene`.
 #' @examples
 #' s <- vl_scene(width = 4, height = 3) |>
-#'   push(viewport(xscale = c(0, 10), yscale = c(0, 10))) |>
-#'   draw(rect_grob(gp = gpar(fill = "grey95", col = "grey50"))) |>
-#'   draw(lines_grob(x = unit(0:10, "native"), y = unit(0:10, "native"),
-#'                   gp = gpar(col = "steelblue", lwd = 2)))
+#'   push(vl_viewport(xscale = c(0, 10), yscale = c(0, 10))) |>
+#'   draw(rect_grob(gp = vl_gpar(fill = "grey95", col = "grey50"))) |>
+#'   draw(lines_grob(x = vl_unit(0:10, "native"), y = vl_unit(0:10, "native"),
+#'                   gp = vl_gpar(col = "steelblue", lwd = 2)))
 #' @export
 vl_scene <- function(width = 6, height = 4, dpi = 96, bg = "white",
-                     gp = gpar(), xscale = c(0, 1), yscale = c(0, 1), clip = FALSE,
+                     gp = vl_gpar(), xscale = c(0, 1), yscale = c(0, 1), clip = FALSE,
                      title = NULL, desc = NULL) {
-  root <- .bnode(vp = viewport(name = "root", gp = gp, xscale = xscale, yscale = yscale, clip = clip))
+  root <- .bnode(vp = vl_viewport(name = "root", gp = gp, xscale = xscale, yscale = yscale, clip = clip))
   vellum_scene(
     width = .as_size(width), height = .as_size(height), dpi = dpi, bg = bg,
     root = NULL, bstate = .bstate_new(root, list(root), 0L, 0),
@@ -245,7 +245,7 @@ vl_scene <- function(width = 6, height = 4, dpi = 96, bg = "white",
 #' @return The scene, with the accessibility fields set (a new value).
 #' @examples
 #' vl_scene(2, 2) |>
-#'   draw(points_grob(c(0.3, 0.7), 0.5, gp = gpar(fill = "red"))) |>
+#'   draw(points_grob(c(0.3, 0.7), 0.5, gp = vl_gpar(fill = "red"))) |>
 #'   describe(title = "Two red dots", desc = "Two red points on a white field.")
 #' @export
 describe <- function(scene, title = NULL, desc = NULL) {
@@ -268,7 +268,7 @@ describe <- function(scene, title = NULL, desc = NULL) {
 
 #' @rdname vl_scene
 #' @param scene A [vl_scene()].
-#' @param vp A [viewport()].
+#' @param vp A [vl_viewport()].
 #' @export
 push <- function(scene, vp) {
   scene <- .ensure_building(scene)
@@ -425,7 +425,7 @@ scene_svg <- function(scene, text = c("native", "outline")) {
 #'   The `as.raster()` method: a `raster` (character matrix, `c(height, width)`).
 #' @examples
 #' s <- vl_scene(2, 1, bg = "white") |>
-#'   draw(circle_grob(r = 0.3, gp = gpar(fill = "red", col = NA)))
+#'   draw(circle_grob(r = 0.3, gp = vl_gpar(fill = "red", col = NA)))
 #' dim(scene_raster(s)) # c(4, width_px, height_px)
 #' @importFrom grDevices as.raster
 #' @export
@@ -479,7 +479,7 @@ S7::method(as.raster, vellum_scene) <- function(x, ...) {
 #' @examples
 #' \dontrun{
 #' vl_scene(4, 3) |>
-#'   draw(circle_grob(r = 0.3, gp = gpar(fill = "tomato", col = NA))) |>
+#'   draw(circle_grob(r = 0.3, gp = vl_gpar(fill = "tomato", col = NA))) |>
 #'   display()
 #' }
 #' @export
@@ -529,7 +529,7 @@ makeContent.vellum_scene_grob <- function(x) {
     if (r <= 72) NA_real_ else min(r, 300)
   }, error = function(e) NA_real_)
   dpi <- knit_dpi %||% (if (is.na(dev_dpi)) x$scene@dpi else max(72, dev_dpi))
-  s2 <- S7::set_props(x$scene, width = unit(w_in, "in"), height = unit(h_in, "in"), dpi = dpi)
+  s2 <- S7::set_props(x$scene, width = vl_unit(w_in, "in"), height = vl_unit(h_in, "in"), dpi = dpi)
   grid::setChildren(x, grid::gList(
     grid::rasterGrob(as.raster(s2), width = grid::unit(1, "npc"),
                      height = grid::unit(1, "npc"), interpolate = TRUE)
@@ -1129,7 +1129,7 @@ hit_test <- function(scene, x, y, units = c("npc", "px")) {
 #'
 #' @param scene A [vl_scene()].
 #' @param name A node name (set via the `name` argument of a grob/viewport).
-#' @param ... Properties to set, e.g. `gp = gpar(col = "red")`.
+#' @param ... Properties to set, e.g. `gp = vl_gpar(col = "red")`.
 #' @return `node_names()`: character. `get_node()`: a node. `edit_node()`: a
 #'   `vellum_scene`.
 #' @export
@@ -1351,7 +1351,7 @@ edit_node <- function(scene, name, ...) {
   names(.unit_codes)[match(vctrs::field(u, "unit"), .unit_codes)]
 }
 
-.as_size <- function(x) if (is_unit(x)) x else unit(x, "in")
+.as_size <- function(x) if (is_unit(x)) x else vl_unit(x, "in")
 
 .to_inches <- function(u) {
   v <- vctrs::field(u, "value")[1]

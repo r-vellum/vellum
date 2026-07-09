@@ -11,7 +11,7 @@ test_that("segments_grob draws each segment", {
   s <- vl_scene(1, 1, dpi = 100, bg = "white") |>
     draw(segments_grob(
       x0 = c(0.1, 0.5), y0 = c(0.5, 0.1), x1 = c(0.9, 0.5), y1 = c(0.5, 0.9),
-      gp = gpar(col = "black", lwd = 3)
+      gp = vl_gpar(col = "black", lwd = 3)
     ))
   expect_equal(px(s, 50, 50)[1:3], c(0L, 0L, 0L)) # both segments cross the centre
   expect_equal(px(s, 20, 80)[1:3], c(255L, 255L, 255L)) # empty corner
@@ -23,7 +23,7 @@ test_that("an even-odd path leaves a hole that winding fills", {
   donut <- function(rule) {
     vl_scene(1, 1, dpi = 100, bg = "white") |>
       draw(path_grob(c(o$x, i$x), c(o$y, i$y), id = rep(1:2, each = 64),
-                     rule = rule, gp = gpar(fill = "steelblue", col = NA)))
+                     rule = rule, gp = vl_gpar(fill = "steelblue", col = NA)))
   }
   eo <- donut("evenodd")
   expect_equal(px(eo, 50, 12)[1:3], c(70L, 130L, 180L)) # on the ring: filled
@@ -34,14 +34,14 @@ test_that("an even-odd path leaves a hole that winding fills", {
 
 test_that("a single-subpath path fills (no id)", {
   tri <- vl_scene(1, 1, dpi = 100, bg = "white") |>
-    draw(path_grob(c(0.5, 0.1, 0.9), c(0.9, 0.1, 0.1), gp = gpar(fill = "red", col = NA)))
+    draw(path_grob(c(0.5, 0.1, 0.9), c(0.9, 0.1, 0.1), gp = vl_gpar(fill = "red", col = NA)))
   expect_equal(px(tri, 50, 40)[1:3], c(255L, 0L, 0L))
 })
 
-test_that("path strokes its outline with the gpar col + lty", {
+test_that("path strokes its outline with the vl_gpar col + lty", {
   o <- ring(0.5, 0.5, 0.4)
   s <- vl_scene(1, 1, dpi = 100, bg = "white") |>
-    draw(path_grob(o$x, o$y, gp = gpar(fill = NA, col = "black", lwd = 3)))
+    draw(path_grob(o$x, o$y, gp = vl_gpar(fill = NA, col = "black", lwd = 3)))
   expect_equal(px(s, 50, 50)[1:3], c(255L, 255L, 255L)) # unfilled interior
   expect_true(px(s, 50, 11)[1] < 128L) # stroked boundary near top of ring
 })
@@ -50,7 +50,7 @@ test_that("SVG path emits fill-rule for even-odd; PDF renders", {
   o <- ring(0.5, 0.5, 0.4); i <- ring(0.5, 0.5, 0.18)
   s <- vl_scene(1, 1, dpi = 100) |>
     draw(path_grob(c(o$x, i$x), c(o$y, i$y), id = rep(1:2, each = 64),
-                   rule = "evenodd", gp = gpar(fill = "steelblue", col = NA)))
+                   rule = "evenodd", gp = vl_gpar(fill = "steelblue", col = NA)))
   fsvg <- withr::local_tempfile(fileext = ".svg")
   render(s, fsvg)
   expect_match(paste(readLines(fsvg, warn = FALSE), collapse = ""), 'fill-rule="evenodd"')
@@ -71,7 +71,7 @@ test_that("path_grob groups non-consecutive ids into one sub-path (grid-style)",
   xv <- c(o$x[1:16], i$x, o$x[17:32]); yv <- c(o$y[1:16], i$y, o$y[17:32])
   idv <- c(rep(1, 16), rep(2, 32), rep(1, 16))
   s <- vl_scene(1, 1, dpi = 100, bg = "white") |>
-    draw(path_grob(xv, yv, id = idv, rule = "evenodd", gp = gpar(fill = "steelblue", col = NA)))
+    draw(path_grob(xv, yv, id = idv, rule = "evenodd", gp = vl_gpar(fill = "steelblue", col = NA)))
   expect_equal(px(s, 50, 12)[1:3], c(70L, 130L, 180L))   # ring filled
   expect_equal(px(s, 50, 50)[1:3], c(255L, 255L, 255L))  # hole (would fill if mis-grouped)
 })

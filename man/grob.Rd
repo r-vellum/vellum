@@ -25,7 +25,7 @@ rect_grob(
   width = 1,
   height = 1,
   sketch = NULL,
-  gp = gpar(),
+  gp = vl_gpar(),
   name = NULL,
   vp = NULL,
   id = NULL,
@@ -41,7 +41,7 @@ roundrect_grob(
   height = 1,
   r = 0.1,
   sketch = NULL,
-  gp = gpar(),
+  gp = vl_gpar(),
   name = NULL,
   vp = NULL,
   id = NULL,
@@ -56,7 +56,7 @@ lines_grob(
   end_cap = NULL,
   offset = NULL,
   sketch = NULL,
-  gp = gpar(),
+  gp = vl_gpar(),
   name = NULL,
   vp = NULL,
   id = NULL,
@@ -67,7 +67,7 @@ polygon_grob(
   x,
   y,
   sketch = NULL,
-  gp = gpar(),
+  gp = vl_gpar(),
   name = NULL,
   vp = NULL,
   id = NULL,
@@ -78,7 +78,7 @@ bezier_grob(
   x,
   y,
   n = 60,
-  gp = gpar(),
+  gp = vl_gpar(),
   name = NULL,
   vp = NULL,
   id = NULL,
@@ -91,7 +91,7 @@ spline_grob(
   shape = 1,
   n = 20,
   open = TRUE,
-  gp = gpar(),
+  gp = vl_gpar(),
   name = NULL,
   vp = NULL,
   id = NULL,
@@ -103,7 +103,7 @@ circle_grob(
   y = 0.5,
   r = 0.25,
   sketch = NULL,
-  gp = gpar(),
+  gp = vl_gpar(),
   name = NULL,
   vp = NULL,
   id = NULL,
@@ -115,10 +115,10 @@ circle_grob(
 points_grob(
   x,
   y,
-  size = unit(2, "mm"),
+  size = vl_unit(2, "mm"),
   shape = "circle",
   sketch = NULL,
-  gp = gpar(),
+  gp = vl_gpar(),
   name = NULL,
   vp = NULL,
   id = NULL,
@@ -130,12 +130,12 @@ points_grob(
 hexagon_grob(
   x = 0.5,
   y = 0.5,
-  size = unit(2, "mm"),
+  size = vl_unit(2, "mm"),
   width = NULL,
   height = NULL,
   fill = NULL,
   orientation = c("flat", "pointy"),
-  gp = gpar(),
+  gp = vl_gpar(),
   name = NULL,
   vp = NULL,
   id = NULL,
@@ -154,7 +154,7 @@ sector_grob(
   fill = NULL,
   arrow = NULL,
   sketch = NULL,
-  gp = gpar(),
+  gp = vl_gpar(),
   name = NULL,
   vp = NULL,
   id = NULL,
@@ -166,12 +166,12 @@ sector_grob(
 loop_grob(
   x = 0.5,
   y = 0.5,
-  size = unit(4, "mm"),
-  foot = unit(0, "mm"),
+  size = vl_unit(4, "mm"),
+  foot = vl_unit(0, "mm"),
   angle = 0,
   width = 1,
   arrow = NULL,
-  gp = gpar(),
+  gp = vl_gpar(),
   name = NULL,
   vp = NULL,
   id = NULL,
@@ -188,7 +188,7 @@ segments_grob(
   end_cap = NULL,
   offset = NULL,
   sketch = NULL,
-  gp = gpar(),
+  gp = vl_gpar(),
   name = NULL,
   vp = NULL,
   id = NULL,
@@ -203,7 +203,7 @@ path_grob(
   id = NULL,
   rule = c("winding", "evenodd"),
   sketch = NULL,
-  gp = gpar(),
+  gp = vl_gpar(),
   name = NULL,
   vp = NULL,
   role = NULL
@@ -216,7 +216,7 @@ raster_grob(
   width = 1,
   height = 1,
   interpolate = TRUE,
-  gp = gpar(),
+  gp = vl_gpar(),
   name = NULL,
   vp = NULL,
   id = NULL,
@@ -229,7 +229,7 @@ text_grob(
   y = 0.5,
   just = "centre",
   rot = 0,
-  gp = gpar(),
+  gp = vl_gpar(),
   name = NULL,
   vp = NULL,
   id = NULL,
@@ -237,9 +237,9 @@ text_grob(
 )
 }
 \arguments{
-\item{x, y}{Coordinates (\code{\link[=unit]{unit()}} or numeric).}
+\item{x, y}{Coordinates (\code{\link[=vl_unit]{vl_unit()}} or numeric).}
 
-\item{width, height}{Grob size (\code{\link[=unit]{unit()}} or numeric), recycled like \code{x}/\code{y}.
+\item{width, height}{Grob size (\code{\link[=vl_unit]{vl_unit()}} or numeric), recycled like \code{x}/\code{y}.
 For most grobs the drawn rectangle size. For \code{\link[=hexagon_grob]{hexagon_grob()}}, the optional
 per-hexagon \strong{full} corner-to-corner extent along x/y: when both are given
 they override \code{size} (resolved per-axis, so a hexagon can be \emph{non-regular}
@@ -253,11 +253,11 @@ without shortening it (the igraph "narrowing" factor).}
 
 \item{sketch}{Optional \code{\link[=sketch]{sketch()}} spec for a hand-drawn look; \code{NULL} = crisp.}
 
-\item{gp}{Graphical parameters, from \code{\link[=gpar]{gpar()}}.}
+\item{gp}{Graphical parameters, from \code{\link[=vl_gpar]{vl_gpar()}}.}
 
 \item{name}{Optional name (for \code{\link[=edit_node]{edit_node()}}).}
 
-\item{vp}{Optional \code{\link[=viewport]{viewport()}} to draw this grob inside.}
+\item{vp}{Optional \code{\link[=vl_viewport]{vl_viewport()}} to draw this grob inside.}
 
 \item{id}{For most grobs, an optional semantic identifier emitted by the SVG
 backend as \code{data-vellum-id} (for interactivity, accessibility, and testing;
@@ -281,26 +281,26 @@ list with one entry (record) per element (recycled), e.g. tooltip text or
 field values. It never reaches the backend (nothing drawn changes); it rides
 on the scene and is returned by \code{\link[=scene_model]{scene_model()}}. \code{NULL} (default) = none.}
 
-\item{r}{Radius (\code{\link[=unit]{unit()}} or numeric).}
+\item{r}{Radius (\code{\link[=vl_unit]{vl_unit()}} or numeric).}
 
-\item{arrow}{An \code{\link[=arrow]{arrow()}} spec to draw heads on the line/segment ends, or
+\item{arrow}{An \code{\link[=vl_arrow]{vl_arrow()}} spec to draw heads on the line/segment ends, or
 \code{NULL} for none.}
 
-\item{start_cap, end_cap}{Optional \strong{absolute-length} \code{\link[=unit]{unit()}}s (\code{mm}/\code{cm}/
+\item{start_cap, end_cap}{Optional \strong{absolute-length} \code{\link[=vl_unit]{vl_unit()}}s (\code{mm}/\code{cm}/
 \verb{in}/\code{pt}; a bare numeric is taken as \code{mm}) that shorten the drawn line
 inward from its start/end by that physical amount, resolved \strong{at render} in
 device space — so the gap is exact at any size, dpi, and aspect ratio, with
 no reliance on the native scale. For \code{\link[=segments_grob]{segments_grob()}} the caps are
 per-element (scalar or length-n, recycled like the coordinates); for
 \code{\link[=lines_grob]{lines_grob()}} a single (scalar) cap trims each end of the whole polyline.
-\code{NULL} (default) leaves the endpoint untouched. When an \code{\link[=arrow]{arrow()}} is also
+\code{NULL} (default) leaves the endpoint untouched. When an \code{\link[=vl_arrow]{vl_arrow()}} is also
 present its head is placed at the \emph{capped} end, so the tip lands on the
 boundary (e.g. a node marker) rather than under it. This is what lets a
 directed edge stop at a node's radius. See the acceptance notes in the
 package for the degenerate cases (a cap \code{>=} the segment length draws
 nothing; a zero-length segment is skipped).}
 
-\item{offset}{Optional \strong{absolute-length} \code{\link[=unit]{unit()}} (\code{mm}/\code{cm}/\verb{in}/\code{pt}; a bare
+\item{offset}{Optional \strong{absolute-length} \code{\link[=vl_unit]{vl_unit()}} (\code{mm}/\code{cm}/\verb{in}/\code{pt}; a bare
 numeric is \code{mm}) that shifts the line \strong{perpendicular} to its own direction by
 that physical amount, resolved \strong{at render} in device space. The sign picks
 the side (\code{+} left of the direction of travel, \verb{−} right). For
@@ -319,7 +319,7 @@ then cap, then head). \code{NULL}/\code{0} (default) leaves the geometry untouch
 
 \item{open}{If \code{FALSE}, the spline is closed (wraps end to start).}
 
-\item{size}{Loop extent: an \strong{absolute} \code{\link[=unit]{unit()}} (\code{mm}/\code{cm}/\verb{in}/\code{pt}; a bare
+\item{size}{Loop extent: an \strong{absolute} \code{\link[=vl_unit]{vl_unit()}} (\code{mm}/\code{cm}/\verb{in}/\code{pt}; a bare
 numeric is \code{mm}), resolved to a device length \strong{at render} so the loop tracks
 a node's mm size at any page size/dpi. Nested loops on one vertex pass growing
 \code{size} (same \code{x}/\code{y}/\code{angle}) for concentric teardrops. Recycled per loop.}
@@ -330,7 +330,7 @@ falls back to \code{gp$fill}.}
 \item{orientation}{Hexagon orientation: \code{"flat"} (default, flat top/bottom edge)
 or \code{"pointy"} (vertex at top). \code{size} is the circumradius (centre to vertex).}
 
-\item{r0, r1}{Inner and outer radius of each sector (\code{\link[=unit]{unit()}} or numeric;
+\item{r0, r1}{Inner and outer radius of each sector (\code{\link[=vl_unit]{vl_unit()}} or numeric;
 numeric is treated as \code{"native"}). \code{r0 = 0} gives a pie slice; \code{r0 == r1}
 gives an arc outline (stroke only, no fill).}
 
@@ -338,7 +338,7 @@ gives an arc outline (stroke only, no fill).}
 at 3 o'clock and increasing counter-clockwise.}
 
 \item{foot}{Node radius the loop's two \strong{feet} attach at (an \strong{absolute}
-\code{\link[=unit]{unit()}}; \code{0} = both feet at the vertex, like igraph). A positive \code{foot} puts
+\code{\link[=vl_unit]{vl_unit()}}; \code{0} = both feet at the vertex, like igraph). A positive \code{foot} puts
 the feet on the node's boundary so the loop visibly leaves and re-enters the
 node edge, and a directed loop's head lands on the boundary rather than under
 the marker. Recycled per loop.}
@@ -346,7 +346,7 @@ the marker. Recycled per loop.}
 \item{angle}{Outward direction of the loop in \strong{radians} (which way the teardrop
 bulges away from the vertex, e.g. away from the layout centroid).}
 
-\item{x0, y0, x1, y1}{Segment start/end coordinates (\code{\link[=unit]{unit()}} or numeric).}
+\item{x0, y0, x1, y1}{Segment start/end coordinates (\code{\link[=vl_unit]{vl_unit()}} or numeric).}
 
 \item{rule}{Fill rule: \code{"winding"} (non-zero, default) or \code{"evenodd"}.}
 
@@ -369,7 +369,7 @@ A grob object.
 \description{
 Grobs are immutable value objects describing something to draw. Build them
 with the constructors below, add them to a scene with \code{\link[=draw]{draw()}}, and render
-with \code{\link[=render]{render()}}. Coordinates accept a \code{\link[=unit]{unit()}} vector or a bare numeric
+with \code{\link[=render]{render()}}. Coordinates accept a \code{\link[=vl_unit]{vl_unit()}} vector or a bare numeric
 (interpreted in the \code{default_units}, usually \code{"npc"}).
 }
 \details{
@@ -377,7 +377,7 @@ with \code{\link[=render]{render()}}. Coordinates accept a \code{\link[=unit]{un
 single call. \code{gp$fill} recycles per sector; \code{gp$col}/\code{lwd} give a uniform stroke.
 
 Passing \code{r0 == r1} gives an \strong{open arc} (stroke only). Combined with an
-absolute (\code{mm}) radius at a \code{"native"} centre and an \code{\link[=arrow]{arrow()}}, the radius is
+absolute (\code{mm}) radius at a \code{"native"} centre and an \code{\link[=vl_arrow]{vl_arrow()}}, the radius is
 resolved to a device length at render (like a marker \code{size}), so the arc tracks
 an mm size at any page size or dpi; the arrowhead sits tangent to the outer arc's
 end. (For node-link \strong{self-loops}, prefer \code{\link[=loop_grob]{loop_grob()}} — a teardrop, not a
@@ -385,7 +385,7 @@ ring.)
 
 \code{loop_grob()} draws \strong{self-loops} for node-link diagrams as an igraph-style cubic
 \strong{Bézier teardrop}: it leaves the vertex \verb{(x, y)} (a \code{"native"} anchor), bulges
-out to \code{size} along \code{angle}, and returns, with an optional \code{\link[=arrow]{arrow()}} head tangent
+out to \code{size} along \code{angle}, and returns, with an optional \code{\link[=vl_arrow]{vl_arrow()}} head tangent
 to the curve at the returning foot. \code{size} and \code{foot} are absolute and resolved to
 device px \strong{at render}, so the loop is a fixed physical size that scales with the
 mm node markers — no native-per-mm estimation, exact at any figure size/dpi.

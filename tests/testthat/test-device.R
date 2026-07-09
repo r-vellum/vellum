@@ -13,7 +13,7 @@ test_that("as_vellum translates core grid grobs (with a viewport) faithfully", {
   expect_equal(px(round(0.66 * 400), round((1 - 0.34) * 400))[1:3], c(0L, 0L, 255L))
 })
 
-test_that("per-element (vector) gpar is split into per-style vellum grobs", {
+test_that("per-element (vector) vl_gpar is split into per-style vellum grobs", {
   # three points, three colours -> three marker grobs, each a scalar colour.
   g <- grid::pointsGrob(c(0.25, 0.5, 0.75), c(0.5, 0.5, 0.5), pch = 19,
                         gp = grid::gpar(col = c("red", "green", "blue")))

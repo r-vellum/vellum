@@ -20,9 +20,9 @@ cells <- list(c(1, 1), c(1, 2), c(2, 1), c(2, 2))
 
 # shared style (lwd inherited by every panel line) + a 2x2 layout
 s <- vl_scene(width = 7, height = 5, dpi = 150, bg = "white") |>
-  push(viewport(
-    gp = gpar(lwd = 2),
-    layout = grid_layout(widths = unit(c(1, 1), "null"), heights = unit(c(1, 1), "null"))
+  push(vl_viewport(
+    gp = vl_gpar(lwd = 2),
+    layout = grid_layout(widths = vl_unit(c(1, 1), "null"), heights = vl_unit(c(1, 1), "null"))
   ))
 
 for (i in seq_along(series)) {
@@ -30,18 +30,18 @@ for (i in seq_along(series)) {
   d <- series[[i]]
   yr <- range(d$y)
   s <- s |>
-    push(viewport(row = rc[1], col = rc[2])) |> # cell
-    push(viewport(x = 0.5, y = 0.45, width = 0.86, height = 0.74,
+    push(vl_viewport(row = rc[1], col = rc[2])) |> # cell
+    push(vl_viewport(x = 0.5, y = 0.45, width = 0.86, height = 0.74,
                   xscale = range(xs), yscale = yr, clip = TRUE)) |>
-    draw(rect_grob(gp = gpar(fill = "grey97", col = NA))) |>
-    draw(lines_grob(unit(range(xs), "native"), unit(c(0, 0), "native"),
-                    gp = gpar(col = "grey80", lwd = 1))) |>
-    draw(lines_grob(unit(xs, "native"), unit(d$y, "native"), gp = gpar(col = d$col))) |>
+    draw(rect_grob(gp = vl_gpar(fill = "grey97", col = NA))) |>
+    draw(lines_grob(vl_unit(range(xs), "native"), vl_unit(c(0, 0), "native"),
+                    gp = vl_gpar(col = "grey80", lwd = 1))) |>
+    draw(lines_grob(vl_unit(xs, "native"), vl_unit(d$y, "native"), gp = vl_gpar(col = d$col))) |>
     pop() |>
     draw(rect_grob(x = 0.5, y = 0.45, width = 0.86, height = 0.74,
-                   gp = gpar(fill = NA, col = "grey60", lwd = 1))) |>
+                   gp = vl_gpar(fill = NA, col = "grey60", lwd = 1))) |>
     draw(text_grob(d$title, x = 0.5, y = 0.9, just = c("centre", "top"),
-                   gp = gpar(fontface = "bold", fontsize = 13))) |>
+                   gp = vl_gpar(fontface = "bold", fontsize = 13))) |>
     pop()
 }
 

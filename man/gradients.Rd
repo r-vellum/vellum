@@ -47,10 +47,10 @@ end stops), \code{"repeat"}, or \code{"reflect"}.}
 radius \code{0.5} npc).}
 }
 \value{
-A \code{vellum_gradient} object, suitable for \code{gpar(fill = ...)}.
+A \code{vellum_gradient} object, suitable for \code{vl_gpar(fill = ...)}.
 }
 \description{
-Create a linear or radial gradient to use as a \code{fill} in \code{\link[=gpar]{gpar()}}. A gradient
+Create a linear or radial gradient to use as a \code{fill} in \code{\link[=vl_gpar]{vl_gpar()}}. A gradient
 interpolates between colour \emph{stops}. Its geometry (\code{x1}/\code{y1}/... or
 \code{cx}/\code{cy}/\code{r}) is given in the coordinate system named by \code{units} and is
 resolved against the viewport at draw time, so the gradient transforms with

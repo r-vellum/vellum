@@ -23,11 +23,11 @@ library(vellum)
 
 vl_scene(width = 5, height = 2.4, bg = "white") |>
   draw(rect_grob(width = 0.94, height = 0.82,
-                 gp = gpar(fill = linear_gradient(c("#1b2a4a", "#3a7bd5")), col = NA))) |>
+                 gp = vl_gpar(fill = linear_gradient(c("#1b2a4a", "#3a7bd5")), col = NA))) |>
   draw(circle_grob(x = 0.16, y = 0.5, r = 0.28,
-                   gp = gpar(fill = "#f7c948", col = NA))) |>
+                   gp = vl_gpar(fill = "#f7c948", col = NA))) |>
   draw(text_grob("vellum", x = 0.62, y = 0.5,
-                 gp = gpar(fontsize = 64, col = "white", fontface = "bold"))) |>
+                 gp = vl_gpar(fontsize = 64, col = "white", fontface = "bold"))) |>
   render("man/figures/README-hello.png")
 ```
 
@@ -53,7 +53,7 @@ with `render()`, which picks the backend from the file extension.
   `get_node()` / `edit_node()`).
 - **A modern paint model across all backends.** Linear & radial
   **gradients**, tiling **patterns**, alpha/luminance **masks**, and
-  group opacity (`viewport(alpha=)`).
+  group opacity (`vl_viewport(alpha=)`).
 - **Built-in big-data aggregation.** `datashade()` bins millions of
   points into a density raster in one pass, with no overplotting and no
   giant files.
@@ -88,23 +88,23 @@ pak::pak("r-vellum/vellum")
 Gradients, a tiling pattern, and a mask, composed with viewports:
 
 ``` r
-tile <- list(rect_grob(gp = gpar(fill = "#ecf0f1", col = NA)),
-             circle_grob(r = 0.32, gp = gpar(fill = "#e74c3c", col = NA)))
+tile <- list(rect_grob(gp = vl_gpar(fill = "#ecf0f1", col = NA)),
+             circle_grob(r = 0.32, gp = vl_gpar(fill = "#e74c3c", col = NA)))
 
 vl_scene(6, 2.1, bg = "white") |>
   # radial gradient
-  push(viewport(x = 1/6, width = 1/3)) |>
-    draw(circle_grob(r = 0.42, gp = gpar(fill = radial_gradient(c("#f6d365", "#fda085")), col = NA))) |>
+  push(vl_viewport(x = 1/6, width = 1/3)) |>
+    draw(circle_grob(r = 0.42, gp = vl_gpar(fill = radial_gradient(c("#f6d365", "#fda085")), col = NA))) |>
   pop() |>
   # tiling pattern
-  push(viewport(x = 3/6, width = 1/3)) |>
+  push(vl_viewport(x = 3/6, width = 1/3)) |>
     draw(rect_grob(width = 0.84, height = 0.84,
-                   gp = gpar(fill = pattern(tile, width = 0.22, height = 0.22), col = NA))) |>
+                   gp = vl_gpar(fill = vl_pattern(tile, width = 0.22, height = 0.22), col = NA))) |>
   pop() |>
   # a linear gradient, clipped to a circular mask
-  push(viewport(x = 5/6, width = 1/3,
-                mask = as_mask(circle_grob(r = 0.42, gp = gpar(fill = "white", col = NA))))) |>
-    draw(rect_grob(gp = gpar(fill = linear_gradient(c("#7f53ac", "#647dee")), col = NA))) |>
+  push(vl_viewport(x = 5/6, width = 1/3,
+                mask = as_mask(circle_grob(r = 0.42, gp = vl_gpar(fill = "white", col = NA))))) |>
+    draw(rect_grob(gp = vl_gpar(fill = linear_gradient(c("#7f53ac", "#647dee")), col = NA))) |>
   pop() |>
   render("man/figures/README-paint.png")
 ```
@@ -123,11 +123,11 @@ x <- runif(60, 0, 10)
 y <- 1.8 * x + rnorm(60, 0, 4)
 
 vl_scene(4.5, 3, bg = "white") |>
-  push(viewport(x = 0.57, y = 0.57, width = 0.82, height = 0.82,
+  push(vl_viewport(x = 0.57, y = 0.57, width = 0.82, height = 0.82,
                 xscale = c(0, 10), yscale = range(pretty(y)))) |>
-    draw(rect_grob(gp = gpar(fill = "#f4f6f8", col = "#cfd8dc"))) |>
-    draw(points_grob(unit(x, "native"), unit(y, "native"), size = unit(3.2, "mm"),
-                     gp = gpar(fill = "#3a7bd5", col = "#1b2a4a", lwd = 1))) |>
+    draw(rect_grob(gp = vl_gpar(fill = "#f4f6f8", col = "#cfd8dc"))) |>
+    draw(points_grob(vl_unit(x, "native"), vl_unit(y, "native"), size = vl_unit(3.2, "mm"),
+                     gp = vl_gpar(fill = "#3a7bd5", col = "#1b2a4a", lwd = 1))) |>
   pop() |>
   render("man/figures/README-scatter.png")
 ```
@@ -160,7 +160,7 @@ vl_scene(4.5, 3, bg = "white") |>
 
 ``` r
 s <- vl_scene(4, 3) |>
-  draw(circle_grob(r = 0.3, gp = gpar(fill = "tomato", col = NA)))
+  draw(circle_grob(r = 0.3, gp = vl_gpar(fill = "tomato", col = NA)))
 
 render(s, "out.png") # raster   (tiny-skia)
 render(s, "out.svg") # vector   (hand-rolled SVG)

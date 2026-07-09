@@ -13,7 +13,7 @@ vl_scene(
   height = 4,
   dpi = 96,
   bg = "white",
-  gp = gpar(),
+  gp = vl_gpar(),
   xscale = c(0, 1),
   yscale = c(0, 1),
   clip = FALSE,
@@ -30,13 +30,13 @@ pop(scene, n = 1)
 render(scene, path, text = c("native", "outline"), debug = FALSE)
 }
 \arguments{
-\item{width, height}{Page size (\code{\link[=unit]{unit()}} or numeric inches).}
+\item{width, height}{Page size (\code{\link[=vl_unit]{vl_unit()}} or numeric inches).}
 
 \item{dpi}{Resolution in dots per inch.}
 
 \item{bg}{Background colour (or \code{NA} for transparent).}
 
-\item{gp}{Page-level graphical parameters (\code{\link[=gpar]{gpar()}}) carried by the root
+\item{gp}{Page-level graphical parameters (\code{\link[=vl_gpar]{vl_gpar()}}) carried by the root
 viewport; inherited by everything drawn (e.g. a default \code{col}/\code{fontsize}).}
 
 \item{xscale, yscale}{Native coordinate range of the root viewport, so
@@ -53,7 +53,7 @@ output is unchanged. See \code{\link[=describe]{describe()}} to set them on an e
 
 \item{scene}{A \code{\link[=vl_scene]{vl_scene()}}.}
 
-\item{vp}{A \code{\link[=viewport]{viewport()}}.}
+\item{vp}{A \code{\link[=vl_viewport]{vl_viewport()}}.}
 
 \item{grob}{A grob (see \link{grob}).}
 
@@ -85,8 +85,8 @@ modify). \code{\link[=render]{render()}} compiles the scene and writes the outpu
 }
 \examples{
 s <- vl_scene(width = 4, height = 3) |>
-  push(viewport(xscale = c(0, 10), yscale = c(0, 10))) |>
-  draw(rect_grob(gp = gpar(fill = "grey95", col = "grey50"))) |>
-  draw(lines_grob(x = unit(0:10, "native"), y = unit(0:10, "native"),
-                  gp = gpar(col = "steelblue", lwd = 2)))
+  push(vl_viewport(xscale = c(0, 10), yscale = c(0, 10))) |>
+  draw(rect_grob(gp = vl_gpar(fill = "grey95", col = "grey50"))) |>
+  draw(lines_grob(x = vl_unit(0:10, "native"), y = vl_unit(0:10, "native"),
+                  gp = vl_gpar(col = "steelblue", lwd = 2)))
 }

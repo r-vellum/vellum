@@ -147,10 +147,10 @@ H <- W * nrow / ncol
 cell_px <- round(W * dpi / ncol) # datashade canvas = cell pixel size (crisp)
 
 s <- vl_scene(width = W, height = H, dpi = dpi, bg = "white") |>
-  push(viewport(
+  push(vl_viewport(
     layout = grid_layout(
-      widths = unit(rep(1, ncol), "null"),
-      heights = unit(rep(1, nrow), "null")
+      widths = vl_unit(rep(1, ncol), "null"),
+      heights = vl_unit(rep(1, nrow), "null")
     )
   ))
 
@@ -183,7 +183,7 @@ for (i in seq_len(panels)) {
   row <- (i - 1) %/% ncol + 1
   col <- (i - 1) %% ncol + 1
   s <- s |>
-    push(viewport(row = row, col = col)) |>
+    push(vl_viewport(row = row, col = col)) |>
     draw(img) |>
     pop()
 }

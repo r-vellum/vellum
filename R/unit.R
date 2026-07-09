@@ -18,10 +18,10 @@
 #'
 #' Arithmetic: `+` and `-` combine two units of the *same* code, or two
 #' *absolute* units (`"mm"`/`"cm"`/`"in"`/`"pt"`), which resolve to `"mm"`
-#' immediately (e.g. `unit(10, "mm") + unit(1, "in")` is `35.4mm`). A position
+#' immediately (e.g. `vl_unit(10, "mm") + vl_unit(1, "in")` is `35.4mm`). A position
 #' unit (`"npc"`/`"native"`) plus an absolute unit forms a **compound** unit — a
 #' data/panel anchor plus an exact absolute offset — e.g.
-#' `unit(1, "native") + unit(2, "mm")` is `1native+2mm`: it resolves to the
+#' `vl_unit(1, "native") + vl_unit(2, "mm")` is `1native+2mm`: it resolves to the
 #' native position shifted right by exactly 2 mm at render, at any scale or
 #' aspect. Mixing two *different* position bases (e.g. `"npc"` and `"native"`)
 #' still errors, as it cannot be reduced to one unit. `unit * scalar` scales the
@@ -33,10 +33,10 @@
 #'   `label`, `fontfamily`, `fontface`, `fontsize`, `lineheight`.
 #' @return A `unit` vector.
 #' @examples
-#' unit(1:3, "native")
-#' unit(c(0.5, 1), c("npc", "in"))
+#' vl_unit(1:3, "native")
+#' vl_unit(c(0.5, 1), c("npc", "in"))
 #' @export
-unit <- function(values, units = "npc", data = NULL) {
+vl_unit <- function(values, units = "npc", data = NULL) {
   values <- vctrs::vec_cast(values, double())
   if (length(values) == 0L) {
     return(new_unit())
@@ -88,14 +88,14 @@ new_unit <- function(value = double(), unit = integer(), offset = NULL) {
   )
 }
 
-#' @rdname unit
+#' @rdname vl_unit
 #' @param x An object.
 #' @export
 is_unit <- function(x) inherits(x, "vellum_unit")
 
 # Coerce a bare numeric to a unit with `default` units; pass units through.
 as_unit <- function(x, default = "npc") {
-  if (is_unit(x)) x else unit(x, default)
+  if (is_unit(x)) x else vl_unit(x, default)
 }
 
 # Resolve derived units (cm/char/line/strwidth/strheight/grobwidth/grobheight)
@@ -182,7 +182,7 @@ vec_arith.vellum_unit.default <- function(op, x, y, ...) {
 #' @method vec_arith.vellum_unit numeric
 vec_arith.vellum_unit.numeric <- function(op, x, y, ...) {
   # Scaling multiplies the base value *and* the absolute offset, so
-  # `2 * (unit(1, "native") + unit(3, "mm"))` is `unit(2, "native") + 6 mm`.
+  # `2 * (vl_unit(1, "native") + vl_unit(3, "mm"))` is `vl_unit(2, "native") + 6 mm`.
   switch(op,
     "*" = new_unit(vctrs::field(x, "value") * y, vctrs::field(x, "unit"), vctrs::field(x, "offset") * y),
     "/" = new_unit(vctrs::field(x, "value") / y, vctrs::field(x, "unit"), vctrs::field(x, "offset") / y),
@@ -206,7 +206,7 @@ vec_arith.numeric.vellum_unit <- function(op, x, y, ...) {
 .abort_unit_scalar <- function(op) {
   cli::cli_abort(c(
     "Can't {op} a {.cls unit} and a bare number.",
-    i = "Wrap the number in {.fn unit} (e.g. {.code unit(5, \"mm\") {op} unit(3, \"mm\")}), or scale with {.code *}."
+    i = "Wrap the number in {.fn unit} (e.g. {.code vl_unit(5, \"mm\") {op} vl_unit(3, \"mm\")}), or scale with {.code *}."
   ))
 }
 #' @export
@@ -265,7 +265,7 @@ vec_arith.vellum_unit.vellum_unit <- function(op, x, y, ...) {
   pos <- ax$pos + s * ay$pos
   off <- ax$off + s * ay$off
   # No position base on either side => a pure absolute result, resolved to mm
-  # (the classic `unit(10,"mm") + unit(1,"in")` case, unchanged).
+  # (the classic `vl_unit(10,"mm") + vl_unit(1,"in")` case, unchanged).
   both_abs <- is.na(code)
   new_unit(
     ifelse(both_abs, off, pos),

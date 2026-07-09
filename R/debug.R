@@ -46,7 +46,7 @@ NULL
     )
     add(polygon_grob(
       x = corners[1, ], y = corners[2, ],
-      gp = gpar(col = col, fill = NA, lwd = 1)
+      gp = vl_gpar(col = col, fill = NA, lwd = 1)
     ))
     # Track boundaries (interior layout edges only).
     if (isTRUE(g$has_layout[i] == 1L)) {
@@ -59,14 +59,14 @@ NULL
       for (k in seq_along(xe)[-c(1L, length(xe))]) {
         a <- .dev_to_npc(tf, xo + xe[k], y_lo, W, H)
         b <- .dev_to_npc(tf, xo + xe[k], y_hi, W, H)
-        add(segments_grob(a[1], a[2], b[1], b[2], gp = gpar(col = col, lwd = 0.5, lty = "dashed")))
+        add(segments_grob(a[1], a[2], b[1], b[2], gp = vl_gpar(col = col, lwd = 0.5, lty = "dashed")))
       }
       x_lo <- xo + xe[1]
       x_hi <- xo + xe[length(xe)]
       for (k in seq_along(ye)[-c(1L, length(ye))]) {
         a <- .dev_to_npc(tf, x_lo, yo + ye[k], W, H)
         b <- .dev_to_npc(tf, x_hi, yo + ye[k], W, H)
-        add(segments_grob(a[1], a[2], b[1], b[2], gp = gpar(col = col, lwd = 0.5, lty = "dashed")))
+        add(segments_grob(a[1], a[2], b[1], b[2], gp = vl_gpar(col = col, lwd = 0.5, lty = "dashed")))
       }
     }
     # Clip region (device-space bbox -> npc), dashed.
@@ -74,14 +74,14 @@ NULL
       cl <- g$clip[[i]]
       cx <- c(cl[1], cl[3], cl[3], cl[1]) / W
       cy <- 1 - c(cl[2], cl[2], cl[4], cl[4]) / H
-      add(polygon_grob(x = cx, y = cy, gp = gpar(col = "#FF7F00", fill = NA, lwd = 0.75, lty = "dotted")))
+      add(polygon_grob(x = cx, y = cy, gp = vl_gpar(col = "#FF7F00", fill = NA, lwd = 0.75, lty = "dotted")))
     }
     # Name label at the region's top-left corner.
     nm <- name_by_id[[as.character(vid)]]
     if (!is.null(nm) && !is.na(nm) && nzchar(nm)) {
       tl <- .dev_to_npc(tf, 0, 0, W, H)
       add(text_grob(nm, x = tl[1], y = tl[2], just = c("left", "top"),
-                    gp = gpar(col = col, fontsize = 8)))
+                    gp = vl_gpar(col = col, fontsize = 8)))
     }
   }
   for (gr in grobs) compile(gr, s)
@@ -134,7 +134,7 @@ NULL
 #'   `height_mm`, and `determined_by`), printed legibly.
 #' @examples
 #' s <- vl_scene(4, 3) |>
-#'   push(viewport(name = "panel", width = unit(2, "in"), height = unit(1, "in")))
+#'   push(vl_viewport(name = "panel", width = vl_unit(2, "in"), height = vl_unit(1, "in")))
 #' why_size(s, "panel")
 #' @export
 why_size <- function(scene, name) {

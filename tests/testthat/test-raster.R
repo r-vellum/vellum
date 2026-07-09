@@ -3,7 +3,7 @@
 
 test_that("scene_raster() returns a c(4, w, h) integer array with correct pixels", {
   s <- vl_scene(2, 1, dpi = 100, bg = "white") |>
-    draw(rect_grob(gp = gpar(fill = "red", col = NA)))
+    draw(rect_grob(gp = vl_gpar(fill = "red", col = NA)))
   r <- scene_raster(s)
   expect_equal(dim(r), c(4L, 200L, 100L)) # channels, x, y
   expect_equal(r[1:4, 100, 50], c(255L, 0L, 0L, 255L)) # centre is opaque red
@@ -25,7 +25,7 @@ test_that("as.raster() renders correctly via grid (no shear/tiling)", {
   # raster back through grid::grid.raster() — the real consumer — and check pixels.
   s <- vl_scene(4, 2, dpi = 100, bg = "white") |>
     draw(rect_grob(x = 0.1, y = 0.85, width = 0.16, height = 0.24,
-                   gp = gpar(fill = "red", col = NA))) # top-LEFT block
+                   gp = vl_gpar(fill = "red", col = NA))) # top-LEFT block
   ras <- as.raster(s)
   expect_s3_class(ras, "raster")
   expect_equal(dim(ras), c(200L, 400L)) # c(height, width)

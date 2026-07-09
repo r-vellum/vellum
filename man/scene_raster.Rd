@@ -26,6 +26,6 @@ An \code{\link[grDevices:as.raster]{grDevices::as.raster()}} method returns the 
 }
 \examples{
 s <- vl_scene(2, 1, bg = "white") |>
-  draw(circle_grob(r = 0.3, gp = gpar(fill = "red", col = NA)))
+  draw(circle_grob(r = 0.3, gp = vl_gpar(fill = "red", col = NA)))
 dim(scene_raster(s)) # c(4, width_px, height_px)
 }

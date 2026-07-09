@@ -2,7 +2,7 @@
 #'
 #' Grobs are immutable value objects describing something to draw. Build them
 #' with the constructors below, add them to a scene with [draw()], and render
-#' with [render()]. Coordinates accept a [unit()] vector or a bare numeric
+#' with [render()]. Coordinates accept a [vl_unit()] vector or a bare numeric
 #' (interpreted in the `default_units`, usually `"npc"`).
 #'
 #' @name grob
@@ -26,7 +26,7 @@ grob <- S7::new_class(
   "grob", package = "vellum", abstract = TRUE,
   properties = list(
     name = S7::new_property(S7::class_any, default = NULL),
-    gp   = S7::new_property(gpar, default = quote(gpar())),
+    gp   = S7::new_property(vl_gpar, default = quote(vl_gpar())),
     vp   = S7::new_property(S7::class_any, default = NULL),
     id   = S7::new_property(S7::class_any, default = NULL),
     role = S7::new_property(S7::class_any, default = NULL),
@@ -55,15 +55,15 @@ grob <- S7::new_class(
 grob_rect <- S7::new_class("grob_rect", parent = grob, package = "vellum",
   properties = list(
     x = .unit_prop(), y = .unit_prop(),
-    width = .unit_prop("unit(1, \"npc\")"), height = .unit_prop("unit(1, \"npc\")"),
+    width = .unit_prop("vl_unit(1, \"npc\")"), height = .unit_prop("vl_unit(1, \"npc\")"),
     sketch = S7::new_property(S7::class_any, default = NULL)
   )
 )
 grob_roundrect <- S7::new_class("grob_roundrect", parent = grob, package = "vellum",
   properties = list(
     x = .unit_prop(), y = .unit_prop(),
-    width = .unit_prop("unit(1, \"npc\")"), height = .unit_prop("unit(1, \"npc\")"),
-    r = .unit_prop("unit(0.1, \"npc\")"),
+    width = .unit_prop("vl_unit(1, \"npc\")"), height = .unit_prop("vl_unit(1, \"npc\")"),
+    r = .unit_prop("vl_unit(0.1, \"npc\")"),
     sketch = S7::new_property(S7::class_any, default = NULL)
   )
 )
@@ -78,11 +78,11 @@ grob_polygon <- S7::new_class("grob_polygon", parent = grob, package = "vellum",
   properties = list(x = .unit_prop(), y = .unit_prop(),
                     sketch = S7::new_property(S7::class_any, default = NULL)))
 grob_circle <- S7::new_class("grob_circle", parent = grob, package = "vellum",
-  properties = list(x = .unit_prop(), y = .unit_prop(), r = .unit_prop("unit(0.25, \"npc\")"),
+  properties = list(x = .unit_prop(), y = .unit_prop(), r = .unit_prop("vl_unit(0.25, \"npc\")"),
                     sketch = S7::new_property(S7::class_any, default = NULL)))
 grob_points <- S7::new_class("grob_points", parent = grob, package = "vellum",
   properties = list(
-    x = .unit_prop(), y = .unit_prop(), size = .unit_prop("unit(2, \"mm\")"),
+    x = .unit_prop(), y = .unit_prop(), size = .unit_prop("vl_unit(2, \"mm\")"),
     shape = S7::new_property(S7::class_character, default = "circle"),
     sketch = S7::new_property(S7::class_any, default = NULL)
   ),
@@ -97,7 +97,7 @@ grob_points <- S7::new_class("grob_points", parent = grob, package = "vellum",
 
 grob_hexagon <- S7::new_class("grob_hexagon", parent = grob, package = "vellum",
   properties = list(
-    x = .unit_prop(), y = .unit_prop(), size = .unit_prop("unit(2, \"mm\")"),
+    x = .unit_prop(), y = .unit_prop(), size = .unit_prop("vl_unit(2, \"mm\")"),
     width = S7::new_property(S7::class_any, default = NULL),
     height = S7::new_property(S7::class_any, default = NULL),
     fill = S7::new_property(S7::class_any, default = NULL),
@@ -107,7 +107,7 @@ grob_hexagon <- S7::new_class("grob_hexagon", parent = grob, package = "vellum",
 grob_sector <- S7::new_class("grob_sector", parent = grob, package = "vellum",
   properties = list(
     x = .unit_prop(), y = .unit_prop(),
-    r0 = .unit_prop("unit(0, \"native\")"), r1 = .unit_prop("unit(0.5, \"native\")"),
+    r0 = .unit_prop("vl_unit(0, \"native\")"), r1 = .unit_prop("vl_unit(0.5, \"native\")"),
     theta0 = S7::new_property(S7::class_double, default = 0),
     theta1 = S7::new_property(S7::class_double, default = 0),
     fill = S7::new_property(S7::class_any, default = NULL),
@@ -162,7 +162,7 @@ grob_segments <- S7::new_class("grob_segments", parent = grob, package = "vellum
 grob_loop <- S7::new_class("grob_loop", parent = grob, package = "vellum",
   properties = list(
     x = .unit_prop(), y = .unit_prop(),
-    size = .unit_prop("unit(4, \"mm\")"), foot = .unit_prop("unit(0, \"mm\")"),
+    size = .unit_prop("vl_unit(4, \"mm\")"), foot = .unit_prop("vl_unit(0, \"mm\")"),
     angle = S7::new_property(S7::class_double, default = 0),
     width = S7::new_property(S7::class_double, default = 1),
     arrow = S7::new_property(S7::class_any, default = NULL)
@@ -181,7 +181,7 @@ grob_raster <- S7::new_class("grob_raster", parent = grob, package = "vellum",
     iw = S7::new_property(S7::class_integer, default = 0L),
     ih = S7::new_property(S7::class_integer, default = 0L),
     x = .unit_prop(), y = .unit_prop(),
-    width = .unit_prop("unit(1, \"npc\")"), height = .unit_prop("unit(1, \"npc\")"),
+    width = .unit_prop("vl_unit(1, \"npc\")"), height = .unit_prop("vl_unit(1, \"npc\")"),
     interpolate = S7::new_property(S7::class_logical, default = TRUE)
   )
 )
@@ -189,8 +189,8 @@ grob_raster <- S7::new_class("grob_raster", parent = grob, package = "vellum",
 # --- friendly constructors --------------------------------------------------
 
 #' @rdname grob
-#' @param x,y Coordinates ([unit()] or numeric).
-#' @param width,height Grob size ([unit()] or numeric), recycled like `x`/`y`.
+#' @param x,y Coordinates ([vl_unit()] or numeric).
+#' @param width,height Grob size ([vl_unit()] or numeric), recycled like `x`/`y`.
 #'   For most grobs the drawn rectangle size. For [hexagon_grob()], the optional
 #'   per-hexagon **full** corner-to-corner extent along x/y: when both are given
 #'   they override `size` (resolved per-axis, so a hexagon can be *non-regular*
@@ -201,14 +201,14 @@ grob_raster <- S7::new_class("grob_raster", parent = grob, package = "vellum",
 #'   dimensionless lateral petal scale in `(0, 1]` (recycled per loop): `1`
 #'   (default) is the full teardrop, smaller narrows the petal's **waist**
 #'   without shortening it (the igraph "narrowing" factor).
-#' @param gp Graphical parameters, from [gpar()].
+#' @param gp Graphical parameters, from [vl_gpar()].
 #' @param name Optional name (for [edit_node()]).
-#' @param vp Optional [viewport()] to draw this grob inside.
+#' @param vp Optional [vl_viewport()] to draw this grob inside.
 #' @param role Optional ARIA role, emitted by the SVG backend as `role=` for
 #'   accessibility (ignored by the raster and PDF backends).
 #' @export
 rect_grob <- function(x = 0.5, y = 0.5, width = 1, height = 1,
-                      sketch = NULL, gp = gpar(), name = NULL, vp = NULL, id = NULL, role = NULL,
+                      sketch = NULL, gp = vl_gpar(), name = NULL, vp = NULL, id = NULL, role = NULL,
                       key = NULL, meta = NULL) {
   w <- as_unit(width)
   h <- as_unit(height)
@@ -221,12 +221,12 @@ rect_grob <- function(x = 0.5, y = 0.5, width = 1, height = 1,
 }
 
 #' @rdname grob
-#' @param r Corner radius ([unit()] or numeric). An `"npc"`/numeric radius is
+#' @param r Corner radius ([vl_unit()] or numeric). An `"npc"`/numeric radius is
 #'   isotropic (a fraction of the shorter side, like grid's `"snpc"`), so corners
 #'   stay circular on non-square rectangles; clamped to half the shorter side.
 #' @export
 roundrect_grob <- function(x = 0.5, y = 0.5, width = 1, height = 1, r = 0.1,
-                           sketch = NULL, gp = gpar(), name = NULL, vp = NULL, id = NULL, role = NULL) {
+                           sketch = NULL, gp = vl_gpar(), name = NULL, vp = NULL, id = NULL, role = NULL) {
   w <- as_unit(width)
   h <- as_unit(height)
   rr <- as_unit(r)
@@ -260,22 +260,22 @@ roundrect_grob <- function(x = 0.5, y = 0.5, width = 1, height = 1, r = 0.1,
 }
 
 #' @rdname grob
-#' @param arrow An [arrow()] spec to draw heads on the line/segment ends, or
+#' @param arrow An [vl_arrow()] spec to draw heads on the line/segment ends, or
 #'   `NULL` for none.
-#' @param start_cap,end_cap Optional **absolute-length** [unit()]s (`mm`/`cm`/
+#' @param start_cap,end_cap Optional **absolute-length** [vl_unit()]s (`mm`/`cm`/
 #'   `in`/`pt`; a bare numeric is taken as `mm`) that shorten the drawn line
 #'   inward from its start/end by that physical amount, resolved **at render** in
 #'   device space — so the gap is exact at any size, dpi, and aspect ratio, with
 #'   no reliance on the native scale. For [segments_grob()] the caps are
 #'   per-element (scalar or length-n, recycled like the coordinates); for
 #'   [lines_grob()] a single (scalar) cap trims each end of the whole polyline.
-#'   `NULL` (default) leaves the endpoint untouched. When an [arrow()] is also
+#'   `NULL` (default) leaves the endpoint untouched. When an [vl_arrow()] is also
 #'   present its head is placed at the *capped* end, so the tip lands on the
 #'   boundary (e.g. a node marker) rather than under it. This is what lets a
 #'   directed edge stop at a node's radius. See the acceptance notes in the
 #'   package for the degenerate cases (a cap `>=` the segment length draws
 #'   nothing; a zero-length segment is skipped).
-#' @param offset Optional **absolute-length** [unit()] (`mm`/`cm`/`in`/`pt`; a bare
+#' @param offset Optional **absolute-length** [vl_unit()] (`mm`/`cm`/`in`/`pt`; a bare
 #'   numeric is `mm`) that shifts the line **perpendicular** to its own direction by
 #'   that physical amount, resolved **at render** in device space. The sign picks
 #'   the side (`+` left of the direction of travel, `−` right). For
@@ -288,7 +288,7 @@ roundrect_grob <- function(x = 0.5, y = 0.5, width = 1, height = 1, r = 0.1,
 #' @param sketch Optional [sketch()] spec for a hand-drawn look; `NULL` = crisp.
 #' @export
 lines_grob <- function(x, y, arrow = NULL, start_cap = NULL, end_cap = NULL, offset = NULL,
-                       sketch = NULL, gp = gpar(), name = NULL, vp = NULL, id = NULL, role = NULL) {
+                       sketch = NULL, gp = vl_gpar(), name = NULL, vp = NULL, id = NULL, role = NULL) {
   n <- .coord_n(x, y)
   start_cap <- .check_cap(start_cap, "start_cap", scalar = TRUE)
   end_cap <- .check_cap(end_cap, "end_cap", scalar = TRUE)
@@ -330,14 +330,14 @@ lines_grob <- function(x, y, arrow = NULL, start_cap = NULL, end_cap = NULL, off
 #' [segments_grob()] (pass as their `arrow =` argument).
 #'
 #' @param angle Half-angle of the head at the tip, in degrees (default 30).
-#' @param length Head length as an absolute [unit()] (default `unit(0.25, "in")`).
+#' @param length Head length as an absolute [vl_unit()] (default `vl_unit(0.25, "in")`).
 #' @param ends Which ends get a head: `"last"` (default), `"first"`, or `"both"`.
 #' @param type `"open"` (a two-barb V) or `"closed"` (a filled triangle).
 #' @return A `vellum_arrow` object.
 #' @examples
-#' lines_grob(c(0.1, 0.9), c(0.1, 0.9), arrow = arrow(type = "closed"))
+#' lines_grob(c(0.1, 0.9), c(0.1, 0.9), arrow = vl_arrow(type = "closed"))
 #' @export
-arrow <- function(angle = 30, length = unit(0.25, "in"),
+vl_arrow <- function(angle = 30, length = vl_unit(0.25, "in"),
                   ends = c("last", "first", "both"), type = c("open", "closed")) {
   ends <- match.arg(ends)
   type <- match.arg(type)
@@ -387,7 +387,7 @@ arrow <- function(angle = 30, length = unit(0.25, "in"),
 #' @param seed Integer seed for the wobble (same seed => identical output).
 #' @return A `vellum_sketch` object for a grob's `sketch` argument.
 #' @examples
-#' rect_grob(gp = gpar(fill = "steelblue", col = "black"), sketch = sketch())
+#' rect_grob(gp = vl_gpar(fill = "steelblue", col = "black"), sketch = sketch())
 #' @export
 sketch <- function(roughness = 1, bowing = 1,
                    fill_style = c("hachure", "solid", "crosshatch", "zigzag", "dots"),
@@ -447,7 +447,7 @@ sketch <- function(roughness = 1, bowing = 1,
 
 #' @rdname grob
 #' @export
-polygon_grob <- function(x, y, sketch = NULL, gp = gpar(), name = NULL, vp = NULL, id = NULL, role = NULL) {
+polygon_grob <- function(x, y, sketch = NULL, gp = vl_gpar(), name = NULL, vp = NULL, id = NULL, role = NULL) {
   n <- .coord_n(x, y)
   grob_polygon(x = vctrs::vec_recycle(as_unit(x, "native"), n),
                y = vctrs::vec_recycle(as_unit(y, "native"), n),
@@ -504,13 +504,13 @@ polygon_grob <- function(x, y, sketch = NULL, gp = gpar(), name = NULL, vp = NUL
 #' @rdname grob
 #' @param n Number of points to sample the curve at (flattened to a polyline).
 #' @export
-bezier_grob <- function(x, y, n = 60, gp = gpar(), name = NULL, vp = NULL, id = NULL, role = NULL) {
+bezier_grob <- function(x, y, n = 60, gp = vl_gpar(), name = NULL, vp = NULL, id = NULL, role = NULL) {
   ax <- .axis_unit(x)
   ay <- .axis_unit(y)
   if (length(ax$value) != length(ay$value)) cli::cli_abort("{.arg x} and {.arg y} must have the same length.")
   if (length(ax$value) < 2L) cli::cli_abort("A Bezier needs at least 2 control points.")
   t <- seq(0, 1, length.out = max(2L, n))
-  lines_grob(unit(.bezier_eval(ax$value, t), ax$unit), unit(.bezier_eval(ay$value, t), ay$unit),
+  lines_grob(vl_unit(.bezier_eval(ax$value, t), ax$unit), vl_unit(.bezier_eval(ay$value, t), ay$unit),
              gp = gp, name = name, vp = vp, id = id, role = role)
 }
 
@@ -519,20 +519,20 @@ bezier_grob <- function(x, y, n = 60, gp = gpar(), name = NULL, vp = NULL, id = 
 #'   Catmull-Rom curve through the points, `0` straight segments.
 #' @param open If `FALSE`, the spline is closed (wraps end to start).
 #' @export
-spline_grob <- function(x, y, shape = 1, n = 20, open = TRUE, gp = gpar(), name = NULL, vp = NULL, id = NULL, role = NULL) {
+spline_grob <- function(x, y, shape = 1, n = 20, open = TRUE, gp = vl_gpar(), name = NULL, vp = NULL, id = NULL, role = NULL) {
   ax <- .axis_unit(x)
   ay <- .axis_unit(y)
   if (length(ax$value) != length(ay$value)) cli::cli_abort("{.arg x} and {.arg y} must have the same length.")
   tension <- 1 - max(0, min(1, shape))
   fx <- .cardinal(ax$value, tension, max(1L, n), !open)
   fy <- .cardinal(ay$value, tension, max(1L, n), !open)
-  lines_grob(unit(fx, ax$unit), unit(fy, ay$unit), gp = gp, name = name, vp = vp, id = id, role = role)
+  lines_grob(vl_unit(fx, ax$unit), vl_unit(fy, ay$unit), gp = gp, name = name, vp = vp, id = id, role = role)
 }
 
 #' @rdname grob
-#' @param r Radius ([unit()] or numeric).
+#' @param r Radius ([vl_unit()] or numeric).
 #' @export
-circle_grob <- function(x = 0.5, y = 0.5, r = 0.25, sketch = NULL, gp = gpar(), name = NULL, vp = NULL, id = NULL, role = NULL,
+circle_grob <- function(x = 0.5, y = 0.5, r = 0.25, sketch = NULL, gp = vl_gpar(), name = NULL, vp = NULL, id = NULL, role = NULL,
                         key = NULL, meta = NULL) {
   n <- .common_n(x, y, r)
   ru <- as_unit(r)
@@ -545,13 +545,13 @@ circle_grob <- function(x = 0.5, y = 0.5, r = 0.25, sketch = NULL, gp = gpar(), 
 }
 
 #' @rdname grob
-#' @param size Point size ([unit()] or numeric).
+#' @param size Point size ([vl_unit()] or numeric).
 #' @param shape Marker shape(s): `"circle"` (default), `"square"`, `"triangle"`,
 #'   `"diamond"`, `"plus"`, or `"cross"`, recycled per point. Filled shapes use
 #'   `gp$fill` (and outline `gp$col`); `"plus"`/`"cross"` are stroke-only.
 #' @export
-points_grob <- function(x, y, size = unit(2, "mm"), shape = "circle",
-                        sketch = NULL, gp = gpar(), name = NULL, vp = NULL, id = NULL, role = NULL,
+points_grob <- function(x, y, size = vl_unit(2, "mm"), shape = "circle",
+                        sketch = NULL, gp = vl_gpar(), name = NULL, vp = NULL, id = NULL, role = NULL,
                         key = NULL, meta = NULL) {
   n <- .coord_n(x, y)
   sz <- as_unit(size, "mm")
@@ -577,10 +577,10 @@ points_grob <- function(x, y, size = unit(2, "mm"), shape = "circle",
 #' @param orientation Hexagon orientation: `"flat"` (default, flat top/bottom edge)
 #'   or `"pointy"` (vertex at top). `size` is the circumradius (centre to vertex).
 #' @export
-hexagon_grob <- function(x = 0.5, y = 0.5, size = unit(2, "mm"),
+hexagon_grob <- function(x = 0.5, y = 0.5, size = vl_unit(2, "mm"),
                          width = NULL, height = NULL, fill = NULL,
                          orientation = c("flat", "pointy"),
-                         gp = gpar(), name = NULL, vp = NULL, id = NULL, role = NULL,
+                         gp = vl_gpar(), name = NULL, vp = NULL, id = NULL, role = NULL,
                          key = NULL, meta = NULL) {
   orientation <- match.arg(orientation)
   n <- .coord_n(x, y)
@@ -608,7 +608,7 @@ hexagon_grob <- function(x = 0.5, y = 0.5, size = unit(2, "mm"),
 }
 
 #' @rdname grob
-#' @param r0,r1 Inner and outer radius of each sector ([unit()] or numeric;
+#' @param r0,r1 Inner and outer radius of each sector ([vl_unit()] or numeric;
 #'   numeric is treated as `"native"`). `r0 = 0` gives a pie slice; `r0 == r1`
 #'   gives an arc outline (stroke only, no fill).
 #' @param theta0,theta1 Start and end angle of each sector, in **radians**, with 0
@@ -620,14 +620,14 @@ hexagon_grob <- function(x = 0.5, y = 0.5, size = unit(2, "mm"),
 #' single call. `gp$fill` recycles per sector; `gp$col`/`lwd` give a uniform stroke.
 #'
 #' Passing `r0 == r1` gives an **open arc** (stroke only). Combined with an
-#' absolute (`mm`) radius at a `"native"` centre and an [arrow()], the radius is
+#' absolute (`mm`) radius at a `"native"` centre and an [vl_arrow()], the radius is
 #' resolved to a device length at render (like a marker `size`), so the arc tracks
 #' an mm size at any page size or dpi; the arrowhead sits tangent to the outer arc's
 #' end. (For node-link **self-loops**, prefer [loop_grob()] — a teardrop, not a
 #' ring.)
 #' @export
 sector_grob <- function(x = 0.5, y = 0.5, r0 = 0, r1 = 0.5, theta0 = 0, theta1 = 2 * pi,
-                        fill = NULL, arrow = NULL, sketch = NULL, gp = gpar(), name = NULL, vp = NULL, id = NULL, role = NULL,
+                        fill = NULL, arrow = NULL, sketch = NULL, gp = vl_gpar(), name = NULL, vp = NULL, id = NULL, role = NULL,
                         key = NULL, meta = NULL) {
   n <- .common_n(x, y, r0, r1, theta0, theta1)
   .check_finite_num(theta0, "theta0")
@@ -646,12 +646,12 @@ sector_grob <- function(x = 0.5, y = 0.5, r0 = 0, r1 = 0.5, theta0 = 0, theta1 =
 }
 
 #' @rdname grob
-#' @param size Loop extent: an **absolute** [unit()] (`mm`/`cm`/`in`/`pt`; a bare
+#' @param size Loop extent: an **absolute** [vl_unit()] (`mm`/`cm`/`in`/`pt`; a bare
 #'   numeric is `mm`), resolved to a device length **at render** so the loop tracks
 #'   a node's mm size at any page size/dpi. Nested loops on one vertex pass growing
 #'   `size` (same `x`/`y`/`angle`) for concentric teardrops. Recycled per loop.
 #' @param foot Node radius the loop's two **feet** attach at (an **absolute**
-#'   [unit()]; `0` = both feet at the vertex, like igraph). A positive `foot` puts
+#'   [vl_unit()]; `0` = both feet at the vertex, like igraph). A positive `foot` puts
 #'   the feet on the node's boundary so the loop visibly leaves and re-enters the
 #'   node edge, and a directed loop's head lands on the boundary rather than under
 #'   the marker. Recycled per loop.
@@ -660,13 +660,13 @@ sector_grob <- function(x = 0.5, y = 0.5, r0 = 0, r1 = 0.5, theta0 = 0, theta1 =
 #' @details
 #' `loop_grob()` draws **self-loops** for node-link diagrams as an igraph-style cubic
 #' **Bézier teardrop**: it leaves the vertex `(x, y)` (a `"native"` anchor), bulges
-#' out to `size` along `angle`, and returns, with an optional [arrow()] head tangent
+#' out to `size` along `angle`, and returns, with an optional [vl_arrow()] head tangent
 #' to the curve at the returning foot. `size` and `foot` are absolute and resolved to
 #' device px **at render**, so the loop is a fixed physical size that scales with the
 #' mm node markers — no native-per-mm estimation, exact at any figure size/dpi.
 #' @export
-loop_grob <- function(x = 0.5, y = 0.5, size = unit(4, "mm"), foot = unit(0, "mm"),
-                      angle = 0, width = 1, arrow = NULL, gp = gpar(), name = NULL, vp = NULL, id = NULL, role = NULL) {
+loop_grob <- function(x = 0.5, y = 0.5, size = vl_unit(4, "mm"), foot = vl_unit(0, "mm"),
+                      angle = 0, width = 1, arrow = NULL, gp = vl_gpar(), name = NULL, vp = NULL, id = NULL, role = NULL) {
   n <- .common_n(x, y, size, foot, angle, width)
   .check_finite_num(angle, "angle")
   sz <- .check_cap(as_unit(size, "mm"), "size")
@@ -683,10 +683,10 @@ loop_grob <- function(x = 0.5, y = 0.5, size = unit(4, "mm"), foot = unit(0, "mm
 }
 
 #' @rdname grob
-#' @param x0,y0,x1,y1 Segment start/end coordinates ([unit()] or numeric).
+#' @param x0,y0,x1,y1 Segment start/end coordinates ([vl_unit()] or numeric).
 #' @export
 segments_grob <- function(x0, y0, x1, y1, arrow = NULL, start_cap = NULL, end_cap = NULL,
-                          offset = NULL, sketch = NULL, gp = gpar(), name = NULL, vp = NULL, id = NULL, role = NULL,
+                          offset = NULL, sketch = NULL, gp = vl_gpar(), name = NULL, vp = NULL, id = NULL, role = NULL,
                           key = NULL, meta = NULL) {
   n <- .common_n(x0, y0, x1, y1)
   start_cap <- .check_cap(start_cap, "start_cap")
@@ -726,7 +726,7 @@ segments_grob <- function(x0, y0, x1, y1, arrow = NULL, start_cap = NULL, end_ca
 #'   on the scene and is returned by [scene_model()]. `NULL` (default) = none.
 #' @export
 path_grob <- function(x, y, id = NULL, rule = c("winding", "evenodd"),
-                      sketch = NULL, gp = gpar(), name = NULL, vp = NULL, role = NULL) {
+                      sketch = NULL, gp = vl_gpar(), name = NULL, vp = NULL, role = NULL) {
   rule <- match.arg(rule)
   n <- .coord_n(x, y)
   xu <- vctrs::vec_recycle(as_unit(x, "native"), n)
@@ -753,7 +753,7 @@ path_grob <- function(x, y, id = NULL, rule = c("winding", "evenodd"),
 #'   keeps hard pixel edges.
 #' @export
 raster_grob <- function(image, x = 0.5, y = 0.5, width = 1, height = 1,
-                        interpolate = TRUE, gp = gpar(), name = NULL, vp = NULL, id = NULL, role = NULL) {
+                        interpolate = TRUE, gp = vl_gpar(), name = NULL, vp = NULL, id = NULL, role = NULL) {
   px <- .image_to_rgba(image)
   grob_raster(
     rgba = px$rgba, iw = px$iw, ih = px$ih,
@@ -782,7 +782,7 @@ raster_grob <- function(image, x = 0.5, y = 0.5, width = 1, height = 1,
 #' @param rot Rotation in degrees, counter-clockwise.
 #' @export
 text_grob <- function(label, x = 0.5, y = 0.5, just = "centre", rot = 0,
-                      gp = gpar(), name = NULL, vp = NULL, id = NULL, role = NULL) {
+                      gp = vl_gpar(), name = NULL, vp = NULL, id = NULL, role = NULL) {
   # Rich labels pass through untouched; everything else coerces to character.
   if (!S7::S7_inherits(label, vellum_label)) label <- as.character(label)
   grob_text(label = label, x = as_unit(x), y = as_unit(y),
@@ -792,8 +792,8 @@ text_grob <- function(label, x = 0.5, y = 0.5, just = "centre", rot = 0,
 
 #' Size a unit by a grob's extent
 #'
-#' `grobwidth(grob)` and `grobheight(grob)` return a [unit()] equal to the drawn
-#' width/height of `grob` — handy for sizing a [viewport()] or [grid_layout()]
+#' `grobwidth(grob)` and `grobheight(grob)` return a [vl_unit()] equal to the drawn
+#' width/height of `grob` — handy for sizing a [vl_viewport()] or [grid_layout()]
 #' track to its contents (e.g. a margin to an axis label). The extent is measured
 #' **eagerly** to absolute millimetres at construction, so it is exact for text
 #' and absolute-unit (`mm`/`in`/`pt`) grobs. A grob sized in `npc`/`native` has no
@@ -804,14 +804,14 @@ text_grob <- function(label, x = 0.5, y = 0.5, just = "centre", rot = 0,
 #' @param mult A multiplier on the measured extent (default 1).
 #' @return A `unit` (in millimetres).
 #' @examples
-#' grobwidth(text_grob("A wide axis label", gp = gpar(fontsize = 14)))
-#' grobheight(rect_grob(height = unit(8, "mm")))
+#' grobwidth(text_grob("A wide axis label", gp = vl_gpar(fontsize = 14)))
+#' grobheight(rect_grob(height = vl_unit(8, "mm")))
 #' @export
-grobwidth <- function(grob, mult = 1) unit(mult, "grobwidth", data = grob)
+grobwidth <- function(grob, mult = 1) vl_unit(mult, "grobwidth", data = grob)
 
 #' @rdname grobwidth
 #' @export
-grobheight <- function(grob, mult = 1) unit(mult, "grobheight", data = grob)
+grobheight <- function(grob, mult = 1) vl_unit(mult, "grobheight", data = grob)
 
 # A grob's drawn extent as c(width_mm, height_mm). Text uses exact (advance)
 # metrics; any other grob (incl. a gtree) is rendered into a throwaway scene and

@@ -18,30 +18,30 @@
 facet_scene <- function(dpi = 100) {
   ylabs <- c("100", "200")
   xlabs <- c("A", "B")
-  gutter_w <- grobwidth(text_grob("200", gp = gpar(fontsize = 12)), mult = 1.5)
-  gutter_h <- grobheight(text_grob("A", gp = gpar(fontsize = 12)), mult = 1.8)
-  cols <- c(gutter_w, unit(1, "null"), unit(1, "null"))
-  rows <- c(unit(1, "null"), unit(1, "null"), gutter_h)
+  gutter_w <- grobwidth(text_grob("200", gp = vl_gpar(fontsize = 12)), mult = 1.5)
+  gutter_h <- grobheight(text_grob("A", gp = vl_gpar(fontsize = 12)), mult = 1.8)
+  cols <- c(gutter_w, vl_unit(1, "null"), vl_unit(1, "null"))
+  rows <- c(vl_unit(1, "null"), vl_unit(1, "null"), gutter_h)
   fills <- c("red", "green", "blue", "orange") # (r1c2, r1c3, r2c2, r2c3)
 
   s <- vl_scene(width = 4, height = 4, dpi = dpi, bg = "white") |>
-    push(viewport(layout = grid_layout(cols, rows)))
+    push(vl_viewport(layout = grid_layout(cols, rows)))
   k <- 0L
   for (r in 1:2) for (cc in 2:3) {
     k <- k + 1L
     s <- s |>
-      push(viewport(row = r, col = cc)) |>
-      draw(rect_grob(gp = gpar(fill = fills[k], col = NA))) |>
+      push(vl_viewport(row = r, col = cc)) |>
+      draw(rect_grob(gp = vl_gpar(fill = fills[k], col = NA))) |>
       pop()
   }
   # axis labels in the gutters (just exercises the gutter cells)
   for (r in 1:2) {
-    s <- s |> push(viewport(row = r, col = 1)) |>
-      draw(text_grob(ylabs[r], gp = gpar(fontsize = 12))) |> pop()
+    s <- s |> push(vl_viewport(row = r, col = 1)) |>
+      draw(text_grob(ylabs[r], gp = vl_gpar(fontsize = 12))) |> pop()
   }
   for (cc in 2:3) {
-    s <- s |> push(viewport(row = 3, col = cc)) |>
-      draw(text_grob(xlabs[cc - 1L], gp = gpar(fontsize = 12))) |> pop()
+    s <- s |> push(vl_viewport(row = 3, col = cc)) |>
+      draw(text_grob(xlabs[cc - 1L], gp = vl_gpar(fontsize = 12))) |> pop()
   }
   list(scene = s, gutter_w = gutter_w, dpi = dpi)
 }

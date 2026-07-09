@@ -1,6 +1,6 @@
 #' Gradient fills
 #'
-#' Create a linear or radial gradient to use as a `fill` in [gpar()]. A gradient
+#' Create a linear or radial gradient to use as a `fill` in [vl_gpar()]. A gradient
 #' interpolates between colour *stops*. Its geometry (`x1`/`y1`/... or
 #' `cx`/`cy`/`r`) is given in the coordinate system named by `units` and is
 #' resolved against the viewport at draw time, so the gradient transforms with
@@ -18,7 +18,7 @@
 #'   `"mm"`, `"in"`, `"pt"`.
 #' @param extend How the gradient behaves outside `[0, 1]`: `"pad"` (clamp to the
 #'   end stops), `"repeat"`, or `"reflect"`.
-#' @return A `vellum_gradient` object, suitable for `gpar(fill = ...)`.
+#' @return A `vellum_gradient` object, suitable for `vl_gpar(fill = ...)`.
 #' @examples
 #' linear_gradient(c("white", "navy"))
 #' radial_gradient(c("yellow", "red"), cx = 0.5, cy = 0.5, r = 0.5)
@@ -128,12 +128,12 @@ print.vellum_gradient <- function(x, ...) {
 #' @param units Coordinate system for the geometry; see [linear_gradient()].
 #' @param extend Tiling mode: `"repeat"` (default), `"reflect"`, or `"pad"`.
 #'   (SVG renders all modes as `repeat`.)
-#' @return A `vellum_pattern` object, suitable for `gpar(fill = ...)`.
+#' @return A `vellum_pattern` object, suitable for `vl_gpar(fill = ...)`.
 #' @examples
-#' dots <- circle_grob(r = 0.25, gp = gpar(fill = "white", col = NA))
-#' pattern(dots, width = 0.08, height = 0.08)
+#' dots <- circle_grob(r = 0.25, gp = vl_gpar(fill = "white", col = NA))
+#' vl_pattern(dots, width = 0.08, height = 0.08)
 #' @export
-pattern <- function(grob, width = 0.1, height = 0.1, x = 0.5, y = 0.5,
+vl_pattern <- function(grob, width = 0.1, height = 0.1, x = 0.5, y = 0.5,
                     units = "npc", extend = "repeat") {
   units <- match.arg(units, .coord_units)
   extend <- match.arg(extend, .gradient_extend)
@@ -185,7 +185,7 @@ print.vellum_pattern <- function(x, ...) {
 
 #' Masks
 #'
-#' Wrap a grob (or list of grobs) as a mask for `viewport(mask = ...)`. The mask
+#' Wrap a grob (or list of grobs) as a mask for `vl_viewport(mask = ...)`. The mask
 #' content is rendered to an isolated layer; its coverage then modulates the
 #' visibility of the viewport's contents.
 #'
@@ -195,7 +195,7 @@ print.vellum_pattern <- function(x, ...) {
 #'   `"luminance"` uses its brightness (white shows, black hides).
 #' @return A `vellum_mask` object.
 #' @examples
-#' as_mask(circle_grob(r = 0.4, gp = gpar(fill = "white", col = NA)))
+#' as_mask(circle_grob(r = 0.4, gp = vl_gpar(fill = "white", col = NA)))
 #' @export
 as_mask <- function(grob, type = c("alpha", "luminance")) {
   type <- match.arg(type)

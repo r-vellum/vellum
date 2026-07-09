@@ -68,8 +68,8 @@ s <- vl_scene(5, 3, bg = "white") |>
   draw(points_grob(
     x    = c(0.25, 0.5, 0.75),
     y    = c(0.4, 0.7, 0.4),
-    size = unit(6, "mm"),
-    gp   = gpar(fill = "#3498db", col = NA),
+    size = vl_unit(6, "mm"),
+    gp   = vl_gpar(fill = "#3498db", col = NA),
     key  = c("a", "b", "c"),
     meta = list(
       list(tooltip = "first"),
@@ -185,7 +185,7 @@ Four attribute mechanisms, each emitted only when its source is set:
 | `data-vellum-id` | grob `id` | per grob/node | `*_grob(id=)` |
 | `data-vellum-name` | grob `name` | per grob/node | `*_grob(name=)` |
 | `role` | grob `role` | per grob/node | `*_grob(role=)` |
-| `data-vellum-panel` | named viewport | wrapping `<g>` | `viewport(name=)` |
+| `data-vellum-panel` | named viewport | wrapping `<g>` | `vl_viewport(name=)` |
 
 An empty/`NULL` source emits **no attribute**, so a scene that declares no
 interactivity is byte-for-byte identical to one built before any of this existed.

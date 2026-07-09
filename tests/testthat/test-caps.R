@@ -17,10 +17,10 @@ first_ink_x <- function(s, y, w) {
 test_that("end_cap shortens a segment inward from its geometric end", {
   # 2x1in @ 100dpi = 200x100; native x 0.1..0.9 -> device 20..180, y=0.5 -> 50.
   base <- vl_scene(2, 1, dpi = 100, bg = "white") |>
-    draw(segments_grob(0.1, 0.5, 0.9, 0.5, gp = gpar(col = "black", lwd = 4)))
+    draw(segments_grob(0.1, 0.5, 0.9, 0.5, gp = vl_gpar(col = "black", lwd = 4)))
   capped <- vl_scene(2, 1, dpi = 100, bg = "white") |>
-    draw(segments_grob(0.1, 0.5, 0.9, 0.5, end_cap = unit(20, "mm"),
-                       gp = gpar(col = "black", lwd = 4)))
+    draw(segments_grob(0.1, 0.5, 0.9, 0.5, end_cap = vl_unit(20, "mm"),
+                       gp = vl_gpar(col = "black", lwd = 4)))
   # Uncapped runs to ~180; a 20mm (=~79px) cap pulls the drawn end back to ~101.
   expect_gt(last_ink_x(base, 50, 200), 175L)
   expect_lt(last_ink_x(capped, 50, 200), 110L)
@@ -31,8 +31,8 @@ test_that("end_cap shortens a segment inward from its geometric end", {
 
 test_that("start_cap shortens a segment inward from its start", {
   capped <- vl_scene(2, 1, dpi = 100, bg = "white") |>
-    draw(segments_grob(0.1, 0.5, 0.9, 0.5, start_cap = unit(20, "mm"),
-                       gp = gpar(col = "black", lwd = 4)))
+    draw(segments_grob(0.1, 0.5, 0.9, 0.5, start_cap = vl_unit(20, "mm"),
+                       gp = vl_gpar(col = "black", lwd = 4)))
   # start 20 -> ~99; end untouched at ~180.
   expect_gt(first_ink_x(capped, 50, 200), 90L)
   expect_lt(first_ink_x(capped, 50, 200), 108L)
@@ -45,8 +45,8 @@ test_that("the cap gap is an absolute physical length (resolution independent)",
   cap_at <- function(dpi) {
     w <- as.integer(2 * dpi)
     s <- vl_scene(2, 1, dpi = dpi, bg = "white") |>
-      draw(segments_grob(0.1, 0.5, 0.9, 0.5, end_cap = unit(20, "mm"),
-                         gp = gpar(col = "black", lwd = 4)))
+      draw(segments_grob(0.1, 0.5, 0.9, 0.5, end_cap = vl_unit(20, "mm"),
+                         gp = vl_gpar(col = "black", lwd = 4)))
     geom_end <- 0.9 * w # native 0.9 -> device px
     geom_end - last_ink_x(s, as.integer(dpi / 2), w) # gap in px
   }
@@ -60,8 +60,8 @@ test_that("the cap gap is an absolute physical length (resolution independent)",
 test_that("an arrowhead lands on the capped end, not the geometric end", {
   s <- vl_scene(2, 1, dpi = 100, bg = "white") |>
     draw(segments_grob(0.1, 0.5, 0.9, 0.5,
-      arrow = arrow(type = "closed", length = unit(6, "mm")),
-      end_cap = unit(20, "mm"), gp = gpar(col = "black", lwd = 3)
+      arrow = vl_arrow(type = "closed", length = vl_unit(6, "mm")),
+      end_cap = vl_unit(20, "mm"), gp = vl_gpar(col = "black", lwd = 3)
     ))
   # Closed head: a filled triangle whose tip sits at the capped end (~x=101) and
   # widens backward along the edge. A point ~13px back and above the line is
@@ -75,7 +75,7 @@ test_that("per-element caps shorten each segment independently", {
   s <- vl_scene(2, 1, dpi = 100, bg = "white") |>
     draw(segments_grob(
       x0 = c(0.1, 0.1), y0 = c(0.3, 0.7), x1 = c(0.9, 0.9), y1 = c(0.3, 0.7),
-      end_cap = unit(c(0, 40), "mm"), gp = gpar(col = "black", lwd = 4)
+      end_cap = vl_unit(c(0, 40), "mm"), gp = vl_gpar(col = "black", lwd = 4)
     ))
   # y=0.3 -> device 70 (no cap, runs to ~180); y=0.7 -> device 30 (40mm cap ~157px
   # -> drawn end ~23, i.e. almost nothing beyond the start).
@@ -86,44 +86,44 @@ test_that("per-element caps shorten each segment independently", {
 test_that("degenerate caps do not error and draw nothing beyond bounds", {
   # A cap longer than the segment consumes it entirely (no ink), no error.
   s <- vl_scene(2, 1, dpi = 100, bg = "white") |>
-    draw(segments_grob(0.1, 0.5, 0.9, 0.5, end_cap = unit(500, "mm"),
-                       gp = gpar(col = "black", lwd = 4)))
+    draw(segments_grob(0.1, 0.5, 0.9, 0.5, end_cap = vl_unit(500, "mm"),
+                       gp = vl_gpar(col = "black", lwd = 4)))
   expect_true(is.na(last_ink_x(s, 50, 200)))
   # A zero-length segment with a cap: skipped, no divide-by-zero.
   s2 <- vl_scene(2, 1, dpi = 100, bg = "white") |>
-    draw(segments_grob(0.5, 0.5, 0.5, 0.5, end_cap = unit(5, "mm"),
-                       gp = gpar(col = "black", lwd = 4)))
+    draw(segments_grob(0.5, 0.5, 0.5, 0.5, end_cap = vl_unit(5, "mm"),
+                       gp = vl_gpar(col = "black", lwd = 4)))
   expect_true(is.na(last_ink_x(s2, 50, 200)))
 })
 
 test_that("NULL caps render byte-for-byte like no caps at all", {
   a <- scene_raster(vl_scene(2, 1, dpi = 100, bg = "white") |>
     draw(segments_grob(0.1, 0.5, 0.9, 0.5,
-      arrow = arrow(type = "closed"), gp = gpar(col = "black", lwd = 3))))
+      arrow = vl_arrow(type = "closed"), gp = vl_gpar(col = "black", lwd = 3))))
   b <- scene_raster(vl_scene(2, 1, dpi = 100, bg = "white") |>
     draw(segments_grob(0.1, 0.5, 0.9, 0.5,
-      arrow = arrow(type = "closed"), start_cap = NULL, end_cap = NULL,
-      gp = gpar(col = "black", lwd = 3))))
+      arrow = vl_arrow(type = "closed"), start_cap = NULL, end_cap = NULL,
+      gp = vl_gpar(col = "black", lwd = 3))))
   expect_identical(a, b)
 })
 
 test_that("lines_grob caps trim the whole-path ends", {
   capped <- vl_scene(2, 1, dpi = 100, bg = "white") |>
-    draw(lines_grob(c(0.1, 0.5, 0.9), c(0.5, 0.5, 0.5), end_cap = unit(20, "mm"),
-                    gp = gpar(col = "black", lwd = 4)))
+    draw(lines_grob(c(0.1, 0.5, 0.9), c(0.5, 0.5, 0.5), end_cap = vl_unit(20, "mm"),
+                    gp = vl_gpar(col = "black", lwd = 4)))
   expect_lt(last_ink_x(capped, 50, 200), 110L)
   expect_lt(first_ink_x(capped, 50, 200), 28L) # start untouched
 })
 
 test_that("caps validate: absolute units only, non-negative, numeric = mm", {
   # native/npc caps are rejected (not resolvable to a device length up front).
-  expect_error(segments_grob(0, 0, 1, 1, end_cap = unit(0.1, "native")), "absolute")
-  expect_error(segments_grob(0, 0, 1, 1, start_cap = unit(0.1, "npc")), "absolute")
+  expect_error(segments_grob(0, 0, 1, 1, end_cap = vl_unit(0.1, "native")), "absolute")
+  expect_error(segments_grob(0, 0, 1, 1, start_cap = vl_unit(0.1, "npc")), "absolute")
   # negative is an error.
-  expect_error(segments_grob(0, 0, 1, 1, end_cap = unit(-2, "mm")), "non-negative")
+  expect_error(segments_grob(0, 0, 1, 1, end_cap = vl_unit(-2, "mm")), "non-negative")
   # a bare numeric cap is taken as mm (no error, builds a grob).
   g <- segments_grob(0, 0, 1, 1, end_cap = 5)
   expect_s3_class(g@end_cap, "vellum_unit")
   # a length-n cap on a single line (whole-path) is rejected.
-  expect_error(lines_grob(c(0, 1), c(0, 1), end_cap = unit(c(1, 2), "mm")), "single value")
+  expect_error(lines_grob(c(0, 1), c(0, 1), end_cap = vl_unit(c(1, 2), "mm")), "single value")
 })

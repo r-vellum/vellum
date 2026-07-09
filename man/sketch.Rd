@@ -56,5 +56,5 @@ Sketch is a deliberate exception to vellum's crisp, fidelity-first defaults —
 see \code{vignette} / \verb{_docs/DESIGN-ROUGHR.md}. Text is never sketched.
 }
 \examples{
-rect_grob(gp = gpar(fill = "steelblue", col = "black"), sketch = sketch())
+rect_grob(gp = vl_gpar(fill = "steelblue", col = "black"), sketch = sketch())
 }

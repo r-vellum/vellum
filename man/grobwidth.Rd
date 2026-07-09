@@ -18,8 +18,8 @@ grobheight(grob, mult = 1)
 A \code{unit} (in millimetres).
 }
 \description{
-\code{grobwidth(grob)} and \code{grobheight(grob)} return a \code{\link[=unit]{unit()}} equal to the drawn
-width/height of \code{grob} — handy for sizing a \code{\link[=viewport]{viewport()}} or \code{\link[=grid_layout]{grid_layout()}}
+\code{grobwidth(grob)} and \code{grobheight(grob)} return a \code{\link[=vl_unit]{vl_unit()}} equal to the drawn
+width/height of \code{grob} — handy for sizing a \code{\link[=vl_viewport]{vl_viewport()}} or \code{\link[=grid_layout]{grid_layout()}}
 track to its contents (e.g. a margin to an axis label). The extent is measured
 \strong{eagerly} to absolute millimetres at construction, so it is exact for text
 and absolute-unit (\code{mm}/\verb{in}/\code{pt}) grobs. A grob sized in \code{npc}/\code{native} has no
@@ -27,6 +27,6 @@ viewport-independent extent and is measured against a fixed reference, so for
 those prefer \code{npc}/\code{native} directly.
 }
 \examples{
-grobwidth(text_grob("A wide axis label", gp = gpar(fontsize = 14)))
-grobheight(rect_grob(height = unit(8, "mm")))
+grobwidth(text_grob("A wide axis label", gp = vl_gpar(fontsize = 14)))
+grobheight(rect_grob(height = vl_unit(8, "mm")))
 }
