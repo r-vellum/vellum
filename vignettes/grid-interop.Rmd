@@ -95,13 +95,13 @@ its grob tree, or pass a captured grob to `as_vellum()`.
 ## When to use interop versus the native API
 
 Reach for `as_vellum()` / `render_grid()` when you already have grid, ggplot2,
-or lattice output and simply want vellum's deterministic, multi-backend
+or lattice output and want vellum's deterministic, multi-backend
 rendering (for example byte-stable PNGs for snapshot tests, or one plot emitted
 to PNG, SVG, and PDF from the same source).
 
 Build with the native `vl_scene()` API instead when you want what the retained
 scene graph offers: named and editable nodes, hit-testing, and a per-element
-`scene_model()` (see `vignette("retained-mode")`). Interop faithfully reproduces
+`scene_model()` (see `vignette("retained-mode")`). Interop reproduces
 the *pixels* of a grid scene, but a grammar built directly on vellum is what
 carries the per-element identity that interactivity needs.
 

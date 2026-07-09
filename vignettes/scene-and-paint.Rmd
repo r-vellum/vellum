@@ -28,8 +28,8 @@ model** (gradients, patterns, and masks) shared across every backend.
 
 A vellum scene is a tree. The root is the page created by `vl_scene()`; every
 `push()` adds a `viewport()` child and descends into it; every `draw()` appends
-a grob at the current level; `pop()` climbs back up. The tree is retained, not
-drawn-and-forgotten, which is what enables the queries in
+a grob at the current level; `pop()` climbs back up. The tree is retained rather
+than drawn-and-forgotten, which is what enables the queries in
 `vignette("retained-mode")`.
 
 Because it is a tree, viewports nest, and a child's geometry is expressed

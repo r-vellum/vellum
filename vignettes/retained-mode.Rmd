@@ -23,7 +23,7 @@ library(vellum)
 grid, and most drawing APIs, are *immediate mode*: a call paints pixels and
 forgets everything about them. vellum is *retained mode*. The scene you build
 is kept as a tree until you render it, and that tree can be queried and edited
-afterwards. This article shows the three things that buys you: naming and
+afterwards. It buys you three things: naming and
 editing nodes, hit-testing, and reading back a per-element model of the scene.
 
 ## Naming nodes

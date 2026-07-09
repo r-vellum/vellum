@@ -23,7 +23,7 @@ library(vellum)
 vellum is the backend for a small ecosystem: [vellumplot](https://r-vellum.github.io/vellumplot/)
 compiles a grammar of graphics *into* a vellum scene, and
 [vellumwidget](https://r-vellum.github.io/vellumwidget/) turns a rendered scene into an
-interactive HTML widget. Both bind to a narrow seam — `scene_model()`,
+interactive HTML widget. Both bind to a narrow seam: `scene_model()`,
 `scene_svg()`, and the per-element metadata that rides on grobs. Because the
 three packages are version-locked and co-released, a change to that seam can
 break the layers above it silently.
@@ -50,8 +50,8 @@ before. Nothing here changes what is painted.
 
 ## Carrying identity on a grob
 
-The batched mark constructors — `points_grob()`, `circle_grob()`, `rect_grob()`,
-`segments_grob()`, `hexagon_grob()`, `sector_grob()` — take two optional
+The batched mark constructors (`points_grob()`, `circle_grob()`, `rect_grob()`,
+`segments_grob()`, `hexagon_grob()`, `sector_grob()`) take two optional
 per-element arguments:
 
 - `key`: a character vector of **data keys**, one per element (recycled). This
@@ -84,7 +84,7 @@ s
 emits one grob per style bucket, so a scatter with three colours is three
 `points_grob()`s. The `key`/`meta` machinery is per element regardless.)
 
-## `scene_model()` — the per-element table
+## `scene_model()`: the per-element table
 
 `scene_model()` walks the rendered scene and returns a list of **two data
 frames**.
@@ -125,10 +125,10 @@ The `mark` vocabulary is a closed set:
 Two families produce these rows:
 
 - **Batched marks** (`rect`, `point`, `circle`, `hexagon`, `sector`, `segment`)
-  emit **one row per element, always** — even when unkeyed (then `key` is `NA`).
+  emit **one row per element, always**, even when unkeyed (then `key` is `NA`).
 - **Single-shape marks** (`path`, `line`, `polygon`) emit **one row per grob, and
   only when keyed**. An unkeyed path/line/polygon is geometry-only and does not
-  appear in the table. (A single `sf` feature — one polygon or linestring — is
+  appear in the table. (A single `sf` feature, one polygon or linestring, is
   exactly one such element.) These constructors do not take a `key` argument; the
   grammar keys them by setting the grob's `keys` slot, which is how a single sf
   feature becomes addressable.
@@ -148,7 +148,7 @@ Columns: `name`, `x0`, `y0`, `x1`, `y1`.
 ### The `meta` key vocabulary
 
 vellum treats `meta` as opaque: it is a free-form list, recycled to the element
-count and carried through untouched — vellum does **not** name or validate its
+count and carried through untouched; vellum does **not** name or validate its
 keys. The following key names are **conventions** the grammar (vellumplot) writes and
 the widget (vellumwidget) reads. Documenting them here keeps the three layers in step;
 they are not enforced by vellum.
@@ -165,7 +165,7 @@ they are not enforced by vellum.
 
 If you add a convention, add it here.
 
-## `scene_svg()` — the emitted attributes
+## `scene_svg()`: the emitted attributes
 
 `scene_svg()` returns the same scene as an SVG string. Interactivity rides on SVG
 attributes; the raster and PDF backends ignore all of them.
@@ -197,12 +197,12 @@ A scene carries an optional accessible **name** and **description**, set with
 
 - the **SVG** root becomes `<svg role="img" aria-labelledby="…">` with `<title>`
   and `<desc>` children (the reliable screen-reader pattern; WCAG 1.1.1);
-- the **PDF** is a **tagged PDF** — the chart is a `Figure` in the structure tree
+- the **PDF** is a **tagged PDF**: the chart is a `Figure` in the structure tree
   whose `Alt` is the description.
 
 This is additive: with no title/desc the output is unchanged. The grammar layer
 (`vellumplot`) sets these automatically from the plot's title and an auto-generated (or
-`labs(alt=)`) alt text — see vellumplot's [Accessibility
+`labs(alt=)`) alt text. See vellumplot's [Accessibility
 article](https://r-vellum.github.io/vellumplot/articles/accessibility.html).
 Per-element `role` (above) is a genuine ARIA role; the interactive widget layer
 (`vellumwidget`) adds

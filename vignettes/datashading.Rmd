@@ -151,7 +151,7 @@ labels, or reference lines in `"native"` units in that viewport. For crisp bins,
 match `width` / `height` to the viewport's pixel size and keep the default
 `interpolate = FALSE`.
 
-For the attractors we just centre a square window on the orbit so a square cell
+For the attractors we centre a square window on the orbit so a square cell
 maps without distortion:
 
 ```{r}
