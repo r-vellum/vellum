@@ -1,0 +1,225 @@
+# vellum
+
+**vellum** is a low-level graphics framework for R, in the spirit of
+**grid**, with a **Rust** backend. You describe a scene with a small,
+declarative R API; the scene graph, unit/layout engine, and rendering
+all run in Rust; and the same scene renders to **PNG, SVG, or PDF**.
+
+It is the *foundation layer* a grammar of graphics builds on, the way
+grid underlies ggplot2. It is not a plotting package itself; the
+[quill](https://github.com/schochastics/quill) grammar of graphics is
+built on top of it.
+
+``` r
+
+library(vellum)
+
+vl_scene(width = 5, height = 2.4, bg = "white") |>
+  draw(rect_grob(width = 0.94, height = 0.82,
+                 gp = gpar(fill = linear_gradient(c("#1b2a4a", "#3a7bd5")), col = NA))) |>
+  draw(circle_grob(x = 0.16, y = 0.5, r = 0.28,
+                   gp = gpar(fill = "#f7c948", col = NA))) |>
+  draw(text_grob("vellum", x = 0.62, y = 0.5,
+                 gp = gpar(fontsize = 64, col = "white", fontface = "bold"))) |>
+  render("man/figures/README-hello.png")
+```
+
+![](reference/figures/README-hello.png)
+
+A scene is built functionally:
+[`vl_scene()`](https://schochastics.github.io/vellum/reference/vl_scene.md)
+followed by a pipeline of
+[`push()`](https://schochastics.github.io/vellum/reference/vl_scene.md),
+[`draw()`](https://schochastics.github.io/vellum/reference/vl_scene.md),
+and
+[`pop()`](https://schochastics.github.io/vellum/reference/vl_scene.md)
+over an immutable tree. It is rendered with
+[`render()`](https://schochastics.github.io/vellum/reference/vl_scene.md),
+which picks the backend from the file extension.
+
+## What sets it apart
+
+- **Rust backend, deterministic output.** Rendering runs in Rust
+  ([tiny-skia](https://github.com/linebender/tiny-skia) for raster,
+  [krilla](https://github.com/LaurenzV/krilla) for PDF) and is
+  byte-stable, so output is reproducible and snapshot-testable.
+- **One scene, three backends.** The *same* scene renders to PNG, SVG,
+  and PDF with consistent geometry, via `render(scene, "plot.svg")` or
+  `render(scene, "plot.pdf")`.
+- **A retained scene graph, not immediate-mode drawing.** Because the
+  scene is kept (not drawn-and-forgotten), vellum offers capabilities
+  grid does not: **hit-testing**
+  ([`hit_test()`](https://schochastics.github.io/vellum/reference/hit_test.md)
+  picks the topmost grob under a point) and named, **editable** nodes
+  ([`node_names()`](https://schochastics.github.io/vellum/reference/node_names.md)
+  /
+  [`get_node()`](https://schochastics.github.io/vellum/reference/node_names.md)
+  /
+  [`edit_node()`](https://schochastics.github.io/vellum/reference/node_names.md)).
+- **A modern paint model across all backends.** Linear & radial
+  **gradients**, tiling **patterns**, alpha/luminance **masks**, and
+  group opacity (`viewport(alpha=)`).
+- **Built-in big-data aggregation.**
+  [`datashade()`](https://schochastics.github.io/vellum/reference/datashade.md)
+  bins millions of points into a density raster in one pass, with no
+  overplotting and no giant files.
+- **Device-independent, faithful text.** Shaping runs through
+  [textshaping](https://github.com/r-lib/textshaping) (which sits on
+  [systemfonts](https://github.com/r-lib/systemfonts)) — the same stack
+  as ragg/svglite — with per-glyph fallback, justification, rotation,
+  and Markdown-style rich labels
+  ([`md()`](https://schochastics.github.io/vellum/reference/md.md):
+  bold/italic, super/subscript, coloured spans).
+- **Vectorised primitives and a flex layout engine.** Batched
+  rects/circles/points/segments/text, nested viewports with rotation and
+  arbitrary-path clipping, and a row/column layout solver with `"null"`
+  (flexible) tracks.
+- **Grid interop.**
+  [`as_vellum()`](https://schochastics.github.io/vellum/reference/as_vellum.md)
+  /
+  [`render_grid()`](https://schochastics.github.io/vellum/reference/as_vellum.md)
+  render an existing grid grob tree, including **ggplot2** and
+  **lattice**, through the vellum backend.
+
+## Installation
+
+vellum compiles a Rust crate, so you need a **Rust toolchain**
+(`cargo`/`rustc`) in addition to R. Then:
+
+``` r
+
+# install.packages("pak")
+pak::pak("schochastics/vellum")
+```
+
+## Examples
+
+### The paint model
+
+Gradients, a tiling pattern, and a mask, composed with viewports:
+
+``` r
+
+tile <- list(rect_grob(gp = gpar(fill = "#ecf0f1", col = NA)),
+             circle_grob(r = 0.32, gp = gpar(fill = "#e74c3c", col = NA)))
+
+vl_scene(6, 2.1, bg = "white") |>
+  # radial gradient
+  push(viewport(x = 1/6, width = 1/3)) |>
+    draw(circle_grob(r = 0.42, gp = gpar(fill = radial_gradient(c("#f6d365", "#fda085")), col = NA))) |>
+  pop() |>
+  # tiling pattern
+  push(viewport(x = 3/6, width = 1/3)) |>
+    draw(rect_grob(width = 0.84, height = 0.84,
+                   gp = gpar(fill = pattern(tile, width = 0.22, height = 0.22), col = NA))) |>
+  pop() |>
+  # a linear gradient, clipped to a circular mask
+  push(viewport(x = 5/6, width = 1/3,
+                mask = as_mask(circle_grob(r = 0.42, gp = gpar(fill = "white", col = NA))))) |>
+    draw(rect_grob(gp = gpar(fill = linear_gradient(c("#7f53ac", "#647dee")), col = NA))) |>
+  pop() |>
+  render("man/figures/README-paint.png")
+```
+
+![](reference/figures/README-paint.png)
+
+### A data scene with native coordinates
+
+vellum is the layer a grammar builds on, so plots are assembled from
+primitives in a viewport with its own `xscale` / `yscale` (`"native"`
+units):
+
+``` r
+
+set.seed(1)
+x <- runif(60, 0, 10)
+y <- 1.8 * x + rnorm(60, 0, 4)
+
+vl_scene(4.5, 3, bg = "white") |>
+  push(viewport(x = 0.57, y = 0.57, width = 0.82, height = 0.82,
+                xscale = c(0, 10), yscale = range(pretty(y)))) |>
+    draw(rect_grob(gp = gpar(fill = "#f4f6f8", col = "#cfd8dc"))) |>
+    draw(points_grob(unit(x, "native"), unit(y, "native"), size = unit(3.2, "mm"),
+                     gp = gpar(fill = "#3a7bd5", col = "#1b2a4a", lwd = 1))) |>
+  pop() |>
+  render("man/figures/README-scatter.png")
+```
+
+![](reference/figures/README-scatter.png)
+
+### A million points with `datashade()`
+
+[`datashade()`](https://schochastics.github.io/vellum/reference/datashade.md)
+aggregates the points into a grid the size of the output raster, counts
+how many land in each cell, and colours each cell by that count. Because
+the work scales with the number of pixels rather than the number of
+points, it draws millions of points quickly, shows true density instead
+of the solid blob that overplotting produces, and keeps the output file
+small.
+
+``` r
+
+set.seed(2)
+n <- 1e6
+xx <- rnorm(n)
+yy <- xx * 0.55 + rnorm(n)
+
+vl_scene(4.5, 3, bg = "white") |>
+  draw(datashade(xx, yy, width = 450, height = 300, colors = c("#fde0dd", "#7a0177"))) |>
+  render("man/figures/README-datashade.png")
+```
+
+![](reference/figures/README-datashade.png)
+
+### One scene, three formats
+
+``` r
+
+s <- vl_scene(4, 3) |>
+  draw(circle_grob(r = 0.3, gp = gpar(fill = "tomato", col = NA)))
+
+render(s, "out.png") # raster   (tiny-skia)
+render(s, "out.svg") # vector   (hand-rolled SVG)
+render(s, "out.pdf") # vector   (krilla)
+```
+
+## Relationship to grid and ggplot2
+
+vellum sits at grid’s level of the stack: units, viewports, grobs,
+layout, and rendering, but with a Rust scene graph, multi-backend
+output, hit-testing, and a modern paint model. It is **not** a grammar
+of graphics (no scales, stats, geoms, or facets) — that is
+[quill](https://github.com/schochastics/quill), which compiles a plot
+spec into a vellum scene. To render *existing* grid / ggplot2 / lattice
+output through the vellum backend, use
+[`as_vellum()`](https://schochastics.github.io/vellum/reference/as_vellum.md)
+/
+[`render_grid()`](https://schochastics.github.io/vellum/reference/as_vellum.md).
+
+## The vellum ecosystem
+
+vellum is the backend of a small ecosystem of packages that share its
+scene model:
+
+- **[vellum](https://github.com/schochastics/vellum)** — the parchment:
+  the low-level graphics backend (this package).
+- **[quill](https://github.com/schochastics/quill)** — the pen: a
+  pipe-first grammar of graphics that compiles a plot spec into a vellum
+  scene.
+- **[gloss](https://github.com/schochastics/gloss)** — the gloss:
+  client-side interactive HTML widgets for vellum scenes and quill
+  plots.
+- **[scriptorium](https://github.com/schochastics/scriptorium)** —
+  installs and loads the whole ecosystem in one step.
+
+## Development
+
+vellum wires an R package to a Rust crate via
+[extendr](https://extendr.github.io/) (crates are vendored for
+offline/CRAN builds).
+
+``` r
+
+rextendr::document() # compile the Rust backend + regenerate R wrappers
+devtools::test()     # run the test suite
+```
