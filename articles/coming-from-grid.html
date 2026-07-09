@@ -122,12 +122,12 @@ front</td>
 </tr>
 <tr class="even">
 <td><code>unit(1, "native")</code></td>
-<td><code>unit(1, "native")</code></td>
+<td><code>vl_unit(1, "native")</code></td>
 <td>same idea; each element carries its own unit</td>
 </tr>
 <tr class="odd">
-<td><code><a href="../reference/viewport.html">viewport()</a></code></td>
-<td><code><a href="../reference/viewport.html">viewport()</a></code></td>
+<td><code><a href="https://rdrr.io/r/grid/viewport.html" class="external-link">viewport()</a></code></td>
+<td><code><a href="../reference/vl_viewport.html">vl_viewport()</a></code></td>
 <td>region with its own <code>xscale</code> / <code>yscale</code>
 </td>
 </tr>
@@ -158,13 +158,13 @@ front</td>
 <td>grobs are immutable S7 values</td>
 </tr>
 <tr class="odd">
-<td><code><a href="../reference/gpar.html">gpar()</a></code></td>
-<td><code><a href="../reference/gpar.html">gpar()</a></code></td>
+<td><code><a href="https://rdrr.io/r/grid/gpar.html" class="external-link">gpar()</a></code></td>
+<td><code><a href="../reference/vl_gpar.html">vl_gpar()</a></code></td>
 <td>familiar fields; <code>fill</code> also accepts gradients</td>
 </tr>
 <tr class="even">
 <td><code><a href="https://rdrr.io/r/grid/grid.layout.html" class="external-link">grid.layout()</a></code></td>
-<td><code><a href="../reference/viewport.html">grid_layout()</a></code></td>
+<td><code><a href="../reference/vl_viewport.html">grid_layout()</a></code></td>
 <td>flexible <code>"null"</code> tracks work the same</td>
 </tr>
 <tr class="odd">
@@ -200,20 +200,20 @@ front</td>
 <div class="sourceCode" id="cb1"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va">grid</span><span class="op">)</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/grid/grid.newpage.html" class="external-link">grid.newpage</a></span><span class="op">(</span><span class="op">)</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/grid/viewports.html" class="external-link">pushViewport</a></span><span class="op">(</span><span class="fu"><a href="../reference/viewport.html">viewport</a></span><span class="op">(</span>width <span class="op">=</span> <span class="fl">0.8</span>, height <span class="op">=</span> <span class="fl">0.8</span>,</span>
+<span><span class="fu"><a href="https://rdrr.io/r/grid/viewports.html" class="external-link">pushViewport</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/grid/viewport.html" class="external-link">viewport</a></span><span class="op">(</span>width <span class="op">=</span> <span class="fl">0.8</span>, height <span class="op">=</span> <span class="fl">0.8</span>,</span>
 <span>                      xscale <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0</span>, <span class="fl">10</span><span class="op">)</span>, yscale <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0</span>, <span class="fl">20</span><span class="op">)</span><span class="op">)</span><span class="op">)</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/grid/grid.rect.html" class="external-link">grid.rect</a></span><span class="op">(</span>gp <span class="op">=</span> <span class="fu"><a href="../reference/gpar.html">gpar</a></span><span class="op">(</span>fill <span class="op">=</span> <span class="st">"grey97"</span>, col <span class="op">=</span> <span class="st">"grey70"</span><span class="op">)</span><span class="op">)</span></span>
-<span><span class="fu"><a href="https://rdrr.io/r/grid/grid.lines.html" class="external-link">grid.lines</a></span><span class="op">(</span>x <span class="op">=</span> <span class="fu"><a href="../reference/unit.html">unit</a></span><span class="op">(</span><span class="fl">0</span><span class="op">:</span><span class="fl">10</span>, <span class="st">"native"</span><span class="op">)</span>, y <span class="op">=</span> <span class="fu"><a href="../reference/unit.html">unit</a></span><span class="op">(</span><span class="op">(</span><span class="fl">0</span><span class="op">:</span><span class="fl">10</span><span class="op">)</span> <span class="op">*</span> <span class="fl">2</span>, <span class="st">"native"</span><span class="op">)</span>,</span>
-<span>           gp <span class="op">=</span> <span class="fu"><a href="../reference/gpar.html">gpar</a></span><span class="op">(</span>col <span class="op">=</span> <span class="st">"steelblue"</span>, lwd <span class="op">=</span> <span class="fl">2</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/grid/grid.rect.html" class="external-link">grid.rect</a></span><span class="op">(</span>gp <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/grid/gpar.html" class="external-link">gpar</a></span><span class="op">(</span>fill <span class="op">=</span> <span class="st">"grey97"</span>, col <span class="op">=</span> <span class="st">"grey70"</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/grid/grid.lines.html" class="external-link">grid.lines</a></span><span class="op">(</span>x <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/grid/unit.html" class="external-link">unit</a></span><span class="op">(</span><span class="fl">0</span><span class="op">:</span><span class="fl">10</span>, <span class="st">"native"</span><span class="op">)</span>, y <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/grid/unit.html" class="external-link">unit</a></span><span class="op">(</span><span class="op">(</span><span class="fl">0</span><span class="op">:</span><span class="fl">10</span><span class="op">)</span> <span class="op">*</span> <span class="fl">2</span>, <span class="st">"native"</span><span class="op">)</span>,</span>
+<span>           gp <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/grid/gpar.html" class="external-link">gpar</a></span><span class="op">(</span>col <span class="op">=</span> <span class="st">"steelblue"</span>, lwd <span class="op">=</span> <span class="fl">2</span><span class="op">)</span><span class="op">)</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/grid/viewports.html" class="external-link">popViewport</a></span><span class="op">(</span><span class="op">)</span></span></code></pre></div>
 <p>The same scene in vellum:</p>
 <div class="sourceCode" id="cb2"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/vl_scene.html">vl_scene</a></span><span class="op">(</span><span class="fl">5</span>, <span class="fl">3</span>, bg <span class="op">=</span> <span class="st">"white"</span><span class="op">)</span> <span class="op">|&gt;</span></span>
-<span>  <span class="fu"><a href="../reference/vl_scene.html">push</a></span><span class="op">(</span><span class="fu"><a href="../reference/viewport.html">viewport</a></span><span class="op">(</span>width <span class="op">=</span> <span class="fl">0.8</span>, height <span class="op">=</span> <span class="fl">0.8</span>,</span>
+<span>  <span class="fu"><a href="../reference/vl_scene.html">push</a></span><span class="op">(</span><span class="fu"><a href="../reference/vl_viewport.html">vl_viewport</a></span><span class="op">(</span>width <span class="op">=</span> <span class="fl">0.8</span>, height <span class="op">=</span> <span class="fl">0.8</span>,</span>
 <span>                xscale <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0</span>, <span class="fl">10</span><span class="op">)</span>, yscale <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0</span>, <span class="fl">20</span><span class="op">)</span><span class="op">)</span><span class="op">)</span> <span class="op">|&gt;</span></span>
-<span>  <span class="fu"><a href="../reference/vl_scene.html">draw</a></span><span class="op">(</span><span class="fu"><a href="../reference/grob.html">rect_grob</a></span><span class="op">(</span>gp <span class="op">=</span> <span class="fu"><a href="../reference/gpar.html">gpar</a></span><span class="op">(</span>fill <span class="op">=</span> <span class="st">"grey97"</span>, col <span class="op">=</span> <span class="st">"grey70"</span><span class="op">)</span><span class="op">)</span><span class="op">)</span> <span class="op">|&gt;</span></span>
-<span>  <span class="fu"><a href="../reference/vl_scene.html">draw</a></span><span class="op">(</span><span class="fu"><a href="../reference/grob.html">lines_grob</a></span><span class="op">(</span>x <span class="op">=</span> <span class="fu"><a href="../reference/unit.html">unit</a></span><span class="op">(</span><span class="fl">0</span><span class="op">:</span><span class="fl">10</span>, <span class="st">"native"</span><span class="op">)</span>, y <span class="op">=</span> <span class="fu"><a href="../reference/unit.html">unit</a></span><span class="op">(</span><span class="op">(</span><span class="fl">0</span><span class="op">:</span><span class="fl">10</span><span class="op">)</span> <span class="op">*</span> <span class="fl">2</span>, <span class="st">"native"</span><span class="op">)</span>,</span>
-<span>                  gp <span class="op">=</span> <span class="fu"><a href="../reference/gpar.html">gpar</a></span><span class="op">(</span>col <span class="op">=</span> <span class="st">"steelblue"</span>, lwd <span class="op">=</span> <span class="fl">2</span><span class="op">)</span><span class="op">)</span><span class="op">)</span> <span class="op">|&gt;</span></span>
+<span>  <span class="fu"><a href="../reference/vl_scene.html">draw</a></span><span class="op">(</span><span class="fu"><a href="../reference/grob.html">rect_grob</a></span><span class="op">(</span>gp <span class="op">=</span> <span class="fu"><a href="../reference/vl_gpar.html">vl_gpar</a></span><span class="op">(</span>fill <span class="op">=</span> <span class="st">"grey97"</span>, col <span class="op">=</span> <span class="st">"grey70"</span><span class="op">)</span><span class="op">)</span><span class="op">)</span> <span class="op">|&gt;</span></span>
+<span>  <span class="fu"><a href="../reference/vl_scene.html">draw</a></span><span class="op">(</span><span class="fu"><a href="../reference/grob.html">lines_grob</a></span><span class="op">(</span>x <span class="op">=</span> <span class="fu"><a href="../reference/vl_unit.html">vl_unit</a></span><span class="op">(</span><span class="fl">0</span><span class="op">:</span><span class="fl">10</span>, <span class="st">"native"</span><span class="op">)</span>, y <span class="op">=</span> <span class="fu"><a href="../reference/vl_unit.html">vl_unit</a></span><span class="op">(</span><span class="op">(</span><span class="fl">0</span><span class="op">:</span><span class="fl">10</span><span class="op">)</span> <span class="op">*</span> <span class="fl">2</span>, <span class="st">"native"</span><span class="op">)</span>,</span>
+<span>                  gp <span class="op">=</span> <span class="fu"><a href="../reference/vl_gpar.html">vl_gpar</a></span><span class="op">(</span>col <span class="op">=</span> <span class="st">"steelblue"</span>, lwd <span class="op">=</span> <span class="fl">2</span><span class="op">)</span><span class="op">)</span><span class="op">)</span> <span class="op">|&gt;</span></span>
 <span>  <span class="fu"><a href="../reference/vl_scene.html">pop</a></span><span class="op">(</span><span class="op">)</span></span></code></pre></div>
 <p><img src="coming-from-grid_files/figure-html/translation-1.png" class="r-plt" alt="" width="480"></p>
 <p>The shapes are the same; the difference is that the vellum version is
@@ -251,16 +251,16 @@ immediately, without an open device.</p>
 <h3 id="units-resolve-eagerly-and-mixed-unit-arithmetic-is-restricted">Units resolve eagerly, and mixed-unit arithmetic is restricted<a class="anchor" aria-label="anchor" href="#units-resolve-eagerly-and-mixed-unit-arithmetic-is-restricted"></a>
 </h3>
 <p>Because units resolve eagerly to a flat representation, vellum will
-<em>not</em> defer <code>unit(1, "npc") - unit(2, "mm")</code> the way
-grid does. Same-space arithmetic and absolute-plus-absolute both work
-(<code>unit(10, "mm") + unit(1, "in")</code> gives <code>35.4mm</code>),
-but mixing a relative and an absolute unit in one expression is reported
-rather than guessed.</p>
+<em>not</em> defer <code>vl_unit(1, "npc") - vl_unit(2, "mm")</code> the
+way grid does. Same-space arithmetic and absolute-plus-absolute both
+work (<code>vl_unit(10, "mm") + vl_unit(1, "in")</code> gives
+<code>35.4mm</code>), but mixing a relative and an absolute unit in one
+expression is reported rather than guessed.</p>
 <div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="fu"><a href="../reference/unit.html">unit</a></span><span class="op">(</span><span class="fl">10</span>, <span class="st">"mm"</span><span class="op">)</span> <span class="op">+</span> <span class="fu"><a href="../reference/unit.html">unit</a></span><span class="op">(</span><span class="fl">1</span>, <span class="st">"in"</span><span class="op">)</span> <span class="co"># absolute + absolute -&gt; mm</span></span>
+<code class="sourceCode R"><span><span class="fu"><a href="../reference/vl_unit.html">vl_unit</a></span><span class="op">(</span><span class="fl">10</span>, <span class="st">"mm"</span><span class="op">)</span> <span class="op">+</span> <span class="fu"><a href="../reference/vl_unit.html">vl_unit</a></span><span class="op">(</span><span class="fl">1</span>, <span class="st">"in"</span><span class="op">)</span> <span class="co"># absolute + absolute -&gt; mm</span></span>
 <span><span class="co">#&gt; &lt;vellum_unit[1]&gt;</span></span>
 <span><span class="co">#&gt; [1] 35.4mm</span></span>
-<span><span class="fu"><a href="../reference/unit.html">unit</a></span><span class="op">(</span><span class="fl">1</span><span class="op">:</span><span class="fl">3</span>, <span class="st">"cm"</span><span class="op">)</span> <span class="op">*</span> <span class="fl">2</span>            <span class="co"># scaling is fine</span></span>
+<span><span class="fu"><a href="../reference/vl_unit.html">vl_unit</a></span><span class="op">(</span><span class="fl">1</span><span class="op">:</span><span class="fl">3</span>, <span class="st">"cm"</span><span class="op">)</span> <span class="op">*</span> <span class="fl">2</span>            <span class="co"># scaling is fine</span></span>
 <span><span class="co">#&gt; &lt;vellum_unit[3]&gt;</span></span>
 <span><span class="co">#&gt; [1] 20mm 40mm 60mm</span></span></code></pre></div>
 <p>If you have grid code that offsets a relative position by an absolute
@@ -280,10 +280,10 @@ and editing a node copies rather than mutating in place. See
 <code><a href="../articles/retained-mode.html">vignette("retained-mode")</a></code> for what this enables.</p>
 </div>
 <div class="section level3">
-<h3 id="gpar-inherits-but-there-is-no-cascade">
-<code>gpar</code> inherits, but there is no cascade<a class="anchor" aria-label="anchor" href="#gpar-inherits-but-there-is-no-cascade"></a>
+<h3 id="vl_gpar-inherits-but-there-is-no-cascade">
+<code>vl_gpar</code> inherits, but there is no cascade<a class="anchor" aria-label="anchor" href="#vl_gpar-inherits-but-there-is-no-cascade"></a>
 </h3>
-<p><code><a href="../reference/gpar.html">gpar()</a></code> inheritance works as in grid: a field left
+<p><code><a href="../reference/vl_gpar.html">vl_gpar()</a></code> inheritance works as in grid: a field left
 <code>NULL</code> is inherited from the enclosing viewport, and
 <code>alpha</code> multiplies down the tree. vellum does not add a
 CSS-like cascade with selectors or theme objects at this layer; that is

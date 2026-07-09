@@ -1,7 +1,7 @@
 # Masks
 
-Wrap a grob (or list of grobs) as a mask for `viewport(mask = ...)`. The
-mask content is rendered to an isolated layer; its coverage then
+Wrap a grob (or list of grobs) as a mask for `vl_viewport(mask = ...)`.
+The mask content is rendered to an isolated layer; its coverage then
 modulates the visibility of the viewport's contents.
 
 ## Usage
@@ -29,12 +29,12 @@ A `vellum_mask` object.
 ## Examples
 
 ``` r
-as_mask(circle_grob(r = 0.4, gp = gpar(fill = "white", col = NA)))
+as_mask(circle_grob(r = 0.4, gp = vl_gpar(fill = "white", col = NA)))
 #> $grobs
 #> $grobs[[1]]
 #> <vellum::grob_circle>
 #>  @ name  : NULL
-#>  @ gp    : <vellum::gpar>
+#>  @ gp    : <vellum::vl_gpar>
 #>  .. @ col       : logi NA
 #>  .. @ fill      : chr "white"
 #>  .. @ lwd       : NULL

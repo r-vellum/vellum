@@ -1,7 +1,7 @@
 # Reusable style classes
 
 A `style` bundles
-[`gpar()`](https://r-vellum.github.io/vellum/reference/gpar.md)
+[`vl_gpar()`](https://r-vellum.github.io/vellum/reference/vl_gpar.md)
 graphical parameters under an optional name so the same look can be
 reused across many viewports or grobs. A `style` **is** a `gpar` — it
 carries every graphical-parameter field and obeys the same inheritance
@@ -107,7 +107,7 @@ on every element.
 ``` r
 accent <- style(col = "firebrick", lwd = 2, name = "accent")
 # Reuse it on a viewport; children inherit unless they override.
-viewport(gp = accent)
+vl_viewport(gp = accent)
 #> <vellum::class_viewport>
 #>  @ x      : unit [1:1] 0.5npc
 #>  @ y      : unit [1:1] 0.5npc

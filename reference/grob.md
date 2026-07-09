@@ -6,8 +6,9 @@ them with the constructors below, add them to a scene with
 render with
 [`render()`](https://r-vellum.github.io/vellum/reference/vl_scene.md).
 Coordinates accept a
-[`unit()`](https://r-vellum.github.io/vellum/reference/unit.md) vector
-or a bare numeric (interpreted in the `default_units`, usually `"npc"`).
+[`vl_unit()`](https://r-vellum.github.io/vellum/reference/vl_unit.md)
+vector or a bare numeric (interpreted in the `default_units`, usually
+`"npc"`).
 
 ## Usage
 
@@ -18,7 +19,7 @@ rect_grob(
   width = 1,
   height = 1,
   sketch = NULL,
-  gp = gpar(),
+  gp = vl_gpar(),
   name = NULL,
   vp = NULL,
   id = NULL,
@@ -34,7 +35,7 @@ roundrect_grob(
   height = 1,
   r = 0.1,
   sketch = NULL,
-  gp = gpar(),
+  gp = vl_gpar(),
   name = NULL,
   vp = NULL,
   id = NULL,
@@ -49,7 +50,7 @@ lines_grob(
   end_cap = NULL,
   offset = NULL,
   sketch = NULL,
-  gp = gpar(),
+  gp = vl_gpar(),
   name = NULL,
   vp = NULL,
   id = NULL,
@@ -60,7 +61,7 @@ polygon_grob(
   x,
   y,
   sketch = NULL,
-  gp = gpar(),
+  gp = vl_gpar(),
   name = NULL,
   vp = NULL,
   id = NULL,
@@ -71,7 +72,7 @@ bezier_grob(
   x,
   y,
   n = 60,
-  gp = gpar(),
+  gp = vl_gpar(),
   name = NULL,
   vp = NULL,
   id = NULL,
@@ -84,7 +85,7 @@ spline_grob(
   shape = 1,
   n = 20,
   open = TRUE,
-  gp = gpar(),
+  gp = vl_gpar(),
   name = NULL,
   vp = NULL,
   id = NULL,
@@ -96,7 +97,7 @@ circle_grob(
   y = 0.5,
   r = 0.25,
   sketch = NULL,
-  gp = gpar(),
+  gp = vl_gpar(),
   name = NULL,
   vp = NULL,
   id = NULL,
@@ -108,10 +109,10 @@ circle_grob(
 points_grob(
   x,
   y,
-  size = unit(2, "mm"),
+  size = vl_unit(2, "mm"),
   shape = "circle",
   sketch = NULL,
-  gp = gpar(),
+  gp = vl_gpar(),
   name = NULL,
   vp = NULL,
   id = NULL,
@@ -123,12 +124,12 @@ points_grob(
 hexagon_grob(
   x = 0.5,
   y = 0.5,
-  size = unit(2, "mm"),
+  size = vl_unit(2, "mm"),
   width = NULL,
   height = NULL,
   fill = NULL,
   orientation = c("flat", "pointy"),
-  gp = gpar(),
+  gp = vl_gpar(),
   name = NULL,
   vp = NULL,
   id = NULL,
@@ -147,7 +148,7 @@ sector_grob(
   fill = NULL,
   arrow = NULL,
   sketch = NULL,
-  gp = gpar(),
+  gp = vl_gpar(),
   name = NULL,
   vp = NULL,
   id = NULL,
@@ -159,12 +160,12 @@ sector_grob(
 loop_grob(
   x = 0.5,
   y = 0.5,
-  size = unit(4, "mm"),
-  foot = unit(0, "mm"),
+  size = vl_unit(4, "mm"),
+  foot = vl_unit(0, "mm"),
   angle = 0,
   width = 1,
   arrow = NULL,
-  gp = gpar(),
+  gp = vl_gpar(),
   name = NULL,
   vp = NULL,
   id = NULL,
@@ -181,7 +182,7 @@ segments_grob(
   end_cap = NULL,
   offset = NULL,
   sketch = NULL,
-  gp = gpar(),
+  gp = vl_gpar(),
   name = NULL,
   vp = NULL,
   id = NULL,
@@ -196,7 +197,7 @@ path_grob(
   id = NULL,
   rule = c("winding", "evenodd"),
   sketch = NULL,
-  gp = gpar(),
+  gp = vl_gpar(),
   name = NULL,
   vp = NULL,
   role = NULL
@@ -209,7 +210,7 @@ raster_grob(
   width = 1,
   height = 1,
   interpolate = TRUE,
-  gp = gpar(),
+  gp = vl_gpar(),
   name = NULL,
   vp = NULL,
   id = NULL,
@@ -222,7 +223,7 @@ text_grob(
   y = 0.5,
   just = "centre",
   rot = 0,
-  gp = gpar(),
+  gp = vl_gpar(),
   name = NULL,
   vp = NULL,
   id = NULL,
@@ -235,14 +236,14 @@ text_grob(
 - x, y:
 
   Coordinates
-  ([`unit()`](https://r-vellum.github.io/vellum/reference/unit.md) or
-  numeric).
+  ([`vl_unit()`](https://r-vellum.github.io/vellum/reference/vl_unit.md)
+  or numeric).
 
 - width, height:
 
   Grob size
-  ([`unit()`](https://r-vellum.github.io/vellum/reference/unit.md) or
-  numeric), recycled like `x`/`y`. For most grobs the drawn rectangle
+  ([`vl_unit()`](https://r-vellum.github.io/vellum/reference/vl_unit.md)
+  or numeric), recycled like `x`/`y`. For most grobs the drawn rectangle
   size. For `hexagon_grob()`, the optional per-hexagon **full**
   corner-to-corner extent along x/y: when both are given they override
   `size` (resolved per-axis, so a hexagon can be *non-regular* and tile
@@ -263,7 +264,7 @@ text_grob(
 - gp:
 
   Graphical parameters, from
-  [`gpar()`](https://r-vellum.github.io/vellum/reference/gpar.md).
+  [`vl_gpar()`](https://r-vellum.github.io/vellum/reference/vl_gpar.md).
 
 - name:
 
@@ -273,7 +274,7 @@ text_grob(
 - vp:
 
   Optional
-  [`viewport()`](https://r-vellum.github.io/vellum/reference/viewport.md)
+  [`vl_viewport()`](https://r-vellum.github.io/vellum/reference/vl_viewport.md)
   to draw this grob inside.
 
 - id:
@@ -314,18 +315,19 @@ text_grob(
 - r:
 
   Radius
-  ([`unit()`](https://r-vellum.github.io/vellum/reference/unit.md) or
-  numeric).
+  ([`vl_unit()`](https://r-vellum.github.io/vellum/reference/vl_unit.md)
+  or numeric).
 
 - arrow:
 
-  An [`arrow()`](https://r-vellum.github.io/vellum/reference/arrow.md)
+  An
+  [`vl_arrow()`](https://r-vellum.github.io/vellum/reference/vl_arrow.md)
   spec to draw heads on the line/segment ends, or `NULL` for none.
 
 - start_cap, end_cap:
 
   Optional **absolute-length**
-  [`unit()`](https://r-vellum.github.io/vellum/reference/unit.md)s
+  [`vl_unit()`](https://r-vellum.github.io/vellum/reference/vl_unit.md)s
   (`mm`/`cm`/ `in`/`pt`; a bare numeric is taken as `mm`) that shorten
   the drawn line inward from its start/end by that physical amount,
   resolved **at render** in device space — so the gap is exact at any
@@ -334,17 +336,17 @@ text_grob(
   recycled like the coordinates); for `lines_grob()` a single (scalar)
   cap trims each end of the whole polyline. `NULL` (default) leaves the
   endpoint untouched. When an
-  [`arrow()`](https://r-vellum.github.io/vellum/reference/arrow.md) is
-  also present its head is placed at the *capped* end, so the tip lands
-  on the boundary (e.g. a node marker) rather than under it. This is
-  what lets a directed edge stop at a node's radius. See the acceptance
-  notes in the package for the degenerate cases (a cap `>=` the segment
-  length draws nothing; a zero-length segment is skipped).
+  [`vl_arrow()`](https://r-vellum.github.io/vellum/reference/vl_arrow.md)
+  is also present its head is placed at the *capped* end, so the tip
+  lands on the boundary (e.g. a node marker) rather than under it. This
+  is what lets a directed edge stop at a node's radius. See the
+  acceptance notes in the package for the degenerate cases (a cap `>=`
+  the segment length draws nothing; a zero-length segment is skipped).
 
 - offset:
 
   Optional **absolute-length**
-  [`unit()`](https://r-vellum.github.io/vellum/reference/unit.md)
+  [`vl_unit()`](https://r-vellum.github.io/vellum/reference/vl_unit.md)
   (`mm`/`cm`/`in`/`pt`; a bare numeric is `mm`) that shifts the line
   **perpendicular** to its own direction by that physical amount,
   resolved **at render** in device space. The sign picks the side (`+`
@@ -375,7 +377,7 @@ text_grob(
 - size:
 
   Loop extent: an **absolute**
-  [`unit()`](https://r-vellum.github.io/vellum/reference/unit.md)
+  [`vl_unit()`](https://r-vellum.github.io/vellum/reference/vl_unit.md)
   (`mm`/`cm`/`in`/`pt`; a bare numeric is `mm`), resolved to a device
   length **at render** so the loop tracks a node's mm size at any page
   size/dpi. Nested loops on one vertex pass growing `size` (same
@@ -395,8 +397,8 @@ text_grob(
 - r0, r1:
 
   Inner and outer radius of each sector
-  ([`unit()`](https://r-vellum.github.io/vellum/reference/unit.md) or
-  numeric; numeric is treated as `"native"`). `r0 = 0` gives a pie
+  ([`vl_unit()`](https://r-vellum.github.io/vellum/reference/vl_unit.md)
+  or numeric; numeric is treated as `"native"`). `r0 = 0` gives a pie
   slice; `r0 == r1` gives an arc outline (stroke only, no fill).
 
 - theta0, theta1:
@@ -407,11 +409,11 @@ text_grob(
 - foot:
 
   Node radius the loop's two **feet** attach at (an **absolute**
-  [`unit()`](https://r-vellum.github.io/vellum/reference/unit.md); `0` =
-  both feet at the vertex, like igraph). A positive `foot` puts the feet
-  on the node's boundary so the loop visibly leaves and re-enters the
-  node edge, and a directed loop's head lands on the boundary rather
-  than under the marker. Recycled per loop.
+  [`vl_unit()`](https://r-vellum.github.io/vellum/reference/vl_unit.md);
+  `0` = both feet at the vertex, like igraph). A positive `foot` puts
+  the feet on the node's boundary so the loop visibly leaves and
+  re-enters the node edge, and a directed loop's head lands on the
+  boundary rather than under the marker. Recycled per loop.
 
 - angle:
 
@@ -421,8 +423,8 @@ text_grob(
 - x0, y0, x1, y1:
 
   Segment start/end coordinates
-  ([`unit()`](https://r-vellum.github.io/vellum/reference/unit.md) or
-  numeric).
+  ([`vl_unit()`](https://r-vellum.github.io/vellum/reference/vl_unit.md)
+  or numeric).
 
 - rule:
 
@@ -465,18 +467,18 @@ give a uniform stroke.
 
 Passing `r0 == r1` gives an **open arc** (stroke only). Combined with an
 absolute (`mm`) radius at a `"native"` centre and an
-[`arrow()`](https://r-vellum.github.io/vellum/reference/arrow.md), the
-radius is resolved to a device length at render (like a marker `size`),
-so the arc tracks an mm size at any page size or dpi; the arrowhead sits
-tangent to the outer arc's end. (For node-link **self-loops**, prefer
-`loop_grob()` — a teardrop, not a ring.)
+[`vl_arrow()`](https://r-vellum.github.io/vellum/reference/vl_arrow.md),
+the radius is resolved to a device length at render (like a marker
+`size`), so the arc tracks an mm size at any page size or dpi; the
+arrowhead sits tangent to the outer arc's end. (For node-link
+**self-loops**, prefer `loop_grob()` — a teardrop, not a ring.)
 
 `loop_grob()` draws **self-loops** for node-link diagrams as an
 igraph-style cubic **Bézier teardrop**: it leaves the vertex `(x, y)` (a
 `"native"` anchor), bulges out to `size` along `angle`, and returns,
 with an optional
-[`arrow()`](https://r-vellum.github.io/vellum/reference/arrow.md) head
-tangent to the curve at the returning foot. `size` and `foot` are
+[`vl_arrow()`](https://r-vellum.github.io/vellum/reference/vl_arrow.md)
+head tangent to the curve at the returning foot. `size` and `foot` are
 absolute and resolved to device px **at render**, so the loop is a fixed
 physical size that scales with the mm node markers — no native-per-mm
 estimation, exact at any figure size/dpi.

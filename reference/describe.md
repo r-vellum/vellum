@@ -37,6 +37,6 @@ The scene, with the accessibility fields set (a new value).
 
 ``` r
 vl_scene(2, 2) |>
-  draw(points_grob(c(0.3, 0.7), 0.5, gp = gpar(fill = "red"))) |>
+  draw(points_grob(c(0.3, 0.7), 0.5, gp = vl_gpar(fill = "red"))) |>
   describe(title = "Two red dots", desc = "Two red points on a white field.")
 ```

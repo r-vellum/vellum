@@ -10,13 +10,13 @@ places where vellum works differently on purpose.
 | grid | vellum | notes |
 |----|----|----|
 | [`grid.newpage()`](https://rdrr.io/r/grid/grid.newpage.html) | [`vl_scene()`](https://r-vellum.github.io/vellum/reference/vl_scene.md) | vellum’s scene also fixes page size, background, and dpi up front |
-| `unit(1, "native")` | `unit(1, "native")` | same idea; each element carries its own unit |
-| [`viewport()`](https://r-vellum.github.io/vellum/reference/viewport.md) | [`viewport()`](https://r-vellum.github.io/vellum/reference/viewport.md) | region with its own `xscale` / `yscale` |
+| `unit(1, "native")` | `vl_unit(1, "native")` | same idea; each element carries its own unit |
+| [`viewport()`](https://rdrr.io/r/grid/viewport.html) | [`vl_viewport()`](https://r-vellum.github.io/vellum/reference/vl_viewport.md) | region with its own `xscale` / `yscale` |
 | [`pushViewport()`](https://rdrr.io/r/grid/viewports.html) / [`popViewport()`](https://rdrr.io/r/grid/viewports.html) | [`push()`](https://r-vellum.github.io/vellum/reference/vl_scene.md) / [`pop()`](https://r-vellum.github.io/vellum/reference/vl_scene.md) | functional: they take and return a scene, no global stack |
 | [`grid.rect()`](https://rdrr.io/r/grid/grid.rect.html), [`grid.circle()`](https://rdrr.io/r/grid/grid.circle.html), … | [`rect_grob()`](https://r-vellum.github.io/vellum/reference/grob.md), [`circle_grob()`](https://r-vellum.github.io/vellum/reference/grob.md), … plus [`draw()`](https://r-vellum.github.io/vellum/reference/vl_scene.md) | the constructor builds a value; [`draw()`](https://r-vellum.github.io/vellum/reference/vl_scene.md) adds it |
 | [`rectGrob()`](https://rdrr.io/r/grid/grid.rect.html), [`gTree()`](https://rdrr.io/r/grid/grid.grob.html) | [`rect_grob()`](https://r-vellum.github.io/vellum/reference/grob.md), the scene tree | grobs are immutable S7 values |
-| [`gpar()`](https://r-vellum.github.io/vellum/reference/gpar.md) | [`gpar()`](https://r-vellum.github.io/vellum/reference/gpar.md) | familiar fields; `fill` also accepts gradients |
-| [`grid.layout()`](https://rdrr.io/r/grid/grid.layout.html) | [`grid_layout()`](https://r-vellum.github.io/vellum/reference/viewport.md) | flexible `"null"` tracks work the same |
+| [`gpar()`](https://rdrr.io/r/grid/gpar.html) | [`vl_gpar()`](https://r-vellum.github.io/vellum/reference/vl_gpar.md) | familiar fields; `fill` also accepts gradients |
+| [`grid.layout()`](https://rdrr.io/r/grid/grid.layout.html) | [`grid_layout()`](https://r-vellum.github.io/vellum/reference/vl_viewport.md) | flexible `"null"` tracks work the same |
 | [`grid.edit()`](https://rdrr.io/r/grid/grid.edit.html) / [`editGrob()`](https://rdrr.io/r/grid/grid.edit.html) | [`edit_node()`](https://r-vellum.github.io/vellum/reference/node_names.md) | edit by `name`; copy-on-modify, not in place |
 | [`grid.grabExpr()`](https://rdrr.io/r/grid/grid.grab.html) / display list | the retained scene | the tree is the model; nothing is replayed |
 | [`grid.locator()`](https://rdrr.io/r/grid/grid.locator.html) | [`hit_test()`](https://r-vellum.github.io/vellum/reference/hit_test.md) | exact geometric picking, not one interactive click |
@@ -43,11 +43,11 @@ The same scene in vellum:
 ``` r
 
 vl_scene(5, 3, bg = "white") |>
-  push(viewport(width = 0.8, height = 0.8,
+  push(vl_viewport(width = 0.8, height = 0.8,
                 xscale = c(0, 10), yscale = c(0, 20))) |>
-  draw(rect_grob(gp = gpar(fill = "grey97", col = "grey70"))) |>
-  draw(lines_grob(x = unit(0:10, "native"), y = unit((0:10) * 2, "native"),
-                  gp = gpar(col = "steelblue", lwd = 2))) |>
+  draw(rect_grob(gp = vl_gpar(fill = "grey97", col = "grey70"))) |>
+  draw(lines_grob(x = vl_unit(0:10, "native"), y = vl_unit((0:10) * 2, "native"),
+                  gp = vl_gpar(col = "steelblue", lwd = 2))) |>
   pop()
 ```
 
@@ -89,17 +89,18 @@ immediately, without an open device.
 ### Units resolve eagerly, and mixed-unit arithmetic is restricted
 
 Because units resolve eagerly to a flat representation, vellum will
-*not* defer `unit(1, "npc") - unit(2, "mm")` the way grid does.
+*not* defer `vl_unit(1, "npc") - vl_unit(2, "mm")` the way grid does.
 Same-space arithmetic and absolute-plus-absolute both work
-(`unit(10, "mm") + unit(1, "in")` gives `35.4mm`), but mixing a relative
-and an absolute unit in one expression is reported rather than guessed.
+(`vl_unit(10, "mm") + vl_unit(1, "in")` gives `35.4mm`), but mixing a
+relative and an absolute unit in one expression is reported rather than
+guessed.
 
 ``` r
 
-unit(10, "mm") + unit(1, "in") # absolute + absolute -> mm
+vl_unit(10, "mm") + vl_unit(1, "in") # absolute + absolute -> mm
 #> <vellum_unit[1]>
 #> [1] 35.4mm
-unit(1:3, "cm") * 2            # scaling is fine
+vl_unit(1:3, "cm") * 2            # scaling is fine
 #> <vellum_unit[3]>
 #> [1] 20mm 40mm 60mm
 ```
@@ -124,9 +125,9 @@ step, and editing a node copies rather than mutating in place. See
 [`vignette("retained-mode")`](https://r-vellum.github.io/vellum/articles/retained-mode.md)
 for what this enables.
 
-### `gpar` inherits, but there is no cascade
+### `vl_gpar` inherits, but there is no cascade
 
-[`gpar()`](https://r-vellum.github.io/vellum/reference/gpar.md)
+[`vl_gpar()`](https://r-vellum.github.io/vellum/reference/vl_gpar.md)
 inheritance works as in grid: a field left `NULL` is inherited from the
 enclosing viewport, and `alpha` multiplies down the tree. vellum does
 not add a CSS-like cascade with selectors or theme objects at this

@@ -14,14 +14,12 @@
 <url><loc>https://r-vellum.github.io/vellum/index.html</loc></url>
 <url><loc>https://r-vellum.github.io/vellum/news/index.html</loc></url>
 <url><loc>https://r-vellum.github.io/vellum/reference/Scene.html</loc></url>
-<url><loc>https://r-vellum.github.io/vellum/reference/arrow.html</loc></url>
 <url><loc>https://r-vellum.github.io/vellum/reference/as_mask.html</loc></url>
 <url><loc>https://r-vellum.github.io/vellum/reference/as_vellum.html</loc></url>
 <url><loc>https://r-vellum.github.io/vellum/reference/as_vellum_scene.html</loc></url>
 <url><loc>https://r-vellum.github.io/vellum/reference/datashade.html</loc></url>
 <url><loc>https://r-vellum.github.io/vellum/reference/describe.html</loc></url>
 <url><loc>https://r-vellum.github.io/vellum/reference/display.html</loc></url>
-<url><loc>https://r-vellum.github.io/vellum/reference/gpar.html</loc></url>
 <url><loc>https://r-vellum.github.io/vellum/reference/gradients.html</loc></url>
 <url><loc>https://r-vellum.github.io/vellum/reference/grob.html</loc></url>
 <url><loc>https://r-vellum.github.io/vellum/reference/grobwidth.html</loc></url>
@@ -29,7 +27,6 @@
 <url><loc>https://r-vellum.github.io/vellum/reference/index.html</loc></url>
 <url><loc>https://r-vellum.github.io/vellum/reference/md.html</loc></url>
 <url><loc>https://r-vellum.github.io/vellum/reference/node_names.html</loc></url>
-<url><loc>https://r-vellum.github.io/vellum/reference/pattern.html</loc></url>
 <url><loc>https://r-vellum.github.io/vellum/reference/rs_backend_info.html</loc></url>
 <url><loc>https://r-vellum.github.io/vellum/reference/rs_clear_glyph_cache.html</loc></url>
 <url><loc>https://r-vellum.github.io/vellum/reference/rs_clear_subraster_cache.html</loc></url>
@@ -41,12 +38,15 @@
 <url><loc>https://r-vellum.github.io/vellum/reference/scene_svg.html</loc></url>
 <url><loc>https://r-vellum.github.io/vellum/reference/sketch.html</loc></url>
 <url><loc>https://r-vellum.github.io/vellum/reference/style.html</loc></url>
-<url><loc>https://r-vellum.github.io/vellum/reference/unit.html</loc></url>
 <url><loc>https://r-vellum.github.io/vellum/reference/vellum-package.html</loc></url>
-<url><loc>https://r-vellum.github.io/vellum/reference/viewport.html</loc></url>
+<url><loc>https://r-vellum.github.io/vellum/reference/vl_arrow.html</loc></url>
 <url><loc>https://r-vellum.github.io/vellum/reference/vl_clear_render_cache.html</loc></url>
+<url><loc>https://r-vellum.github.io/vellum/reference/vl_gpar.html</loc></url>
+<url><loc>https://r-vellum.github.io/vellum/reference/vl_pattern.html</loc></url>
 <url><loc>https://r-vellum.github.io/vellum/reference/vl_scene.html</loc></url>
 <url><loc>https://r-vellum.github.io/vellum/reference/vl_strwidth.html</loc></url>
+<url><loc>https://r-vellum.github.io/vellum/reference/vl_unit.html</loc></url>
+<url><loc>https://r-vellum.github.io/vellum/reference/vl_viewport.html</loc></url>
 <url><loc>https://r-vellum.github.io/vellum/reference/why_size.html</loc></url>
 </urlset>
 

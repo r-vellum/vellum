@@ -144,8 +144,8 @@ value per grob) for semantic identity and accessibility.</p>
 <span>  <span class="fu"><a href="../reference/vl_scene.html">draw</a></span><span class="op">(</span><span class="fu"><a href="../reference/grob.html">points_grob</a></span><span class="op">(</span></span>
 <span>    x    <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.25</span>, <span class="fl">0.5</span>, <span class="fl">0.75</span><span class="op">)</span>,</span>
 <span>    y    <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.4</span>, <span class="fl">0.7</span>, <span class="fl">0.4</span><span class="op">)</span>,</span>
-<span>    size <span class="op">=</span> <span class="fu"><a href="../reference/unit.html">unit</a></span><span class="op">(</span><span class="fl">6</span>, <span class="st">"mm"</span><span class="op">)</span>,</span>
-<span>    gp   <span class="op">=</span> <span class="fu"><a href="../reference/gpar.html">gpar</a></span><span class="op">(</span>fill <span class="op">=</span> <span class="st">"#3498db"</span>, col <span class="op">=</span> <span class="cn">NA</span><span class="op">)</span>,</span>
+<span>    size <span class="op">=</span> <span class="fu"><a href="../reference/vl_unit.html">vl_unit</a></span><span class="op">(</span><span class="fl">6</span>, <span class="st">"mm"</span><span class="op">)</span>,</span>
+<span>    gp   <span class="op">=</span> <span class="fu"><a href="../reference/vl_gpar.html">vl_gpar</a></span><span class="op">(</span>fill <span class="op">=</span> <span class="st">"#3498db"</span>, col <span class="op">=</span> <span class="cn">NA</span><span class="op">)</span>,</span>
 <span>    key  <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"a"</span>, <span class="st">"b"</span>, <span class="st">"c"</span><span class="op">)</span>,</span>
 <span>    meta <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span></span>
 <span>      <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>tooltip <span class="op">=</span> <span class="st">"first"</span><span class="op">)</span>,</span>
@@ -440,7 +440,7 @@ set:</p>
 <td>named viewport</td>
 <td>wrapping <code>&lt;g&gt;</code>
 </td>
-<td><code>viewport(name=)</code></td>
+<td><code>vl_viewport(name=)</code></td>
 </tr>
 </tbody>
 </table>

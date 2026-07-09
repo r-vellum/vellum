@@ -16,11 +16,11 @@ into something you can look up and modify later.
 
 dots <- vl_scene(5, 3, bg = "white") |>
   draw(circle_grob(x = 0.25, y = 0.5, r = 0.16, name = "a",
-                   gp = gpar(fill = "#bdc3c7", col = NA))) |>
+                   gp = vl_gpar(fill = "#bdc3c7", col = NA))) |>
   draw(circle_grob(x = 0.55, y = 0.5, r = 0.16, name = "b",
-                   gp = gpar(fill = "#bdc3c7", col = NA))) |>
+                   gp = vl_gpar(fill = "#bdc3c7", col = NA))) |>
   draw(circle_grob(x = 0.85, y = 0.5, r = 0.16, name = "c",
-                   gp = gpar(fill = "#bdc3c7", col = NA)))
+                   gp = vl_gpar(fill = "#bdc3c7", col = NA)))
 
 node_names(dots)
 #> [1] "a" "b" "c"
@@ -36,7 +36,7 @@ returns the node itself, so you can inspect a value you built earlier.
 get_node(dots, "b")
 #> <vellum::grob_circle>
 #>  @ name  : chr "b"
-#>  @ gp    : <vellum::gpar>
+#>  @ gp    : <vellum::vl_gpar>
 #>  .. @ col       : logi NA
 #>  .. @ fill      : chr "#bdc3c7"
 #>  .. @ lwd       : NULL
@@ -70,7 +70,7 @@ dot.
 
 ``` r
 
-highlighted <- edit_node(dots, "b", gp = gpar(fill = "#e74c3c", col = NA))
+highlighted <- edit_node(dots, "b", gp = vl_gpar(fill = "#e74c3c", col = NA))
 highlighted
 ```
 
@@ -152,10 +152,10 @@ data.
 
 keyed <- vl_scene(5, 3, bg = "white") |>
   draw(points_grob(
-    x = unit(c(0.25, 0.55, 0.85), "npc"), y = 0.5,
-    size = unit(6, "mm"),
+    x = vl_unit(c(0.25, 0.55, 0.85), "npc"), y = 0.5,
+    size = vl_unit(6, "mm"),
     key = c("row-1", "row-2", "row-3"),
-    gp = gpar(fill = "#3a7bd5", col = NA)
+    gp = vl_gpar(fill = "#3a7bd5", col = NA)
   ))
 
 scene_model(keyed)$elements[, c("mark", "key", "x", "y")]

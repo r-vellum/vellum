@@ -7,10 +7,10 @@
   };
 </script><script src="../deps/jquery-3.6.0/jquery-3.6.0.min.js"></script><meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no"><link href="../deps/bootstrap-5.3.8/bootstrap.min.css" rel="stylesheet"><script src="../deps/bootstrap-5.3.8/bootstrap.bundle.min.js"></script><link href="../deps/Spectral-0.4.10/font.css" rel="stylesheet"><link href="../deps/JetBrains_Mono-0.4.10/font.css" rel="stylesheet"><link href="../deps/Spectral_SC-0.4.10/font.css" rel="stylesheet"><link href="../deps/font-awesome-6.5.2/css/all.min.css" rel="stylesheet"><link href="../deps/font-awesome-6.5.2/css/v4-shims.min.css" rel="stylesheet"><script src="../deps/headroom-0.11.0/headroom.min.js"></script><script src="../deps/headroom-0.11.0/jQuery.headroom.min.js"></script><script src="../deps/bootstrap-toc-1.0.1/bootstrap-toc.min.js"></script><script src="../deps/clipboard.js-2.0.11/clipboard.min.js"></script><script src="../deps/search-1.0.0/autocomplete.jquery.min.js"></script><script src="../deps/search-1.0.0/fuse.min.js"></script><script src="../deps/search-1.0.0/mark.min.js"></script><!-- pkgdown --><script src="../pkgdown.js"></script><link href="../extra.css" rel="stylesheet"><meta property="og:title" content="Graphical objects (grobs) — grob"><meta name="description" content='Grobs are immutable value objects describing something to draw. Build them
 with the constructors below, add them to a scene with draw(), and render
-with render(). Coordinates accept a unit() vector or a bare numeric
+with render(). Coordinates accept a vl_unit() vector or a bare numeric
 (interpreted in the default_units, usually "npc").'><meta property="og:description" content='Grobs are immutable value objects describing something to draw. Build them
 with the constructors below, add them to a scene with draw(), and render
-with render(). Coordinates accept a unit() vector or a bare numeric
+with render(). Coordinates accept a vl_unit() vector or a bare numeric
 (interpreted in the default_units, usually "npc").'><meta property="og:image" content="https://r-vellum.github.io/vellum/logo.png"><meta name="twitter:card" content="summary_large_image"><meta name="twitter:creator" content="@schochastics"><meta name="twitter:site" content="@schochastics"><meta name="theme-color" content="#efe6d2"></head><body>
     <a href="#main" class="visually-hidden-focusable">Skip to contents</a>
 
@@ -66,7 +66,7 @@ with render(). Coordinates accept a unit() vector or a bare numeric
     <div class="ref-description section level2">
     <p>Grobs are immutable value objects describing something to draw. Build them
 with the constructors below, add them to a scene with <code><a href="vl_scene.html">draw()</a></code>, and render
-with <code><a href="vl_scene.html">render()</a></code>. Coordinates accept a <code><a href="unit.html">unit()</a></code> vector or a bare numeric
+with <code><a href="vl_scene.html">render()</a></code>. Coordinates accept a <code><a href="vl_unit.html">vl_unit()</a></code> vector or a bare numeric
 (interpreted in the <code>default_units</code>, usually <code>"npc"</code>).</p>
     </div>
 
@@ -78,7 +78,7 @@ with <code><a href="vl_scene.html">render()</a></code>. Coordinates accept a <co
 <span>  width <span class="op">=</span> <span class="fl">1</span>,</span>
 <span>  height <span class="op">=</span> <span class="fl">1</span>,</span>
 <span>  sketch <span class="op">=</span> <span class="cn">NULL</span>,</span>
-<span>  gp <span class="op">=</span> <span class="fu"><a href="gpar.html">gpar</a></span><span class="op">(</span><span class="op">)</span>,</span>
+<span>  gp <span class="op">=</span> <span class="fu"><a href="vl_gpar.html">vl_gpar</a></span><span class="op">(</span><span class="op">)</span>,</span>
 <span>  name <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  vp <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  id <span class="op">=</span> <span class="cn">NULL</span>,</span>
@@ -94,7 +94,7 @@ with <code><a href="vl_scene.html">render()</a></code>. Coordinates accept a <co
 <span>  height <span class="op">=</span> <span class="fl">1</span>,</span>
 <span>  r <span class="op">=</span> <span class="fl">0.1</span>,</span>
 <span>  sketch <span class="op">=</span> <span class="cn">NULL</span>,</span>
-<span>  gp <span class="op">=</span> <span class="fu"><a href="gpar.html">gpar</a></span><span class="op">(</span><span class="op">)</span>,</span>
+<span>  gp <span class="op">=</span> <span class="fu"><a href="vl_gpar.html">vl_gpar</a></span><span class="op">(</span><span class="op">)</span>,</span>
 <span>  name <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  vp <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  id <span class="op">=</span> <span class="cn">NULL</span>,</span>
@@ -109,7 +109,7 @@ with <code><a href="vl_scene.html">render()</a></code>. Coordinates accept a <co
 <span>  end_cap <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  offset <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  sketch <span class="op">=</span> <span class="cn">NULL</span>,</span>
-<span>  gp <span class="op">=</span> <span class="fu"><a href="gpar.html">gpar</a></span><span class="op">(</span><span class="op">)</span>,</span>
+<span>  gp <span class="op">=</span> <span class="fu"><a href="vl_gpar.html">vl_gpar</a></span><span class="op">(</span><span class="op">)</span>,</span>
 <span>  name <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  vp <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  id <span class="op">=</span> <span class="cn">NULL</span>,</span>
@@ -120,7 +120,7 @@ with <code><a href="vl_scene.html">render()</a></code>. Coordinates accept a <co
 <span>  <span class="va">x</span>,</span>
 <span>  <span class="va">y</span>,</span>
 <span>  sketch <span class="op">=</span> <span class="cn">NULL</span>,</span>
-<span>  gp <span class="op">=</span> <span class="fu"><a href="gpar.html">gpar</a></span><span class="op">(</span><span class="op">)</span>,</span>
+<span>  gp <span class="op">=</span> <span class="fu"><a href="vl_gpar.html">vl_gpar</a></span><span class="op">(</span><span class="op">)</span>,</span>
 <span>  name <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  vp <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  id <span class="op">=</span> <span class="cn">NULL</span>,</span>
@@ -131,7 +131,7 @@ with <code><a href="vl_scene.html">render()</a></code>. Coordinates accept a <co
 <span>  <span class="va">x</span>,</span>
 <span>  <span class="va">y</span>,</span>
 <span>  n <span class="op">=</span> <span class="fl">60</span>,</span>
-<span>  gp <span class="op">=</span> <span class="fu"><a href="gpar.html">gpar</a></span><span class="op">(</span><span class="op">)</span>,</span>
+<span>  gp <span class="op">=</span> <span class="fu"><a href="vl_gpar.html">vl_gpar</a></span><span class="op">(</span><span class="op">)</span>,</span>
 <span>  name <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  vp <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  id <span class="op">=</span> <span class="cn">NULL</span>,</span>
@@ -144,7 +144,7 @@ with <code><a href="vl_scene.html">render()</a></code>. Coordinates accept a <co
 <span>  shape <span class="op">=</span> <span class="fl">1</span>,</span>
 <span>  n <span class="op">=</span> <span class="fl">20</span>,</span>
 <span>  open <span class="op">=</span> <span class="cn">TRUE</span>,</span>
-<span>  gp <span class="op">=</span> <span class="fu"><a href="gpar.html">gpar</a></span><span class="op">(</span><span class="op">)</span>,</span>
+<span>  gp <span class="op">=</span> <span class="fu"><a href="vl_gpar.html">vl_gpar</a></span><span class="op">(</span><span class="op">)</span>,</span>
 <span>  name <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  vp <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  id <span class="op">=</span> <span class="cn">NULL</span>,</span>
@@ -156,7 +156,7 @@ with <code><a href="vl_scene.html">render()</a></code>. Coordinates accept a <co
 <span>  y <span class="op">=</span> <span class="fl">0.5</span>,</span>
 <span>  r <span class="op">=</span> <span class="fl">0.25</span>,</span>
 <span>  sketch <span class="op">=</span> <span class="cn">NULL</span>,</span>
-<span>  gp <span class="op">=</span> <span class="fu"><a href="gpar.html">gpar</a></span><span class="op">(</span><span class="op">)</span>,</span>
+<span>  gp <span class="op">=</span> <span class="fu"><a href="vl_gpar.html">vl_gpar</a></span><span class="op">(</span><span class="op">)</span>,</span>
 <span>  name <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  vp <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  id <span class="op">=</span> <span class="cn">NULL</span>,</span>
@@ -168,10 +168,10 @@ with <code><a href="vl_scene.html">render()</a></code>. Coordinates accept a <co
 <span><span class="fu">points_grob</span><span class="op">(</span></span>
 <span>  <span class="va">x</span>,</span>
 <span>  <span class="va">y</span>,</span>
-<span>  size <span class="op">=</span> <span class="fu"><a href="unit.html">unit</a></span><span class="op">(</span><span class="fl">2</span>, <span class="st">"mm"</span><span class="op">)</span>,</span>
+<span>  size <span class="op">=</span> <span class="fu"><a href="vl_unit.html">vl_unit</a></span><span class="op">(</span><span class="fl">2</span>, <span class="st">"mm"</span><span class="op">)</span>,</span>
 <span>  shape <span class="op">=</span> <span class="st">"circle"</span>,</span>
 <span>  sketch <span class="op">=</span> <span class="cn">NULL</span>,</span>
-<span>  gp <span class="op">=</span> <span class="fu"><a href="gpar.html">gpar</a></span><span class="op">(</span><span class="op">)</span>,</span>
+<span>  gp <span class="op">=</span> <span class="fu"><a href="vl_gpar.html">vl_gpar</a></span><span class="op">(</span><span class="op">)</span>,</span>
 <span>  name <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  vp <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  id <span class="op">=</span> <span class="cn">NULL</span>,</span>
@@ -183,12 +183,12 @@ with <code><a href="vl_scene.html">render()</a></code>. Coordinates accept a <co
 <span><span class="fu">hexagon_grob</span><span class="op">(</span></span>
 <span>  x <span class="op">=</span> <span class="fl">0.5</span>,</span>
 <span>  y <span class="op">=</span> <span class="fl">0.5</span>,</span>
-<span>  size <span class="op">=</span> <span class="fu"><a href="unit.html">unit</a></span><span class="op">(</span><span class="fl">2</span>, <span class="st">"mm"</span><span class="op">)</span>,</span>
+<span>  size <span class="op">=</span> <span class="fu"><a href="vl_unit.html">vl_unit</a></span><span class="op">(</span><span class="fl">2</span>, <span class="st">"mm"</span><span class="op">)</span>,</span>
 <span>  width <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  height <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  fill <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  orientation <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"flat"</span>, <span class="st">"pointy"</span><span class="op">)</span>,</span>
-<span>  gp <span class="op">=</span> <span class="fu"><a href="gpar.html">gpar</a></span><span class="op">(</span><span class="op">)</span>,</span>
+<span>  gp <span class="op">=</span> <span class="fu"><a href="vl_gpar.html">vl_gpar</a></span><span class="op">(</span><span class="op">)</span>,</span>
 <span>  name <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  vp <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  id <span class="op">=</span> <span class="cn">NULL</span>,</span>
@@ -207,7 +207,7 @@ with <code><a href="vl_scene.html">render()</a></code>. Coordinates accept a <co
 <span>  fill <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  arrow <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  sketch <span class="op">=</span> <span class="cn">NULL</span>,</span>
-<span>  gp <span class="op">=</span> <span class="fu"><a href="gpar.html">gpar</a></span><span class="op">(</span><span class="op">)</span>,</span>
+<span>  gp <span class="op">=</span> <span class="fu"><a href="vl_gpar.html">vl_gpar</a></span><span class="op">(</span><span class="op">)</span>,</span>
 <span>  name <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  vp <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  id <span class="op">=</span> <span class="cn">NULL</span>,</span>
@@ -219,12 +219,12 @@ with <code><a href="vl_scene.html">render()</a></code>. Coordinates accept a <co
 <span><span class="fu">loop_grob</span><span class="op">(</span></span>
 <span>  x <span class="op">=</span> <span class="fl">0.5</span>,</span>
 <span>  y <span class="op">=</span> <span class="fl">0.5</span>,</span>
-<span>  size <span class="op">=</span> <span class="fu"><a href="unit.html">unit</a></span><span class="op">(</span><span class="fl">4</span>, <span class="st">"mm"</span><span class="op">)</span>,</span>
-<span>  foot <span class="op">=</span> <span class="fu"><a href="unit.html">unit</a></span><span class="op">(</span><span class="fl">0</span>, <span class="st">"mm"</span><span class="op">)</span>,</span>
+<span>  size <span class="op">=</span> <span class="fu"><a href="vl_unit.html">vl_unit</a></span><span class="op">(</span><span class="fl">4</span>, <span class="st">"mm"</span><span class="op">)</span>,</span>
+<span>  foot <span class="op">=</span> <span class="fu"><a href="vl_unit.html">vl_unit</a></span><span class="op">(</span><span class="fl">0</span>, <span class="st">"mm"</span><span class="op">)</span>,</span>
 <span>  angle <span class="op">=</span> <span class="fl">0</span>,</span>
 <span>  width <span class="op">=</span> <span class="fl">1</span>,</span>
 <span>  arrow <span class="op">=</span> <span class="cn">NULL</span>,</span>
-<span>  gp <span class="op">=</span> <span class="fu"><a href="gpar.html">gpar</a></span><span class="op">(</span><span class="op">)</span>,</span>
+<span>  gp <span class="op">=</span> <span class="fu"><a href="vl_gpar.html">vl_gpar</a></span><span class="op">(</span><span class="op">)</span>,</span>
 <span>  name <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  vp <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  id <span class="op">=</span> <span class="cn">NULL</span>,</span>
@@ -241,7 +241,7 @@ with <code><a href="vl_scene.html">render()</a></code>. Coordinates accept a <co
 <span>  end_cap <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  offset <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  sketch <span class="op">=</span> <span class="cn">NULL</span>,</span>
-<span>  gp <span class="op">=</span> <span class="fu"><a href="gpar.html">gpar</a></span><span class="op">(</span><span class="op">)</span>,</span>
+<span>  gp <span class="op">=</span> <span class="fu"><a href="vl_gpar.html">vl_gpar</a></span><span class="op">(</span><span class="op">)</span>,</span>
 <span>  name <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  vp <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  id <span class="op">=</span> <span class="cn">NULL</span>,</span>
@@ -256,7 +256,7 @@ with <code><a href="vl_scene.html">render()</a></code>. Coordinates accept a <co
 <span>  id <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  rule <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"winding"</span>, <span class="st">"evenodd"</span><span class="op">)</span>,</span>
 <span>  sketch <span class="op">=</span> <span class="cn">NULL</span>,</span>
-<span>  gp <span class="op">=</span> <span class="fu"><a href="gpar.html">gpar</a></span><span class="op">(</span><span class="op">)</span>,</span>
+<span>  gp <span class="op">=</span> <span class="fu"><a href="vl_gpar.html">vl_gpar</a></span><span class="op">(</span><span class="op">)</span>,</span>
 <span>  name <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  vp <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  role <span class="op">=</span> <span class="cn">NULL</span></span>
@@ -269,7 +269,7 @@ with <code><a href="vl_scene.html">render()</a></code>. Coordinates accept a <co
 <span>  width <span class="op">=</span> <span class="fl">1</span>,</span>
 <span>  height <span class="op">=</span> <span class="fl">1</span>,</span>
 <span>  interpolate <span class="op">=</span> <span class="cn">TRUE</span>,</span>
-<span>  gp <span class="op">=</span> <span class="fu"><a href="gpar.html">gpar</a></span><span class="op">(</span><span class="op">)</span>,</span>
+<span>  gp <span class="op">=</span> <span class="fu"><a href="vl_gpar.html">vl_gpar</a></span><span class="op">(</span><span class="op">)</span>,</span>
 <span>  name <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  vp <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  id <span class="op">=</span> <span class="cn">NULL</span>,</span>
@@ -282,7 +282,7 @@ with <code><a href="vl_scene.html">render()</a></code>. Coordinates accept a <co
 <span>  y <span class="op">=</span> <span class="fl">0.5</span>,</span>
 <span>  just <span class="op">=</span> <span class="st">"centre"</span>,</span>
 <span>  rot <span class="op">=</span> <span class="fl">0</span>,</span>
-<span>  gp <span class="op">=</span> <span class="fu"><a href="gpar.html">gpar</a></span><span class="op">(</span><span class="op">)</span>,</span>
+<span>  gp <span class="op">=</span> <span class="fu"><a href="vl_gpar.html">vl_gpar</a></span><span class="op">(</span><span class="op">)</span>,</span>
 <span>  name <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  vp <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  id <span class="op">=</span> <span class="cn">NULL</span>,</span>
@@ -295,11 +295,11 @@ with <code><a href="vl_scene.html">render()</a></code>. Coordinates accept a <co
 
 
 <dl><dt id="arg-x-y">x, y<a class="anchor" aria-label="anchor" href="#arg-x-y"></a></dt>
-<dd><p>Coordinates (<code><a href="unit.html">unit()</a></code> or numeric).</p></dd>
+<dd><p>Coordinates (<code><a href="vl_unit.html">vl_unit()</a></code> or numeric).</p></dd>
 
 
 <dt id="arg-width-height">width, height<a class="anchor" aria-label="anchor" href="#arg-width-height"></a></dt>
-<dd><p>Grob size (<code><a href="unit.html">unit()</a></code> or numeric), recycled like <code>x</code>/<code>y</code>.
+<dd><p>Grob size (<code><a href="vl_unit.html">vl_unit()</a></code> or numeric), recycled like <code>x</code>/<code>y</code>.
 For most grobs the drawn rectangle size. For <code>hexagon_grob()</code>, the optional
 per-hexagon <strong>full</strong> corner-to-corner extent along x/y: when both are given
 they override <code>size</code> (resolved per-axis, so a hexagon can be <em>non-regular</em>
@@ -317,7 +317,7 @@ without shortening it (the igraph "narrowing" factor).</p></dd>
 
 
 <dt id="arg-gp">gp<a class="anchor" aria-label="anchor" href="#arg-gp"></a></dt>
-<dd><p>Graphical parameters, from <code><a href="gpar.html">gpar()</a></code>.</p></dd>
+<dd><p>Graphical parameters, from <code><a href="vl_gpar.html">vl_gpar()</a></code>.</p></dd>
 
 
 <dt id="arg-name">name<a class="anchor" aria-label="anchor" href="#arg-name"></a></dt>
@@ -325,7 +325,7 @@ without shortening it (the igraph "narrowing" factor).</p></dd>
 
 
 <dt id="arg-vp">vp<a class="anchor" aria-label="anchor" href="#arg-vp"></a></dt>
-<dd><p>Optional <code><a href="viewport.html">viewport()</a></code> to draw this grob inside.</p></dd>
+<dd><p>Optional <code><a href="vl_viewport.html">vl_viewport()</a></code> to draw this grob inside.</p></dd>
 
 
 <dt id="arg-id">id<a class="anchor" aria-label="anchor" href="#arg-id"></a></dt>
@@ -359,23 +359,23 @@ on the scene and is returned by <code><a href="scene_model.html">scene_model()</
 
 
 <dt id="arg-r">r<a class="anchor" aria-label="anchor" href="#arg-r"></a></dt>
-<dd><p>Radius (<code><a href="unit.html">unit()</a></code> or numeric).</p></dd>
+<dd><p>Radius (<code><a href="vl_unit.html">vl_unit()</a></code> or numeric).</p></dd>
 
 
 <dt id="arg-arrow">arrow<a class="anchor" aria-label="anchor" href="#arg-arrow"></a></dt>
-<dd><p>An <code><a href="arrow.html">arrow()</a></code> spec to draw heads on the line/segment ends, or
+<dd><p>An <code><a href="vl_arrow.html">vl_arrow()</a></code> spec to draw heads on the line/segment ends, or
 <code>NULL</code> for none.</p></dd>
 
 
 <dt id="arg-start-cap-end-cap">start_cap, end_cap<a class="anchor" aria-label="anchor" href="#arg-start-cap-end-cap"></a></dt>
-<dd><p>Optional <strong>absolute-length</strong> <code><a href="unit.html">unit()</a></code>s (<code>mm</code>/<code>cm</code>/
+<dd><p>Optional <strong>absolute-length</strong> <code><a href="vl_unit.html">vl_unit()</a></code>s (<code>mm</code>/<code>cm</code>/
 <code>in</code>/<code>pt</code>; a bare numeric is taken as <code>mm</code>) that shorten the drawn line
 inward from its start/end by that physical amount, resolved <strong>at render</strong> in
 device space — so the gap is exact at any size, dpi, and aspect ratio, with
 no reliance on the native scale. For <code>segments_grob()</code> the caps are
 per-element (scalar or length-n, recycled like the coordinates); for
 <code>lines_grob()</code> a single (scalar) cap trims each end of the whole polyline.
-<code>NULL</code> (default) leaves the endpoint untouched. When an <code><a href="arrow.html">arrow()</a></code> is also
+<code>NULL</code> (default) leaves the endpoint untouched. When an <code><a href="vl_arrow.html">vl_arrow()</a></code> is also
 present its head is placed at the <em>capped</em> end, so the tip lands on the
 boundary (e.g. a node marker) rather than under it. This is what lets a
 directed edge stop at a node's radius. See the acceptance notes in the
@@ -384,7 +384,7 @@ nothing; a zero-length segment is skipped).</p></dd>
 
 
 <dt id="arg-offset">offset<a class="anchor" aria-label="anchor" href="#arg-offset"></a></dt>
-<dd><p>Optional <strong>absolute-length</strong> <code><a href="unit.html">unit()</a></code> (<code>mm</code>/<code>cm</code>/<code>in</code>/<code>pt</code>; a bare
+<dd><p>Optional <strong>absolute-length</strong> <code><a href="vl_unit.html">vl_unit()</a></code> (<code>mm</code>/<code>cm</code>/<code>in</code>/<code>pt</code>; a bare
 numeric is <code>mm</code>) that shifts the line <strong>perpendicular</strong> to its own direction by
 that physical amount, resolved <strong>at render</strong> in device space. The sign picks
 the side (<code>+</code> left of the direction of travel, <code>−</code> right). For
@@ -411,7 +411,7 @@ then cap, then head). <code>NULL</code>/<code>0</code> (default) leaves the geom
 
 
 <dt id="arg-size">size<a class="anchor" aria-label="anchor" href="#arg-size"></a></dt>
-<dd><p>Loop extent: an <strong>absolute</strong> <code><a href="unit.html">unit()</a></code> (<code>mm</code>/<code>cm</code>/<code>in</code>/<code>pt</code>; a bare
+<dd><p>Loop extent: an <strong>absolute</strong> <code><a href="vl_unit.html">vl_unit()</a></code> (<code>mm</code>/<code>cm</code>/<code>in</code>/<code>pt</code>; a bare
 numeric is <code>mm</code>), resolved to a device length <strong>at render</strong> so the loop tracks
 a node's mm size at any page size/dpi. Nested loops on one vertex pass growing
 <code>size</code> (same <code>x</code>/<code>y</code>/<code>angle</code>) for concentric teardrops. Recycled per loop.</p></dd>
@@ -428,7 +428,7 @@ or <code>"pointy"</code> (vertex at top). <code>size</code> is the circumradius 
 
 
 <dt id="arg-r-r-">r0, r1<a class="anchor" aria-label="anchor" href="#arg-r-r-"></a></dt>
-<dd><p>Inner and outer radius of each sector (<code><a href="unit.html">unit()</a></code> or numeric;
+<dd><p>Inner and outer radius of each sector (<code><a href="vl_unit.html">vl_unit()</a></code> or numeric;
 numeric is treated as <code>"native"</code>). <code>r0 = 0</code> gives a pie slice; <code>r0 == r1</code>
 gives an arc outline (stroke only, no fill).</p></dd>
 
@@ -440,7 +440,7 @@ at 3 o'clock and increasing counter-clockwise.</p></dd>
 
 <dt id="arg-foot">foot<a class="anchor" aria-label="anchor" href="#arg-foot"></a></dt>
 <dd><p>Node radius the loop's two <strong>feet</strong> attach at (an <strong>absolute</strong>
-<code><a href="unit.html">unit()</a></code>; <code>0</code> = both feet at the vertex, like igraph). A positive <code>foot</code> puts
+<code><a href="vl_unit.html">vl_unit()</a></code>; <code>0</code> = both feet at the vertex, like igraph). A positive <code>foot</code> puts
 the feet on the node's boundary so the loop visibly leaves and re-enters the
 node edge, and a directed loop's head lands on the boundary rather than under
 the marker. Recycled per loop.</p></dd>
@@ -452,7 +452,7 @@ bulges away from the vertex, e.g. away from the layout centroid).</p></dd>
 
 
 <dt id="arg-x-y-x-y-">x0, y0, x1, y1<a class="anchor" aria-label="anchor" href="#arg-x-y-x-y-"></a></dt>
-<dd><p>Segment start/end coordinates (<code><a href="unit.html">unit()</a></code> or numeric).</p></dd>
+<dd><p>Segment start/end coordinates (<code><a href="vl_unit.html">vl_unit()</a></code> or numeric).</p></dd>
 
 
 <dt id="arg-rule">rule<a class="anchor" aria-label="anchor" href="#arg-rule"></a></dt>
@@ -491,14 +491,14 @@ keeps hard pixel edges.</p></dd>
     <p><code>sector_grob()</code> draws a batch of annular sectors (pie / donut / rose wedges) in a
 single call. <code>gp$fill</code> recycles per sector; <code>gp$col</code>/<code>lwd</code> give a uniform stroke.</p>
 <p>Passing <code>r0 == r1</code> gives an <strong>open arc</strong> (stroke only). Combined with an
-absolute (<code>mm</code>) radius at a <code>"native"</code> centre and an <code><a href="arrow.html">arrow()</a></code>, the radius is
+absolute (<code>mm</code>) radius at a <code>"native"</code> centre and an <code><a href="vl_arrow.html">vl_arrow()</a></code>, the radius is
 resolved to a device length at render (like a marker <code>size</code>), so the arc tracks
 an mm size at any page size or dpi; the arrowhead sits tangent to the outer arc's
 end. (For node-link <strong>self-loops</strong>, prefer <code>loop_grob()</code> — a teardrop, not a
 ring.)</p>
 <p><code>loop_grob()</code> draws <strong>self-loops</strong> for node-link diagrams as an igraph-style cubic
 <strong>Bézier teardrop</strong>: it leaves the vertex <code>(x, y)</code> (a <code>"native"</code> anchor), bulges
-out to <code>size</code> along <code>angle</code>, and returns, with an optional <code><a href="arrow.html">arrow()</a></code> head tangent
+out to <code>size</code> along <code>angle</code>, and returns, with an optional <code><a href="vl_arrow.html">vl_arrow()</a></code> head tangent
 to the curve at the returning foot. <code>size</code> and <code>foot</code> are absolute and resolved to
 device px <strong>at render</strong>, so the loop is a fixed physical size that scales with the
 mm node markers — no native-per-mm estimation, exact at any figure size/dpi.</p>

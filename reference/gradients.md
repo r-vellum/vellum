@@ -1,7 +1,7 @@
 # Gradient fills
 
 Create a linear or radial gradient to use as a `fill` in
-[`gpar()`](https://r-vellum.github.io/vellum/reference/gpar.md). A
+[`vl_gpar()`](https://r-vellum.github.io/vellum/reference/vl_gpar.md). A
 gradient interpolates between colour *stops*. Its geometry
 (`x1`/`y1`/... or `cx`/`cy`/`r`) is given in the coordinate system named
 by `units` and is resolved against the viewport at draw time, so the
@@ -66,7 +66,7 @@ radial_gradient(
 
 ## Value
 
-A `vellum_gradient` object, suitable for `gpar(fill = ...)`.
+A `vellum_gradient` object, suitable for `vl_gpar(fill = ...)`.
 
 ## Examples
 

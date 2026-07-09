@@ -31,15 +31,15 @@ last line of a chunk is enough.
 vl_scene(width = 6, height = 3, bg = "white") |>
   draw(rect_grob(
     width = 0.94, height = 0.82,
-    gp = gpar(fill = linear_gradient(c("#1b2a4a", "#3a7bd5")), col = NA)
+    gp = vl_gpar(fill = linear_gradient(c("#1b2a4a", "#3a7bd5")), col = NA)
   )) |>
   draw(circle_grob(
     x = 0.16, y = 0.5, r = 0.28,
-    gp = gpar(fill = "#f7c948", col = NA)
+    gp = vl_gpar(fill = "#f7c948", col = NA)
   )) |>
   draw(text_grob(
     "vellum", x = 0.62, y = 0.5,
-    gp = gpar(fontsize = 48, col = "white", fontface = "bold")
+    gp = vl_gpar(fontsize = 48, col = "white", fontface = "bold")
   ))
 ```
 
@@ -55,7 +55,7 @@ and a couple of dozen more (see
 [`?grob`](https://r-vellum.github.io/vellum/reference/grob.md)). Each is
 an immutable value object; building one draws nothing on its own.
 
-**[`gpar()`](https://r-vellum.github.io/vellum/reference/gpar.md)**
+**[`vl_gpar()`](https://r-vellum.github.io/vellum/reference/vl_gpar.md)**
 carries the graphical parameters (fill, stroke colour, line width, font,
 opacity) attached to a grob. A `fill` can be a plain colour or a
 gradient, as above.
@@ -69,7 +69,7 @@ gradient, as above.
 A scene is a tree of viewports and grobs, built functionally.
 [`push()`](https://r-vellum.github.io/vellum/reference/vl_scene.md)
 descends into a new
-[`viewport()`](https://r-vellum.github.io/vellum/reference/viewport.md),
+[`vl_viewport()`](https://r-vellum.github.io/vellum/reference/vl_viewport.md),
 [`draw()`](https://r-vellum.github.io/vellum/reference/vl_scene.md) adds
 a grob at the current level, and
 [`pop()`](https://r-vellum.github.io/vellum/reference/vl_scene.md)
@@ -84,15 +84,15 @@ x <- runif(60, 0, 10)
 y <- 1.8 * x + rnorm(60, 0, 4)
 
 vl_scene(5, 3.2, bg = "white") |>
-  push(viewport(
+  push(vl_viewport(
     x = 0.57, y = 0.57, width = 0.82, height = 0.82,
     xscale = c(0, 10), yscale = range(pretty(y))
   )) |>
-  draw(rect_grob(gp = gpar(fill = "#f4f6f8", col = "#cfd8dc"))) |>
+  draw(rect_grob(gp = vl_gpar(fill = "#f4f6f8", col = "#cfd8dc"))) |>
   draw(points_grob(
-    unit(x, "native"), unit(y, "native"),
-    size = unit(3.2, "mm"),
-    gp = gpar(fill = "#3a7bd5", col = "#1b2a4a", lwd = 1)
+    vl_unit(x, "native"), vl_unit(y, "native"),
+    size = vl_unit(3.2, "mm"),
+    gp = vl_gpar(fill = "#3a7bd5", col = "#1b2a4a", lwd = 1)
   )) |>
   pop()
 ```
@@ -102,8 +102,8 @@ vl_scene(5, 3.2, bg = "white") |>
 The panel rectangle is drawn in `"npc"` (it fills its viewport), while
 the points are placed in `"native"` units, so their positions follow the
 data scales. A single
-[`unit()`](https://r-vellum.github.io/vellum/reference/unit.md) vector
-can even mix coordinate systems per axis. See
+[`vl_unit()`](https://r-vellum.github.io/vellum/reference/vl_unit.md)
+vector can even mix coordinate systems per axis. See
 [`vignette("scene-and-paint")`](https://r-vellum.github.io/vellum/articles/scene-and-paint.md)
 for the full picture of units, viewports, and the paint model.
 
@@ -116,7 +116,7 @@ it picks the backend from the file extension.
 ``` r
 
 s <- vl_scene(4, 3) |>
-  draw(circle_grob(r = 0.3, gp = gpar(fill = "tomato", col = NA)))
+  draw(circle_grob(r = 0.3, gp = vl_gpar(fill = "tomato", col = NA)))
 
 render(s, "out.png") # raster (tiny-skia)
 render(s, "out.svg") # vector (hand-rolled SVG)

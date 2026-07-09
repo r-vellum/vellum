@@ -14,7 +14,7 @@ vl_scene(
   height = 4,
   dpi = 96,
   bg = "white",
-  gp = gpar(),
+  gp = vl_gpar(),
   xscale = c(0, 1),
   yscale = c(0, 1),
   clip = FALSE,
@@ -36,8 +36,8 @@ render(scene, path, text = c("native", "outline"), debug = FALSE)
 - width, height:
 
   Page size
-  ([`unit()`](https://r-vellum.github.io/vellum/reference/unit.md) or
-  numeric inches).
+  ([`vl_unit()`](https://r-vellum.github.io/vellum/reference/vl_unit.md)
+  or numeric inches).
 
 - dpi:
 
@@ -50,7 +50,7 @@ render(scene, path, text = c("native", "outline"), debug = FALSE)
 - gp:
 
   Page-level graphical parameters
-  ([`gpar()`](https://r-vellum.github.io/vellum/reference/gpar.md))
+  ([`vl_gpar()`](https://r-vellum.github.io/vellum/reference/vl_gpar.md))
   carried by the root viewport; inherited by everything drawn (e.g. a
   default `col`/`fontsize`).
 
@@ -81,7 +81,7 @@ render(scene, path, text = c("native", "outline"), debug = FALSE)
 - vp:
 
   A
-  [`viewport()`](https://r-vellum.github.io/vellum/reference/viewport.md).
+  [`vl_viewport()`](https://r-vellum.github.io/vellum/reference/vl_viewport.md).
 
 - grob:
 
@@ -123,8 +123,8 @@ render(scene, path, text = c("native", "outline"), debug = FALSE)
 
 ``` r
 s <- vl_scene(width = 4, height = 3) |>
-  push(viewport(xscale = c(0, 10), yscale = c(0, 10))) |>
-  draw(rect_grob(gp = gpar(fill = "grey95", col = "grey50"))) |>
-  draw(lines_grob(x = unit(0:10, "native"), y = unit(0:10, "native"),
-                  gp = gpar(col = "steelblue", lwd = 2)))
+  push(vl_viewport(xscale = c(0, 10), yscale = c(0, 10))) |>
+  draw(rect_grob(gp = vl_gpar(fill = "grey95", col = "grey50"))) |>
+  draw(lines_grob(x = vl_unit(0:10, "native"), y = vl_unit(0:10, "native"),
+                  gp = vl_gpar(col = "steelblue", lwd = 2)))
 ```

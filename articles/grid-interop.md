@@ -32,16 +32,11 @@ Any grob or gTree works. Here is a small hand-built one.
 ``` r
 
 library(grid)
-#> 
-#> Attaching package: 'grid'
-#> The following objects are masked from 'package:vellum':
-#> 
-#>     arrow, gpar, pattern, unit, viewport
 
 g <- gTree(children = gList(
-  rectGrob(gp = gpar(fill = "grey97", col = "grey70")),
-  circleGrob(r = 0.3, gp = gpar(fill = "#3a7bd5", col = NA)),
-  textGrob("grid -> vellum", y = 0.12, gp = gpar(fontface = "bold"))
+  rectGrob(gp = grid::gpar(fill = "grey97", col = "grey70")),
+  circleGrob(r = 0.3, gp = grid::gpar(fill = "#3a7bd5", col = NA)),
+  textGrob("grid -> vellum", y = 0.12, gp = grid::gpar(fontface = "bold"))
 ))
 
 as_vellum(g, width = 5, height = 3)
@@ -69,11 +64,6 @@ renders that.
 ``` r
 
 library(ggplot2)
-#> 
-#> Attaching package: 'ggplot2'
-#> The following objects are masked from 'package:vellum':
-#> 
-#>     arrow, unit
 
 p <- ggplot(mtcars, aes(wt, mpg, colour = factor(cyl))) +
   geom_point(size = 2) +

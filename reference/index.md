@@ -49,19 +49,19 @@ The drawable primitives. Most are vectorised and batch internally.
   [`raster_grob()`](https://r-vellum.github.io/vellum/reference/grob.md)
   [`text_grob()`](https://r-vellum.github.io/vellum/reference/grob.md) :
   Graphical objects (grobs)
-- [`arrow()`](https://r-vellum.github.io/vellum/reference/arrow.md) :
-  Arrowheads
+- [`vl_arrow()`](https://r-vellum.github.io/vellum/reference/vl_arrow.md)
+  : Arrowheads
 
 ## Units, viewports & layout
 
 Coordinate systems, nested viewports with scales, clipping and rotation,
 and the row/column layout solver.
 
-- [`unit()`](https://r-vellum.github.io/vellum/reference/unit.md)
-  [`is_unit()`](https://r-vellum.github.io/vellum/reference/unit.md) :
-  Units of measurement
-- [`viewport()`](https://r-vellum.github.io/vellum/reference/viewport.md)
-  [`grid_layout()`](https://r-vellum.github.io/vellum/reference/viewport.md)
+- [`vl_unit()`](https://r-vellum.github.io/vellum/reference/vl_unit.md)
+  [`is_unit()`](https://r-vellum.github.io/vellum/reference/vl_unit.md)
+  : Units of measurement
+- [`vl_viewport()`](https://r-vellum.github.io/vellum/reference/vl_viewport.md)
+  [`grid_layout()`](https://r-vellum.github.io/vellum/reference/vl_viewport.md)
   : Viewports and layouts
 - [`grobwidth()`](https://r-vellum.github.io/vellum/reference/grobwidth.md)
   [`grobheight()`](https://r-vellum.github.io/vellum/reference/grobwidth.md)
@@ -74,14 +74,14 @@ and the row/column layout solver.
 The paint model shared across all backends: gradients, tiling patterns,
 masks, reusable styles, and hand-drawn rendering.
 
-- [`gpar()`](https://r-vellum.github.io/vellum/reference/gpar.md) :
-  Graphical parameters
+- [`vl_gpar()`](https://r-vellum.github.io/vellum/reference/vl_gpar.md)
+  : Graphical parameters
 - [`style()`](https://r-vellum.github.io/vellum/reference/style.md) :
   Reusable style classes
 - [`linear_gradient()`](https://r-vellum.github.io/vellum/reference/gradients.md)
   [`radial_gradient()`](https://r-vellum.github.io/vellum/reference/gradients.md)
   : Gradient fills
-- [`pattern()`](https://r-vellum.github.io/vellum/reference/pattern.md)
+- [`vl_pattern()`](https://r-vellum.github.io/vellum/reference/vl_pattern.md)
   : Tiling-pattern fills
 - [`as_mask()`](https://r-vellum.github.io/vellum/reference/as_mask.md)
   : Masks

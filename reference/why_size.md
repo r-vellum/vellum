@@ -35,7 +35,7 @@ and `determined_by`), printed legibly.
 
 ``` r
 s <- vl_scene(4, 3) |>
-  push(viewport(name = "panel", width = unit(2, "in"), height = unit(1, "in")))
+  push(vl_viewport(name = "panel", width = vl_unit(2, "in"), height = vl_unit(1, "in")))
 why_size(s, "panel")
 #> $name
 #> [1] "panel"

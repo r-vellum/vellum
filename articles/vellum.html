@@ -118,15 +118,15 @@ a scene displays it, so the last line of a chunk is enough.</p>
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/vl_scene.html">vl_scene</a></span><span class="op">(</span>width <span class="op">=</span> <span class="fl">6</span>, height <span class="op">=</span> <span class="fl">3</span>, bg <span class="op">=</span> <span class="st">"white"</span><span class="op">)</span> <span class="op">|&gt;</span></span>
 <span>  <span class="fu"><a href="../reference/vl_scene.html">draw</a></span><span class="op">(</span><span class="fu"><a href="../reference/grob.html">rect_grob</a></span><span class="op">(</span></span>
 <span>    width <span class="op">=</span> <span class="fl">0.94</span>, height <span class="op">=</span> <span class="fl">0.82</span>,</span>
-<span>    gp <span class="op">=</span> <span class="fu"><a href="../reference/gpar.html">gpar</a></span><span class="op">(</span>fill <span class="op">=</span> <span class="fu"><a href="../reference/gradients.html">linear_gradient</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"#1b2a4a"</span>, <span class="st">"#3a7bd5"</span><span class="op">)</span><span class="op">)</span>, col <span class="op">=</span> <span class="cn">NA</span><span class="op">)</span></span>
+<span>    gp <span class="op">=</span> <span class="fu"><a href="../reference/vl_gpar.html">vl_gpar</a></span><span class="op">(</span>fill <span class="op">=</span> <span class="fu"><a href="../reference/gradients.html">linear_gradient</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"#1b2a4a"</span>, <span class="st">"#3a7bd5"</span><span class="op">)</span><span class="op">)</span>, col <span class="op">=</span> <span class="cn">NA</span><span class="op">)</span></span>
 <span>  <span class="op">)</span><span class="op">)</span> <span class="op">|&gt;</span></span>
 <span>  <span class="fu"><a href="../reference/vl_scene.html">draw</a></span><span class="op">(</span><span class="fu"><a href="../reference/grob.html">circle_grob</a></span><span class="op">(</span></span>
 <span>    x <span class="op">=</span> <span class="fl">0.16</span>, y <span class="op">=</span> <span class="fl">0.5</span>, r <span class="op">=</span> <span class="fl">0.28</span>,</span>
-<span>    gp <span class="op">=</span> <span class="fu"><a href="../reference/gpar.html">gpar</a></span><span class="op">(</span>fill <span class="op">=</span> <span class="st">"#f7c948"</span>, col <span class="op">=</span> <span class="cn">NA</span><span class="op">)</span></span>
+<span>    gp <span class="op">=</span> <span class="fu"><a href="../reference/vl_gpar.html">vl_gpar</a></span><span class="op">(</span>fill <span class="op">=</span> <span class="st">"#f7c948"</span>, col <span class="op">=</span> <span class="cn">NA</span><span class="op">)</span></span>
 <span>  <span class="op">)</span><span class="op">)</span> <span class="op">|&gt;</span></span>
 <span>  <span class="fu"><a href="../reference/vl_scene.html">draw</a></span><span class="op">(</span><span class="fu"><a href="../reference/grob.html">text_grob</a></span><span class="op">(</span></span>
 <span>    <span class="st">"vellum"</span>, x <span class="op">=</span> <span class="fl">0.62</span>, y <span class="op">=</span> <span class="fl">0.5</span>,</span>
-<span>    gp <span class="op">=</span> <span class="fu"><a href="../reference/gpar.html">gpar</a></span><span class="op">(</span>fontsize <span class="op">=</span> <span class="fl">48</span>, col <span class="op">=</span> <span class="st">"white"</span>, fontface <span class="op">=</span> <span class="st">"bold"</span><span class="op">)</span></span>
+<span>    gp <span class="op">=</span> <span class="fu"><a href="../reference/vl_gpar.html">vl_gpar</a></span><span class="op">(</span>fontsize <span class="op">=</span> <span class="fl">48</span>, col <span class="op">=</span> <span class="st">"white"</span>, fontface <span class="op">=</span> <span class="st">"bold"</span><span class="op">)</span></span>
 <span>  <span class="op">)</span><span class="op">)</span></span></code></pre></div>
 <p><img src="vellum_files/figure-html/hello-1.png" class="r-plt" alt="" width="576"></p>
 <p>Three ideas do most of the work here.</p>
@@ -135,9 +135,10 @@ a scene displays it, so the last line of a chunk is enough.</p>
 <code><a href="../reference/grob.html">text_grob()</a></code>, and a couple of dozen more (see
 <code><a href="../reference/grob.html">?grob</a></code>). Each is an immutable value object; building one
 draws nothing on its own.</p>
-<p><strong><code><a href="../reference/gpar.html">gpar()</a></code></strong> carries the graphical parameters
-(fill, stroke colour, line width, font, opacity) attached to a grob. A
-<code>fill</code> can be a plain colour or a gradient, as above.</p>
+<p><strong><code><a href="../reference/vl_gpar.html">vl_gpar()</a></code></strong> carries the graphical
+parameters (fill, stroke colour, line width, font, opacity) attached to
+a grob. A <code>fill</code> can be a plain colour or a gradient, as
+above.</p>
 <p><strong>Coordinates default to <code>"npc"</code></strong>:
 normalised parent coordinates, where <code>(0, 0)</code> is the
 bottom-left of the region and <code>(1, 1)</code> the top-right. So
@@ -148,7 +149,7 @@ is vertically centred.</p>
 <h2 id="building-a-scene-push-draw-pop">Building a scene: push, draw, pop<a class="anchor" aria-label="anchor" href="#building-a-scene-push-draw-pop"></a>
 </h2>
 <p>A scene is a tree of viewports and grobs, built functionally.
-<code><a href="../reference/vl_scene.html">push()</a></code> descends into a new <code><a href="../reference/viewport.html">viewport()</a></code>,
+<code><a href="../reference/vl_scene.html">push()</a></code> descends into a new <code><a href="../reference/vl_viewport.html">vl_viewport()</a></code>,
 <code><a href="../reference/vl_scene.html">draw()</a></code> adds a grob at the current level, and
 <code><a href="../reference/vl_scene.html">pop()</a></code> ascends. A viewport is a rectangular region that
 establishes its own coordinate systems, so once you push one with an
@@ -160,24 +161,24 @@ map data values straight onto the region.</p>
 <span><span class="va">y</span> <span class="op">&lt;-</span> <span class="fl">1.8</span> <span class="op">*</span> <span class="va">x</span> <span class="op">+</span> <span class="fu"><a href="https://rdrr.io/r/stats/Normal.html" class="external-link">rnorm</a></span><span class="op">(</span><span class="fl">60</span>, <span class="fl">0</span>, <span class="fl">4</span><span class="op">)</span></span>
 <span></span>
 <span><span class="fu"><a href="../reference/vl_scene.html">vl_scene</a></span><span class="op">(</span><span class="fl">5</span>, <span class="fl">3.2</span>, bg <span class="op">=</span> <span class="st">"white"</span><span class="op">)</span> <span class="op">|&gt;</span></span>
-<span>  <span class="fu"><a href="../reference/vl_scene.html">push</a></span><span class="op">(</span><span class="fu"><a href="../reference/viewport.html">viewport</a></span><span class="op">(</span></span>
+<span>  <span class="fu"><a href="../reference/vl_scene.html">push</a></span><span class="op">(</span><span class="fu"><a href="../reference/vl_viewport.html">vl_viewport</a></span><span class="op">(</span></span>
 <span>    x <span class="op">=</span> <span class="fl">0.57</span>, y <span class="op">=</span> <span class="fl">0.57</span>, width <span class="op">=</span> <span class="fl">0.82</span>, height <span class="op">=</span> <span class="fl">0.82</span>,</span>
 <span>    xscale <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0</span>, <span class="fl">10</span><span class="op">)</span>, yscale <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/range.html" class="external-link">range</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/pretty.html" class="external-link">pretty</a></span><span class="op">(</span><span class="va">y</span><span class="op">)</span><span class="op">)</span></span>
 <span>  <span class="op">)</span><span class="op">)</span> <span class="op">|&gt;</span></span>
-<span>  <span class="fu"><a href="../reference/vl_scene.html">draw</a></span><span class="op">(</span><span class="fu"><a href="../reference/grob.html">rect_grob</a></span><span class="op">(</span>gp <span class="op">=</span> <span class="fu"><a href="../reference/gpar.html">gpar</a></span><span class="op">(</span>fill <span class="op">=</span> <span class="st">"#f4f6f8"</span>, col <span class="op">=</span> <span class="st">"#cfd8dc"</span><span class="op">)</span><span class="op">)</span><span class="op">)</span> <span class="op">|&gt;</span></span>
+<span>  <span class="fu"><a href="../reference/vl_scene.html">draw</a></span><span class="op">(</span><span class="fu"><a href="../reference/grob.html">rect_grob</a></span><span class="op">(</span>gp <span class="op">=</span> <span class="fu"><a href="../reference/vl_gpar.html">vl_gpar</a></span><span class="op">(</span>fill <span class="op">=</span> <span class="st">"#f4f6f8"</span>, col <span class="op">=</span> <span class="st">"#cfd8dc"</span><span class="op">)</span><span class="op">)</span><span class="op">)</span> <span class="op">|&gt;</span></span>
 <span>  <span class="fu"><a href="../reference/vl_scene.html">draw</a></span><span class="op">(</span><span class="fu"><a href="../reference/grob.html">points_grob</a></span><span class="op">(</span></span>
-<span>    <span class="fu"><a href="../reference/unit.html">unit</a></span><span class="op">(</span><span class="va">x</span>, <span class="st">"native"</span><span class="op">)</span>, <span class="fu"><a href="../reference/unit.html">unit</a></span><span class="op">(</span><span class="va">y</span>, <span class="st">"native"</span><span class="op">)</span>,</span>
-<span>    size <span class="op">=</span> <span class="fu"><a href="../reference/unit.html">unit</a></span><span class="op">(</span><span class="fl">3.2</span>, <span class="st">"mm"</span><span class="op">)</span>,</span>
-<span>    gp <span class="op">=</span> <span class="fu"><a href="../reference/gpar.html">gpar</a></span><span class="op">(</span>fill <span class="op">=</span> <span class="st">"#3a7bd5"</span>, col <span class="op">=</span> <span class="st">"#1b2a4a"</span>, lwd <span class="op">=</span> <span class="fl">1</span><span class="op">)</span></span>
+<span>    <span class="fu"><a href="../reference/vl_unit.html">vl_unit</a></span><span class="op">(</span><span class="va">x</span>, <span class="st">"native"</span><span class="op">)</span>, <span class="fu"><a href="../reference/vl_unit.html">vl_unit</a></span><span class="op">(</span><span class="va">y</span>, <span class="st">"native"</span><span class="op">)</span>,</span>
+<span>    size <span class="op">=</span> <span class="fu"><a href="../reference/vl_unit.html">vl_unit</a></span><span class="op">(</span><span class="fl">3.2</span>, <span class="st">"mm"</span><span class="op">)</span>,</span>
+<span>    gp <span class="op">=</span> <span class="fu"><a href="../reference/vl_gpar.html">vl_gpar</a></span><span class="op">(</span>fill <span class="op">=</span> <span class="st">"#3a7bd5"</span>, col <span class="op">=</span> <span class="st">"#1b2a4a"</span>, lwd <span class="op">=</span> <span class="fl">1</span><span class="op">)</span></span>
 <span>  <span class="op">)</span><span class="op">)</span> <span class="op">|&gt;</span></span>
 <span>  <span class="fu"><a href="../reference/vl_scene.html">pop</a></span><span class="op">(</span><span class="op">)</span></span></code></pre></div>
 <p><img src="vellum_files/figure-html/scatter-1.png" class="r-plt" alt="" width="480"></p>
 <p>The panel rectangle is drawn in <code>"npc"</code> (it fills its
 viewport), while the points are placed in <code>"native"</code> units,
-so their positions follow the data scales. A single <code><a href="../reference/unit.html">unit()</a></code>
-vector can even mix coordinate systems per axis. See
-<code><a href="../articles/scene-and-paint.html">vignette("scene-and-paint")</a></code> for the full picture of units,
-viewports, and the paint model.</p>
+so their positions follow the data scales. A single
+<code><a href="../reference/vl_unit.html">vl_unit()</a></code> vector can even mix coordinate systems per axis.
+See <code><a href="../articles/scene-and-paint.html">vignette("scene-and-paint")</a></code> for the full picture of
+units, viewports, and the paint model.</p>
 </div>
 <div class="section level2">
 <h2 id="rendering-to-a-file">Rendering to a file<a class="anchor" aria-label="anchor" href="#rendering-to-a-file"></a>
@@ -187,7 +188,7 @@ call <code><a href="../reference/vl_scene.html">render()</a></code>; it picks th
 extension.</p>
 <div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">s</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/vl_scene.html">vl_scene</a></span><span class="op">(</span><span class="fl">4</span>, <span class="fl">3</span><span class="op">)</span> <span class="op">|&gt;</span></span>
-<span>  <span class="fu"><a href="../reference/vl_scene.html">draw</a></span><span class="op">(</span><span class="fu"><a href="../reference/grob.html">circle_grob</a></span><span class="op">(</span>r <span class="op">=</span> <span class="fl">0.3</span>, gp <span class="op">=</span> <span class="fu"><a href="../reference/gpar.html">gpar</a></span><span class="op">(</span>fill <span class="op">=</span> <span class="st">"tomato"</span>, col <span class="op">=</span> <span class="cn">NA</span><span class="op">)</span><span class="op">)</span><span class="op">)</span></span>
+<span>  <span class="fu"><a href="../reference/vl_scene.html">draw</a></span><span class="op">(</span><span class="fu"><a href="../reference/grob.html">circle_grob</a></span><span class="op">(</span>r <span class="op">=</span> <span class="fl">0.3</span>, gp <span class="op">=</span> <span class="fu"><a href="../reference/vl_gpar.html">vl_gpar</a></span><span class="op">(</span>fill <span class="op">=</span> <span class="st">"tomato"</span>, col <span class="op">=</span> <span class="cn">NA</span><span class="op">)</span><span class="op">)</span><span class="op">)</span></span>
 <span></span>
 <span><span class="fu"><a href="../reference/vl_scene.html">render</a></span><span class="op">(</span><span class="va">s</span>, <span class="st">"out.png"</span><span class="op">)</span> <span class="co"># raster (tiny-skia)</span></span>
 <span><span class="fu"><a href="../reference/vl_scene.html">render</a></span><span class="op">(</span><span class="va">s</span>, <span class="st">"out.svg"</span><span class="op">)</span> <span class="co"># vector (hand-rolled SVG)</span></span>

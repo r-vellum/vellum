@@ -27,7 +27,7 @@ edit_node(scene, name, ...)
 
 - ...:
 
-  Properties to set, e.g. `gp = gpar(col = "red")`.
+  Properties to set, e.g. `gp = vl_gpar(col = "red")`.
 
 ## Value
 

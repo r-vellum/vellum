@@ -86,10 +86,10 @@ sketched.
 ## Examples
 
 ``` r
-rect_grob(gp = gpar(fill = "steelblue", col = "black"), sketch = sketch())
+rect_grob(gp = vl_gpar(fill = "steelblue", col = "black"), sketch = sketch())
 #> <vellum::grob_rect>
 #>  @ name  : NULL
-#>  @ gp    : <vellum::gpar>
+#>  @ gp    : <vellum::vl_gpar>
 #>  .. @ col       : chr "black"
 #>  .. @ fill      : chr "steelblue"
 #>  .. @ lwd       : NULL

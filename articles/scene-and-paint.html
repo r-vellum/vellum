@@ -104,7 +104,7 @@ patterns, and masks) shared across every backend.</p>
 </h2>
 <p>A vellum scene is a tree. The root is the page created by
 <code><a href="../reference/vl_scene.html">vl_scene()</a></code>; every <code><a href="../reference/vl_scene.html">push()</a></code> adds a
-<code><a href="../reference/viewport.html">viewport()</a></code> child and descends into it; every
+<code><a href="../reference/vl_viewport.html">vl_viewport()</a></code> child and descends into it; every
 <code><a href="../reference/vl_scene.html">draw()</a></code> appends a grob at the current level;
 <code><a href="../reference/vl_scene.html">pop()</a></code> climbs back up. The tree is retained rather than
 drawn-and-forgotten, which is what enables the queries in
@@ -116,21 +116,21 @@ inside it in local coordinates, then pop.</p>
 <div class="sourceCode" id="cb1"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/vl_scene.html">vl_scene</a></span><span class="op">(</span><span class="fl">6</span>, <span class="fl">2.4</span>, bg <span class="op">=</span> <span class="st">"white"</span><span class="op">)</span> <span class="op">|&gt;</span></span>
 <span>  <span class="co"># a full-width band</span></span>
-<span>  <span class="fu"><a href="../reference/vl_scene.html">draw</a></span><span class="op">(</span><span class="fu"><a href="../reference/grob.html">rect_grob</a></span><span class="op">(</span>height <span class="op">=</span> <span class="fl">0.6</span>, gp <span class="op">=</span> <span class="fu"><a href="../reference/gpar.html">gpar</a></span><span class="op">(</span>fill <span class="op">=</span> <span class="st">"#eef2f6"</span>, col <span class="op">=</span> <span class="cn">NA</span><span class="op">)</span><span class="op">)</span><span class="op">)</span> <span class="op">|&gt;</span></span>
+<span>  <span class="fu"><a href="../reference/vl_scene.html">draw</a></span><span class="op">(</span><span class="fu"><a href="../reference/grob.html">rect_grob</a></span><span class="op">(</span>height <span class="op">=</span> <span class="fl">0.6</span>, gp <span class="op">=</span> <span class="fu"><a href="../reference/vl_gpar.html">vl_gpar</a></span><span class="op">(</span>fill <span class="op">=</span> <span class="st">"#eef2f6"</span>, col <span class="op">=</span> <span class="cn">NA</span><span class="op">)</span><span class="op">)</span><span class="op">)</span> <span class="op">|&gt;</span></span>
 <span>  <span class="co"># an inset viewport occupying the middle third</span></span>
-<span>  <span class="fu"><a href="../reference/vl_scene.html">push</a></span><span class="op">(</span><span class="fu"><a href="../reference/viewport.html">viewport</a></span><span class="op">(</span>x <span class="op">=</span> <span class="fl">0.5</span>, width <span class="op">=</span> <span class="fl">1</span> <span class="op">/</span> <span class="fl">3</span>, height <span class="op">=</span> <span class="fl">0.8</span><span class="op">)</span><span class="op">)</span> <span class="op">|&gt;</span></span>
-<span>  <span class="fu"><a href="../reference/vl_scene.html">draw</a></span><span class="op">(</span><span class="fu"><a href="../reference/grob.html">rect_grob</a></span><span class="op">(</span>gp <span class="op">=</span> <span class="fu"><a href="../reference/gpar.html">gpar</a></span><span class="op">(</span>fill <span class="op">=</span> <span class="st">"#3a7bd5"</span>, col <span class="op">=</span> <span class="cn">NA</span><span class="op">)</span><span class="op">)</span><span class="op">)</span> <span class="op">|&gt;</span></span>
-<span>  <span class="fu"><a href="../reference/vl_scene.html">draw</a></span><span class="op">(</span><span class="fu"><a href="../reference/grob.html">text_grob</a></span><span class="op">(</span><span class="st">"inset"</span>, gp <span class="op">=</span> <span class="fu"><a href="../reference/gpar.html">gpar</a></span><span class="op">(</span>col <span class="op">=</span> <span class="st">"white"</span>, fontface <span class="op">=</span> <span class="st">"bold"</span><span class="op">)</span><span class="op">)</span><span class="op">)</span> <span class="op">|&gt;</span></span>
+<span>  <span class="fu"><a href="../reference/vl_scene.html">push</a></span><span class="op">(</span><span class="fu"><a href="../reference/vl_viewport.html">vl_viewport</a></span><span class="op">(</span>x <span class="op">=</span> <span class="fl">0.5</span>, width <span class="op">=</span> <span class="fl">1</span> <span class="op">/</span> <span class="fl">3</span>, height <span class="op">=</span> <span class="fl">0.8</span><span class="op">)</span><span class="op">)</span> <span class="op">|&gt;</span></span>
+<span>  <span class="fu"><a href="../reference/vl_scene.html">draw</a></span><span class="op">(</span><span class="fu"><a href="../reference/grob.html">rect_grob</a></span><span class="op">(</span>gp <span class="op">=</span> <span class="fu"><a href="../reference/vl_gpar.html">vl_gpar</a></span><span class="op">(</span>fill <span class="op">=</span> <span class="st">"#3a7bd5"</span>, col <span class="op">=</span> <span class="cn">NA</span><span class="op">)</span><span class="op">)</span><span class="op">)</span> <span class="op">|&gt;</span></span>
+<span>  <span class="fu"><a href="../reference/vl_scene.html">draw</a></span><span class="op">(</span><span class="fu"><a href="../reference/grob.html">text_grob</a></span><span class="op">(</span><span class="st">"inset"</span>, gp <span class="op">=</span> <span class="fu"><a href="../reference/vl_gpar.html">vl_gpar</a></span><span class="op">(</span>col <span class="op">=</span> <span class="st">"white"</span>, fontface <span class="op">=</span> <span class="st">"bold"</span><span class="op">)</span><span class="op">)</span><span class="op">)</span> <span class="op">|&gt;</span></span>
 <span>  <span class="fu"><a href="../reference/vl_scene.html">pop</a></span><span class="op">(</span><span class="op">)</span></span></code></pre></div>
 <p><img src="scene-and-paint_files/figure-html/nesting-1.png" class="r-plt" alt="" width="576"></p>
 </div>
 <div class="section level2">
 <h2 id="units">Units<a class="anchor" aria-label="anchor" href="#units"></a>
 </h2>
-<p>Coordinates and sizes are <code><a href="../reference/unit.html">unit()</a></code> vectors: a value paired
-with a unit name. Each element carries its own unit, so one vector can
-mix coordinate systems, and a grob can even use different units on its x
-and y axes.</p>
+<p>Coordinates and sizes are <code><a href="../reference/vl_unit.html">vl_unit()</a></code> vectors: a value
+paired with a unit name. Each element carries its own unit, so one
+vector can mix coordinate systems, and a grob can even use different
+units on its x and y axes.</p>
 <p>The units you reach for most:</p>
 <ul>
 <li>
@@ -148,12 +148,12 @@ regardless of the viewport.</li>
 </ul>
 <p>A bare number is interpreted in the grob’s default units (usually
 <code>"npc"</code>), so <code>x = 0.5</code> and
-<code>x = unit(0.5, "npc")</code> are the same thing.</p>
+<code>x = vl_unit(0.5, "npc")</code> are the same thing.</p>
 <div class="sourceCode" id="cb2"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="fu"><a href="../reference/unit.html">unit</a></span><span class="op">(</span><span class="fl">1</span><span class="op">:</span><span class="fl">3</span>, <span class="st">"native"</span><span class="op">)</span></span>
+<code class="sourceCode R"><span><span class="fu"><a href="../reference/vl_unit.html">vl_unit</a></span><span class="op">(</span><span class="fl">1</span><span class="op">:</span><span class="fl">3</span>, <span class="st">"native"</span><span class="op">)</span></span>
 <span><span class="co">#&gt; &lt;vellum_unit[3]&gt;</span></span>
 <span><span class="co">#&gt; [1] 1native 2native 3native</span></span>
-<span><span class="fu"><a href="../reference/unit.html">unit</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.5</span>, <span class="fl">1</span><span class="op">)</span>, <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"npc"</span>, <span class="st">"in"</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="fu"><a href="../reference/vl_unit.html">vl_unit</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.5</span>, <span class="fl">1</span><span class="op">)</span>, <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"npc"</span>, <span class="st">"in"</span><span class="op">)</span><span class="op">)</span></span>
 <span><span class="co">#&gt; &lt;vellum_unit[2]&gt;</span></span>
 <span><span class="co">#&gt; [1] 0.5npc 1.0in</span></span></code></pre></div>
 <p><code>"native"</code> units need a viewport with scales to resolve
@@ -161,15 +161,15 @@ against. Set <code>xscale</code> and <code>yscale</code> when you
 push:</p>
 <div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/vl_scene.html">vl_scene</a></span><span class="op">(</span><span class="fl">5</span>, <span class="fl">3</span>, bg <span class="op">=</span> <span class="st">"white"</span><span class="op">)</span> <span class="op">|&gt;</span></span>
-<span>  <span class="fu"><a href="../reference/vl_scene.html">push</a></span><span class="op">(</span><span class="fu"><a href="../reference/viewport.html">viewport</a></span><span class="op">(</span></span>
+<span>  <span class="fu"><a href="../reference/vl_scene.html">push</a></span><span class="op">(</span><span class="fu"><a href="../reference/vl_viewport.html">vl_viewport</a></span><span class="op">(</span></span>
 <span>    width <span class="op">=</span> <span class="fl">0.86</span>, height <span class="op">=</span> <span class="fl">0.82</span>,</span>
 <span>    xscale <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0</span>, <span class="fl">10</span><span class="op">)</span>, yscale <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="op">-</span><span class="fl">5</span>, <span class="fl">25</span><span class="op">)</span></span>
 <span>  <span class="op">)</span><span class="op">)</span> <span class="op">|&gt;</span></span>
-<span>  <span class="fu"><a href="../reference/vl_scene.html">draw</a></span><span class="op">(</span><span class="fu"><a href="../reference/grob.html">rect_grob</a></span><span class="op">(</span>gp <span class="op">=</span> <span class="fu"><a href="../reference/gpar.html">gpar</a></span><span class="op">(</span>fill <span class="op">=</span> <span class="st">"grey97"</span>, col <span class="op">=</span> <span class="st">"grey70"</span><span class="op">)</span><span class="op">)</span><span class="op">)</span> <span class="op">|&gt;</span></span>
+<span>  <span class="fu"><a href="../reference/vl_scene.html">draw</a></span><span class="op">(</span><span class="fu"><a href="../reference/grob.html">rect_grob</a></span><span class="op">(</span>gp <span class="op">=</span> <span class="fu"><a href="../reference/vl_gpar.html">vl_gpar</a></span><span class="op">(</span>fill <span class="op">=</span> <span class="st">"grey97"</span>, col <span class="op">=</span> <span class="st">"grey70"</span><span class="op">)</span><span class="op">)</span><span class="op">)</span> <span class="op">|&gt;</span></span>
 <span>  <span class="fu"><a href="../reference/vl_scene.html">draw</a></span><span class="op">(</span><span class="fu"><a href="../reference/grob.html">lines_grob</a></span><span class="op">(</span></span>
-<span>    x <span class="op">=</span> <span class="fu"><a href="../reference/unit.html">unit</a></span><span class="op">(</span><span class="fl">0</span><span class="op">:</span><span class="fl">10</span>, <span class="st">"native"</span><span class="op">)</span>,</span>
-<span>    y <span class="op">=</span> <span class="fu"><a href="../reference/unit.html">unit</a></span><span class="op">(</span><span class="op">(</span><span class="fl">0</span><span class="op">:</span><span class="fl">10</span><span class="op">)</span> <span class="op">*</span> <span class="fl">2</span>, <span class="st">"native"</span><span class="op">)</span>,</span>
-<span>    gp <span class="op">=</span> <span class="fu"><a href="../reference/gpar.html">gpar</a></span><span class="op">(</span>col <span class="op">=</span> <span class="st">"steelblue"</span>, lwd <span class="op">=</span> <span class="fl">2</span><span class="op">)</span></span>
+<span>    x <span class="op">=</span> <span class="fu"><a href="../reference/vl_unit.html">vl_unit</a></span><span class="op">(</span><span class="fl">0</span><span class="op">:</span><span class="fl">10</span>, <span class="st">"native"</span><span class="op">)</span>,</span>
+<span>    y <span class="op">=</span> <span class="fu"><a href="../reference/vl_unit.html">vl_unit</a></span><span class="op">(</span><span class="op">(</span><span class="fl">0</span><span class="op">:</span><span class="fl">10</span><span class="op">)</span> <span class="op">*</span> <span class="fl">2</span>, <span class="st">"native"</span><span class="op">)</span>,</span>
+<span>    gp <span class="op">=</span> <span class="fu"><a href="../reference/vl_gpar.html">vl_gpar</a></span><span class="op">(</span>col <span class="op">=</span> <span class="st">"steelblue"</span>, lwd <span class="op">=</span> <span class="fl">2</span><span class="op">)</span></span>
 <span>  <span class="op">)</span><span class="op">)</span> <span class="op">|&gt;</span></span>
 <span>  <span class="fu"><a href="../reference/vl_scene.html">pop</a></span><span class="op">(</span><span class="op">)</span></span></code></pre></div>
 <p><img src="scene-and-paint_files/figure-html/native-1.png" class="r-plt" alt="" width="480"></p>
@@ -177,17 +177,17 @@ push:</p>
 string-relative units (<code>"char"</code>, <code>"line"</code>,
 <code>"strwidth"</code>) resolve to millimetres at construction. Mixing
 a relative and an absolute unit in a single arithmetic expression (say
-<code>unit(1, "npc") - unit(2, "mm")</code>) is deferred and reported
-rather than silently guessed, so an ambiguous offset fails loudly
-instead of drawing in the wrong place.</p>
+<code>vl_unit(1, "npc") - vl_unit(2, "mm")</code>) is deferred and
+reported rather than silently guessed, so an ambiguous offset fails
+loudly instead of drawing in the wrong place.</p>
 </div>
 <div class="section level2">
 <h2 id="the-paint-model">The paint model<a class="anchor" aria-label="anchor" href="#the-paint-model"></a>
 </h2>
-<p>Any <code>fill</code> in <code><a href="../reference/gpar.html">gpar()</a></code> can be more than a flat
-colour. The same three paint types work identically on the raster, SVG,
-and PDF backends (with the documented exception that the PDF backend
-does not yet rasterise patterns).</p>
+<p>Any <code>fill</code> in <code><a href="../reference/vl_gpar.html">vl_gpar()</a></code> can be more than a
+flat colour. The same three paint types work identically on the raster,
+SVG, and PDF backends (with the documented exception that the PDF
+backend does not yet rasterise patterns).</p>
 <div class="section level3">
 <h3 id="gradients">Gradients<a class="anchor" aria-label="anchor" href="#gradients"></a>
 </h3>
@@ -198,16 +198,16 @@ against the viewport at draw time, so a gradient transforms with its
 grob just like the outline does.</p>
 <div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/vl_scene.html">vl_scene</a></span><span class="op">(</span><span class="fl">6</span>, <span class="fl">2.2</span>, bg <span class="op">=</span> <span class="st">"white"</span><span class="op">)</span> <span class="op">|&gt;</span></span>
-<span>  <span class="fu"><a href="../reference/vl_scene.html">push</a></span><span class="op">(</span><span class="fu"><a href="../reference/viewport.html">viewport</a></span><span class="op">(</span>x <span class="op">=</span> <span class="fl">0.28</span>, width <span class="op">=</span> <span class="fl">0.44</span><span class="op">)</span><span class="op">)</span> <span class="op">|&gt;</span></span>
+<span>  <span class="fu"><a href="../reference/vl_scene.html">push</a></span><span class="op">(</span><span class="fu"><a href="../reference/vl_viewport.html">vl_viewport</a></span><span class="op">(</span>x <span class="op">=</span> <span class="fl">0.28</span>, width <span class="op">=</span> <span class="fl">0.44</span><span class="op">)</span><span class="op">)</span> <span class="op">|&gt;</span></span>
 <span>  <span class="fu"><a href="../reference/vl_scene.html">draw</a></span><span class="op">(</span><span class="fu"><a href="../reference/grob.html">rect_grob</a></span><span class="op">(</span></span>
 <span>    width <span class="op">=</span> <span class="fl">0.8</span>, height <span class="op">=</span> <span class="fl">0.7</span>,</span>
-<span>    gp <span class="op">=</span> <span class="fu"><a href="../reference/gpar.html">gpar</a></span><span class="op">(</span>fill <span class="op">=</span> <span class="fu"><a href="../reference/gradients.html">linear_gradient</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"#1b2a4a"</span>, <span class="st">"#3a7bd5"</span><span class="op">)</span><span class="op">)</span>, col <span class="op">=</span> <span class="cn">NA</span><span class="op">)</span></span>
+<span>    gp <span class="op">=</span> <span class="fu"><a href="../reference/vl_gpar.html">vl_gpar</a></span><span class="op">(</span>fill <span class="op">=</span> <span class="fu"><a href="../reference/gradients.html">linear_gradient</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"#1b2a4a"</span>, <span class="st">"#3a7bd5"</span><span class="op">)</span><span class="op">)</span>, col <span class="op">=</span> <span class="cn">NA</span><span class="op">)</span></span>
 <span>  <span class="op">)</span><span class="op">)</span> <span class="op">|&gt;</span></span>
 <span>  <span class="fu"><a href="../reference/vl_scene.html">pop</a></span><span class="op">(</span><span class="op">)</span> <span class="op">|&gt;</span></span>
-<span>  <span class="fu"><a href="../reference/vl_scene.html">push</a></span><span class="op">(</span><span class="fu"><a href="../reference/viewport.html">viewport</a></span><span class="op">(</span>x <span class="op">=</span> <span class="fl">0.72</span>, width <span class="op">=</span> <span class="fl">0.44</span><span class="op">)</span><span class="op">)</span> <span class="op">|&gt;</span></span>
+<span>  <span class="fu"><a href="../reference/vl_scene.html">push</a></span><span class="op">(</span><span class="fu"><a href="../reference/vl_viewport.html">vl_viewport</a></span><span class="op">(</span>x <span class="op">=</span> <span class="fl">0.72</span>, width <span class="op">=</span> <span class="fl">0.44</span><span class="op">)</span><span class="op">)</span> <span class="op">|&gt;</span></span>
 <span>  <span class="fu"><a href="../reference/vl_scene.html">draw</a></span><span class="op">(</span><span class="fu"><a href="../reference/grob.html">circle_grob</a></span><span class="op">(</span></span>
 <span>    r <span class="op">=</span> <span class="fl">0.34</span>,</span>
-<span>    gp <span class="op">=</span> <span class="fu"><a href="../reference/gpar.html">gpar</a></span><span class="op">(</span>fill <span class="op">=</span> <span class="fu"><a href="../reference/gradients.html">radial_gradient</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"#f6d365"</span>, <span class="st">"#fda085"</span><span class="op">)</span><span class="op">)</span>, col <span class="op">=</span> <span class="cn">NA</span><span class="op">)</span></span>
+<span>    gp <span class="op">=</span> <span class="fu"><a href="../reference/vl_gpar.html">vl_gpar</a></span><span class="op">(</span>fill <span class="op">=</span> <span class="fu"><a href="../reference/gradients.html">radial_gradient</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"#f6d365"</span>, <span class="st">"#fda085"</span><span class="op">)</span><span class="op">)</span>, col <span class="op">=</span> <span class="cn">NA</span><span class="op">)</span></span>
 <span>  <span class="op">)</span><span class="op">)</span> <span class="op">|&gt;</span></span>
 <span>  <span class="fu"><a href="../reference/vl_scene.html">pop</a></span><span class="op">(</span><span class="op">)</span></span></code></pre></div>
 <p><img src="scene-and-paint_files/figure-html/gradients-1.png" class="r-plt" alt="" width="576"></p>
@@ -215,19 +215,19 @@ grob just like the outline does.</p>
 <div class="section level3">
 <h3 id="patterns">Patterns<a class="anchor" aria-label="anchor" href="#patterns"></a>
 </h3>
-<p><code><a href="../reference/pattern.html">pattern()</a></code> fills a shape by tiling a grob (or a list of
-grobs). The tile is authored in the unit square and repeated across a
+<p><code><a href="../reference/vl_pattern.html">vl_pattern()</a></code> fills a shape by tiling a grob (or a list
+of grobs). The tile is authored in the unit square and repeated across a
 cell whose size you choose.</p>
 <div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">tile</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span></span>
-<span>  <span class="fu"><a href="../reference/grob.html">rect_grob</a></span><span class="op">(</span>gp <span class="op">=</span> <span class="fu"><a href="../reference/gpar.html">gpar</a></span><span class="op">(</span>fill <span class="op">=</span> <span class="st">"#ecf0f1"</span>, col <span class="op">=</span> <span class="cn">NA</span><span class="op">)</span><span class="op">)</span>,</span>
-<span>  <span class="fu"><a href="../reference/grob.html">circle_grob</a></span><span class="op">(</span>r <span class="op">=</span> <span class="fl">0.32</span>, gp <span class="op">=</span> <span class="fu"><a href="../reference/gpar.html">gpar</a></span><span class="op">(</span>fill <span class="op">=</span> <span class="st">"#e74c3c"</span>, col <span class="op">=</span> <span class="cn">NA</span><span class="op">)</span><span class="op">)</span></span>
+<span>  <span class="fu"><a href="../reference/grob.html">rect_grob</a></span><span class="op">(</span>gp <span class="op">=</span> <span class="fu"><a href="../reference/vl_gpar.html">vl_gpar</a></span><span class="op">(</span>fill <span class="op">=</span> <span class="st">"#ecf0f1"</span>, col <span class="op">=</span> <span class="cn">NA</span><span class="op">)</span><span class="op">)</span>,</span>
+<span>  <span class="fu"><a href="../reference/grob.html">circle_grob</a></span><span class="op">(</span>r <span class="op">=</span> <span class="fl">0.32</span>, gp <span class="op">=</span> <span class="fu"><a href="../reference/vl_gpar.html">vl_gpar</a></span><span class="op">(</span>fill <span class="op">=</span> <span class="st">"#e74c3c"</span>, col <span class="op">=</span> <span class="cn">NA</span><span class="op">)</span><span class="op">)</span></span>
 <span><span class="op">)</span></span>
 <span></span>
 <span><span class="fu"><a href="../reference/vl_scene.html">vl_scene</a></span><span class="op">(</span><span class="fl">4</span>, <span class="fl">2.4</span>, bg <span class="op">=</span> <span class="st">"white"</span><span class="op">)</span> <span class="op">|&gt;</span></span>
 <span>  <span class="fu"><a href="../reference/vl_scene.html">draw</a></span><span class="op">(</span><span class="fu"><a href="../reference/grob.html">rect_grob</a></span><span class="op">(</span></span>
 <span>    width <span class="op">=</span> <span class="fl">0.84</span>, height <span class="op">=</span> <span class="fl">0.84</span>,</span>
-<span>    gp <span class="op">=</span> <span class="fu"><a href="../reference/gpar.html">gpar</a></span><span class="op">(</span>fill <span class="op">=</span> <span class="fu"><a href="../reference/pattern.html">pattern</a></span><span class="op">(</span><span class="va">tile</span>, width <span class="op">=</span> <span class="fl">0.18</span>, height <span class="op">=</span> <span class="fl">0.3</span><span class="op">)</span>, col <span class="op">=</span> <span class="cn">NA</span><span class="op">)</span></span>
+<span>    gp <span class="op">=</span> <span class="fu"><a href="../reference/vl_gpar.html">vl_gpar</a></span><span class="op">(</span>fill <span class="op">=</span> <span class="fu"><a href="../reference/vl_pattern.html">vl_pattern</a></span><span class="op">(</span><span class="va">tile</span>, width <span class="op">=</span> <span class="fl">0.18</span>, height <span class="op">=</span> <span class="fl">0.3</span><span class="op">)</span>, col <span class="op">=</span> <span class="cn">NA</span><span class="op">)</span></span>
 <span>  <span class="op">)</span><span class="op">)</span></span></code></pre></div>
 <p><img src="scene-and-paint_files/figure-html/pattern-1.png" class="r-plt" alt="" width="384"></p>
 </div>
@@ -236,22 +236,22 @@ cell whose size you choose.</p>
 </h3>
 <p>A mask is a grob whose coverage modulates the visibility of a
 viewport’s contents. Wrap it with <code><a href="../reference/as_mask.html">as_mask()</a></code> and pass it to
-<code>viewport(mask = ...)</code>. Here a linear gradient is clipped to
-a circular alpha mask.</p>
+<code>vl_viewport(mask = ...)</code>. Here a linear gradient is clipped
+to a circular alpha mask.</p>
 <div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/vl_scene.html">vl_scene</a></span><span class="op">(</span><span class="fl">4</span>, <span class="fl">2.4</span>, bg <span class="op">=</span> <span class="st">"white"</span><span class="op">)</span> <span class="op">|&gt;</span></span>
-<span>  <span class="fu"><a href="../reference/vl_scene.html">push</a></span><span class="op">(</span><span class="fu"><a href="../reference/viewport.html">viewport</a></span><span class="op">(</span></span>
-<span>    mask <span class="op">=</span> <span class="fu"><a href="../reference/as_mask.html">as_mask</a></span><span class="op">(</span><span class="fu"><a href="../reference/grob.html">circle_grob</a></span><span class="op">(</span>r <span class="op">=</span> <span class="fl">0.42</span>, gp <span class="op">=</span> <span class="fu"><a href="../reference/gpar.html">gpar</a></span><span class="op">(</span>fill <span class="op">=</span> <span class="st">"white"</span>, col <span class="op">=</span> <span class="cn">NA</span><span class="op">)</span><span class="op">)</span><span class="op">)</span></span>
+<span>  <span class="fu"><a href="../reference/vl_scene.html">push</a></span><span class="op">(</span><span class="fu"><a href="../reference/vl_viewport.html">vl_viewport</a></span><span class="op">(</span></span>
+<span>    mask <span class="op">=</span> <span class="fu"><a href="../reference/as_mask.html">as_mask</a></span><span class="op">(</span><span class="fu"><a href="../reference/grob.html">circle_grob</a></span><span class="op">(</span>r <span class="op">=</span> <span class="fl">0.42</span>, gp <span class="op">=</span> <span class="fu"><a href="../reference/vl_gpar.html">vl_gpar</a></span><span class="op">(</span>fill <span class="op">=</span> <span class="st">"white"</span>, col <span class="op">=</span> <span class="cn">NA</span><span class="op">)</span><span class="op">)</span><span class="op">)</span></span>
 <span>  <span class="op">)</span><span class="op">)</span> <span class="op">|&gt;</span></span>
-<span>  <span class="fu"><a href="../reference/vl_scene.html">draw</a></span><span class="op">(</span><span class="fu"><a href="../reference/grob.html">rect_grob</a></span><span class="op">(</span>gp <span class="op">=</span> <span class="fu"><a href="../reference/gpar.html">gpar</a></span><span class="op">(</span>fill <span class="op">=</span> <span class="fu"><a href="../reference/gradients.html">linear_gradient</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"#7f53ac"</span>, <span class="st">"#647dee"</span><span class="op">)</span><span class="op">)</span>, col <span class="op">=</span> <span class="cn">NA</span><span class="op">)</span><span class="op">)</span><span class="op">)</span> <span class="op">|&gt;</span></span>
+<span>  <span class="fu"><a href="../reference/vl_scene.html">draw</a></span><span class="op">(</span><span class="fu"><a href="../reference/grob.html">rect_grob</a></span><span class="op">(</span>gp <span class="op">=</span> <span class="fu"><a href="../reference/vl_gpar.html">vl_gpar</a></span><span class="op">(</span>fill <span class="op">=</span> <span class="fu"><a href="../reference/gradients.html">linear_gradient</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"#7f53ac"</span>, <span class="st">"#647dee"</span><span class="op">)</span><span class="op">)</span>, col <span class="op">=</span> <span class="cn">NA</span><span class="op">)</span><span class="op">)</span><span class="op">)</span> <span class="op">|&gt;</span></span>
 <span>  <span class="fu"><a href="../reference/vl_scene.html">pop</a></span><span class="op">(</span><span class="op">)</span></span></code></pre></div>
 <p><img src="scene-and-paint_files/figure-html/mask-1.png" class="r-plt" alt="" width="384"></p>
 <p>Related to masks is <strong>group opacity</strong>. Setting
-<code>viewport(alpha = ...)</code> composites the viewport’s contents as
-a single isolated layer at that opacity, so overlapping elements do not
-accumulate the way per-element <code>gpar(alpha = )</code> would. That
-distinction (compositing a group versus fading each mark) is exactly the
-kind of control a grammar layer needs from its backend.</p>
+<code>vl_viewport(alpha = ...)</code> composites the viewport’s contents
+as a single isolated layer at that opacity, so overlapping elements do
+not accumulate the way per-element <code>vl_gpar(alpha = )</code> would.
+That distinction (compositing a group versus fading each mark) is
+exactly the kind of control a grammar layer needs from its backend.</p>
 </div>
 </div>
 <div class="section level2">
@@ -261,13 +261,13 @@ kind of control a grammar layer needs from its backend.</p>
 <li>A scene is a retained tree of nested viewports and grobs, built with
 <code><a href="../reference/vl_scene.html">push()</a></code> / <code><a href="../reference/vl_scene.html">draw()</a></code> / <code><a href="../reference/vl_scene.html">pop()</a></code>.</li>
 <li>
-<code><a href="../reference/unit.html">unit()</a></code> vectors express geometry; <code>"npc"</code> is
-relative to the viewport, <code>"native"</code> follows the data scales,
-and <code>"mm"</code> and friends are absolute.</li>
+<code><a href="../reference/vl_unit.html">vl_unit()</a></code> vectors express geometry; <code>"npc"</code>
+is relative to the viewport, <code>"native"</code> follows the data
+scales, and <code>"mm"</code> and friends are absolute.</li>
 <li>
-<code>gpar(fill = )</code> accepts gradients and patterns, and
-<code><a href="../reference/viewport.html">viewport()</a></code> accepts masks, group opacity, and blend modes,
-all consistent across backends.</li>
+<code>vl_gpar(fill = )</code> accepts gradients and patterns, and
+<code><a href="../reference/vl_viewport.html">vl_viewport()</a></code> accepts masks, group opacity, and blend
+modes, all consistent across backends.</li>
 </ul>
 <p>Next, see <code><a href="../articles/retained-mode.html">vignette("retained-mode")</a></code> for what the
 retained tree lets you do after it is built. ```</p>

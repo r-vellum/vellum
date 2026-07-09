@@ -119,14 +119,14 @@ panel <- function(how) {
 }
 
 vl_scene(6, 6, bg = "white") |>
-  push(viewport(layout = grid_layout(
-    widths = unit(c(1, 1), "null"),
-    heights = unit(c(1, 1), "null")
+  push(vl_viewport(layout = grid_layout(
+    widths = vl_unit(c(1, 1), "null"),
+    heights = vl_unit(c(1, 1), "null")
   ))) |>
-  push(viewport(row = 1, col = 1)) |> draw(panel("linear"))  |> pop() |>
-  push(viewport(row = 1, col = 2)) |> draw(panel("log"))     |> pop() |>
-  push(viewport(row = 2, col = 1)) |> draw(panel("cbrt"))    |> pop() |>
-  push(viewport(row = 2, col = 2)) |> draw(panel("eq_hist")) |> pop()
+  push(vl_viewport(row = 1, col = 1)) |> draw(panel("linear"))  |> pop() |>
+  push(vl_viewport(row = 1, col = 2)) |> draw(panel("log"))     |> pop() |>
+  push(vl_viewport(row = 2, col = 1)) |> draw(panel("cbrt"))    |> pop() |>
+  push(vl_viewport(row = 2, col = 2)) |> draw(panel("eq_hist")) |> pop()
 ```
 
 ![](datashading_files/figure-html/how-1.png)
@@ -141,7 +141,7 @@ meaning rather than one that depends on the data’s rank distribution.
 [`datashade()`](https://r-vellum.github.io/vellum/reference/datashade.md)
 bins over `xlim` by `ylim` and returns a raster that fills its viewport
 (`npc` `0..1`). To place it against data axes, draw it inside a
-[`viewport()`](https://r-vellum.github.io/vellum/reference/viewport.md)
+[`vl_viewport()`](https://r-vellum.github.io/vellum/reference/vl_viewport.md)
 whose `xscale` / `yscale` match the same limits, then draw axes, labels,
 or reference lines in `"native"` units in that viewport. For crisp bins,
 match `width` / `height` to the viewport’s pixel size and keep the
@@ -176,7 +176,7 @@ regardless of how the raw orbit range differs between the two axes.
 
 Because each shaded attractor is just a grob, a gallery is a layout of
 them. Push a
-[`grid_layout()`](https://r-vellum.github.io/vellum/reference/viewport.md)
+[`grid_layout()`](https://r-vellum.github.io/vellum/reference/vl_viewport.md)
 of `"null"` (flexible) tracks and drop one
 [`datashade()`](https://r-vellum.github.io/vellum/reference/datashade.md)
 raster into each cell. Square cells (from the square window above) keep
@@ -200,9 +200,9 @@ nrow <- 2
 cell_px <- 300
 
 s <- vl_scene(6, 6, dpi = 100, bg = "white") |>
-  push(viewport(layout = grid_layout(
-    widths  = unit(rep(1, ncol), "null"),
-    heights = unit(rep(1, nrow), "null")
+  push(vl_viewport(layout = grid_layout(
+    widths  = vl_unit(rep(1, ncol), "null"),
+    heights = vl_unit(rep(1, nrow), "null")
   )))
 
 for (i in seq_along(gallery)) {
@@ -217,7 +217,7 @@ for (i in seq_along(gallery)) {
   )
   row <- (i - 1) %/% ncol + 1
   col <- (i - 1) %% ncol + 1
-  s <- s |> push(viewport(row = row, col = col)) |> draw(img) |> pop()
+  s <- s |> push(vl_viewport(row = row, col = col)) |> draw(img) |> pop()
 }
 
 s
@@ -247,7 +247,7 @@ Rscript inst/examples/attractors.R gallery.png 1e7
   [`raster_grob()`](https://r-vellum.github.io/vellum/reference/grob.md).
   Draw it inside a viewport whose scales match `xlim` / `ylim` to align
   it with axes, or tile many of them in a
-  [`grid_layout()`](https://r-vellum.github.io/vellum/reference/viewport.md)
+  [`grid_layout()`](https://r-vellum.github.io/vellum/reference/vl_viewport.md)
   for a gallery.
 
 ## In a grammar

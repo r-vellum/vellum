@@ -2,6 +2,20 @@
 
 ## vellum (development version)
 
+- **Breaking: renamed the grid-colliding exports to a `vl_` prefix** so
+  attaching vellum no longer masks grid:
+  [`gpar()`](https://rdrr.io/r/grid/gpar.html) →
+  [`vl_gpar()`](https://r-vellum.github.io/vellum/reference/vl_gpar.md),
+  [`unit()`](https://rdrr.io/r/grid/unit.html) →
+  [`vl_unit()`](https://r-vellum.github.io/vellum/reference/vl_unit.md),
+  [`viewport()`](https://rdrr.io/r/grid/viewport.html) →
+  [`vl_viewport()`](https://r-vellum.github.io/vellum/reference/vl_viewport.md),
+  [`arrow()`](https://rdrr.io/r/grid/arrow.html) →
+  [`vl_arrow()`](https://r-vellum.github.io/vellum/reference/vl_arrow.md),
+  and [`pattern()`](https://rdrr.io/r/grid/patterns.html) →
+  [`vl_pattern()`](https://r-vellum.github.io/vellum/reference/vl_pattern.md).
+  The old names are removed (no aliases).
+
 - **Multi-line and per-datum rich text.**
   [`text_grob()`](https://r-vellum.github.io/vellum/reference/grob.md)
   labels may now contain embedded newlines (`\n`), stacked
@@ -78,12 +92,11 @@ rendering all run in Rust.
 
 - Vectorised drawing primitives (rect, circle, points, segments, lines,
   path, polygon, text, raster, …) that batch internally.
-- A unit system
-  ([`unit()`](https://r-vellum.github.io/vellum/reference/unit.md),
+- A unit system ([`unit()`](https://rdrr.io/r/grid/unit.html),
   `grobwidth`, …) and nested
-  [`viewport()`](https://r-vellum.github.io/vellum/reference/viewport.md)s
-  with their own scales, rotation, and arbitrary-path clipping, plus a
-  row/column layout solver with `"null"` (flexible) tracks.
+  [`viewport()`](https://rdrr.io/r/grid/viewport.html)s with their own
+  scales, rotation, and arbitrary-path clipping, plus a row/column
+  layout solver with `"null"` (flexible) tracks.
 
 ### Paint model
 
