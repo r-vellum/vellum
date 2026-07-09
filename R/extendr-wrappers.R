@@ -6,15 +6,19 @@
 NULL
 
 #' Backend identity and build info (internal diagnostic).
+#' @keywords internal
 rs_backend_info <- function() .Call(wrap__rs_backend_info)
 
 #' Empty the persistent glyph-outline cache (font bytes + extracted outlines).
+#' @keywords internal
 rs_clear_glyph_cache <- function() .Call(wrap__rs_clear_glyph_cache)
 
 #' Empty the repaint-boundary sub-raster cache (FW4c) and reset its counters.
+#' @keywords internal
 rs_clear_subraster_cache <- function() .Call(wrap__rs_clear_subraster_cache)
 
 #' Sub-raster cache stats: `c(hits, misses, resident_entries)` (tests/diagnostics).
+#' @keywords internal
 rs_subraster_stats <- function() .Call(wrap__rs_subraster_stats)
 
 #' Set the glyph-bitmap cache mode.
@@ -23,6 +27,7 @@ rs_subraster_stats <- function() .Call(wrap__rs_subraster_stats)
 rs_set_glyph_bitmap_mode <- function(mode) .Call(wrap__rs_set_glyph_bitmap_mode, mode)
 
 #' Glyph sprite cache stats: `c(hits, misses, resident)` (tests/diagnostics).
+#' @keywords internal
 rs_glyph_sprite_stats <- function() .Call(wrap__rs_glyph_sprite_stats)
 
 rs_aggregate_2d <- function(x, y, w, nx, ny, x0, x1, y0, y1) .Call(wrap__rs_aggregate_2d, x, y, w, nx, ny, x0, x1, y0, y1)
@@ -31,6 +36,7 @@ rs_attractor <- function(kind, n, a, b, c, d, x0, y0) .Call(wrap__rs_attractor, 
 
 #' A drawing scene held in the Rust backend. Internal: the public R API is the
 #' S7 layer (`vl_scene()`, grobs, `render()`), which compiles to this object.
+#' @keywords internal
 #'
 #' @section Methods:
 #'\subsection{Method `new`}{

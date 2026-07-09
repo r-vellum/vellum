@@ -9,18 +9,21 @@ mod sketch;
 mod units;
 
 /// Backend identity and build info (internal diagnostic).
+/// @keywords internal
 #[extendr]
 fn rs_backend_info() -> String {
     format!("vellum Rust backend v{}", env!("CARGO_PKG_VERSION"))
 }
 
 /// Empty the persistent glyph-outline cache (font bytes + extracted outlines).
+/// @keywords internal
 #[extendr]
 fn rs_clear_glyph_cache() {
     font::clear_glyph_cache();
 }
 
 /// Empty the repaint-boundary sub-raster cache (FW4c) and reset its counters.
+/// @keywords internal
 #[extendr]
 fn rs_clear_subraster_cache() {
     scene::clear_subraster_cache();
@@ -35,6 +38,7 @@ fn rs_set_glyph_bitmap_mode(mode: i32) {
 }
 
 /// Glyph sprite cache stats: `c(hits, misses, resident)` (tests/diagnostics).
+/// @keywords internal
 #[extendr]
 fn rs_glyph_sprite_stats() -> Vec<i32> {
     let (h, m, n) = font::glyph_sprite_stats();
@@ -42,6 +46,7 @@ fn rs_glyph_sprite_stats() -> Vec<i32> {
 }
 
 /// Sub-raster cache stats: `c(hits, misses, resident_entries)` (tests/diagnostics).
+/// @keywords internal
 #[extendr]
 fn rs_subraster_stats() -> Vec<i32> {
     scene::subraster_stats().into_iter().map(|v| v as i32).collect()

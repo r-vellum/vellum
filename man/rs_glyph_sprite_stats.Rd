@@ -9,3 +9,4 @@ rs_glyph_sprite_stats()
 \description{
 Glyph sprite cache stats: \code{c(hits, misses, resident)} (tests/diagnostics).
 }
+\keyword{internal}

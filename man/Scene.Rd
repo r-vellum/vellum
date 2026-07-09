@@ -265,3 +265,4 @@ exact. Markers and text use a bounding box; lines/segments a pick band.
 }
 }
 
+\keyword{internal}

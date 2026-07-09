@@ -557,6 +557,7 @@ impl NodeMeta {
 
 /// A drawing scene held in the Rust backend. Internal: the public R API is the
 /// S7 layer (`vl_scene()`, grobs, `render()`), which compiles to this object.
+/// @keywords internal
 #[extendr]
 #[derive(Clone, Debug)]
 pub struct Scene {

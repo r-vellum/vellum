@@ -4,3 +4,4 @@ src/Makevars.win
 /*.png
 Rplots.pdf
 **/Rplots.pdf
+docs/

@@ -9,3 +9,4 @@ rs_backend_info()
 \description{
 Backend identity and build info (internal diagnostic).
 }
+\keyword{internal}

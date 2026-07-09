@@ -96,6 +96,7 @@ reference:
     backend (PNG / SVG / PDF) from the file extension.
   contents:
   - vl_scene
+  - describe
   - display
   - scene_raster
   - scene_svg

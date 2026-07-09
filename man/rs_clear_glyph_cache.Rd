@@ -9,3 +9,4 @@ rs_clear_glyph_cache()
 \description{
 Empty the persistent glyph-outline cache (font bytes + extracted outlines).
 }
+\keyword{internal}

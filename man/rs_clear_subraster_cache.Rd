@@ -9,3 +9,4 @@ rs_clear_subraster_cache()
 \description{
 Empty the repaint-boundary sub-raster cache (FW4c) and reset its counters.
 }
+\keyword{internal}

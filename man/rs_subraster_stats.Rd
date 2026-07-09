@@ -9,3 +9,4 @@ rs_subraster_stats()
 \description{
 Sub-raster cache stats: \code{c(hits, misses, resident_entries)} (tests/diagnostics).
 }
+\keyword{internal}
