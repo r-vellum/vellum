@@ -191,7 +191,7 @@ model:
   low-level graphics backend (this package).
 - **[vellumplot](https://github.com/r-vellum/vellumplot)** — the pen: a pipe-first
   grammar of graphics that compiles a plot spec into a vellum scene.
-- **[vellumwidget](https://github.com/r-vellum/vellumwidget)** — the vellumwidget: client-side
+- **[vellumwidget](https://github.com/r-vellum/vellumwidget)** — the annotation: client-side
   interactive HTML widgets for vellum scenes and vellumplot plots.
 - **[vellumverse](https://github.com/r-vellum/vellumverse)** — installs and
   loads the whole ecosystem in one step.

@@ -187,7 +187,7 @@ scene model:
 - **[vellumplot](https://github.com/r-vellum/vellumplot)** — the pen: a
   pipe-first grammar of graphics that compiles a plot spec into a vellum
   scene.
-- **[vellumwidget](https://github.com/r-vellum/vellumwidget)** — the vellumwidget:
+- **[vellumwidget](https://github.com/r-vellum/vellumwidget)** — the annotation:
   client-side interactive HTML widgets for vellum scenes and vellumplot
   plots.
 - **[vellumverse](https://github.com/r-vellum/vellumverse)** —
