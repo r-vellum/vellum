@@ -1,4 +1,4 @@
-# vellum (development version)
+# vellum 0.2.0
 
 * **Breaking: renamed the grid-colliding exports to a `vl_` prefix** so
   attaching vellum no longer masks grid: `gpar()` → `vl_gpar()`, `unit()` →
