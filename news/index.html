@@ -13,7 +13,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">vellum</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.1.1.9000</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.2.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -58,7 +58,7 @@
     </div>
 
     <div class="section level2">
-<h2 class="pkg-version" data-toc-text="development version" id="vellum-development-version">vellum (development version)<a class="anchor" aria-label="anchor" href="#vellum-development-version"></a></h2>
+<h2 class="pkg-version" data-toc-text="0.2.0" id="vellum-020">vellum 0.2.0<a class="anchor" aria-label="anchor" href="#vellum-020"></a></h2>
 <ul><li><p><strong>Breaking: renamed the grid-colliding exports to a <code>vl_</code> prefix</strong> so attaching vellum no longer masks grid: <code><a href="https://rdrr.io/r/grid/gpar.html" class="external-link">gpar()</a></code> → <code><a href="../reference/vl_gpar.html">vl_gpar()</a></code>, <code><a href="https://rdrr.io/r/grid/unit.html" class="external-link">unit()</a></code> → <code><a href="../reference/vl_unit.html">vl_unit()</a></code>, <code><a href="https://rdrr.io/r/grid/viewport.html" class="external-link">viewport()</a></code> → <code><a href="../reference/vl_viewport.html">vl_viewport()</a></code>, <code><a href="https://rdrr.io/r/grid/arrow.html" class="external-link">arrow()</a></code> → <code><a href="../reference/vl_arrow.html">vl_arrow()</a></code>, and <code><a href="https://rdrr.io/r/grid/patterns.html" class="external-link">pattern()</a></code> → <code><a href="../reference/vl_pattern.html">vl_pattern()</a></code>. The old names are removed (no aliases).</p></li>
 <li><p><strong>Multi-line and per-datum rich text.</strong> <code><a href="../reference/grob.html">text_grob()</a></code> labels may now contain embedded newlines (<code>\n</code>), stacked baseline-to-baseline; <code><a href="../reference/md.html">md()</a></code> gained the same and is now <strong>vectorised</strong> — <code>md(x)</code> returns a single label for a length-1 <code>x</code> or a list of labels for a vector, so a label grob can carry one distinct rich label per position. Single-line, single-label output is byte-for-byte unchanged. (Rust is untouched — shaping stays R-side.)</p></li>
 <li>
