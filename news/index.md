@@ -1,5 +1,7 @@
 # Changelog
 
+## vellum (development version)
+
 ## vellum 0.2.0
 
 - **Breaking: renamed the grid-colliding exports to a `vl_` prefix** so
