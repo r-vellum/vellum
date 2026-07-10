@@ -206,8 +206,8 @@ scene model:
   pipe-first grammar of graphics that compiles a plot spec into a vellum
   scene.
 - **[vellumwidget](https://github.com/r-vellum/vellumwidget)** — the
-  vellumwidget: client-side interactive HTML widgets for vellum scenes
-  and vellumplot plots.
+  annotation: client-side interactive HTML widgets for vellum scenes and
+  vellumplot plots.
 - **[vellumverse](https://github.com/r-vellum/vellumverse)** — installs
   and loads the whole ecosystem in one step.
 
