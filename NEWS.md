@@ -1,5 +1,17 @@
 # vellum (development version)
 
+* **Hue-preserving (OKLCH) gradient interpolation.** `linear_gradient()` and
+  `radial_gradient()` now also accept `interpolation = "oklch"`, the polar form
+  of Oklab (lightness, chroma, hue). Hue and chroma move independently, so a ramp
+  between two saturated colours keeps its chroma through the middle instead of
+  desaturating toward grey the way a straight line in Oklab can — the hue sweeps
+  along the shorter arc (blue→yellow passes through green). An achromatic endpoint
+  (grey/black/white) borrows the other end's hue, so ramps to/from white don't
+  flash an arbitrary colour. Like `"oklab"` it is pre-sampled into dense sRGB
+  stops in the Rust core, so it renders identically on the raster, SVG, and PDF
+  backends with no new dependency. See `_docs/gradient-interpolation.R` for a
+  side-by-side of all three spaces.
+
 * **Perceptual (Oklab) gradient interpolation.** `linear_gradient()` and
   `radial_gradient()` gained `interpolation = "oklab"`, which blends the stops in
   the perceptually-uniform Oklab space instead of sRGB — removing the muddy,

@@ -45,8 +45,9 @@ left-to-right sweep in \code{npc}).}
 \item{extend}{How the gradient behaves outside \verb{[0, 1]}: \code{"pad"} (clamp to the
 end stops), \code{"repeat"}, or \code{"reflect"}.}
 
-\item{interpolation}{Colour space the stops are blended in: \code{"srgb"} (default)
-or \code{"oklab"} (perceptually uniform). See Details.}
+\item{interpolation}{Colour space the stops are blended in: \code{"srgb"} (default),
+\code{"oklab"} (perceptually uniform), or \code{"oklch"} (perceptual, hue-preserving).
+See Details.}
 
 \item{cx, cy, r}{Centre and radius of a radial gradient (default centred,
 radius \code{0.5} npc).}
@@ -65,11 +66,17 @@ the grob just like its outline.
 By default stops are blended in sRGB (each backend's native behaviour). Set
 \code{interpolation = "oklab"} to blend in the perceptually-uniform Oklab space
 instead, which removes the muddy, over-dark midtones and hue drift of sRGB
-blending — the ramp stays even and vivid. It works identically on the raster,
-SVG, and PDF backends.
+blending — the ramp stays even and vivid. \code{interpolation = "oklch"} blends in
+the polar form of the same space (lightness, chroma, hue): hue and chroma move
+independently, so a ramp between two saturated colours keeps its chroma through
+the middle instead of dipping toward grey the way a straight line in Oklab can
+— at the cost of sweeping through the intermediate hues along the shorter arc
+(e.g. blue→yellow passes through green). All modes work identically on the
+raster, SVG, and PDF backends.
 }
 \examples{
 linear_gradient(c("white", "navy"))
 linear_gradient(c("blue", "yellow"), interpolation = "oklab")
+linear_gradient(c("blue", "yellow"), interpolation = "oklch")
 radial_gradient(c("yellow", "red"), cx = 0.5, cy = 0.5, r = 0.5)
 }

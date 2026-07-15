@@ -9,8 +9,13 @@
 #' By default stops are blended in sRGB (each backend's native behaviour). Set
 #' `interpolation = "oklab"` to blend in the perceptually-uniform Oklab space
 #' instead, which removes the muddy, over-dark midtones and hue drift of sRGB
-#' blending — the ramp stays even and vivid. It works identically on the raster,
-#' SVG, and PDF backends.
+#' blending — the ramp stays even and vivid. `interpolation = "oklch"` blends in
+#' the polar form of the same space (lightness, chroma, hue): hue and chroma move
+#' independently, so a ramp between two saturated colours keeps its chroma through
+#' the middle instead of dipping toward grey the way a straight line in Oklab can
+#' — at the cost of sweeping through the intermediate hues along the shorter arc
+#' (e.g. blue→yellow passes through green). All modes work identically on the
+#' raster, SVG, and PDF backends.
 #'
 #' @param colours A vector of two or more colours (any R colour spec). With
 #'   `stops = NULL` they are spread evenly across `[0, 1]`.
@@ -24,12 +29,14 @@
 #'   `"mm"`, `"in"`, `"pt"`.
 #' @param extend How the gradient behaves outside `[0, 1]`: `"pad"` (clamp to the
 #'   end stops), `"repeat"`, or `"reflect"`.
-#' @param interpolation Colour space the stops are blended in: `"srgb"` (default)
-#'   or `"oklab"` (perceptually uniform). See Details.
+#' @param interpolation Colour space the stops are blended in: `"srgb"` (default),
+#'   `"oklab"` (perceptually uniform), or `"oklch"` (perceptual, hue-preserving).
+#'   See Details.
 #' @return A `vellum_gradient` object, suitable for `vl_gpar(fill = ...)`.
 #' @examples
 #' linear_gradient(c("white", "navy"))
 #' linear_gradient(c("blue", "yellow"), interpolation = "oklab")
+#' linear_gradient(c("blue", "yellow"), interpolation = "oklch")
 #' radial_gradient(c("yellow", "red"), cx = 0.5, cy = 0.5, r = 0.5)
 #' @name gradients
 NULL
@@ -49,7 +56,7 @@ radial_gradient <- function(colours, stops = NULL, cx = 0.5, cy = 0.5, r = 0.5,
 }
 
 .gradient_extend <- c("pad", "repeat", "reflect")
-.gradient_interpolation <- c("srgb", "oklab")
+.gradient_interpolation <- c("srgb", "oklab", "oklch")
 
 .new_gradient <- function(kind, colours, stops, coords, units, extend, interpolation = "srgb") {
   n <- length(colours)

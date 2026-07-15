@@ -26,14 +26,21 @@ use crate::color::{Rgba, Stop};
 pub enum Interp {
     /// Interpolate in gamma-encoded sRGB (the backends' native behaviour).
     Srgb,
-    /// Interpolate perceptually in Oklab (pre-sampled to sRGB stops).
+    /// Interpolate perceptually in Oklab's rectangular `(L, a, b)` form
+    /// (pre-sampled to sRGB stops).
     Oklab,
+    /// Interpolate perceptually in Oklab's polar `(L, C, h)` form — hue and
+    /// chroma move independently, so a ramp between two saturated colours keeps
+    /// its chroma through the middle instead of dipping toward grey the way a
+    /// straight line in `(a, b)` can. The CSS `oklch` interpolation space.
+    Oklch,
 }
 
 impl Interp {
     pub fn parse(s: &str) -> Interp {
         match s {
             "oklab" => Interp::Oklab,
+            "oklch" => Interp::Oklch,
             _ => Interp::Srgb,
         }
     }
@@ -45,10 +52,12 @@ const SAMPLES_PER_SEGMENT: usize = 32;
 const MAX_STOPS: usize = 256;
 
 /// Return the stops a backend should interpolate linearly in sRGB to realise
-/// `interp`. `Srgb` is the identity (author stops unchanged). `Oklab` expands each
-/// adjacent-stop segment into densely pre-sampled sRGB stops walked in Oklab, so
-/// the backends' sRGB interpolation between adjacent samples reproduces the
-/// perceptual curve. Endpoints are preserved exactly.
+/// `interp`. `Srgb` is the identity (author stops unchanged). `Oklab`/`Oklch`
+/// expand each adjacent-stop segment into densely pre-sampled sRGB stops walked
+/// in the requested perceptual space, so the backends' sRGB interpolation
+/// between adjacent samples reproduces the perceptual curve. `Oklab` walks the
+/// rectangular `(L, a, b)`; `Oklch` walks the polar `(L, C, h)`. Endpoints are
+/// preserved exactly.
 pub fn interpolate_stops(stops: &[Stop], interp: Interp) -> Vec<Stop> {
     if interp == Interp::Srgb || stops.len() < 2 {
         return stops.to_vec();
@@ -63,13 +72,19 @@ pub fn interpolate_stops(stops: &[Stop], interp: Interp) -> Vec<Stop> {
         let (lab0, a0) = rgba_to_oklab(s0.color);
         let (lab1, a1) = rgba_to_oklab(s1.color);
         let span = s1.offset - s0.offset;
+        // For Oklch, pre-resolve the polar endpoints and the shortest-arc hue
+        // delta once per segment; Oklab lerps the rectangular channels directly.
+        let polar = (interp == Interp::Oklch).then(|| LchSeg::prep(lab0, lab1));
         for j in 1..=k {
             let t = j as f32 / k as f32;
-            let lab = [
-                lerp(lab0[0], lab1[0], t),
-                lerp(lab0[1], lab1[1], t),
-                lerp(lab0[2], lab1[2], t),
-            ];
+            let lab = match &polar {
+                Some(p) => p.sample(t),
+                None => [
+                    lerp(lab0[0], lab1[0], t),
+                    lerp(lab0[1], lab1[1], t),
+                    lerp(lab0[2], lab1[2], t),
+                ],
+            };
             out.push(Stop {
                 offset: s0.offset + span * t,
                 color: oklab_to_rgba(lab, lerp(a0, a1, t)),
@@ -77,6 +92,63 @@ pub fn interpolate_stops(stops: &[Stop], interp: Interp) -> Vec<Stop> {
         }
     }
     out
+}
+
+/// One stop segment's endpoints in Oklab polar form `(L, C, h)`, plus the
+/// shortest-arc hue delta `dh` (radians) from start to end. Precomputed once per
+/// segment; [`LchSeg::sample`] evaluates the interpolant at `t`.
+struct LchSeg {
+    l0: f32,
+    c0: f32,
+    h0: f32,
+    l1: f32,
+    c1: f32,
+    dh: f32,
+}
+
+/// Chroma below this counts as achromatic (grey/black/white): its hue is
+/// undefined, so it borrows the other endpoint's hue (matching CSS `oklch`).
+const CHROMA_EPS: f32 = 1e-4;
+
+impl LchSeg {
+    fn prep(lab0: [f32; 3], lab1: [f32; 3]) -> LchSeg {
+        let (l0, c0, mut h0) = lab_to_lch(lab0);
+        let (l1, c1, mut h1) = lab_to_lch(lab1);
+        // An achromatic endpoint has no meaningful hue: adopt the other end's so
+        // the ramp doesn't flash through an arbitrary hue near grey/white/black.
+        if c0 < CHROMA_EPS {
+            h0 = h1;
+        }
+        if c1 < CHROMA_EPS {
+            h1 = h0;
+        }
+        // Shortest arc: wrap the hue delta into (-PI, PI].
+        let mut dh = h1 - h0;
+        let tau = 2.0 * std::f32::consts::PI;
+        while dh > std::f32::consts::PI {
+            dh -= tau;
+        }
+        while dh <= -std::f32::consts::PI {
+            dh += tau;
+        }
+        LchSeg { l0, c0, h0, l1, c1, dh }
+    }
+
+    /// Interpolated Oklab `(L, a, b)` at `t` in `0..=1`: L and C move linearly,
+    /// hue rotates along the shortest arc.
+    fn sample(&self, t: f32) -> [f32; 3] {
+        let l = lerp(self.l0, self.l1, t);
+        let c = lerp(self.c0, self.c1, t);
+        let h = self.h0 + self.dh * t;
+        [l, c * h.cos(), c * h.sin()]
+    }
+}
+
+/// Oklab rectangular `(L, a, b)` -> polar `(L, C, h)` with hue in radians.
+fn lab_to_lch(lab: [f32; 3]) -> (f32, f32, f32) {
+    let c = (lab[1] * lab[1] + lab[2] * lab[2]).sqrt();
+    let h = lab[2].atan2(lab[1]);
+    (lab[0], c, h)
 }
 
 #[inline]
@@ -216,5 +288,85 @@ mod tests {
         }).unwrap();
         assert!(mid.color.r < 115, "oklab midpoint {} should be darker than the sRGB 127", mid.color.r);
         assert!(mid.color.r > 85, "oklab midpoint {} unexpectedly dark", mid.color.r);
+    }
+
+    #[test]
+    fn parse_oklch() {
+        assert_eq!(Interp::parse("oklch"), Interp::Oklch);
+        assert_eq!(Interp::parse("oklab"), Interp::Oklab);
+        assert_eq!(Interp::parse("srgb"), Interp::Srgb);
+        assert_eq!(Interp::parse("weird"), Interp::Srgb);
+    }
+
+    /// Chroma (radial distance in the Oklab a/b plane) of an sRGB colour.
+    fn chroma(c: Rgba) -> f32 {
+        let (lab, _) = rgba_to_oklab(c);
+        (lab[1] * lab[1] + lab[2] * lab[2]).sqrt()
+    }
+
+    /// The stop nearest a given offset.
+    fn nearest(out: &[Stop], off: f32) -> Stop {
+        *out.iter()
+            .min_by(|a, b| (a.offset - off).abs().partial_cmp(&(b.offset - off).abs()).unwrap())
+            .unwrap()
+    }
+
+    #[test]
+    fn oklch_keeps_chroma_where_oklab_dips() {
+        // Blue -> yellow are near-complementary: the straight line in Oklab (a, b)
+        // passes close to the neutral axis, so its midpoint desaturates. Oklch
+        // rotates the hue at held chroma instead, staying vivid through the middle.
+        let author = vec![stop(0.0, 0, 0, 255), stop(1.0, 255, 255, 0)];
+        let lab = interpolate_stops(&author, Interp::Oklab);
+        let lch = interpolate_stops(&author, Interp::Oklch);
+        let c_lab = chroma(nearest(&lab, 0.5).color);
+        let c_lch = chroma(nearest(&lch, 0.5).color);
+        assert!(
+            c_lch > c_lab + 0.02,
+            "oklch midpoint chroma {c_lch} should exceed oklab's {c_lab}"
+        );
+    }
+
+    #[test]
+    fn oklch_achromatic_endpoint_does_not_flash_hue() {
+        // White is achromatic (undefined hue); ramping to blue must hold blue's
+        // hue the whole way (chroma rises from 0), never veering to another hue.
+        let author = vec![stop(0.0, 255, 255, 255), stop(1.0, 0, 0, 255)];
+        let out = interpolate_stops(&author, Interp::Oklch);
+        let (blue_lab, _) = rgba_to_oklab(Rgba { r: 0, g: 0, b: 255, a: 255 });
+        let blue_h = blue_lab[2].atan2(blue_lab[1]);
+        for s in &out {
+            let (lab, _) = rgba_to_oklab(s.color);
+            let c = (lab[1] * lab[1] + lab[2] * lab[2]).sqrt();
+            // Only check samples with enough chroma for hue to be meaningful:
+            // near-white the chroma is tiny and the sRGB8 round-trip makes the hue
+            // angle numerically noisy (in exact Oklab it is constant = blue's hue).
+            if c > 0.05 {
+                let h = lab[2].atan2(lab[1]);
+                let mut dh = (h - blue_h).abs();
+                if dh > std::f32::consts::PI {
+                    dh = 2.0 * std::f32::consts::PI - dh;
+                }
+                // 0.15 rad (~9°) comfortably separates "hue held" from a real flash
+                // (which would be radians of swing) while tolerating sRGB8 rounding.
+                assert!(dh < 0.15, "hue drift {dh} rad at offset {} (expected ~blue)", s.offset);
+            }
+        }
+    }
+
+    #[test]
+    fn oklch_expands_and_preserves_endpoints() {
+        let author = vec![stop(0.0, 0, 0, 255), stop(1.0, 255, 255, 0)];
+        let out = interpolate_stops(&author, Interp::Oklch);
+        assert!(out.len() > author.len());
+        assert_eq!(out.first().unwrap().color, author[0].color);
+        assert!((out.last().unwrap().color.r as i16 - 255).abs() <= 1);
+        assert!((out.last().unwrap().color.g as i16 - 255).abs() <= 1);
+        assert!(out.last().unwrap().color.b <= 1);
+        // offsets non-decreasing within [0, 1]
+        for w in out.windows(2) {
+            assert!(w[1].offset >= w[0].offset);
+            assert!(w[0].offset >= 0.0 && w[1].offset <= 1.0001);
+        }
     }
 }
