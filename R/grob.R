@@ -116,7 +116,8 @@ grob_sector <- S7::new_class("grob_sector", parent = grob, package = "vellum",
   ))
 
 # Marker shape names -> backend codes (must match the `markers` arm in scene.rs).
-.marker_codes <- c(circle = 0L, square = 1L, triangle = 2L, diamond = 3L, plus = 4L, cross = 5L)
+.marker_codes <- c(circle = 0L, square = 1L, triangle = 2L, diamond = 3L, plus = 4L,
+                   cross = 5L, triangle_down = 6L, star = 7L)
 # Extension point for rich text labels (plotmath, markdown, ...). A concrete
 # rich-label type subclasses this and adds a `.text_labels()` method that returns
 # the strings to shape; until such a type exists only plain character labels are
@@ -547,8 +548,10 @@ circle_grob <- function(x = 0.5, y = 0.5, r = 0.25, sketch = NULL, gp = vl_gpar(
 #' @rdname grob
 #' @param size Point size ([vl_unit()] or numeric).
 #' @param shape Marker shape(s): `"circle"` (default), `"square"`, `"triangle"`,
-#'   `"diamond"`, `"plus"`, or `"cross"`, recycled per point. Filled shapes use
-#'   `gp$fill` (and outline `gp$col`); `"plus"`/`"cross"` are stroke-only.
+#'   `"diamond"`, `"plus"`, `"cross"`, `"triangle_down"`, or `"star"`, recycled per
+#'   point. Filled shapes (all but `"plus"`/`"cross"`) paint `gp$fill` and outline
+#'   with `gp$col`, so an *open* marker is `fill = NA` with a `col`, a *filled* one
+#'   sets `fill`; `"plus"`/`"cross"` are stroke-only line glyphs.
 #' @export
 points_grob <- function(x, y, size = vl_unit(2, "mm"), shape = "circle",
                         sketch = NULL, gp = vl_gpar(), name = NULL, vp = NULL, id = NULL, role = NULL,

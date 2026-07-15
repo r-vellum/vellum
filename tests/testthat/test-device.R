@@ -34,9 +34,16 @@ test_that("near-equal continuous styles are not merged into one group", {
   expect_equal(length(s@bstate$build$kids), 2L) # two marker grobs, not one
 })
 
-test_that("pch 25 maps to a triangle (not the circle fallback)", {
-  expect_equal(.gv_pch(25)$shape, "triangle")
+test_that("pch maps to the right vellum marker shape", {
+  # down-pointing triangles map to triangle_down (not the up-triangle fallback)
+  expect_equal(.gv_pch(6)$shape, "triangle_down")
+  expect_equal(.gv_pch(25)$shape, "triangle_down")
   expect_false(.gv_pch(25)$fill) # 21-25 use gp$fill, not col-as-fill
+  # up-triangles still map to triangle
+  expect_equal(.gv_pch(2)$shape, "triangle")
+  expect_equal(.gv_pch(24)$shape, "triangle")
+  # asterisk maps to the star glyph
+  expect_equal(.gv_pch(8)$shape, "star")
 })
 
 test_that("a ggplot renders through vellum without error", {

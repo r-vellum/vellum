@@ -1,5 +1,13 @@
 # vellum (development version)
 
+* **Two new marker shapes: `"triangle_down"` and `"star"`.** `points_grob(shape=)`
+  now accepts a downward-pointing triangle and a five-pointed star in addition to
+  `circle`/`square`/`triangle`/`diamond`/`plus`/`cross`. Like the other filled
+  shapes they paint `gp$fill` and outline with `gp$col` (so an *open* marker is
+  `fill = NA` with a `col`), and they take the same solid-fill fast path. The
+  grid-device shim now maps `pch` 6/25 to `triangle_down` (previously collapsed
+  onto the up-triangle) and `pch` 8 to `star`.
+
 # vellum 0.3.0
 
 * **Categorical datashading (`datashade(category=)`).** `datashade()` gained a

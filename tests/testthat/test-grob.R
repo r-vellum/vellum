@@ -11,13 +11,15 @@ test_that("grob constructors coerce numerics to units and recycle", {
 })
 
 test_that("point shape is validated (constructor and S7 class)", {
-  expect_error(points_grob(0.5, 0.5, shape = "star"), "shape")
+  expect_error(points_grob(0.5, 0.5, shape = "pentagon"), "shape")
   # a bad shape reaching the class directly is caught too (was a cryptic if(NA))
   expect_error(
-    grob_points(x = vl_unit(0.5, "npc"), y = vl_unit(0.5, "npc"), shape = "star"),
+    grob_points(x = vl_unit(0.5, "npc"), y = vl_unit(0.5, "npc"), shape = "pentagon"),
     "shape"
   )
   expect_no_error(points_grob(c(0, 1), 0.5, shape = c("circle", "diamond")))
+  # triangle_down and star are valid shapes.
+  expect_no_error(points_grob(c(0, 1), 0.5, shape = c("triangle_down", "star")))
 })
 
 test_that("grobs carry vl_gpar and name", {

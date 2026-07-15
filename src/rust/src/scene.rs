@@ -368,7 +368,8 @@ enum Node {
         keys: Vec<String>,
     },
     /// A batch of point markers with per-element `shape` codes (0 circle, 1 square,
-    /// 2 triangle, 3 diamond, 4 plus, 5 cross); `size` is the marker radius.
+    /// 2 triangle, 3 diamond, 4 plus, 5 cross, 6 triangle_down, 7 star); `size` is
+    /// the marker radius.
     Markers {
         x: Vec<f64>, y: Vec<f64>, size: Vec<f64>,
         xu: Vec<Unit>, yu: Vec<Unit>, su: Vec<Unit>,
@@ -951,9 +952,9 @@ impl Scene {
 
     /// A batch of markers (point glyphs) sharing one gpar. Like `circles` but each
     /// element carries a `shape` code (0 circle, 1 square, 2 triangle, 3 diamond,
-    /// 4 plus, 5 cross); `size` is the marker radius. Filled shapes fill+stroke per
-    /// gpar; plus/cross are stroke-only. (circle_grob / default points use the
-    /// faster `circles` path; this is for shape variety.)
+    /// 4 plus, 5 cross, 6 triangle_down, 7 star); `size` is the marker radius.
+    /// Filled shapes fill+stroke per gpar; plus/cross are stroke-only. (circle_grob
+    /// / default points use the faster `circles` path; this is for shape variety.)
     #[allow(clippy::too_many_arguments)]
     fn markers(
         &mut self, x: &[f64], y: &[f64], size: &[f64],
@@ -2520,6 +2521,14 @@ impl Scene {
                                     let ring: Vec<(f64, f64)> = match sh {
                                         1 => vec![(cx - rr, cy - rr), (cx + rr, cy - rr), (cx + rr, cy + rr), (cx - rr, cy + rr)],
                                         2 => vec![(cx, cy - rr), (cx + 0.866 * rr, cy + 0.5 * rr), (cx - 0.866 * rr, cy + 0.5 * rr)],
+                                        6 => vec![(cx, cy + rr), (cx + 0.866 * rr, cy - 0.5 * rr), (cx - 0.866 * rr, cy - 0.5 * rr)],
+                                        7 => (0..10)
+                                            .map(|k| {
+                                                let ang = -std::f64::consts::FRAC_PI_2 + k as f64 * std::f64::consts::PI / 5.0;
+                                                let rad = if k % 2 == 0 { rr } else { rr * 0.382 };
+                                                (cx + rad * ang.cos(), cy + rad * ang.sin())
+                                            })
+                                            .collect(),
                                         _ => vec![(cx, cy - rr), (cx + rr, cy), (cx, cy + rr), (cx - rr, cy)],
                                     };
                                     let s = crate::sketch::rings(&[ring], &oi, gp.fill.is_some());
@@ -2541,7 +2550,9 @@ impl Scene {
                     // Stroked / gradient / line-glyph (plus, cross) markers keep the
                     // per-element build below (a scaled stroke would distort).
                     let fast = solid && stroke.is_none();
-                    let mut unit_cache: [Option<tiny_skia::Path>; 4] = [None, None, None, None];
+                    // Indexed by shape code (0..=7); plus/cross (4/5) never reach here.
+                    let mut unit_cache: [Option<tiny_skia::Path>; 8] =
+                        [None, None, None, None, None, None, None, None];
                     for i in 0..n {
                         b.set_element_key(key_at(keys, i));
                         let cx = vp.x_pos(x[i], xu[i]);
@@ -2554,7 +2565,7 @@ impl Scene {
                         let sh = shape[i];
                         if fast && sh != 4 && sh != 5 {
                             if let Some(rp) = &rf {
-                                let slot = match sh { 1 => 1, 2 => 2, 3 => 3, _ => 0 };
+                                let slot = (sh as usize).min(7);
                                 let unit = unit_cache[slot].get_or_insert_with(|| unit_marker(sh));
                                 let tr = t.pre_concat(Transform::from_row(rr as f32, 0.0, 0.0, rr as f32, cx as f32, cy as f32));
                                 b.fill_path(unit, tr, rp, FillRule::Winding, &clip);
@@ -2606,6 +2617,15 @@ impl Scene {
                                         pb.line_to(cxf, cyf + rrf);
                                         pb.line_to(cxf - rrf, cyf);
                                         pb.close();
+                                    }
+                                    6 => {
+                                        pb.move_to(cxf, cyf + rrf);
+                                        pb.line_to(cxf + 0.866 * rrf, cyf - 0.5 * rrf);
+                                        pb.line_to(cxf - 0.866 * rrf, cyf - 0.5 * rrf);
+                                        pb.close();
+                                    }
+                                    7 => {
+                                        star_path(&mut pb, cxf, cyf, rrf);
                                     }
                                     _ => {
                                         pb.push_circle(cxf, cyf, rrf);
@@ -2962,8 +2982,9 @@ fn unit_rect() -> tiny_skia::Path {
 
 /// A unit marker fill-shape centred at the origin with half-extent 1, scaled by the
 /// per-element radius and placed by an affine transform in the Markers solid-fill
-/// fast path (mirrors `unit_rect`). `shape`: 1=square, 2=triangle, 3=diamond, else
-/// circle. Line glyphs (plus/cross = 4/5) are stroke-only and built per element.
+/// fast path (mirrors `unit_rect`). `shape`: 1=square, 2=triangle, 3=diamond,
+/// 6=triangle_down, 7=star, else circle. Line glyphs (plus/cross = 4/5) are
+/// stroke-only and built per element. Coords are y-down (−y is up).
 fn unit_marker(shape: u32) -> tiny_skia::Path {
     let mut pb = PathBuilder::new();
     match shape {
@@ -2987,11 +3008,39 @@ fn unit_marker(shape: u32) -> tiny_skia::Path {
             pb.line_to(-1.0, 0.0);
             pb.close();
         }
+        6 => {
+            // triangle_down: the up-triangle mirrored in y.
+            pb.move_to(0.0, 1.0);
+            pb.line_to(0.866, -0.5);
+            pb.line_to(-0.866, -0.5);
+            pb.close();
+        }
+        7 => {
+            star_path(&mut pb, 0.0, 0.0, 1.0);
+        }
         _ => {
             pb.push_circle(0.0, 0.0, 1.0);
         }
     }
     pb.finish().expect("unit marker path")
+}
+
+/// Append a 5-pointed star to `pb`, centred at `(cx, cy)` with outer radius `r`.
+/// Ten alternating outer/inner vertices, first at the top `(cx, cy − r)` in the
+/// y-down frame; the inner radius is the regular-pentagram ratio (≈ 0.382).
+fn star_path(pb: &mut PathBuilder, cx: f32, cy: f32, r: f32) {
+    const INNER: f32 = 0.382;
+    for k in 0..10 {
+        let ang = -std::f32::consts::FRAC_PI_2 + k as f32 * std::f32::consts::PI / 5.0;
+        let rad = if k % 2 == 0 { r } else { r * INNER };
+        let (px, py) = (cx + rad * ang.cos(), cy + rad * ang.sin());
+        if k == 0 {
+            pb.move_to(px, py);
+        } else {
+            pb.line_to(px, py);
+        }
+    }
+    pb.close();
 }
 
 /// Build a multi-subpath device path: `nper[k]` consecutive points form one
