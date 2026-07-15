@@ -94,6 +94,9 @@ the grob just like its outline.</p>
 <span>  cx <span class="op">=</span> <span class="fl">0.5</span>,</span>
 <span>  cy <span class="op">=</span> <span class="fl">0.5</span>,</span>
 <span>  r <span class="op">=</span> <span class="fl">0.5</span>,</span>
+<span>  fx <span class="op">=</span> <span class="va">cx</span>,</span>
+<span>  fy <span class="op">=</span> <span class="va">cy</span>,</span>
+<span>  fr <span class="op">=</span> <span class="fl">0</span>,</span>
 <span>  units <span class="op">=</span> <span class="st">"npc"</span>,</span>
 <span>  extend <span class="op">=</span> <span class="st">"pad"</span>,</span>
 <span>  interpolation <span class="op">=</span> <span class="st">"srgb"</span></span>
@@ -136,8 +139,16 @@ See Details.</p></dd>
 
 
 <dt id="arg-cx-cy-r">cx, cy, r<a class="anchor" aria-label="anchor" href="#arg-cx-cy-r"></a></dt>
-<dd><p>Centre and radius of a radial gradient (default centred,
-radius <code>0.5</code> npc).</p></dd>
+<dd><p>Centre and radius of a radial gradient's <em>outer</em> circle — the
+end of the ramp (stop offset 1). Default centred, radius <code>0.5</code> npc.</p></dd>
+
+
+<dt id="arg-fx-fy-fr">fx, fy, fr<a class="anchor" aria-label="anchor" href="#arg-fx-fy-fr"></a></dt>
+<dd><p>Centre and radius of the <em>focal</em> (start) circle — the origin
+of the ramp (stop offset 0). Defaults (<code>fx = cx</code>, <code>fy = cy</code>, <code>fr = 0</code>) give
+the ordinary concentric gradient; move <code>fx</code>/<code>fy</code> to place the highlight
+off-centre, or raise <code>fr</code> for an annular ramp between two circles. Radii must
+be non-negative.</p></dd>
 
 </dl></div>
     <div class="section level2">
@@ -146,7 +157,13 @@ radius <code>0.5</code> npc).</p></dd>
     </div>
     <div class="section level2">
     <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
-    <p>By default stops are blended in sRGB (each backend's native behaviour). Set
+    <p>A radial gradient runs between two circles: the <em>focal</em> (start) circle
+<code>fx</code>/<code>fy</code>/<code>fr</code> at stop offset 0 and the <em>outer</em> (end) circle <code>cx</code>/<code>cy</code>/<code>r</code> at
+offset 1. By default they are concentric (<code>fx = cx</code>, <code>fy = cy</code>, <code>fr = 0</code>) —
+the classic centred highlight. Offsetting <code>fx</code>/<code>fy</code> moves the highlight
+off-centre (as for a sphere lit from one side); a non-zero <code>fr</code> gives an
+annular ramp between the two circles.</p>
+<p>By default stops are blended in sRGB (each backend's native behaviour). Set
 <code>interpolation = "oklab"</code> to blend in the perceptually-uniform Oklab space
 instead, which removes the muddy, over-dark midtones and hue drift of sRGB
 blending — the ramp stays even and vivid. <code>interpolation = "oklch"</code> blends in
@@ -243,7 +260,33 @@ raster, SVG, and PDF backends.</p>
 <span class="r-out co"><span class="r-pr">#&gt;</span> [1] 0 1</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> </span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> $coords</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> [1] 0.5 0.5 0.5</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> [1] 0.5 0.5 0.5 0.5 0.5 0.0</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> $units</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> [1] "npc"</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> $extend</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> [1] "pad"</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> $interpolation</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> [1] "srgb"</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> attr(,"class")</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> [1] "vellum_gradient"</span>
+<span class="r-in"><span><span class="co"># off-centre highlight (a lit sphere): focal point up and to the left</span></span></span>
+<span class="r-in"><span><span class="fu">radial_gradient</span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"white"</span>, <span class="st">"navy"</span><span class="op">)</span>, cx <span class="op">=</span> <span class="fl">0.5</span>, cy <span class="op">=</span> <span class="fl">0.5</span>, r <span class="op">=</span> <span class="fl">0.6</span>,</span></span>
+<span class="r-in"><span>                fx <span class="op">=</span> <span class="fl">0.35</span>, fy <span class="op">=</span> <span class="fl">0.65</span><span class="op">)</span></span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> $kind</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> [1] "radial"</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> $colours</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> [1] "white" "navy" </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> $stops</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> [1] 0 1</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> $coords</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> [1] 0.50 0.50 0.60 0.35 0.65 0.00</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> </span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> $units</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> [1] "npc"</span>

@@ -28,6 +28,9 @@ radial_gradient(
   cx = 0.5,
   cy = 0.5,
   r = 0.5,
+  fx = cx,
+  fy = cy,
+  fr = 0,
   units = "npc",
   extend = "pad",
   interpolation = "srgb"
@@ -69,14 +72,29 @@ radial_gradient(
 
 - cx, cy, r:
 
-  Centre and radius of a radial gradient (default centred, radius `0.5`
-  npc).
+  Centre and radius of a radial gradient's *outer* circle — the end of
+  the ramp (stop offset 1). Default centred, radius `0.5` npc.
+
+- fx, fy, fr:
+
+  Centre and radius of the *focal* (start) circle — the origin of the
+  ramp (stop offset 0). Defaults (`fx = cx`, `fy = cy`, `fr = 0`) give
+  the ordinary concentric gradient; move `fx`/`fy` to place the
+  highlight off-centre, or raise `fr` for an annular ramp between two
+  circles. Radii must be non-negative.
 
 ## Value
 
 A `vellum_gradient` object, suitable for `vl_gpar(fill = ...)`.
 
 ## Details
+
+A radial gradient runs between two circles: the *focal* (start) circle
+`fx`/`fy`/`fr` at stop offset 0 and the *outer* (end) circle
+`cx`/`cy`/`r` at offset 1. By default they are concentric (`fx = cx`,
+`fy = cy`, `fr = 0`) — the classic centred highlight. Offsetting
+`fx`/`fy` moves the highlight off-centre (as for a sphere lit from one
+side); a non-zero `fr` gives an annular ramp between the two circles.
 
 By default stops are blended in sRGB (each backend's native behaviour).
 Set `interpolation = "oklab"` to blend in the perceptually-uniform Oklab
@@ -176,7 +194,33 @@ radial_gradient(c("yellow", "red"), cx = 0.5, cy = 0.5, r = 0.5)
 #> [1] 0 1
 #> 
 #> $coords
-#> [1] 0.5 0.5 0.5
+#> [1] 0.5 0.5 0.5 0.5 0.5 0.0
+#> 
+#> $units
+#> [1] "npc"
+#> 
+#> $extend
+#> [1] "pad"
+#> 
+#> $interpolation
+#> [1] "srgb"
+#> 
+#> attr(,"class")
+#> [1] "vellum_gradient"
+# off-centre highlight (a lit sphere): focal point up and to the left
+radial_gradient(c("white", "navy"), cx = 0.5, cy = 0.5, r = 0.6,
+                fx = 0.35, fy = 0.65)
+#> $kind
+#> [1] "radial"
+#> 
+#> $colours
+#> [1] "white" "navy" 
+#> 
+#> $stops
+#> [1] 0 1
+#> 
+#> $coords
+#> [1] 0.50 0.50 0.60 0.35 0.65 0.00
 #> 
 #> $units
 #> [1] "npc"
