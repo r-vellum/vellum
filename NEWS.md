@@ -1,4 +1,4 @@
-# vellum (development version)
+# vellum 0.3.0
 
 * **Categorical datashading (`datashade(category=)`).** `datashade()` gained a
   `count_cat` mode: pass `category` (a factor or vector, one value per point) and
