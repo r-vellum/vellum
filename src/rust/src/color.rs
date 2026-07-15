@@ -59,7 +59,7 @@ impl Extend {
 }
 
 /// A gradient colour stop (`offset` in 0..=1).
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Stop {
     pub offset: f32,
     pub color: Rgba,
@@ -170,11 +170,14 @@ fn parse_gradient(obj: &Robj, kind: &str) -> Option<Paint> {
     let extend = Extend::parse(obj.dollar("extend").ok().and_then(|e| e.as_str().map(String::from)).as_deref().unwrap_or("pad"));
     let cols = obj.dollar("col").ok()?.as_integer_slice()?.to_vec();
     let offs = obj.dollar("offset").ok()?.as_real_slice()?.to_vec();
+    let interp = crate::oklab::Interp::parse(
+        obj.dollar("interpolation").ok().and_then(|s| s.as_str().map(String::from)).as_deref().unwrap_or("srgb"),
+    );
     let n = offs.len().min(cols.len() / 4);
     if n == 0 {
         return None;
     }
-    let stops: Vec<Stop> = (0..n)
+    let author: Vec<Stop> = (0..n)
         .map(|i| Stop {
             offset: offs[i].clamp(0.0, 1.0) as f32,
             color: Rgba {
@@ -185,6 +188,9 @@ fn parse_gradient(obj: &Robj, kind: &str) -> Option<Paint> {
             },
         })
         .collect();
+    // Perceptual interpolation (Oklab) is realised by pre-sampling the author
+    // stops into dense sRGB stops here; `srgb` leaves them untouched. See `oklab`.
+    let stops = crate::oklab::interpolate_stops(&author, interp);
     match kind {
         "radial" if coords.len() >= 3 => {
             Some(Paint::Radial { cx: coords[0], cy: coords[1], r: coords[2], unit, stops, extend })

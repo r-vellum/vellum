@@ -3,6 +3,7 @@ use extendr_api::prelude::*;
 mod aggregate;
 mod color;
 mod font;
+mod oklab;
 mod render;
 mod scene;
 mod sketch;
