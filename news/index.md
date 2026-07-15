@@ -15,8 +15,8 @@
   end’s hue, so ramps to/from white don’t flash an arbitrary colour.
   Like `"oklab"` it is pre-sampled into dense sRGB stops in the Rust
   core, so it renders identically on the raster, SVG, and PDF backends
-  with no new dependency. See `_docs/gradient-interpolation.R` for a
-  side-by-side of all three spaces.
+  with no new dependency. See `inst/examples/gradient-interpolation.R`
+  for a side-by-side of all three spaces.
 
 - **Perceptual (Oklab) gradient interpolation.**
   [`linear_gradient()`](https://r-vellum.github.io/vellum/reference/gradients.md)
