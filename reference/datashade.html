@@ -90,8 +90,11 @@ cost from both point count and overplotting. <code>datashade()</code> returns a 
 <span>  height <span class="op">=</span> <span class="fl">400L</span>,</span>
 <span>  xlim <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  ylim <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  category <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  colors <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"#deebf7"</span>, <span class="st">"#08306b"</span><span class="op">)</span>,</span>
 <span>  how <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"eq_hist"</span>, <span class="st">"log"</span>, <span class="st">"cbrt"</span>, <span class="st">"linear"</span><span class="op">)</span>,</span>
+<span>  span <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  clip <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  interpolate <span class="op">=</span> <span class="cn">FALSE</span>,</span>
 <span>  name <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  vp <span class="op">=</span> <span class="cn">NULL</span>,</span>
@@ -122,14 +125,35 @@ point; otherwise <code>weight</code> must be the same length as <code>x</code>.<
 <dd><p>Data range to bin over; default the finite range of <code>x</code>/<code>y</code>.</p></dd>
 
 
+<dt id="arg-category">category<a class="anchor" aria-label="anchor" href="#arg-category"></a></dt>
+<dd><p>Optional per-point category (factor or vector) selecting
+categorical (<code>count_cat</code>) shading; see Details. <code>NULL</code> (default) shades by
+plain density.</p></dd>
+
+
 <dt id="arg-colors">colors<a class="anchor" aria-label="anchor" href="#arg-colors"></a></dt>
-<dd><p>Two or more colours forming the low-to-high density ramp.</p></dd>
+<dd><p>For density shading, two or more colours forming the low-to-high
+ramp. For categorical shading (<code>category</code> set), a per-category hue vector —
+named by category level, or one colour per level in level order.</p></dd>
 
 
 <dt id="arg-how">how<a class="anchor" aria-label="anchor" href="#arg-how"></a></dt>
 <dd><p>Density-to-colour mapping: <code>"eq_hist"</code> (histogram equalisation —
 datashader's default, reveals structure across orders of magnitude), <code>"log"</code>,
-<code>"cbrt"</code> (cube root), or <code>"linear"</code>.</p></dd>
+<code>"cbrt"</code> (cube root), or <code>"linear"</code>. Also drives the per-cell opacity under
+categorical shading.</p></dd>
+
+
+<dt id="arg-span">span<a class="anchor" aria-label="anchor" href="#arg-span"></a></dt>
+<dd><p>Optional <code>c(lo, hi)</code> density values mapped to the ends of the
+colour ramp / opacity range; densities outside are clamped. <code>NULL</code> (default)
+uses the full observed range.</p></dd>
+
+
+<dt id="arg-clip">clip<a class="anchor" aria-label="anchor" href="#arg-clip"></a></dt>
+<dd><p>Optional percentile pair in <code>[0, 1]</code> (e.g. <code>c(0.01, 0.99)</code>) deriving
+<code>span</code> from the quantiles of the non-empty cell densities — a robust way to
+keep a few extreme cells from flattening the rest. Overrides <code>span</code>.</p></dd>
 
 
 <dt id="arg-interpolate">interpolate<a class="anchor" aria-label="anchor" href="#arg-interpolate"></a></dt>
@@ -152,6 +176,17 @@ line the image up with data axes draw it inside a <code><a href="vl_viewport.htm
 bins make <code>width</code>/<code>height</code> match the viewport's pixel size and keep
 <code>interpolate = FALSE</code>.</p>
     </div>
+    <div class="section level2">
+    <h2 id="categorical-shading-count-cat-">Categorical shading (<code>count_cat</code>)<a class="anchor" aria-label="anchor" href="#categorical-shading-count-cat-"></a></h2>
+    <p>Pass <code>category</code> (a factor or vector, one value per point) to shade by <em>category</em>
+rather than plain density: each category is aggregated into its own count grid in
+the same single pass, and each cell is coloured by the <strong>count-weighted average</strong>
+of the category hues it contains, with opacity driven by the cell's total density
+(via <code>how</code>). This reveals which category dominates where <em>and</em> where categories
+mix, without overplotting bias. When <code>category</code> is set, <code>colors</code> is a per-category
+hue vector (named by level, or one colour per level in level order) instead of a
+low-to-high ramp.</p>
+    </div>
 
     <div class="section level2">
     <h2 id="ref-examples">Examples<a class="anchor" aria-label="anchor" href="#ref-examples"></a></h2>
@@ -162,6 +197,10 @@ bins make <code>width</code>/<code>height</code> match the viewport's pixel size
 <span class="r-in"><span><span class="va">s</span> <span class="op">&lt;-</span> <span class="fu"><a href="vl_scene.html">vl_scene</a></span><span class="op">(</span><span class="fl">6</span>, <span class="fl">4.5</span><span class="op">)</span> <span class="op">|&gt;</span></span></span>
 <span class="r-in"><span>  <span class="fu"><a href="vl_scene.html">push</a></span><span class="op">(</span><span class="fu"><a href="vl_viewport.html">vl_viewport</a></span><span class="op">(</span>xscale <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/range.html" class="external-link">range</a></span><span class="op">(</span><span class="va">x</span><span class="op">)</span>, yscale <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/range.html" class="external-link">range</a></span><span class="op">(</span><span class="va">y</span><span class="op">)</span><span class="op">)</span><span class="op">)</span> <span class="op">|&gt;</span></span></span>
 <span class="r-in"><span>  <span class="fu"><a href="vl_scene.html">draw</a></span><span class="op">(</span><span class="va">g</span><span class="op">)</span></span></span>
+<span class="r-in"><span></span></span>
+<span class="r-in"><span><span class="co"># Categorical: colour each cell by which group dominates it</span></span></span>
+<span class="r-in"><span><span class="va">grp</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/sample.html" class="external-link">sample</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"a"</span>, <span class="st">"b"</span><span class="op">)</span>, <span class="va">n</span>, replace <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="va">gc</span> <span class="op">&lt;-</span> <span class="fu">datashade</span><span class="op">(</span><span class="va">x</span>, <span class="va">y</span>, category <span class="op">=</span> <span class="va">grp</span>, colors <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span>a <span class="op">=</span> <span class="st">"#e41a1c"</span>, b <span class="op">=</span> <span class="st">"#377eb8"</span><span class="op">)</span><span class="op">)</span></span></span>
 </code></pre></div>
     </div>
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>

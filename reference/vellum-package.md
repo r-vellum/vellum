@@ -11,6 +11,8 @@ Useful links:
 
 - <https://r-vellum.github.io/vellum/>
 
+- <https://schochastics.r-universe.dev/vellum>
+
 - Report bugs at <https://github.com/r-vellum/vellum/issues>
 
 ## Author
