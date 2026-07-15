@@ -38,6 +38,44 @@ test_that("a radial gradient runs from centre colour to edge colour (raster)", {
   expect_true(edge[1] > 200L && edge[2] > 200L) # yellow-ish
 })
 
+test_that("radial gradient radii must be non-negative", {
+  expect_error(radial_gradient(c("red", "yellow"), r = -0.1), "non-negative")
+  expect_error(radial_gradient(c("red", "yellow"), fr = -0.1), "non-negative")
+})
+
+test_that("a focal offset moves the radial highlight off-centre (raster)", {
+  # White (offset 0) sits at the focal circle; navy (offset 1) at the outer edge.
+  # With the focus pushed to the left, the white highlight follows it.
+  s <- vl_scene(width = 1, height = 1, dpi = 100, bg = "white") |>
+    draw(rect_grob(gp = vl_gpar(
+      col = NA,
+      fill = radial_gradient(c("white", "navy"), cx = 0.5, cy = 0.5, r = 0.6,
+                             fx = 0.25, fy = 0.5)
+    )))
+  near <- px(s, 25, 50) # at the focal point -> ~white
+  far <- px(s, 85, 50) # opposite side -> toward navy
+  expect_true(all(near[1:3] > 230L)) # focal point is ~white (offset 0)
+  expect_true(sum(far[1:3]) < sum(near[1:3]) - 150L) # far side clearly darker
+})
+
+test_that("SVG emits fx/fy/fr only for a focal (non-concentric) radial", {
+  svg_of <- function(g) {
+    f <- withr::local_tempfile(fileext = ".svg")
+    render(vl_scene(1, 1, dpi = 100, bg = "white") |>
+             draw(rect_grob(gp = vl_gpar(col = NA, fill = g))), f)
+    paste(readLines(f, warn = FALSE), collapse = "\n")
+  }
+  focal <- svg_of(radial_gradient(c("white", "navy"), fx = 0.3, fy = 0.4))
+  conc <- svg_of(radial_gradient(c("white", "navy"))) # concentric default
+  # Coords are baked to device px (userSpaceOnUse): fx 0.3 npc -> 30; fy 0.4 npc
+  # -> 60 after the y-flip on a 100px page.
+  expect_match(focal, 'fx="30"')
+  expect_match(focal, 'fy="60"')
+  expect_match(focal, "fr=")
+  # Concentric output is unchanged: no focal attributes emitted.
+  expect_false(grepl("fx=", conc, fixed = TRUE))
+})
+
 test_that("vl_gpar alpha fades a gradient's stops (raster)", {
   s <- vl_scene(width = 1, height = 1, dpi = 100, bg = "white") |>
     draw(rect_grob(gp = vl_gpar(

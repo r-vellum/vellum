@@ -1,5 +1,16 @@
 # vellum (development version)
 
+* **Focal / two-circle radial gradients.** `radial_gradient()` gained `fx`, `fy`,
+  `fr` — the *focal* (start) circle at stop offset 0, distinct from the *outer*
+  (end) circle `cx`/`cy`/`r` at offset 1. Offsetting `fx`/`fy` moves the highlight
+  off-centre (a sphere lit from one side); a non-zero `fr` gives an annular ramp
+  between the two circles. This matches grid's two-circle `radialGradient()` (the
+  previous concentric-only form could only place the highlight dead-centre). The
+  defaults (`fx = cx`, `fy = cy`, `fr = 0`) are the old concentric behaviour and
+  are byte-for-byte unchanged on every backend. Rendered identically on raster
+  (tiny-skia two-point conical), SVG (`<radialGradient fx fy fr>`), and PDF
+  (krilla). See `inst/examples/gradients.R`.
+
 * **Hue-preserving (OKLCH) gradient interpolation.** `linear_gradient()` and
   `radial_gradient()` now also accept `interpolation = "oklch"`, the polar form
   of Oklab (lightness, chroma, hue). Hue and chroma move independently, so a ramp

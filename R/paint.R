@@ -6,6 +6,13 @@
 #' resolved against the viewport at draw time, so the gradient transforms with
 #' the grob just like its outline.
 #'
+#' A radial gradient runs between two circles: the *focal* (start) circle
+#' `fx`/`fy`/`fr` at stop offset 0 and the *outer* (end) circle `cx`/`cy`/`r` at
+#' offset 1. By default they are concentric (`fx = cx`, `fy = cy`, `fr = 0`) —
+#' the classic centred highlight. Offsetting `fx`/`fy` moves the highlight
+#' off-centre (as for a sphere lit from one side); a non-zero `fr` gives an
+#' annular ramp between the two circles.
+#'
 #' By default stops are blended in sRGB (each backend's native behaviour). Set
 #' `interpolation = "oklab"` to blend in the perceptually-uniform Oklab space
 #' instead, which removes the muddy, over-dark midtones and hue drift of sRGB
@@ -23,8 +30,13 @@
 #'   spaced.
 #' @param x1,y1,x2,y2 Start and end points of a linear gradient (default a
 #'   left-to-right sweep in `npc`).
-#' @param cx,cy,r Centre and radius of a radial gradient (default centred,
-#'   radius `0.5` npc).
+#' @param cx,cy,r Centre and radius of a radial gradient's *outer* circle — the
+#'   end of the ramp (stop offset 1). Default centred, radius `0.5` npc.
+#' @param fx,fy,fr Centre and radius of the *focal* (start) circle — the origin
+#'   of the ramp (stop offset 0). Defaults (`fx = cx`, `fy = cy`, `fr = 0`) give
+#'   the ordinary concentric gradient; move `fx`/`fy` to place the highlight
+#'   off-centre, or raise `fr` for an annular ramp between two circles. Radii must
+#'   be non-negative.
 #' @param units Coordinate system for the geometry: one of `"npc"`, `"native"`,
 #'   `"mm"`, `"in"`, `"pt"`.
 #' @param extend How the gradient behaves outside `[0, 1]`: `"pad"` (clamp to the
@@ -38,6 +50,9 @@
 #' linear_gradient(c("blue", "yellow"), interpolation = "oklab")
 #' linear_gradient(c("blue", "yellow"), interpolation = "oklch")
 #' radial_gradient(c("yellow", "red"), cx = 0.5, cy = 0.5, r = 0.5)
+#' # off-centre highlight (a lit sphere): focal point up and to the left
+#' radial_gradient(c("white", "navy"), cx = 0.5, cy = 0.5, r = 0.6,
+#'                 fx = 0.35, fy = 0.65)
 #' @name gradients
 NULL
 
@@ -51,8 +66,12 @@ linear_gradient <- function(colours, stops = NULL, x1 = 0, y1 = 0, x2 = 1, y2 = 
 #' @rdname gradients
 #' @export
 radial_gradient <- function(colours, stops = NULL, cx = 0.5, cy = 0.5, r = 0.5,
+                            fx = cx, fy = cy, fr = 0,
                             units = "npc", extend = "pad", interpolation = "srgb") {
-  .new_gradient("radial", colours, stops, c(cx, cy, r), units, extend, interpolation)
+  if (!is.numeric(r) || !is.numeric(fr) || anyNA(c(r, fr)) || r < 0 || fr < 0) {
+    cli::cli_abort("Radial gradient radii {.arg r}/{.arg fr} must be non-negative.")
+  }
+  .new_gradient("radial", colours, stops, c(cx, cy, r, fx, fy, fr), units, extend, interpolation)
 }
 
 .gradient_extend <- c("pad", "repeat", "reflect")

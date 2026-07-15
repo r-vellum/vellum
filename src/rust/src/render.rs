@@ -57,7 +57,10 @@ fn skia_stroke(s: &StrokeStyle) -> Stroke {
 pub enum ResolvedPaint {
     Solid(Rgba),
     Linear { x1: f64, y1: f64, x2: f64, y2: f64, stops: Vec<Stop>, extend: Extend },
-    Radial { cx: f64, cy: f64, r: f64, stops: Vec<Stop>, extend: Extend },
+    /// Two circles in local px: the focal/start circle `(fx, fy, fr)` at stop
+    /// offset 0 and the outer/end circle `(cx, cy, r)` at offset 1 (concentric
+    /// when `fr == 0` and `(fx, fy) == (cx, cy)`).
+    Radial { cx: f64, cy: f64, r: f64, fx: f64, fy: f64, fr: f64, stops: Vec<Stop>, extend: Extend },
     /// A tiled image: `tile` is straight RGBA (`tw` x `th`, top-left); it fills a
     /// `w` x `h` (px) cell centred at `(x, y)` and repeats per `extend`. `opacity`
     /// is the folded gpar alpha (applied without touching the shared tile).
@@ -674,13 +677,13 @@ fn paint_for(paint: &ResolvedPaint) -> Option<Paint<'static>> {
             skia_spread(*extend),
             Transform::identity(),
         ),
-        ResolvedPaint::Radial { cx, cy, r, stops, extend } => tiny_skia::RadialGradient::new(
+        ResolvedPaint::Radial { cx, cy, r, fx, fy, fr, stops, extend } => tiny_skia::RadialGradient::new(
             // tiny-skia 0.12: new(start_point, start_radius, end_point, end_radius, …).
-            // A concentric radial = start circle collapsed to the centre (radius 0),
-            // end circle at the same centre with radius `r` (mirrors the PDF path's
-            // fr = 0, cr = r).
-            tiny_skia::Point::from_xy(*cx as f32, *cy as f32),
-            0.0,
+            // The focal circle `(fx, fy, fr)` is the start (stop offset 0); the outer
+            // circle `(cx, cy, r)` is the end (offset 1). A concentric gradient has
+            // `fr = 0` and `(fx, fy) == (cx, cy)`.
+            tiny_skia::Point::from_xy(*fx as f32, *fy as f32),
+            *fr as f32,
             tiny_skia::Point::from_xy(*cx as f32, *cy as f32),
             *r as f32,
             skia_stops(stops),
@@ -1110,14 +1113,21 @@ impl SvgBackend {
                 });
                 format!("fill=\"url(#{id})\"")
             }
-            ResolvedPaint::Radial { cx, cy, r, stops, extend } => {
+            ResolvedPaint::Radial { cx, cy, r, fx, fy, fr, stops, extend } => {
                 let stops_xml = svg_stops(stops);
                 let s = svg_spread(*extend);
-                let key = format!("R|{cx}|{cy}|{r}|{s}|{stops_xml}");
+                // SVG's `fx`/`fy` default to `cx`/`cy` and `fr` to 0, so a concentric
+                // gradient omits them — keeping its output byte-identical to before.
+                let focal = if *fr != 0.0 || *fx != *cx || *fy != *cy {
+                    format!(" fx=\"{fx}\" fy=\"{fy}\" fr=\"{fr}\"")
+                } else {
+                    String::new()
+                };
+                let key = format!("R|{cx}|{cy}|{r}|{focal}|{s}|{stops_xml}");
                 let id = self.intern_def(key, |id| {
                     format!(
                         "<radialGradient id=\"{id}\" gradientUnits=\"userSpaceOnUse\" \
-                         cx=\"{cx}\" cy=\"{cy}\" r=\"{r}\" spreadMethod=\"{s}\">{stops_xml}</radialGradient>"
+                         cx=\"{cx}\" cy=\"{cy}\" r=\"{r}\"{focal} spreadMethod=\"{s}\">{stops_xml}</radialGradient>"
                     )
                 });
                 format!("fill=\"url(#{id})\"")
@@ -1775,11 +1785,11 @@ impl RenderBackend for PdfBackend<'_, '_> {
                 }),
                 NormalizedF32::ONE,
             ),
-            ResolvedPaint::Radial { cx, cy, r, stops, extend } => (
+            ResolvedPaint::Radial { cx, cy, r, fx, fy, fr, stops, extend } => (
                 KPaint::from(KRadial {
-                    fx: *cx as f32,
-                    fy: *cy as f32,
-                    fr: 0.0,
+                    fx: *fx as f32,
+                    fy: *fy as f32,
+                    fr: *fr as f32,
                     cx: *cx as f32,
                     cy: *cy as f32,
                     cr: *r as f32,
