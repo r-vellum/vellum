@@ -1,3 +1,5 @@
+# vellum (development version)
+
 # vellum 0.3.0
 
 * **Categorical datashading (`datashade(category=)`).** `datashade()` gained a
