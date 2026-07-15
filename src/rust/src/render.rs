@@ -675,7 +675,12 @@ fn paint_for(paint: &ResolvedPaint) -> Option<Paint<'static>> {
             Transform::identity(),
         ),
         ResolvedPaint::Radial { cx, cy, r, stops, extend } => tiny_skia::RadialGradient::new(
+            // tiny-skia 0.12: new(start_point, start_radius, end_point, end_radius, …).
+            // A concentric radial = start circle collapsed to the centre (radius 0),
+            // end circle at the same centre with radius `r` (mirrors the PDF path's
+            // fr = 0, cr = r).
             tiny_skia::Point::from_xy(*cx as f32, *cy as f32),
+            0.0,
             tiny_skia::Point::from_xy(*cx as f32, *cy as f32),
             *r as f32,
             skia_stops(stops),
