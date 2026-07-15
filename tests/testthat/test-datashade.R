@@ -148,3 +148,144 @@ test_that("category = NULL is byte-identical to the single-category path", {
   b <- datashade(x, y, width = 50, height = 50, category = NULL)
   expect_identical(a@rgba, b@rgba)
 })
+
+# --- Phase 3: line / segment aggregation (Rust rasteriser) ----------------------
+
+test_that("rs_aggregate_segments lays an axis-aligned segment on the right cells", {
+  # A vertical segment landing exactly on column 1's centre (x = 0.375 on a 4-wide
+  # grid over [0,1]): all coverage in column 1, interior rows full, ends partial.
+  g <- rs_aggregate_segments(0.375, 0.1, 0.375, 0.9, NULL, 4L, 4L, 0, 1, 0, 1)
+  m <- matrix(g, 4L, 4L, byrow = TRUE) # row-major, top-left origin
+  expect_true(all(m[, c(1, 3, 4)] == 0)) # only column 2 (1-based) carries ink
+  expect_equal(m[2, 2], 1) # interior cell: full coverage
+  expect_equal(m[3, 2], 1)
+  expect_gt(m[1, 2], 0) # endpoint cells: partial coverage
+  expect_gt(m[4, 2], 0)
+})
+
+test_that("rs_aggregate_segments AA-splits a segment straddling two rows", {
+  # A horizontal segment at world y = 0.5 sits on the boundary between the two
+  # middle rows of a 4-high grid, so coverage splits evenly across them.
+  g <- rs_aggregate_segments(0.1, 0.5, 0.9, 0.5, NULL, 4L, 4L, 0, 1, 0, 1)
+  m <- matrix(g, 4L, 4L, byrow = TRUE)
+  expect_true(all(m[c(1, 4), ] == 0))    # top and bottom rows empty
+  expect_equal(m[2, ], m[3, ])           # the two middle rows carry equal ink
+  expect_gt(sum(m[2, ]), 0)
+})
+
+test_that("rs_aggregate_segments honours per-segment weights", {
+  g1 <- rs_aggregate_segments(0.375, 0.1, 0.375, 0.9, NULL, 4L, 4L, 0, 1, 0, 1)
+  g3 <- rs_aggregate_segments(0.375, 0.1, 0.375, 0.9, 3, 4L, 4L, 0, 1, 0, 1)
+  expect_equal(g3, g1 * 3) # a weight of 3 scales the deposited coverage
+})
+
+test_that("rs_aggregate_lines connects a series but breaks across groups / NA", {
+  x <- c(0.1, 0.9); y <- c(0.5, 0.5)
+  same <- rs_aggregate_lines(x, y, c(1L, 1L), NULL, 3L, 3L, 0, 1, 0, 1)
+  diff <- rs_aggregate_lines(x, y, c(1L, 2L), NULL, 3L, 3L, 0, 1, 0, 1)
+  expect_gt(sum(same), 0)      # one connected series -> a drawn line
+  expect_equal(sum(diff), 0)   # different groups -> no segment drawn
+  # An NA vertex breaks the polyline just like a group change.
+  nab <- rs_aggregate_lines(c(0.1, NA, 0.9), c(0.5, NA, 0.5), NULL, NULL, 3L, 3L, 0, 1, 0, 1)
+  expect_equal(sum(nab), 0)
+})
+
+test_that("datashade_segments / datashade_lines return renderable rasters", {
+  set.seed(10)
+  n <- 2000
+  e <- datashade_segments(rnorm(n), rnorm(n), rnorm(n), rnorm(n), width = 64, height = 48)
+  expect_true(S7::S7_inherits(e, grob))
+  expect_equal(c(e@iw, e@ih), c(64L, 48L))
+
+  k <- 30; m <- 100
+  walks <- apply(matrix(rnorm(k * m), m, k), 2, cumsum)
+  tt <- rep(seq_len(m), k)
+  g <- datashade_lines(tt, as.vector(walks), group = rep(seq_len(k), each = m),
+                       width = 80, height = 60)
+  expect_equal(c(g@iw, g@ih), c(80L, 60L))
+
+  f <- withr::local_tempfile(fileext = ".png")
+  s <- vl_scene(2, 1.5, dpi = 100) |>
+    push(vl_viewport(xscale = range(tt), yscale = range(walks))) |>
+    draw(g)
+  expect_no_error(render(s, f))
+})
+
+test_that("a line shades along its path while empty space stays transparent", {
+  # A single diagonal from (-3,-3) to (3,3) over [-4,4]^2 on a 100x100 grid, which
+  # runs along the raster's anti-diagonal (row ~ 99 - col). Inspect the raster's
+  # alpha directly: robust to sub-pixel AA placement that a device probe is not.
+  g <- datashade_segments(-3, -3, 3, 3, NULL, width = 100, height = 100,
+                          xlim = c(-4, 4), ylim = c(-4, 4),
+                          colors = c("#ffffff", "#000000"))
+  a <- matrix(g@rgba[c(FALSE, FALSE, FALSE, TRUE)], 100L, 100L, byrow = TRUE) # alpha
+  on_win <- a[48:52, 48:52]   # centred on the line -> shaded
+  off_win <- a[5:9, 5:9]      # far top-left corner -> empty
+  expect_gt(sum(on_win > 0), 0)
+  expect_equal(sum(off_win), 0)
+})
+
+test_that("datashade line/segment functions validate / recycle weights", {
+  expect_no_error(datashade_segments(0, 0, 1, 1, weight = 2, width = 8, height = 8))
+  expect_error(
+    datashade_segments(c(0, 0), c(0, 0), c(1, 1), c(1, 1), weight = c(1, 2, 3)),
+    "weight"
+  )
+  expect_error(
+    datashade_lines(c(0, 1, 2), c(0, 1, 2), group = c(1, 2)),
+    "group"
+  )
+})
+
+# --- Phase 3: spread / dynspread ------------------------------------------------
+
+test_that("spread dilates a lone pixel over its neighbourhood", {
+  # A 5x5 canvas with a single opaque black pixel at the centre.
+  img <- matrix("transparent", 5, 5)
+  img[3, 3] <- "#000000"
+  g <- raster_grob(img, interpolate = FALSE)
+  alpha <- function(gr) matrix(gr@rgba[c(FALSE, FALSE, FALSE, TRUE)], 5, 5, byrow = TRUE)
+  expect_equal(sum(alpha(g) > 0), 1L)
+
+  sq <- spread(g, px = 1, shape = "square")
+  expect_equal(sum(alpha(sq) > 0), 9L) # full 3x3 block
+
+  ci <- spread(g, px = 1, shape = "circle")
+  expect_equal(sum(alpha(ci) > 0), 5L) # plus-shaped: centre + 4 edge neighbours
+})
+
+test_that("spread grows coverage and dynspread picks a bounded radius", {
+  set.seed(11)
+  n <- 1500
+  g <- datashade_segments(rnorm(n), rnorm(n), rnorm(n), rnorm(n), width = 80, height = 80)
+  alpha_n <- function(gr) sum(gr@rgba[c(FALSE, FALSE, FALSE, TRUE)] > 0)
+  base <- alpha_n(g)
+  sp <- spread(g, px = 2)
+  expect_gt(alpha_n(sp), base)               # spreading only adds ink
+  dy <- dynspread(g, max_px = 3)
+  expect_gte(alpha_n(dy), base)              # dynspread grows (or leaves) coverage
+  expect_lte(alpha_n(dy), alpha_n(spread(g, px = 3)))
+})
+
+test_that("spread / dynspread are no-ops on px 0 and non-raster grobs", {
+  g <- datashade_segments(0, 0, 1, 1, width = 16, height = 16)
+  expect_identical(spread(g, px = 0)@rgba, g@rgba)
+  # a non-raster grob passes through untouched
+  r <- rect_grob()
+  expect_identical(spread(r), r)
+  expect_identical(dynspread(r), r)
+  expect_error(spread(g, px = -1), "px")
+  expect_error(dynspread(g, threshold = 2), "threshold")
+})
+
+test_that("the spread= convenience arg matches the standalone functions", {
+  set.seed(12)
+  n <- 800
+  args <- list(rnorm(n), rnorm(n), rnorm(n), rnorm(n), width = 60, height = 60)
+  raw <- do.call(datashade_segments, args)
+  expect_identical(do.call(datashade_segments, c(args, list(spread = 2L)))@rgba,
+                   spread(raw, px = 2L)@rgba)
+  expect_identical(do.call(datashade_segments, c(args, list(spread = "auto")))@rgba,
+                   dynspread(raw)@rgba)
+  expect_error(do.call(datashade_segments, c(args, list(spread = -1L))), "spread")
+})

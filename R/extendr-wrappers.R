@@ -34,6 +34,10 @@ rs_aggregate_2d <- function(x, y, w, nx, ny, x0, x1, y0, y1) .Call(wrap__rs_aggr
 
 rs_aggregate_2d_cat <- function(x, y, cat, ncat, w, nx, ny, x0, x1, y0, y1) .Call(wrap__rs_aggregate_2d_cat, x, y, cat, ncat, w, nx, ny, x0, x1, y0, y1)
 
+rs_aggregate_segments <- function(x0, y0, x1, y1, w, nx, ny, x0d, x1d, y0d, y1d) .Call(wrap__rs_aggregate_segments, x0, y0, x1, y1, w, nx, ny, x0d, x1d, y0d, y1d)
+
+rs_aggregate_lines <- function(x, y, brk, w, nx, ny, x0d, x1d, y0d, y1d) .Call(wrap__rs_aggregate_lines, x, y, brk, w, nx, ny, x0d, x1d, y0d, y1d)
+
 rs_attractor <- function(kind, n, a, b, c, d, x0, y0) .Call(wrap__rs_attractor, kind, n, a, b, c, d, x0, y0)
 
 #' A drawing scene held in the Rust backend. Internal: the public R API is the

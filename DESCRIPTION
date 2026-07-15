@@ -45,6 +45,7 @@ Collate:
     'extendr-wrappers.R'
     'paint.R'
     'scene-model.R'
+    'spread.R'
     'style.R'
     'text.R'
     'unit.R'

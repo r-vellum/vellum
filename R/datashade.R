@@ -47,9 +47,15 @@
 #' @param clip Optional percentile pair in `[0, 1]` (e.g. `c(0.01, 0.99)`) deriving
 #'   `span` from the quantiles of the non-empty cell densities — a robust way to
 #'   keep a few extreme cells from flattening the rest. Overrides `span`.
+#' @param spread Optional post-aggregation spreading, applied to the shaded
+#'   raster to keep sparse output visible (see [spread()] / [dynspread()]):
+#'   `NULL` (default) none; a positive integer applies [spread()] with that pixel
+#'   radius; `"auto"` applies [dynspread()] (radius chosen from the image density).
 #' @param interpolate Passed to [raster_grob()]; `FALSE` keeps hard bin edges.
 #' @param name,vp,id,role Passed to [raster_grob()] (see [grob]).
 #' @return A [grob][grob] (a raster), drawable with [draw()].
+#' @seealso [datashade_lines()] and [datashade_segments()] for the line/segment
+#'   (dense-timeseries, network-edge) counterparts, and [dynspread()]/[spread()].
 #' @examples
 #' set.seed(1)
 #' n <- 1e6
@@ -68,7 +74,7 @@ datashade <- function(x, y, weight = NULL, width = 600L, height = 400L,
                       category = NULL,
                       colors = c("#deebf7", "#08306b"),
                       how = c("eq_hist", "log", "cbrt", "linear"),
-                      span = NULL, clip = NULL,
+                      span = NULL, clip = NULL, spread = NULL,
                       interpolate = FALSE, name = NULL, vp = NULL, id = NULL, role = NULL) {
   how <- match.arg(how)
   x <- as.double(x)
@@ -81,25 +87,7 @@ datashade <- function(x, y, weight = NULL, width = 600L, height = 400L,
   xlim <- .ds_lim(xlim, x, "xlim")
   ylim <- .ds_lim(ylim, y, "ylim")
   span <- .ds_span(span, clip)
-  # Weights must line up with the points: a scalar is recycled, a full-length
-  # vector is used as-is, anything else is an error. (The Rust aggregator keeps
-  # weights only when they match the point count and would otherwise *silently*
-  # ignore a mismatched vector, so validate here.)
-  w <- if (is.null(weight)) {
-    NULL
-  } else {
-    weight <- as.double(weight)
-    if (length(weight) == 1L) {
-      rep(weight, length(x))
-    } else if (length(weight) == length(x)) {
-      weight
-    } else {
-      cli::cli_abort(c(
-        "{.arg weight} must be length 1 or the same length as {.arg x}.",
-        i = "{.arg x} has length {length(x)}, but {.arg weight} has length {length(weight)}."
-      ))
-    }
-  }
+  w <- .ds_weight(weight, length(x), "x")
 
   if (is.null(category)) {
     counts <- rs_aggregate_2d(x, y, w, width, height, xlim[1], xlim[2], ylim[1], ylim[2])
@@ -107,8 +95,174 @@ datashade <- function(x, y, weight = NULL, width = 600L, height = 400L,
   } else {
     shade <- .ds_shade_cat(x, y, w, category, width, height, xlim, ylim, colors, how, span)
   }
+  .ds_finish(shade, width, height, spread, interpolate, name, vp, id, role)
+}
+
+# Weights must line up with the observations: a scalar is recycled, a full-length
+# vector is used as-is, anything else is an error. (The Rust aggregators keep
+# weights only when they match the count and would otherwise *silently* ignore a
+# mismatched vector, so validate here.) `n` is the observation count; `arg` names
+# the length reference in error messages.
+.ds_weight <- function(weight, n, arg) {
+  if (is.null(weight)) {
+    return(NULL)
+  }
+  weight <- as.double(weight)
+  if (length(weight) == 1L) {
+    rep(weight, n)
+  } else if (length(weight) == n) {
+    weight
+  } else {
+    cli::cli_abort(c(
+      "{.arg weight} must be length 1 or the same length as {.arg {arg}}.",
+      i = "{.arg {arg}} has length {n}, but {.arg weight} has length {length(weight)}."
+    ))
+  }
+}
+
+# Shared tail for every datashade* function: reshape the flat row-major top-left
+# shade vector into an `height` x `width` raster, wrap it in a `raster_grob`, and
+# apply optional `spread`/dynspread. Kept in one place so the point, line, and
+# segment paths produce identical grobs.
+.ds_finish <- function(shade, width, height, spread, interpolate, name, vp, id, role) {
   img <- matrix(shade, nrow = height, ncol = width, byrow = TRUE)
-  raster_grob(img, interpolate = interpolate, name = name, vp = vp, id = id, role = role)
+  g <- raster_grob(img, interpolate = interpolate, name = name, vp = vp, id = id, role = role)
+  .ds_apply_spread(g, spread)
+}
+
+# Resolve the `spread` convenience argument (NULL / positive integer / "auto")
+# to a spreading of the finished grob. `sp` (not `spread`) so the local value
+# never shadows the `spread()` function.
+.ds_apply_spread <- function(g, sp) {
+  if (is.null(sp)) {
+    return(g)
+  }
+  if (identical(sp, "auto")) {
+    return(dynspread(g))
+  }
+  sp <- as.integer(sp)
+  if (length(sp) != 1L || is.na(sp) || sp < 0L) {
+    cli::cli_abort('{.arg spread} must be {.code NULL}, a non-negative integer, or {.val auto}.')
+  }
+  if (sp == 0L) g else spread(g, px = sp)
+}
+
+#' Aggregate-then-shade dense lines and segments (datashader-style)
+#'
+#' The line/segment analogue of [datashade()]. Past a few hundred thousand line
+#' vertices — a dense stack of timeseries, or the edges of a large graph — drawing
+#' each line as a vector primitive overplots into a solid mass and balloons the
+#' output. `datashade_lines()` and `datashade_segments()` instead **rasterise** the
+#' lines into a canvas-sized grid in one pass: each cell accumulates the
+#' (anti-aliased) coverage of the lines crossing it, so overlapping lines *add* and
+#' the grid records true line density. The grid is shaded exactly like
+#' [datashade()] (`colors`/`how`/`span`/`clip`) and returned as a single
+#' [raster_grob()].
+#'
+#' - `datashade_lines()` takes a **connected polyline**: a segment is drawn between
+#'   each consecutive `(x, y)`. Pass `group` to pack several series into one call —
+#'   the line breaks wherever the group changes; an `NA` in `x`/`y` also breaks it.
+#'   This is the dense-timeseries path.
+#' - `datashade_segments()` takes **independent segments** `(x0, y0) -> (x1, y1)`,
+#'   one per element. This is the network-edge / `mark_segment` path.
+#'
+#' Line coverage is anti-aliased (a Wu accumulator) and summed, so a line deposits
+#' roughly `weight` per cell it spans and dense bundles brighten honestly rather
+#' than saturating. As with [datashade()], align the raster to data axes by drawing
+#' it in a [vl_viewport()] whose `xscale`/`yscale` match `xlim`/`ylim`.
+#'
+#' @inheritParams datashade
+#' @param x,y For `datashade_lines()`, the polyline vertices (data space); a
+#'   segment joins each consecutive pair.
+#' @param group For `datashade_lines()`, an optional per-vertex series id (factor
+#'   or vector) the same length as `x`. The line breaks between vertices whose
+#'   group differs, so multiple series pack into one call. `NULL` treats all
+#'   vertices as one series (still broken by `NA` coordinates).
+#' @param x0,y0,x1,y1 For `datashade_segments()`, the segment endpoints (data
+#'   space), one per segment; all four the same length.
+#' @param weight Optional per-line weight (per start-vertex for
+#'   `datashade_lines()`, per segment for `datashade_segments()`): cells
+#'   accumulate summed weight instead of plain coverage. `NULL` weighs each line 1;
+#'   a scalar is recycled; otherwise it must match the line/segment count.
+#' @return A [grob][grob] (a raster), drawable with [draw()].
+#' @seealso [datashade()] for points; [dynspread()]/[spread()] for keeping thin
+#'   lines visible.
+#' @examples
+#' set.seed(1)
+#' # Dense timeseries: 400 random walks of 500 steps, packed into one raster.
+#' k <- 400; m <- 500
+#' walks <- apply(matrix(rnorm(k * m), m, k), 2, cumsum)
+#' t <- rep(seq_len(m), k)
+#' g <- datashade_lines(t, as.vector(walks), group = rep(seq_len(k), each = m),
+#'                      width = 400, height = 300)
+#'
+#' # Network edges: random segments shaded by edge density.
+#' n <- 5000
+#' e <- datashade_segments(rnorm(n), rnorm(n), rnorm(n), rnorm(n))
+#' @export
+datashade_lines <- function(x, y, group = NULL, weight = NULL,
+                            width = 600L, height = 400L, xlim = NULL, ylim = NULL,
+                            colors = c("#deebf7", "#08306b"),
+                            how = c("eq_hist", "log", "cbrt", "linear"),
+                            span = NULL, clip = NULL, spread = NULL,
+                            interpolate = FALSE, name = NULL, vp = NULL, id = NULL, role = NULL) {
+  how <- match.arg(how)
+  x <- as.double(x)
+  y <- as.double(y)
+  n <- length(x)
+  if (length(y) != n) {
+    cli::cli_abort("{.arg x} and {.arg y} must have the same length.")
+  }
+  width <- max(1L, as.integer(width))
+  height <- max(1L, as.integer(height))
+  xlim <- .ds_lim(xlim, x, "xlim")
+  ylim <- .ds_lim(ylim, y, "ylim")
+  span <- .ds_span(span, clip)
+  w <- .ds_weight(weight, n, "x")
+  brk <- if (is.null(group)) {
+    NULL
+  } else {
+    if (length(group) != n) {
+      cli::cli_abort(c(
+        "{.arg group} must be the same length as {.arg x}.",
+        i = "{.arg x} has length {n}, but {.arg group} has length {length(group)}."
+      ))
+    }
+    as.integer(if (is.factor(group)) group else factor(group))
+  }
+  counts <- rs_aggregate_lines(x, y, brk, w, width, height, xlim[1], xlim[2], ylim[1], ylim[2])
+  shade <- .ds_shade(counts, colors, how, span)
+  .ds_finish(shade, width, height, spread, interpolate, name, vp, id, role)
+}
+
+#' @rdname datashade_lines
+#' @export
+datashade_segments <- function(x0, y0, x1, y1, weight = NULL,
+                               width = 600L, height = 400L, xlim = NULL, ylim = NULL,
+                               colors = c("#deebf7", "#08306b"),
+                               how = c("eq_hist", "log", "cbrt", "linear"),
+                               span = NULL, clip = NULL, spread = NULL,
+                               interpolate = FALSE, name = NULL, vp = NULL, id = NULL, role = NULL) {
+  how <- match.arg(how)
+  x0 <- as.double(x0)
+  y0 <- as.double(y0)
+  x1 <- as.double(x1)
+  y1 <- as.double(y1)
+  n <- length(x0)
+  if (length(y0) != n || length(x1) != n || length(y1) != n) {
+    cli::cli_abort("{.arg x0}, {.arg y0}, {.arg x1}, and {.arg y1} must have the same length.")
+  }
+  width <- max(1L, as.integer(width))
+  height <- max(1L, as.integer(height))
+  # Limits must span both endpoints so a segment never falls entirely off-canvas
+  # just because one end sits outside the other end's range.
+  xlim <- .ds_lim(xlim, c(x0, x1), "xlim")
+  ylim <- .ds_lim(ylim, c(y0, y1), "ylim")
+  span <- .ds_span(span, clip)
+  w <- .ds_weight(weight, n, "x0")
+  counts <- rs_aggregate_segments(x0, y0, x1, y1, w, width, height, xlim[1], xlim[2], ylim[1], ylim[2])
+  shade <- .ds_shade(counts, colors, how, span)
+  .ds_finish(shade, width, height, spread, interpolate, name, vp, id, role)
 }
 
 # Resolve a limit pair, defaulting to the finite data range; widen a degenerate

@@ -17,6 +17,7 @@ datashade(
   how = c("eq_hist", "log", "cbrt", "linear"),
   span = NULL,
   clip = NULL,
+  spread = NULL,
   interpolate = FALSE,
   name = NULL,
   vp = NULL,
@@ -55,6 +56,11 @@ uses the full observed range.}
 \item{clip}{Optional percentile pair in \verb{[0, 1]} (e.g. \code{c(0.01, 0.99)}) deriving
 \code{span} from the quantiles of the non-empty cell densities — a robust way to
 keep a few extreme cells from flattening the rest. Overrides \code{span}.}
+
+\item{spread}{Optional post-aggregation spreading, applied to the shaded
+raster to keep sparse output visible (see \code{\link[=spread]{spread()}} / \code{\link[=dynspread]{dynspread()}}):
+\code{NULL} (default) none; a positive integer applies \code{\link[=spread]{spread()}} with that pixel
+radius; \code{"auto"} applies \code{\link[=dynspread]{dynspread()}} (radius chosen from the image density).}
 
 \item{interpolate}{Passed to \code{\link[=raster_grob]{raster_grob()}}; \code{FALSE} keeps hard bin edges.}
 
@@ -102,4 +108,8 @@ s <- vl_scene(6, 4.5) |>
 # Categorical: colour each cell by which group dominates it
 grp <- sample(c("a", "b"), n, replace = TRUE)
 gc <- datashade(x, y, category = grp, colors = c(a = "#e41a1c", b = "#377eb8"))
+}
+\seealso{
+\code{\link[=datashade_lines]{datashade_lines()}} and \code{\link[=datashade_segments]{datashade_segments()}} for the line/segment
+(dense-timeseries, network-edge) counterparts, and \code{\link[=dynspread]{dynspread()}}/\code{\link[=spread]{spread()}}.
 }
