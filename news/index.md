@@ -25,6 +25,16 @@
   `triangle_down` (previously collapsed onto the up-triangle) and `pch`
   8 to `star`.
 
+- **Slimmer Rust dependency tree.** Bumped the direct `tiny-skia` (0.11
+  → 0.12) and `skrifa` (0.31 → 0.42) crates to the versions the `krilla`
+  PDF backend already pulls in. This collapses six duplicated transitive
+  crates (`skrifa`, `read-fonts`, `font-types`, `tiny-skia-path`, `png`,
+  and `bitflags` were each compiled twice), taking the vendored tree
+  from 75 to 69 crates for a smaller source tarball and a faster build.
+  Rendered output is unchanged — the raster snapshots are
+  pixel-for-pixel identical — and the minimum Rust version is still
+  1.92.
+
 ## vellum 0.3.0
 
 - **Categorical datashading (`datashade(category=)`).**
