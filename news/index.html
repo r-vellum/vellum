@@ -13,7 +13,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">vellum</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.2.0.9000</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.3.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -58,7 +58,7 @@
     </div>
 
     <div class="section level2">
-<h2 class="pkg-version" data-toc-text="development version" id="vellum-development-version">vellum (development version)<a class="anchor" aria-label="anchor" href="#vellum-development-version"></a></h2>
+<h2 class="pkg-version" data-toc-text="0.3.0" id="vellum-030">vellum 0.3.0<a class="anchor" aria-label="anchor" href="#vellum-030"></a></h2>
 <ul><li><p><strong>Categorical datashading (<code>datashade(category=)</code>).</strong> <code><a href="../reference/datashade.html">datashade()</a></code> gained a <code>count_cat</code> mode: pass <code>category</code> (a factor or vector, one value per point) and each category is aggregated into its own count grid in the same single pass, then every cell is coloured by the <strong>count-weighted average</strong> of the category hues it holds, with opacity from the cell’s total density. This shows which category dominates where — and where categories mix — without overplotting bias, in one call instead of a hand-stacked layer per category. When <code>category</code> is set, <code>colors</code> is a per-category hue vector (named by level, or one per level in level order) rather than a low-to-high ramp. Backed by a new <code>rs_aggregate_2d_cat()</code> Rust aggregator (one O(N) pass, category-major grid). A <code><a href="../reference/datashade.html">datashade()</a></code> call with no <code>category</code> renders byte-for-byte as before.</p></li>
 <li><p><strong>Percentile / span colour clamping for <code><a href="../reference/datashade.html">datashade()</a></code>.</strong> New <code>span</code> (absolute <code>c(lo, hi)</code> density limits) and <code>clip</code> (a percentile pair like <code>c(0.01, 0.99)</code>, derived from the non-empty cell quantiles) clamp the density range before the <code>how</code> transform, so a few extreme cells no longer flatten the rest. Both default <code>NULL</code> (unchanged output). The shade step is now a reusable internal colormap utility shared by the density and categorical paths.</p></li>
 </ul></div>
