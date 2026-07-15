@@ -2,6 +2,19 @@
 
 ## vellum (development version)
 
+- **Perceptual (Oklab) gradient interpolation.**
+  [`linear_gradient()`](https://r-vellum.github.io/vellum/reference/gradients.md)
+  and
+  [`radial_gradient()`](https://r-vellum.github.io/vellum/reference/gradients.md)
+  gained `interpolation = "oklab"`, which blends the stops in the
+  perceptually-uniform Oklab space instead of sRGB — removing the muddy,
+  over-dark midtones and hue drift of sRGB blending (a blue→yellow ramp
+  no longer passes through a grey dead-zone). It works identically on
+  the raster, SVG, and PDF backends: the stops are pre-sampled in Oklab
+  into dense sRGB stops, so no backend colour-space support is needed.
+  The default is `"srgb"` and is byte-for-byte unchanged. (Implemented
+  directly, with no new crate dependency.)
+
 - **Two new marker shapes: `"triangle_down"` and `"star"`.**
   `points_grob(shape=)` now accepts a downward-pointing triangle and a
   five-pointed star in addition to

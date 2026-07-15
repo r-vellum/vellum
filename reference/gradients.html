@@ -84,7 +84,8 @@ the grob just like its outline.</p>
 <span>  x2 <span class="op">=</span> <span class="fl">1</span>,</span>
 <span>  y2 <span class="op">=</span> <span class="fl">0</span>,</span>
 <span>  units <span class="op">=</span> <span class="st">"npc"</span>,</span>
-<span>  extend <span class="op">=</span> <span class="st">"pad"</span></span>
+<span>  extend <span class="op">=</span> <span class="st">"pad"</span>,</span>
+<span>  interpolation <span class="op">=</span> <span class="st">"srgb"</span></span>
 <span><span class="op">)</span></span>
 <span></span>
 <span><span class="fu">radial_gradient</span><span class="op">(</span></span>
@@ -94,7 +95,8 @@ the grob just like its outline.</p>
 <span>  cy <span class="op">=</span> <span class="fl">0.5</span>,</span>
 <span>  r <span class="op">=</span> <span class="fl">0.5</span>,</span>
 <span>  units <span class="op">=</span> <span class="st">"npc"</span>,</span>
-<span>  extend <span class="op">=</span> <span class="st">"pad"</span></span>
+<span>  extend <span class="op">=</span> <span class="st">"pad"</span>,</span>
+<span>  interpolation <span class="op">=</span> <span class="st">"srgb"</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
 
@@ -127,6 +129,11 @@ left-to-right sweep in <code>npc</code>).</p></dd>
 end stops), <code>"repeat"</code>, or <code>"reflect"</code>.</p></dd>
 
 
+<dt id="arg-interpolation">interpolation<a class="anchor" aria-label="anchor" href="#arg-interpolation"></a></dt>
+<dd><p>Colour space the stops are blended in: <code>"srgb"</code> (default)
+or <code>"oklab"</code> (perceptually uniform). See Details.</p></dd>
+
+
 <dt id="arg-cx-cy-r">cx, cy, r<a class="anchor" aria-label="anchor" href="#arg-cx-cy-r"></a></dt>
 <dd><p>Centre and radius of a radial gradient (default centred,
 radius <code>0.5</code> npc).</p></dd>
@@ -135,6 +142,14 @@ radius <code>0.5</code> npc).</p></dd>
     <div class="section level2">
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
     <p>A <code>vellum_gradient</code> object, suitable for <code>vl_gpar(fill = ...)</code>.</p>
+    </div>
+    <div class="section level2">
+    <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
+    <p>By default stops are blended in sRGB (each backend's native behaviour). Set
+<code>interpolation = "oklab"</code> to blend in the perceptually-uniform Oklab space
+instead, which removes the muddy, over-dark midtones and hue drift of sRGB
+blending — the ramp stays even and vivid. It works identically on the raster,
+SVG, and PDF backends.</p>
     </div>
 
     <div class="section level2">
@@ -158,6 +173,33 @@ radius <code>0.5</code> npc).</p></dd>
 <span class="r-out co"><span class="r-pr">#&gt;</span> $extend</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> [1] "pad"</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> $interpolation</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> [1] "srgb"</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> attr(,"class")</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> [1] "vellum_gradient"</span>
+<span class="r-in"><span><span class="fu">linear_gradient</span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"blue"</span>, <span class="st">"yellow"</span><span class="op">)</span>, interpolation <span class="op">=</span> <span class="st">"oklab"</span><span class="op">)</span></span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> $kind</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> [1] "linear"</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> $colours</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> [1] "blue"   "yellow"</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> $stops</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> [1] 0 1</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> $coords</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> [1] 0 0 1 0</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> $units</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> [1] "npc"</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> $extend</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> [1] "pad"</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> $interpolation</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> [1] "oklab"</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> </span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> attr(,"class")</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> [1] "vellum_gradient"</span>
 <span class="r-in"><span><span class="fu">radial_gradient</span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"yellow"</span>, <span class="st">"red"</span><span class="op">)</span>, cx <span class="op">=</span> <span class="fl">0.5</span>, cy <span class="op">=</span> <span class="fl">0.5</span>, r <span class="op">=</span> <span class="fl">0.5</span><span class="op">)</span></span></span>
@@ -178,6 +220,9 @@ radius <code>0.5</code> npc).</p></dd>
 <span class="r-out co"><span class="r-pr">#&gt;</span> </span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> $extend</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> [1] "pad"</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> </span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> $interpolation</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> [1] "srgb"</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> </span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> attr(,"class")</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> [1] "vellum_gradient"</span>

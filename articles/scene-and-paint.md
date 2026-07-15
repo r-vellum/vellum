@@ -136,6 +136,28 @@ vl_scene(6, 2.2, bg = "white") |>
 
 ![](scene-and-paint_files/figure-html/gradients-1.png)
 
+Stops blend in sRGB by default. Blending two distant hues there passes
+through a muddy, over-dark middle — a blue→yellow ramp dips through
+grey. Set `interpolation = "oklab"` to blend in the perceptually-uniform
+Oklab space instead, so the ramp stays even and vivid. The same option
+works on every backend (the stops are pre-sampled in Oklab into ordinary
+sRGB stops), and the default `"srgb"` is unchanged.
+
+``` r
+
+bar <- function(x, interp) {
+  rect_grob(
+    x = x, width = 0.46, height = 0.7,
+    gp = vl_gpar(col = NA, fill = linear_gradient(c("blue", "yellow"), interpolation = interp))
+  )
+}
+vl_scene(6, 1.6, bg = "white") |>
+  draw(bar(0.27, "srgb")) |> # sRGB: grey dead-zone in the middle
+  draw(bar(0.73, "oklab")) # Oklab: clean cyan/green transition
+```
+
+![](scene-and-paint_files/figure-html/gradient-interpolation-1.png)
+
 ### Patterns
 
 [`vl_pattern()`](https://r-vellum.github.io/vellum/reference/vl_pattern.md)

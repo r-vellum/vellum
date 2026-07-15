@@ -18,7 +18,8 @@ linear_gradient(
   x2 = 1,
   y2 = 0,
   units = "npc",
-  extend = "pad"
+  extend = "pad",
+  interpolation = "srgb"
 )
 
 radial_gradient(
@@ -28,7 +29,8 @@ radial_gradient(
   cy = 0.5,
   r = 0.5,
   units = "npc",
-  extend = "pad"
+  extend = "pad",
+  interpolation = "srgb"
 )
 ```
 
@@ -59,6 +61,11 @@ radial_gradient(
   How the gradient behaves outside `[0, 1]`: `"pad"` (clamp to the end
   stops), `"repeat"`, or `"reflect"`.
 
+- interpolation:
+
+  Colour space the stops are blended in: `"srgb"` (default) or `"oklab"`
+  (perceptually uniform). See Details.
+
 - cx, cy, r:
 
   Centre and radius of a radial gradient (default centred, radius `0.5`
@@ -67,6 +74,14 @@ radial_gradient(
 ## Value
 
 A `vellum_gradient` object, suitable for `vl_gpar(fill = ...)`.
+
+## Details
+
+By default stops are blended in sRGB (each backend's native behaviour).
+Set `interpolation = "oklab"` to blend in the perceptually-uniform Oklab
+space instead, which removes the muddy, over-dark midtones and hue drift
+of sRGB blending — the ramp stays even and vivid. It works identically
+on the raster, SVG, and PDF backends.
 
 ## Examples
 
@@ -90,6 +105,33 @@ linear_gradient(c("white", "navy"))
 #> $extend
 #> [1] "pad"
 #> 
+#> $interpolation
+#> [1] "srgb"
+#> 
+#> attr(,"class")
+#> [1] "vellum_gradient"
+linear_gradient(c("blue", "yellow"), interpolation = "oklab")
+#> $kind
+#> [1] "linear"
+#> 
+#> $colours
+#> [1] "blue"   "yellow"
+#> 
+#> $stops
+#> [1] 0 1
+#> 
+#> $coords
+#> [1] 0 0 1 0
+#> 
+#> $units
+#> [1] "npc"
+#> 
+#> $extend
+#> [1] "pad"
+#> 
+#> $interpolation
+#> [1] "oklab"
+#> 
 #> attr(,"class")
 #> [1] "vellum_gradient"
 radial_gradient(c("yellow", "red"), cx = 0.5, cy = 0.5, r = 0.5)
@@ -110,6 +152,9 @@ radial_gradient(c("yellow", "red"), cx = 0.5, cy = 0.5, r = 0.5)
 #> 
 #> $extend
 #> [1] "pad"
+#> 
+#> $interpolation
+#> [1] "srgb"
 #> 
 #> attr(,"class")
 #> [1] "vellum_gradient"
