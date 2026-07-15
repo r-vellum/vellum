@@ -87,9 +87,10 @@ A whole batch of circles in one call, sharing one gpar (also used for
 
 A batch of markers (point glyphs) sharing one gpar. Like `circles` but
 each element carries a `shape` code (0 circle, 1 square, 2 triangle, 3
-diamond, 4 plus, 5 cross); `size` is the marker radius. Filled shapes
-fill+stroke per gpar; plus/cross are stroke-only. (circle_grob / default
-points use the faster `circles` path; this is for shape variety.)
+diamond, 4 plus, 5 cross, 6 triangle_down, 7 star); `size` is the marker
+radius. Filled shapes fill+stroke per gpar; plus/cross are stroke-only.
+(circle_grob / default points use the faster `circles` path; this is for
+shape variety.)
 
 ### Method `hexagons`
 

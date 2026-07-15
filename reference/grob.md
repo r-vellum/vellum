@@ -366,9 +366,11 @@ text_grob(
 - shape:
 
   Marker shape(s): `"circle"` (default), `"square"`, `"triangle"`,
-  `"diamond"`, `"plus"`, or `"cross"`, recycled per point. Filled shapes
-  use `gp$fill` (and outline `gp$col`); `"plus"`/`"cross"` are
-  stroke-only.
+  `"diamond"`, `"plus"`, `"cross"`, `"triangle_down"`, or `"star"`,
+  recycled per point. Filled shapes (all but `"plus"`/`"cross"`) paint
+  `gp$fill` and outline with `gp$col`, so an *open* marker is
+  `fill = NA` with a `col`, a *filled* one sets `fill`;
+  `"plus"`/`"cross"` are stroke-only line glyphs.
 
 - open:
 
