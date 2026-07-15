@@ -3102,10 +3102,13 @@ fn resolve_paint(paint: &Paint, vp: &Vp) -> ResolvedPaint {
             stops: stops.clone(),
             extend: *extend,
         },
-        Paint::Radial { cx, cy, r, unit, stops, extend } => ResolvedPaint::Radial {
+        Paint::Radial { cx, cy, r, fx, fy, fr, unit, stops, extend } => ResolvedPaint::Radial {
             cx: vp.x_pos(*cx, *unit),
             cy: vp.y_pos(*cy, *unit),
             r: vp.r_len(*r, *unit),
+            fx: vp.x_pos(*fx, *unit),
+            fy: vp.y_pos(*fy, *unit),
+            fr: vp.r_len(*fr, *unit),
             stops: stops.clone(),
             extend: *extend,
         },

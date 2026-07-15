@@ -24,6 +24,9 @@ radial_gradient(
   cx = 0.5,
   cy = 0.5,
   r = 0.5,
+  fx = cx,
+  fy = cy,
+  fr = 0,
   units = "npc",
   extend = "pad",
   interpolation = "srgb"
@@ -49,8 +52,14 @@ end stops), \code{"repeat"}, or \code{"reflect"}.}
 \code{"oklab"} (perceptually uniform), or \code{"oklch"} (perceptual, hue-preserving).
 See Details.}
 
-\item{cx, cy, r}{Centre and radius of a radial gradient (default centred,
-radius \code{0.5} npc).}
+\item{cx, cy, r}{Centre and radius of a radial gradient's \emph{outer} circle — the
+end of the ramp (stop offset 1). Default centred, radius \code{0.5} npc.}
+
+\item{fx, fy, fr}{Centre and radius of the \emph{focal} (start) circle — the origin
+of the ramp (stop offset 0). Defaults (\code{fx = cx}, \code{fy = cy}, \code{fr = 0}) give
+the ordinary concentric gradient; move \code{fx}/\code{fy} to place the highlight
+off-centre, or raise \code{fr} for an annular ramp between two circles. Radii must
+be non-negative.}
 }
 \value{
 A \code{vellum_gradient} object, suitable for \code{vl_gpar(fill = ...)}.
@@ -63,6 +72,13 @@ resolved against the viewport at draw time, so the gradient transforms with
 the grob just like its outline.
 }
 \details{
+A radial gradient runs between two circles: the \emph{focal} (start) circle
+\code{fx}/\code{fy}/\code{fr} at stop offset 0 and the \emph{outer} (end) circle \code{cx}/\code{cy}/\code{r} at
+offset 1. By default they are concentric (\code{fx = cx}, \code{fy = cy}, \code{fr = 0}) —
+the classic centred highlight. Offsetting \code{fx}/\code{fy} moves the highlight
+off-centre (as for a sphere lit from one side); a non-zero \code{fr} gives an
+annular ramp between the two circles.
+
 By default stops are blended in sRGB (each backend's native behaviour). Set
 \code{interpolation = "oklab"} to blend in the perceptually-uniform Oklab space
 instead, which removes the muddy, over-dark midtones and hue drift of sRGB
@@ -79,4 +95,7 @@ linear_gradient(c("white", "navy"))
 linear_gradient(c("blue", "yellow"), interpolation = "oklab")
 linear_gradient(c("blue", "yellow"), interpolation = "oklch")
 radial_gradient(c("yellow", "red"), cx = 0.5, cy = 0.5, r = 0.5)
+# off-centre highlight (a lit sphere): focal point up and to the left
+radial_gradient(c("white", "navy"), cx = 0.5, cy = 0.5, r = 0.6,
+                fx = 0.35, fy = 0.65)
 }

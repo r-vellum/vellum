@@ -92,7 +92,11 @@ pub struct PatternFill {
 pub enum Paint {
     Solid(Rgba),
     Linear { x1: f64, y1: f64, x2: f64, y2: f64, unit: Unit, stops: Vec<Stop>, extend: Extend },
-    Radial { cx: f64, cy: f64, r: f64, unit: Unit, stops: Vec<Stop>, extend: Extend },
+    /// A radial gradient between two circles: the focal/start circle
+    /// `(fx, fy, fr)` at stop offset 0 and the outer/end circle `(cx, cy, r)` at
+    /// offset 1. `fr == 0` with `(fx, fy) == (cx, cy)` is the ordinary concentric
+    /// gradient; a non-zero focal offset places the highlight off-centre.
+    Radial { cx: f64, cy: f64, r: f64, fx: f64, fy: f64, fr: f64, unit: Unit, stops: Vec<Stop>, extend: Extend },
     Pattern(PatternFill),
 }
 
@@ -107,8 +111,8 @@ impl Paint {
             Paint::Linear { x1, y1, x2, y2, unit, stops, extend } => {
                 Paint::Linear { x1, y1, x2, y2, unit, stops: fade(stops), extend }
             }
-            Paint::Radial { cx, cy, r, unit, stops, extend } => {
-                Paint::Radial { cx, cy, r, unit, stops: fade(stops), extend }
+            Paint::Radial { cx, cy, r, fx, fy, fr, unit, stops, extend } => {
+                Paint::Radial { cx, cy, r, fx, fy, fr, unit, stops: fade(stops), extend }
             }
             Paint::Pattern(mut p) => {
                 // Fold alpha into the opacity scalar; the tile `Rc` stays shared.
@@ -193,7 +197,14 @@ fn parse_gradient(obj: &Robj, kind: &str) -> Option<Paint> {
     let stops = crate::oklab::interpolate_stops(&author, interp);
     match kind {
         "radial" if coords.len() >= 3 => {
-            Some(Paint::Radial { cx: coords[0], cy: coords[1], r: coords[2], unit, stops, extend })
+            // coords are `[cx, cy, r, fx, fy, fr]`; the focal circle is optional
+            // (a length-3 vector, or an older gradient, means concentric).
+            let (fx, fy, fr) = if coords.len() >= 6 {
+                (coords[3], coords[4], coords[5])
+            } else {
+                (coords[0], coords[1], 0.0)
+            };
+            Some(Paint::Radial { cx: coords[0], cy: coords[1], r: coords[2], fx, fy, fr, unit, stops, extend })
         }
         "linear" if coords.len() >= 4 => {
             Some(Paint::Linear { x1: coords[0], y1: coords[1], x2: coords[2], y2: coords[3], unit, stops, extend })

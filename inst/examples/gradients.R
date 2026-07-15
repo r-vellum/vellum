@@ -22,6 +22,15 @@ s <- vl_scene(width = 7, height = 4, dpi = 150, bg = "white") |>
     fill = radial_gradient(c("#fff6b0", "#ffd23f", "#ffd23f00"),
                            cx = 0.78, cy = 0.72, r = 0.16)
   ))) |>
+  # Moon: a *focal* radial gradient — the highlight (fx/fy) sits up and to the
+  # left of the disc's centre, so it reads as a sphere lit from that direction
+  # rather than a flat, centred glow.
+  draw(circle_grob(x = 0.20, y = 0.82, r = 0.07, gp = vl_gpar(
+    col = NA,
+    fill = radial_gradient(c("#fdfdff", "#9aa8c4"),
+                           cx = 0.20, cy = 0.82, r = 0.07,
+                           fx = 0.17, fy = 0.85)
+  ))) |>
   # Three "buildings": left-to-right gradients, reflected to look lit.
   draw(rect_grob(x = 0.20, y = 0.28, width = 0.12, height = 0.46, gp = vl_gpar(
     col = NA,
