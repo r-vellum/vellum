@@ -63,8 +63,9 @@ radial_gradient(
 
 - interpolation:
 
-  Colour space the stops are blended in: `"srgb"` (default) or `"oklab"`
-  (perceptually uniform). See Details.
+  Colour space the stops are blended in: `"srgb"` (default), `"oklab"`
+  (perceptually uniform), or `"oklch"` (perceptual, hue-preserving). See
+  Details.
 
 - cx, cy, r:
 
@@ -80,8 +81,14 @@ A `vellum_gradient` object, suitable for `vl_gpar(fill = ...)`.
 By default stops are blended in sRGB (each backend's native behaviour).
 Set `interpolation = "oklab"` to blend in the perceptually-uniform Oklab
 space instead, which removes the muddy, over-dark midtones and hue drift
-of sRGB blending — the ramp stays even and vivid. It works identically
-on the raster, SVG, and PDF backends.
+of sRGB blending — the ramp stays even and vivid.
+`interpolation = "oklch"` blends in the polar form of the same space
+(lightness, chroma, hue): hue and chroma move independently, so a ramp
+between two saturated colours keeps its chroma through the middle
+instead of dipping toward grey the way a straight line in Oklab can — at
+the cost of sweeping through the intermediate hues along the shorter arc
+(e.g. blue→yellow passes through green). All modes work identically on
+the raster, SVG, and PDF backends.
 
 ## Examples
 
@@ -131,6 +138,30 @@ linear_gradient(c("blue", "yellow"), interpolation = "oklab")
 #> 
 #> $interpolation
 #> [1] "oklab"
+#> 
+#> attr(,"class")
+#> [1] "vellum_gradient"
+linear_gradient(c("blue", "yellow"), interpolation = "oklch")
+#> $kind
+#> [1] "linear"
+#> 
+#> $colours
+#> [1] "blue"   "yellow"
+#> 
+#> $stops
+#> [1] 0 1
+#> 
+#> $coords
+#> [1] 0 0 1 0
+#> 
+#> $units
+#> [1] "npc"
+#> 
+#> $extend
+#> [1] "pad"
+#> 
+#> $interpolation
+#> [1] "oklch"
 #> 
 #> attr(,"class")
 #> [1] "vellum_gradient"
