@@ -66,6 +66,73 @@ fn rs_aggregate_2d(x: &[f64], y: &[f64], w: Robj, nx: i32, ny: i32, x0: f64, x1:
     grid
 }
 
+// Categorical (`count_cat`) binning: like `rs_aggregate_2d`, but keep a separate
+// count grid per category in the same single O(N) pass. `cat` is a 0-based category
+// index per point (points with `cat < 0` or `cat >= ncat` — e.g. an NA level — are
+// skipped). The result is a flat **category-major** grid of length `ncat*nx*ny`:
+// category `k`'s grid occupies `[k*nx*ny .. (k+1)*nx*ny)`, each laid out row-major
+// top-left like `rs_aggregate_2d`, so the R side reshapes it to an `(nx*ny) x ncat`
+// matrix with a single `matrix()` call. Binning/edge/skip rules match
+// `rs_aggregate_2d` exactly. See `datashade(category=)`.
+#[extendr]
+fn rs_aggregate_2d_cat(x: &[f64], y: &[f64], cat: &[i32], ncat: i32, w: Robj, nx: i32, ny: i32, x0: f64, x1: f64, y0: f64, y1: f64) -> Vec<f64> {
+    let nx = nx.max(1) as usize;
+    let ny = ny.max(1) as usize;
+    let ncat = ncat.max(0) as usize;
+    let ncell = nx * ny;
+    let n = x.len().min(y.len()).min(cat.len());
+    let mut grid = vec![0.0f64; ncell * ncat];
+    if ncat == 0 {
+        return grid;
+    }
+
+    let dx = x1 - x0;
+    let dy = y1 - y0;
+    if !(dx.is_finite() && dy.is_finite()) || dx == 0.0 || dy == 0.0 {
+        return grid;
+    }
+    let sx = nx as f64 / dx;
+    let sy = ny as f64 / dy;
+
+    // Per-point weights, length-`n` (recycled/validated R-side), else all 1.0.
+    let weights: Option<&[f64]> = w.as_real_slice().filter(|s| s.len() == n);
+
+    for i in 0..n {
+        let k = cat[i];
+        if k < 0 || (k as usize) >= ncat {
+            continue; // NA / out-of-range category
+        }
+        let (px, py) = (x[i], y[i]);
+        if !(px.is_finite() && py.is_finite()) {
+            continue;
+        }
+        let cf = (px - x0) * sx;
+        let rf = (y1 - py) * sy;
+        if cf < 0.0 || rf < 0.0 {
+            continue;
+        }
+        let mut col = cf as usize;
+        let mut row = rf as usize;
+        if col >= nx {
+            if px <= x1 {
+                col = nx - 1;
+            } else {
+                continue;
+            }
+        }
+        if row >= ny {
+            if py >= y0 {
+                row = ny - 1;
+            } else {
+                continue;
+            }
+        }
+        let wt = weights.map_or(1.0, |s| s[i]);
+        grid[(k as usize) * ncell + row * nx + col] += wt;
+    }
+    grid
+}
+
 // Iterate a strange-attractor map `n` steps from `(x0, y0)`, returning the orbit
 // as a flat `[x0..xn, y0..yn]` vector (length `2n`; the R side splits it). The
 // per-step recurrence is sequential (each point depends on the last), so this
@@ -105,5 +172,6 @@ fn rs_attractor(kind: &str, n: i32, a: f64, b: f64, c: f64, d: f64, x0: f64, y0:
 extendr_module! {
     mod aggregate;
     fn rs_aggregate_2d;
+    fn rs_aggregate_2d_cat;
     fn rs_attractor;
 }

@@ -1,5 +1,24 @@
 # vellum (development version)
 
+* **Categorical datashading (`datashade(category=)`).** `datashade()` gained a
+  `count_cat` mode: pass `category` (a factor or vector, one value per point) and
+  each category is aggregated into its own count grid in the same single pass, then
+  every cell is coloured by the **count-weighted average** of the category hues it
+  holds, with opacity from the cell's total density. This shows which category
+  dominates where — and where categories mix — without overplotting bias, in one
+  call instead of a hand-stacked layer per category. When `category` is set,
+  `colors` is a per-category hue vector (named by level, or one per level in level
+  order) rather than a low-to-high ramp. Backed by a new `rs_aggregate_2d_cat()`
+  Rust aggregator (one O(N) pass, category-major grid). A `datashade()` call with no
+  `category` renders byte-for-byte as before.
+
+* **Percentile / span colour clamping for `datashade()`.** New `span` (absolute
+  `c(lo, hi)` density limits) and `clip` (a percentile pair like `c(0.01, 0.99)`,
+  derived from the non-empty cell quantiles) clamp the density range before the
+  `how` transform, so a few extreme cells no longer flatten the rest. Both default
+  `NULL` (unchanged output). The shade step is now a reusable internal colormap
+  utility shared by the density and categorical paths.
+
 # vellum 0.2.0
 
 * **Breaking: renamed the grid-colliding exports to a `vl_` prefix** so
