@@ -314,8 +314,10 @@ then cap, then head). \code{NULL}/\code{0} (default) leaves the geometry untouch
 \item{n}{Number of points to sample the curve at (flattened to a polyline).}
 
 \item{shape}{Marker shape(s): \code{"circle"} (default), \code{"square"}, \code{"triangle"},
-\code{"diamond"}, \code{"plus"}, or \code{"cross"}, recycled per point. Filled shapes use
-\code{gp$fill} (and outline \code{gp$col}); \code{"plus"}/\code{"cross"} are stroke-only.}
+\code{"diamond"}, \code{"plus"}, \code{"cross"}, \code{"triangle_down"}, or \code{"star"}, recycled per
+point. Filled shapes (all but \code{"plus"}/\code{"cross"}) paint \code{gp$fill} and outline
+with \code{gp$col}, so an \emph{open} marker is \code{fill = NA} with a \code{col}, a \emph{filled} one
+sets \code{fill}; \code{"plus"}/\code{"cross"} are stroke-only line glyphs.}
 
 \item{open}{If \code{FALSE}, the spline is closed (wraps end to start).}
 

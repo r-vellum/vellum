@@ -110,9 +110,9 @@ rs_attractor <- function(kind, n, a, b, c, d, x0, y0) .Call(wrap__rs_attractor, 
 #'\subsection{Method `markers`}{
 #'A batch of markers (point glyphs) sharing one gpar. Like `circles` but each
 #'element carries a `shape` code (0 circle, 1 square, 2 triangle, 3 diamond,
-#'4 plus, 5 cross); `size` is the marker radius. Filled shapes fill+stroke per
-#'gpar; plus/cross are stroke-only. (circle_grob / default points use the
-#'faster `circles` path; this is for shape variety.)
+#'4 plus, 5 cross, 6 triangle_down, 7 star); `size` is the marker radius.
+#'Filled shapes fill+stroke per gpar; plus/cross are stroke-only. (circle_grob
+#'/ default points use the faster `circles` path; this is for shape variety.)
 #'}
 #'
 #'\subsection{Method `hexagons`}{

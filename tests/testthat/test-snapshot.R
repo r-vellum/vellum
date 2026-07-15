@@ -15,9 +15,10 @@ test_that("shape rendering is byte-stable", {
   skip_on_cran()
 
   snap(
-    vl_scene(2, 1.2, dpi = 90, bg = "white") |>
-      draw(points_grob(vl_unit(c(1:6) / 7, "npc"), vl_unit(0.5, "npc"), size = vl_unit(4, "mm"),
-                       shape = c("circle", "square", "triangle", "diamond", "plus", "cross"),
+    vl_scene(2.7, 1.2, dpi = 90, bg = "white") |>
+      draw(points_grob(vl_unit(c(1:8) / 9, "npc"), vl_unit(0.5, "npc"), size = vl_unit(4, "mm"),
+                       shape = c("circle", "square", "triangle", "diamond", "plus", "cross",
+                                 "triangle_down", "star"),
                        gp = vl_gpar(fill = "steelblue", col = "navy", lwd = 2))),
     "markers.png"
   )

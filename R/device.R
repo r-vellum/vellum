@@ -375,9 +375,11 @@ render_grid <- function(x, path, width = 7, height = 7, dpi = 96, bg = "white",
   shape <- switch(as.character(pch),
     "0" = "square", "15" = "square", "22" = "square",
     "1" = "circle", "16" = "circle", "19" = "circle", "20" = "circle", "21" = "circle",
-    "2" = "triangle", "6" = "triangle", "17" = "triangle", "24" = "triangle", "25" = "triangle",
+    "2" = "triangle", "17" = "triangle", "24" = "triangle",
+    "6" = "triangle_down", "25" = "triangle_down",
     "5" = "diamond", "18" = "diamond", "23" = "diamond",
     "3" = "plus", "4" = "cross",
+    "8" = "star",
     "circle"
   )
   list(shape = shape, fill = filled)
