@@ -32,6 +32,19 @@ test_that("shape rendering is byte-stable", {
     "gradients.png"
   )
 
+  # Oklab-interpolated gradients (perceptual): a blue->yellow linear ramp with no
+  # muddy grey dead-zone, and a red->green radial that stays vivid through the middle.
+  snap(
+    vl_scene(2, 2, dpi = 90, bg = "white") |>
+      draw(rect_grob(width = 0.9, height = 0.45,
+                     gp = vl_gpar(col = NA, fill = linear_gradient(c("blue", "yellow"),
+                                                                   interpolation = "oklab")))) |>
+      draw(circle_grob(y = 0.25, r = 0.18,
+                       gp = vl_gpar(col = NA, fill = radial_gradient(c("red", "green"),
+                                                                     interpolation = "oklab")))),
+    "gradients-oklab.png"
+  )
+
   tile <- list(rect_grob(gp = vl_gpar(fill = "red", col = NA)),
                circle_grob(r = 0.3, gp = vl_gpar(fill = "white", col = NA)))
   snap(

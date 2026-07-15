@@ -14,7 +14,8 @@ linear_gradient(
   x2 = 1,
   y2 = 0,
   units = "npc",
-  extend = "pad"
+  extend = "pad",
+  interpolation = "srgb"
 )
 
 radial_gradient(
@@ -24,7 +25,8 @@ radial_gradient(
   cy = 0.5,
   r = 0.5,
   units = "npc",
-  extend = "pad"
+  extend = "pad",
+  interpolation = "srgb"
 )
 }
 \arguments{
@@ -43,6 +45,9 @@ left-to-right sweep in \code{npc}).}
 \item{extend}{How the gradient behaves outside \verb{[0, 1]}: \code{"pad"} (clamp to the
 end stops), \code{"repeat"}, or \code{"reflect"}.}
 
+\item{interpolation}{Colour space the stops are blended in: \code{"srgb"} (default)
+or \code{"oklab"} (perceptually uniform). See Details.}
+
 \item{cx, cy, r}{Centre and radius of a radial gradient (default centred,
 radius \code{0.5} npc).}
 }
@@ -56,7 +61,15 @@ interpolates between colour \emph{stops}. Its geometry (\code{x1}/\code{y1}/... 
 resolved against the viewport at draw time, so the gradient transforms with
 the grob just like its outline.
 }
+\details{
+By default stops are blended in sRGB (each backend's native behaviour). Set
+\code{interpolation = "oklab"} to blend in the perceptually-uniform Oklab space
+instead, which removes the muddy, over-dark midtones and hue drift of sRGB
+blending — the ramp stays even and vivid. It works identically on the raster,
+SVG, and PDF backends.
+}
 \examples{
 linear_gradient(c("white", "navy"))
+linear_gradient(c("blue", "yellow"), interpolation = "oklab")
 radial_gradient(c("yellow", "red"), cx = 0.5, cy = 0.5, r = 0.5)
 }

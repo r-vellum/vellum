@@ -6,6 +6,12 @@
 #' resolved against the viewport at draw time, so the gradient transforms with
 #' the grob just like its outline.
 #'
+#' By default stops are blended in sRGB (each backend's native behaviour). Set
+#' `interpolation = "oklab"` to blend in the perceptually-uniform Oklab space
+#' instead, which removes the muddy, over-dark midtones and hue drift of sRGB
+#' blending — the ramp stays even and vivid. It works identically on the raster,
+#' SVG, and PDF backends.
+#'
 #' @param colours A vector of two or more colours (any R colour spec). With
 #'   `stops = NULL` they are spread evenly across `[0, 1]`.
 #' @param stops Optional offsets in `[0, 1]`, one per colour. Defaults to evenly
@@ -18,9 +24,12 @@
 #'   `"mm"`, `"in"`, `"pt"`.
 #' @param extend How the gradient behaves outside `[0, 1]`: `"pad"` (clamp to the
 #'   end stops), `"repeat"`, or `"reflect"`.
+#' @param interpolation Colour space the stops are blended in: `"srgb"` (default)
+#'   or `"oklab"` (perceptually uniform). See Details.
 #' @return A `vellum_gradient` object, suitable for `vl_gpar(fill = ...)`.
 #' @examples
 #' linear_gradient(c("white", "navy"))
+#' linear_gradient(c("blue", "yellow"), interpolation = "oklab")
 #' radial_gradient(c("yellow", "red"), cx = 0.5, cy = 0.5, r = 0.5)
 #' @name gradients
 NULL
@@ -28,20 +37,21 @@ NULL
 #' @rdname gradients
 #' @export
 linear_gradient <- function(colours, stops = NULL, x1 = 0, y1 = 0, x2 = 1, y2 = 0,
-                            units = "npc", extend = "pad") {
-  .new_gradient("linear", colours, stops, c(x1, y1, x2, y2), units, extend)
+                            units = "npc", extend = "pad", interpolation = "srgb") {
+  .new_gradient("linear", colours, stops, c(x1, y1, x2, y2), units, extend, interpolation)
 }
 
 #' @rdname gradients
 #' @export
 radial_gradient <- function(colours, stops = NULL, cx = 0.5, cy = 0.5, r = 0.5,
-                            units = "npc", extend = "pad") {
-  .new_gradient("radial", colours, stops, c(cx, cy, r), units, extend)
+                            units = "npc", extend = "pad", interpolation = "srgb") {
+  .new_gradient("radial", colours, stops, c(cx, cy, r), units, extend, interpolation)
 }
 
 .gradient_extend <- c("pad", "repeat", "reflect")
+.gradient_interpolation <- c("srgb", "oklab")
 
-.new_gradient <- function(kind, colours, stops, coords, units, extend) {
+.new_gradient <- function(kind, colours, stops, coords, units, extend, interpolation = "srgb") {
   n <- length(colours)
   if (n < 1L) {
     cli::cli_abort("A gradient needs at least one colour.")
@@ -60,6 +70,7 @@ radial_gradient <- function(colours, stops = NULL, cx = 0.5, cy = 0.5, r = 0.5,
   }
   units <- match.arg(units, .coord_units)
   extend <- match.arg(extend, .gradient_extend)
+  interpolation <- match.arg(interpolation, .gradient_interpolation)
   if (!all(is.finite(coords))) {
     cli::cli_abort("Gradient coordinates must be finite.")
   }
@@ -70,7 +81,8 @@ radial_gradient <- function(colours, stops = NULL, cx = 0.5, cy = 0.5, r = 0.5,
       stops = as.double(stops),
       coords = as.double(coords),
       units = units,
-      extend = extend
+      extend = extend,
+      interpolation = interpolation
     ),
     class = "vellum_gradient"
   )
@@ -105,7 +117,8 @@ print.vellum_gradient <- function(x, ...) {
     units = g$units,
     col = as.integer(rgba), # column-major -> flat r,g,b,a per stop
     offset = pmin(pmax(g$stops, 0), 1),
-    extend = g$extend
+    extend = g$extend,
+    interpolation = g$interpolation %||% "srgb"
   )
 }
 
