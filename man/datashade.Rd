@@ -12,8 +12,11 @@ datashade(
   height = 400L,
   xlim = NULL,
   ylim = NULL,
+  category = NULL,
   colors = c("#deebf7", "#08306b"),
   how = c("eq_hist", "log", "cbrt", "linear"),
+  span = NULL,
+  clip = NULL,
   interpolate = FALSE,
   name = NULL,
   vp = NULL,
@@ -32,11 +35,26 @@ point; otherwise \code{weight} must be the same length as \code{x}.}
 
 \item{xlim, ylim}{Data range to bin over; default the finite range of \code{x}/\code{y}.}
 
-\item{colors}{Two or more colours forming the low-to-high density ramp.}
+\item{category}{Optional per-point category (factor or vector) selecting
+categorical (\code{count_cat}) shading; see Details. \code{NULL} (default) shades by
+plain density.}
+
+\item{colors}{For density shading, two or more colours forming the low-to-high
+ramp. For categorical shading (\code{category} set), a per-category hue vector —
+named by category level, or one colour per level in level order.}
 
 \item{how}{Density-to-colour mapping: \code{"eq_hist"} (histogram equalisation —
 datashader's default, reveals structure across orders of magnitude), \code{"log"},
-\code{"cbrt"} (cube root), or \code{"linear"}.}
+\code{"cbrt"} (cube root), or \code{"linear"}. Also drives the per-cell opacity under
+categorical shading.}
+
+\item{span}{Optional \code{c(lo, hi)} density values mapped to the ends of the
+colour ramp / opacity range; densities outside are clamped. \code{NULL} (default)
+uses the full observed range.}
+
+\item{clip}{Optional percentile pair in \verb{[0, 1]} (e.g. \code{c(0.01, 0.99)}) deriving
+\code{span} from the quantiles of the non-empty cell densities — a robust way to
+keep a few extreme cells from flattening the rest. Overrides \code{span}.}
 
 \item{interpolate}{Passed to \code{\link[=raster_grob]{raster_grob()}}; \code{FALSE} keeps hard bin edges.}
 
@@ -61,6 +79,17 @@ line the image up with data axes draw it inside a \code{\link[=vl_viewport]{vl_v
 bins make \code{width}/\code{height} match the viewport's pixel size and keep
 \code{interpolate = FALSE}.
 }
+\section{Categorical shading (\code{count_cat})}{
+Pass \code{category} (a factor or vector, one value per point) to shade by \emph{category}
+rather than plain density: each category is aggregated into its own count grid in
+the same single pass, and each cell is coloured by the \strong{count-weighted average}
+of the category hues it contains, with opacity driven by the cell's total density
+(via \code{how}). This reveals which category dominates where \emph{and} where categories
+mix, without overplotting bias. When \code{category} is set, \code{colors} is a per-category
+hue vector (named by level, or one colour per level in level order) instead of a
+low-to-high ramp.
+}
+
 \examples{
 set.seed(1)
 n <- 1e6
@@ -69,4 +98,8 @@ g <- datashade(x, y, width = 400, height = 300)
 s <- vl_scene(6, 4.5) |>
   push(vl_viewport(xscale = range(x), yscale = range(y))) |>
   draw(g)
+
+# Categorical: colour each cell by which group dominates it
+grp <- sample(c("a", "b"), n, replace = TRUE)
+gc <- datashade(x, y, category = grp, colors = c(a = "#e41a1c", b = "#377eb8"))
 }

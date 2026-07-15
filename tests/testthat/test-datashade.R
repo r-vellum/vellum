@@ -61,3 +61,90 @@ test_that("datashade() validates / recycles the weight vector", {
     "weight"
   )
 })
+
+# --- Phase 1: percentile / span colormap clamping -------------------------------
+
+test_that("span / clip clamp the density range but leave the default unchanged", {
+  set.seed(3)
+  x <- c(rnorm(3000), rep(0, 200)) # a spike of duplicate density at the centre
+  y <- c(rnorm(3000), rep(0, 200))
+  base <- datashade(x, y, width = 40, height = 40, how = "linear")
+  # A clip that trims the top percentile changes at least one shaded cell.
+  clipped <- datashade(x, y, width = 40, height = 40, how = "linear", clip = c(0, 0.9))
+  expect_false(identical(base@rgba, clipped@rgba))
+  # An absolute span behaves the same way; both are additive (default NULL == today).
+  spanned <- datashade(x, y, width = 40, height = 40, how = "linear", span = c(1, 5))
+  expect_false(identical(base@rgba, spanned@rgba))
+  again <- datashade(x, y, width = 40, height = 40, how = "linear")
+  expect_identical(base@rgba, again@rgba) # NULL span/clip is byte-identical
+})
+
+test_that("span / clip are validated", {
+  x <- rnorm(100); y <- rnorm(100)
+  expect_error(datashade(x, y, clip = c(0.9, 0.1)), "clip")
+  expect_error(datashade(x, y, clip = c(-1, 0.5)), "clip")
+  expect_error(datashade(x, y, span = c(5, 1)), "span")
+})
+
+# --- Phase 2: categorical (count_cat) aggregation + blend -----------------------
+
+test_that("rs_aggregate_2d_cat keeps a separate count grid per category", {
+  # two categories, two points each, on a 2x2 grid: cat 0 top-right, cat 1 bottom-left
+  g <- rs_aggregate_2d_cat(
+    c(0.9, 0.1), c(0.9, 0.1), c(0L, 1L), 2L, NULL, 2L, 2L, 0, 1, 0, 1
+  )
+  expect_length(g, 2 * 4) # ncat * nx * ny, category-major
+  cat0 <- g[1:4] # row-major TL, TR, BL, BR
+  cat1 <- g[5:8]
+  expect_equal(cat0, c(0, 1, 0, 0)) # cat 0's point in the top-right cell
+  expect_equal(cat1, c(0, 0, 1, 0)) # cat 1's point in the bottom-left cell
+})
+
+test_that("rs_aggregate_2d_cat drops out-of-range categories and NA levels", {
+  g <- rs_aggregate_2d_cat(
+    c(0.5, 0.5, 0.5), c(0.5, 0.5, 0.5), c(0L, 5L, -1L), 2L, NULL, 1L, 1L, 0, 1, 0, 1
+  )
+  expect_equal(sum(g), 1) # only the cat-0 point lands; cat 5 (>=ncat) and -1 dropped
+})
+
+test_that("categorical datashade blends hues by count and is opacity-by-density", {
+  # A pure-red cluster, a pure-blue cluster, and a 50/50 mixed cluster.
+  n <- 2000
+  rx <- rnorm(n, -2, 0.05); ry <- rnorm(n, -2, 0.05)
+  bx <- rnorm(n, 2, 0.05); by <- rnorm(n, 2, 0.05)
+  mx <- rnorm(2 * n, 0, 0.05); my <- rnorm(2 * n, 0, 0.05)
+  x <- c(rx, bx, mx); y <- c(ry, by, my)
+  cat <- factor(c(rep("r", n), rep("b", n), rep(c("r", "b"), n)))
+  g <- datashade(x, y, category = cat, width = 100, height = 100,
+                 xlim = c(-4, 4), ylim = c(-4, 4),
+                 colors = c(r = "#ff0000", b = "#0000ff"))
+  expect_true(S7::S7_inherits(g, grob))
+
+  s <- vl_scene(2, 2, dpi = 100, bg = "white") |>
+    push(vl_viewport(xscale = c(-4, 4), yscale = c(-4, 4))) |>
+    draw(g)
+  red <- px(s, 50, 150)    # data (-2,-2) -> lower-left cluster: red-dominant
+  blue <- px(s, 150, 50)   # data (2,2)  -> upper-right cluster: blue-dominant
+  mixed <- px(s, 100, 100) # data (0,0)  -> mixed cluster: purple-ish
+  expect_gt(red[1], red[3])    # more red than blue
+  expect_gt(blue[3], blue[1])  # more blue than red
+  expect_gt(mixed[1], 40L)     # mixed cell carries both channels
+  expect_gt(mixed[3], 40L)
+})
+
+test_that("categorical colors must cover every level", {
+  x <- rnorm(50); y <- rnorm(50); cat <- rep(c("a", "b", "c"), length.out = 50)
+  expect_error(datashade(x, y, category = cat, colors = c(a = "red", b = "blue")), "colors")
+  expect_error(datashade(x, y, category = cat, colors = c("red", "blue")), "colour per")
+  # named covering, or one-per-level in order, both work
+  expect_no_error(datashade(x, y, category = cat, colors = c(a = "red", b = "blue", c = "green")))
+  expect_no_error(datashade(x, y, category = cat, colors = c("red", "blue", "green")))
+})
+
+test_that("category = NULL is byte-identical to the single-category path", {
+  set.seed(4)
+  x <- rnorm(5000); y <- rnorm(5000)
+  a <- datashade(x, y, width = 50, height = 50)
+  b <- datashade(x, y, width = 50, height = 50, category = NULL)
+  expect_identical(a@rgba, b@rgba)
+})
