@@ -1,5 +1,23 @@
 # vellum (development version)
 
+* **Line & segment datashading.** `datashade_lines()` and `datashade_segments()`
+  extend the aggregate-then-shade engine from point clouds to dense lines. A new
+  anti-aliased Rust line rasteriser accumulates coverage per grid cell (overlapping
+  lines *add*), so a bundle of hundreds of timeseries or a graph of tens of
+  thousands of edges renders at cost decoupled from the vertex count, as one
+  `raster_grob()`. `datashade_lines()` takes a connected polyline with an optional
+  `group` id (packing many series into one call; `NA` also breaks the line);
+  `datashade_segments()` takes independent `(x0,y0)->(x1,y1)` segments (the
+  network-edge case). Both share `datashade()`'s `colors`/`how`/`span`/`clip`
+  shading and per-line `weight`. See the *Datashading* article and
+  `inst/examples/lines.R`.
+
+* **Pixel spreading (`spread()` / `dynspread()`).** Dilate the non-empty pixels of
+  any raster grob so thin marks stay visible — datashader's `spread` (fixed radius)
+  and `dynspread` (radius chosen from image density). Available standalone, or via
+  a `spread =` argument on the `datashade*` functions (`spread = 2` for a fixed
+  radius, `spread = "auto"` for dynspread).
+
 * **Focal / two-circle radial gradients.** `radial_gradient()` gained `fx`, `fy`,
   `fr` — the *focal* (start) circle at stop offset 0, distinct from the *outer*
   (end) circle `cx`/`cy`/`r` at offset 1. Offsetting `fx`/`fy` moves the highlight

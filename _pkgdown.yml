@@ -143,9 +143,12 @@ reference:
 
 - title: Big data
   desc: >
-    Aggregate-then-shade rendering for large point clouds.
+    Aggregate-then-shade rendering for large point clouds, dense timeseries, and
+    network edges.
   contents:
   - datashade
+  - datashade_lines
+  - spread
 
 - title: Inspecting & editing scenes
   desc: >
