@@ -24,7 +24,8 @@ Suggests:
     knitr,
     png,
     base64enc,
-    rmarkdown
+    rmarkdown,
+    xml2
 VignetteBuilder: knitr
 Config/testthat/edition: 3
 Imports:
