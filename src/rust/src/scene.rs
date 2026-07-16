@@ -2024,8 +2024,11 @@ impl Scene {
         let mut stack: Vec<usize> = root.children.iter().rev().copied().collect();
         while let Some(id) = stack.pop() {
             let node = &self.viewports[id];
-            let parent = out[node.parent.unwrap()].clone().unwrap();
-            out[id] = Some(self.resolve_one(node, &parent));
+            // Borrow the (already-resolved) parent instead of deep-cloning the whole
+            // ResolvedVp (gp_acc + clip_chain) just to pass a reference. The borrow
+            // ends when resolve_one returns its owned result, before the write below.
+            let resolved = self.resolve_one(node, out[node.parent.unwrap()].as_ref().unwrap());
+            out[id] = Some(resolved);
             for &c in node.children.iter().rev() {
                 stack.push(c);
             }
@@ -2161,11 +2164,14 @@ impl Scene {
                 }
                 continue;
             }
-            let attrs = meta
-                .and_then(|m| m.get(i))
-                .filter(|md| !md.is_empty())
-                .map(|md| md.svg_attrs())
-                .unwrap_or_default();
+            // begin_node/end_node are consumed only by the SVG backend (they are
+            // no-ops on raster/PDF), so build the attribute string — two `format!`s
+            // in `svg_attrs` — only when the backend actually emits it. Empty attrs
+            // ⇒ has_meta false ⇒ the (no-op) bracketing is skipped downstream.
+            let attrs = match meta.and_then(|m| m.get(i)).filter(|md| !md.is_empty()) {
+                Some(md) if b.wants_element_keys() => md.svg_attrs(),
+                _ => String::new(),
+            };
             let has_meta = !attrs.is_empty();
             match node {
                 Node::SubrasterStart { nid } => {

@@ -839,7 +839,7 @@ impl RenderBackend for RasterBackend {
                 None => paint.clone(),
             };
             self.targets.last_mut().expect("at least the page target").fill_path(
-                &outline,
+                outline.as_ref(),
                 &glyph_paint,
                 FillRule::Winding,
                 base.pre_concat(place),
@@ -1328,7 +1328,7 @@ impl RenderBackend for SvgBackend {
                     Some(&c) => format!(" fill=\"{}\" fill-opacity=\"{}\"", rgb_hex(c), opacity(c)),
                     None => String::new(),
                 };
-                paths.push_str(&format!("<path d=\"{}\"{}{}/>", path_to_d(&outline), fill_attr, transform_attr(place)));
+                paths.push_str(&format!("<path d=\"{}\"{}{}/>", path_to_d(outline.as_ref()), fill_attr, transform_attr(place)));
             }
             if !paths.is_empty() {
                 let element = format!(
@@ -1611,20 +1611,28 @@ fn transform_attr(t: Transform) -> String {
 }
 
 fn path_to_d(path: &Path) -> String {
+    use std::fmt::Write;
     use tiny_skia::PathSegment;
     let mut d = String::new();
+    // Write directly into the buffer (no throwaway String per segment). Writing to
+    // a String is infallible, so the Result is discarded.
     for seg in path.segments() {
         match seg {
-            PathSegment::MoveTo(p) => d.push_str(&format!("M{} {} ", p.x, p.y)),
-            PathSegment::LineTo(p) => d.push_str(&format!("L{} {} ", p.x, p.y)),
-            PathSegment::QuadTo(c, p) => d.push_str(&format!("Q{} {} {} {} ", c.x, c.y, p.x, p.y)),
+            PathSegment::MoveTo(p) => { let _ = write!(d, "M{} {} ", p.x, p.y); }
+            PathSegment::LineTo(p) => { let _ = write!(d, "L{} {} ", p.x, p.y); }
+            PathSegment::QuadTo(c, p) => { let _ = write!(d, "Q{} {} {} {} ", c.x, c.y, p.x, p.y); }
             PathSegment::CubicTo(c1, c2, p) => {
-                d.push_str(&format!("C{} {} {} {} {} {} ", c1.x, c1.y, c2.x, c2.y, p.x, p.y))
+                let _ = write!(d, "C{} {} {} {} {} {} ", c1.x, c1.y, c2.x, c2.y, p.x, p.y);
             }
             PathSegment::Close => d.push('Z'),
         }
     }
-    d.trim_end().to_string()
+    // Each non-close segment leaves exactly one trailing space; drop it (a `Z`
+    // leaves none). Equivalent to the previous trim_end without a second alloc.
+    if d.ends_with(' ') {
+        d.pop();
+    }
+    d
 }
 
 /// A clip shape as a closed SVG path `d` in device coords (transform baked in).

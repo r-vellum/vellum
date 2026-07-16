@@ -41,7 +41,9 @@ pub struct GlyphSprite {
 /// so exceeding a cap ages half the entries instead of wiping everything.
 pub struct FontCache {
     files: TwoGenCache<String, Option<Rc<Vec<u8>>>>,
-    outlines: TwoGenCache<(String, u32, u32, u32), Option<tiny_skia::Path>>,
+    // `Rc<Path>` so a repeated glyph (the outline-fill fallback runs once per glyph
+    // *instance*) bumps a refcount instead of deep-copying the path's two Vecs.
+    outlines: TwoGenCache<(String, u32, u32, u32), Option<Rc<tiny_skia::Path>>>,
     sprites: TwoGenCache<(String, u32, u32, u32, u32, u8, u8), Option<Rc<GlyphSprite>>>,
     sprite_hits: i64,
     sprite_misses: i64,
@@ -92,7 +94,7 @@ impl FontCache {
         face_index: u32,
         glyph_id: u32,
         size_px: f32,
-    ) -> Option<tiny_skia::Path> {
+    ) -> Option<Rc<tiny_skia::Path>> {
         let key = (font_path.to_string(), face_index, glyph_id, size_px.to_bits());
         if let Some(o) = self.outlines.get(&key) {
             return o;
@@ -102,7 +104,7 @@ impl FontCache {
         // is the common, intended case; a transient read failure staying `None`
         // until `clear_glyph_cache` is an accepted trade-off (fonts don't appear
         // mid-session in practice).
-        let out = self.extract(font_path, face_index, glyph_id, size_px);
+        let out = self.extract(font_path, face_index, glyph_id, size_px).map(Rc::new);
         self.outlines.insert(key, out.clone());
         out
     }
@@ -184,7 +186,7 @@ impl FontCache {
         paint.anti_alias = true;
         // glyph-local (lx, ly) -> sprite pixel (lx + fx - sminx, -ly + fy - sminy).
         let t = Transform::from_row(1.0, 0.0, 0.0, -1.0, fx - sminx, fy - sminy);
-        pm.fill_path(&outline, &paint, FillRule::Winding, t, None);
+        pm.fill_path(outline.as_ref(), &paint, FillRule::Winding, t, None);
         Some(GlyphSprite { pixmap: pm, dx: sminx as i32, dy: sminy as i32 })
     }
 
@@ -200,7 +202,7 @@ thread_local! {
 }
 
 /// Glyph outline via the persistent cache. See [`FontCache::glyph_outline`].
-pub fn glyph_outline_cached(font_path: &str, face_index: u32, glyph_id: u32, size_px: f32) -> Option<tiny_skia::Path> {
+pub fn glyph_outline_cached(font_path: &str, face_index: u32, glyph_id: u32, size_px: f32) -> Option<Rc<tiny_skia::Path>> {
     GLYPH_CACHE.with(|c| c.borrow_mut().glyph_outline(font_path, face_index, glyph_id, size_px))
 }
 
