@@ -1174,7 +1174,10 @@ impl SvgBackend {
         let mut svg_attrs = String::new();
         let mut a11y_head = String::new();
         if self.a11y_title.is_some() || self.a11y_desc.is_some() {
-            let p = &self.a11y_prefix;
+            // Escape the prefix: it is interpolated into `id`/`aria-labelledby`
+            // attribute values, so a `"`/`<`/`&` would otherwise break the markup.
+            let p = xml_escape(&self.a11y_prefix);
+            let p = &p;
             let mut ids: Vec<String> = Vec::new();
             if let Some(t) = &self.a11y_title {
                 ids.push(format!("{p}-t"));

@@ -31,3 +31,18 @@ test_that("attribute values are XML-escaped", {
   txt <- svg_text(s)
   expect_match(txt, "data-vellum-id=\"a&amp;b&quot;c\"")
 })
+
+test_that("a named colourless text grob keeps following SVG output well-nested", {
+  # Regression: a *named* (metadata) text grob with col = NA is a non-rich
+  # label with no shared colour, so the scene walk skipped it -- but it had
+  # already opened a metadata <g>. Failing to close that node left the SVG
+  # backend's node buffer dangling and mis-nested every following element.
+  s <- vl_scene(2, 2) |>
+    draw(text_grob("hi", id = "t1", gp = vl_gpar(col = NA))) |>
+    draw(rect_grob(width = 0.5, height = 0.5, name = "after", gp = vl_gpar(fill = "blue")))
+  txt <- svg_text(s)
+  # The following grob's metadata still lands in the document...
+  expect_match(txt, 'data-vellum-name="after"')
+  # ...and the whole document parses as balanced XML (unbalanced <g> throws).
+  expect_no_error(xml2::read_xml(txt))
+})

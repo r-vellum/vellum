@@ -996,7 +996,12 @@ impl Scene {
         let gp = PartialGpar::from_robj(&rnull(), &col, &lwd, &alpha, &stroke);
         let fill = fill
             .chunks_exact(4)
-            .map(|c| Rgba { r: c[0] as u8, g: c[1] as u8, b: c[2] as u8, a: c[3] as u8 })
+            .map(|c| Rgba {
+                r: c[0].clamp(0, 255) as u8,
+                g: c[1].clamp(0, 255) as u8,
+                b: c[2].clamp(0, 255) as u8,
+                a: c[3].clamp(0, 255) as u8,
+            })
             .collect();
         self.emit_node(Node::Hexagons {
             x: x.to_vec(), y: y.to_vec(), size: size.to_vec(), w: w.to_vec(), h: h.to_vec(),
@@ -1026,7 +1031,12 @@ impl Scene {
         let gp = PartialGpar::from_robj(&rnull(), &col, &lwd, &alpha, &stroke);
         let fill = fill
             .chunks_exact(4)
-            .map(|c| Rgba { r: c[0] as u8, g: c[1] as u8, b: c[2] as u8, a: c[3] as u8 })
+            .map(|c| Rgba {
+                r: c[0].clamp(0, 255) as u8,
+                g: c[1].clamp(0, 255) as u8,
+                b: c[2].clamp(0, 255) as u8,
+                a: c[3].clamp(0, 255) as u8,
+            })
             .collect();
         let sketch = sketch_from(
             sroughness, sbowing, sfill_style, sfill_weight, shachure_angle,
@@ -1266,7 +1276,12 @@ impl Scene {
                 gface: gface[lo..hi].iter().map(|&v| v.max(0) as u32).collect(),
                 gcol: gcol[lo * 4..hi * 4]
                     .chunks_exact(4)
-                    .map(|c| Rgba { r: c[0] as u8, g: c[1] as u8, b: c[2] as u8, a: c[3] as u8 })
+                    .map(|c| Rgba {
+                        r: c[0].clamp(0, 255) as u8,
+                        g: c[1].clamp(0, 255) as u8,
+                        b: c[2].clamp(0, 255) as u8,
+                        a: c[3].clamp(0, 255) as u8,
+                    })
                     .collect(),
                 label: label[i].clone(),
                 family: family.to_string(),
@@ -2758,7 +2773,16 @@ impl Scene {
                     let color = match gp.col {
                         Some(c) => c,
                         None if !gcol.is_empty() => Rgba { r: 0, g: 0, b: 0, a: 255 },
-                        None => continue,
+                        // Nothing to draw, but a metadata node was already opened at
+                        // the top of the loop; close it before skipping so the SVG
+                        // backend's node buffer stays balanced (else all following
+                        // output mis-nests). See BUGFIX1 Phase 1.
+                        None => {
+                            if has_meta {
+                                b.end_node();
+                            }
+                            continue;
+                        }
                     };
                     let run = TextRun {
                         ax: vp.x_pos(*x, *xu),
