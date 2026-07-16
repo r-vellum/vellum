@@ -90,3 +90,40 @@ test_that("vl_viewport(cache=) is validated", {
   expect_error(vl_viewport(cache = "yes"), "cache")
   expect_error(vl_viewport(cache = c(TRUE, FALSE)), "cache")
 })
+
+test_that("the sub-raster cache retains multiple generations (no full wipe at cap)", {
+  # BUGFIX1 Phase 3: eviction was a full clear() at capacity, which collapsed the
+  # hit rate the moment the boundary count exceeded the cap. Two-generation
+  # ("retain-half") eviction keeps up to ~2x the cap resident. With 50 distinct
+  # cached boundaries and a per-generation cap of 32, all 50 stay resident; the
+  # old clear()-at-32 policy would leave only ~18.
+  vl_clear_render_cache()
+  s <- vl_scene(4, 4, dpi = 50, bg = "white")
+  n <- 50L
+  for (i in seq_len(n)) {
+    s <- s |>
+      push(vl_viewport(x = (i %% 8) / 8 + 0.06, y = (i %/% 8) / 8 + 0.06,
+                       width = 0.1, height = 0.1, cache = TRUE, name = paste0("b", i))) |>
+      draw(circle_grob(r = 0.4, gp = vl_gpar(fill = "red", col = NA))) |>
+      pop()
+  }
+  scene_raster(s)
+  st <- rs_subraster_stats()
+  expect_equal(st[2], n)  # all 50 distinct boundaries miss on the cold pass
+  expect_equal(st[3], n)  # ...and all 50 stay resident (retain-half, not wiped)
+})
+
+test_that("a cached boundary that inherits gpar renders byte-identical to uncached", {
+  # Guards the sub-raster key's gpar fingerprint (BUGFIX1 Phase 3): a boundary
+  # whose descendants inherit an ancestor's fill must still be pixel-correct.
+  mk <- function(cache) {
+    vl_scene(2, 1, dpi = 100, bg = "white") |>
+      push(vl_viewport(name = "outer", gp = vl_gpar(fill = "darkorange"))) |>
+      push(vl_viewport(cache = cache, name = "inner")) |>
+      draw(rect_grob(width = 0.5, height = 0.8, gp = vl_gpar(col = NA))) |>
+      pop() |>
+      pop()
+  }
+  vl_clear_render_cache()
+  expect_identical(scene_raster(mk(TRUE)), scene_raster(mk(FALSE)))
+})

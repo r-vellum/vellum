@@ -8,9 +8,10 @@
 //! (y-up, origin at the glyph's baseline pen position).
 
 use std::cell::{Cell, RefCell};
-use std::collections::HashMap;
 use std::path::Path;
 use std::rc::Rc;
+
+use crate::cache::TwoGenCache;
 
 use skrifa::instance::{LocationRef, Size};
 use skrifa::outline::{DrawSettings, OutlinePen};
@@ -36,32 +37,50 @@ pub struct GlyphSprite {
 /// sprites. Outlines are keyed by `(path, face, glyph, size-bits)`; sprites also
 /// by `(colour, phase_x, phase_y)` (see `GlyphSprite`). A repeated glyph — within
 /// a render and, via the persistent cache below, across renders — is extracted
-/// and rasterised once.
-#[derive(Default)]
+/// and rasterised once. Each cache uses two-generation eviction (see `cache.rs`)
+/// so exceeding a cap ages half the entries instead of wiping everything.
 pub struct FontCache {
-    files: HashMap<String, Option<Vec<u8>>>,
-    outlines: HashMap<(String, u32, u32, u32), Option<tiny_skia::Path>>,
-    sprites: HashMap<(String, u32, u32, u32, u32, u8, u8), Option<Rc<GlyphSprite>>>,
+    files: TwoGenCache<String, Option<Rc<Vec<u8>>>>,
+    outlines: TwoGenCache<(String, u32, u32, u32), Option<tiny_skia::Path>>,
+    sprites: TwoGenCache<(String, u32, u32, u32, u32, u8, u8), Option<Rc<GlyphSprite>>>,
     sprite_hits: i64,
     sprite_misses: i64,
 }
 
-/// Drop everything once the outline cache gets large (a crude memory backstop;
-/// outlines are immutable so there is no correctness need to evict otherwise).
+/// Per-generation caps. Font bytes: few distinct files, but bound it so a
+/// long session opening many fonts can't grow it without limit. Outlines are
+/// immutable; sprites carry a colour + phase axis on top of the glyph alphabet,
+/// so their key space is larger.
+const FILES_CAP: usize = 128;
 const OUTLINE_CAP: usize = 20_000;
-/// Sprite cache cap. Sprites carry a colour and phase axis on top of the glyph
-/// alphabet, so the key space is larger than the outline cache; still bounded.
 const SPRITE_CAP: usize = 16_384;
 /// Never cache an absurdly large sprite (defensive; the R/size gate already keeps
 /// sprited glyphs small). A glyph this big falls back to the outline-fill path.
 const SPRITE_MAX_DIM: i64 = 512;
 
+impl Default for FontCache {
+    fn default() -> Self {
+        FontCache {
+            files: TwoGenCache::new(FILES_CAP),
+            outlines: TwoGenCache::new(OUTLINE_CAP),
+            sprites: TwoGenCache::new(SPRITE_CAP),
+            sprite_hits: 0,
+            sprite_misses: 0,
+        }
+    }
+}
+
 impl FontCache {
-    fn bytes(&mut self, path: &str) -> Option<&[u8]> {
-        self.files
-            .entry(path.to_string())
-            .or_insert_with(|| std::fs::read(Path::new(path)).ok())
-            .as_deref()
+    fn bytes(&mut self, path: &str) -> Option<Rc<Vec<u8>>> {
+        let key = path.to_string();
+        if let Some(cached) = self.files.get(&key) {
+            return cached; // cached success, or a cached read failure (`None`)
+        }
+        // Not cached: read once. A failure is cached too (a comment below notes
+        // the staleness trade-off); realistically fonts don't appear mid-session.
+        let bytes = std::fs::read(Path::new(path)).ok().map(Rc::new);
+        self.files.insert(key, bytes.clone());
+        bytes
     }
 
     /// Outline of `glyph_id` in `font_path`/`face_index`, scaled to `size_px`
@@ -76,11 +95,13 @@ impl FontCache {
     ) -> Option<tiny_skia::Path> {
         let key = (font_path.to_string(), face_index, glyph_id, size_px.to_bits());
         if let Some(o) = self.outlines.get(&key) {
-            return o.clone();
+            return o;
         }
-        if self.outlines.len() > OUTLINE_CAP {
-            self.outlines.clear();
-        }
+        // A negative result (`None`: unreadable font, missing glyph, or a
+        // whitespace glyph with no outline) is cached like any other. Whitespace
+        // is the common, intended case; a transient read failure staying `None`
+        // until `clear_glyph_cache` is an accepted trade-off (fonts don't appear
+        // mid-session in practice).
         let out = self.extract(font_path, face_index, glyph_id, size_px);
         self.outlines.insert(key, out.clone());
         out
@@ -88,7 +109,7 @@ impl FontCache {
 
     fn extract(&mut self, font_path: &str, face_index: u32, glyph_id: u32, size_px: f32) -> Option<tiny_skia::Path> {
         let bytes = self.bytes(font_path)?;
-        let font = FontRef::from_index(bytes, face_index).ok()?;
+        let font = FontRef::from_index(bytes.as_slice(), face_index).ok()?;
         let outlines = font.outline_glyphs();
         let glyph = outlines.get(GlyphId::new(glyph_id))?;
 
@@ -118,12 +139,9 @@ impl FontCache {
         );
         if let Some(s) = self.sprites.get(&key) {
             self.sprite_hits += 1;
-            return s.clone();
+            return s;
         }
         self.sprite_misses += 1;
-        if self.sprites.len() > SPRITE_CAP {
-            self.sprites.clear();
-        }
         let sprite = self
             .build_sprite(font_path, face_index, glyph_id, size_px, color, phase_x, phase_y)
             .map(Rc::new);

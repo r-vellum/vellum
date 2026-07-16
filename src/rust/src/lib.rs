@@ -1,6 +1,7 @@
 use extendr_api::prelude::*;
 
 mod aggregate;
+mod cache;
 mod color;
 mod font;
 mod oklab;

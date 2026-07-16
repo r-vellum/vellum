@@ -21,6 +21,7 @@ use crate::render::{
 };
 
 use crate::color::{opt_color, Gpar, GparAcc, Lty, Paint, PartialGpar, Rgba};
+use crate::cache::TwoGenCache;
 
 // --- repaint-boundary (FW4c) sub-raster cache -------------------------------
 // Persistent (thread-local, process-lifetime) memo of a `cache = TRUE`
@@ -36,16 +37,22 @@ struct SubKey {
     nid: u64,
     tx: [u32; 6],
     clip: u64,
+    /// Fingerprint of the gpar the boundary *inherits* (not captured by `nid`,
+    /// which only identifies the subtree's own content). Without it, two
+    /// boundaries sharing every other field but differing in inherited style
+    /// would collide and return stale pixels.
+    gp: u64,
     w: u32,
     h: u32,
     dpi: u64,
 }
 
 thread_local! {
-    static SUBRASTER_CACHE: RefCell<HashMap<SubKey, Pixmap>> = RefCell::new(HashMap::new());
+    static SUBRASTER_CACHE: RefCell<TwoGenCache<SubKey, Pixmap>> = RefCell::new(TwoGenCache::new(SUBRASTER_CAP));
     static SUBRASTER_STATS: RefCell<(i64, i64)> = RefCell::new((0, 0)); // (hits, misses)
 }
-/// Max cached sub-rasters resident at once; each is a page-sized RGBA layer.
+/// Per-generation cap for the sub-raster cache; each entry is a page-sized RGBA
+/// layer. Two-generation eviction keeps up to ~2x this resident (see `cache.rs`).
 const SUBRASTER_CAP: usize = 32;
 
 // Exact fingerprint of a rectangular clip chain, or `None` if the chain contains
@@ -71,11 +78,12 @@ fn rect_clip_fingerprint(shapes: &[ClipShape]) -> Option<u64> {
     Some(hasher.finish())
 }
 
-fn subraster_key(nid: f64, t: &Transform, clip: &[ClipShape], w: u32, h: u32, dpi: f64) -> Option<SubKey> {
+fn subraster_key(nid: f64, t: &Transform, clip: &[ClipShape], gp: u64, w: u32, h: u32, dpi: f64) -> Option<SubKey> {
     Some(SubKey {
         nid: nid.to_bits(),
         tx: [t.sx.to_bits(), t.ky.to_bits(), t.kx.to_bits(), t.sy.to_bits(), t.tx.to_bits(), t.ty.to_bits()],
         clip: rect_clip_fingerprint(clip)?,
+        gp,
         w,
         h,
         dpi: dpi.to_bits(),
@@ -84,7 +92,7 @@ fn subraster_key(nid: f64, t: &Transform, clip: &[ClipShape], w: u32, h: u32, dp
 
 fn subraster_get(key: &SubKey) -> Option<Pixmap> {
     SUBRASTER_CACHE.with(|c| {
-        let hit = c.borrow().get(key).cloned();
+        let hit = c.borrow_mut().get(key);
         SUBRASTER_STATS.with(|s| {
             let mut st = s.borrow_mut();
             if hit.is_some() {
@@ -98,13 +106,7 @@ fn subraster_get(key: &SubKey) -> Option<Pixmap> {
 }
 
 fn subraster_put(key: SubKey, pm: Pixmap) {
-    SUBRASTER_CACHE.with(|c| {
-        let mut m = c.borrow_mut();
-        if m.len() >= SUBRASTER_CAP {
-            m.clear(); // crude memory backstop, like the glyph/shape caches
-        }
-        m.insert(key, pm);
-    });
+    SUBRASTER_CACHE.with(|c| c.borrow_mut().insert(key, pm));
 }
 
 /// Empty the repaint-boundary sub-raster cache and reset its hit/miss counters.
@@ -2170,7 +2172,7 @@ impl Scene {
                     // Vector backends ignore the boundary (render subtree inline).
                     if b.caches_subrasters() {
                         let rv = &resolved[*vp_id];
-                        match subraster_key(*nid, &rv.vp.transform, &rv.clip_chain, self.w_px, self.h_px, self.dpi) {
+                        match subraster_key(*nid, &rv.vp.transform, &rv.clip_chain, rv.gp_acc.fingerprint(), self.w_px, self.h_px, self.dpi) {
                             None => sub_stack.push(None), // path-clipped: inline, no capture
                             Some(key) => {
                                 if let Some(pm) = subraster_get(&key) {

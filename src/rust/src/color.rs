@@ -451,6 +451,121 @@ impl GparAcc {
             linemitre: self.linemitre,
         }
     }
+
+    /// A 64-bit fingerprint of this fully-folded accumulator. Used to key the
+    /// repaint-boundary sub-raster cache: a boundary's cached pixels depend on the
+    /// gpar it *inherits* (which the subtree's content-identity `nid` does not
+    /// capture), so two boundaries sharing every other key field but differing in
+    /// inherited style must key differently. Covers every field that can affect a
+    /// descendant primitive's pixels; identical accumulators fingerprint identically
+    /// (so genuine cross-render hits are preserved). Pattern fills fold in the tile
+    /// `Rc` identity — a rebuilt-but-equal tile keys differently and re-renders,
+    /// which is safe (correctness over the optimisation, a rare case).
+    pub fn fingerprint(&self) -> u64 {
+        use std::hash::{Hash, Hasher};
+        let mut h = std::collections::hash_map::DefaultHasher::new();
+        hash_opt_paint(&self.fill, &mut h);
+        match self.col {
+            Some(c) => {
+                1u8.hash(&mut h);
+                hash_rgba(c, &mut h);
+            }
+            None => 0u8.hash(&mut h),
+        }
+        self.lwd.to_bits().hash(&mut h);
+        self.alpha.to_bits().hash(&mut h);
+        hash_lty(&self.lty, &mut h);
+        std::mem::discriminant(&self.lineend).hash(&mut h);
+        std::mem::discriminant(&self.linejoin).hash(&mut h);
+        self.linemitre.to_bits().hash(&mut h);
+        h.finish()
+    }
+}
+
+fn hash_rgba(c: Rgba, h: &mut impl std::hash::Hasher) {
+    use std::hash::Hash;
+    [c.r, c.g, c.b, c.a].hash(h);
+}
+
+fn hash_unit(u: &Unit, h: &mut impl std::hash::Hasher) {
+    use std::hash::Hash;
+    std::mem::discriminant(&u.kind).hash(h);
+    u.off_mm.to_bits().hash(h);
+}
+
+fn hash_stops(stops: &[Stop], h: &mut impl std::hash::Hasher) {
+    use std::hash::Hash;
+    (stops.len() as u64).hash(h);
+    for s in stops {
+        s.offset.to_bits().hash(h);
+        hash_rgba(s.color, h);
+    }
+}
+
+fn hash_lty(lty: &Lty, h: &mut impl std::hash::Hasher) {
+    use std::hash::Hash;
+    match lty {
+        Lty::Solid => 0u8.hash(h),
+        Lty::Blank => 1u8.hash(h),
+        Lty::Dash(v) => {
+            2u8.hash(h);
+            (v.len() as u64).hash(h);
+            for f in v {
+                f.to_bits().hash(h);
+            }
+        }
+    }
+}
+
+fn hash_paint(p: &Paint, h: &mut impl std::hash::Hasher) {
+    use std::hash::Hash;
+    match p {
+        Paint::Solid(c) => {
+            0u8.hash(h);
+            hash_rgba(*c, h);
+        }
+        Paint::Linear { x1, y1, x2, y2, unit, stops, extend } => {
+            1u8.hash(h);
+            for v in [*x1, *y1, *x2, *y2] {
+                v.to_bits().hash(h);
+            }
+            hash_unit(unit, h);
+            hash_stops(stops, h);
+            std::mem::discriminant(extend).hash(h);
+        }
+        Paint::Radial { cx, cy, r, fx, fy, fr, unit, stops, extend } => {
+            2u8.hash(h);
+            for v in [*cx, *cy, *r, *fx, *fy, *fr] {
+                v.to_bits().hash(h);
+            }
+            hash_unit(unit, h);
+            hash_stops(stops, h);
+            std::mem::discriminant(extend).hash(h);
+        }
+        Paint::Pattern(pf) => {
+            3u8.hash(h);
+            (Rc::as_ptr(&pf.tile) as usize).hash(h);
+            pf.tw.hash(h);
+            pf.th.hash(h);
+            for v in [pf.x, pf.y, pf.w, pf.h] {
+                v.to_bits().hash(h);
+            }
+            hash_unit(&pf.unit, h);
+            std::mem::discriminant(&pf.extend).hash(h);
+            pf.opacity.to_bits().hash(h);
+        }
+    }
+}
+
+fn hash_opt_paint(p: &Option<Paint>, h: &mut impl std::hash::Hasher) {
+    use std::hash::Hash;
+    match p {
+        Some(pp) => {
+            1u8.hash(h);
+            hash_paint(pp, h);
+        }
+        None => 0u8.hash(h),
+    }
 }
 
 /// Effective graphical parameters for a single primitive (alpha already applied).
