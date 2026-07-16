@@ -932,8 +932,20 @@ impl RenderBackend for RasterBackend {
         // beat); for huge overplotted clouds use datashade() (PERF-5) instead.
         const SPRITE_MIN: usize = 10_000;
         const SPRITE_MAX_R: f64 = 64.0;
+        // The fixed-radius sprite is placed at the mapped centre, so it is exact
+        // only when the CTM's linear part preserves length — a rotation/reflection
+        // at unit scale keeps a circle the same-radius circle (viewport transforms
+        // are isometries by invariant, enforced by a debug_assert in resolve_one).
+        // A non-unit scale would need a resized sprite, so verify at runtime and
+        // fall back to per-element fills (which apply the full CTM) otherwise —
+        // keeping raster identical to SVG/PDF even if the invariant is ever broken.
+        let m = &transform;
+        let unit_scale = (m.sx * m.sx + m.ky * m.ky - 1.0).abs() < 1e-6
+            && (m.kx * m.kx + m.sy * m.sy - 1.0).abs() < 1e-6
+            && (m.sx * m.kx + m.ky * m.sy).abs() < 1e-6;
         let n = cx.len().min(cy.len()).min(r.len());
         let uniform_small = n >= SPRITE_MIN
+            && unit_scale
             && stroke.is_none()
             && r[0] > 0.0
             && r[0] <= SPRITE_MAX_R
@@ -1504,6 +1516,18 @@ fn splice_data_key(element: &str, key: &str) -> String {
     s
 }
 
+/// Coverage byte a mask contributes for one (demultiplied) pixel: its alpha, or
+/// its Rec.709 luminance. Shared by the SVG (`mask_png`) and PDF (`mask_gray_rgba`)
+/// mask encoders so the two backends can't drift in how they read coverage.
+fn mask_coverage(c: tiny_skia::ColorU8, kind: MaskKind) -> u8 {
+    match kind {
+        MaskKind::Alpha => c.alpha(),
+        MaskKind::Luminance => {
+            (0.2126 * c.red() as f32 + 0.7152 * c.green() as f32 + 0.0722 * c.blue() as f32).round() as u8
+        }
+    }
+}
+
 /// Encode a mask raster as an opaque grayscale PNG where each pixel's gray level
 /// is its coverage (alpha or luminance), for use as an SVG luminance `<mask>`.
 fn mask_png(pm: &Pixmap, kind: MaskKind) -> Option<Vec<u8>> {
@@ -1511,14 +1535,7 @@ fn mask_png(pm: &Pixmap, kind: MaskKind) -> Option<Vec<u8>> {
     let src = pm.pixels();
     let dst = out.pixels_mut();
     for (s, d) in src.iter().zip(dst.iter_mut()) {
-        let c = s.demultiply();
-        let cov = match kind {
-            MaskKind::Alpha => c.alpha(),
-            MaskKind::Luminance => {
-                (0.2126 * c.red() as f32 + 0.7152 * c.green() as f32 + 0.0722 * c.blue() as f32)
-                    .round() as u8
-            }
-        };
+        let cov = mask_coverage(s.demultiply(), kind);
         *d = tiny_skia::ColorU8::from_rgba(cov, cov, cov, 255).premultiply();
     }
     out.encode_png().ok()
@@ -1532,14 +1549,7 @@ fn mask_gray_rgba(pm: &Pixmap, kind: MaskKind) -> Vec<u8> {
     let src = pm.pixels();
     let mut out = Vec::with_capacity(src.len() * 4);
     for s in src {
-        let c = s.demultiply();
-        let cov = match kind {
-            MaskKind::Alpha => c.alpha(),
-            MaskKind::Luminance => (0.2126 * c.red() as f32
-                + 0.7152 * c.green() as f32
-                + 0.0722 * c.blue() as f32)
-                .round() as u8,
-        };
+        let cov = mask_coverage(s.demultiply(), kind);
         out.extend_from_slice(&[cov, cov, cov, 255]);
     }
     out
@@ -1635,19 +1645,24 @@ fn path_to_d(path: &Path) -> String {
     d
 }
 
+/// The four device-space corners of a `w`x`h` rect placed by `t`, ordered
+/// TL, TR, BR, BL. Shared by the SVG (`clip_shape_d`) and PDF (`clip_rect_kpath`)
+/// rect-clip emitters so their corner math can't drift.
+fn rect_corners(w: f64, h: f64, t: Transform) -> [(f64, f64); 4] {
+    let pt = |x: f64, y: f64| {
+        (
+            t.sx as f64 * x + t.kx as f64 * y + t.tx as f64,
+            t.ky as f64 * x + t.sy as f64 * y + t.ty as f64,
+        )
+    };
+    [pt(0.0, 0.0), pt(w, 0.0), pt(w, h), pt(0.0, h)]
+}
+
 /// A clip shape as a closed SVG path `d` in device coords (transform baked in).
 fn clip_shape_d(shape: &ClipShape) -> String {
     match shape {
         ClipShape::Rect { w, h, transform } => {
-            let pt = |x: f64, y: f64| {
-                let dx = transform.sx as f64 * x + transform.kx as f64 * y + transform.tx as f64;
-                let dy = transform.ky as f64 * x + transform.sy as f64 * y + transform.ty as f64;
-                (dx, dy)
-            };
-            let (x0, y0) = pt(0.0, 0.0);
-            let (x1, y1) = pt(*w, 0.0);
-            let (x2, y2) = pt(*w, *h);
-            let (x3, y3) = pt(0.0, *h);
+            let [(x0, y0), (x1, y1), (x2, y2), (x3, y3)] = rect_corners(*w, *h, *transform);
             format!("M{x0} {y0} L{x1} {y1} L{x2} {y2} L{x3} {y3} Z")
         }
         ClipShape::Path { path, transform, .. } => match path.clone().transform(*transform) {
@@ -2036,7 +2051,7 @@ impl RenderBackend for PdfBackend<'_, '_> {
         }
     }
 
-    fn draw_image(&mut self, rgba: &[u8], iw: u32, ih: u32, x: f64, y: f64, w: f64, h: f64, _interpolate: bool, transform: Transform, clip: &Clip) {
+    fn draw_image(&mut self, rgba: &[u8], iw: u32, ih: u32, x: f64, y: f64, w: f64, h: f64, interpolate: bool, transform: Transform, clip: &Clip) {
         if iw == 0 || ih == 0 || rgba.len() < (iw as usize) * (ih as usize) * 4 {
             return;
         }
@@ -2044,7 +2059,20 @@ impl RenderBackend for PdfBackend<'_, '_> {
             Some(s) => s,
             None => return,
         };
-        let img = KImage::from_rgba8(rgba.to_vec(), iw, ih);
+        // krilla's `from_rgba8` hard-codes non-interpolated sampling, so honour
+        // `interpolate` (as raster/SVG do) by routing an interpolated image through
+        // a PNG — `from_png` carries the `/Interpolate` flag. Nearest otherwise, and
+        // as a fallback if PNG encoding fails.
+        let img = if interpolate {
+            match straight_png(rgba, iw, ih)
+                .and_then(|png| KImage::from_png(krilla::Data::from(png), true).ok())
+            {
+                Some(i) => i,
+                None => KImage::from_rgba8(rgba.to_vec(), iw, ih),
+            }
+        } else {
+            KImage::from_rgba8(rgba.to_vec(), iw, ih)
+        };
         // draw_image places the image at the origin scaled to `size`; translate to
         // the cell's top-left, under the primitive transform + clip.
         let place = transform.pre_concat(Transform::from_row(1.0, 0.0, 0.0, 1.0, (x - w / 2.0) as f32, (y - h / 2.0) as f32));
@@ -2078,20 +2106,12 @@ fn to_ktransform(t: Transform) -> KTransform {
 }
 
 fn clip_rect_kpath(w: f64, h: f64, transform: Transform) -> Option<KPath> {
-    let pt = |x: f64, y: f64| {
-        let dx = transform.sx as f64 * x + transform.kx as f64 * y + transform.tx as f64;
-        let dy = transform.ky as f64 * x + transform.sy as f64 * y + transform.ty as f64;
-        (dx as f32, dy as f32)
-    };
+    let c = rect_corners(w, h, transform);
     let mut pb = KPathBuilder::new();
-    let (x0, y0) = pt(0.0, 0.0);
-    pb.move_to(x0, y0);
-    let (x1, y1) = pt(w, 0.0);
-    pb.line_to(x1, y1);
-    let (x2, y2) = pt(w, h);
-    pb.line_to(x2, y2);
-    let (x3, y3) = pt(0.0, h);
-    pb.line_to(x3, y3);
+    pb.move_to(c[0].0 as f32, c[0].1 as f32);
+    pb.line_to(c[1].0 as f32, c[1].1 as f32);
+    pb.line_to(c[2].0 as f32, c[2].1 as f32);
+    pb.line_to(c[3].0 as f32, c[3].1 as f32);
     pb.close();
     pb.finish()
 }

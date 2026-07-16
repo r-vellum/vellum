@@ -17,6 +17,65 @@ fn grid_len(nx: usize, ny: usize, extra: usize) -> usize {
     }
 }
 
+/// The `nx` x `ny` grid over `[x0, x1] x [y0, y1]` (top-left origin, row 0 = `y1`),
+/// with the world->grid scales `sx`/`sy`. Shared by every aggregator so the
+/// degeneracy guard, scale setup, and (for points) the max-edge cell clamp are
+/// defined once. `new` returns `None` for a degenerate extent (caller returns the
+/// empty grid unchanged).
+struct GridBounds {
+    nx: usize,
+    ny: usize,
+    x0: f64,
+    x1: f64,
+    y0: f64,
+    y1: f64,
+    sx: f64,
+    sy: f64,
+}
+
+impl GridBounds {
+    fn new(nx: usize, ny: usize, x0: f64, x1: f64, y0: f64, y1: f64) -> Option<GridBounds> {
+        let dx = x1 - x0;
+        let dy = y1 - y0;
+        if !(dx.is_finite() && dy.is_finite()) || dx == 0.0 || dy == 0.0 {
+            return None;
+        }
+        Some(GridBounds { nx, ny, x0, x1, y0, y1, sx: nx as f64 / dx, sy: ny as f64 / dy })
+    }
+
+    /// Cell `(col, row)` a point falls in, or `None` if it is non-finite or
+    /// outside the bounds. The max edges (`x1`, `y1`) fold into the last
+    /// column/row rather than spilling out.
+    #[inline]
+    fn cell(&self, px: f64, py: f64) -> Option<(usize, usize)> {
+        if !(px.is_finite() && py.is_finite()) {
+            return None;
+        }
+        let cf = (px - self.x0) * self.sx; // column from x (left->right)
+        let rf = (self.y1 - py) * self.sy; // row from y (top = y1)
+        if cf < 0.0 || rf < 0.0 {
+            return None;
+        }
+        let mut col = cf as usize;
+        let mut row = rf as usize;
+        if col >= self.nx {
+            if px <= self.x1 {
+                col = self.nx - 1; // include the max edge
+            } else {
+                return None;
+            }
+        }
+        if row >= self.ny {
+            if py >= self.y0 {
+                row = self.ny - 1;
+            } else {
+                return None;
+            }
+        }
+        Some((col, row))
+    }
+}
+
 // Bin points `(x, y)` into an `nx` x `ny` grid over `[x0, x1] x [y0, y1]`,
 // returning the grid row-major, top-left origin (row 0 = `y1`, the top), so it
 // maps directly onto a raster image. Each in-range point adds its weight to its
@@ -33,46 +92,19 @@ fn rs_aggregate_2d(x: &[f64], y: &[f64], w: Robj, nx: i32, ny: i32, x0: f64, x1:
     let n = x.len().min(y.len());
     let mut grid = vec![0.0f64; grid_len(nx, ny, 1)];
 
-    let dx = x1 - x0;
-    let dy = y1 - y0;
-    if !(dx.is_finite() && dy.is_finite()) || dx == 0.0 || dy == 0.0 {
-        return grid;
-    }
-    let sx = nx as f64 / dx;
-    let sy = ny as f64 / dy;
+    let gb = match GridBounds::new(nx, ny, x0, x1, y0, y1) {
+        Some(g) => g,
+        None => return grid,
+    };
 
     // Per-point weights, length-`n` (recycled/validated R-side), else all 1.0.
     let weights: Option<&[f64]> = w.as_real_slice().filter(|s| s.len() == n);
 
     for i in 0..n {
-        let (px, py) = (x[i], y[i]);
-        if !(px.is_finite() && py.is_finite()) {
-            continue;
+        if let Some((col, row)) = gb.cell(x[i], y[i]) {
+            let wt = weights.map_or(1.0, |s| s[i]);
+            grid[row * nx + col] += wt;
         }
-        // Column from x (left->right), row from y (top = y1).
-        let cf = (px - x0) * sx;
-        let rf = (y1 - py) * sy;
-        if cf < 0.0 || rf < 0.0 {
-            continue;
-        }
-        let mut col = cf as usize;
-        let mut row = rf as usize;
-        if col >= nx {
-            if px <= x1 {
-                col = nx - 1; // include the max edge
-            } else {
-                continue;
-            }
-        }
-        if row >= ny {
-            if py >= y0 {
-                row = ny - 1;
-            } else {
-                continue;
-            }
-        }
-        let wt = weights.map_or(1.0, |s| s[i]);
-        grid[row * nx + col] += wt;
     }
     grid
 }
@@ -97,13 +129,10 @@ fn rs_aggregate_2d_cat(x: &[f64], y: &[f64], cat: &[i32], ncat: i32, w: Robj, nx
         return grid;
     }
 
-    let dx = x1 - x0;
-    let dy = y1 - y0;
-    if !(dx.is_finite() && dy.is_finite()) || dx == 0.0 || dy == 0.0 {
-        return grid;
-    }
-    let sx = nx as f64 / dx;
-    let sy = ny as f64 / dy;
+    let gb = match GridBounds::new(nx, ny, x0, x1, y0, y1) {
+        Some(g) => g,
+        None => return grid,
+    };
 
     // Per-point weights, length-`n` (recycled/validated R-side), else all 1.0.
     let weights: Option<&[f64]> = w.as_real_slice().filter(|s| s.len() == n);
@@ -113,33 +142,10 @@ fn rs_aggregate_2d_cat(x: &[f64], y: &[f64], cat: &[i32], ncat: i32, w: Robj, nx
         if k < 0 || (k as usize) >= ncat {
             continue; // NA / out-of-range category
         }
-        let (px, py) = (x[i], y[i]);
-        if !(px.is_finite() && py.is_finite()) {
-            continue;
+        if let Some((col, row)) = gb.cell(x[i], y[i]) {
+            let wt = weights.map_or(1.0, |s| s[i]);
+            grid[(k as usize) * ncell + row * nx + col] += wt;
         }
-        let cf = (px - x0) * sx;
-        let rf = (y1 - py) * sy;
-        if cf < 0.0 || rf < 0.0 {
-            continue;
-        }
-        let mut col = cf as usize;
-        let mut row = rf as usize;
-        if col >= nx {
-            if px <= x1 {
-                col = nx - 1;
-            } else {
-                continue;
-            }
-        }
-        if row >= ny {
-            if py >= y0 {
-                row = ny - 1;
-            } else {
-                continue;
-            }
-        }
-        let wt = weights.map_or(1.0, |s| s[i]);
-        grid[(k as usize) * ncell + row * nx + col] += wt;
     }
     grid
 }
@@ -321,19 +327,16 @@ fn rs_aggregate_segments(
     let n = x0.len().min(y0.len()).min(x1.len()).min(y1.len());
     let mut grid = vec![0.0f64; grid_len(nx, ny, 1)];
 
-    let dx = x1d - x0d;
-    let dy = y1d - y0d;
-    if !(dx.is_finite() && dy.is_finite()) || dx == 0.0 || dy == 0.0 {
-        return grid;
-    }
-    let sx = nx as f64 / dx;
-    let sy = ny as f64 / dy;
+    let gb = match GridBounds::new(nx, ny, x0d, x1d, y0d, y1d) {
+        Some(g) => g,
+        None => return grid,
+    };
 
     let weights: Option<&[f64]> = w.as_real_slice().filter(|s| s.len() == n);
 
     for i in 0..n {
         let wt = weights.map_or(1.0, |s| s[i]);
-        accumulate_segment(&mut grid, nx, ny, sx, sy, x0d, y1d, x0[i], y0[i], x1[i], y1[i], wt);
+        accumulate_segment(&mut grid, nx, ny, gb.sx, gb.sy, gb.x0, gb.y1, x0[i], y0[i], x1[i], y1[i], wt);
     }
     grid
 }
@@ -353,14 +356,14 @@ fn rs_aggregate_lines(
     let ny = ny.max(1) as usize;
     let n = x.len().min(y.len());
     let mut grid = vec![0.0f64; grid_len(nx, ny, 1)];
-
-    let dx = x1d - x0d;
-    let dy = y1d - y0d;
-    if !(dx.is_finite() && dy.is_finite()) || dx == 0.0 || dy == 0.0 || n < 2 {
+    if n < 2 {
         return grid;
     }
-    let sx = nx as f64 / dx;
-    let sy = ny as f64 / dy;
+
+    let gb = match GridBounds::new(nx, ny, x0d, x1d, y0d, y1d) {
+        Some(g) => g,
+        None => return grid,
+    };
 
     let ids: Option<&[i32]> = brk.as_integer_slice().filter(|s| s.len() == n);
     let weights: Option<&[f64]> = w.as_real_slice().filter(|s| s.len() == n);
@@ -376,7 +379,7 @@ fn rs_aggregate_lines(
             continue; // NA gap
         }
         let wt = weights.map_or(1.0, |s| s[i]);
-        accumulate_segment(&mut grid, nx, ny, sx, sy, x0d, y1d, ax, ay, bx, by, wt);
+        accumulate_segment(&mut grid, nx, ny, gb.sx, gb.sy, gb.x0, gb.y1, ax, ay, bx, by, wt);
     }
     grid
 }

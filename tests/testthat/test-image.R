@@ -52,6 +52,24 @@ test_that("SVG embeds an <image>; PDF renders natively", {
   expect_equal(rawToChar(readBin(fpdf, "raw", 5)), "%PDF-")
 })
 
+test_that("PDF honours the image interpolate flag (BUGFIX1 Phase 6)", {
+  # krilla's from_rgba8 hard-codes non-interpolated, so interpolate was ignored in
+  # PDF; an interpolated image now routes through PNG (which carries /Interpolate).
+  # The two modes must produce valid but *different* PDFs (else the flag is a no-op).
+  pdf_bytes <- function(interp) {
+    s <- vl_scene(2, 2, dpi = 90) |>
+      draw(raster_grob(quad_img(), width = 0.8, height = 0.8, interpolate = interp))
+    f <- withr::local_tempfile(fileext = ".pdf")
+    render(s, f)
+    readBin(f, "raw", 1e6)
+  }
+  a <- pdf_bytes(TRUE)
+  b <- pdf_bytes(FALSE)
+  expect_equal(rawToChar(a[1:5]), "%PDF-")
+  expect_equal(rawToChar(b[1:5]), "%PDF-")
+  expect_false(identical(a, b))
+})
+
 test_that("raster_grob rejects an empty image", {
   expect_error(raster_grob(matrix(character(0), 0, 0)), "no pixels")
 })
