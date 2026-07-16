@@ -301,7 +301,9 @@ fn curve_path_closed(pts: &[Pt], tightness: f64) -> Option<Path> {
 
 /// A jittered loop of points around an ellipse (one hand-drawn pass).
 fn ellipse_points(cx: f64, cy: f64, rx: f64, ry: f64, o: &SketchOpts, rng: &mut Rng) -> Vec<Pt> {
-    let steps = o.curve_step_count.max(6.0);
+    // Upper-bound the step count: it comes straight from a caller option and is
+    // cast to `usize` for a loop + allocation, so cap it (BUGFIX1 Phase 2).
+    let steps = o.curve_step_count.clamp(6.0, 512.0);
     let n = steps as usize;
     let incr = std::f64::consts::TAU / steps;
     let amp = o.max_offset;
@@ -433,9 +435,13 @@ fn fill_params(o: &SketchOpts) -> (f64, f64) {
     let gap = if o.hachure_gap > 0.0 {
         o.hachure_gap
     } else {
-        (weight * 4.0).max(0.1)
+        weight * 4.0
     };
-    (weight, gap)
+    // Floor the *effective* gap unconditionally (incl. a caller-supplied value):
+    // the scanline loop in `hachure_segments`/`dot_paths` runs ~extent/gap times,
+    // so an unclamped tiny `hachure_gap` (e.g. 1e-6) would allocate millions of
+    // spans. See BUGFIX1 Phase 2.
+    (weight, gap.max(0.1))
 }
 
 /// Parallel interior spans across all rings at `angle_deg`, even-odd paired.

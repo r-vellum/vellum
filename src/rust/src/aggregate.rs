@@ -6,6 +6,17 @@
 
 use extendr_api::prelude::*;
 
+// Cell count for a grid allocation, guarding the `usize` products against
+// overflow on absurd resolutions (which would wrap to a tiny alloc and then
+// panic on index). `extra` is the per-cell multiplier (1, or `ncat`). Fails
+// loudly with an R error instead. (BUGFIX1 Phase 2.)
+fn grid_len(nx: usize, ny: usize, extra: usize) -> usize {
+    match nx.checked_mul(ny).and_then(|c| c.checked_mul(extra)) {
+        Some(v) => v,
+        None => throw_r_error("datashade grid dimensions too large"),
+    }
+}
+
 // Bin points `(x, y)` into an `nx` x `ny` grid over `[x0, x1] x [y0, y1]`,
 // returning the grid row-major, top-left origin (row 0 = `y1`, the top), so it
 // maps directly onto a raster image. Each in-range point adds its weight to its
@@ -20,7 +31,7 @@ fn rs_aggregate_2d(x: &[f64], y: &[f64], w: Robj, nx: i32, ny: i32, x0: f64, x1:
     let nx = nx.max(1) as usize;
     let ny = ny.max(1) as usize;
     let n = x.len().min(y.len());
-    let mut grid = vec![0.0f64; nx * ny];
+    let mut grid = vec![0.0f64; grid_len(nx, ny, 1)];
 
     let dx = x1 - x0;
     let dy = y1 - y0;
@@ -79,9 +90,9 @@ fn rs_aggregate_2d_cat(x: &[f64], y: &[f64], cat: &[i32], ncat: i32, w: Robj, nx
     let nx = nx.max(1) as usize;
     let ny = ny.max(1) as usize;
     let ncat = ncat.max(0) as usize;
-    let ncell = nx * ny;
+    let ncell = grid_len(nx, ny, 1);
     let n = x.len().min(y.len()).min(cat.len());
-    let mut grid = vec![0.0f64; ncell * ncat];
+    let mut grid = vec![0.0f64; grid_len(nx, ny, ncat)];
     if ncat == 0 {
         return grid;
     }
@@ -228,6 +239,50 @@ fn wu_segment(grid: &mut [f64], nx: usize, ny: usize, gx0: f64, gy0: f64, gx1: f
     }
 }
 
+// Liang–Barsky clip of a segment to the axis-aligned rectangle
+// `[xmin, xmax] x [ymin, ymax]`, returning the clipped endpoints or `None` when
+// the segment lies wholly outside. The visible grid is `[0, nx) x [0, ny)`; the
+// callers clip to a one-cell-larger rect so the anti-aliased fringe that grazes
+// the canvas edge is preserved (the shared, in-canvas prefix of the Wu walk is
+// unchanged — only far off-canvas extent, which `splat` would drop anyway, is
+// removed). Without this a single segment reaching a far outlier under a tight
+// axis limit drives `wu_segment`'s major-axis loop for ~1e9 dropped cells.
+#[inline]
+fn clip_to_rect(
+    x0: f64, y0: f64, x1: f64, y1: f64, xmin: f64, xmax: f64, ymin: f64, ymax: f64,
+) -> Option<(f64, f64, f64, f64)> {
+    let dx = x1 - x0;
+    let dy = y1 - y0;
+    let (mut t0, mut t1) = (0.0f64, 1.0f64);
+    let p = [-dx, dx, -dy, dy];
+    let q = [x0 - xmin, xmax - x0, y0 - ymin, ymax - y0];
+    for k in 0..4 {
+        if p[k] == 0.0 {
+            if q[k] < 0.0 {
+                return None; // parallel to this edge and outside it
+            }
+        } else {
+            let r = q[k] / p[k];
+            if p[k] < 0.0 {
+                if r > t1 {
+                    return None;
+                }
+                if r > t0 {
+                    t0 = r;
+                }
+            } else {
+                if r < t0 {
+                    return None;
+                }
+                if r < t1 {
+                    t1 = r;
+                }
+            }
+        }
+    }
+    Some((x0 + t0 * dx, y0 + t0 * dy, x0 + t1 * dx, y0 + t1 * dy))
+}
+
 // Map a world-space segment to cell-centre grid coordinates and accumulate it.
 #[allow(clippy::too_many_arguments)]
 #[inline]
@@ -239,7 +294,16 @@ fn accumulate_segment(
     let gy0 = (y1d - wy0) * sy - 0.5; // top-left origin: row grows downward from y1
     let gx1 = (wx1 - x0d) * sx - 0.5;
     let gy1 = (y1d - wy1) * sy - 0.5;
-    wu_segment(grid, nx, ny, gx0, gy0, gx1, gy1, wt);
+    if !(gx0.is_finite() && gy0.is_finite() && gx1.is_finite() && gy1.is_finite()) {
+        return;
+    }
+    // Clip to the grid rect (one cell of margin) before rasterizing; `splat`
+    // still guards each cell for the residual fringe.
+    if let Some((cx0, cy0, cx1, cy1)) =
+        clip_to_rect(gx0, gy0, gx1, gy1, -1.0, nx as f64, -1.0, ny as f64)
+    {
+        wu_segment(grid, nx, ny, cx0, cy0, cx1, cy1, wt);
+    }
 }
 
 // Bin a batch of independent line segments `(x0,y0)->(x1,y1)` into an `nx` x `ny`
@@ -255,7 +319,7 @@ fn rs_aggregate_segments(
     let nx = nx.max(1) as usize;
     let ny = ny.max(1) as usize;
     let n = x0.len().min(y0.len()).min(x1.len()).min(y1.len());
-    let mut grid = vec![0.0f64; nx * ny];
+    let mut grid = vec![0.0f64; grid_len(nx, ny, 1)];
 
     let dx = x1d - x0d;
     let dy = y1d - y0d;
@@ -288,7 +352,7 @@ fn rs_aggregate_lines(
     let nx = nx.max(1) as usize;
     let ny = ny.max(1) as usize;
     let n = x.len().min(y.len());
-    let mut grid = vec![0.0f64; nx * ny];
+    let mut grid = vec![0.0f64; grid_len(nx, ny, 1)];
 
     let dx = x1d - x0d;
     let dy = y1d - y0d;

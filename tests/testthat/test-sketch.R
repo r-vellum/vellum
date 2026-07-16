@@ -105,3 +105,18 @@ test_that("sketch renders on all three backends", {
     expect_gt(file.size(f), 0)
   }
 })
+
+test_that("a tiny hachure_gap is floored, not walked scanline-by-scanline", {
+  # Regression (BUGFIX1 Phase 2): a caller-supplied hachure_gap passed through
+  # fill_params unclamped, so the scanline loop ran ~extent/gap times (millions
+  # of span allocations for gap = 1e-6). The effective gap is now floored.
+  el <- system.time({
+    s <- vl_scene(1, 1, dpi = 100, bg = "white") |>
+      draw(rect_grob(width = 0.8, height = 0.8,
+                     gp = vl_gpar(fill = "steelblue", col = "black"),
+                     sketch = sketch(fill_style = "hachure", hachure_gap = 1e-6, seed = 1)))
+    r <- scene_raster(s)
+  })[["elapsed"]]
+  expect_lt(el, 5)
+  expect_gt(nonwhite(s), 0) # the fill still renders
+})

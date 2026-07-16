@@ -1806,11 +1806,14 @@ impl RenderBackend for PdfBackend<'_, '_> {
             // A real tiling pattern: draw the tile image into a stream sized to the
             // cell, anchored at the cell's top-left (matching raster/SVG).
             ResolvedPaint::Pattern { tile, tw, th, x, y, w, h, opacity, .. } => {
-                match KSize::from_wh(*w as f32, *h as f32) {
+                // Overflow-checked tile byte count (parity with pixmap_from_straight).
+                let need = (*tw as usize)
+                    .checked_mul(*th as usize)
+                    .and_then(|p| p.checked_mul(4));
+                match (KSize::from_wh(*w as f32, *h as f32), need) {
                     // `>=` for parity with the raster/SVG tile checks (which accept a
                     // buffer at least the required size, not exactly it).
-                    Some(cell) if tile.len() >= (*tw as usize) * (*th as usize) * 4 => {
-                        let n = (*tw as usize) * (*th as usize) * 4;
+                    (Some(cell), Some(n)) if tile.len() >= n => {
                         let img = KImage::from_rgba8(tile[..n].to_vec(), *tw, *th);
                         let stream = {
                             let mut sb = self.surface.stream_builder();

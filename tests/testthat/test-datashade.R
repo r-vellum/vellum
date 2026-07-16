@@ -289,3 +289,25 @@ test_that("the spread= convenience arg matches the standalone functions", {
                    dynspread(raw)@rgba)
   expect_error(do.call(datashade_segments, c(args, list(spread = -1L))), "spread")
 })
+
+test_that("a line/segment to a far off-canvas outlier is clipped, not walked cell-by-cell", {
+  # Regression (BUGFIX1 Phase 2): segments were not clipped to the canvas before
+  # rasterizing, so a far endpoint under a tight axis limit drove the Wu loop for
+  # ~1e9 dropped cells (an effective hang). Clipping bounds it to the grid extent.
+  el <- system.time({
+    g <- datashade_lines(
+      x = c(0.2, 1e9), y = c(0.5, 0.5),
+      xlim = c(0, 1), ylim = c(0, 1), width = 400L, height = 400L
+    )
+  })[["elapsed"]]
+  expect_false(is.null(g))
+  expect_lt(el, 5)
+
+  # Clipping must not change on-canvas coverage: two endpoints that both fall
+  # well outside the limit clip to the same grid boundary, so the raw count
+  # grids are identical (and finite).
+  near <- rs_aggregate_lines(c(0.2, 2),   c(0.5, 0.5), NULL, NULL, 50L, 50L, 0, 1, 0, 1)
+  far  <- rs_aggregate_lines(c(0.2, 1e6), c(0.5, 0.5), NULL, NULL, 50L, 50L, 0, 1, 0, 1)
+  expect_equal(near, far)
+  expect_true(all(is.finite(far)))
+})
