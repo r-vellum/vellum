@@ -5,6 +5,7 @@
 //! [`RenderBackend`] trait. tiny-skia raster is one implementation; SVG (and PDF,
 //! later) are others. Geometry is carried as `tiny_skia::Path` + `Transform`.
 
+use std::borrow::Cow;
 use std::collections::HashMap;
 use std::rc::Rc;
 
@@ -1028,8 +1029,14 @@ pub struct SvgBackend {
     node_stack: Vec<String>,
     node_open: Vec<Option<String>>,
     /// Per-element data key for the next primitive (`set_element_key`); spliced
-    /// into the emitted element as `data-key="…"`. `None` = no attribute.
-    cur_element_key: Option<String>,
+    /// into the emitted element as `data-key="…"`. `None` = no attribute. Held as
+    /// `Rc<str>` so `emit` (called once per fill and once per stroke of an element)
+    /// can take a cheap refcount-bump clone rather than copying the key each time.
+    cur_element_key: Option<Rc<str>>,
+    /// Memoised `fill="…" fill-opacity="…"` for the last solid paint. A batched
+    /// primitive resolves one paint for the whole run, so this hits on every
+    /// element after the first — skipping a per-element `rgb_hex` + `format!`.
+    last_solid_fill: Option<(Rgba, String)>,
     /// Scene-level accessible name / long description (a11y). When either is set,
     /// the root `<svg>` gains `role="img"` + `aria-labelledby` and emits
     /// `<title>`/`<desc>` children. `a11y_prefix` uniquifies their ids so several
@@ -1066,6 +1073,7 @@ impl SvgBackend {
             node_stack: Vec::new(),
             node_open: Vec::new(),
             cur_element_key: None,
+            last_solid_fill: None,
             a11y_title: None,
             a11y_desc: None,
             a11y_prefix: String::new(),
@@ -1117,7 +1125,16 @@ impl SvgBackend {
     /// own `transform` maps them to device, exactly like the path geometry.
     fn svg_fill(&mut self, paint: &ResolvedPaint) -> String {
         match paint {
-            ResolvedPaint::Solid(c) => format!("fill=\"{}\" fill-opacity=\"{}\"", rgb_hex(*c), opacity(*c)),
+            ResolvedPaint::Solid(c) => {
+                if let Some((pc, s)) = &self.last_solid_fill {
+                    if pc == c {
+                        return s.clone();
+                    }
+                }
+                let s = format!("fill=\"{}\" fill-opacity=\"{}\"", rgb_hex(*c), opacity(*c));
+                self.last_solid_fill = Some((*c, s.clone()));
+                s
+            }
             ResolvedPaint::Linear { x1, y1, x2, y2, stops, extend } => {
                 let stops_xml = svg_stops(stops);
                 let s = svg_spread(*extend);
@@ -1226,19 +1243,26 @@ impl SvgBackend {
     /// would double-transform the clip region.
     fn emit(&mut self, element: &str, clip: &Clip) {
         let attr = self.clip_attr(clip);
-        // Splice a per-element `data-key` into the shape element's opening tag when
-        // one is set (kept, not cleared, so a fill+stroke pair for one element both
-        // carry it; the batched render loop clears it when the node ends).
-        let element = match &self.cur_element_key {
-            Some(k) => splice_data_key(element, k),
-            None => element.to_string(),
-        };
-        let wrapped = if attr.is_empty() {
-            element
-        } else {
-            format!("<g{attr}>{element}</g>")
-        };
-        self.out().push_str(&wrapped);
+        let has_clip = !attr.is_empty();
+        // A per-element `data-key` is spliced into the shape's opening tag when set
+        // (kept, not cleared, so a fill+stroke pair for one element both carry it;
+        // the batched render loop clears it when the node ends). Writing straight
+        // into the output buffer avoids copying the whole `element` string (and, when
+        // keyed, the extra splice buffer) that the previous formatting approach did.
+        let key = self.cur_element_key.clone(); // cheap Rc refcount bump when set
+        let out = self.out();
+        if has_clip {
+            out.push_str("<g");
+            out.push_str(&attr);
+            out.push('>');
+        }
+        match &key {
+            Some(k) => push_data_keyed(out, element, k),
+            None => out.push_str(element),
+        }
+        if has_clip {
+            out.push_str("</g>");
+        }
     }
 
     /// A ` clip-path="url(#…)"` attribute for this clip (empty string = none).
@@ -1480,7 +1504,7 @@ impl RenderBackend for SvgBackend {
     }
 
     fn set_element_key(&mut self, key: Option<&str>) {
-        self.cur_element_key = key.map(|s| s.to_string());
+        self.cur_element_key = key.map(Rc::from);
     }
 
     fn wants_element_keys(&self) -> bool {
@@ -1505,20 +1529,19 @@ impl RenderBackend for SvgBackend {
     }
 }
 
-/// Insert a `data-key="…"` attribute into a shape element's opening tag, right
-/// after the tag name (so it lands inside `<tag …>`). Used by `SvgBackend::emit`
-/// to tag individual elements of a batched primitive for interactivity.
-fn splice_data_key(element: &str, key: &str) -> String {
+/// Append `element` to `out` with a `data-key="…"` attribute spliced into its
+/// opening tag, right after the tag name (so it lands inside `<tag …>`). Writes
+/// directly into the output buffer — no intermediate element/attribute Strings.
+/// Used by `SvgBackend::emit` to tag individual elements of a batched primitive.
+fn push_data_keyed(out: &mut String, element: &str, key: &str) {
     // The opening tag name runs from the leading `<` to the first space, `/`, or
     // `>`; splice the attribute there.
-    let at = element
-        .find([' ', '/', '>'])
-        .unwrap_or(element.len());
-    let mut s = String::with_capacity(element.len() + key.len() + 12);
-    s.push_str(&element[..at]);
-    s.push_str(&format!(" data-key=\"{}\"", xml_escape(key)));
-    s.push_str(&element[at..]);
-    s
+    let at = element.find([' ', '/', '>']).unwrap_or(element.len());
+    out.push_str(&element[..at]);
+    out.push_str(" data-key=\"");
+    out.push_str(xml_escape(key).as_ref());
+    out.push('"');
+    out.push_str(&element[at..]);
 }
 
 /// Coverage byte a mask contributes for one (demultiplied) pixel: its alpha, or
@@ -1679,8 +1702,23 @@ fn clip_shape_d(shape: &ClipShape) -> String {
 
 // Escape a string for XML text or a double-quoted attribute value. Shared with
 // scene.rs (the SVG identity attributes) so the two backends can't drift.
-pub(crate) fn xml_escape(s: &str) -> String {
-    s.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;").replace('"', "&quot;")
+pub(crate) fn xml_escape(s: &str) -> Cow<'_, str> {
+    // Fast path: the overwhelming majority of keys / ids / labels contain none of
+    // the XML metacharacters, so return the input untouched (no allocation).
+    if !s.bytes().any(|b| matches!(b, b'&' | b'<' | b'>' | b'"')) {
+        return Cow::Borrowed(s);
+    }
+    let mut out = String::with_capacity(s.len() + 8);
+    for c in s.chars() {
+        match c {
+            '&' => out.push_str("&amp;"),
+            '<' => out.push_str("&lt;"),
+            '>' => out.push_str("&gt;"),
+            '"' => out.push_str("&quot;"),
+            _ => out.push(c),
+        }
+    }
+    Cow::Owned(out)
 }
 
 // --- PDF backend (krilla) ---------------------------------------------------

@@ -1,5 +1,14 @@
 # vellum (development version)
 
+* **Faster, leaner keyed SVG emission.** Emitting a scene to SVG with per-element
+  `data-key`s (the interactivity attributes) now writes each element straight into
+  the output buffer instead of building and copying an intermediate string per
+  element, memoises the `fill` attribute across a batch's shared paint, holds the
+  current element key as an `Rc<str>`, and skips escaping work for keys/ids/labels
+  that contain no XML metacharacters (the common case). Output is byte-identical;
+  a 150k-point keyed scatter's `scene_svg()` is ~12% faster with substantially
+  fewer per-element allocations.
+
 * **`vl_strwidth()` / `vl_strheight()` measure `md()` labels.** Both now accept a
   rich label from `md()` (or a list of them) in addition to character strings,
   measuring it through the same run composition the renderer draws — so
