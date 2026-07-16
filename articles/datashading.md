@@ -235,14 +235,148 @@ colormap. Run it for a fresh gallery every time:
 Rscript inst/examples/attractors.R gallery.png 1e7
 ```
 
+## Lines: dense timeseries
+
+Points are not the only thing that overplots. A few hundred stacked
+timeseries, each with a few thousand samples, is already a million line
+vertices — draw them as vector paths and you get a solid band that hides
+where the traces actually concentrate. The same aggregate-then-shade
+idea applies: rasterise the lines into a grid where each cell
+accumulates the coverage of the lines crossing it, then colour by that
+density.
+[`datashade_lines()`](https://r-vellum.github.io/vellum/reference/datashade_lines.md)
+does this.
+
+It takes a connected polyline. Pass `group` to pack many series into one
+call — the line breaks wherever the group id changes (an `NA` coordinate
+breaks it too), so a whole panel of traces is a single call and a single
+raster.
+
+``` r
+
+set.seed(1)
+k <- 600       # series
+m <- 800       # samples each
+steps <- matrix(rnorm(k * m, sd = 0.4), m, k)
+walks <- apply(steps, 2, cumsum)          # k random walks, m samples
+
+t <- rep(seq_len(m), times = k)           # x: shared time axis
+y <- as.vector(walks)                     # y: all traces concatenated
+grp <- rep(seq_len(k), each = m)          # which series each vertex belongs to
+
+vl_scene(6, 4, bg = "white") |>
+  push(vl_viewport(xscale = range(t), yscale = range(y))) |>
+  draw(datashade_lines(
+    t, y, group = grp,
+    width = 600, height = 400,
+    colors = c("#ffffff", "#fdd0a2", "#fd8d3c", "#d94801", "#7f2704"),
+    how = "eq_hist"
+  ))
+```
+
+![](datashading_files/figure-html/walks-1.png)
+
+The bright core is where the walks pile up (near the start, before they
+diffuse apart); the faint outer envelope is the handful of traces that
+wandered far. That structure is exactly what an opaque band of 480,000
+vertices would have hidden. Coverage is anti-aliased and *summed*, so
+overlapping traces brighten honestly rather than saturating to a single
+flat colour.
+
+## Segments: network edges
+
+[`datashade_segments()`](https://r-vellum.github.io/vellum/reference/datashade_lines.md)
+is the same engine for *independent* segments — each element is one
+`(x0, y0) -> (x1, y1)` line, not a connected path. The motivating case
+is the edges of a large graph: a hairball of tens of thousands of edges
+drawn as vectors is an unreadable blob, but aggregated it becomes an
+edge-*density* field showing which regions of the layout the edges
+actually run through.
+
+``` r
+
+set.seed(2)
+# A toy "layout": two loose clusters of nodes with many edges between them.
+n_nodes <- 400
+nx <- c(rnorm(n_nodes / 2, -1), rnorm(n_nodes / 2, 1))
+ny <- rnorm(n_nodes)
+n_edges <- 8000
+a <- sample(n_nodes, n_edges, replace = TRUE)
+b <- sample(n_nodes, n_edges, replace = TRUE)
+
+vl_scene(6, 4, bg = "white") |>
+  push(vl_viewport(xscale = range(nx), yscale = range(ny))) |>
+  draw(datashade_segments(
+    nx[a], ny[a], nx[b], ny[b],
+    width = 600, height = 400,
+    colors = c("#ffffff", "#c6dbef", "#6baed6", "#2171b5", "#08306b"),
+    how = "eq_hist"
+  ))
+```
+
+![](datashading_files/figure-html/edges-1.png)
+
+Per-segment `weight` works like the point path’s per-point weight: pass
+edge weights and cells accumulate summed weight instead of a plain
+crossing count.
+
+## Keeping thin marks visible: spread
+
+Aggregated lines are often a single pixel wide, and a lone pixel
+disappears when the image is shown small or over a busy background.
+[`spread()`](https://r-vellum.github.io/vellum/reference/spread.md)
+dilates each non-empty pixel over a small neighbourhood — the
+aggregation is untouched, the marks just get a little bolder.
+[`dynspread()`](https://r-vellum.github.io/vellum/reference/dynspread.md)
+chooses the radius automatically from how dense the image already is
+(dense regions spread less), which is what the `spread = "auto"`
+shortcut on the `datashade_*` functions calls.
+
+``` r
+
+sparse <- datashade_segments(
+  nx[a][1:1500], ny[a][1:1500], nx[b][1:1500], ny[b][1:1500],
+  width = 300, height = 300, colors = c("#ffffff", "#08306b")
+)
+
+vl_scene(6, 3, bg = "white") |>
+  push(vl_viewport(layout = grid_layout(
+    widths = vl_unit(c(1, 1), "null"),
+    heights = vl_unit(1, "null")
+  ))) |>
+  push(vl_viewport(row = 1, col = 1)) |> draw(sparse)            |> pop() |>
+  push(vl_viewport(row = 1, col = 2)) |> draw(dynspread(sparse)) |> pop()
+```
+
+![](datashading_files/figure-html/spread-1.png)
+
+Left, the raw one-pixel edges; right, the same raster after
+[`dynspread()`](https://r-vellum.github.io/vellum/reference/dynspread.md).
+Pass `spread = 2` (a fixed radius) or `spread = "auto"` (dynspread)
+straight to
+[`datashade_lines()`](https://r-vellum.github.io/vellum/reference/datashade_lines.md)
+/
+[`datashade_segments()`](https://r-vellum.github.io/vellum/reference/datashade_lines.md)
+to fold this into the shading call.
+
 ## Recap
 
 - [`datashade()`](https://r-vellum.github.io/vellum/reference/datashade.md)
   bins a point cloud into a grid and colours cells by density, so cost
   tracks the grid size, not the point count, and overplotting becomes
   signal rather than noise.
+- [`datashade_lines()`](https://r-vellum.github.io/vellum/reference/datashade_lines.md)
+  and
+  [`datashade_segments()`](https://r-vellum.github.io/vellum/reference/datashade_lines.md)
+  do the same for dense timeseries and network edges: an anti-aliased
+  line rasteriser accumulates coverage per cell, so overlapping lines
+  add rather than saturate.
 - `how = "eq_hist"` keeps structure visible across orders of magnitude;
   `"log"`, `"cbrt"`, and `"linear"` are simpler alternatives.
+- [`spread()`](https://r-vellum.github.io/vellum/reference/spread.md) /
+  [`dynspread()`](https://r-vellum.github.io/vellum/reference/dynspread.md)
+  (or `spread =` on the `datashade_*` calls) dilate thin rasterised
+  marks so single-pixel lines stay visible.
 - The result is one
   [`raster_grob()`](https://r-vellum.github.io/vellum/reference/grob.md).
   Draw it inside a viewport whose scales match `xlim` / `ylim` to align

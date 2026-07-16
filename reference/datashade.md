@@ -26,6 +26,7 @@ datashade(
   how = c("eq_hist", "log", "cbrt", "linear"),
   span = NULL,
   clip = NULL,
+  spread = NULL,
   interpolate = FALSE,
   name = NULL,
   vp = NULL,
@@ -86,6 +87,18 @@ datashade(
   way to keep a few extreme cells from flattening the rest. Overrides
   `span`.
 
+- spread:
+
+  Optional post-aggregation spreading, applied to the shaded raster to
+  keep sparse output visible (see
+  [`spread()`](https://r-vellum.github.io/vellum/reference/spread.md) /
+  [`dynspread()`](https://r-vellum.github.io/vellum/reference/dynspread.md)):
+  `NULL` (default) none; a positive integer applies
+  [`spread()`](https://r-vellum.github.io/vellum/reference/spread.md)
+  with that pixel radius; `"auto"` applies
+  [`dynspread()`](https://r-vellum.github.io/vellum/reference/dynspread.md)
+  (radius chosen from the image density).
+
 - interpolate:
 
   Passed to
@@ -124,6 +137,14 @@ which category dominates where *and* where categories mix, without
 overplotting bias. When `category` is set, `colors` is a per-category
 hue vector (named by level, or one colour per level in level order)
 instead of a low-to-high ramp.
+
+## See also
+
+[`datashade_lines()`](https://r-vellum.github.io/vellum/reference/datashade_lines.md)
+and
+[`datashade_segments()`](https://r-vellum.github.io/vellum/reference/datashade_lines.md)
+for the line/segment (dense-timeseries, network-edge) counterparts, and
+[`dynspread()`](https://r-vellum.github.io/vellum/reference/dynspread.md)/[`spread()`](https://r-vellum.github.io/vellum/reference/spread.md).
 
 ## Examples
 

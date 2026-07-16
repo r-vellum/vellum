@@ -101,10 +101,18 @@ labels.
 
 ## Big data
 
-Aggregate-then-shade rendering for large point clouds.
+Aggregate-then-shade rendering for large point clouds, dense timeseries,
+and network edges.
 
 - [`datashade()`](https://r-vellum.github.io/vellum/reference/datashade.md)
   : Aggregate-then-shade a large point cloud (datashader-style)
+- [`datashade_lines()`](https://r-vellum.github.io/vellum/reference/datashade_lines.md)
+  [`datashade_segments()`](https://r-vellum.github.io/vellum/reference/datashade_lines.md)
+  : Aggregate-then-shade dense lines and segments (datashader-style)
+- [`spread()`](https://r-vellum.github.io/vellum/reference/spread.md) :
+  Spread (dilate) the pixels of a raster grob
+- [`dynspread()`](https://r-vellum.github.io/vellum/reference/dynspread.md)
+  : Dynamically spread a raster grob to a target density
 
 ## Inspecting & editing scenes
 

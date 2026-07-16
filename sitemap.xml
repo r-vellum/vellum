@@ -18,8 +18,10 @@
 <url><loc>https://r-vellum.github.io/vellum/reference/as_vellum.html</loc></url>
 <url><loc>https://r-vellum.github.io/vellum/reference/as_vellum_scene.html</loc></url>
 <url><loc>https://r-vellum.github.io/vellum/reference/datashade.html</loc></url>
+<url><loc>https://r-vellum.github.io/vellum/reference/datashade_lines.html</loc></url>
 <url><loc>https://r-vellum.github.io/vellum/reference/describe.html</loc></url>
 <url><loc>https://r-vellum.github.io/vellum/reference/display.html</loc></url>
+<url><loc>https://r-vellum.github.io/vellum/reference/dynspread.html</loc></url>
 <url><loc>https://r-vellum.github.io/vellum/reference/gradients.html</loc></url>
 <url><loc>https://r-vellum.github.io/vellum/reference/grob.html</loc></url>
 <url><loc>https://r-vellum.github.io/vellum/reference/grobwidth.html</loc></url>
@@ -37,6 +39,7 @@
 <url><loc>https://r-vellum.github.io/vellum/reference/scene_raster.html</loc></url>
 <url><loc>https://r-vellum.github.io/vellum/reference/scene_svg.html</loc></url>
 <url><loc>https://r-vellum.github.io/vellum/reference/sketch.html</loc></url>
+<url><loc>https://r-vellum.github.io/vellum/reference/spread.html</loc></url>
 <url><loc>https://r-vellum.github.io/vellum/reference/style.html</loc></url>
 <url><loc>https://r-vellum.github.io/vellum/reference/vellum-package.html</loc></url>
 <url><loc>https://r-vellum.github.io/vellum/reference/vl_arrow.html</loc></url>

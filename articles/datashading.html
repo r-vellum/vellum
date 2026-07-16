@@ -305,6 +305,111 @@ a random colormap. Run it for a fresh gallery every time:</p>
 <div class="sourceCode" id="cb7"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb7-1"><a href="#cb7-1" tabindex="-1"></a>Rscript inst<span class="sc">/</span>examples<span class="sc">/</span>attractors.R gallery.png <span class="fl">1e7</span></span></code></pre></div>
 </div>
 <div class="section level2">
+<h2 id="lines-dense-timeseries">Lines: dense timeseries<a class="anchor" aria-label="anchor" href="#lines-dense-timeseries"></a>
+</h2>
+<p>Points are not the only thing that overplots. A few hundred stacked
+timeseries, each with a few thousand samples, is already a million line
+vertices — draw them as vector paths and you get a solid band that hides
+where the traces actually concentrate. The same aggregate-then-shade
+idea applies: rasterise the lines into a grid where each cell
+accumulates the coverage of the lines crossing it, then colour by that
+density. <code><a href="../reference/datashade_lines.html">datashade_lines()</a></code> does this.</p>
+<p>It takes a connected polyline. Pass <code>group</code> to pack many
+series into one call — the line breaks wherever the group id changes (an
+<code>NA</code> coordinate breaks it too), so a whole panel of traces is
+a single call and a single raster.</p>
+<div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/base/Random.html" class="external-link">set.seed</a></span><span class="op">(</span><span class="fl">1</span><span class="op">)</span></span>
+<span><span class="va">k</span> <span class="op">&lt;-</span> <span class="fl">600</span>       <span class="co"># series</span></span>
+<span><span class="va">m</span> <span class="op">&lt;-</span> <span class="fl">800</span>       <span class="co"># samples each</span></span>
+<span><span class="va">steps</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/matrix.html" class="external-link">matrix</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/stats/Normal.html" class="external-link">rnorm</a></span><span class="op">(</span><span class="va">k</span> <span class="op">*</span> <span class="va">m</span>, sd <span class="op">=</span> <span class="fl">0.4</span><span class="op">)</span>, <span class="va">m</span>, <span class="va">k</span><span class="op">)</span></span>
+<span><span class="va">walks</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/apply.html" class="external-link">apply</a></span><span class="op">(</span><span class="va">steps</span>, <span class="fl">2</span>, <span class="va">cumsum</span><span class="op">)</span>          <span class="co"># k random walks, m samples</span></span>
+<span></span>
+<span><span class="va">t</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/rep.html" class="external-link">rep</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/seq.html" class="external-link">seq_len</a></span><span class="op">(</span><span class="va">m</span><span class="op">)</span>, times <span class="op">=</span> <span class="va">k</span><span class="op">)</span>           <span class="co"># x: shared time axis</span></span>
+<span><span class="va">y</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/vector.html" class="external-link">as.vector</a></span><span class="op">(</span><span class="va">walks</span><span class="op">)</span>                     <span class="co"># y: all traces concatenated</span></span>
+<span><span class="va">grp</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/rep.html" class="external-link">rep</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/seq.html" class="external-link">seq_len</a></span><span class="op">(</span><span class="va">k</span><span class="op">)</span>, each <span class="op">=</span> <span class="va">m</span><span class="op">)</span>          <span class="co"># which series each vertex belongs to</span></span>
+<span></span>
+<span><span class="fu"><a href="../reference/vl_scene.html">vl_scene</a></span><span class="op">(</span><span class="fl">6</span>, <span class="fl">4</span>, bg <span class="op">=</span> <span class="st">"white"</span><span class="op">)</span> <span class="op">|&gt;</span></span>
+<span>  <span class="fu"><a href="../reference/vl_scene.html">push</a></span><span class="op">(</span><span class="fu"><a href="../reference/vl_viewport.html">vl_viewport</a></span><span class="op">(</span>xscale <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/range.html" class="external-link">range</a></span><span class="op">(</span><span class="va">t</span><span class="op">)</span>, yscale <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/range.html" class="external-link">range</a></span><span class="op">(</span><span class="va">y</span><span class="op">)</span><span class="op">)</span><span class="op">)</span> <span class="op">|&gt;</span></span>
+<span>  <span class="fu"><a href="../reference/vl_scene.html">draw</a></span><span class="op">(</span><span class="fu"><a href="../reference/datashade_lines.html">datashade_lines</a></span><span class="op">(</span></span>
+<span>    <span class="va">t</span>, <span class="va">y</span>, group <span class="op">=</span> <span class="va">grp</span>,</span>
+<span>    width <span class="op">=</span> <span class="fl">600</span>, height <span class="op">=</span> <span class="fl">400</span>,</span>
+<span>    colors <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"#ffffff"</span>, <span class="st">"#fdd0a2"</span>, <span class="st">"#fd8d3c"</span>, <span class="st">"#d94801"</span>, <span class="st">"#7f2704"</span><span class="op">)</span>,</span>
+<span>    how <span class="op">=</span> <span class="st">"eq_hist"</span></span>
+<span>  <span class="op">)</span><span class="op">)</span></span></code></pre></div>
+<p><img src="datashading_files/figure-html/walks-1.png" class="r-plt" alt="" width="500"></p>
+<p>The bright core is where the walks pile up (near the start, before
+they diffuse apart); the faint outer envelope is the handful of traces
+that wandered far. That structure is exactly what an opaque band of
+480,000 vertices would have hidden. Coverage is anti-aliased and
+<em>summed</em>, so overlapping traces brighten honestly rather than
+saturating to a single flat colour.</p>
+</div>
+<div class="section level2">
+<h2 id="segments-network-edges">Segments: network edges<a class="anchor" aria-label="anchor" href="#segments-network-edges"></a>
+</h2>
+<p><code><a href="../reference/datashade_lines.html">datashade_segments()</a></code> is the same engine for
+<em>independent</em> segments — each element is one
+<code>(x0, y0) -&gt; (x1, y1)</code> line, not a connected path. The
+motivating case is the edges of a large graph: a hairball of tens of
+thousands of edges drawn as vectors is an unreadable blob, but
+aggregated it becomes an edge-<em>density</em> field showing which
+regions of the layout the edges actually run through.</p>
+<div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/base/Random.html" class="external-link">set.seed</a></span><span class="op">(</span><span class="fl">2</span><span class="op">)</span></span>
+<span><span class="co"># A toy "layout": two loose clusters of nodes with many edges between them.</span></span>
+<span><span class="va">n_nodes</span> <span class="op">&lt;-</span> <span class="fl">400</span></span>
+<span><span class="va">nx</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/stats/Normal.html" class="external-link">rnorm</a></span><span class="op">(</span><span class="va">n_nodes</span> <span class="op">/</span> <span class="fl">2</span>, <span class="op">-</span><span class="fl">1</span><span class="op">)</span>, <span class="fu"><a href="https://rdrr.io/r/stats/Normal.html" class="external-link">rnorm</a></span><span class="op">(</span><span class="va">n_nodes</span> <span class="op">/</span> <span class="fl">2</span>, <span class="fl">1</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="va">ny</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/stats/Normal.html" class="external-link">rnorm</a></span><span class="op">(</span><span class="va">n_nodes</span><span class="op">)</span></span>
+<span><span class="va">n_edges</span> <span class="op">&lt;-</span> <span class="fl">8000</span></span>
+<span><span class="va">a</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/sample.html" class="external-link">sample</a></span><span class="op">(</span><span class="va">n_nodes</span>, <span class="va">n_edges</span>, replace <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span>
+<span><span class="va">b</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/sample.html" class="external-link">sample</a></span><span class="op">(</span><span class="va">n_nodes</span>, <span class="va">n_edges</span>, replace <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span>
+<span></span>
+<span><span class="fu"><a href="../reference/vl_scene.html">vl_scene</a></span><span class="op">(</span><span class="fl">6</span>, <span class="fl">4</span>, bg <span class="op">=</span> <span class="st">"white"</span><span class="op">)</span> <span class="op">|&gt;</span></span>
+<span>  <span class="fu"><a href="../reference/vl_scene.html">push</a></span><span class="op">(</span><span class="fu"><a href="../reference/vl_viewport.html">vl_viewport</a></span><span class="op">(</span>xscale <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/range.html" class="external-link">range</a></span><span class="op">(</span><span class="va">nx</span><span class="op">)</span>, yscale <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/range.html" class="external-link">range</a></span><span class="op">(</span><span class="va">ny</span><span class="op">)</span><span class="op">)</span><span class="op">)</span> <span class="op">|&gt;</span></span>
+<span>  <span class="fu"><a href="../reference/vl_scene.html">draw</a></span><span class="op">(</span><span class="fu"><a href="../reference/datashade_lines.html">datashade_segments</a></span><span class="op">(</span></span>
+<span>    <span class="va">nx</span><span class="op">[</span><span class="va">a</span><span class="op">]</span>, <span class="va">ny</span><span class="op">[</span><span class="va">a</span><span class="op">]</span>, <span class="va">nx</span><span class="op">[</span><span class="va">b</span><span class="op">]</span>, <span class="va">ny</span><span class="op">[</span><span class="va">b</span><span class="op">]</span>,</span>
+<span>    width <span class="op">=</span> <span class="fl">600</span>, height <span class="op">=</span> <span class="fl">400</span>,</span>
+<span>    colors <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"#ffffff"</span>, <span class="st">"#c6dbef"</span>, <span class="st">"#6baed6"</span>, <span class="st">"#2171b5"</span>, <span class="st">"#08306b"</span><span class="op">)</span>,</span>
+<span>    how <span class="op">=</span> <span class="st">"eq_hist"</span></span>
+<span>  <span class="op">)</span><span class="op">)</span></span></code></pre></div>
+<p><img src="datashading_files/figure-html/edges-1.png" class="r-plt" alt="" width="500"></p>
+<p>Per-segment <code>weight</code> works like the point path’s per-point
+weight: pass edge weights and cells accumulate summed weight instead of
+a plain crossing count.</p>
+</div>
+<div class="section level2">
+<h2 id="keeping-thin-marks-visible-spread">Keeping thin marks visible: spread<a class="anchor" aria-label="anchor" href="#keeping-thin-marks-visible-spread"></a>
+</h2>
+<p>Aggregated lines are often a single pixel wide, and a lone pixel
+disappears when the image is shown small or over a busy background.
+<code><a href="../reference/spread.html">spread()</a></code> dilates each non-empty pixel over a small
+neighbourhood — the aggregation is untouched, the marks just get a
+little bolder. <code><a href="../reference/dynspread.html">dynspread()</a></code> chooses the radius automatically
+from how dense the image already is (dense regions spread less), which
+is what the <code>spread = "auto"</code> shortcut on the
+<code>datashade_*</code> functions calls.</p>
+<div class="sourceCode" id="cb10"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">sparse</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/datashade_lines.html">datashade_segments</a></span><span class="op">(</span></span>
+<span>  <span class="va">nx</span><span class="op">[</span><span class="va">a</span><span class="op">]</span><span class="op">[</span><span class="fl">1</span><span class="op">:</span><span class="fl">1500</span><span class="op">]</span>, <span class="va">ny</span><span class="op">[</span><span class="va">a</span><span class="op">]</span><span class="op">[</span><span class="fl">1</span><span class="op">:</span><span class="fl">1500</span><span class="op">]</span>, <span class="va">nx</span><span class="op">[</span><span class="va">b</span><span class="op">]</span><span class="op">[</span><span class="fl">1</span><span class="op">:</span><span class="fl">1500</span><span class="op">]</span>, <span class="va">ny</span><span class="op">[</span><span class="va">b</span><span class="op">]</span><span class="op">[</span><span class="fl">1</span><span class="op">:</span><span class="fl">1500</span><span class="op">]</span>,</span>
+<span>  width <span class="op">=</span> <span class="fl">300</span>, height <span class="op">=</span> <span class="fl">300</span>, colors <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"#ffffff"</span>, <span class="st">"#08306b"</span><span class="op">)</span></span>
+<span><span class="op">)</span></span>
+<span></span>
+<span><span class="fu"><a href="../reference/vl_scene.html">vl_scene</a></span><span class="op">(</span><span class="fl">6</span>, <span class="fl">3</span>, bg <span class="op">=</span> <span class="st">"white"</span><span class="op">)</span> <span class="op">|&gt;</span></span>
+<span>  <span class="fu"><a href="../reference/vl_scene.html">push</a></span><span class="op">(</span><span class="fu"><a href="../reference/vl_viewport.html">vl_viewport</a></span><span class="op">(</span>layout <span class="op">=</span> <span class="fu"><a href="../reference/vl_viewport.html">grid_layout</a></span><span class="op">(</span></span>
+<span>    widths <span class="op">=</span> <span class="fu"><a href="../reference/vl_unit.html">vl_unit</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">1</span>, <span class="fl">1</span><span class="op">)</span>, <span class="st">"null"</span><span class="op">)</span>,</span>
+<span>    heights <span class="op">=</span> <span class="fu"><a href="../reference/vl_unit.html">vl_unit</a></span><span class="op">(</span><span class="fl">1</span>, <span class="st">"null"</span><span class="op">)</span></span>
+<span>  <span class="op">)</span><span class="op">)</span><span class="op">)</span> <span class="op">|&gt;</span></span>
+<span>  <span class="fu"><a href="../reference/vl_scene.html">push</a></span><span class="op">(</span><span class="fu"><a href="../reference/vl_viewport.html">vl_viewport</a></span><span class="op">(</span>row <span class="op">=</span> <span class="fl">1</span>, col <span class="op">=</span> <span class="fl">1</span><span class="op">)</span><span class="op">)</span> <span class="op">|&gt;</span> <span class="fu"><a href="../reference/vl_scene.html">draw</a></span><span class="op">(</span><span class="va">sparse</span><span class="op">)</span>            <span class="op">|&gt;</span> <span class="fu"><a href="../reference/vl_scene.html">pop</a></span><span class="op">(</span><span class="op">)</span> <span class="op">|&gt;</span></span>
+<span>  <span class="fu"><a href="../reference/vl_scene.html">push</a></span><span class="op">(</span><span class="fu"><a href="../reference/vl_viewport.html">vl_viewport</a></span><span class="op">(</span>row <span class="op">=</span> <span class="fl">1</span>, col <span class="op">=</span> <span class="fl">2</span><span class="op">)</span><span class="op">)</span> <span class="op">|&gt;</span> <span class="fu"><a href="../reference/vl_scene.html">draw</a></span><span class="op">(</span><span class="fu"><a href="../reference/dynspread.html">dynspread</a></span><span class="op">(</span><span class="va">sparse</span><span class="op">)</span><span class="op">)</span> <span class="op">|&gt;</span> <span class="fu"><a href="../reference/vl_scene.html">pop</a></span><span class="op">(</span><span class="op">)</span></span></code></pre></div>
+<p><img src="datashading_files/figure-html/spread-1.png" class="r-plt" alt="" width="600"></p>
+<p>Left, the raw one-pixel edges; right, the same raster after
+<code><a href="../reference/dynspread.html">dynspread()</a></code>. Pass <code>spread = 2</code> (a fixed radius)
+or <code>spread = "auto"</code> (dynspread) straight to
+<code><a href="../reference/datashade_lines.html">datashade_lines()</a></code> / <code><a href="../reference/datashade_lines.html">datashade_segments()</a></code> to
+fold this into the shading call.</p>
+</div>
+<div class="section level2">
 <h2 id="recap">Recap<a class="anchor" aria-label="anchor" href="#recap"></a>
 </h2>
 <ul>
@@ -313,9 +418,18 @@ a random colormap. Run it for a fresh gallery every time:</p>
 cells by density, so cost tracks the grid size, not the point count, and
 overplotting becomes signal rather than noise.</li>
 <li>
+<code><a href="../reference/datashade_lines.html">datashade_lines()</a></code> and <code><a href="../reference/datashade_lines.html">datashade_segments()</a></code>
+do the same for dense timeseries and network edges: an anti-aliased line
+rasteriser accumulates coverage per cell, so overlapping lines add
+rather than saturate.</li>
+<li>
 <code>how = "eq_hist"</code> keeps structure visible across orders
 of magnitude; <code>"log"</code>, <code>"cbrt"</code>, and
 <code>"linear"</code> are simpler alternatives.</li>
+<li>
+<code><a href="../reference/spread.html">spread()</a></code> / <code><a href="../reference/dynspread.html">dynspread()</a></code> (or
+<code>spread =</code> on the <code>datashade_*</code> calls) dilate thin
+rasterised marks so single-pixel lines stay visible.</li>
 <li>The result is one <code><a href="../reference/grob.html">raster_grob()</a></code>. Draw it inside a
 viewport whose scales match <code>xlim</code> / <code>ylim</code> to
 align it with axes, or tile many of them in a <code><a href="../reference/vl_viewport.html">grid_layout()</a></code>

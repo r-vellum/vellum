@@ -2,6 +2,52 @@
 
 ## vellum (development version)
 
+- **[`vl_strwidth()`](https://r-vellum.github.io/vellum/reference/vl_strwidth.md)
+  /
+  [`vl_strheight()`](https://r-vellum.github.io/vellum/reference/vl_strwidth.md)
+  measure [`md()`](https://r-vellum.github.io/vellum/reference/md.md)
+  labels.** Both now accept a rich label from
+  [`md()`](https://r-vellum.github.io/vellum/reference/md.md) (or a list
+  of them) in addition to character strings, measuring it through the
+  same run composition the renderer draws — so super/subscripts and bold
+  runs reserve the space they actually occupy.
+  `family`/`fontface`/`fontsize` supply the base style the label’s runs
+  are relative to. Previously a caller had to reduce a rich label to
+  plain text (and
+  [`as.character()`](https://rdrr.io/r/base/character.html) on an
+  [`md()`](https://r-vellum.github.io/vellum/reference/md.md) object
+  errors), so downstream layout code that measured a rich title got zero
+  width and clipped it.
+
+- **Line & segment datashading.**
+  [`datashade_lines()`](https://r-vellum.github.io/vellum/reference/datashade_lines.md)
+  and
+  [`datashade_segments()`](https://r-vellum.github.io/vellum/reference/datashade_lines.md)
+  extend the aggregate-then-shade engine from point clouds to dense
+  lines. A new anti-aliased Rust line rasteriser accumulates coverage
+  per grid cell (overlapping lines *add*), so a bundle of hundreds of
+  timeseries or a graph of tens of thousands of edges renders at cost
+  decoupled from the vertex count, as one
+  [`raster_grob()`](https://r-vellum.github.io/vellum/reference/grob.md).
+  [`datashade_lines()`](https://r-vellum.github.io/vellum/reference/datashade_lines.md)
+  takes a connected polyline with an optional `group` id (packing many
+  series into one call; `NA` also breaks the line);
+  [`datashade_segments()`](https://r-vellum.github.io/vellum/reference/datashade_lines.md)
+  takes independent `(x0,y0)->(x1,y1)` segments (the network-edge case).
+  Both share
+  [`datashade()`](https://r-vellum.github.io/vellum/reference/datashade.md)’s
+  `colors`/`how`/`span`/`clip` shading and per-line `weight`. See the
+  *Datashading* article and `inst/examples/lines.R`.
+
+- **Pixel spreading
+  ([`spread()`](https://r-vellum.github.io/vellum/reference/spread.md) /
+  [`dynspread()`](https://r-vellum.github.io/vellum/reference/dynspread.md)).**
+  Dilate the non-empty pixels of any raster grob so thin marks stay
+  visible — datashader’s `spread` (fixed radius) and `dynspread` (radius
+  chosen from image density). Available standalone, or via a `spread =`
+  argument on the `datashade*` functions (`spread = 2` for a fixed
+  radius, `spread = "auto"` for dynspread).
+
 - **Focal / two-circle radial gradients.**
   [`radial_gradient()`](https://r-vellum.github.io/vellum/reference/gradients.md)
   gained `fx`, `fy`, `fr` — the *focal* (start) circle at stop offset 0,

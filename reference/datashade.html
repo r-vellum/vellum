@@ -95,6 +95,7 @@ cost from both point count and overplotting. <code>datashade()</code> returns a 
 <span>  how <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"eq_hist"</span>, <span class="st">"log"</span>, <span class="st">"cbrt"</span>, <span class="st">"linear"</span><span class="op">)</span>,</span>
 <span>  span <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  clip <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  spread <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  interpolate <span class="op">=</span> <span class="cn">FALSE</span>,</span>
 <span>  name <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  vp <span class="op">=</span> <span class="cn">NULL</span>,</span>
@@ -156,6 +157,13 @@ uses the full observed range.</p></dd>
 keep a few extreme cells from flattening the rest. Overrides <code>span</code>.</p></dd>
 
 
+<dt id="arg-spread">spread<a class="anchor" aria-label="anchor" href="#arg-spread"></a></dt>
+<dd><p>Optional post-aggregation spreading, applied to the shaded
+raster to keep sparse output visible (see <code><a href="spread.html">spread()</a></code> / <code><a href="dynspread.html">dynspread()</a></code>):
+<code>NULL</code> (default) none; a positive integer applies <code><a href="spread.html">spread()</a></code> with that pixel
+radius; <code>"auto"</code> applies <code><a href="dynspread.html">dynspread()</a></code> (radius chosen from the image density).</p></dd>
+
+
 <dt id="arg-interpolate">interpolate<a class="anchor" aria-label="anchor" href="#arg-interpolate"></a></dt>
 <dd><p>Passed to <code><a href="grob.html">raster_grob()</a></code>; <code>FALSE</code> keeps hard bin edges.</p></dd>
 
@@ -186,6 +194,11 @@ of the category hues it contains, with opacity driven by the cell's total densit
 mix, without overplotting bias. When <code>category</code> is set, <code>colors</code> is a per-category
 hue vector (named by level, or one colour per level in level order) instead of a
 low-to-high ramp.</p>
+    </div>
+    <div class="section level2">
+    <h2 id="see-also">See also<a class="anchor" aria-label="anchor" href="#see-also"></a></h2>
+    <div class="dont-index"><p><code><a href="datashade_lines.html">datashade_lines()</a></code> and <code><a href="datashade_lines.html">datashade_segments()</a></code> for the line/segment
+(dense-timeseries, network-edge) counterparts, and <code><a href="dynspread.html">dynspread()</a></code>/<code><a href="spread.html">spread()</a></code>.</p></div>
     </div>
 
     <div class="section level2">

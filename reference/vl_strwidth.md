@@ -32,7 +32,12 @@ vl_strheight(
 
 - label:
 
-  Character vector of strings to measure.
+  Character vector of strings to measure, or a rich label from
+  [`md()`](https://r-vellum.github.io/vellum/reference/md.md) (or a list
+  of them). Rich labels are measured with the same run composition the
+  renderer draws, so super/subscripts and bold runs are accounted for;
+  `family`/`fontface`/`fontsize` then supply the *base* style the
+  label's runs are relative to.
 
 - family:
 

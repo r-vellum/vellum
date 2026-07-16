@@ -100,7 +100,11 @@ not need an open scene). Vectorised over <code>label</code>. (Named <code>vl_*</
 
 
 <dl><dt id="arg-label">label<a class="anchor" aria-label="anchor" href="#arg-label"></a></dt>
-<dd><p>Character vector of strings to measure.</p></dd>
+<dd><p>Character vector of strings to measure, or a rich label from
+<code><a href="md.html">md()</a></code> (or a list of them). Rich labels are measured with the same run
+composition the renderer draws, so super/subscripts and bold runs are
+accounted for; <code>family</code>/<code>fontface</code>/<code>fontsize</code> then supply the <em>base</em> style
+the label's runs are relative to.</p></dd>
 
 
 <dt id="arg-family">family<a class="anchor" aria-label="anchor" href="#arg-family"></a></dt>
