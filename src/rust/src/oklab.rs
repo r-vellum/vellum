@@ -46,9 +46,12 @@ impl Interp {
     }
 }
 
-/// Samples per author-stop segment when pre-sampling in a perceptual space, and a
-/// cap on the total so a many-stop gradient can't explode the `<defs>` / shading.
+/// Samples per author-stop segment when pre-sampling in a perceptual space.
 const SAMPLES_PER_SEGMENT: usize = 32;
+/// Soft budget for the total emitted stops: the per-segment sample count is
+/// `MAX_STOPS/nseg` (clamped), so the true total is `~nseg*k + 1` — near this for
+/// many segments, and up to `SAMPLES_PER_SEGMENT*nseg + 1` for a few. Bounds the
+/// `<defs>` / shading size without being an exact ceiling.
 const MAX_STOPS: usize = 256;
 
 /// Return the stops a backend should interpolate linearly in sRGB to realise
@@ -56,8 +59,10 @@ const MAX_STOPS: usize = 256;
 /// expand each adjacent-stop segment into densely pre-sampled sRGB stops walked
 /// in the requested perceptual space, so the backends' sRGB interpolation
 /// between adjacent samples reproduces the perceptual curve. `Oklab` walks the
-/// rectangular `(L, a, b)`; `Oklch` walks the polar `(L, C, h)`. Endpoints are
-/// preserved exactly.
+/// rectangular `(L, a, b)`; `Oklch` walks the polar `(L, C, h)`. **Every author
+/// stop** (not just the first/last) is emitted exactly — only the interior
+/// samples between them are the Oklab-computed round-trips — so author colours
+/// never drift by the sRGB8 round-trip's ±1/channel.
 pub fn interpolate_stops(stops: &[Stop], interp: Interp) -> Vec<Stop> {
     if interp == Interp::Srgb || stops.len() < 2 {
         return stops.to_vec();
@@ -65,17 +70,22 @@ pub fn interpolate_stops(stops: &[Stop], interp: Interp) -> Vec<Stop> {
     let nseg = stops.len() - 1;
     // Keep the total bounded: fewer samples per segment when there are many.
     let k = (MAX_STOPS / nseg).clamp(2, SAMPLES_PER_SEGMENT);
+    // Convert each author stop to Oklab once; interior stops are shared by two
+    // segments, so this halves the conversions vs recomputing per segment.
+    let labs: Vec<([f32; 3], f32)> = stops.iter().map(|s| rgba_to_oklab(s.color)).collect();
     let mut out = Vec::with_capacity(nseg * k + 1);
     out.push(stops[0]);
-    for pair in stops.windows(2) {
-        let (s0, s1) = (pair[0], pair[1]);
-        let (lab0, a0) = rgba_to_oklab(s0.color);
-        let (lab1, a1) = rgba_to_oklab(s1.color);
+    for seg in 0..nseg {
+        let (s0, s1) = (stops[seg], stops[seg + 1]);
+        let (lab0, a0) = labs[seg];
+        let (lab1, a1) = labs[seg + 1];
         let span = s1.offset - s0.offset;
         // For Oklch, pre-resolve the polar endpoints and the shortest-arc hue
         // delta once per segment; Oklab lerps the rectangular channels directly.
         let polar = (interp == Interp::Oklch).then(|| LchSeg::prep(lab0, lab1));
-        for j in 1..=k {
+        // Interior samples only (1..k); the segment endpoint is the author stop
+        // `s1`, pushed exactly below (which also seeds the next segment's start).
+        for j in 1..k {
             let t = j as f32 / k as f32;
             let lab = match &polar {
                 Some(p) => p.sample(t),
@@ -90,6 +100,7 @@ pub fn interpolate_stops(stops: &[Stop], interp: Interp) -> Vec<Stop> {
                 color: oklab_to_rgba(lab, lerp(a0, a1, t)),
             });
         }
+        out.push(s1);
     }
     out
 }
@@ -167,7 +178,15 @@ fn srgb_to_linear(c: u8) -> f32 {
     }
 }
 
-/// Linear-light [0, 1] -> one sRGB channel byte (clamped, gamut-safe).
+/// Linear-light [0, 1] -> one sRGB channel byte.
+///
+/// Out-of-[0,1] channels (an interpolated Oklab/Oklch sample outside the sRGB
+/// gamut) are clamped **per channel**. This is a deliberate simplification, not a
+/// true gamut map: a proper map (CSS Color 4) reduces chroma toward the L axis to
+/// stay in gamut, whereas per-channel clamping can shift the sample's hue and
+/// lightness. It is chosen for simplicity and stability (no dependence on a
+/// gamut-mapping iteration); the visible effect is confined to highly-saturated
+/// out-of-gamut mid-ramp samples.
 #[inline]
 fn linear_to_srgb(c: f32) -> u8 {
     let c = c.clamp(0.0, 1.0);
@@ -200,7 +219,8 @@ fn rgba_to_oklab(c: Rgba) -> ([f32; 3], f32) {
     )
 }
 
-/// Oklab `[L, a, b]` + linear alpha -> sRGB colour (out-of-gamut channels clamped).
+/// Oklab `[L, a, b]` + linear alpha -> sRGB colour. Out-of-gamut channels are
+/// clamped per channel (a deliberate simplification; see [`linear_to_srgb`]).
 fn oklab_to_rgba(lab: [f32; 3], alpha: f32) -> Rgba {
     let (ll, aa, bb) = (lab[0], lab[1], lab[2]);
     let l_ = ll + 0.3963377774 * aa + 0.2158037573 * bb;
@@ -273,6 +293,23 @@ mod tests {
         for w in out.windows(2) {
             assert!(w[1].offset >= w[0].offset);
             assert!(w[0].offset >= 0.0 && w[1].offset <= 1.0001);
+        }
+    }
+
+    #[test]
+    fn oklab_preserves_interior_author_stops_exactly() {
+        // Every author stop — not just the endpoints — must appear byte-exact in
+        // the expansion (no Oklab->sRGB8 round-trip drift at author offsets).
+        let author = vec![stop(0.0, 0, 0, 0), stop(0.5, 12, 200, 77), stop(1.0, 255, 255, 255)];
+        for interp in [Interp::Oklab, Interp::Oklch] {
+            let out = interpolate_stops(&author, interp);
+            for a in &author {
+                assert!(
+                    out.iter().any(|s| s.color == a.color && (s.offset - a.offset).abs() < 1e-6),
+                    "author stop {:?} missing from {interp:?} expansion",
+                    a.color
+                );
+            }
         }
     }
 

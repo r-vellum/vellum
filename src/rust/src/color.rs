@@ -29,8 +29,14 @@ impl Rgba {
     pub const WHITE: Rgba = Rgba { r: 255, g: 255, b: 255, a: 255 };
     pub const BLACK: Rgba = Rgba { r: 0, g: 0, b: 0, a: 255 };
 
-    /// Apply a multiplicative alpha (gpar `alpha`, in 0..=1) to this colour.
+    /// Apply a multiplicative alpha (gpar `alpha`, in 0..=1) to this colour. A
+    /// non-finite multiplier is ignored (alpha unchanged) rather than silently
+    /// collapsing to 0 via a NaN cast — the fold path pre-filters non-finite
+    /// values, so this guards only direct callers of this `pub` method.
     pub fn with_alpha(self, alpha: f64) -> Rgba {
+        if !alpha.is_finite() {
+            return self;
+        }
         let a = (self.a as f64 * alpha.clamp(0.0, 1.0)).round() as u8;
         Rgba { a, ..self }
     }
@@ -169,11 +175,16 @@ fn parse_pattern(obj: &Robj) -> Option<Paint> {
 }
 
 fn parse_gradient(obj: &Robj, kind: &str) -> Option<Paint> {
-    let coords = obj.dollar("coords").ok()?.as_real_slice()?.to_vec();
+    // Bind the R vectors so their borrowed slices live for the whole function
+    // (no defensive `.to_vec()` copy of read-only data).
+    let coords_obj = obj.dollar("coords").ok()?;
+    let coords = coords_obj.as_real_slice()?;
     let unit = Unit::parse(obj.dollar("units").ok().and_then(|u| u.as_str().map(String::from)).as_deref().unwrap_or("npc"));
     let extend = Extend::parse(obj.dollar("extend").ok().and_then(|e| e.as_str().map(String::from)).as_deref().unwrap_or("pad"));
-    let cols = obj.dollar("col").ok()?.as_integer_slice()?.to_vec();
-    let offs = obj.dollar("offset").ok()?.as_real_slice()?.to_vec();
+    let cols_obj = obj.dollar("col").ok()?;
+    let cols = cols_obj.as_integer_slice()?;
+    let offs_obj = obj.dollar("offset").ok()?;
+    let offs = offs_obj.as_real_slice()?;
     let interp = crate::oklab::Interp::parse(
         obj.dollar("interpolation").ok().and_then(|s| s.as_str().map(String::from)).as_deref().unwrap_or("srgb"),
     );
@@ -181,9 +192,11 @@ fn parse_gradient(obj: &Robj, kind: &str) -> Option<Paint> {
     if n == 0 {
         return None;
     }
-    let author: Vec<Stop> = (0..n)
+    let mut author: Vec<Stop> = (0..n)
         .map(|i| Stop {
-            offset: offs[i].clamp(0.0, 1.0) as f32,
+            // Guard a non-finite offset (an R `NA`/`Inf` would otherwise clamp to
+            // NaN and corrupt sorting/shading); finite offsets clamp to [0, 1].
+            offset: if offs[i].is_finite() { offs[i].clamp(0.0, 1.0) as f32 } else { 0.0 },
             color: Rgba {
                 r: cols[4 * i].clamp(0, 255) as u8,
                 g: cols[4 * i + 1].clamp(0, 255) as u8,
@@ -192,6 +205,9 @@ fn parse_gradient(obj: &Robj, kind: &str) -> Option<Paint> {
             },
         })
         .collect();
+    // Backends assume monotonically non-decreasing offsets; sort (stable) so
+    // unordered author offsets can't produce a non-monotonic stop list.
+    author.sort_by(|p, q| p.offset.total_cmp(&q.offset));
     // Perceptual interpolation (Oklab) is realised by pre-sampling the author
     // stops into dense sRGB stops here; `srgb` leaves them untouched. See `oklab`.
     let stops = crate::oklab::interpolate_stops(&author, interp);
@@ -586,5 +602,23 @@ impl Gpar {
     /// Stroke width in device pixels.
     pub fn lwd_px(&self, dpi: f64) -> f32 {
         (self.lwd * dpi / 96.0) as f32
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn with_alpha_ignores_non_finite() {
+        let c = Rgba { r: 10, g: 20, b: 30, a: 200 };
+        // NaN / infinities must not silently zero the alpha (a NaN `as u8` -> 0).
+        assert_eq!(c.with_alpha(f64::NAN).a, 200);
+        assert_eq!(c.with_alpha(f64::INFINITY).a, 200);
+        assert_eq!(c.with_alpha(f64::NEG_INFINITY).a, 200);
+        // Finite multipliers still apply (and clamp).
+        assert_eq!(c.with_alpha(0.5).a, 100);
+        assert_eq!(c.with_alpha(0.0).a, 0);
+        assert_eq!(c.with_alpha(2.0).a, 200); // clamped to 1.0
     }
 }
