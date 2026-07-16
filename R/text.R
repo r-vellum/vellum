@@ -6,7 +6,11 @@
 #' not need an open scene). Vectorised over `label`. (Named `vl_*` to avoid masking
 #' `grDevices::strwidth()`.)
 #'
-#' @param label Character vector of strings to measure.
+#' @param label Character vector of strings to measure, or a rich label from
+#'   [md()] (or a list of them). Rich labels are measured with the same run
+#'   composition the renderer draws, so super/subscripts and bold runs are
+#'   accounted for; `family`/`fontface`/`fontsize` then supply the *base* style
+#'   the label's runs are relative to.
 #' @param family Font family (e.g. `"sans"`, `"serif"`, `"mono"`, or a specific
 #'   family name). `""` uses the system default.
 #' @param fontface One of `"plain"`, `"bold"`, `"italic"`, `"bold.italic"`.
@@ -33,6 +37,18 @@ vl_strheight <- function(label, family = "", fontface = "plain",
 # `shape_text` metric column ("width"/"height"). `res = 72` => points.
 .text_metric <- function(label, family, fontface, fontsize, cex, unit, which) {
   unit <- match.arg(unit, c("in", "pt", "mm", "cm"))
+  # Rich md() labels are measured through the same composition path the renderer
+  # draws (`.md_extent_pt`), so reserved layout space matches drawn glyphs. A
+  # single label or a list of them is accepted; family/fontface/fontsize give the
+  # base style the label's runs are relative to.
+  if (.is_md_labelish(label)) {
+    labs <- if (S7::S7_inherits(label, vellum_label)) list(label) else label
+    col <- if (which == "width") 1L else 2L
+    pt <- vapply(labs, function(l) {
+      .md_extent_pt(l, family, fontface, fontsize * cex)[col]
+    }, numeric(1))
+    return(.pt_to_unit(pt, unit))
+  }
   label <- as.character(label)
   if (length(label) == 0L) {
     return(numeric(0))
@@ -43,6 +59,18 @@ vl_strheight <- function(label, family = "", fontface = "plain",
     family = family, italic = face$italic, weight = face$weight,
     size = fontsize * cex, res = 72
   )$metrics[[which]]
+  .pt_to_unit(pt, unit)
+}
+
+# TRUE for a single md() label or a non-empty list of them.
+.is_md_labelish <- function(x) {
+  S7::S7_inherits(x, vellum_label) ||
+    (is.list(x) && length(x) &&
+      all(vapply(x, S7::S7_inherits, logical(1), vellum_label)))
+}
+
+# Convert points to an output unit (one of "pt"/"in"/"mm"/"cm").
+.pt_to_unit <- function(pt, unit) {
   switch(unit,
     pt = pt,
     "in" = pt / 72,

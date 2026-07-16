@@ -1,5 +1,14 @@
 # vellum (development version)
 
+* **`vl_strwidth()` / `vl_strheight()` measure `md()` labels.** Both now accept a
+  rich label from `md()` (or a list of them) in addition to character strings,
+  measuring it through the same run composition the renderer draws — so
+  super/subscripts and bold runs reserve the space they actually occupy.
+  `family`/`fontface`/`fontsize` supply the base style the label's runs are
+  relative to. Previously a caller had to reduce a rich label to plain text (and
+  `as.character()` on an `md()` object errors), so downstream layout code that
+  measured a rich title got zero width and clipped it.
+
 * **Line & segment datashading.** `datashade_lines()` and `datashade_segments()`
   extend the aggregate-then-shade engine from point clouds to dense lines. A new
   anti-aliased Rust line rasteriser accumulates coverage per grid cell (overlapping

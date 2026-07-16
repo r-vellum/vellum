@@ -24,7 +24,11 @@ vl_strheight(
 )
 }
 \arguments{
-\item{label}{Character vector of strings to measure.}
+\item{label}{Character vector of strings to measure, or a rich label from
+\code{\link[=md]{md()}} (or a list of them). Rich labels are measured with the same run
+composition the renderer draws, so super/subscripts and bold runs are
+accounted for; \code{family}/\code{fontface}/\code{fontsize} then supply the \emph{base} style
+the label's runs are relative to.}
 
 \item{family}{Font family (e.g. \code{"sans"}, \code{"serif"}, \code{"mono"}, or a specific
 family name). \code{""} uses the system default.}
