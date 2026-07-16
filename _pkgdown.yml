@@ -149,6 +149,7 @@ reference:
   - datashade
   - datashade_lines
   - spread
+  - dynspread
 
 - title: Inspecting & editing scenes
   desc: >
