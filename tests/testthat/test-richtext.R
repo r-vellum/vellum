@@ -82,3 +82,32 @@ test_that("rich labels render to SVG and PDF without error", {
   txt <- paste(readLines(svg, warn = FALSE), collapse = "\n")
   expect_match(txt, "#ff0000|#f00", ignore.case = TRUE) # span colour reaches SVG
 })
+
+test_that("vl_strwidth()/vl_strheight() measure an md() label", {
+  # A rich label is measured through the same composition path it draws with, so
+  # reserved layout space matches drawn glyphs (regression: legend/axis titles
+  # built from md() used to measure as 0 and clip).
+  lbl <- md("Power (hp m^2^)")
+  w_pt <- .md_extent_pt(lbl, "", "plain", 11)[1]
+  h_pt <- .md_extent_pt(lbl, "", "plain", 11)[2]
+  expect_equal(vl_strwidth(lbl, "", "plain", 11, unit = "pt"), w_pt)
+  expect_equal(vl_strwidth(lbl, "", "plain", 11, unit = "mm"), w_pt / 72 * 25.4)
+  expect_gt(vl_strwidth(lbl, "", "plain", 11, unit = "mm"), 0)
+  expect_equal(vl_strheight(lbl, "", "plain", 11, unit = "pt"), h_pt)
+})
+
+test_that("vl_strwidth() accepts a list of md() labels, one width each", {
+  labs <- md(c("*a*", "**bbb**"))
+  w <- vl_strwidth(labs, "", "plain", 11, unit = "mm")
+  expect_length(w, 2L)
+  expect_true(all(w > 0))
+  expect_gt(w[2], w[1]) # bold "bbb" is wider than a single italic "a"
+})
+
+test_that("a plain md() label measures like the equivalent character string", {
+  expect_equal(
+    vl_strwidth(md("plain text"), "", "plain", 12, unit = "mm"),
+    vl_strwidth("plain text", "", "plain", 12, unit = "mm"),
+    tolerance = 1e-6
+  )
+})
