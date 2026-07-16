@@ -493,7 +493,12 @@ enum Node {
 }
 
 impl Node {
-    fn gp(&self) -> &PartialGpar {
+    /// This node's own graphical parameters, or `None` for a structural node
+    /// (image/group/subraster/panel marker) that carries none. Returning `Option`
+    /// — rather than an `unreachable!()` — lets the walk skip an unhandled
+    /// structural node defensively instead of panicking, and keeps the match
+    /// exhaustive so a new variant must be classified at compile time.
+    fn gp(&self) -> Option<&PartialGpar> {
         match self {
             Node::Rect { gp, .. }
             | Node::RoundRect { gp, .. }
@@ -508,12 +513,10 @@ impl Node {
             | Node::Segments { gp, .. }
             | Node::Loop { gp, .. }
             | Node::Path { gp, .. }
-            | Node::Text { gp, .. } => gp,
+            | Node::Text { gp, .. } => Some(gp),
             Node::Image { .. } | Node::GroupStart { .. } | Node::GroupEnd
             | Node::SubrasterStart { .. } | Node::SubrasterEnd
-            | Node::PanelStart { .. } | Node::PanelEnd => {
-                unreachable!("handled before gpar resolution")
-            }
+            | Node::PanelStart { .. } | Node::PanelEnd => None,
         }
     }
 }
@@ -1949,24 +1952,30 @@ fn clip_shape_bbox(shape: &ClipShape) -> (f64, f64, f64, f64) {
 }
 
 /// Build the intersection clip `Mask` for a resolved clip chain (device px), or
-/// `None` when there is no clip. Mirrors the raster backend's `mask_for`.
+/// `None` when there is no clip. Used by `hit_test`: the mask is built **aliased**
+/// (no fractional edge coverage) to match the aliased pick fills, so a pixel
+/// exactly on a clip boundary is fully in or fully out and its decoded pick id is
+/// exact — a fractional edge would blend the pick colour toward the white no-hit
+/// background and mis-decode. (Real rendering uses the raster backend's own
+/// anti-aliased `mask_for`.)
 fn build_clip_mask(w: u32, h: u32, chain: &[ClipShape]) -> Option<Mask> {
     if chain.is_empty() {
         return None;
     }
+    let aa = false; // aliased: hard 0/255 coverage for exact pick decoding
     let mut m = Mask::new(w, h)?;
     if let Some(p) = rect_path(0.0, 0.0, w as f64, h as f64) {
-        m.fill_path(&p, FillRule::Winding, true, Transform::identity());
+        m.fill_path(&p, FillRule::Winding, aa, Transform::identity());
     }
     for shape in chain {
         match shape {
             ClipShape::Rect { w: rw, h: rh, transform } => match rect_path(0.0, 0.0, *rw, *rh) {
-                Some(r) => m.intersect_path(&r, FillRule::Winding, true, *transform),
+                Some(r) => m.intersect_path(&r, FillRule::Winding, aa, *transform),
                 None => m.clear(),
             },
             ClipShape::Path { path, evenodd, transform } => {
                 let rule = if *evenodd { FillRule::EvenOdd } else { FillRule::Winding };
-                m.intersect_path(path, rule, true, *transform);
+                m.intersect_path(path, rule, aa, *transform);
             }
         }
     }
@@ -2244,7 +2253,14 @@ impl Scene {
 
             let rv = &resolved[*vp_id];
             let vp = &rv.vp;
-            let gp = rv.gp_acc.apply(node.gp()).resolve();
+            // Drawing nodes only; a structural node with no gpar would have been
+            // consumed by the match above, but skip it defensively if not (before
+            // any begin_node, so nothing needs closing).
+            let node_gp = match node.gp() {
+                Some(g) => g,
+                None => continue,
+            };
+            let gp = rv.gp_acc.apply(node_gp).resolve();
             let t = vp.transform;
             let clip = Clip { id: *vp_id, shapes: &rv.clip_chain };
 

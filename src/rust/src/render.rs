@@ -580,6 +580,11 @@ const CLIP_CACHE_CAP: usize = 8;
 
 impl RasterBackend {
     pub fn new(w: u32, h: u32, bg: Rgba) -> Self {
+        // Clamp to >=1 so a 0-sized target can't panic here (page dimensions are
+        // already validated to >=1 by px_dim; this guards the constructor directly
+        // and keeps the stored w/h — reused for every group/subraster layer and
+        // clip mask below — non-zero). A valid render is unaffected.
+        let (w, h) = (w.max(1), h.max(1));
         let mut pm = Pixmap::new(w, h).expect("non-zero pixmap dimensions");
         // `Pixmap::new` is already zeroed (transparent); only paint a non-empty
         // background. This skips a full-page write for every rasterized mask,

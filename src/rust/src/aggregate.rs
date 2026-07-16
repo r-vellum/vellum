@@ -3,6 +3,12 @@
 //! overplotting. The R side then shades the returned grid (eq_hist/log/…) and
 //! draws it as a single raster — far cheaper than emitting N markers when N ≫
 //! pixels, and overplotting-honest (the grid records true density).
+//!
+//! Type contract: `weight` must be a **double** vector and `brk` an **integer**
+//! vector (the R `datashade*` wrappers coerce them). A mismatched storage type
+//! makes the slice accessor return `None`, which falls back **silently** to
+//! all-1.0 weights / a single series rather than erroring — so the coercion is a
+//! hard dependency, not a nicety.
 
 use extendr_api::prelude::*;
 
@@ -205,6 +211,10 @@ fn wu_segment(grid: &mut [f64], nx: usize, ny: usize, gx0: f64, gy0: f64, gx1: f
     }
     let dx = x1 - x0;
     let dy = y1 - y0;
+    // `dx` is the *major*-axis extent after the steep-axis swap, and the
+    // zero-length case returned above, so `dx != 0` here; the guard is defensive
+    // (a division-by-zero backstop) rather than a reachable branch.
+    debug_assert!(dx != 0.0);
     let gradient = if dx == 0.0 { 1.0 } else { dy / dx };
 
     let plot = |grid: &mut [f64], major: i64, minor: i64, c: f64| {
@@ -215,7 +225,11 @@ fn wu_segment(grid: &mut [f64], nx: usize, ny: usize, gx0: f64, gy0: f64, gx1: f
         }
     };
 
-    // First endpoint.
+    // First endpoint. Note: for a segment whose two ends fall in the same
+    // major-axis cell (`xpxl1 == xpxl2`) the interior loop below doesn't run and
+    // both endpoint plots deposit into that cell, so its coverage can exceed `wt`.
+    // This matches Wu/Rough.js behaviour and only mildly perturbs the density of a
+    // sub-pixel segment; it is intentional, not a bug.
     let xend = (x0 + 0.5).floor();
     let yend = y0 + gradient * (xend - x0);
     let xgap = rfpart(x0 + 0.5);
