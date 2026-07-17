@@ -487,7 +487,11 @@ enum Node {
     /// Opens a named panel group (paired with `PanelEnd`): the SVG backend wraps the
     /// enclosed nodes in `<g data-vellum-panel="name">` so a host can target the
     /// panel (e.g. for pan/zoom); raster/PDF ignore it. Emitted for named viewports.
-    PanelStart { name: String },
+    /// When `pannable`, the SVG backend instead emits an outer clipped
+    /// `<g data-vellum-panel>` around an inner `<g data-vellum-pan>` (hoisting the
+    /// panel's clip to the outer, untransformed group) so a host can set a
+    /// `transform` on the inner group and pan/zoom the marks while the clip stays put.
+    PanelStart { name: String, pannable: bool },
     /// Closes the named panel group.
     PanelEnd,
 }
@@ -1334,8 +1338,8 @@ impl Scene {
     /// Open a named panel group around the following nodes (paired with
     /// `end_panel`). The SVG backend wraps them in `<g data-vellum-panel="name">`;
     /// other backends ignore it. Emitted by the R compiler for named viewports.
-    fn begin_panel(&mut self, name: String) {
-        self.emit_node(Node::PanelStart { name });
+    fn begin_panel(&mut self, name: String, pannable: bool) {
+        self.emit_node(Node::PanelStart { name, pannable });
     }
 
     /// Close the most recently opened panel group.
@@ -1614,7 +1618,7 @@ impl Scene {
         let mut panel_stack: Vec<String> = Vec::new();
         for (vp_id, node) in self.nodes.iter() {
             match node {
-                Node::PanelStart { name } => { panel_stack.push(name.clone()); continue; }
+                Node::PanelStart { name, .. } => { panel_stack.push(name.clone()); continue; }
                 Node::PanelEnd => { panel_stack.pop(); continue; }
                 _ => {}
             }
@@ -2226,8 +2230,8 @@ impl Scene {
                     b.end_group();
                     continue;
                 }
-                Node::PanelStart { name } => {
-                    b.begin_panel(name);
+                Node::PanelStart { name, pannable } => {
+                    b.begin_panel(name, *pannable);
                     continue;
                 }
                 Node::PanelEnd => {

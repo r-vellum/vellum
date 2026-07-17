@@ -281,9 +281,10 @@ pub trait RenderBackend {
     fn set_element_key(&mut self, _key: Option<&str>) {}
 
     /// Open a named panel group around the following primitives (paired with
-    /// `end_panel`). The SVG backend wraps them in `<g data-vellum-panel="name">`;
-    /// raster/PDF ignore it.
-    fn begin_panel(&mut self, _name: &str) {}
+    /// `end_panel`). The SVG backend wraps them in `<g data-vellum-panel="name">`
+    /// (and, when `pannable`, an inner `<g data-vellum-pan>` with the clip hoisted
+    /// to the outer group); raster/PDF ignore it.
+    fn begin_panel(&mut self, _name: &str, _pannable: bool) {}
     fn end_panel(&mut self) {}
 
     /// Whether this backend emits per-element `data-key` attributes (only the SVG
@@ -1028,6 +1029,16 @@ pub struct SvgBackend {
     /// attributes (`None` = this node carried no metadata, so no buffer was pushed).
     node_stack: Vec<String>,
     node_open: Vec<Option<String>>,
+    /// Pannable-panel state (clip-stable pan group). `panel_pannable` records, per
+    /// open panel, whether it is pannable (so `end_panel` closes one group or two).
+    /// While inside a pannable panel, the first clipped element's clip is hoisted
+    /// onto the outer panel group (`pan_clip_id`) and suppressed on the elements
+    /// (which live in the inner, transformable group). `pan_active` guards against
+    /// nested pannable panels (the inner one falls back to an ordinary panel).
+    panel_pannable: Vec<bool>,
+    pan_active: bool,
+    pan_clip_pending: bool,
+    pan_clip_id: Option<usize>,
     /// Per-element data key for the next primitive (`set_element_key`); spliced
     /// into the emitted element as `data-key="…"`. `None` = no attribute. Held as
     /// `Rc<str>` so `emit` (called once per fill and once per stroke of an element)
@@ -1072,6 +1083,10 @@ impl SvgBackend {
             outline_text,
             node_stack: Vec::new(),
             node_open: Vec::new(),
+            panel_pannable: Vec::new(),
+            pan_active: false,
+            pan_clip_pending: false,
+            pan_clip_id: None,
             cur_element_key: None,
             last_solid_fill: None,
             a11y_title: None,
@@ -1242,7 +1257,26 @@ impl SvgBackend {
     /// and stay aligned — putting `clip-path` directly on a transformed element
     /// would double-transform the clip region.
     fn emit(&mut self, element: &str, clip: &Clip) {
-        let attr = self.clip_attr(clip);
+        let mut attr = self.clip_attr(clip);
+        // Pannable panel: hoist the first clipped element's clip onto the outer
+        // panel group (so it stays put under the inner group's transform), and
+        // suppress that clip on the elements themselves. The outer frame is the one
+        // below the inner `data-vellum-pan` frame on the open-frame stack.
+        if self.pan_active && !attr.is_empty() {
+            if self.pan_clip_pending {
+                let n = self.node_open.len();
+                if n >= 2 {
+                    if let Some(outer) = self.node_open[n - 2].as_mut() {
+                        outer.push_str(&attr);
+                    }
+                }
+                self.pan_clip_id = Some(clip.id);
+                self.pan_clip_pending = false;
+            }
+            if self.pan_clip_id == Some(clip.id) {
+                attr = String::new(); // hoisted to the outer group; don't re-clip here
+            }
+        }
         let has_clip = !attr.is_empty();
         // A per-element `data-key` is spliced into the shape's opening tag when set
         // (kept, not cleared, so a fill+stroke pair for one element both carry it;
@@ -1516,15 +1550,41 @@ impl RenderBackend for SvgBackend {
     // (identical mechanism), so panels and per-node `<g>`s nest correctly. The
     // wrapper carries no transform — elements keep their baked device-space
     // transforms, matching the clip-`<g>` invariant.
-    fn begin_panel(&mut self, name: &str) {
+    fn begin_panel(&mut self, name: &str, pannable: bool) {
+        // A pannable panel (and not already inside one) emits TWO nested frames: an
+        // outer `<g data-vellum-panel>` that will carry the hoisted clip (added
+        // lazily from the first clipped element, in `emit`) and stays untransformed,
+        // and an inner `<g data-vellum-pan>` a host can transform. Otherwise a single
+        // `<g data-vellum-panel>` as before.
+        let pan = pannable && !self.pan_active;
         self.node_stack.push(String::new());
         self.node_open.push(Some(format!("data-vellum-panel=\"{}\"", xml_escape(name))));
+        if pan {
+            self.node_stack.push(String::new());
+            self.node_open.push(Some(format!("data-vellum-pan=\"{}\"", xml_escape(name))));
+            self.pan_active = true;
+            self.pan_clip_pending = true;
+            self.pan_clip_id = None;
+        }
+        self.panel_pannable.push(pan);
     }
 
     fn end_panel(&mut self) {
+        let pan = self.panel_pannable.pop().unwrap_or(false);
+        // Close the (inner, if pannable) group into its parent frame.
         if let Some(Some(attrs)) = self.node_open.pop() {
             let inner = self.node_stack.pop().unwrap_or_default();
             self.out().push_str(&format!("<g {attrs}>{inner}</g>"));
+        }
+        if pan {
+            // Close the outer panel group (its attrs may have gained clip-path).
+            if let Some(Some(attrs)) = self.node_open.pop() {
+                let outer = self.node_stack.pop().unwrap_or_default();
+                self.out().push_str(&format!("<g {attrs}>{outer}</g>"));
+            }
+            self.pan_active = false;
+            self.pan_clip_pending = false;
+            self.pan_clip_id = None;
         }
     }
 }

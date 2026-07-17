@@ -360,7 +360,7 @@ Scene$group_start <- function(mask, alpha, blend) .Call(wrap__Scene__group_start
 
 Scene$group_end <- function() .Call(wrap__Scene__group_end, self)
 
-Scene$begin_panel <- function(name) .Call(wrap__Scene__begin_panel, self, name)
+Scene$begin_panel <- function(name, pannable) .Call(wrap__Scene__begin_panel, self, name, pannable)
 
 Scene$end_panel <- function() .Call(wrap__Scene__end_panel, self)
 
