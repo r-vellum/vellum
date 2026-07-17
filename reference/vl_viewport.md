@@ -31,6 +31,7 @@ vl_viewport(
   blend = NULL,
   name = NULL,
   meta = NULL,
+  pannable = FALSE,
   cache = FALSE
 )
 
@@ -128,6 +129,17 @@ grid_layout(
   of the per-element grob `meta` channel, intended for panel-scoped
   conventions such as axis/scale descriptors.
 
+- pannable:
+
+  Emit this named panel as a **clip-stable pannable group** (default
+  `FALSE`): an outer `<g data-vellum-panel>` carrying the panel's clip
+  (untransformed, so the clip stays fixed) wrapping an inner
+  `<g data-vellum-pan>` that holds the content. A host (e.g.
+  `vellumwidget`) can set a `transform` on the inner group to pan/zoom
+  the marks while the clip and the surrounding axes stay put. SVG only;
+  requires a named viewport. No effect on the rendered (static) output —
+  the extra inner group is inert until a host transforms it.
+
 - cache:
 
   Repaint boundary (`TRUE`/`FALSE`, default `FALSE`). Flag this
@@ -176,15 +188,15 @@ A `viewport` object.
 ``` r
 vl_viewport(xscale = c(0, 10), yscale = c(0, 100))
 #> <vellum::class_viewport>
-#>  @ x      : unit [1:1] 0.5npc
-#>  @ y      : unit [1:1] 0.5npc
-#>  @ width  : unit [1:1] 1npc
-#>  @ height : unit [1:1] 1npc
-#>  @ xscale : num [1:2] 0 10
-#>  @ yscale : num [1:2] 0 100
-#>  @ angle  : num 0
-#>  @ clip   : logi FALSE
-#>  @ gp     : <vellum::vl_gpar>
+#>  @ x       : unit [1:1] 0.5npc
+#>  @ y       : unit [1:1] 0.5npc
+#>  @ width   : unit [1:1] 1npc
+#>  @ height  : unit [1:1] 1npc
+#>  @ xscale  : num [1:2] 0 10
+#>  @ yscale  : num [1:2] 0 100
+#>  @ angle   : num 0
+#>  @ clip    : logi FALSE
+#>  @ gp      : <vellum::vl_gpar>
 #>  .. @ col       : NULL
 #>  .. @ fill      : NULL
 #>  .. @ lwd       : NULL
@@ -197,15 +209,16 @@ vl_viewport(xscale = c(0, 10), yscale = c(0, 100))
 #>  .. @ fontface  : NULL
 #>  .. @ fontsize  : NULL
 #>  .. @ lineheight: NULL
-#>  @ layout : NULL
-#>  @ row    : NULL
-#>  @ col    : NULL
-#>  @ rowspan: int 1
-#>  @ colspan: int 1
-#>  @ mask   : NULL
-#>  @ alpha  : NULL
-#>  @ blend  : NULL
-#>  @ name   : NULL
-#>  @ meta   : NULL
-#>  @ cache  : logi FALSE
+#>  @ layout  : NULL
+#>  @ row     : NULL
+#>  @ col     : NULL
+#>  @ rowspan : int 1
+#>  @ colspan : int 1
+#>  @ mask    : NULL
+#>  @ alpha   : NULL
+#>  @ blend   : NULL
+#>  @ name    : NULL
+#>  @ meta    : NULL
+#>  @ pannable: logi FALSE
+#>  @ cache   : logi FALSE
 ```

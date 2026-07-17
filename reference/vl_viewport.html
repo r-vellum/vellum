@@ -96,6 +96,7 @@ viewports are then placed into cells via <code>row</code>/<code>col</code>.</p>
 <span>  blend <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  name <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  meta <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  pannable <span class="op">=</span> <span class="cn">FALSE</span>,</span>
 <span>  cache <span class="op">=</span> <span class="cn">FALSE</span></span>
 <span><span class="op">)</span></span>
 <span></span>
@@ -185,6 +186,17 @@ the panel-level counterpart of the per-element grob <code>meta</code> channel, i
 for panel-scoped conventions such as axis/scale descriptors.</p></dd>
 
 
+<dt id="arg-pannable">pannable<a class="anchor" aria-label="anchor" href="#arg-pannable"></a></dt>
+<dd><p>Emit this named panel as a <strong>clip-stable pannable group</strong>
+(default <code>FALSE</code>): an outer <code>&lt;g data-vellum-panel&gt;</code> carrying the panel's clip
+(untransformed, so the clip stays fixed) wrapping an inner
+<code>&lt;g data-vellum-pan&gt;</code> that holds the content. A host (e.g. <code>vellumwidget</code>) can
+set a <code>transform</code> on the inner group to pan/zoom the marks while the clip and
+the surrounding axes stay put. SVG only; requires a named viewport. No effect
+on the rendered (static) output — the extra inner group is inert until a host
+transforms it.</p></dd>
+
+
 <dt id="arg-cache">cache<a class="anchor" aria-label="anchor" href="#arg-cache"></a></dt>
 <dd><p>Repaint boundary (<code>TRUE</code>/<code>FALSE</code>, default <code>FALSE</code>). Flag this
 viewport's subtree as a cached sub-raster: on render it is rasterised once to
@@ -225,15 +237,15 @@ built on top of vellum.</p></dd>
     <h2 id="ref-examples">Examples<a class="anchor" aria-label="anchor" href="#ref-examples"></a></h2>
     <div class="sourceCode"><pre class="sourceCode r"><code><span class="r-in"><span><span class="fu">vl_viewport</span><span class="op">(</span>xscale <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0</span>, <span class="fl">10</span><span class="op">)</span>, yscale <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0</span>, <span class="fl">100</span><span class="op">)</span><span class="op">)</span></span></span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> &lt;vellum::class_viewport&gt;</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>  @ x      : unit [1:1] 0.5npc</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>  @ y      : unit [1:1] 0.5npc</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>  @ width  : unit [1:1] 1npc</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>  @ height : unit [1:1] 1npc</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>  @ xscale : num [1:2] 0 10</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>  @ yscale : num [1:2] 0 100</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>  @ angle  : num 0</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>  @ clip   : logi FALSE</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>  @ gp     : &lt;vellum::vl_gpar&gt;</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>  @ x       : unit [1:1] 0.5npc</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>  @ y       : unit [1:1] 0.5npc</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>  @ width   : unit [1:1] 1npc</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>  @ height  : unit [1:1] 1npc</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>  @ xscale  : num [1:2] 0 10</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>  @ yscale  : num [1:2] 0 100</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>  @ angle   : num 0</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>  @ clip    : logi FALSE</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>  @ gp      : &lt;vellum::vl_gpar&gt;</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>  .. @ col       : NULL</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>  .. @ fill      : NULL</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>  .. @ lwd       : NULL</span>
@@ -246,17 +258,18 @@ built on top of vellum.</p></dd>
 <span class="r-out co"><span class="r-pr">#&gt;</span>  .. @ fontface  : NULL</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>  .. @ fontsize  : NULL</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>  .. @ lineheight: NULL</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>  @ layout : NULL</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>  @ row    : NULL</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>  @ col    : NULL</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>  @ rowspan: int 1</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>  @ colspan: int 1</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>  @ mask   : NULL</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>  @ alpha  : NULL</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>  @ blend  : NULL</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>  @ name   : NULL</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>  @ meta   : NULL</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>  @ cache  : logi FALSE</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>  @ layout  : NULL</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>  @ row     : NULL</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>  @ col     : NULL</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>  @ rowspan : int 1</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>  @ colspan : int 1</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>  @ mask    : NULL</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>  @ alpha   : NULL</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>  @ blend   : NULL</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>  @ name    : NULL</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>  @ meta    : NULL</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>  @ pannable: logi FALSE</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>  @ cache   : logi FALSE</span>
 </code></pre></div>
     </div>
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>

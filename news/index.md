@@ -2,6 +2,17 @@
 
 ## vellum (development version)
 
+- **`vl_viewport(pannable = TRUE)`: clip-stable pannable panels.** A
+  named panel so marked is emitted to SVG as an outer
+  `<g data-vellum-panel>` carrying the panel’s clip (hoisted once,
+  untransformed) around an inner `<g data-vellum-pan>` holding the
+  content. A host can set a `transform` on the inner group to pan/zoom
+  the marks while the clip and the surrounding axes stay fixed — the
+  basis for host-side axis-aware zoom. SVG-only and inert for static
+  rendering; non-pannable panels and the raster/PDF backends are
+  byte-for-byte unchanged. See
+  [`vignette("scene-contract")`](https://r-vellum.github.io/vellum/articles/scene-contract.md).
+
 - **[`scene_model()`](https://r-vellum.github.io/vellum/reference/scene_model.md)
   no longer forces a second scene compile.** Its viewport id↔︎name
   capture must compile (a cache *hit* would skip the capture), but it

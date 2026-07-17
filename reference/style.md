@@ -109,15 +109,15 @@ accent <- style(col = "firebrick", lwd = 2, name = "accent")
 # Reuse it on a viewport; children inherit unless they override.
 vl_viewport(gp = accent)
 #> <vellum::class_viewport>
-#>  @ x      : unit [1:1] 0.5npc
-#>  @ y      : unit [1:1] 0.5npc
-#>  @ width  : unit [1:1] 1npc
-#>  @ height : unit [1:1] 1npc
-#>  @ xscale : num [1:2] 0 1
-#>  @ yscale : num [1:2] 0 1
-#>  @ angle  : num 0
-#>  @ clip   : logi FALSE
-#>  @ gp     : <vellum::vellum_style>
+#>  @ x       : unit [1:1] 0.5npc
+#>  @ y       : unit [1:1] 0.5npc
+#>  @ width   : unit [1:1] 1npc
+#>  @ height  : unit [1:1] 1npc
+#>  @ xscale  : num [1:2] 0 1
+#>  @ yscale  : num [1:2] 0 1
+#>  @ angle   : num 0
+#>  @ clip    : logi FALSE
+#>  @ gp      : <vellum::vellum_style>
 #>  .. @ col       : chr "firebrick"
 #>  .. @ fill      : NULL
 #>  .. @ lwd       : num 2
@@ -131,15 +131,16 @@ vl_viewport(gp = accent)
 #>  .. @ fontsize  : NULL
 #>  .. @ lineheight: NULL
 #>  .. @ name      : chr "accent"
-#>  @ layout : NULL
-#>  @ row    : NULL
-#>  @ col    : NULL
-#>  @ rowspan: int 1
-#>  @ colspan: int 1
-#>  @ mask   : NULL
-#>  @ alpha  : NULL
-#>  @ blend  : NULL
-#>  @ name   : NULL
-#>  @ meta   : NULL
-#>  @ cache  : logi FALSE
+#>  @ layout  : NULL
+#>  @ row     : NULL
+#>  @ col     : NULL
+#>  @ rowspan : int 1
+#>  @ colspan : int 1
+#>  @ mask    : NULL
+#>  @ alpha   : NULL
+#>  @ blend   : NULL
+#>  @ name    : NULL
+#>  @ meta    : NULL
+#>  @ pannable: logi FALSE
+#>  @ cache   : logi FALSE
 ```

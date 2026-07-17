@@ -511,11 +511,34 @@ set:</p>
 </td>
 <td><code>vl_viewport(name=)</code></td>
 </tr>
+<tr class="even">
+<td><code>data-vellum-pan</code></td>
+<td>pannable panel’s inner group</td>
+<td>inner <code>&lt;g&gt;</code>
+</td>
+<td><code>vl_viewport(pannable=)</code></td>
+</tr>
 </tbody>
 </table>
 <p>An empty/<code>NULL</code> source emits <strong>no
 attribute</strong>, so a scene that declares no interactivity is
 byte-for-byte identical to one built before any of this existed.</p>
+<div class="section level3">
+<h3 id="pannable-panels">Pannable panels<a class="anchor" aria-label="anchor" href="#pannable-panels"></a>
+</h3>
+<p>A named viewport marked <code>vl_viewport(pannable = TRUE)</code> is
+emitted as <strong>two nested groups</strong> instead of one: an outer
+<code>&lt;g data-vellum-panel="name"&gt;</code> that carries the panel’s
+clip (untransformed, so the clip region stays fixed) around an inner
+<code>&lt;g data-vellum-pan="name"&gt;</code> holding the content. The
+panel’s clip is <strong>hoisted once</strong> to the outer group (rather
+than repeated per element), so a host can set a <code>transform</code>
+on the inner group to pan/zoom the marks while the clip — and the
+axes/legend outside the panel — stay put. This is the structural basis
+for host-side axis-aware zoom. It is SVG-only and inert for static
+rendering (the extra group has no transform until a host sets one);
+non-pannable panels and other backends are unchanged.</p>
+</div>
 </div>
 <div class="section level2">
 <h2 id="accessibility">Accessibility<a class="anchor" aria-label="anchor" href="#accessibility"></a>
