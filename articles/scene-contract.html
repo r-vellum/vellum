@@ -292,17 +292,85 @@ which is how a single sf feature becomes addressable.</li>
 <code>panels</code><a class="anchor" aria-label="anchor" href="#panels"></a>
 </h3>
 <p>One row per <strong>named panel</strong> (a named viewport becomes an
-addressable panel), with the bounding box of that panel’s elements:</p>
+addressable panel):</p>
 <div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/utils/str.html" class="external-link">str</a></span><span class="op">(</span><span class="va">m</span><span class="op">$</span><span class="va">panels</span><span class="op">)</span></span>
-<span><span class="co">#&gt; 'data.frame':    0 obs. of  5 variables:</span></span>
-<span><span class="co">#&gt;  $ name: chr </span></span>
-<span><span class="co">#&gt;  $ x0  : num </span></span>
-<span><span class="co">#&gt;  $ y0  : num </span></span>
-<span><span class="co">#&gt;  $ x1  : num </span></span>
-<span><span class="co">#&gt;  $ y1  : num</span></span></code></pre></div>
-<p>Columns: <code>name</code>, <code>x0</code>, <code>y0</code>,
-<code>x1</code>, <code>y1</code>.</p>
+<span><span class="co">#&gt; 'data.frame':    0 obs. of  14 variables:</span></span>
+<span><span class="co">#&gt;  $ name     : chr </span></span>
+<span><span class="co">#&gt;  $ x0       : num </span></span>
+<span><span class="co">#&gt;  $ y0       : num </span></span>
+<span><span class="co">#&gt;  $ x1       : num </span></span>
+<span><span class="co">#&gt;  $ y1       : num </span></span>
+<span><span class="co">#&gt;  $ px0      : num </span></span>
+<span><span class="co">#&gt;  $ py0      : num </span></span>
+<span><span class="co">#&gt;  $ px1      : num </span></span>
+<span><span class="co">#&gt;  $ py1      : num </span></span>
+<span><span class="co">#&gt;  $ xscale_lo: num </span></span>
+<span><span class="co">#&gt;  $ xscale_hi: num </span></span>
+<span><span class="co">#&gt;  $ yscale_lo: num </span></span>
+<span><span class="co">#&gt;  $ yscale_hi: num </span></span>
+<span><span class="co">#&gt;  $ meta     : list()</span></span></code></pre></div>
+<p>Columns:</p>
+<table class="table">
+<colgroup>
+<col width="33%">
+<col width="33%">
+<col width="33%">
+</colgroup>
+<thead><tr class="header">
+<th>column</th>
+<th>type</th>
+<th>meaning</th>
+</tr></thead>
+<tbody>
+<tr class="odd">
+<td><code>name</code></td>
+<td>character</td>
+<td>the panel’s viewport name</td>
+</tr>
+<tr class="even">
+<td><code>x0, y0, x1, y1</code></td>
+<td>numeric</td>
+<td>bounding box of the panel’s <em>elements</em> (device px)</td>
+</tr>
+<tr class="odd">
+<td><code>px0, py0, px1, py1</code></td>
+<td>numeric</td>
+<td>the panel viewport’s <strong>resolved device-px rectangle</strong> —
+the true data region, from the layout solve, not just where marks landed
+(<code>NA</code> if the viewport was not captured)</td>
+</tr>
+<tr class="even">
+<td><code>xscale_lo, xscale_hi</code></td>
+<td>numeric</td>
+<td>the panel viewport’s native x coordinate range (its
+<code>xscale</code>)</td>
+</tr>
+<tr class="odd">
+<td><code>yscale_lo, yscale_hi</code></td>
+<td>numeric</td>
+<td>native y coordinate range (its <code>yscale</code>)</td>
+</tr>
+<tr class="even">
+<td><code>meta</code></td>
+<td>list</td>
+<td>the panel viewport’s free-form <code>meta</code> (list-column;
+<code>NULL</code> when none)</td>
+</tr>
+</tbody>
+</table>
+<p>The pixel rectangle paired with the native range gives the affine
+that maps device px ↔︎ native for that panel — the geometry a host needs
+to invert a pixel back to a data coordinate. It is the panel-level
+analogue of an element’s bbox + <code>meta</code>.</p>
+<p>The panel-level <code>meta</code> (the <code>meta =</code> argument
+of [vl_viewport()]) is the same opaque, host-read channel as element
+<code>meta</code>: vellum carries it untouched and names no conventions.
+The grammar uses it for panel-scoped descriptors — e.g. the
+<code>scales</code> descriptor <code>vellumplot</code> attaches to each
+data panel (per-axis type, domain, breaks, and labels), which
+<code>vellumwidget</code> reads to map pixels back to data values. That
+convention is documented by <code>vellumplot</code>, not here.</p>
 </div>
 <div class="section level3">
 <h3 id="the-meta-key-vocabulary">The <code>meta</code> key vocabulary<a class="anchor" aria-label="anchor" href="#the-meta-key-vocabulary"></a>

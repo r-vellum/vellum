@@ -2,6 +2,24 @@
 
 ## vellum (development version)
 
+- **Scene contract: `scene_model()$panels` now carries per-panel
+  geometry and metadata.** Each panel row gains its panel viewport’s
+  resolved device-px rectangle (`px0,py0,px1,py1` — the true data region
+  from the layout solve, not the element-extent bbox), its native
+  coordinate ranges (`xscale_lo/hi`, `yscale_lo/hi`), and a `meta`
+  list-column. Together the pixel rect and native range give the affine
+  a host needs to map device pixels back to native (and thence data)
+  coordinates. The existing element-extent `x0..y1` columns are
+  unchanged, so this is additive.
+
+- **`vl_viewport(meta=)`: a panel-level free-form metadata channel.** A
+  named viewport can carry arbitrary `meta` (any R object), surfaced as
+  the `meta` column of `scene_model()$panels`. Like grob `meta`, it
+  never crosses to the rendering backend and vellum names no conventions
+  for it — it is the panel-scoped counterpart of per-element `meta`, for
+  host conventions such as axis/scale descriptors. See
+  [`vignette("scene-contract")`](https://r-vellum.github.io/vellum/articles/scene-contract.md).
+
 ## vellum 0.4.0
 
 - **Faster, leaner keyed SVG emission.** Emitting a scene to SVG with

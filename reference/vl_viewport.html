@@ -95,6 +95,7 @@ viewports are then placed into cells via <code>row</code>/<code>col</code>.</p>
 <span>  alpha <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  blend <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  name <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  meta <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  cache <span class="op">=</span> <span class="cn">FALSE</span></span>
 <span><span class="op">)</span></span>
 <span></span>
@@ -174,6 +175,16 @@ over-compositing.</p></dd>
 <dd><p>Optional name (for <code><a href="node_names.html">edit_node()</a></code>).</p></dd>
 
 
+<dt id="arg-meta">meta<a class="anchor" aria-label="anchor" href="#arg-meta"></a></dt>
+<dd><p>Optional free-form metadata for this viewport (any R object,
+default <code>NULL</code>). Like a grob's <code>meta</code>, it never crosses to the rendering
+backend — it rides on the R scene and surfaces, for a <em>named</em> viewport, as
+the <code>meta</code> column of <code><a href="scene_model.html">scene_model()</a></code>'s <code>panels</code> table. A host (e.g.
+<code>vellumwidget</code>) reads it; <code>vellum</code> neither inspects nor validates it. This is
+the panel-level counterpart of the per-element grob <code>meta</code> channel, intended
+for panel-scoped conventions such as axis/scale descriptors.</p></dd>
+
+
 <dt id="arg-cache">cache<a class="anchor" aria-label="anchor" href="#arg-cache"></a></dt>
 <dd><p>Repaint boundary (<code>TRUE</code>/<code>FALSE</code>, default <code>FALSE</code>). Flag this
 viewport's subtree as a cached sub-raster: on render it is rasterised once to
@@ -244,6 +255,7 @@ built on top of vellum.</p></dd>
 <span class="r-out co"><span class="r-pr">#&gt;</span>  @ alpha  : NULL</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>  @ blend  : NULL</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>  @ name   : NULL</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>  @ meta   : NULL</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>  @ cache  : logi FALSE</span>
 </code></pre></div>
     </div>

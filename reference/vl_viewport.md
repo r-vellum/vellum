@@ -30,6 +30,7 @@ vl_viewport(
   alpha = NULL,
   blend = NULL,
   name = NULL,
+  meta = NULL,
   cache = FALSE
 )
 
@@ -115,6 +116,18 @@ grid_layout(
   Optional name (for
   [`edit_node()`](https://r-vellum.github.io/vellum/reference/node_names.md)).
 
+- meta:
+
+  Optional free-form metadata for this viewport (any R object, default
+  `NULL`). Like a grob's `meta`, it never crosses to the rendering
+  backend — it rides on the R scene and surfaces, for a *named*
+  viewport, as the `meta` column of
+  [`scene_model()`](https://r-vellum.github.io/vellum/reference/scene_model.md)'s
+  `panels` table. A host (e.g. `vellumwidget`) reads it; `vellum`
+  neither inspects nor validates it. This is the panel-level counterpart
+  of the per-element grob `meta` channel, intended for panel-scoped
+  conventions such as axis/scale descriptors.
+
 - cache:
 
   Repaint boundary (`TRUE`/`FALSE`, default `FALSE`). Flag this
@@ -193,5 +206,6 @@ vl_viewport(xscale = c(0, 10), yscale = c(0, 100))
 #>  @ alpha  : NULL
 #>  @ blend  : NULL
 #>  @ name   : NULL
+#>  @ meta   : NULL
 #>  @ cache  : logi FALSE
 ```

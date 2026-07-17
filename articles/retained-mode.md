@@ -132,7 +132,7 @@ sm <- scene_model(dots)
 str(sm, max.level = 1)
 #> List of 2
 #>  $ elements:'data.frame':    3 obs. of  14 variables:
-#>  $ panels  :'data.frame':    0 obs. of  5 variables:
+#>  $ panels  :'data.frame':    0 obs. of  14 variables:
 sm$elements[, c("mark", "name", "x", "y", "w", "h")]
 #>     mark name   x   y     w     h
 #> 1 circle    a 120 144 92.16 92.16

@@ -153,20 +153,51 @@ Two families produce these rows:
 ### `panels`
 
 One row per **named panel** (a named viewport becomes an addressable
-panel), with the bounding box of that panel’s elements:
+panel):
 
 ``` r
 
 str(m$panels)
-#> 'data.frame':    0 obs. of  5 variables:
-#>  $ name: chr 
-#>  $ x0  : num 
-#>  $ y0  : num 
-#>  $ x1  : num 
-#>  $ y1  : num
+#> 'data.frame':    0 obs. of  14 variables:
+#>  $ name     : chr 
+#>  $ x0       : num 
+#>  $ y0       : num 
+#>  $ x1       : num 
+#>  $ y1       : num 
+#>  $ px0      : num 
+#>  $ py0      : num 
+#>  $ px1      : num 
+#>  $ py1      : num 
+#>  $ xscale_lo: num 
+#>  $ xscale_hi: num 
+#>  $ yscale_lo: num 
+#>  $ yscale_hi: num 
+#>  $ meta     : list()
 ```
 
-Columns: `name`, `x0`, `y0`, `x1`, `y1`.
+Columns:
+
+| column | type | meaning |
+|----|----|----|
+| `name` | character | the panel’s viewport name |
+| `x0, y0, x1, y1` | numeric | bounding box of the panel’s *elements* (device px) |
+| `px0, py0, px1, py1` | numeric | the panel viewport’s **resolved device-px rectangle** — the true data region, from the layout solve, not just where marks landed (`NA` if the viewport was not captured) |
+| `xscale_lo, xscale_hi` | numeric | the panel viewport’s native x coordinate range (its `xscale`) |
+| `yscale_lo, yscale_hi` | numeric | native y coordinate range (its `yscale`) |
+| `meta` | list | the panel viewport’s free-form `meta` (list-column; `NULL` when none) |
+
+The pixel rectangle paired with the native range gives the affine that
+maps device px ↔︎ native for that panel — the geometry a host needs to
+invert a pixel back to a data coordinate. It is the panel-level analogue
+of an element’s bbox + `meta`.
+
+The panel-level `meta` (the `meta =` argument of \[vl_viewport()\]) is
+the same opaque, host-read channel as element `meta`: vellum carries it
+untouched and names no conventions. The grammar uses it for panel-scoped
+descriptors — e.g. the `scales` descriptor `vellumplot` attaches to each
+data panel (per-axis type, domain, breaks, and labels), which
+`vellumwidget` reads to map pixels back to data values. That convention
+is documented by `vellumplot`, not here.
 
 ### The `meta` key vocabulary
 

@@ -140,5 +140,6 @@ vl_viewport(gp = accent)
 #>  @ alpha  : NULL
 #>  @ blend  : NULL
 #>  @ name   : NULL
+#>  @ meta   : NULL
 #>  @ cache  : logi FALSE
 ```
