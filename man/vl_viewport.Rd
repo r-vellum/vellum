@@ -24,6 +24,7 @@ vl_viewport(
   alpha = NULL,
   blend = NULL,
   name = NULL,
+  meta = NULL,
   cache = FALSE
 )
 
@@ -72,6 +73,14 @@ isolated layer) onto the backdrop below it. One of \code{"normal"} (default),
 over-compositing.}
 
 \item{name}{Optional name (for \code{\link[=edit_node]{edit_node()}}).}
+
+\item{meta}{Optional free-form metadata for this viewport (any R object,
+default \code{NULL}). Like a grob's \code{meta}, it never crosses to the rendering
+backend --- it rides on the R scene and surfaces, for a \emph{named} viewport, as
+the \code{meta} column of \code{scene_model()}'s \code{panels} table. A host (e.g.
+\code{vellumwidget}) reads it; \code{vellum} neither inspects nor validates it. This is
+the panel-level counterpart of the per-element grob \code{meta} channel, intended
+for panel-scoped conventions such as axis/scale descriptors.}
 
 \item{cache}{Repaint boundary (\code{TRUE}/\code{FALSE}, default \code{FALSE}). Flag this
 viewport's subtree as a cached sub-raster: on render it is rasterised once to

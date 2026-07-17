@@ -109,8 +109,11 @@ scene_model <- function(scene) {
   }
   for (ch in root@children) walk(ch, .panel_name(root@vp))
 
-  # Geometry (device px) from the compiled backend, in the same paint order.
-  et <- .scene_to_backend(scene)$element_table()
+  # One compile that also captures the viewport id<->name map (via `.push_vp`), so
+  # `panels` can carry each panel viewport's resolved pixel rect, native scale, and
+  # `meta`. Element geometry (device px) is taken from the same backend, in paint order.
+  cap <- .sm_compile_capture(scene)
+  et <- cap$backend$element_table()
 
   if (!length(chunks)) {
     empty <- data.frame(
@@ -153,21 +156,92 @@ scene_model <- function(scene) {
   )
   elements$meta <- meta
 
-  list(elements = elements, panels = .sm_panels(panel, gx0, gy0, gx1, gy1))
+  list(
+    elements = elements,
+    panels = .sm_panels(panel, gx0, gy0, gx1, gy1, cap$items, cap$backend$resolved_geometry())
+  )
 }
 
 .sm_empty_panels <- function() {
-  data.frame(name = character(), x0 = numeric(), y0 = numeric(),
-             x1 = numeric(), y1 = numeric(), stringsAsFactors = FALSE)
+  d <- data.frame(
+    name = character(),
+    x0 = numeric(), y0 = numeric(), x1 = numeric(), y1 = numeric(),
+    px0 = numeric(), py0 = numeric(), px1 = numeric(), py1 = numeric(),
+    xscale_lo = numeric(), xscale_hi = numeric(),
+    yscale_lo = numeric(), yscale_hi = numeric(),
+    stringsAsFactors = FALSE
+  )
+  d$meta <- list()
+  d
 }
 
-# One row per named panel: the bounding box of its elements (device px).
-.sm_panels <- function(panel, x0, y0, x1, y1) {
+# Device-px rectangle of a resolved viewport: the bbox of its four local corners
+# mapped through the local->device affine `transform = c(sx, ky, kx, sy, tx, ty)`.
+# Returns `c(px0, py0, px1, py1)` or NULL when the id is absent.
+.sm_vp_rect <- function(geom, id) {
+  i <- match(id, geom$id)
+  if (is.na(i)) return(NULL)
+  tf <- geom$transform[[i]]
+  w <- geom$w_px[i]
+  h <- geom$h_px[i]
+  cx <- c(0, w, w, 0)
+  cy <- c(0, 0, h, h)
+  dx <- tf[1] * cx + tf[3] * cy + tf[5]
+  dy <- tf[2] * cx + tf[4] * cy + tf[6]
+  c(px0 = min(dx), py0 = min(dy), px1 = max(dx), py1 = max(dy))
+}
+
+# One row per named panel. Besides the element-extent bbox (`x0..y1`, kept for
+# back-compat) each row now carries the panel viewport's resolved device-px
+# rectangle (`px0..py1`, the true data region, not just where marks landed), its
+# native coordinate ranges (`xscale_*`/`yscale_*`), and its free-form `meta` — the
+# geometry a host needs to map device px <-> native for that panel. Values are `NA`
+# / `NULL` for a panel whose viewport was not captured (e.g. a foreign scene).
+.sm_panels <- function(panel, x0, y0, x1, y1, items, geom) {
   pn <- unique(panel[!is.na(panel)])
-  if (!length(pn)) return(.sm_empty_panels())
-  do.call(rbind, lapply(pn, function(p) {
+  n <- length(pn)
+  if (!n) return(.sm_empty_panels())
+  ex0 <- ey0 <- ex1 <- ey1 <- numeric(n)
+  px0 <- py0 <- px1 <- py1 <- rep(NA_real_, n)
+  xsl <- xsh <- ysl <- ysh <- rep(NA_real_, n)
+  meta <- vector("list", n)
+  for (j in seq_len(n)) {
+    p <- pn[j]
     i <- which(!is.na(panel) & panel == p)
-    data.frame(name = p, x0 = min(x0[i]), y0 = min(y0[i]),
-               x1 = max(x1[i]), y1 = max(y1[i]), stringsAsFactors = FALSE)
-  }))
+    ex0[j] <- min(x0[i]); ey0[j] <- min(y0[i]); ex1[j] <- max(x1[i]); ey1[j] <- max(y1[i])
+    it <- Find(function(t) identical(as.character(t$name), p), items)
+    if (!is.null(it)) {
+      r <- .sm_vp_rect(geom, it$id)
+      if (!is.null(r)) { px0[j] <- r[["px0"]]; py0[j] <- r[["py0"]]; px1[j] <- r[["px1"]]; py1[j] <- r[["py1"]] }
+      xs <- it$vp@xscale; ys <- it$vp@yscale
+      if (length(xs) == 2L) { xsl[j] <- xs[1L]; xsh[j] <- xs[2L] }
+      if (length(ys) == 2L) { ysl[j] <- ys[1L]; ysh[j] <- ys[2L] }
+      # `meta[[j]] <- NULL` would DELETE the slot (R gotcha); the list is
+      # pre-filled with NULLs, so only assign when the viewport carries meta.
+      if (!is.null(it$vp@meta)) meta[[j]] <- it$vp@meta
+    }
+  }
+  out <- data.frame(
+    name = pn, x0 = ex0, y0 = ey0, x1 = ex1, y1 = ey1,
+    px0 = px0, py0 = py0, px1 = px1, py1 = py1,
+    xscale_lo = xsl, xscale_hi = xsh, yscale_lo = ysl, yscale_hi = ysh,
+    stringsAsFactors = FALSE
+  )
+  out$meta <- meta
+  out
+}
+
+# Compile the scene once, capturing the viewport id<->name/`vp` map (as the debug
+# path does) without drawing any overlay, so `scene_model()` can get element
+# geometry, resolved viewport geometry, and the panel viewport objects from one
+# consistent backend. Bypasses the render cache (a cache hit would skip the compile
+# and so capture no map); scene_model is a once-per-build call, not the render path.
+.sm_compile_capture <- function(scene) {
+  reg <- new.env(parent = emptyenv())
+  reg$items <- list()
+  old <- .debug_state$reg
+  .debug_state$reg <- reg
+  on.exit(.debug_state$reg <- old, add = TRUE)
+  backend <- .compile_backend(scene, debug = FALSE)
+  list(backend = backend, items = reg$items)
 }
