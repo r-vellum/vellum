@@ -242,6 +242,21 @@ scene_model <- function(scene) {
   old <- .debug_state$reg
   .debug_state$reg <- reg
   on.exit(.debug_state$reg <- old, add = TRUE)
-  backend <- .compile_backend(scene, debug = FALSE)
+  cid <- .scene_cid(scene)
+  backend <- .compile_backend(scene, cid = cid)
+  # A cache *hit* would skip the id<->name capture (`.push_vp` only records during a
+  # compile), so we always compile here rather than reuse a cached backend. But
+  # write the freshly compiled backend to the render cache, so the `scene_svg()` /
+  # `render()` that typically follows in the same build reuses it instead of
+  # compiling a second time. Mirrors the cache guard in `.scene_to_backend()`
+  # (only with a scene id, and only when caching is enabled).
+  if (!is.null(cid) && isTRUE(getOption("vellum.cache", TRUE))) {
+    key <- .render_key(
+      cid, .to_inches(scene@width), .to_inches(scene@height),
+      scene@dpi, .rs_col(scene@bg) %||% c(255L, 255L, 255L, 0L),
+      scene@title, scene@desc
+    )
+    .render_cache_put(key, backend)
+  }
   list(backend = backend, items = reg$items)
 }
