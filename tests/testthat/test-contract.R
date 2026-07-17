@@ -50,6 +50,23 @@ test_that("panels carry the panel viewport's pixel rect, native scale, and meta"
   expect_identical(row$meta[[1]]$scales$x$type, "continuous")
 })
 
+test_that("scene_model() warms the render cache so a following render need not recompile", {
+  skip_if_not(isTRUE(getOption("vellum.cache", TRUE)), "render cache disabled")
+  sc <- vl_scene(3, 2, dpi = 100) |>
+    push(vl_viewport(name = "panel-1-1", xscale = c(0, 10), yscale = c(0, 20))) |>
+    draw(points_grob(5, 10, gp = vl_gpar(fill = "red"), key = "k1")) |>
+    pop()
+  cid <- .scene_cid(sc)
+  skip_if(is.null(cid), "scene carries no cache id")
+  vl_clear_render_cache()
+  invisible(scene_model(sc))
+  key <- .render_key(
+    cid, .to_inches(sc@width), .to_inches(sc@height), sc@dpi,
+    .rs_col(sc@bg) %||% c(255L, 255L, 255L, 0L), sc@title, sc@desc
+  )
+  expect_false(is.null(.render_cache_get(key)))
+})
+
 test_that("a panel whose viewport carries no meta yields NULL meta (no delete gotcha)", {
   sc <- vl_scene(2, 2, dpi = 100) |>
     push(vl_viewport(name = "panel-1-1")) |>

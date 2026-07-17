@@ -1,5 +1,11 @@
 # vellum (development version)
 
+* **`scene_model()` no longer forces a second scene compile.** Its viewport
+  id↔name capture must compile (a cache *hit* would skip the capture), but it now
+  writes that compiled backend to the render cache, so a `scene_svg()` / `render()`
+  that follows in the same build reuses it instead of recompiling. Restores the
+  single-compile behaviour the earlier `scene_model()` change had lost.
+
 * **Scene contract: `scene_model()$panels` now carries per-panel geometry and
   metadata.** Each panel row gains its panel viewport's resolved device-px
   rectangle (`px0,py0,px1,py1` — the true data region from the layout solve, not
