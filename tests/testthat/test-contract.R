@@ -18,10 +18,46 @@ test_that("scene_model() returns the documented element and panel columns", {
     c("key", "mark", "id", "name", "panel",
       "x0", "y0", "x1", "y1", "x", "y", "w", "h", "meta")
   )
-  expect_identical(names(m$panels), c("name", "x0", "y0", "x1", "y1"))
+  expect_identical(
+    names(m$panels),
+    c("name", "x0", "y0", "x1", "y1", "px0", "py0", "px1", "py1",
+      "xscale_lo", "xscale_hi", "yscale_lo", "yscale_hi", "meta")
+  )
   # meta is a list-column carried through untouched.
   expect_type(m$elements$meta, "list")
   expect_identical(m$elements$meta[[1]]$t, "A")
+})
+
+test_that("panels carry the panel viewport's pixel rect, native scale, and meta", {
+  sc <- vl_scene(3, 2, dpi = 100) |>
+    push(vl_viewport(
+      name = "panel-1-1", xscale = c(0, 10), yscale = c(0, 20),
+      meta = list(scales = list(x = list(type = "continuous")))
+    )) |>
+    draw(points_grob(5, 10, gp = vl_gpar(fill = "red"), key = "k1")) |>
+    pop()
+  p <- scene_model(sc)$panels
+  row <- p[p$name == "panel-1-1", ]
+  expect_equal(nrow(row), 1L)
+  # native ranges come straight from the viewport's xscale/yscale
+  expect_equal(c(row$xscale_lo, row$xscale_hi), c(0, 10))
+  expect_equal(c(row$yscale_lo, row$yscale_hi), c(0, 20))
+  # a true device-px rectangle (not the element extent): finite, ordered, and
+  # wider/taller than the single mark's bbox
+  expect_true(is.finite(row$px0) && row$px1 > row$px0 && row$py1 > row$py0)
+  expect_true(row$px1 - row$px0 > row$x1 - row$x0)
+  # the opaque panel-level meta rides through untouched
+  expect_identical(row$meta[[1]]$scales$x$type, "continuous")
+})
+
+test_that("a panel whose viewport carries no meta yields NULL meta (no delete gotcha)", {
+  sc <- vl_scene(2, 2, dpi = 100) |>
+    push(vl_viewport(name = "panel-1-1")) |>
+    draw(points_grob(0.5, 0.5, gp = vl_gpar(fill = "red"), key = "a")) |>
+    pop()
+  p <- scene_model(sc)$panels
+  expect_equal(nrow(p), 1L)
+  expect_null(p$meta[[1]])
 })
 
 test_that("the `mark` vocabulary is the documented closed set, in paint order", {
