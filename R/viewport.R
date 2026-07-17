@@ -39,6 +39,14 @@
 #'   `vellumwidget`) reads it; `vellum` neither inspects nor validates it. This is
 #'   the panel-level counterpart of the per-element grob `meta` channel, intended
 #'   for panel-scoped conventions such as axis/scale descriptors.
+#' @param pannable Emit this named panel as a **clip-stable pannable group**
+#'   (default `FALSE`): an outer `<g data-vellum-panel>` carrying the panel's clip
+#'   (untransformed, so the clip stays fixed) wrapping an inner
+#'   `<g data-vellum-pan>` that holds the content. A host (e.g. `vellumwidget`) can
+#'   set a `transform` on the inner group to pan/zoom the marks while the clip and
+#'   the surrounding axes stay put. SVG only; requires a named viewport. No effect
+#'   on the rendered (static) output — the extra inner group is inert until a host
+#'   transforms it.
 #' @param cache Repaint boundary (`TRUE`/`FALSE`, default `FALSE`). Flag this
 #'   viewport's subtree as a cached sub-raster: on render it is rasterised once to
 #'   its own layer and, on later renders where the subtree is **unchanged**, the
@@ -58,7 +66,7 @@ vl_viewport <- function(x = 0.5, y = 0.5, width = 1, height = 1,
                      gp = vl_gpar(), layout = NULL,
                      row = NULL, col = NULL, rowspan = 1, colspan = 1,
                      mask = NULL, alpha = NULL, blend = NULL, name = NULL,
-                     meta = NULL, cache = FALSE) {
+                     meta = NULL, pannable = FALSE, cache = FALSE) {
   .check_cell <- function(v, arg) {
     if (!is.null(v) && (length(v) != 1L || is.na(v) || v < 1)) {
       cli::cli_abort("{.arg {arg}} must be a single positive integer (1-based) or NULL.")
@@ -80,7 +88,8 @@ vl_viewport <- function(x = 0.5, y = 0.5, width = 1, height = 1,
     xscale = as.numeric(xscale), yscale = as.numeric(yscale),
     angle = as.numeric(angle), clip = clip, gp = gp, layout = layout,
     row = row, col = col, rowspan = as.integer(rowspan), colspan = as.integer(colspan),
-    mask = mask, alpha = alpha, blend = blend, name = name, meta = meta, cache = cache
+    mask = mask, alpha = alpha, blend = blend, name = name, meta = meta,
+    pannable = as.logical(pannable), cache = cache
   )
 }
 
@@ -113,6 +122,7 @@ class_viewport <- S7::new_class(
     blend = S7::new_property(S7::class_any, default = NULL),
     name = S7::new_property(S7::class_any, default = NULL),
     meta = S7::new_property(S7::class_any, default = NULL),
+    pannable = S7::new_property(S7::class_logical, default = FALSE),
     cache = S7::new_property(S7::class_logical, default = FALSE)
   )
 )

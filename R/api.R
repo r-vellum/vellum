@@ -1012,7 +1012,7 @@ S7::method(compile, gtree) <- function(node, scene) {
   # (a host targets it for pan/zoom); costs nothing on other backends or when
   # unnamed. Bracket the whole subtree, outside any mask/opacity group.
   panel <- .panel_name(node@vp)
-  if (!is.null(panel)) scene$begin_panel(panel)
+  if (!is.null(panel)) scene$begin_panel(panel, isTRUE(node@vp@pannable))
   mask <- if (!is.null(node@vp)) node@vp@mask else NULL
   alpha <- if (!is.null(node@vp)) node@vp@alpha else NULL
   blend <- if (!is.null(node@vp)) node@vp@blend else NULL

@@ -205,9 +205,23 @@ Four attribute mechanisms, each emitted only when its source is set:
 | `data-vellum-name` | grob `name` | per grob/node | `*_grob(name=)` |
 | `role` | grob `role` | per grob/node | `*_grob(role=)` |
 | `data-vellum-panel` | named viewport | wrapping `<g>` | `vl_viewport(name=)` |
+| `data-vellum-pan` | pannable panel's inner group | inner `<g>` | `vl_viewport(pannable=)` |
 
 An empty/`NULL` source emits **no attribute**, so a scene that declares no
 interactivity is byte-for-byte identical to one built before any of this existed.
+
+### Pannable panels
+
+A named viewport marked `vl_viewport(pannable = TRUE)` is emitted as **two nested
+groups** instead of one: an outer `<g data-vellum-panel="name">` that carries the
+panel's clip (untransformed, so the clip region stays fixed) around an inner
+`<g data-vellum-pan="name">` holding the content. The panel's clip is **hoisted
+once** to the outer group (rather than repeated per element), so a host can set a
+`transform` on the inner group to pan/zoom the marks while the clip — and the
+axes/legend outside the panel — stay put. This is the structural basis for
+host-side axis-aware zoom. It is SVG-only and inert for static rendering (the
+extra group has no transform until a host sets one); non-pannable panels and other
+backends are unchanged.
 
 ## Accessibility
 

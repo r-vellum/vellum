@@ -130,6 +130,30 @@ test_that("grob id/role/name and named panels surface as SVG attributes", {
   expect_match(svg, 'data-vellum-panel="panel-1-1"', fixed = TRUE)
 })
 
+test_that("a pannable clipped panel emits outer(clip) > inner(data-vellum-pan) with one hoisted clip", {
+  sc <- vl_scene(3, 2, dpi = 100) |>
+    push(vl_viewport(name = "panel-1-1", xscale = c(0, 10), yscale = c(0, 10),
+                     clip = TRUE, pannable = TRUE)) |>
+    draw(points_grob(c(3, 7), 5, gp = vl_gpar(fill = "red"), key = c("a", "b"))) |>
+    pop()
+  svg <- scene_svg(sc)
+  # the panel group carries the clip; a nested pan group holds the content
+  expect_match(svg, 'data-vellum-panel="panel-1-1"[^>]*clip-path=')
+  expect_match(svg, 'data-vellum-pan="panel-1-1"', fixed = TRUE)
+  # clip is hoisted once to the outer group, not repeated per element
+  expect_equal(lengths(regmatches(svg, gregexpr("clip-path=", svg))), 1L)
+})
+
+test_that("a non-pannable panel is unchanged (no pan group; per-element clips)", {
+  sc <- vl_scene(3, 2, dpi = 100) |>
+    push(vl_viewport(name = "p", clip = TRUE)) |>
+    draw(points_grob(c(3, 7), 5, gp = vl_gpar(fill = "red"), key = c("a", "b"))) |>
+    pop()
+  svg <- scene_svg(sc)
+  expect_no_match(svg, 'data-vellum-pan="', fixed = TRUE)
+  expect_match(svg, 'data-vellum-panel="p"', fixed = TRUE)
+})
+
 test_that("additivity: a scene with no keys/meta emits no data-key (byte-stable)", {
   plain <- vl_scene(2, 2, dpi = 100) |>
     draw(points_grob(c(0.25, 0.75), 0.5, gp = vl_gpar(fill = "red")))

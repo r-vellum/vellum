@@ -25,6 +25,7 @@ vl_viewport(
   blend = NULL,
   name = NULL,
   meta = NULL,
+  pannable = FALSE,
   cache = FALSE
 )
 
@@ -81,6 +82,15 @@ the \code{meta} column of \code{scene_model()}'s \code{panels} table. A host (e.
 \code{vellumwidget}) reads it; \code{vellum} neither inspects nor validates it. This is
 the panel-level counterpart of the per-element grob \code{meta} channel, intended
 for panel-scoped conventions such as axis/scale descriptors.}
+
+\item{pannable}{Emit this named panel as a \strong{clip-stable pannable group}
+(default \code{FALSE}): an outer \verb{<g data-vellum-panel>} carrying the panel's clip
+(untransformed, so the clip stays fixed) wrapping an inner
+\verb{<g data-vellum-pan>} that holds the content. A host (e.g. \code{vellumwidget}) can
+set a \code{transform} on the inner group to pan/zoom the marks while the clip and
+the surrounding axes stay put. SVG only; requires a named viewport. No effect
+on the rendered (static) output — the extra inner group is inert until a host
+transforms it.}
 
 \item{cache}{Repaint boundary (\code{TRUE}/\code{FALSE}, default \code{FALSE}). Flag this
 viewport's subtree as a cached sub-raster: on render it is rasterised once to
