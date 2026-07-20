@@ -13,7 +13,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">vellum</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.5.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.5.0.9000</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -57,6 +57,9 @@
       <small>Source: <a href="https://github.com/r-vellum/vellum/blob/main/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="development version" id="vellum-development-version">vellum (development version)<a class="anchor" aria-label="anchor" href="#vellum-development-version"></a></h2>
+</div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.5.0" id="vellum-050">vellum 0.5.0<a class="anchor" aria-label="anchor" href="#vellum-050"></a></h2>
 <ul><li><p><strong><code>vl_viewport(pannable = TRUE)</code>: clip-stable pannable panels.</strong> A named panel so marked is emitted to SVG as an outer <code>&lt;g data-vellum-panel&gt;</code> carrying the panel’s clip (hoisted once, untransformed) around an inner <code>&lt;g data-vellum-pan&gt;</code> holding the content. A host can set a <code>transform</code> on the inner group to pan/zoom the marks while the clip and the surrounding axes stay fixed — the basis for host-side axis-aware zoom. SVG-only and inert for static rendering; non-pannable panels and the raster/PDF backends are byte-for-byte unchanged. See <code><a href="../articles/scene-contract.html">vignette("scene-contract")</a></code>.</p></li>
