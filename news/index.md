@@ -1,6 +1,6 @@
 # Changelog
 
-## vellum (development version)
+## vellum 0.5.0
 
 - **`vl_viewport(pannable = TRUE)`: clip-stable pannable panels.** A
   named panel so marked is emitted to SVG as an outer
