@@ -2767,19 +2767,21 @@ impl Scene {
                         }
                         if let Some(a) = arrow {
                             // Endpoints and travel-tangent of the outer arc in local px.
-                            // The path is (cx + r cos θ, cy + r sin θ), so the forward
-                            // tangent is sgn·(-sin θ, cos θ); the arrowhead direction for
-                            // the "last" end points forward, "first" points backward.
+                            // The path is (cx + r cos θ, cy - r sin θ) — the y term is
+                            // negated for the y-down device frame (see `sector_path`) — so
+                            // dP/dθ = (-sin θ, -cos θ) and the forward tangent is
+                            // sgn·(-sin θ, -cos θ); the arrowhead direction for the "last"
+                            // end points forward, "first" points backward.
                             let (t0, t1) = (theta0[i], theta1[i]);
                             let sgn = if t1 >= t0 { 1.0 } else { -1.0 };
                             let outer = rr1.max(rr0);
                             if a.ends & 2 != 0 {
-                                let (px, py) = ((cx + outer * t1.cos()) as f32, (cy + outer * t1.sin()) as f32);
-                                ends.push((px, py, sgn * -t1.sin(), sgn * t1.cos()));
+                                let (px, py) = ((cx + outer * t1.cos()) as f32, (cy - outer * t1.sin()) as f32);
+                                ends.push((px, py, sgn * -t1.sin(), sgn * -t1.cos()));
                             }
                             if a.ends & 1 != 0 {
-                                let (px, py) = ((cx + outer * t0.cos()) as f32, (cy + outer * t0.sin()) as f32);
-                                ends.push((px, py, sgn * t0.sin(), sgn * -t0.cos()));
+                                let (px, py) = ((cx + outer * t0.cos()) as f32, (cy - outer * t0.sin()) as f32);
+                                ends.push((px, py, sgn * t0.sin(), sgn * t0.cos()));
                             }
                         }
                     }
@@ -3326,7 +3328,10 @@ fn draw_sketch_rings<B: RenderBackend>(
     paint_sketch(b, &s, gp, t, clip, vp, o.fill_weight);
 }
 
-/// Sample `n` points along an arc (0 at 3 o'clock, CCW), inclusive of both ends.
+/// Sample `n` points along an arc in the local (y-down) frame, inclusive of both
+/// ends. Angles wind clockwise on screen (0 at 3 o'clock) — this is the raw
+/// device-space form used by `roundrect_ring`, whose corner arcs are specified
+/// directly in the y-down frame. For a y-up sector arc, use `sector_arc_pts`.
 fn arc_pts(cx: f64, cy: f64, r: f64, t0: f64, t1: f64, n: usize) -> Vec<(f64, f64)> {
     let n = n.max(2);
     (0..=n)
@@ -3337,15 +3342,29 @@ fn arc_pts(cx: f64, cy: f64, r: f64, t0: f64, t1: f64, n: usize) -> Vec<(f64, f6
         .collect()
 }
 
+/// Sample `n` points along a sector arc (0 at 3 o'clock, CCW — the y-up angle
+/// contract), inclusive of both ends. `(cx, cy)` is in the y-down device frame,
+/// so the y term is negated to match `sector_path` (keeping the sketched wedge
+/// aligned with the crisp fill).
+fn sector_arc_pts(cx: f64, cy: f64, r: f64, t0: f64, t1: f64, n: usize) -> Vec<(f64, f64)> {
+    let n = n.max(2);
+    (0..=n)
+        .map(|k| {
+            let a = t0 + (t1 - t0) * (k as f64 / n as f64);
+            (cx + r * a.cos(), cy - r * a.sin())
+        })
+        .collect()
+}
+
 /// The closed outline of an annular sector as a point ring (local px): outer arc
 /// forward, then the inner arc back — or the centre for a pie slice (`r0 == 0`).
 fn wedge_ring(cx: f64, cy: f64, r0: f64, r1: f64, t0: f64, t1: f64) -> Vec<(f64, f64)> {
     // Sample density scales with the arc span (≥ ~8 points, ~1 per 6°).
     let span = (t1 - t0).abs();
     let n = ((span / (std::f64::consts::PI / 30.0)).ceil() as usize).clamp(8, 180);
-    let mut ring = arc_pts(cx, cy, r1, t0, t1, n);
+    let mut ring = sector_arc_pts(cx, cy, r1, t0, t1, n);
     if r0 > 0.0 {
-        ring.extend(arc_pts(cx, cy, r0, t1, t0, n));
+        ring.extend(sector_arc_pts(cx, cy, r0, t1, t0, n));
     } else {
         ring.push((cx, cy));
     }
@@ -3607,10 +3626,13 @@ fn loop_control_points(cx: f64, cy: f64, s: f64, foot: f64, angle: f64, width: f
         (0.4 * s, -0.2 * s * width),// P2
         (foot * fdx, -foot * fdy),  // P3 — returning foot
     ];
-    let (ca, sa) = (angle.cos(), angle.sin());
+    // `angle` is a y-up angle (0 at 3 o'clock, CCW). `(cx, cy)` is already y-down, so
+    // negate the angle to rotate into the device frame — the same sign flip
+    // `sector_path` applies. (The teardrop is symmetric about its +x axis, so this is a
+    // pure rotation to the correct screen orientation, not a reflection of the shape.)
+    let (ca, sa) = (angle.cos(), (-angle).sin());
     let mut out = [(0.0f32, 0.0f32); 4];
     for (k, &(px, py)) in local.iter().enumerate() {
-        // Rotate in device (y-down) space, consistent with `sector`'s cos/sin use.
         out[k] = ((cx + px * ca - py * sa) as f32, (cy + px * sa + py * ca) as f32);
     }
     out

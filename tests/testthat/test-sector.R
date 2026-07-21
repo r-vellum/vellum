@@ -11,6 +11,20 @@ test_that("a pie slice (r0 = 0) fills inside its wedge but not outside", {
   expect_equal(px(s, 25, 50)[1:3], c(255L, 255L, 255L))   # left of centre: outside
 })
 
+test_that("an asymmetric wedge fills the native-up half, not its y-down mirror", {
+  # theta 30deg..60deg -> a wedge pointing up-right in native (y-up) coords. Its
+  # bisector is 45deg, so a point up-right of centre is inside and the vertically
+  # mirrored point (down-right) must be empty. Guards against the y-down flip (#14):
+  # a mirrored sector would fill below centre instead of above.
+  s <- vl_scene(1, 1, dpi = 100, bg = "white") |>
+    draw(sector_grob(x = 0.5, y = 0.5, r0 = 0, r1 = 0.45,
+                     theta0 = pi / 6, theta1 = pi / 3,
+                     gp = vl_gpar(fill = "blue", col = NA)))
+  # centre is device (50, 50); native-up is a smaller row. ~20px along 45deg.
+  expect_equal(px(s, 64, 36)[1:3], c(0L, 0L, 255L))       # up-right: inside
+  expect_equal(px(s, 64, 64)[1:3], c(255L, 255L, 255L))   # down-right (mirror): outside
+})
+
 test_that("an annulus (r0 > 0) leaves a hollow centre", {
   s <- vl_scene(1, 1, dpi = 100, bg = "white") |>
     draw(sector_grob(x = 0.5, y = 0.5, r0 = 0.25, r1 = 0.45,

@@ -458,7 +458,10 @@ pub fn sector_path(cx: f64, cy: f64, r0: f64, r1: f64, theta0: f64, theta1: f64)
     const MAX_SECTOR_SEGS: usize = 4096;
     let segs = ((dtheta.abs() / (std::f64::consts::PI / 45.0)).ceil().max(2.0) as usize)
         .min(MAX_SECTOR_SEGS);
-    let pt = |r: f64, a: f64| ((cx + r * a.cos()) as f32, (cy + r * a.sin()) as f32);
+    // `(cx, cy)` is already in the y-down device frame (via `y_pos`), while `a` is a
+    // y-up angle (0 at 3 o'clock, CCW, per the R contract). Negate the sin term to map
+    // the y-up angle onto the device offset — the same sign flip `y_pos`/`rotation_about` apply.
+    let pt = |r: f64, a: f64| ((cx + r * a.cos()) as f32, (cy - r * a.sin()) as f32);
     let mut pb = PathBuilder::new();
     // Outer arc, theta0 -> theta1.
     let (sx, sy) = pt(r_out, theta0);
