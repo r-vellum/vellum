@@ -1,6 +1,6 @@
 Package: vellum
 Title: A Low-Level Graphics Framework with a Rust Backend
-Version: 0.5.0.9000
+Version: 0.5.1
 Authors@R: 
     person("David", "Schoch", , "david.schoch@cynkra.com", role = c("aut", "cre"))
 Description: A grid-like low-level graphics system for R whose scene
