@@ -13,7 +13,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">vellum</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.5.0.9000</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.5.1.9000</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -60,6 +60,11 @@
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="development version" id="vellum-development-version">vellum (development version)<a class="anchor" aria-label="anchor" href="#vellum-development-version"></a></h2>
 </div>
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.5.1" id="vellum-051">vellum 0.5.1<a class="anchor" aria-label="anchor" href="#vellum-051"></a></h2>
+<ul><li>
+<strong><code><a href="../reference/grob.html">sector_grob()</a></code> and <code><a href="../reference/grob.html">loop_grob()</a></code> no longer render vertically mirrored.</strong> Sector arcs were built directly in the y-down device frame (<code>cy + r·sin θ</code>) while every other primitive maps coordinates through the y-up native frame, so a sector drawn at angle <code>θ</code> landed where the others would place <code>-θ</code> — the documented “0 at 3 o’clock, counter-clockwise” contract was mirrored across the horizontal axis. A centroid label/point overlaid on a pie / donut / rose / sunburst therefore sat on the mirror image of its wedge. Sector fills, strokes, arrowheads, and hand-drawn (<code>sketch=</code>) wedges — and <code><a href="../reference/grob.html">loop_grob()</a></code>’s teardrop <code>angle</code>, which shared the same convention — now all honour the y-up angle contract (<a href="https://github.com/r-vellum/vellum/issues/14" class="external-link">#14</a>).</li>
+</ul></div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.5.0" id="vellum-050">vellum 0.5.0<a class="anchor" aria-label="anchor" href="#vellum-050"></a></h2>
 <ul><li><p><strong><code>vl_viewport(pannable = TRUE)</code>: clip-stable pannable panels.</strong> A named panel so marked is emitted to SVG as an outer <code>&lt;g data-vellum-panel&gt;</code> carrying the panel’s clip (hoisted once, untransformed) around an inner <code>&lt;g data-vellum-pan&gt;</code> holding the content. A host can set a <code>transform</code> on the inner group to pan/zoom the marks while the clip and the surrounding axes stay fixed — the basis for host-side axis-aware zoom. SVG-only and inert for static rendering; non-pannable panels and the raster/PDF backends are byte-for-byte unchanged. See <code><a href="../articles/scene-contract.html">vignette("scene-contract")</a></code>.</p></li>

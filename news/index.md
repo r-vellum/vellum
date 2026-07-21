@@ -2,6 +2,25 @@
 
 ## vellum (development version)
 
+## vellum 0.5.1
+
+- **[`sector_grob()`](https://r-vellum.github.io/vellum/reference/grob.md)
+  and
+  [`loop_grob()`](https://r-vellum.github.io/vellum/reference/grob.md)
+  no longer render vertically mirrored.** Sector arcs were built
+  directly in the y-down device frame (`cy + r·sin θ`) while every other
+  primitive maps coordinates through the y-up native frame, so a sector
+  drawn at angle `θ` landed where the others would place `-θ` — the
+  documented “0 at 3 o’clock, counter-clockwise” contract was mirrored
+  across the horizontal axis. A centroid label/point overlaid on a pie /
+  donut / rose / sunburst therefore sat on the mirror image of its
+  wedge. Sector fills, strokes, arrowheads, and hand-drawn (`sketch=`)
+  wedges — and
+  [`loop_grob()`](https://r-vellum.github.io/vellum/reference/grob.md)’s
+  teardrop `angle`, which shared the same convention — now all honour
+  the y-up angle contract
+  ([\#14](https://github.com/r-vellum/vellum/issues/14)).
+
 ## vellum 0.5.0
 
 - **`vl_viewport(pannable = TRUE)`: clip-stable pannable panels.** A
