@@ -37,6 +37,19 @@ test_that("angle rotates the loop's outward direction", {
   expect_lte(reach(left, 300), 2L) # angle=pi bulges to the left, ~nothing right of centre
 })
 
+test_that("angle rotates in the native (y-up) frame: pi/2 bulges up, not down", {
+  # angle = pi/2 is native-up. In the y-down device frame that is a smaller row, so
+  # the teardrop must occupy the region *above* the vertex and leave below it empty.
+  # Guards the same y-down flip as sector_grob (#14): a mirrored loop would bulge down.
+  s <- vl_scene(3, 3, dpi = 100, bg = "white") |>
+    draw(loop_grob(0.5, 0.5, size = vl_unit(20, "mm"), angle = pi / 2,
+                   gp = vl_gpar(col = "black", lwd = 2)))
+  above <- any(vapply(120:145, function(y) px(s, 150, y)[1] < 128L, logical(1)))
+  below <- any(vapply(155:180, function(y) px(s, 150, y)[1] < 128L, logical(1)))
+  expect_true(above)   # bulges up (native +y)
+  expect_false(below)  # not down (the y-down mirror)
+})
+
 test_that("nested loops (growing size) give concentric teardrops", {
   small <- vl_scene(3, 3, dpi = 100, bg = "white") |>
     draw(loop_grob(0.5, 0.5, size = vl_unit(15, "mm"), gp = vl_gpar(col = "black", lwd = 2)))
