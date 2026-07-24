@@ -52,9 +52,10 @@ A `vellum_pattern` object, suitable for `vl_gpar(fill = ...)`.
 ## Details
 
 The tile is rendered to a raster image (sized from `width`/`height` at
-the scene's resolution) and embedded: PNG raster, SVG `<image>` in a
-`<pattern>`. The PDF backend has no image support yet, so a pattern
-degrades to the tile's average colour there.
+the scene's resolution) and embedded on every backend: PNG raster, SVG
+`<image>` in a `<pattern>`, and a PDF tiling pattern with the tile as an
+embedded image XObject. Only a degenerate tile or cell size fails,
+leaving the shape unfilled with a degrade warning.
 
 ## Examples
 
