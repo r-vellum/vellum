@@ -38,9 +38,10 @@ the cell geometry is resolved against the viewport at draw time.
 }
 \details{
 The tile is rendered to a raster image (sized from \code{width}/\code{height} at the
-scene's resolution) and embedded: PNG raster, SVG \verb{<image>} in a \verb{<pattern>}.
-The PDF backend has no image support yet, so a pattern degrades to the tile's
-average colour there.
+scene's resolution) and embedded on every backend: PNG raster, SVG \verb{<image>}
+in a \verb{<pattern>}, and a PDF tiling pattern with the tile as an embedded image
+XObject. Only a degenerate tile or cell size fails, leaving the shape unfilled
+with a degrade warning.
 }
 \examples{
 dots <- circle_grob(r = 0.25, gp = vl_gpar(fill = "white", col = NA))

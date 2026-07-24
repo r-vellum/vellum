@@ -156,9 +156,10 @@ print.vellum_gradient <- function(x, ...) {
 #' the cell geometry is resolved against the viewport at draw time.
 #'
 #' The tile is rendered to a raster image (sized from `width`/`height` at the
-#' scene's resolution) and embedded: PNG raster, SVG `<image>` in a `<pattern>`.
-#' The PDF backend has no image support yet, so a pattern degrades to the tile's
-#' average colour there.
+#' scene's resolution) and embedded on every backend: PNG raster, SVG `<image>`
+#' in a `<pattern>`, and a PDF tiling pattern with the tile as an embedded image
+#' XObject. Only a degenerate tile or cell size fails, leaving the shape unfilled
+#' with a degrade warning.
 #'
 #' @param grob A grob, or a list of grobs, drawn into the tile (their `0..1` npc
 #'   coordinates map to the tile, painted in order).
