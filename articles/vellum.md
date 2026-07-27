@@ -133,8 +133,8 @@ reproducible and snapshot-testable.
   the scene graph, units and viewports, and the paint model (gradients,
   patterns, masks).
 - [`vignette("retained-mode")`](https://r-vellum.github.io/vellum/articles/retained-mode.md):
-  because the scene graph is kept rather than drawn and forgotten, you
-  can hit-test it and edit nodes by name.
+  because the scene graph is a value you keep, you can edit nodes by
+  name, hit-test a point, and read back per-element geometry.
 - [`vignette("coming-from-grid")`](https://r-vellum.github.io/vellum/articles/coming-from-grid.md):
   a translation guide if you already know grid.
 - [`vignette("grid-interop")`](https://r-vellum.github.io/vellum/articles/grid-interop.md):

@@ -52,7 +52,7 @@
 <li><hr class="dropdown-divider"></li>
     <li><h6 class="dropdown-header" data-toc-skip>Concepts</h6></li>
     <li><a class="dropdown-item" href="../articles/scene-and-paint.html">The scene graph and the paint model</a></li>
-    <li><a class="dropdown-item" href="../articles/retained-mode.html">Retained-mode superpowers: hit-testing and editable nodes</a></li>
+    <li><a class="dropdown-item" href="../articles/retained-mode.html">Retained-mode scenes: editing, hit-testing, and read-back</a></li>
     <li><a class="dropdown-item" href="../articles/datashading.html">Datashading: millions of points, honestly</a></li>
     <li><hr class="dropdown-divider"></li>
     <li><h6 class="dropdown-header" data-toc-skip>Interop</h6></li>
@@ -170,21 +170,38 @@ front</td>
 </tr>
 <tr class="odd">
 <td>
-<code><a href="https://rdrr.io/r/grid/grid.edit.html" class="external-link">grid.edit()</a></code> / <code><a href="https://rdrr.io/r/grid/grid.edit.html" class="external-link">editGrob()</a></code>
+<code><a href="https://rdrr.io/r/grid/grid.ls.html" class="external-link">grid.ls()</a></code> / <code><a href="https://rdrr.io/r/grid/grid.get.html" class="external-link">grid.get()</a></code>
 </td>
-<td><code><a href="../reference/node_names.html">edit_node()</a></code></td>
-<td>edit by <code>name</code>; copy-on-modify, not in place</td>
+<td>
+<code><a href="../reference/node_names.html">node_names()</a></code> / <code><a href="../reference/node_names.html">get_node()</a></code>
+</td>
+<td>list and read nodes by <code>name</code>
+</td>
 </tr>
 <tr class="even">
 <td>
-<code><a href="https://rdrr.io/r/grid/grid.grab.html" class="external-link">grid.grabExpr()</a></code> / display list</td>
-<td>the retained scene</td>
-<td>the tree is the model; nothing is replayed</td>
+<code><a href="https://rdrr.io/r/grid/grid.edit.html" class="external-link">grid.edit()</a></code> / <code><a href="https://rdrr.io/r/grid/grid.edit.html" class="external-link">editGrob()</a></code>
+</td>
+<td><code><a href="../reference/node_names.html">edit_node()</a></code></td>
+<td>
+<code><a href="https://rdrr.io/r/grid/grid.edit.html" class="external-link">editGrob()</a></code> also copies; <code><a href="https://rdrr.io/r/grid/grid.edit.html" class="external-link">grid.edit()</a></code>
+mutates the display list, <code><a href="../reference/node_names.html">edit_node()</a></code> never does</td>
 </tr>
 <tr class="odd">
+<td>
+<code><a href="https://rdrr.io/r/grid/grid.grab.html" class="external-link">grid.grabExpr()</a></code> / display list</td>
+<td>the retained scene</td>
+<td>the tree is the model, not something you recover from a device</td>
+</tr>
+<tr class="even">
 <td><code><a href="https://rdrr.io/r/grid/grid.locator.html" class="external-link">grid.locator()</a></code></td>
 <td><code><a href="../reference/hit_test.html">hit_test()</a></code></td>
-<td>exact geometric picking, not one interactive click</td>
+<td>picking from a pick-buffer, not one interactive click</td>
+</tr>
+<tr class="odd">
+<td>(no counterpart)</td>
+<td><code><a href="../reference/scene_model.html">scene_model()</a></code></td>
+<td>per-element identity plus resolved device-pixel bbox</td>
 </tr>
 <tr class="even">
 <td>device (<code><a href="https://rdrr.io/r/grDevices/png.html" class="external-link">png()</a></code>, <code><a href="https://rdrr.io/r/grDevices/pdf.html" class="external-link">pdf()</a></code>, …)</td>
@@ -270,15 +287,22 @@ single <code>unit</code> expression. This is the change most likely to
 surface when porting grid code.</p>
 </div>
 <div class="section level3">
-<h3 id="the-tree-is-retained-and-inspectable">The tree is retained and inspectable<a class="anchor" aria-label="anchor" href="#the-tree-is-retained-and-inspectable"></a>
+<h3 id="the-tree-is-a-value-and-it-can-report-geometry">The tree is a value, and it can report geometry<a class="anchor" aria-label="anchor" href="#the-tree-is-a-value-and-it-can-report-geometry"></a>
 </h3>
-<p>grid’s rendered output is pixels plus a display list. vellum keeps
-the scene as an immutable tree you can query and edit after the fact:
-<code><a href="../reference/node_names.html">node_names()</a></code>, <code><a href="../reference/node_names.html">get_node()</a></code>,
-<code><a href="../reference/node_names.html">edit_node()</a></code>, <code><a href="../reference/hit_test.html">hit_test()</a></code>, and
-<code><a href="../reference/scene_model.html">scene_model()</a></code>. There is no <code><a href="https://rdrr.io/r/grid/grid.force.html" class="external-link">grid.force()</a></code> step,
-and editing a node copies rather than mutating in place. See
-<code><a href="../articles/retained-mode.html">vignette("retained-mode")</a></code> for what this enables.</p>
+<p>grid retains its scene as well, so this is a difference of degree for
+the inspect-and-edit half: <code><a href="https://rdrr.io/r/grid/grid.ls.html" class="external-link">grid.ls()</a></code>,
+<code><a href="https://rdrr.io/r/grid/grid.get.html" class="external-link">grid.get()</a></code>, <code><a href="https://rdrr.io/r/grid/grid.edit.html" class="external-link">grid.edit()</a></code> and
+<code><a href="https://rdrr.io/r/grid/grid.edit.html" class="external-link">editGrob()</a></code> already let you rewrite a plot after the fact,
+and <code><a href="../reference/node_names.html">node_names()</a></code>, <code><a href="../reference/node_names.html">get_node()</a></code> and
+<code><a href="../reference/node_names.html">edit_node()</a></code> are the counterparts here. The difference is
+that vellum’s tree is an immutable value rather than device state, so
+there is no <code><a href="https://rdrr.io/r/grid/grid.force.html" class="external-link">grid.force()</a></code> step and no in-place mutation of a
+display list.</p>
+<p>The half with no grid counterpart is geometry read-back:
+<code><a href="../reference/hit_test.html">hit_test()</a></code> picks the topmost node under a point, and
+<code><a href="../reference/scene_model.html">scene_model()</a></code> returns every drawn element with its resolved
+device-pixel bounding box. See <code><a href="../articles/retained-mode.html">vignette("retained-mode")</a></code>
+for what that enables.</p>
 </div>
 <div class="section level3">
 <h3 id="vl_gpar-inherits-but-there-is-no-cascade">

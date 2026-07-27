@@ -17,9 +17,11 @@ places where vellum works differently on purpose.
 | [`rectGrob()`](https://rdrr.io/r/grid/grid.rect.html), [`gTree()`](https://rdrr.io/r/grid/grid.grob.html) | [`rect_grob()`](https://r-vellum.github.io/vellum/reference/grob.md), the scene tree | grobs are immutable S7 values |
 | [`gpar()`](https://rdrr.io/r/grid/gpar.html) | [`vl_gpar()`](https://r-vellum.github.io/vellum/reference/vl_gpar.md) | familiar fields; `fill` also accepts gradients |
 | [`grid.layout()`](https://rdrr.io/r/grid/grid.layout.html) | [`grid_layout()`](https://r-vellum.github.io/vellum/reference/vl_viewport.md) | flexible `"null"` tracks work the same |
-| [`grid.edit()`](https://rdrr.io/r/grid/grid.edit.html) / [`editGrob()`](https://rdrr.io/r/grid/grid.edit.html) | [`edit_node()`](https://r-vellum.github.io/vellum/reference/node_names.md) | edit by `name`; copy-on-modify, not in place |
-| [`grid.grabExpr()`](https://rdrr.io/r/grid/grid.grab.html) / display list | the retained scene | the tree is the model; nothing is replayed |
-| [`grid.locator()`](https://rdrr.io/r/grid/grid.locator.html) | [`hit_test()`](https://r-vellum.github.io/vellum/reference/hit_test.md) | exact geometric picking, not one interactive click |
+| [`grid.ls()`](https://rdrr.io/r/grid/grid.ls.html) / [`grid.get()`](https://rdrr.io/r/grid/grid.get.html) | [`node_names()`](https://r-vellum.github.io/vellum/reference/node_names.md) / [`get_node()`](https://r-vellum.github.io/vellum/reference/node_names.md) | list and read nodes by `name` |
+| [`grid.edit()`](https://rdrr.io/r/grid/grid.edit.html) / [`editGrob()`](https://rdrr.io/r/grid/grid.edit.html) | [`edit_node()`](https://r-vellum.github.io/vellum/reference/node_names.md) | [`editGrob()`](https://rdrr.io/r/grid/grid.edit.html) also copies; [`grid.edit()`](https://rdrr.io/r/grid/grid.edit.html) mutates the display list, [`edit_node()`](https://r-vellum.github.io/vellum/reference/node_names.md) never does |
+| [`grid.grabExpr()`](https://rdrr.io/r/grid/grid.grab.html) / display list | the retained scene | the tree is the model, not something you recover from a device |
+| [`grid.locator()`](https://rdrr.io/r/grid/grid.locator.html) | [`hit_test()`](https://r-vellum.github.io/vellum/reference/hit_test.md) | picking from a pick-buffer, not one interactive click |
+| (no counterpart) | [`scene_model()`](https://r-vellum.github.io/vellum/reference/scene_model.md) | per-element identity plus resolved device-pixel bbox |
 | device ([`png()`](https://rdrr.io/r/grDevices/png.html), [`pdf()`](https://rdrr.io/r/grDevices/pdf.html), …) | `render(scene, path)` | the extension picks the backend |
 
 ## Side by side
@@ -110,20 +112,32 @@ amount, compose it at the viewport or native level instead of in a
 single `unit` expression. This is the change most likely to surface when
 porting grid code.
 
-### The tree is retained and inspectable
+### The tree is a value, and it can report geometry
 
-grid’s rendered output is pixels plus a display list. vellum keeps the
-scene as an immutable tree you can query and edit after the fact:
+grid retains its scene as well, so this is a difference of degree for
+the inspect-and-edit half:
+[`grid.ls()`](https://rdrr.io/r/grid/grid.ls.html),
+[`grid.get()`](https://rdrr.io/r/grid/grid.get.html),
+[`grid.edit()`](https://rdrr.io/r/grid/grid.edit.html) and
+[`editGrob()`](https://rdrr.io/r/grid/grid.edit.html) already let you
+rewrite a plot after the fact, and
 [`node_names()`](https://r-vellum.github.io/vellum/reference/node_names.md),
-[`get_node()`](https://r-vellum.github.io/vellum/reference/node_names.md),
-[`edit_node()`](https://r-vellum.github.io/vellum/reference/node_names.md),
-[`hit_test()`](https://r-vellum.github.io/vellum/reference/hit_test.md),
+[`get_node()`](https://r-vellum.github.io/vellum/reference/node_names.md)
 and
-[`scene_model()`](https://r-vellum.github.io/vellum/reference/scene_model.md).
-There is no [`grid.force()`](https://rdrr.io/r/grid/grid.force.html)
-step, and editing a node copies rather than mutating in place. See
+[`edit_node()`](https://r-vellum.github.io/vellum/reference/node_names.md)
+are the counterparts here. The difference is that vellum’s tree is an
+immutable value rather than device state, so there is no
+[`grid.force()`](https://rdrr.io/r/grid/grid.force.html) step and no
+in-place mutation of a display list.
+
+The half with no grid counterpart is geometry read-back:
+[`hit_test()`](https://r-vellum.github.io/vellum/reference/hit_test.md)
+picks the topmost node under a point, and
+[`scene_model()`](https://r-vellum.github.io/vellum/reference/scene_model.md)
+returns every drawn element with its resolved device-pixel bounding box.
+See
 [`vignette("retained-mode")`](https://r-vellum.github.io/vellum/articles/retained-mode.md)
-for what this enables.
+for what that enables.
 
 ### `vl_gpar` inherits, but there is no cascade
 

@@ -17,8 +17,8 @@ child and descends into it; every
 [`draw()`](https://r-vellum.github.io/vellum/reference/vl_scene.md)
 appends a grob at the current level;
 [`pop()`](https://r-vellum.github.io/vellum/reference/vl_scene.md)
-climbs back up. The tree is retained rather than drawn-and-forgotten,
-which is what enables the queries in
+climbs back up. The tree is an immutable value that outlives its
+construction, which is what enables the queries in
 [`vignette("retained-mode")`](https://r-vellum.github.io/vellum/articles/retained-mode.md).
 
 Because it is a tree, viewports nest, and a child’s geometry is

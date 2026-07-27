@@ -1,11 +1,21 @@
-# Retained-mode superpowers: hit-testing and editable nodes
+# Retained-mode scenes: editing, hit-testing, and read-back
 
-grid, and most drawing APIs, are *immediate mode*: a call paints pixels
-and forgets everything about them. vellum is *retained mode*. The scene
-you build is kept as a tree until you render it, and that tree can be
-queried and edited afterwards. It buys you three things: naming and
-editing nodes, hit-testing, and reading back a per-element model of the
-scene.
+vellum is *retained mode*: the scene you build is kept as a tree until
+you render it, and that tree can be queried and edited afterwards. It
+gives you three things: naming and editing nodes, hit-testing, and
+reading back a per-element model of the scene.
+
+grid is retained too, so the first of those three is not new. A `gTree`
+is a value, [`editGrob()`](https://rdrr.io/r/grid/grid.edit.html)
+derives a modified copy of one, and a drawn plot’s display list can be
+walked and rewritten with
+[`grid.ls()`](https://rdrr.io/r/grid/grid.ls.html),
+[`grid.get()`](https://rdrr.io/r/grid/grid.get.html), and
+[`grid.edit()`](https://rdrr.io/r/grid/grid.edit.html). What differs
+here is that the tree is the primary artefact rather than device state
+you recover, and that the scene can answer questions about where things
+landed: which node is under this point, and what bounding box did each
+element get. Those two grid leaves to you.
 
 ## Naming nodes
 
@@ -65,7 +75,12 @@ get_node(dots, "b")
 [`edit_node()`](https://r-vellum.github.io/vellum/reference/node_names.md)
 returns a *new* scene with one node’s properties changed. It is
 copy-on-modify: the original scene value is untouched, so you can derive
-variants without disturbing the source. Here we highlight the middle
+variants without disturbing the source.
+[`editGrob()`](https://rdrr.io/r/grid/grid.edit.html) gives you the same
+guarantee in grid, at comparable cost; what
+[`edit_node()`](https://r-vellum.github.io/vellum/reference/node_names.md)
+adds is that untouched subtrees keep their internal node ids, which is
+what the repaint-boundary cache keys on. Here we highlight the middle
 dot.
 
 ``` r
@@ -95,12 +110,19 @@ only the changed subtree is re-rasterised.
 
 [`hit_test()`](https://r-vellum.github.io/vellum/reference/hit_test.md)
 answers the inverse question: given a point, which node is drawn on top
-there? grid offers only
-[`grid.locator()`](https://rdrr.io/r/grid/grid.locator.html), but a
-retained scene can be compiled into a colour pick-buffer, so the answer
-is exact with respect to geometry, clipping, and paint order.
-Coordinates default to `"npc"` (`0..1`, y up); pass `units = "px"` for
-device pixels.
+there? grid ships
+[`grid.locator()`](https://rdrr.io/r/grid/grid.locator.html), which
+waits for one interactive click and returns coordinates rather than a
+node; you can build a picker on top of
+[`grobPoints()`](https://rdrr.io/r/grid/grobCoords.html) and a
+point-in-polygon test, or tag exported SVG elements the way gridSVG and
+ggiraph do. vellum compiles the retained scene into a colour pick-buffer
+instead, through the same transform, clipping, and paint-order code that
+drew it, so the answer is exact with respect to geometry, clipping, and
+paint order rather than coming from a second geometry implementation you
+have to keep in sync. It is also an ordinary function call: no device,
+no user, callable as often as you like. Coordinates default to `"npc"`
+(`0..1`, y up); pass `units = "px"` for device pixels.
 
 ``` r
 
@@ -167,14 +189,13 @@ scene_model(keyed)$elements[, c("mark", "key", "x", "y")]
 
 ## Why this matters
 
-The retained scene graph is what separates vellum from an immediate-mode
-drawing layer. Because the tree survives past construction:
+Because the tree survives past construction as a plain value:
 
 - nodes can be **named, inspected, and edited**
   ([`node_names()`](https://r-vellum.github.io/vellum/reference/node_names.md),
   [`get_node()`](https://r-vellum.github.io/vellum/reference/node_names.md),
   [`edit_node()`](https://r-vellum.github.io/vellum/reference/node_names.md))
-  without rebuilding the scene;
+  without rebuilding the scene, as they can in grid;
 - any point can be **hit-tested** back to the node that drew it
   ([`hit_test()`](https://r-vellum.github.io/vellum/reference/hit_test.md));
 - the whole scene can be read back as a **table of elements with keys

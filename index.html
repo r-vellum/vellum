@@ -60,7 +60,7 @@
 <li><hr class="dropdown-divider"></li>
     <li><h6 class="dropdown-header" data-toc-skip>Concepts</h6></li>
     <li><a class="dropdown-item" href="articles/scene-and-paint.html">The scene graph and the paint model</a></li>
-    <li><a class="dropdown-item" href="articles/retained-mode.html">Retained-mode superpowers: hit-testing and editable nodes</a></li>
+    <li><a class="dropdown-item" href="articles/retained-mode.html">Retained-mode scenes: editing, hit-testing, and read-back</a></li>
     <li><a class="dropdown-item" href="articles/datashading.html">Datashading: millions of points, honestly</a></li>
     <li><hr class="dropdown-divider"></li>
     <li><h6 class="dropdown-header" data-toc-skip>Interop</h6></li>
@@ -121,7 +121,7 @@
 <li>
 <strong>One scene, three backends.</strong> The <em>same</em> scene renders to PNG, SVG, and PDF with consistent geometry, via <code>render(scene, "plot.svg")</code> or <code>render(scene, "plot.pdf")</code>.</li>
 <li>
-<strong>A retained scene graph, not immediate-mode drawing.</strong> Because the scene is kept (not drawn-and-forgotten), vellum offers capabilities grid does not: <strong>hit-testing</strong> (<code><a href="reference/hit_test.html">hit_test()</a></code> picks the topmost grob under a point) and named, <strong>editable</strong> nodes (<code><a href="reference/node_names.html">node_names()</a></code> / <code><a href="reference/node_names.html">get_node()</a></code> / <code><a href="reference/node_names.html">edit_node()</a></code>).</li>
+<strong>A scene you can question, not just draw.</strong> Named, <strong>editable</strong> nodes (<code><a href="reference/node_names.html">node_names()</a></code> / <code><a href="reference/node_names.html">get_node()</a></code> / <code><a href="reference/node_names.html">edit_node()</a></code>) work much as <code>grid.ls()</code> / <code>getGrob()</code> / <code>editGrob()</code> do, on a value rather than on device state. What grid has no counterpart for is reading geometry back: <strong>hit-testing</strong> (<code><a href="reference/hit_test.html">hit_test()</a></code> picks the topmost grob under a point, via a pick-buffer built from the same code that drew the scene) and <code><a href="reference/scene_model.html">scene_model()</a></code> (one row per drawn element, with its data key and resolved device-pixel bounding box).</li>
 <li>
 <strong>A modern paint model across all backends.</strong> Linear &amp; radial <strong>gradients</strong>, tiling <strong>patterns</strong>, alpha/luminance <strong>masks</strong>, and group opacity (<code>vl_viewport(alpha=)</code>).</li>
 <li>

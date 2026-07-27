@@ -45,16 +45,21 @@ which picks the backend from the file extension.
 - **One scene, three backends.** The *same* scene renders to PNG, SVG,
   and PDF with consistent geometry, via `render(scene, "plot.svg")` or
   `render(scene, "plot.pdf")`.
-- **A retained scene graph, not immediate-mode drawing.** Because the
-  scene is kept (not drawn-and-forgotten), vellum offers capabilities
-  grid does not: **hit-testing**
-  ([`hit_test()`](https://r-vellum.github.io/vellum/reference/hit_test.md)
-  picks the topmost grob under a point) and named, **editable** nodes
+- **A scene you can question, not just draw.** Named, **editable** nodes
   ([`node_names()`](https://r-vellum.github.io/vellum/reference/node_names.md)
   /
   [`get_node()`](https://r-vellum.github.io/vellum/reference/node_names.md)
   /
-  [`edit_node()`](https://r-vellum.github.io/vellum/reference/node_names.md)).
+  [`edit_node()`](https://r-vellum.github.io/vellum/reference/node_names.md))
+  work much as `grid.ls()` / `getGrob()` / `editGrob()` do, on a value
+  rather than on device state. What grid has no counterpart for is
+  reading geometry back: **hit-testing**
+  ([`hit_test()`](https://r-vellum.github.io/vellum/reference/hit_test.md)
+  picks the topmost grob under a point, via a pick-buffer built from the
+  same code that drew the scene) and
+  [`scene_model()`](https://r-vellum.github.io/vellum/reference/scene_model.md)
+  (one row per drawn element, with its data key and resolved
+  device-pixel bounding box).
 - **A modern paint model across all backends.** Linear & radial
   **gradients**, tiling **patterns**, alpha/luminance **masks**, and
   group opacity (`vl_viewport(alpha=)`).
