@@ -132,8 +132,8 @@ snapshot-testable.
 
 - `vignette("scene-and-paint")`: the scene graph, units and viewports, and the
   paint model (gradients, patterns, masks).
-- `vignette("retained-mode")`: because the scene graph is kept rather than drawn
-  and forgotten, you can hit-test it and edit nodes by name.
+- `vignette("retained-mode")`: because the scene graph is a value you keep, you
+  can edit nodes by name, hit-test a point, and read back per-element geometry.
 - `vignette("coming-from-grid")`: a translation guide if you already know grid.
 - `vignette("grid-interop")`: render existing grid, ggplot2, and lattice output
   through the vellum backend.

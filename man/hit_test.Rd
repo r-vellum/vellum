@@ -19,10 +19,11 @@ The hit node's \code{name} (character); \code{NA_character_} if the topmost grob
 there is unnamed; or \code{NULL} if nothing is drawn at the point.
 }
 \description{
-Find the topmost node drawn under a point — the picking primitive the retained
-scene graph enables (base grid offers only \code{grid.locator()}). The scene is
-compiled into a colour pick-buffer (each grob drawn in a colour encoding its
-id, respecting clipping and paint order), so the result is geometry-, clip- and
-overlap-exact. Markers and text are matched by their bounding box; lines and
-segments by a small pick band.
+Find the topmost node drawn under a point. The scene is compiled into a colour
+pick-buffer (each grob drawn in a colour encoding its id, respecting clipping
+and paint order) using the same code path that renders it, so the result is
+geometry-, clip- and overlap-exact by construction. Markers and text are
+matched by their bounding box; lines and segments by a small pick band. grid
+ships no equivalent: \code{grid.locator()} waits for one interactive click and
+returns coordinates rather than a node.
 }

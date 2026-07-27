@@ -1065,12 +1065,13 @@ S7::method(compile, gtree) <- function(node, scene) {
 
 #' Hit-test a scene
 #'
-#' Find the topmost node drawn under a point — the picking primitive the retained
-#' scene graph enables (base grid offers only `grid.locator()`). The scene is
-#' compiled into a colour pick-buffer (each grob drawn in a colour encoding its
-#' id, respecting clipping and paint order), so the result is geometry-, clip- and
-#' overlap-exact. Markers and text are matched by their bounding box; lines and
-#' segments by a small pick band.
+#' Find the topmost node drawn under a point. The scene is compiled into a colour
+#' pick-buffer (each grob drawn in a colour encoding its id, respecting clipping
+#' and paint order) using the same code path that renders it, so the result is
+#' geometry-, clip- and overlap-exact by construction. Markers and text are
+#' matched by their bounding box; lines and segments by a small pick band. grid
+#' ships no equivalent: `grid.locator()` waits for one interactive click and
+#' returns coordinates rather than a node.
 #'
 #' @param scene A [vl_scene()].
 #' @param x,y Query point, in `units`: `"npc"` (default; the page, `0..1` with y

@@ -37,9 +37,11 @@ differently on purpose.
 | `rectGrob()`, `gTree()` | `rect_grob()`, the scene tree | grobs are immutable S7 values |
 | `gpar()` | `vl_gpar()` | familiar fields; `fill` also accepts gradients |
 | `grid.layout()` | `grid_layout()` | flexible `"null"` tracks work the same |
-| `grid.edit()` / `editGrob()` | `edit_node()` | edit by `name`; copy-on-modify, not in place |
-| `grid.grabExpr()` / display list | the retained scene | the tree is the model; nothing is replayed |
-| `grid.locator()` | `hit_test()` | exact geometric picking, not one interactive click |
+| `grid.ls()` / `grid.get()` | `node_names()` / `get_node()` | list and read nodes by `name` |
+| `grid.edit()` / `editGrob()` | `edit_node()` | `editGrob()` also copies; `grid.edit()` mutates the display list, `edit_node()` never does |
+| `grid.grabExpr()` / display list | the retained scene | the tree is the model, not something you recover from a device |
+| `grid.locator()` | `hit_test()` | picking from a pick-buffer, not one interactive click |
+| (no counterpart) | `scene_model()` | per-element identity plus resolved device-pixel bbox |
 | device (`png()`, `pdf()`, ...) | `render(scene, path)` | the extension picks the backend |
 
 ## Side by side
@@ -112,13 +114,19 @@ If you have grid code that offsets a relative position by an absolute amount,
 compose it at the viewport or native level instead of in a single `unit`
 expression. This is the change most likely to surface when porting grid code.
 
-### The tree is retained and inspectable
+### The tree is a value, and it can report geometry
 
-grid's rendered output is pixels plus a display list. vellum keeps the scene as
-an immutable tree you can query and edit after the fact: `node_names()`,
-`get_node()`, `edit_node()`, `hit_test()`, and `scene_model()`. There is no
-`grid.force()` step, and editing a node copies rather than mutating in place.
-See `vignette("retained-mode")` for what this enables.
+grid retains its scene as well, so this is a difference of degree for the
+inspect-and-edit half: `grid.ls()`, `grid.get()`, `grid.edit()` and `editGrob()`
+already let you rewrite a plot after the fact, and `node_names()`, `get_node()`
+and `edit_node()` are the counterparts here. The difference is that vellum's tree
+is an immutable value rather than device state, so there is no `grid.force()`
+step and no in-place mutation of a display list.
+
+The half with no grid counterpart is geometry read-back: `hit_test()` picks the
+topmost node under a point, and `scene_model()` returns every drawn element with
+its resolved device-pixel bounding box. See `vignette("retained-mode")` for what
+that enables.
 
 ### `vl_gpar` inherits, but there is no cascade
 
