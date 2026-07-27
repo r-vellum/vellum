@@ -560,6 +560,18 @@ S7::method(plot, vellum_scene) <- function(x, y, ...) {
   display(x)
   invisible(x)
 }
+# `method(print, cls) <- fn` is a *replacement call*, so R also binds the symbol
+# on the left — `print` (and `plot`) — in this namespace, holding `base::print`
+# unchanged. Harmless to call, but fatal to registration: `registerS3methods()`
+# treats a generic whose name is a local object as a **local generic** and files
+# every matching `S3method()` directive into vellum's own `.__S3MethodsTable__.`
+# instead of base's, where dispatch never looks. That silently disabled all four
+# `print.vellum_*` S3 methods (gradient/mask/pattern/why_size printed as raw
+# lists). Dropping the accidental bindings restores the normal path; the S7
+# methods above are registered by `S7::methods_register()` in `.onLoad()` and are
+# unaffected. Guarded by `test-print-methods.R` — if a future
+# `method(print, ...) <-` reintroduces the binding, that test fails.
+rm(print, plot)
 
 # --- object-identity render cache -------------------------------------------
 # Keyed on the content-identity token (`.new_scene_id`), so a repeat render of an
