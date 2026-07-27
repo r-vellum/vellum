@@ -91,13 +91,17 @@ vl_scene(5, 3, bg = "white") |>
 
 ![](scene-and-paint_files/figure-html/native-1.png)
 
-Absolute and relative units compose within a viewport, and font- or
-string-relative units (`"char"`, `"line"`, `"strwidth"`) resolve to
-millimetres at construction. Mixing a relative and an absolute unit in a
-single arithmetic expression (say
-`vl_unit(1, "npc") - vl_unit(2, "mm")`) is deferred and reported rather
-than silently guessed, so an ambiguous offset fails loudly instead of
-drawing in the wrong place.
+Font- and string-relative units (`"char"`, `"line"`, `"strwidth"`,
+`"grobwidth"`) resolve to millimetres at construction, because vellum
+can measure text without a device. Arithmetic reduces as far as it can:
+same-unit sums combine, two absolute units become millimetres, and a
+position base plus an absolute becomes a *compound* unit that keeps the
+base and carries the offset in mm
+(`vl_unit(1, "npc") - vl_unit(2, "mm")` prints as `1npc-2mm` and
+resolves as “the npc position, then 2 mm left”, exactly, at any size or
+dpi). Only two *different* position bases (`"npc"` plus `"native"`)
+cannot be reduced to one unit, and that errors rather than being
+guessed.
 
 ## The paint model
 
@@ -225,4 +229,4 @@ kind of control a grammar layer needs from its backend.
 
 Next, see
 [`vignette("retained-mode")`](https://r-vellum.github.io/vellum/articles/retained-mode.md)
-for what the retained tree lets you do after it is built. \`\`\`
+for what a finished scene can tell you about itself. \`\`\`

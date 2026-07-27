@@ -1,15 +1,26 @@
 # Get started
 
-vellum is a low-level graphics framework for R, in the spirit of grid,
-with a Rust backend. You describe a scene with a small, declarative R
-API; the scene graph, unit and layout engine, and rendering all run in
-Rust; and the same scene renders to PNG, SVG, or PDF.
+vellum is a low-level graphics framework for R, in the spirit of grid.
+You describe a scene with a small declarative API and render it to PNG,
+SVG, or PDF.
+
+The property most of the rest follows from is that vellum measures text
+and solves layout itself, in process, instead of asking whichever device
+happens to be current. So a scene has a size before there is a page,
+layout is solved once rather than once per output format, and — the part
+with no counterpart in grid — a finished scene can report where it put
+every element
+([`scene_model()`](https://r-vellum.github.io/vellum/reference/scene_model.md))
+and answer what lies under a given point
+([`hit_test()`](https://r-vellum.github.io/vellum/reference/hit_test.md)).
+That read-back is what an interactive host, an accessibility layer, or a
+test suite binds to.
 
 It is the foundation layer a grammar of graphics builds on, the way grid
 underlies ggplot2. It is not a plotting package itself, so there are no
 scales, stats, geoms, or facets here. What it gives you is the drawing
-substrate: units, viewports, grobs, layout, and a deterministic
-renderer.
+substrate: units, viewports, grobs, layout, a deterministic renderer,
+and a scene you can query afterwards.
 
 ``` r
 
@@ -133,8 +144,11 @@ reproducible and snapshot-testable.
   the scene graph, units and viewports, and the paint model (gradients,
   patterns, masks).
 - [`vignette("retained-mode")`](https://r-vellum.github.io/vellum/articles/retained-mode.md):
-  because the scene graph is a value you keep, you can edit nodes by
-  name, hit-test a point, and read back per-element geometry.
+  read back per-element geometry with
+  [`scene_model()`](https://r-vellum.github.io/vellum/reference/scene_model.md),
+  pick a node under a point with
+  [`hit_test()`](https://r-vellum.github.io/vellum/reference/hit_test.md),
+  and edit nodes by name.
 - [`vignette("coming-from-grid")`](https://r-vellum.github.io/vellum/articles/coming-from-grid.md):
   a translation guide if you already know grid.
 - [`vignette("grid-interop")`](https://r-vellum.github.io/vellum/articles/grid-interop.md):

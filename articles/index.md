@@ -4,8 +4,8 @@
 
 - [The scene graph and the paint
   model](https://r-vellum.github.io/vellum/articles/scene-and-paint.md):
-- [Retained-mode scenes: editing, hit-testing, and
-  read-back](https://r-vellum.github.io/vellum/articles/retained-mode.md):
+- [Asking a scene what it drew: read-back, picking, and
+  editing](https://r-vellum.github.io/vellum/articles/retained-mode.md):
 - [Datashading: millions of points,
   honestly](https://r-vellum.github.io/vellum/articles/datashading.md):
 

@@ -5,7 +5,7 @@
 <meta charset="utf-8">
 <meta http-equiv="X-UA-Compatible" content="IE=edge">
 <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
-<title>A low-level graphics framework with a Rust backend • vellum</title>
+<title>A low-level graphics framework whose scenes report their geometry • vellum</title>
 <!-- favicons --><link rel="icon" type="image/png" sizes="96x96" href="favicon-96x96.png">
 <link rel="icon" type="”image/svg+xml”" href="favicon.svg">
 <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
@@ -25,10 +25,10 @@
 <link href="deps/font-awesome-6.5.2/css/all.min.css" rel="stylesheet">
 <link href="deps/font-awesome-6.5.2/css/v4-shims.min.css" rel="stylesheet">
 <script src="deps/headroom-0.11.0/headroom.min.js"></script><script src="deps/headroom-0.11.0/jQuery.headroom.min.js"></script><script src="deps/bootstrap-toc-1.0.1/bootstrap-toc.min.js"></script><script src="deps/clipboard.js-2.0.11/clipboard.min.js"></script><script src="deps/search-1.0.0/autocomplete.jquery.min.js"></script><script src="deps/search-1.0.0/fuse.min.js"></script><script src="deps/search-1.0.0/mark.min.js"></script><!-- pkgdown --><script src="pkgdown.js"></script><link href="extra.css" rel="stylesheet">
-<meta property="og:title" content="A low-level graphics framework with a Rust backend">
-<meta name="description" content="vellum is the parchment of the vellum ecosystem: a grid-like scene graph, unit/layout engine, and renderer that runs in Rust and draws the same scene to PNG, SVG, or PDF. It is the foundation a grammar of graphics builds on, not a plotting package itself.
+<meta property="og:title" content="A low-level graphics framework whose scenes report their geometry">
+<meta name="description" content="vellum is the parchment of the vellum ecosystem: a grid-like scene graph, unit/layout engine, and renderer. It measures text and solves layout without a device, so one solved scene draws to PNG, SVG, or PDF with the same geometry — and can report that geometry back, element by element, for a host to build on. It is the foundation a grammar of graphics builds on, not a plotting package itself.
 ">
-<meta property="og:description" content="vellum is the parchment of the vellum ecosystem: a grid-like scene graph, unit/layout engine, and renderer that runs in Rust and draws the same scene to PNG, SVG, or PDF. It is the foundation a grammar of graphics builds on, not a plotting package itself.
+<meta property="og:description" content="vellum is the parchment of the vellum ecosystem: a grid-like scene graph, unit/layout engine, and renderer. It measures text and solves layout without a device, so one solved scene draws to PNG, SVG, or PDF with the same geometry — and can report that geometry back, element by element, for a host to build on. It is the foundation a grammar of graphics builds on, not a plotting package itself.
 ">
 <meta property="og:image" content="https://r-vellum.github.io/vellum/logo.png">
 <meta name="twitter:card" content="summary_large_image">
@@ -60,7 +60,7 @@
 <li><hr class="dropdown-divider"></li>
     <li><h6 class="dropdown-header" data-toc-skip>Concepts</h6></li>
     <li><a class="dropdown-item" href="articles/scene-and-paint.html">The scene graph and the paint model</a></li>
-    <li><a class="dropdown-item" href="articles/retained-mode.html">Retained-mode scenes: editing, hit-testing, and read-back</a></li>
+    <li><a class="dropdown-item" href="articles/retained-mode.html">Asking a scene what it drew: read-back, picking, and editing</a></li>
     <li><a class="dropdown-item" href="articles/datashading.html">Datashading: millions of points, honestly</a></li>
     <li><hr class="dropdown-divider"></li>
     <li><h6 class="dropdown-header" data-toc-skip>Interop</h6></li>
@@ -97,7 +97,8 @@
 </div>
 <!-- badges: start -->
 
-<p><strong>vellum</strong> is a low-level graphics framework for R, in the spirit of <strong>grid</strong>, with a <strong>Rust</strong> backend. You describe a scene with a small, declarative R API; the scene graph, unit/layout engine, and rendering all run in Rust; and the same scene renders to <strong>PNG, SVG, or PDF</strong>.</p>
+<p><strong>vellum</strong> is a low-level graphics framework for R, in the spirit of <strong>grid</strong>. You describe a scene with a small declarative API, and because vellum measures text and solves layout itself rather than asking a device, the finished scene can <strong>tell you where it put everything</strong>: one row per drawn element, with its data key and its resolved device-pixel box (<code><a href="reference/scene_model.html">scene_model()</a></code>), plus picking by point (<code><a href="reference/hit_test.html">hit_test()</a></code>). Layout is solved once, so the same scene renders to <strong>PNG, SVG, or PDF</strong> with the same geometry rather than three devices each re-solving it.</p>
+<p>Owning the measurement and rendering stack is what that requires, which is why the engine is written in <strong>Rust</strong> (and why installing from source needs <code>cargo</code>).</p>
 <p>It is the <em>foundation layer</em> a grammar of graphics builds on, the way grid underlies ggplot2. It is not a plotting package itself; the <a href="https://github.com/r-vellum/vellumplot" class="external-link">vellumplot</a> grammar of graphics is built on top of it.</p>
 <div class="sourceCode" id="cb1"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://github.com/r-vellum/vellum" class="external-link">vellum</a></span><span class="op">)</span></span>
@@ -117,22 +118,23 @@
 </h2>
 <ul>
 <li>
-<strong>Rust backend, deterministic output.</strong> Rendering runs in Rust (<a href="https://github.com/linebender/tiny-skia" class="external-link">tiny-skia</a> for raster, <a href="https://github.com/LaurenzV/krilla" class="external-link">krilla</a> for PDF) and is byte-stable, so output is reproducible and snapshot-testable.</li>
+<strong>The scene reports its own geometry.</strong> <code><a href="reference/scene_model.html">scene_model()</a></code> returns one row per drawn element — its data key, mark kind, enclosing panel, and resolved device-pixel box — plus each panel’s pixel rectangle and native ranges. <code><a href="reference/hit_test.html">hit_test()</a></code> answers the inverse question, picking the topmost node under a point through a pick-buffer compiled by the same code that drew the scene, so it cannot disagree with the picture. This is the part with no counterpart in grid, and the seam that tooltips, brushing, accessibility, and layout debugging are all built on.</li>
 <li>
-<strong>One scene, three backends.</strong> The <em>same</em> scene renders to PNG, SVG, and PDF with consistent geometry, via <code>render(scene, "plot.svg")</code> or <code>render(scene, "plot.pdf")</code>.</li>
+<strong>Layout is solved once, not once per device.</strong> Because text is measured in process, layout does not need an open device, and the <em>same</em> solved scene is walked for each backend: <code>render(scene, "plot.png" | "plot.svg" | "plot.pdf")</code> agree on geometry rather than each re-solving it against their own font metrics. Raster and PDF output are byte-stable, so figures are reproducible and snapshot-testable.</li>
 <li>
-<strong>A scene you can question, not just draw.</strong> Named, <strong>editable</strong> nodes (<code><a href="reference/node_names.html">node_names()</a></code> / <code><a href="reference/node_names.html">get_node()</a></code> / <code><a href="reference/node_names.html">edit_node()</a></code>) work much as <code>grid.ls()</code> / <code>getGrob()</code> / <code>editGrob()</code> do, on a value rather than on device state. What grid has no counterpart for is reading geometry back: <strong>hit-testing</strong> (<code><a href="reference/hit_test.html">hit_test()</a></code> picks the topmost grob under a point, via a pick-buffer built from the same code that drew the scene) and <code><a href="reference/scene_model.html">scene_model()</a></code> (one row per drawn element, with its data key and resolved device-pixel bounding box).</li>
+<strong>Named, editable nodes.</strong> <code><a href="reference/node_names.html">node_names()</a></code> / <code><a href="reference/node_names.html">get_node()</a></code> / <code><a href="reference/node_names.html">edit_node()</a></code> work much as <code>grid.ls()</code> / <code>getGrob()</code> / <code>editGrob()</code> do — the difference is that the tree is a value you hold rather than device state you recover, so an edit returns a new scene and nothing has to be undrawn.</li>
+<li>
+<strong>Built-in big-data aggregation.</strong> <code><a href="reference/datashade.html">datashade()</a></code> bins millions of points into a density raster in one pass, so cost scales with output pixels rather than row count, with no overplotting and no giant vector files.</li>
+<li>
+<strong>Text that matches the rest of R.</strong> Shaping runs through <a href="https://github.com/r-lib/textshaping" class="external-link">textshaping</a> on <a href="https://github.com/r-lib/systemfonts" class="external-link">systemfonts</a> — the stack ragg and svglite use — with per-glyph fallback, justification, rotation, and Markdown-style rich labels (<code><a href="reference/md.html">md()</a></code>: bold/italic, super/subscript, coloured spans). <code><a href="reference/vl_strwidth.html">vl_strwidth()</a></code> measures without opening a device.</li>
 <li>
 <strong>A modern paint model across all backends.</strong> Linear &amp; radial <strong>gradients</strong>, tiling <strong>patterns</strong>, alpha/luminance <strong>masks</strong>, and group opacity (<code>vl_viewport(alpha=)</code>).</li>
-<li>
-<strong>Built-in big-data aggregation.</strong> <code><a href="reference/datashade.html">datashade()</a></code> bins millions of points into a density raster in one pass, with no overplotting and no giant files.</li>
-<li>
-<strong>Device-independent, faithful text.</strong> Shaping runs through <a href="https://github.com/r-lib/textshaping" class="external-link">textshaping</a> (which sits on <a href="https://github.com/r-lib/systemfonts" class="external-link">systemfonts</a>) — the same stack as ragg/svglite — with per-glyph fallback, justification, rotation, and Markdown-style rich labels (<code><a href="reference/md.html">md()</a></code>: bold/italic, super/subscript, coloured spans).</li>
 <li>
 <strong>Vectorised primitives and a flex layout engine.</strong> Batched rects/circles/points/segments/text, nested viewports with rotation and arbitrary-path clipping, and a row/column layout solver with <code>"null"</code> (flexible) tracks.</li>
 <li>
 <strong>Grid interop.</strong> <code><a href="reference/as_vellum.html">as_vellum()</a></code> / <code><a href="reference/as_vellum.html">render_grid()</a></code> render an existing grid grob tree, including <strong>ggplot2</strong> and <strong>lattice</strong>, through the vellum backend.</li>
 </ul>
+<p>The engine (<a href="https://github.com/linebender/tiny-skia" class="external-link">tiny-skia</a> for raster, an SVG writer, <a href="https://github.com/LaurenzV/krilla" class="external-link">krilla</a> for PDF) is written in Rust because owning the measuring and rasterising stack is what the first two points require — not as a performance claim.</p>
 </div>
 <div class="section level2">
 <h2 id="installation">Installation<a class="anchor" aria-label="anchor" href="#installation"></a>
@@ -221,7 +223,7 @@
 <div class="section level2">
 <h2 id="relationship-to-grid-and-ggplot2">Relationship to grid and ggplot2<a class="anchor" aria-label="anchor" href="#relationship-to-grid-and-ggplot2"></a>
 </h2>
-<p>vellum sits at grid’s level of the stack: units, viewports, grobs, layout, and rendering, but with a Rust scene graph, multi-backend output, hit-testing, and a modern paint model. It is <strong>not</strong> a grammar of graphics (no scales, stats, geoms, or facets) — that is <a href="https://github.com/r-vellum/vellumplot" class="external-link">vellumplot</a>, which compiles a plot spec into a vellum scene. To render <em>existing</em> grid / ggplot2 / lattice output through the vellum backend, use <code><a href="reference/as_vellum.html">as_vellum()</a></code> / <code><a href="reference/as_vellum.html">render_grid()</a></code>.</p>
+<p>vellum sits at grid’s level of the stack: units, viewports, grobs, layout, and rendering. What it adds is device-independent measurement (so layout is solved once, not once per output format), geometry read-back (<code><a href="reference/scene_model.html">scene_model()</a></code>, <code><a href="reference/hit_test.html">hit_test()</a></code>), a modern paint model, and built-in aggregation for large data. It is <strong>not</strong> a grammar of graphics (no scales, stats, geoms, or facets) — that is <a href="https://github.com/r-vellum/vellumplot" class="external-link">vellumplot</a>, which compiles a plot spec into a vellum scene. To render <em>existing</em> grid / ggplot2 / lattice output through the vellum backend, use <code><a href="reference/as_vellum.html">as_vellum()</a></code> / <code><a href="reference/as_vellum.html">render_grid()</a></code>.</p>
 </div>
 <div class="section level2">
 <h2 id="the-vellum-ecosystem">The vellum ecosystem<a class="anchor" aria-label="anchor" href="#the-vellum-ecosystem"></a>

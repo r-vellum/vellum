@@ -5,7 +5,7 @@
 <meta charset="utf-8">
 <meta http-equiv="X-UA-Compatible" content="IE=edge">
 <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
-<title>Retained-mode scenes: editing, hit-testing, and read-back • vellum</title>
+<title>Asking a scene what it drew: read-back, picking, and editing • vellum</title>
 <!-- favicons --><link rel="icon" type="image/png" sizes="96x96" href="../favicon-96x96.png">
 <link rel="icon" type="”image/svg+xml”" href="../favicon.svg">
 <link rel="apple-touch-icon" sizes="180x180" href="../apple-touch-icon.png">
@@ -25,7 +25,7 @@
 <link href="../deps/font-awesome-6.5.2/css/all.min.css" rel="stylesheet">
 <link href="../deps/font-awesome-6.5.2/css/v4-shims.min.css" rel="stylesheet">
 <script src="../deps/headroom-0.11.0/headroom.min.js"></script><script src="../deps/headroom-0.11.0/jQuery.headroom.min.js"></script><script src="../deps/bootstrap-toc-1.0.1/bootstrap-toc.min.js"></script><script src="../deps/clipboard.js-2.0.11/clipboard.min.js"></script><script src="../deps/search-1.0.0/autocomplete.jquery.min.js"></script><script src="../deps/search-1.0.0/fuse.min.js"></script><script src="../deps/search-1.0.0/mark.min.js"></script><!-- pkgdown --><script src="../pkgdown.js"></script><link href="../extra.css" rel="stylesheet">
-<meta property="og:title" content="Retained-mode scenes: editing, hit-testing, and read-back">
+<meta property="og:title" content="Asking a scene what it drew: read-back, picking, and editing">
 <meta name="theme-color" content="#efe6d2">
 </head>
 <body>
@@ -52,7 +52,7 @@
 <li><hr class="dropdown-divider"></li>
     <li><h6 class="dropdown-header" data-toc-skip>Concepts</h6></li>
     <li><a class="dropdown-item" href="../articles/scene-and-paint.html">The scene graph and the paint model</a></li>
-    <li><a class="dropdown-item" href="../articles/retained-mode.html">Retained-mode scenes: editing, hit-testing, and read-back</a></li>
+    <li><a class="dropdown-item" href="../articles/retained-mode.html">Asking a scene what it drew: read-back, picking, and editing</a></li>
     <li><a class="dropdown-item" href="../articles/datashading.html">Datashading: millions of points, honestly</a></li>
     <li><hr class="dropdown-divider"></li>
     <li><h6 class="dropdown-header" data-toc-skip>Interop</h6></li>
@@ -87,7 +87,7 @@
 
 <div class="row">
   <main id="main" class="col-md-9"><div class="page-header">
-      <img src="../logo.png" class="logo" alt=""><h1>Retained-mode scenes: editing, hit-testing, and read-back</h1>
+      <img src="../logo.png" class="logo" alt=""><h1>Asking a scene what it drew: read-back, picking, and editing</h1>
             
       
       <small class="dont-index">Source: <a href="https://github.com/r-vellum/vellum/blob/main/vignettes/retained-mode.Rmd" class="external-link"><code>vignettes/retained-mode.Rmd</code></a></small>
@@ -96,19 +96,20 @@
 
     
     
-<p>vellum is <em>retained mode</em>: the scene you build is kept as a
-tree until you render it, and that tree can be queried and edited
-afterwards. It gives you three things: naming and editing nodes,
-hit-testing, and reading back a per-element model of the scene.</p>
-<p>grid is retained too, so the first of those three is not new. A
-<code>gTree</code> is a value, <code><a href="https://rdrr.io/r/grid/grid.edit.html" class="external-link">editGrob()</a></code> derives a
-modified copy of one, and a drawn plot’s display list can be walked and
+<p>A vellum scene is a value, and once it has been through the layout
+solve it can answer questions about itself: where did each element end
+up, and what is drawn at this point? That read-back is the capability
+with no counterpart in grid, and it is what an interactive host, an
+accessibility layer, or a test suite binds to. This vignette covers it,
+and the editing API that goes with it.</p>
+<p>Being retained is not the interesting part. grid retains its scene
+too: a <code>gTree</code> is a value, <code><a href="https://rdrr.io/r/grid/grid.edit.html" class="external-link">editGrob()</a></code> derives a
+modified copy, and a drawn plot’s display list can be walked and
 rewritten with <code><a href="https://rdrr.io/r/grid/grid.ls.html" class="external-link">grid.ls()</a></code>, <code><a href="https://rdrr.io/r/grid/grid.get.html" class="external-link">grid.get()</a></code>, and
-<code><a href="https://rdrr.io/r/grid/grid.edit.html" class="external-link">grid.edit()</a></code>. What differs here is that the tree is the
-primary artefact rather than device state you recover, and that the
-scene can answer questions about where things landed: which node is
-under this point, and what bounding box did each element get. Those two
-grid leaves to you.</p>
+<code><a href="https://rdrr.io/r/grid/grid.edit.html" class="external-link">grid.edit()</a></code>. Naming and editing nodes below will look
+familiar for that reason. What grid leaves to you is everything in the
+first paragraph, because its resolved geometry exists only during a draw
+and is gone when the draw ends.</p>
 <div class="section level2">
 <h2 id="naming-nodes">Naming nodes<a class="anchor" aria-label="anchor" href="#naming-nodes"></a>
 </h2>
@@ -255,20 +256,25 @@ map a DOM event back to the originating row of data.</p>
 <div class="section level2">
 <h2 id="why-this-matters">Why this matters<a class="anchor" aria-label="anchor" href="#why-this-matters"></a>
 </h2>
-<p>Because the tree survives past construction as a plain value:</p>
+<p>Ranked by how much of it you cannot get elsewhere:</p>
 <ul>
+<li>the scene can be read back as a <strong>table of elements with keys
+and geometry</strong> (<code><a href="../reference/scene_model.html">scene_model()</a></code>), which is the
+host-agnostic bridge an interactive layer, a screen-reader description,
+or a positional test binds to;</li>
+<li>
+<strong>any point can be picked</strong> back to the node that drew
+it (<code><a href="../reference/hit_test.html">hit_test()</a></code>), through the same compile path that
+rendered the scene, so the answer agrees with the picture by
+construction;</li>
 <li>nodes can be <strong>named, inspected, and edited</strong>
 (<code><a href="../reference/node_names.html">node_names()</a></code>, <code><a href="../reference/node_names.html">get_node()</a></code>,
-<code><a href="../reference/node_names.html">edit_node()</a></code>) without rebuilding the scene, as they can in
-grid;</li>
-<li>any point can be <strong>hit-tested</strong> back to the node that
-drew it (<code><a href="../reference/hit_test.html">hit_test()</a></code>);</li>
-<li>the whole scene can be read back as a <strong>table of elements with
-keys and geometry</strong> (<code><a href="../reference/scene_model.html">scene_model()</a></code>), the
-host-agnostic bridge to interactivity.</li>
+<code><a href="../reference/node_names.html">edit_node()</a></code>) — as they can in grid, the difference being
+that you are editing a value rather than device state.</li>
 </ul>
-<p>These are the primitives an interactive grammar layer builds
-tooltips, brushing, and linked selection on top of. ```</p>
+<p>The first two are what <code>vellumwidget</code> is built on. It adds
+no drawing code of its own: it renders the scene’s SVG, reads this
+table, and attaches behaviour. ```</p>
 </div>
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>
     </nav></aside>

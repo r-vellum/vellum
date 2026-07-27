@@ -1,21 +1,22 @@
-# Retained-mode scenes: editing, hit-testing, and read-back
+# Asking a scene what it drew: read-back, picking, and editing
 
-vellum is *retained mode*: the scene you build is kept as a tree until
-you render it, and that tree can be queried and edited afterwards. It
-gives you three things: naming and editing nodes, hit-testing, and
-reading back a per-element model of the scene.
+A vellum scene is a value, and once it has been through the layout solve
+it can answer questions about itself: where did each element end up, and
+what is drawn at this point? That read-back is the capability with no
+counterpart in grid, and it is what an interactive host, an
+accessibility layer, or a test suite binds to. This vignette covers it,
+and the editing API that goes with it.
 
-grid is retained too, so the first of those three is not new. A `gTree`
-is a value, [`editGrob()`](https://rdrr.io/r/grid/grid.edit.html)
-derives a modified copy of one, and a drawn plot’s display list can be
-walked and rewritten with
+Being retained is not the interesting part. grid retains its scene too:
+a `gTree` is a value,
+[`editGrob()`](https://rdrr.io/r/grid/grid.edit.html) derives a modified
+copy, and a drawn plot’s display list can be walked and rewritten with
 [`grid.ls()`](https://rdrr.io/r/grid/grid.ls.html),
 [`grid.get()`](https://rdrr.io/r/grid/grid.get.html), and
-[`grid.edit()`](https://rdrr.io/r/grid/grid.edit.html). What differs
-here is that the tree is the primary artefact rather than device state
-you recover, and that the scene can answer questions about where things
-landed: which node is under this point, and what bounding box did each
-element get. Those two grid leaves to you.
+[`grid.edit()`](https://rdrr.io/r/grid/grid.edit.html). Naming and
+editing nodes below will look familiar for that reason. What grid leaves
+to you is everything in the first paragraph, because its resolved
+geometry exists only during a draw and is gone when the draw ends.
 
 ## Naming nodes
 
@@ -193,19 +194,24 @@ scene_model(keyed)$elements[, c("mark", "key", "x", "y")]
 
 ## Why this matters
 
-Because the tree survives past construction as a plain value:
+Ranked by how much of it you cannot get elsewhere:
 
+- the scene can be read back as a **table of elements with keys and
+  geometry**
+  ([`scene_model()`](https://r-vellum.github.io/vellum/reference/scene_model.md)),
+  which is the host-agnostic bridge an interactive layer, a
+  screen-reader description, or a positional test binds to;
+- **any point can be picked** back to the node that drew it
+  ([`hit_test()`](https://r-vellum.github.io/vellum/reference/hit_test.md)),
+  through the same compile path that rendered the scene, so the answer
+  agrees with the picture by construction;
 - nodes can be **named, inspected, and edited**
   ([`node_names()`](https://r-vellum.github.io/vellum/reference/node_names.md),
   [`get_node()`](https://r-vellum.github.io/vellum/reference/node_names.md),
   [`edit_node()`](https://r-vellum.github.io/vellum/reference/node_names.md))
-  without rebuilding the scene, as they can in grid;
-- any point can be **hit-tested** back to the node that drew it
-  ([`hit_test()`](https://r-vellum.github.io/vellum/reference/hit_test.md));
-- the whole scene can be read back as a **table of elements with keys
-  and geometry**
-  ([`scene_model()`](https://r-vellum.github.io/vellum/reference/scene_model.md)),
-  the host-agnostic bridge to interactivity.
+  — as they can in grid, the difference being that you are editing a
+  value rather than device state.
 
-These are the primitives an interactive grammar layer builds tooltips,
-brushing, and linked selection on top of. \`\`\`
+The first two are what `vellumwidget` is built on. It adds no drawing
+code of its own: it renders the scene’s SVG, reads this table, and
+attaches behaviour. \`\`\`

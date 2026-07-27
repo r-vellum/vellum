@@ -116,10 +116,10 @@ and network edges.
 - [`dynspread()`](https://r-vellum.github.io/vellum/reference/dynspread.md)
   : Dynamically spread a raster grob to a target density
 
-## Inspecting & editing scenes
+## Querying & editing scenes
 
-Because the scene graph is retained, it can be queried, edited by node
-name, hit-tested, and serialized to a per-element model.
+A solved scene reports its geometry: a per-element model with data keys
+and device-pixel boxes, picking by point, and editing by node name.
 
 - [`node_names()`](https://r-vellum.github.io/vellum/reference/node_names.md)
   [`get_node()`](https://r-vellum.github.io/vellum/reference/node_names.md)
@@ -148,4 +148,5 @@ through the vellum backend.
 
 - [`vellum`](https://r-vellum.github.io/vellum/reference/vellum-package.md)
   [`vellum-package`](https://r-vellum.github.io/vellum/reference/vellum-package.md)
-  : vellum: A Low-Level Graphics Framework with a Rust Backend
+  : vellum: Low-Level Graphics with Device-Independent Layout and
+  Queryable Scenes

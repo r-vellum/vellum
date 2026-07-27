@@ -52,7 +52,7 @@
 <li><hr class="dropdown-divider"></li>
     <li><h6 class="dropdown-header" data-toc-skip>Concepts</h6></li>
     <li><a class="dropdown-item" href="../articles/scene-and-paint.html">The scene graph and the paint model</a></li>
-    <li><a class="dropdown-item" href="../articles/retained-mode.html">Retained-mode scenes: editing, hit-testing, and read-back</a></li>
+    <li><a class="dropdown-item" href="../articles/retained-mode.html">Asking a scene what it drew: read-back, picking, and editing</a></li>
     <li><a class="dropdown-item" href="../articles/datashading.html">Datashading: millions of points, honestly</a></li>
     <li><hr class="dropdown-divider"></li>
     <li><h6 class="dropdown-header" data-toc-skip>Interop</h6></li>
@@ -266,25 +266,35 @@ extent with <code><a href="../reference/grobwidth.html">grobwidth()</a></code> /
 immediately, without an open device.</p>
 </div>
 <div class="section level3">
-<h3 id="units-resolve-eagerly-and-mixed-unit-arithmetic-is-restricted">Units resolve eagerly, and mixed-unit arithmetic is restricted<a class="anchor" aria-label="anchor" href="#units-resolve-eagerly-and-mixed-unit-arithmetic-is-restricted"></a>
+<h3 id="units-are-records-not-expression-trees">Units are records, not expression trees<a class="anchor" aria-label="anchor" href="#units-are-records-not-expression-trees"></a>
 </h3>
-<p>Because units resolve eagerly to a flat representation, vellum will
-<em>not</em> defer <code>vl_unit(1, "npc") - vl_unit(2, "mm")</code> the
-way grid does. Same-space arithmetic and absolute-plus-absolute both
-work (<code>vl_unit(10, "mm") + vl_unit(1, "in")</code> gives
-<code>35.4mm</code>), but mixing a relative and an absolute unit in one
-expression is reported rather than guessed.</p>
+<p>A grid unit defers its arithmetic:
+<code>unit(1, "npc") - unit(2, "mm")</code> is stored as
+<code>sum(1npc, -2mm)</code> and evaluated when a device and viewport
+exist. A vellum unit is a flat record — a value, a base code, and an
+absolute millimetre offset — so arithmetic reduces at construction
+wherever it can.</p>
 <div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="fu"><a href="../reference/vl_unit.html">vl_unit</a></span><span class="op">(</span><span class="fl">10</span>, <span class="st">"mm"</span><span class="op">)</span> <span class="op">+</span> <span class="fu"><a href="../reference/vl_unit.html">vl_unit</a></span><span class="op">(</span><span class="fl">1</span>, <span class="st">"in"</span><span class="op">)</span> <span class="co"># absolute + absolute -&gt; mm</span></span>
+<code class="sourceCode R"><span><span class="fu"><a href="../reference/vl_unit.html">vl_unit</a></span><span class="op">(</span><span class="fl">10</span>, <span class="st">"mm"</span><span class="op">)</span> <span class="op">+</span> <span class="fu"><a href="../reference/vl_unit.html">vl_unit</a></span><span class="op">(</span><span class="fl">1</span>, <span class="st">"in"</span><span class="op">)</span>     <span class="co"># absolute + absolute -&gt; mm</span></span>
 <span><span class="co">#&gt; &lt;vellum_unit[1]&gt;</span></span>
 <span><span class="co">#&gt; [1] 35.4mm</span></span>
-<span><span class="fu"><a href="../reference/vl_unit.html">vl_unit</a></span><span class="op">(</span><span class="fl">1</span><span class="op">:</span><span class="fl">3</span>, <span class="st">"cm"</span><span class="op">)</span> <span class="op">*</span> <span class="fl">2</span>            <span class="co"># scaling is fine</span></span>
+<span><span class="fu"><a href="../reference/vl_unit.html">vl_unit</a></span><span class="op">(</span><span class="fl">1</span>, <span class="st">"native"</span><span class="op">)</span> <span class="op">+</span> <span class="fu"><a href="../reference/vl_unit.html">vl_unit</a></span><span class="op">(</span><span class="fl">2</span>, <span class="st">"mm"</span><span class="op">)</span>  <span class="co"># a compound unit: base + offset</span></span>
+<span><span class="co">#&gt; &lt;vellum_unit[1]&gt;</span></span>
+<span><span class="co">#&gt; [1] 1native+2mm</span></span>
+<span><span class="fu"><a href="../reference/vl_unit.html">vl_unit</a></span><span class="op">(</span><span class="fl">1</span><span class="op">:</span><span class="fl">3</span>, <span class="st">"cm"</span><span class="op">)</span> <span class="op">*</span> <span class="fl">2</span>                   <span class="co"># scaling is fine</span></span>
 <span><span class="co">#&gt; &lt;vellum_unit[3]&gt;</span></span>
 <span><span class="co">#&gt; [1] 20mm 40mm 60mm</span></span></code></pre></div>
-<p>If you have grid code that offsets a relative position by an absolute
-amount, compose it at the viewport or native level instead of in a
-single <code>unit</code> expression. This is the change most likely to
-surface when porting grid code.</p>
+<p>The third form is the one worth knowing. A position base plus an
+absolute is kept as a <em>compound</em> unit that resolves as “the data
+(or npc) position, displaced by exactly this many millimetres” at any
+scale, aspect, or dpi — which is the case most grid code that mixes
+units actually wants.</p>
+<p>The one thing grid expresses and vellum does not is a mix of two
+<em>different</em> position bases (<code>"npc"</code> plus
+<code>"native"</code>), because that cannot reduce to a single record
+without a device. It errors, with a message naming the legal forms. Put
+the normalised part in the viewport and the data part in the coordinate,
+or pre-resolve to absolute units.</p>
 </div>
 <div class="section level3">
 <h3 id="the-tree-is-a-value-and-it-can-report-geometry">The tree is a value, and it can report geometry<a class="anchor" aria-label="anchor" href="#the-tree-is-a-value-and-it-can-report-geometry"></a>

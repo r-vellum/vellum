@@ -27,7 +27,7 @@
   <ul class="dropdown-menu" aria-labelledby="dropdown-articles"><li><hr class="dropdown-divider"></li>
     <li><h6 class="dropdown-header" data-toc-skip>Concepts</h6></li>
     <li><a class="dropdown-item" href="../articles/scene-and-paint.html">The scene graph and the paint model</a></li>
-    <li><a class="dropdown-item" href="../articles/retained-mode.html">Retained-mode scenes: editing, hit-testing, and read-back</a></li>
+    <li><a class="dropdown-item" href="../articles/retained-mode.html">Asking a scene what it drew: read-back, picking, and editing</a></li>
     <li><a class="dropdown-item" href="../articles/datashading.html">Datashading: millions of points, honestly</a></li>
     <li><hr class="dropdown-divider"></li>
     <li><h6 class="dropdown-header" data-toc-skip>Interop</h6></li>
@@ -286,9 +286,9 @@
         </dt>
         <dd>Dynamically spread a raster grob to a target density</dd>
       </dl></div><div class="section level2">
-      <h2 id="inspecting-editing-scenes">Inspecting &amp; editing scenes<a class="anchor" aria-label="anchor" href="#inspecting-editing-scenes"></a></h2>
+      <h2 id="querying-editing-scenes">Querying &amp; editing scenes<a class="anchor" aria-label="anchor" href="#querying-editing-scenes"></a></h2>
 
-      <div class="section-desc"><p>Because the scene graph is retained, it can be queried, edited by node name, hit-tested, and serialized to a per-element model.</p></div>
+      <div class="section-desc"><p>A solved scene reports its geometry: a per-element model with data keys and device-pixel boxes, picking by point, and editing by node name.</p></div>
 
       <dl></dl></div><div class="section level2">
 
@@ -362,7 +362,7 @@
           <code><a href="vellum-package.html">vellum</a></code> <code><a href="vellum-package.html">vellum-package</a></code>
 
         </dt>
-        <dd>vellum: A Low-Level Graphics Framework with a Rust Backend</dd>
+        <dd>vellum: Low-Level Graphics with Device-Independent Layout and Queryable Scenes</dd>
       </dl></div>
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>
     </nav></aside></div>

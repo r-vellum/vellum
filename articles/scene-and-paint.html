@@ -52,7 +52,7 @@
 <li><hr class="dropdown-divider"></li>
     <li><h6 class="dropdown-header" data-toc-skip>Concepts</h6></li>
     <li><a class="dropdown-item" href="../articles/scene-and-paint.html">The scene graph and the paint model</a></li>
-    <li><a class="dropdown-item" href="../articles/retained-mode.html">Retained-mode scenes: editing, hit-testing, and read-back</a></li>
+    <li><a class="dropdown-item" href="../articles/retained-mode.html">Asking a scene what it drew: read-back, picking, and editing</a></li>
     <li><a class="dropdown-item" href="../articles/datashading.html">Datashading: millions of points, honestly</a></li>
     <li><hr class="dropdown-divider"></li>
     <li><h6 class="dropdown-header" data-toc-skip>Interop</h6></li>
@@ -174,13 +174,18 @@ push:</p>
 <span>  <span class="op">)</span><span class="op">)</span> <span class="op">|&gt;</span></span>
 <span>  <span class="fu"><a href="../reference/vl_scene.html">pop</a></span><span class="op">(</span><span class="op">)</span></span></code></pre></div>
 <p><img src="scene-and-paint_files/figure-html/native-1.png" class="r-plt" alt="" width="480"></p>
-<p>Absolute and relative units compose within a viewport, and font- or
-string-relative units (<code>"char"</code>, <code>"line"</code>,
-<code>"strwidth"</code>) resolve to millimetres at construction. Mixing
-a relative and an absolute unit in a single arithmetic expression (say
-<code>vl_unit(1, "npc") - vl_unit(2, "mm")</code>) is deferred and
-reported rather than silently guessed, so an ambiguous offset fails
-loudly instead of drawing in the wrong place.</p>
+<p>Font- and string-relative units (<code>"char"</code>,
+<code>"line"</code>, <code>"strwidth"</code>, <code>"grobwidth"</code>)
+resolve to millimetres at construction, because vellum can measure text
+without a device. Arithmetic reduces as far as it can: same-unit sums
+combine, two absolute units become millimetres, and a position base plus
+an absolute becomes a <em>compound</em> unit that keeps the base and
+carries the offset in mm
+(<code>vl_unit(1, "npc") - vl_unit(2, "mm")</code> prints as
+<code>1npc-2mm</code> and resolves as “the npc position, then 2 mm
+left”, exactly, at any size or dpi). Only two <em>different</em>
+position bases (<code>"npc"</code> plus <code>"native"</code>) cannot be
+reduced to one unit, and that errors rather than being guessed.</p>
 </div>
 <div class="section level2">
 <h2 id="the-paint-model">The paint model<a class="anchor" aria-label="anchor" href="#the-paint-model"></a>
@@ -288,8 +293,8 @@ scales, and <code>"mm"</code> and friends are absolute.</li>
 <code><a href="../reference/vl_viewport.html">vl_viewport()</a></code> accepts masks, group opacity, and blend
 modes, all consistent across backends.</li>
 </ul>
-<p>Next, see <code><a href="../articles/retained-mode.html">vignette("retained-mode")</a></code> for what the
-retained tree lets you do after it is built. ```</p>
+<p>Next, see <code><a href="../articles/retained-mode.html">vignette("retained-mode")</a></code> for what a finished
+scene can tell you about itself. ```</p>
 </div>
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>
     </nav></aside>
