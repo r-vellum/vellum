@@ -42,6 +42,8 @@ rs_glyph_sprite_stats <- function() .Call(wrap__rs_glyph_sprite_stats)
 #'   `1`/`25` for 25 fps); rounded to centiseconds for GIF.
 #'
 #' Returns any renderer degradation warnings (currently none for the raster path).
+#'
+#' @keywords internal
 render_animation <- function(keyframes, seg, frac, format, path, delay_num, delay_den) .Call(wrap__render_animation, keyframes, seg, frac, format, path, delay_num, delay_den)
 
 rs_aggregate_2d <- function(x, y, w, nx, ny, x0, x1, y0, y1) .Call(wrap__rs_aggregate_2d, x, y, w, nx, ny, x0, x1, y0, y1)

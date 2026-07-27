@@ -546,6 +546,8 @@ fn open_gif(path: &str, w: u16, h: u16) -> EncResult<gif::Encoder<BufWriter<File
 ///   `1`/`25` for 25 fps); rounded to centiseconds for GIF.
 ///
 /// Returns any renderer degradation warnings (currently none for the raster path).
+///
+/// @keywords internal
 #[extendr]
 fn render_animation(
     keyframes: List,

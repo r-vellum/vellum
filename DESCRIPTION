@@ -36,7 +36,8 @@ Imports:
     S7,
     textshaping,
     vctrs
-Collate: 
+Collate:
+    'animate.R'
     'gpar.R'
     'viewport.R'
     'grob.R'
