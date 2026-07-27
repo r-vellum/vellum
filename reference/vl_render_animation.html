@@ -88,7 +88,9 @@ every frame.</p>
 <span>  <span class="va">frac</span>,</span>
 <span>  <span class="va">path</span>,</span>
 <span>  format <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"gif"</span>, <span class="st">"apng"</span>, <span class="st">"frames"</span><span class="op">)</span>,</span>
-<span>  fps <span class="op">=</span> <span class="fl">25</span></span>
+<span>  fps <span class="op">=</span> <span class="fl">25</span>,</span>
+<span>  gif_speed <span class="op">=</span> <span class="fl">1</span>,</span>
+<span>  gif_dither <span class="op">=</span> <span class="cn">TRUE</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
 
@@ -125,6 +127,18 @@ as <code>seg</code>.</p></dd>
 <dt id="arg-fps">fps<a class="anchor" aria-label="anchor" href="#arg-fps"></a></dt>
 <dd><p>Frames per second (sets each frame's on-screen duration).</p></dd>
 
+
+<dt id="arg-gif-speed">gif_speed<a class="anchor" aria-label="anchor" href="#arg-gif-speed"></a></dt>
+<dd><p>GIF only: the NeuQuant palette sample factor, <code>1</code> (best
+quality, slowest) to <code>30</code> (fastest). A plot's antialiased edges want the best
+palette, so the default is <code>1</code>. Ignored for <code>"apng"</code>/<code>"frames"</code>.</p></dd>
+
+
+<dt id="arg-gif-dither">gif_dither<a class="anchor" aria-label="anchor" href="#arg-gif-dither"></a></dt>
+<dd><p>GIF only: apply Floyd–Steinberg dithering (default <code>TRUE</code>),
+which greatly reduces the banding a 256-colour palette leaves on gradients and
+antialiased edges. A frame that already fits in 256 colours is kept exact.</p></dd>
+
 </dl></div>
     <div class="section level2">
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
@@ -137,6 +151,9 @@ their geometry, their colours (perceptually, in Oklab), and their bounded
 graphical parameters; discrete attributes snap. Nothing retrains between frames
 — the keyframes are fixed at author time — so this is non-reactive keyframe
 animation, not a live/reactive runtime.</p>
+<p>GIF is limited to 256 colours per frame, so on a plot (smooth panels,
+antialiased marks) it is inherently lossy — <code>gif_speed</code>/<code>gif_dither</code> make it as
+clean as that palette allows. For a lossless result use <code>format = "apng"</code>.</p>
     </div>
     <div class="section level2">
     <h2 id="see-also">See also<a class="anchor" aria-label="anchor" href="#see-also"></a></h2>

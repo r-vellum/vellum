@@ -15,6 +15,9 @@ format — &quot;frames&quot; (a PNG per frame into directory path), &quot;apng&
 single animated PNG at path), or &quot;gif&quot; (a looping animated GIF).
 delay_num/delay_den — per-frame delay as a fraction of a second (e.g.
 1/25 for 25 fps); rounded to centiseconds for GIF.
+gif_speed — GIF only: NeuQuant palette sample factor, 1 (best) to 30
+(fastest). Ignored by the other formats.
+gif_dither — GIF only: apply Floyd–Steinberg dithering.
 
 "><meta property="og:description" content="
 
@@ -26,6 +29,9 @@ format — &quot;frames&quot; (a PNG per frame into directory path), &quot;apng&
 single animated PNG at path), or &quot;gif&quot; (a looping animated GIF).
 delay_num/delay_den — per-frame delay as a fraction of a second (e.g.
 1/25 for 25 fps); rounded to centiseconds for GIF.
+gif_speed — GIF only: NeuQuant palette sample factor, 1 (best) to 30
+(fastest). Ignored by the other formats.
+gif_dither — GIF only: apply Floyd–Steinberg dithering.
 
 "><meta property="og:image" content="https://r-vellum.github.io/vellum/logo.png"><meta name="twitter:card" content="summary_large_image"><meta name="twitter:creator" content="@schochastics"><meta name="twitter:site" content="@schochastics"><meta name="theme-color" content="#efe6d2"></head><body>
     <a href="#main" class="visually-hidden-focusable">Skip to contents</a>
@@ -90,11 +96,24 @@ right one is <code>seg + 1</code>).</p></li>
 single animated PNG at <code>path</code>), or <code>"gif"</code> (a looping animated GIF).</p></li>
 <li><p><code>delay_num</code>/<code>delay_den</code> — per-frame delay as a fraction of a second (e.g.
 <code>1</code>/<code>25</code> for 25 fps); rounded to centiseconds for GIF.</p></li>
+<li><p><code>gif_speed</code> — GIF only: NeuQuant palette sample factor, 1 (best) to 30
+(fastest). Ignored by the other formats.</p></li>
+<li><p><code>gif_dither</code> — GIF only: apply Floyd–Steinberg dithering.</p></li>
 </ul></div>
 
     <div class="section level2">
     <h2 id="ref-usage">Usage<a class="anchor" aria-label="anchor" href="#ref-usage"></a></h2>
-    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">render_animation</span><span class="op">(</span><span class="va">keyframes</span>, <span class="va">seg</span>, <span class="va">frac</span>, <span class="va">format</span>, <span class="va">path</span>, <span class="va">delay_num</span>, <span class="va">delay_den</span><span class="op">)</span></span></code></pre></div>
+    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">render_animation</span><span class="op">(</span></span>
+<span>  <span class="va">keyframes</span>,</span>
+<span>  <span class="va">seg</span>,</span>
+<span>  <span class="va">frac</span>,</span>
+<span>  <span class="va">format</span>,</span>
+<span>  <span class="va">path</span>,</span>
+<span>  <span class="va">delay_num</span>,</span>
+<span>  <span class="va">delay_den</span>,</span>
+<span>  <span class="va">gif_speed</span>,</span>
+<span>  <span class="va">gif_dither</span></span>
+<span><span class="op">)</span></span></code></pre></div>
     </div>
 
     <div class="section level2">

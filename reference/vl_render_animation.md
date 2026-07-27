@@ -17,7 +17,9 @@ vl_render_animation(
   frac,
   path,
   format = c("gif", "apng", "frames"),
-  fps = 25
+  fps = 25,
+  gif_speed = 1,
+  gif_dither = TRUE
 )
 ```
 
@@ -57,6 +59,19 @@ vl_render_animation(
 
   Frames per second (sets each frame's on-screen duration).
 
+- gif_speed:
+
+  GIF only: the NeuQuant palette sample factor, `1` (best quality,
+  slowest) to `30` (fastest). A plot's antialiased edges want the best
+  palette, so the default is `1`. Ignored for `"apng"`/`"frames"`.
+
+- gif_dither:
+
+  GIF only: apply Floyd–Steinberg dithering (default `TRUE`), which
+  greatly reduces the banding a 256-colour palette leaves on gradients
+  and antialiased edges. A frame that already fits in 256 colours is
+  kept exact.
+
 ## Value
 
 `path`, invisibly.
@@ -68,6 +83,11 @@ interpolate their geometry, their colours (perceptually, in Oklab), and
 their bounded graphical parameters; discrete attributes snap. Nothing
 retrains between frames — the keyframes are fixed at author time — so
 this is non-reactive keyframe animation, not a live/reactive runtime.
+
+GIF is limited to 256 colours per frame, so on a plot (smooth panels,
+antialiased marks) it is inherently lossy — `gif_speed`/`gif_dither`
+make it as clean as that palette allows. For a lossless result use
+`format = "apng"`.
 
 ## See also
 

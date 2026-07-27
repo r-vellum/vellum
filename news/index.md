@@ -2,6 +2,17 @@
 
 ## vellum (development version)
 
+- **Cleaner GIF output from
+  [`vl_render_animation()`](https://r-vellum.github.io/vellum/reference/vl_render_animation.md).**
+  GIF frames are limited to 256 colours, so on a plot (smooth panels,
+  antialiased marks) the old nearest-colour quantisation left bubble
+  edges jagged and gradients banded. The encoder now defaults to the
+  best-quality NeuQuant palette (sample factor `1`) and applies
+  Floyd–Steinberg dithering, and a frame that already fits in 256
+  colours is kept exact. New `gif_speed` (`1`–`30`) and `gif_dither`
+  arguments expose the trade-off. GIF is still inherently lossy on a
+  plot; `format = "apng"` remains the lossless option.
+
 - **Converting between the build tree and the immutable tree is ~4-10x
   faster.** `.bnode_to_gtree()` (which runs the first time a built scene
   is rendered, edited, or queried) read the child dict with one

@@ -15,10 +15,25 @@
 - `delay_num`/`delay_den` — per-frame delay as a fraction of a second
   (e.g. `1`/`25` for 25 fps); rounded to centiseconds for GIF.
 
+- `gif_speed` — GIF only: NeuQuant palette sample factor, 1 (best) to 30
+  (fastest). Ignored by the other formats.
+
+- `gif_dither` — GIF only: apply Floyd–Steinberg dithering.
+
 ## Usage
 
 ``` r
-render_animation(keyframes, seg, frac, format, path, delay_num, delay_den)
+render_animation(
+  keyframes,
+  seg,
+  frac,
+  format,
+  path,
+  delay_num,
+  delay_den,
+  gif_speed,
+  gif_dither
+)
 ```
 
 ## Details
