@@ -29,6 +29,7 @@
 <url><loc>https://r-vellum.github.io/vellum/reference/index.html</loc></url>
 <url><loc>https://r-vellum.github.io/vellum/reference/md.html</loc></url>
 <url><loc>https://r-vellum.github.io/vellum/reference/node_names.html</loc></url>
+<url><loc>https://r-vellum.github.io/vellum/reference/render_animation.html</loc></url>
 <url><loc>https://r-vellum.github.io/vellum/reference/rs_backend_info.html</loc></url>
 <url><loc>https://r-vellum.github.io/vellum/reference/rs_clear_glyph_cache.html</loc></url>
 <url><loc>https://r-vellum.github.io/vellum/reference/rs_clear_subraster_cache.html</loc></url>
@@ -46,6 +47,7 @@
 <url><loc>https://r-vellum.github.io/vellum/reference/vl_clear_render_cache.html</loc></url>
 <url><loc>https://r-vellum.github.io/vellum/reference/vl_gpar.html</loc></url>
 <url><loc>https://r-vellum.github.io/vellum/reference/vl_pattern.html</loc></url>
+<url><loc>https://r-vellum.github.io/vellum/reference/vl_render_animation.html</loc></url>
 <url><loc>https://r-vellum.github.io/vellum/reference/vl_scene.html</loc></url>
 <url><loc>https://r-vellum.github.io/vellum/reference/vl_strwidth.html</loc></url>
 <url><loc>https://r-vellum.github.io/vellum/reference/vl_unit.html</loc></url>

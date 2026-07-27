@@ -59,7 +59,9 @@
 
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="development version" id="vellum-development-version">vellum (development version)<a class="anchor" aria-label="anchor" href="#vellum-development-version"></a></h2>
-</div>
+<ul><li>
+<strong><code><a href="../reference/vl_render_animation.html">vl_render_animation()</a></code> — non-reactive keyframe animation.</strong> Interpolate between a set of compiled keyframe scenes and encode the in-between frames to a looping GIF, an animated PNG (APNG), or a directory of PNG frames. The tween, render, and encode run in one parallel, streaming pass in the Rust backend (<code>rayon</code> over frames): matching primitives interpolate their geometry, their colours (perceptually, in Oklab), and their bounded graphical parameters, while discrete attributes snap. The caller supplies the keyframes and a per-frame schedule (which keyframe pair and the eased fraction), so easing stays in R. See <code>inst/examples/animation.R</code>.</li>
+</ul></div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.5.1" id="vellum-051">vellum 0.5.1<a class="anchor" aria-label="anchor" href="#vellum-051"></a></h2>
 <ul><li>

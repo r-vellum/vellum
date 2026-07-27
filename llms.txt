@@ -253,6 +253,8 @@ picks the backend (PNG / SVG / PDF) from the file extension.
   : Render a scene to an SVG string
 - [`as_vellum_scene()`](https://r-vellum.github.io/vellum/reference/as_vellum_scene.md)
   : Coerce an object to a vellum scene
+- [`vl_render_animation()`](https://r-vellum.github.io/vellum/reference/vl_render_animation.md)
+  : Render a keyframe animation
 
 ## Graphical objects (grobs)
 

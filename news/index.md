@@ -2,6 +2,18 @@
 
 ## vellum (development version)
 
+- **[`vl_render_animation()`](https://r-vellum.github.io/vellum/reference/vl_render_animation.md)
+  — non-reactive keyframe animation.** Interpolate between a set of
+  compiled keyframe scenes and encode the in-between frames to a looping
+  GIF, an animated PNG (APNG), or a directory of PNG frames. The tween,
+  render, and encode run in one parallel, streaming pass in the Rust
+  backend (`rayon` over frames): matching primitives interpolate their
+  geometry, their colours (perceptually, in Oklab), and their bounded
+  graphical parameters, while discrete attributes snap. The caller
+  supplies the keyframes and a per-frame schedule (which keyframe pair
+  and the eased fraction), so easing stays in R. See
+  `inst/examples/animation.R`.
+
 ## vellum 0.5.1
 
 - **[`sector_grob()`](https://r-vellum.github.io/vellum/reference/grob.md)
