@@ -30,6 +30,20 @@ rs_set_glyph_bitmap_mode <- function(mode) .Call(wrap__rs_set_glyph_bitmap_mode,
 #' @keywords internal
 rs_glyph_sprite_stats <- function() .Call(wrap__rs_glyph_sprite_stats)
 
+#' Render a keyframe animation to `path`.
+#'
+#' * `keyframes` — a list of compiled `Scene` external pointers (the `K` states).
+#' * `seg` — per frame, the 0-based index of the frame's **left** keyframe (the
+#'   right one is `seg + 1`).
+#' * `frac` — per frame, the eased interpolation fraction in `[0, 1]`.
+#' * `format` — `"frames"` (a PNG per frame into directory `path`) or `"apng"`
+#'   (a single animated PNG at `path`).
+#' * `delay_num`/`delay_den` — APNG per-frame delay as a fraction of a second
+#'   (e.g. `1`/`25` for 25 fps).
+#'
+#' Returns any renderer degradation warnings (currently none for the raster path).
+render_animation <- function(keyframes, seg, frac, format, path, delay_num, delay_den) .Call(wrap__render_animation, keyframes, seg, frac, format, path, delay_num, delay_den)
+
 rs_aggregate_2d <- function(x, y, w, nx, ny, x0, x1, y0, y1) .Call(wrap__rs_aggregate_2d, x, y, w, nx, ny, x0, x1, y0, y1)
 
 rs_aggregate_2d_cat <- function(x, y, cat, ncat, w, nx, ny, x0, x1, y0, y1) .Call(wrap__rs_aggregate_2d_cat, x, y, cat, ncat, w, nx, ny, x0, x1, y0, y1)

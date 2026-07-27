@@ -199,7 +199,7 @@ fn linear_to_srgb(c: f32) -> u8 {
 }
 
 /// sRGB colour -> `([L, a, b], alpha)` in Oklab (alpha kept linear in 0..=1).
-fn rgba_to_oklab(c: Rgba) -> ([f32; 3], f32) {
+pub(crate) fn rgba_to_oklab(c: Rgba) -> ([f32; 3], f32) {
     let r = srgb_to_linear(c.r);
     let g = srgb_to_linear(c.g);
     let b = srgb_to_linear(c.b);
@@ -221,7 +221,7 @@ fn rgba_to_oklab(c: Rgba) -> ([f32; 3], f32) {
 
 /// Oklab `[L, a, b]` + linear alpha -> sRGB colour. Out-of-gamut channels are
 /// clamped per channel (a deliberate simplification; see [`linear_to_srgb`]).
-fn oklab_to_rgba(lab: [f32; 3], alpha: f32) -> Rgba {
+pub(crate) fn oklab_to_rgba(lab: [f32; 3], alpha: f32) -> Rgba {
     let (ll, aa, bb) = (lab[0], lab[1], lab[2]);
     let l_ = ll + 0.3963377774 * aa + 0.2158037573 * bb;
     let m_ = ll - 0.1055613458 * aa - 0.0638541728 * bb;

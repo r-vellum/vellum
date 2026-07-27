@@ -20,6 +20,7 @@ skrifa = '0.42'
 krilla = { version = '=0.8.2', default-features = false, features = ['raster-images'] }
 base64 = '0.22.1'
 png = '0.18'
+rayon = '1.10'
 
 [profile.release]
 lto = true

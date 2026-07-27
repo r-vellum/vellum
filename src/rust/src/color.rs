@@ -11,7 +11,7 @@
 //! chain); instead it accumulates multiplicatively and is applied once when the
 //! gpar is resolved for drawing.
 
-use std::rc::Rc;
+use std::sync::Arc;
 
 use extendr_api::prelude::*;
 
@@ -77,7 +77,7 @@ pub struct Stop {
 /// the viewport at draw time; the tile pixels were rendered by R from a grob.
 #[derive(Clone, Debug)]
 pub struct PatternFill {
-    pub tile: Rc<Vec<u8>>,
+    pub tile: Arc<Vec<u8>>,
     pub tw: u32,
     pub th: u32,
     pub x: f64,
@@ -161,7 +161,7 @@ fn parse_pattern(obj: &Robj) -> Option<Paint> {
     let extend = Extend::parse(obj.dollar("extend").ok().and_then(|e| e.as_str().map(String::from)).as_deref().unwrap_or("repeat"));
     let tile: Vec<u8> = tile_i.iter().map(|v| (*v).clamp(0, 255) as u8).collect();
     Some(Paint::Pattern(PatternFill {
-        tile: Rc::new(tile),
+        tile: Arc::new(tile),
         tw,
         th,
         x: coords[0],
@@ -560,7 +560,7 @@ fn hash_paint(p: &Paint, h: &mut impl std::hash::Hasher) {
         }
         Paint::Pattern(pf) => {
             3u8.hash(h);
-            (Rc::as_ptr(&pf.tile) as usize).hash(h);
+            (Arc::as_ptr(&pf.tile) as usize).hash(h);
             pf.tw.hash(h);
             pf.th.hash(h);
             for v in [pf.x, pf.y, pf.w, pf.h] {
