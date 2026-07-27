@@ -22,6 +22,7 @@ base64 = '0.22.1'
 png = '0.18'
 rayon = '1.10'
 gif = '0.14'
+color_quant = '1.1'
 
 [profile.release]
 lto = true

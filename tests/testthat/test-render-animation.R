@@ -44,7 +44,7 @@ test_that("render_animation interpolates geometry across frames", {
   warns <- vellum:::render_animation(
     keyframes = list(vellum:::.scene_to_backend(s$a), vellum:::.scene_to_backend(s$b)),
     seg = rep(0L, length(fracs)), frac = fracs,
-    format = "frames", path = dir, delay_num = 1L, delay_den = 25L
+    format = "frames", path = dir, delay_num = 1L, delay_den = 25L, gif_speed = 1L, gif_dither = TRUE
   )
   expect_length(warns, 0L)
   files <- sort(list.files(dir, pattern = "\\.png$", full.names = TRUE))
@@ -65,7 +65,7 @@ test_that("endpoints render identically to the keyframes themselves", {
   dir <- withr::local_tempdir()
   vellum:::render_animation(
     list(ba, bb), seg = c(0L, 0L), frac = c(0, 1),
-    format = "frames", path = dir, delay_num = 1L, delay_den = 25L
+    format = "frames", path = dir, delay_num = 1L, delay_den = 25L, gif_speed = 1L, gif_dither = TRUE
   )
   files <- sort(list.files(dir, pattern = "\\.png$", full.names = TRUE))
   # t = 0 is keyframe A, t = 1 is keyframe B, byte-for-byte on geometry (colour
@@ -82,7 +82,7 @@ test_that("render_animation writes a valid multi-frame APNG", {
   out <- withr::local_tempfile(fileext = ".png")
   vellum:::render_animation(
     list(ba, bb), seg = rep(0L, 10), frac = seq(0, 1, length.out = 10),
-    format = "apng", path = out, delay_num = 1L, delay_den = 25L
+    format = "apng", path = out, delay_num = 1L, delay_den = 25L, gif_speed = 1L, gif_dither = TRUE
   )
   expect_true(file.exists(out))
   expect_gt(file.size(out), 100)
@@ -108,7 +108,7 @@ test_that("render_animation writes a valid looping GIF", {
   out <- withr::local_tempfile(fileext = ".gif")
   vellum:::render_animation(
     list(ba, bb), seg = rep(0L, 8), frac = seq(0, 1, length.out = 8),
-    format = "gif", path = out, delay_num = 1L, delay_den = 20L
+    format = "gif", path = out, delay_num = 1L, delay_den = 20L, gif_speed = 1L, gif_dither = TRUE
   )
   expect_true(file.exists(out))
   info <- magick::image_info(magick::image_read(out))
@@ -135,7 +135,7 @@ test_that("keyed elements enter and exit (per-element fade)", {
   vellum:::render_animation(
     list(vellum:::.scene_to_backend(a), vellum:::.scene_to_backend(b)),
     seg = c(0L, 0L, 0L), frac = c(0, 0.5, 1),
-    format = "frames", path = dir, delay_num = 1L, delay_den = 10L
+    format = "frames", path = dir, delay_num = 1L, delay_den = 10L, gif_speed = 1L, gif_dither = TRUE
   )
   files <- sort(list.files(dir, pattern = "\\.png$", full.names = TRUE))
   red_at <- function(png, xnpc) {
@@ -174,7 +174,7 @@ test_that("viewport masks tween (a reveal wipe)", {
   vellum:::render_animation(
     list(vellum:::.scene_to_backend(mk(0)), vellum:::.scene_to_backend(mk(1))),
     seg = c(0L, 0L, 0L), frac = c(0, 0.5, 1),
-    format = "frames", path = dir, delay_num = 1L, delay_den = 10L
+    format = "frames", path = dir, delay_num = 1L, delay_den = 10L, gif_speed = 1L, gif_dither = TRUE
   )
   files <- sort(list.files(dir, pattern = "\\.png$", full.names = TRUE))
   blue <- vapply(files, function(f) {
@@ -193,19 +193,19 @@ test_that("render_animation validates its inputs", {
   bb <- vellum:::.scene_to_backend(s$b)
   dir <- withr::local_tempdir()
   expect_error(
-    vellum:::render_animation(list(ba), seg = 0L, frac = 0, "frames", dir, 1L, 25L),
+    vellum:::render_animation(list(ba), seg = 0L, frac = 0, "frames", dir, 1L, 25L, 1L, TRUE),
     "at least 2 keyframes"
   )
   expect_error(
-    vellum:::render_animation(list(ba, bb), seg = c(0L, 0L), frac = 0, "frames", dir, 1L, 25L),
+    vellum:::render_animation(list(ba, bb), seg = c(0L, 0L), frac = 0, "frames", dir, 1L, 25L, 1L, TRUE),
     "same length"
   )
   expect_error(
-    vellum:::render_animation(list(ba, bb), seg = 5L, frac = 0.5, "frames", dir, 1L, 25L),
+    vellum:::render_animation(list(ba, bb), seg = 5L, frac = 0.5, "frames", dir, 1L, 25L, 1L, TRUE),
     "references keyframe pair"
   )
   expect_error(
-    vellum:::render_animation(list(ba, bb), seg = 0L, frac = 0.5, "webp", dir, 1L, 25L),
+    vellum:::render_animation(list(ba, bb), seg = 0L, frac = 0.5, "webp", dir, 1L, 25L, 1L, TRUE),
     "unknown format"
   )
 })

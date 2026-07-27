@@ -563,6 +563,7 @@ name = "vellum"
 version = "0.1.0"
 dependencies = [
  "base64",
+ "color_quant",
  "extendr-api",
  "gif",
  "krilla",

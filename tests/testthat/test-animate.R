@@ -23,6 +23,29 @@ test_that("vl_render_animation writes a GIF across K keyframes", {
   expect_equal(nrow(info), 20L)
 })
 
+test_that("vl_render_animation honours the GIF quality controls", {
+  skip_if_not_installed("magick")
+  keys <- anim_keys()
+  seg <- rep(1:2, each = 5)
+  frac <- rep(seq(0, 1, length.out = 5), 2)
+
+  # dithered (default) and undithered both produce a valid 10-frame GIF.
+  for (dither in c(TRUE, FALSE)) {
+    out <- withr::local_tempfile(fileext = ".gif")
+    vl_render_animation(keys, seg, frac, out, format = "gif", gif_speed = 3, gif_dither = dither)
+    expect_equal(nrow(magick::image_info(magick::image_read(out))), 10L)
+  }
+
+  expect_error(
+    vl_render_animation(keys, seg, frac, withr::local_tempfile(fileext = ".gif"), gif_speed = 0),
+    "1:30"
+  )
+  expect_error(
+    vl_render_animation(keys, seg, frac, withr::local_tempfile(fileext = ".gif"), gif_speed = 99),
+    "1:30"
+  )
+})
+
 test_that("vl_render_animation writes an APNG and a frame directory", {
   skip_if_not_installed("png")
   keys <- anim_keys()

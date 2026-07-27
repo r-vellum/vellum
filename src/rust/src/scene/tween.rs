@@ -16,12 +16,14 @@
 //! frozen-scale P1 scope keeps them matched); colours lerp in Oklab (reusing
 //! `oklab.rs`); bounded gpar numerics lerp; discrete fields snap at `t >= 0.5`.
 
+use std::borrow::Cow;
 use std::cell::RefCell;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fs::File;
 use std::io::BufWriter;
 use std::path::Path;
 
+use color_quant::NeuQuant;
 use extendr_api::prelude::*;
 use rayon::prelude::*;
 use tiny_skia::Pixmap;
@@ -732,7 +734,10 @@ enum Sink {
     Apng { writer: png::Writer<BufWriter<File>> },
     /// A single animated GIF at `path`. Each frame is quantised to a local 256
     /// colour palette by the pure-Rust `color_quant` (NeuQuant) — no C library.
-    Gif { encoder: gif::Encoder<BufWriter<File>>, w: u16, h: u16, delay_cs: u16 },
+    /// `speed` is the NeuQuant sample factor (1 = best quality, 30 = fastest);
+    /// `dither` applies Floyd–Steinberg error diffusion to hide the banding a
+    /// nearest-colour remap leaves on antialiased/gradient content.
+    Gif { encoder: gif::Encoder<BufWriter<File>>, w: u16, h: u16, delay_cs: u16, speed: i32, dither: bool },
 }
 
 impl Sink {
@@ -747,9 +752,8 @@ impl Sink {
             Sink::Apng { writer } => writer
                 .write_image_data(&straight_rgba(pm))
                 .map_err(|e| format!("APNG frame write failed: {e}")),
-            Sink::Gif { encoder, w, h, delay_cs } => {
-                let mut rgba = straight_rgba(pm);
-                let mut frame = gif::Frame::from_rgba_speed(*w, *h, &mut rgba, 10);
+            Sink::Gif { encoder, w, h, delay_cs, speed, dither } => {
+                let mut frame = gif_frame(&straight_rgba(pm), *w, *h, *speed, *dither);
                 frame.delay = *delay_cs;
                 encoder
                     .write_frame(&frame)
@@ -787,6 +791,93 @@ fn open_apng(
     enc.write_header().map_err(|e| format!("APNG header write failed: {e}"))
 }
 
+/// Encode one straight-RGBA frame to a GIF `Frame`.
+///
+/// A frame with ≤256 distinct colours (a flat plot) keeps them exactly — no
+/// quantisation loss. Otherwise it is reduced to a 256-colour NeuQuant palette at
+/// sample factor `speed` (1 = best), then remapped: with `dither`, via
+/// Floyd–Steinberg error diffusion (much cleaner on antialiased edges and
+/// gradients); without, nearest-colour like the crate default.
+fn gif_frame(rgba: &[u8], w: u16, h: u16, speed: i32, dither: bool) -> gif::Frame<'static> {
+    let speed = speed.clamp(1, 30);
+    // Exact palette when the frame fits in 256 colours (and lossless either way).
+    if !dither || fits_256_colours(rgba) {
+        let mut buf = rgba.to_vec();
+        return gif::Frame::from_rgba_speed(w, h, &mut buf, speed);
+    }
+    fs_dither_frame(rgba, w, h, speed)
+}
+
+/// Whether the straight-RGBA buffer uses at most 256 distinct colours.
+fn fits_256_colours(rgba: &[u8]) -> bool {
+    let mut seen = HashSet::with_capacity(257);
+    for px in rgba.chunks_exact(4) {
+        seen.insert([px[0], px[1], px[2], px[3]]);
+        if seen.len() > 256 {
+            return false;
+        }
+    }
+    true
+}
+
+/// NeuQuant palette + Floyd–Steinberg dithered remap of one opaque frame.
+fn fs_dither_frame(rgba: &[u8], w: u16, h: u16, speed: i32) -> gif::Frame<'static> {
+    let nq = NeuQuant::new(speed, 256, rgba);
+    let palette = nq.color_map_rgb(); // 256 RGB triples
+    let (wi, hi) = (w as usize, h as usize);
+
+    // Working buffer of RGB with accumulated diffusion error (f32 to avoid
+    // truncation as error spreads).
+    let mut work: Vec<[f32; 3]> = rgba
+        .chunks_exact(4)
+        .map(|p| [p[0] as f32, p[1] as f32, p[2] as f32])
+        .collect();
+    let mut out = vec![0u8; wi * hi];
+
+    for y in 0..hi {
+        for x in 0..wi {
+            let i = y * wi + x;
+            let old = work[i];
+            let r = old[0].round().clamp(0.0, 255.0) as u8;
+            let g = old[1].round().clamp(0.0, 255.0) as u8;
+            let b = old[2].round().clamp(0.0, 255.0) as u8;
+            let idx = nq.index_of(&[r, g, b, 255]);
+            out[i] = idx as u8;
+            let err = [
+                old[0] - palette[idx * 3] as f32,
+                old[1] - palette[idx * 3 + 1] as f32,
+                old[2] - palette[idx * 3 + 2] as f32,
+            ];
+            let mut diffuse = |xx: usize, yy: usize, f: f32| {
+                let j = yy * wi + xx;
+                work[j][0] += err[0] * f;
+                work[j][1] += err[1] * f;
+                work[j][2] += err[2] * f;
+            };
+            if x + 1 < wi {
+                diffuse(x + 1, y, 7.0 / 16.0);
+            }
+            if y + 1 < hi {
+                if x > 0 {
+                    diffuse(x - 1, y + 1, 3.0 / 16.0);
+                }
+                diffuse(x, y + 1, 5.0 / 16.0);
+                if x + 1 < wi {
+                    diffuse(x + 1, y + 1, 1.0 / 16.0);
+                }
+            }
+        }
+    }
+
+    gif::Frame {
+        width: w,
+        height: h,
+        buffer: Cow::Owned(out),
+        palette: Some(palette),
+        ..Default::default()
+    }
+}
+
 /// Open a looping GIF encoder for `w`x`h` frames.
 fn open_gif(path: &str, w: u16, h: u16) -> EncResult<gif::Encoder<BufWriter<File>>> {
     let file = File::create(path).map_err(|e| format!("cannot create {path}: {e}"))?;
@@ -809,6 +900,9 @@ fn open_gif(path: &str, w: u16, h: u16) -> EncResult<gif::Encoder<BufWriter<File
 ///   single animated PNG at `path`), or `"gif"` (a looping animated GIF).
 /// * `delay_num`/`delay_den` — per-frame delay as a fraction of a second (e.g.
 ///   `1`/`25` for 25 fps); rounded to centiseconds for GIF.
+/// * `gif_speed` — GIF only: NeuQuant palette sample factor, 1 (best) to 30
+///   (fastest). Ignored by the other formats.
+/// * `gif_dither` — GIF only: apply Floyd–Steinberg dithering.
 ///
 /// Returns any renderer degradation warnings (currently none for the raster path).
 ///
@@ -822,6 +916,8 @@ fn render_animation(
     path: &str,
     delay_num: i32,
     delay_den: i32,
+    gif_speed: i32,
+    gif_dither: bool,
 ) -> Vec<String> {
     let k = keyframes.len();
     if k < 2 {
@@ -879,7 +975,14 @@ fn render_animation(
                 .round()
                 .clamp(1.0, u16::MAX as f64) as u16;
             let encoder = open_gif(path, w as u16, h as u16).unwrap_or_else(|e| throw_r_error(e));
-            Sink::Gif { encoder, w: w as u16, h: h as u16, delay_cs }
+            Sink::Gif {
+                encoder,
+                w: w as u16,
+                h: h as u16,
+                delay_cs,
+                speed: gif_speed,
+                dither: gif_dither,
+            }
         }
         other => throw_r_error(format!(
             "render_animation(): unknown format {other:?} (use \"frames\", \"apng\", or \"gif\")"
