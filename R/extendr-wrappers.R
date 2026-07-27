@@ -36,10 +36,10 @@ rs_glyph_sprite_stats <- function() .Call(wrap__rs_glyph_sprite_stats)
 #' * `seg` — per frame, the 0-based index of the frame's **left** keyframe (the
 #'   right one is `seg + 1`).
 #' * `frac` — per frame, the eased interpolation fraction in `[0, 1]`.
-#' * `format` — `"frames"` (a PNG per frame into directory `path`) or `"apng"`
-#'   (a single animated PNG at `path`).
-#' * `delay_num`/`delay_den` — APNG per-frame delay as a fraction of a second
-#'   (e.g. `1`/`25` for 25 fps).
+#' * `format` — `"frames"` (a PNG per frame into directory `path`), `"apng"` (a
+#'   single animated PNG at `path`), or `"gif"` (a looping animated GIF).
+#' * `delay_num`/`delay_den` — per-frame delay as a fraction of a second (e.g.
+#'   `1`/`25` for 25 fps); rounded to centiseconds for GIF.
 #'
 #' Returns any renderer degradation warnings (currently none for the raster path).
 render_animation <- function(keyframes, seg, frac, format, path, delay_num, delay_den) .Call(wrap__render_animation, keyframes, seg, frac, format, path, delay_num, delay_den)

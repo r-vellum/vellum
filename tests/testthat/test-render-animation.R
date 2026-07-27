@@ -95,6 +95,22 @@ test_that("render_animation writes a valid multi-frame APNG", {
   expect_equal(nframes, 10L)
 })
 
+test_that("render_animation writes a valid looping GIF", {
+  skip_if_not_installed("magick")
+  s <- anim_scenes()
+  ba <- vellum:::.scene_to_backend(s$a)
+  bb <- vellum:::.scene_to_backend(s$b)
+  out <- withr::local_tempfile(fileext = ".gif")
+  vellum:::render_animation(
+    list(ba, bb), seg = rep(0L, 8), frac = seq(0, 1, length.out = 8),
+    format = "gif", path = out, delay_num = 1L, delay_den = 20L
+  )
+  expect_true(file.exists(out))
+  info <- magick::image_info(magick::image_read(out))
+  expect_equal(nrow(info), 8L)
+  expect_equal(info$width[1], vellum:::.scene_to_backend(s$a)$dim()[1])
+})
+
 test_that("render_animation validates its inputs", {
   s <- anim_scenes()
   ba <- vellum:::.scene_to_backend(s$a)

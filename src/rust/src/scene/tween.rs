@@ -465,6 +465,9 @@ enum Sink {
     Frames { dir: String, next: usize },
     /// A single animated PNG at `path`, frames appended to an open writer.
     Apng { writer: png::Writer<BufWriter<File>> },
+    /// A single animated GIF at `path`. Each frame is quantised to a local 256
+    /// colour palette by the pure-Rust `color_quant` (NeuQuant) — no C library.
+    Gif { encoder: gif::Encoder<BufWriter<File>>, w: u16, h: u16, delay_cs: u16 },
 }
 
 impl Sink {
@@ -479,6 +482,14 @@ impl Sink {
             Sink::Apng { writer } => writer
                 .write_image_data(&straight_rgba(pm))
                 .map_err(|e| format!("APNG frame write failed: {e}")),
+            Sink::Gif { encoder, w, h, delay_cs } => {
+                let mut rgba = straight_rgba(pm);
+                let mut frame = gif::Frame::from_rgba_speed(*w, *h, &mut rgba, 10);
+                frame.delay = *delay_cs;
+                encoder
+                    .write_frame(&frame)
+                    .map_err(|e| format!("GIF frame write failed: {e}"))
+            }
         }
     }
 
@@ -486,6 +497,8 @@ impl Sink {
         match self {
             Sink::Frames { .. } => Ok(()),
             Sink::Apng { writer } => writer.finish().map_err(|e| format!("APNG finalise failed: {e}")),
+            // The gif encoder writes the trailer on drop (raii_no_panic).
+            Sink::Gif { .. } => Ok(()),
         }
     }
 }
@@ -509,6 +522,16 @@ fn open_apng(
     enc.write_header().map_err(|e| format!("APNG header write failed: {e}"))
 }
 
+/// Open a looping GIF encoder for `w`x`h` frames.
+fn open_gif(path: &str, w: u16, h: u16) -> EncResult<gif::Encoder<BufWriter<File>>> {
+    let file = File::create(path).map_err(|e| format!("cannot create {path}: {e}"))?;
+    let mut enc = gif::Encoder::new(BufWriter::new(file), w, h, &[])
+        .map_err(|e| format!("GIF header failed: {e}"))?;
+    enc.set_repeat(gif::Repeat::Infinite)
+        .map_err(|e| format!("GIF repeat failed: {e}"))?;
+    Ok(enc)
+}
+
 // --- the batch entry point --------------------------------------------------
 
 /// Render a keyframe animation to `path`.
@@ -517,10 +540,10 @@ fn open_apng(
 /// * `seg` — per frame, the 0-based index of the frame's **left** keyframe (the
 ///   right one is `seg + 1`).
 /// * `frac` — per frame, the eased interpolation fraction in `[0, 1]`.
-/// * `format` — `"frames"` (a PNG per frame into directory `path`) or `"apng"`
-///   (a single animated PNG at `path`).
-/// * `delay_num`/`delay_den` — APNG per-frame delay as a fraction of a second
-///   (e.g. `1`/`25` for 25 fps).
+/// * `format` — `"frames"` (a PNG per frame into directory `path`), `"apng"` (a
+///   single animated PNG at `path`), or `"gif"` (a looping animated GIF).
+/// * `delay_num`/`delay_den` — per-frame delay as a fraction of a second (e.g.
+///   `1`/`25` for 25 fps); rounded to centiseconds for GIF.
 ///
 /// Returns any renderer degradation warnings (currently none for the raster path).
 #[extendr]
@@ -580,7 +603,20 @@ fn render_animation(
             let writer = open_apng(path, w, h, n as u32, dn, dd).unwrap_or_else(|e| throw_r_error(e));
             Sink::Apng { writer }
         }
-        other => throw_r_error(format!("render_animation(): unknown format {other:?} (use \"frames\" or \"apng\")")),
+        "gif" => {
+            if w > u16::MAX as u32 || h > u16::MAX as u32 {
+                throw_r_error("render_animation(): GIF dimensions must be <= 65535 px");
+            }
+            // GIF frame delay is in centiseconds (1/100 s).
+            let delay_cs = ((delay_num.max(0) as f64 / delay_den.max(1) as f64) * 100.0)
+                .round()
+                .clamp(1.0, u16::MAX as f64) as u16;
+            let encoder = open_gif(path, w as u16, h as u16).unwrap_or_else(|e| throw_r_error(e));
+            Sink::Gif { encoder, w: w as u16, h: h as u16, delay_cs }
+        }
+        other => throw_r_error(format!(
+            "render_animation(): unknown format {other:?} (use \"frames\", \"apng\", or \"gif\")"
+        )),
     };
 
     // Chunk the frames so at most one chunk of pixmaps is resident: tween each
