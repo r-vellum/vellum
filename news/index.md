@@ -2,6 +2,20 @@
 
 ## vellum (development version)
 
+- **Converting between the build tree and the immutable tree is ~4-10x
+  faster.** `.bnode_to_gtree()` (which runs the first time a built scene
+  is rendered, edited, or queried) read the child dict with one
+  [`get()`](https://rdrr.io/r/base/get.html) per child; it now uses a
+  single [`mget()`](https://rdrr.io/r/base/get.html).
+  `.gtree_to_bnode()` (which runs when a materialised scene is drawn on
+  again, or when a branched scene forks) did an
+  [`assign()`](https://rdrr.io/r/base/assign.html) per child and an
+  `S7_inherits()` type test per child; it now builds the dict with one
+  [`list2env()`](https://rdrr.io/r/base/list2env.html) and tests the
+  type by attribute. Neither changes the resulting tree. On a scene of
+  20,000 sibling grobs: materialising 34 ms -\> 9 ms, drawing onto an
+  edited scene 106 ms -\> 11 ms, branching a scene 144 ms -\> 21 ms.
+
 - **[`edit_node()`](https://r-vellum.github.io/vellum/reference/node_names.md)
   is ~40x faster on large scenes.** An edit rebuilt the nodes on the
   path with `node@children[[i]] <- ...` and then wrote the new tree back
