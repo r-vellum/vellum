@@ -37,18 +37,8 @@ and `determined_by`), printed legibly.
 s <- vl_scene(4, 3) |>
   push(vl_viewport(name = "panel", width = vl_unit(2, "in"), height = vl_unit(1, "in")))
 why_size(s, "panel")
-#> $name
-#> [1] "panel"
 #> 
-#> $width_mm
-#> [1] 50.8
-#> 
-#> $height_mm
-#> [1] 25.4
-#> 
-#> $determined_by
-#> [1] "placed by size: width = 2in, height = 1in"
-#> 
-#> attr(,"class")
-#> [1] "vellum_why_size"
+#> ── why_size("panel") 
+#> Resolved size: 50.8 mm wide x 25.4 mm tall
+#> Determined by: placed by size: width = 2in, height = 1in
 ```

@@ -112,125 +112,15 @@ the raster, SVG, and PDF backends.
 
 ``` r
 linear_gradient(c("white", "navy"))
-#> $kind
-#> [1] "linear"
-#> 
-#> $colours
-#> [1] "white" "navy" 
-#> 
-#> $stops
-#> [1] 0 1
-#> 
-#> $coords
-#> [1] 0 0 1 0
-#> 
-#> $units
-#> [1] "npc"
-#> 
-#> $extend
-#> [1] "pad"
-#> 
-#> $interpolation
-#> [1] "srgb"
-#> 
-#> attr(,"class")
-#> [1] "vellum_gradient"
+#> <vellum_gradient: linear> 2 stops, units = "npc"
 linear_gradient(c("blue", "yellow"), interpolation = "oklab")
-#> $kind
-#> [1] "linear"
-#> 
-#> $colours
-#> [1] "blue"   "yellow"
-#> 
-#> $stops
-#> [1] 0 1
-#> 
-#> $coords
-#> [1] 0 0 1 0
-#> 
-#> $units
-#> [1] "npc"
-#> 
-#> $extend
-#> [1] "pad"
-#> 
-#> $interpolation
-#> [1] "oklab"
-#> 
-#> attr(,"class")
-#> [1] "vellum_gradient"
+#> <vellum_gradient: linear> 2 stops, units = "npc"
 linear_gradient(c("blue", "yellow"), interpolation = "oklch")
-#> $kind
-#> [1] "linear"
-#> 
-#> $colours
-#> [1] "blue"   "yellow"
-#> 
-#> $stops
-#> [1] 0 1
-#> 
-#> $coords
-#> [1] 0 0 1 0
-#> 
-#> $units
-#> [1] "npc"
-#> 
-#> $extend
-#> [1] "pad"
-#> 
-#> $interpolation
-#> [1] "oklch"
-#> 
-#> attr(,"class")
-#> [1] "vellum_gradient"
+#> <vellum_gradient: linear> 2 stops, units = "npc"
 radial_gradient(c("yellow", "red"), cx = 0.5, cy = 0.5, r = 0.5)
-#> $kind
-#> [1] "radial"
-#> 
-#> $colours
-#> [1] "yellow" "red"   
-#> 
-#> $stops
-#> [1] 0 1
-#> 
-#> $coords
-#> [1] 0.5 0.5 0.5 0.5 0.5 0.0
-#> 
-#> $units
-#> [1] "npc"
-#> 
-#> $extend
-#> [1] "pad"
-#> 
-#> $interpolation
-#> [1] "srgb"
-#> 
-#> attr(,"class")
-#> [1] "vellum_gradient"
+#> <vellum_gradient: radial> 2 stops, units = "npc"
 # off-centre highlight (a lit sphere): focal point up and to the left
 radial_gradient(c("white", "navy"), cx = 0.5, cy = 0.5, r = 0.6,
                 fx = 0.35, fy = 0.65)
-#> $kind
-#> [1] "radial"
-#> 
-#> $colours
-#> [1] "white" "navy" 
-#> 
-#> $stops
-#> [1] 0 1
-#> 
-#> $coords
-#> [1] 0.50 0.50 0.60 0.35 0.65 0.00
-#> 
-#> $units
-#> [1] "npc"
-#> 
-#> $extend
-#> [1] "pad"
-#> 
-#> $interpolation
-#> [1] "srgb"
-#> 
-#> attr(,"class")
-#> [1] "vellum_gradient"
+#> <vellum_gradient: radial> 2 stops, units = "npc"
 ```

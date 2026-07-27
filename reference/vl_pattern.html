@@ -127,52 +127,7 @@ with a degrade warning.</p>
     <h2 id="ref-examples">Examples<a class="anchor" aria-label="anchor" href="#ref-examples"></a></h2>
     <div class="sourceCode"><pre class="sourceCode r"><code><span class="r-in"><span><span class="va">dots</span> <span class="op">&lt;-</span> <span class="fu"><a href="grob.html">circle_grob</a></span><span class="op">(</span>r <span class="op">=</span> <span class="fl">0.25</span>, gp <span class="op">=</span> <span class="fu"><a href="vl_gpar.html">vl_gpar</a></span><span class="op">(</span>fill <span class="op">=</span> <span class="st">"white"</span>, col <span class="op">=</span> <span class="cn">NA</span><span class="op">)</span><span class="op">)</span></span></span>
 <span class="r-in"><span><span class="fu">vl_pattern</span><span class="op">(</span><span class="va">dots</span>, width <span class="op">=</span> <span class="fl">0.08</span>, height <span class="op">=</span> <span class="fl">0.08</span><span class="op">)</span></span></span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> $grob</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> &lt;vellum::grob_circle&gt;</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>  @ name  : NULL</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>  @ gp    : &lt;vellum::vl_gpar&gt;</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>  .. @ col       : logi NA</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>  .. @ fill      : chr "white"</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>  .. @ lwd       : NULL</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>  .. @ alpha     : NULL</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>  .. @ lty       : NULL</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>  .. @ lineend   : NULL</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>  .. @ linejoin  : NULL</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>  .. @ linemitre : NULL</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>  .. @ fontfamily: NULL</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>  .. @ fontface  : NULL</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>  .. @ fontsize  : NULL</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>  .. @ lineheight: NULL</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>  @ vp    : NULL</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>  @ id    : NULL</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>  @ role  : NULL</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>  @ keys  : NULL</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>  @ meta  : NULL</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>  @ x     : unit [1:1] 0.5npc</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>  @ y     : unit [1:1] 0.5npc</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>  @ r     : unit [1:1] 0.25npc</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>  @ sketch: NULL</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> $width</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> [1] 0.08</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> $height</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> [1] 0.08</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> $x</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> [1] 0.5</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> $y</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> [1] 0.5</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> $units</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> [1] "npc"</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> $extend</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> [1] "repeat"</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> </span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> attr(,"class")</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> [1] "vellum_pattern"</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> &lt;vellum_pattern&gt; cell 0.08 x 0.08 <span style="color: #0000BB;">"npc"</span>, extend = <span style="color: #0000BB;">"repeat"</span></span>
 </code></pre></div>
     </div>
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>

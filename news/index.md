@@ -2,6 +2,24 @@
 
 ## vellum (development version)
 
+- **[`print()`](https://rdrr.io/r/base/print.html) works again on
+  gradients, patterns, masks, and
+  [`why_size()`](https://r-vellum.github.io/vellum/reference/why_size.md)
+  results.** All four have `print` methods declared in `NAMESPACE`, but
+  none of them dispatched: the objects printed as raw lists.
+  `S7::method(print, cls) <- fn` is a replacement call, so it also bound
+  the symbol `print` inside the package namespace (holding
+  [`base::print`](https://rdrr.io/r/base/print.html), unchanged) — and
+  R’s [`registerS3methods()`](https://rdrr.io/r/base/ns-internal.html)
+  treats a generic whose name is a local object as a *local* generic,
+  filing every `S3method(print, <class>)` into vellum’s own
+  `.__S3MethodsTable__.` rather than base’s, where dispatch looks.
+  Dropping the accidental `print`/`plot` bindings restores normal
+  registration; the S7 methods for `vellum_scene` register via
+  [`S7::methods_register()`](https://rconsortium.github.io/S7/reference/methods_register.html)
+  and were never affected. `test-print-methods.R` now guards both
+  halves.
+
 - **Cleaner GIF output from
   [`vl_render_animation()`](https://r-vellum.github.io/vellum/reference/vl_render_animation.md).**
   GIF frames are limited to 256 colours, so on a plot (smooth panels,
