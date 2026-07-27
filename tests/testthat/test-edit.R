@@ -59,3 +59,36 @@ test_that("named viewports are found by name too", {
     draw(rect_grob(name = "inner"))
   expect_true(all(c("panel", "inner") %in% node_names(s)))
 })
+
+test_that("an edit rebuilds nodes without dropping any property", {
+  # `.modify_at()` and `.scene_with_root()` construct fresh objects (see the
+  # comments there: writing into an existing one is O(tree)), so they have to
+  # name every property. If gtree or vellum_scene gains one, this fails.
+  s <- vl_scene(width = 3, height = 2, dpi = 123, bg = "#eeddcc") |>
+    describe(title = "t", desc = "d") |>
+    push(vl_viewport(name = "panel", xscale = c(0, 10), clip = TRUE, cache = TRUE)) |>
+    draw(rect_grob(name = "box", gp = vl_gpar(fill = "red", col = NA),
+                   key = "k1", meta = list(list(a = 1)), id = "i1")) |>
+    pop()
+  s <- edit_node(s, "box", gp = vl_gpar(fill = "grey", col = NA)) # materialise
+
+  before <- get_node(s, "panel")
+  s2 <- edit_node(s, "box", gp = vl_gpar(fill = "blue", col = NA))
+  after <- get_node(s2, "panel")
+
+  # every gtree property survives the rebuild except `nid`, which is re-stamped
+  keep <- setdiff(names(S7::props(before)), c("nid", "children"))
+  expect_equal(S7::props(after)[keep], S7::props(before)[keep])
+  expect_false(identical(after@nid, before@nid))
+  expect_length(after@children, length(before@children))
+
+  # ... and every scene property except `root`/`bstate`/`cid`
+  keep <- setdiff(names(S7::props(s)), c("root", "bstate", "cid"))
+  expect_equal(S7::props(s2)[keep], S7::props(s)[keep])
+  expect_null(s2@bstate)
+  expect_false(identical(s2@cid, s@cid))
+
+  # the edit still lands, and untouched siblings keep their identity
+  expect_equal(get_node(s2, "box")@gp@fill, "blue")
+  expect_equal(get_node(s2, "box")@keys, get_node(s, "box")@keys)
+})

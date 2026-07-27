@@ -1162,11 +1162,27 @@ edit_node <- function(scene, name, ...) {
   root <- .materialize_cached(scene, .scene_cid(scene))
   p <- .find_path(root, name)
   if (is.null(p)) cli::cli_abort("No node named {.val {name}}.")
-  # Return an immutable (materialised) scene; the builder env is untouched. The
-  # id lives in `@cid` now that there is no `bstate` carrier (one write).
-  S7::set_props(scene,
-    root = .modify_at(root, p, function(nd) S7::set_props(nd, ...)),
-    bstate = NULL, cid = .new_scene_id())
+  # Return an immutable (materialised) scene; the builder env is untouched.
+  .scene_with_root(scene, .modify_at(root, p, function(nd) S7::set_props(nd, ...)))
+}
+
+# Derive a scene value carrying a new tree, by *rebuilding* it rather than
+# writing into it. Same reason as `.modify_at()`: `S7::set_props(scene, root =)`
+# has to duplicate the old scene first, and duplicating it deep-copies the tree
+# hanging off its `root` attribute — O(nodes), ~130ms on a 20k-grob scene, where
+# constructing a fresh scene just stores the pointer. The id lives in `@cid` now
+# that there is no `bstate` carrier.
+.scene_with_root <- function(scene, root) {
+  vellum_scene(
+    width = attr(scene, "width", exact = TRUE),
+    height = attr(scene, "height", exact = TRUE),
+    dpi = attr(scene, "dpi", exact = TRUE),
+    bg = attr(scene, "bg", exact = TRUE),
+    root = root, bstate = NULL, cid = .new_scene_id(),
+    title = attr(scene, "title", exact = TRUE),
+    desc = attr(scene, "desc", exact = TRUE),
+    a11y_prefix = attr(scene, "a11y_prefix", exact = TRUE)
+  )
 }
 
 # --- internal helpers -------------------------------------------------------
@@ -1392,24 +1408,40 @@ edit_node <- function(scene, name, ...) {
   v
 }
 
-# Tree navigation over the immutable gtree.
-.node_children <- function(node) if (S7::S7_inherits(node, gtree)) node@children else list()
-.node_name <- function(node) {
-  if (S7::S7_inherits(node, grob) && "name" %in% S7::prop_names(node)) node@name else NULL
-}
+# Tree navigation over the immutable gtree. S7 stores properties as attributes,
+# so these read them directly: `S7_inherits()` + `prop_names()` + `@` costs ~5us
+# per node, which is the whole cost of a `.find_path()` walk over a large tree
+# (~120ms at 20k nodes vs ~12ms here). Only a gtree carries `children`, and only
+# a grob carries `name`, so the attribute read is the type test.
+.node_children <- function(node) attr(node, "children", exact = TRUE) %||% list()
+.node_name <- function(node) attr(node, "name", exact = TRUE)
 
 .get_at <- function(node, path) {
   if (length(path) == 0L) return(node)
   .get_at(node@children[[path[[1]]]], path[-1])
 }
+# Rebuild the gtrees on `path` around an edited node. Each is built *fresh* from
+# its own properties rather than written into with `node@children[[i]] <- ...`:
+# assigning a new list into an existing S7 object makes R duplicate that object,
+# and duplicating it deep-copies the whole children list (every sibling grob).
+# That made an edit O(siblings) — ~125ms on a 20k-grob parent — where
+# constructing a new node just stores the pointer (~0.3ms, O(depth)). Every gtree
+# property must be carried over here; `test-edit.R` fails if one is dropped.
+# The re-stamped `nid` marks the subtree content as changed, so a cached repaint
+# boundary on/above the edit invalidates while unchanged off-path siblings keep
+# their `nid` (structural sharing) and stay cached.
 .modify_at <- function(node, path, f) {
   if (length(path) == 0L) return(.restamp_nid(f(node)))
   i <- path[[1]]
-  node@children[[i]] <- .modify_at(node@children[[i]], path[-1], f)
-  # Re-stamp every rebuilt gtree on the path (its subtree content changed), so a
-  # cached repaint boundary on/above the edit invalidates while unchanged
-  # off-path siblings keep their `nid` (structural sharing) and stay cached.
-  .restamp_nid(node)
+  kids <- attr(node, "children", exact = TRUE)
+  kids[[i]] <- .modify_at(kids[[i]], path[-1], f)
+  gtree(
+    name = attr(node, "name", exact = TRUE), gp = attr(node, "gp", exact = TRUE),
+    vp = attr(node, "vp", exact = TRUE), id = attr(node, "id", exact = TRUE),
+    role = attr(node, "role", exact = TRUE), keys = attr(node, "keys", exact = TRUE),
+    meta = attr(node, "meta", exact = TRUE), children = kids,
+    nid = .new_scene_id()
+  )
 }
 .restamp_nid <- function(node) {
   if (S7::S7_inherits(node, gtree)) node@nid <- .new_scene_id()
