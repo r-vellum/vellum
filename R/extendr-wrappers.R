@@ -40,11 +40,14 @@ rs_glyph_sprite_stats <- function() .Call(wrap__rs_glyph_sprite_stats)
 #'   single animated PNG at `path`), or `"gif"` (a looping animated GIF).
 #' * `delay_num`/`delay_den` — per-frame delay as a fraction of a second (e.g.
 #'   `1`/`25` for 25 fps); rounded to centiseconds for GIF.
+#' * `gif_speed` — GIF only: NeuQuant palette sample factor, 1 (best) to 30
+#'   (fastest). Ignored by the other formats.
+#' * `gif_dither` — GIF only: apply Floyd–Steinberg dithering.
 #'
 #' Returns any renderer degradation warnings (currently none for the raster path).
 #'
 #' @keywords internal
-render_animation <- function(keyframes, seg, frac, format, path, delay_num, delay_den) .Call(wrap__render_animation, keyframes, seg, frac, format, path, delay_num, delay_den)
+render_animation <- function(keyframes, seg, frac, format, path, delay_num, delay_den, gif_speed, gif_dither) .Call(wrap__render_animation, keyframes, seg, frac, format, path, delay_num, delay_den, gif_speed, gif_dither)
 
 rs_aggregate_2d <- function(x, y, w, nx, ny, x0, x1, y0, y1) .Call(wrap__rs_aggregate_2d, x, y, w, nx, ny, x0, x1, y0, y1)
 

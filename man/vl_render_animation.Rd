@@ -10,7 +10,9 @@ vl_render_animation(
   frac,
   path,
   format = c("gif", "apng", "frames"),
-  fps = 25
+  fps = 25,
+  gif_speed = 1,
+  gif_dither = TRUE
 )
 }
 \arguments{
@@ -31,6 +33,14 @@ as \code{seg}.}
 \code{"frames"} (one \code{frameNNNNN.png} per frame into \code{path}).}
 
 \item{fps}{Frames per second (sets each frame's on-screen duration).}
+
+\item{gif_speed}{GIF only: the NeuQuant palette sample factor, \code{1} (best
+quality, slowest) to \code{30} (fastest). A plot's antialiased edges want the best
+palette, so the default is \code{1}. Ignored for \code{"apng"}/\code{"frames"}.}
+
+\item{gif_dither}{GIF only: apply Floyd–Steinberg dithering (default \code{TRUE}),
+which greatly reduces the banding a 256-colour palette leaves on gradients and
+antialiased edges. A frame that already fits in 256 colours is kept exact.}
 }
 \value{
 \code{path}, invisibly.
@@ -50,6 +60,10 @@ their geometry, their colours (perceptually, in Oklab), and their bounded
 graphical parameters; discrete attributes snap. Nothing retrains between frames
 — the keyframes are fixed at author time — so this is non-reactive keyframe
 animation, not a live/reactive runtime.
+
+GIF is limited to 256 colours per frame, so on a plot (smooth panels,
+antialiased marks) it is inherently lossy — \code{gif_speed}/\code{gif_dither} make it as
+clean as that palette allows. For a lossless result use \code{format = "apng"}.
 }
 \examples{
 \dontrun{

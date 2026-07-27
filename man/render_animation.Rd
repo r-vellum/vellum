@@ -4,7 +4,17 @@
 \alias{render_animation}
 \title{Render a keyframe animation to \code{path}.}
 \usage{
-render_animation(keyframes, seg, frac, format, path, delay_num, delay_den)
+render_animation(
+  keyframes,
+  seg,
+  frac,
+  format,
+  path,
+  delay_num,
+  delay_den,
+  gif_speed,
+  gif_dither
+)
 }
 \description{
 \itemize{
@@ -16,6 +26,9 @@ right one is \code{seg + 1}).
 single animated PNG at \code{path}), or \code{"gif"} (a looping animated GIF).
 \item \code{delay_num}/\code{delay_den} — per-frame delay as a fraction of a second (e.g.
 \code{1}/\code{25} for 25 fps); rounded to centiseconds for GIF.
+\item \code{gif_speed} — GIF only: NeuQuant palette sample factor, 1 (best) to 30
+(fastest). Ignored by the other formats.
+\item \code{gif_dither} — GIF only: apply Floyd–Steinberg dithering.
 }
 }
 \details{

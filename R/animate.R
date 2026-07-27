@@ -26,7 +26,17 @@
 #' @param format `"gif"` (looping animated GIF), `"apng"` (animated PNG), or
 #'   `"frames"` (one `frameNNNNN.png` per frame into `path`).
 #' @param fps Frames per second (sets each frame's on-screen duration).
+#' @param gif_speed GIF only: the NeuQuant palette sample factor, `1` (best
+#'   quality, slowest) to `30` (fastest). A plot's antialiased edges want the best
+#'   palette, so the default is `1`. Ignored for `"apng"`/`"frames"`.
+#' @param gif_dither GIF only: apply Floyd–Steinberg dithering (default `TRUE`),
+#'   which greatly reduces the banding a 256-colour palette leaves on gradients and
+#'   antialiased edges. A frame that already fits in 256 colours is kept exact.
 #' @return `path`, invisibly.
+#' @details
+#' GIF is limited to 256 colours per frame, so on a plot (smooth panels,
+#' antialiased marks) it is inherently lossy — `gif_speed`/`gif_dither` make it as
+#' clean as that palette allows. For a lossless result use `format = "apng"`.
 #' @seealso [render()], [as_vellum_scene()]
 #' @examples
 #' \dontrun{
@@ -41,7 +51,7 @@
 #' @export
 vl_render_animation <- function(keyframes, seg, frac,
                                 path, format = c("gif", "apng", "frames"),
-                                fps = 25) {
+                                fps = 25, gif_speed = 1, gif_dither = TRUE) {
   format <- match.arg(format)
   if (!is.list(keyframes) || length(keyframes) < 2L) {
     cli::cli_abort("{.arg keyframes} must be a list of at least 2 scenes.")
@@ -69,9 +79,15 @@ vl_render_animation <- function(keyframes, seg, frac,
   # Frame duration = 1 / fps seconds, passed as an exact numerator/denominator so
   # the encoders can round to their own time base (APNG: fraction of a second;
   # GIF: centiseconds). `seg` is 1-based here, 0-based across the FFI.
+  gif_speed <- as.integer(gif_speed[[1L]])
+  if (is.na(gif_speed) || gif_speed < 1L || gif_speed > 30L) {
+    cli::cli_abort("{.arg gif_speed} must be an integer in 1:30 (1 = best quality).")
+  }
+
   warns <- render_animation(
     backends, seg - 1L, frac, format, path,
-    delay_num = 1L, delay_den = as.integer(round(fps))
+    delay_num = 1L, delay_den = as.integer(round(fps)),
+    gif_speed = gif_speed, gif_dither = isTRUE(gif_dither)
   )
   .emit_degrade_warnings(warns)
   invisible(path)
