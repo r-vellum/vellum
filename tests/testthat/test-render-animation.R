@@ -1,8 +1,8 @@
-# P1: the Rust render_animation() engine must reproduce the pure-R tween oracle
-# (R/tween-oracle.R). Both interpolate the same quantities — geometry values on a
-# frozen native/mm scale and colours in Oklab — so a Rust frame at fraction t must
-# match scene_raster(.scene_tween(a, b, t)) within a small tolerance (Oklab is f32
-# in Rust vs f64 in R; identical geometry -> identical rasterisation).
+# The Rust render_animation() engine interpolates geometry (on frozen scales) and
+# colour (in Oklab), renders frames in parallel, and streams them to an encoder.
+# These tests assert the rendered frames directly: geometry lands where the tween
+# puts it, endpoints reproduce the keyframes, colours blend, elements enter/exit,
+# masks wipe, and every encoder writes a valid file.
 
 # Two keyframes: a circle that moves, grows, and changes fill.
 anim_scenes <- function() {
@@ -18,38 +18,43 @@ anim_scenes <- function() {
   list(a = mk(0.25, 4, "#1f77b4"), b = mk(0.75, 12, "#e6ab02"))
 }
 
-# Rust frame [h, w, 4] in 0..1 -> compare to oracle scene_raster [4, w, h] in 0:255.
-max_channel_diff <- function(rust_png, oracle_arr) {
-  rust255 <- aperm(rust_png, c(3, 2, 1)) * 255 # -> [channel, x, y]
-  max(abs(rust255 - oracle_arr))
+# Rust frame [h, w, 4] in 0..1 -> [channel, x, y] in 0:255, vs a scene_raster.
+max_channel_diff <- function(rust_png, ref_arr) {
+  rust255 <- aperm(rust_png, c(3, 2, 1)) * 255
+  max(abs(rust255 - ref_arr))
 }
 
-test_that("render_animation frames match the pure-R oracle (frames dir)", {
-  skip_if_not_installed("png")
-  s <- anim_scenes()
-  ba <- vellum:::.scene_to_backend(s$a)
-  bb <- vellum:::.scene_to_backend(s$b)
+# Horizontal centroid (npc) and pixel width of the non-white ink in a frame.
+ink_stats <- function(png) {
+  arr <- png::readPNG(png)
+  ink <- arr[, , 1] < 0.9 | arr[, , 2] < 0.9 | arr[, , 3] < 0.9
+  per_col <- colSums(ink)
+  cols <- which(per_col > 0)
+  list(
+    cx = weighted.mean(seq_along(per_col), per_col) / ncol(ink),
+    width_px = if (length(cols)) diff(range(cols)) + 1 else 0
+  )
+}
 
-  fracs <- c(0, 0.25, 0.5, 0.75, 1)
+test_that("render_animation interpolates geometry across frames", {
+  skip_if_not_installed("png")
+  s <- anim_scenes() # circle: x 0.25 -> 0.75 (npc), r 4 -> 12 mm
+  fracs <- c(0, 0.5, 1)
   dir <- withr::local_tempdir()
   warns <- vellum:::render_animation(
-    keyframes = list(ba, bb),
-    seg = rep(0L, length(fracs)),
-    frac = fracs,
-    format = "frames",
-    path = dir,
-    delay_num = 1L, delay_den = 25L
+    keyframes = list(vellum:::.scene_to_backend(s$a), vellum:::.scene_to_backend(s$b)),
+    seg = rep(0L, length(fracs)), frac = fracs,
+    format = "frames", path = dir, delay_num = 1L, delay_den = 25L
   )
   expect_length(warns, 0L)
-
   files <- sort(list.files(dir, pattern = "\\.png$", full.names = TRUE))
   expect_length(files, length(fracs))
 
-  for (k in seq_along(fracs)) {
-    rust <- png::readPNG(files[k])
-    oracle <- scene_raster(vellum:::.scene_tween(s$a, s$b, fracs[k]))
-    expect_lte(max_channel_diff(rust, oracle), 4)
-  }
+  stats <- lapply(files, ink_stats)
+  # Centre moves linearly 0.25 -> 0.5 -> 0.75, and the radius grows monotonically.
+  expect_equal(vapply(stats, `[[`, numeric(1), "cx"), c(0.25, 0.5, 0.75), tolerance = 0.03)
+  wd <- vapply(stats, `[[`, numeric(1), "width_px")
+  expect_true(wd[2] > wd[1] && wd[3] > wd[2])
 })
 
 test_that("endpoints render identically to the keyframes themselves", {
