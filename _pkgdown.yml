@@ -103,6 +103,7 @@ reference:
   - scene_raster
   - scene_svg
   - as_vellum_scene
+  - vl_render_animation
 
 - title: Graphical objects (grobs)
   desc: >

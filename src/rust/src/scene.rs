@@ -23,6 +23,11 @@ use crate::render::{
 use crate::color::{opt_color, Gpar, GparAcc, Lty, Paint, PartialGpar, Rgba};
 use crate::cache::TwoGenCache;
 
+// Non-reactive keyframe animation: interpolate between compiled scenes and render
+// the tweened frames in parallel. A child module, so it can reach this module's
+// private `Scene`/`Node` internals directly (see scene/tween.rs).
+mod tween;
+
 // --- repaint-boundary (FW4c) sub-raster cache -------------------------------
 // Persistent (thread-local, process-lifetime) memo of a `cache = TRUE`
 // viewport's rasterised subtree, keyed on the subtree content-identity token
@@ -3768,4 +3773,5 @@ fn px_dim(v: f64) -> u32 {
 extendr_module! {
     mod scene;
     impl Scene;
+    use tween;
 }

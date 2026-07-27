@@ -25,7 +25,8 @@ Suggests:
     png,
     base64enc,
     rmarkdown,
-    xml2
+    xml2,
+    magick
 VignetteBuilder: knitr
 Config/testthat/edition: 3
 Imports:
@@ -35,7 +36,8 @@ Imports:
     S7,
     textshaping,
     vctrs
-Collate: 
+Collate:
+    'animate.R'
     'gpar.R'
     'viewport.R'
     'grob.R'

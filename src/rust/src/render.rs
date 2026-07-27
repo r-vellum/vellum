@@ -8,6 +8,7 @@
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::rc::Rc;
+use std::sync::Arc;
 
 use tiny_skia::{FilterQuality, FillRule, Mask, Paint, Path, PathBuilder, Pixmap, Stroke, StrokeDash, Transform};
 
@@ -65,7 +66,7 @@ pub enum ResolvedPaint {
     /// A tiled image: `tile` is straight RGBA (`tw` x `th`, top-left); it fills a
     /// `w` x `h` (px) cell centred at `(x, y)` and repeats per `extend`. `opacity`
     /// is the folded gpar alpha (applied without touching the shared tile).
-    Pattern { tile: Rc<Vec<u8>>, tw: u32, th: u32, x: f64, y: f64, w: f64, h: f64, extend: Extend, opacity: f32 },
+    Pattern { tile: Arc<Vec<u8>>, tw: u32, th: u32, x: f64, y: f64, w: f64, h: f64, extend: Extend, opacity: f32 },
 }
 
 /// One clip region contributing to a clip chain, in viewport-local pixels placed
@@ -1191,7 +1192,7 @@ impl SvgBackend {
                 // reflect/pad extend modes degrade to repeat here.) Dedup by the
                 // tile's `Rc` identity + geometry so we don't re-encode the PNG.
                 let (px, py) = (x - w / 2.0, y - h / 2.0);
-                let key = format!("P|{:p}|{px}|{py}|{w}|{h}", Rc::as_ptr(tile));
+                let key = format!("P|{:p}|{px}|{py}|{w}|{h}", Arc::as_ptr(tile));
                 let id = match self.def_ids.get(&key) {
                     Some(id) => id.clone(),
                     None => {
