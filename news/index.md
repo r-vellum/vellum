@@ -2,6 +2,25 @@
 
 ## vellum (development version)
 
+- **[`edit_node()`](https://r-vellum.github.io/vellum/reference/node_names.md)
+  is ~40x faster on large scenes.** An edit rebuilt the nodes on the
+  path with `node@children[[i]] <- ...` and then wrote the new tree back
+  with `S7::set_props(scene, root =)`. Both write into an *existing* S7
+  object, which makes R duplicate it first, and duplicating it
+  deep-copies the whole children list hanging off its attributes — so a
+  single edit copied every sibling grob, making it O(scene) instead of
+  O(depth). Both now construct a fresh node/scene around the new
+  children list, which just stores the pointer. `.find_path()` also
+  reads `name`/`children` as attributes rather than through
+  `S7_inherits()` + `prop_names()` + `@`, cutting the search itself by
+  ~10x. On a scene of 20,000 named sibling grobs: 597 ms -\> 14 ms per
+  edit (grid’s [`editGrob()`](https://rdrr.io/r/grid/grid.edit.html) is
+  430 ms on the equivalent `gTree`). Scenes built from batched marks
+  (one grob carrying many elements, which is what `vellumplot` emits)
+  were already ~0.3 ms and are unchanged. No behaviour change: the
+  derived tree, its `nid` re-stamping, the repaint-boundary cache hits,
+  and the rendered bytes are all identical.
+
 - **[`vl_render_animation()`](https://r-vellum.github.io/vellum/reference/vl_render_animation.md)
   — non-reactive keyframe animation.** Interpolate between a set of
   compiled keyframe scenes and encode the in-between frames to a looping
