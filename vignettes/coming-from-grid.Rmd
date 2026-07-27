@@ -96,23 +96,30 @@ knows its extent when you build it. You measure with `vl_strwidth()` or size a
 unit by a grob's extent with `grobwidth()` / `grobheight()` immediately, without
 an open device.
 
-### Units resolve eagerly, and mixed-unit arithmetic is restricted
+### Units are records, not expression trees
 
-Because units resolve eagerly to a flat representation, vellum will *not* defer
-`vl_unit(1, "npc") - vl_unit(2, "mm")` the way grid does. Same-space arithmetic and
-absolute-plus-absolute both work (`vl_unit(10, "mm") + vl_unit(1, "in")` gives
-`35.4mm`), but mixing a relative and an absolute unit in one expression is
-reported rather than guessed.
+A grid unit defers its arithmetic: `unit(1, "npc") - unit(2, "mm")` is stored as
+`sum(1npc, -2mm)` and evaluated when a device and viewport exist. A vellum unit is
+a flat record — a value, a base code, and an absolute millimetre offset — so
+arithmetic reduces at construction wherever it can.
 
 ```{r}
 #| label: unit-arith
-vl_unit(10, "mm") + vl_unit(1, "in") # absolute + absolute -> mm
-vl_unit(1:3, "cm") * 2            # scaling is fine
+vl_unit(10, "mm") + vl_unit(1, "in")     # absolute + absolute -> mm
+vl_unit(1, "native") + vl_unit(2, "mm")  # a compound unit: base + offset
+vl_unit(1:3, "cm") * 2                   # scaling is fine
 ```
 
-If you have grid code that offsets a relative position by an absolute amount,
-compose it at the viewport or native level instead of in a single `unit`
-expression. This is the change most likely to surface when porting grid code.
+The third form is the one worth knowing. A position base plus an absolute is kept
+as a *compound* unit that resolves as "the data (or npc) position, displaced by
+exactly this many millimetres" at any scale, aspect, or dpi — which is the case
+most grid code that mixes units actually wants.
+
+The one thing grid expresses and vellum does not is a mix of two *different*
+position bases (`"npc"` plus `"native"`), because that cannot reduce to a single
+record without a device. It errors, with a message naming the legal forms. Put the
+normalised part in the viewport and the data part in the coordinate, or pre-resolve
+to absolute units.
 
 ### The tree is a value, and it can report geometry
 

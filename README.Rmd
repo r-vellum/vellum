@@ -20,10 +20,17 @@ knitr::opts_chunk$set(
 [![R-CMD-check](https://github.com/r-vellum/vellum/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/r-vellum/vellum/actions/workflows/R-CMD-check.yaml)
 <!-- badges: end -->
 
-**vellum** is a low-level graphics framework for R, in the spirit of **grid**,
-with a **Rust** backend. You describe a scene with a small, declarative R API;
-the scene graph, unit/layout engine, and rendering all run in Rust; and the same
-scene renders to **PNG, SVG, or PDF**.
+**vellum** is a low-level graphics framework for R, in the spirit of **grid**.
+You describe a scene with a small declarative API, and because vellum measures
+text and solves layout itself rather than asking a device, the finished scene can
+**tell you where it put everything**: one row per drawn element, with its data
+key and its resolved device-pixel box (`scene_model()`), plus picking by point
+(`hit_test()`). Layout is solved once, so the same scene renders to **PNG, SVG,
+or PDF** with the same geometry rather than three devices each re-solving it.
+
+Owning the measurement and rendering stack is what that requires, which is why
+the engine is written in **Rust** (and why installing from source needs
+`cargo`).
 
 It is the *foundation layer* a grammar of graphics builds on, the way grid
 underlies ggplot2. It is not a plotting package itself; the
@@ -51,36 +58,47 @@ which picks the backend from the file extension.
 
 ## What sets it apart
 
-- **Rust backend, deterministic output.** Rendering runs in Rust
-  ([tiny-skia](https://github.com/linebender/tiny-skia) for raster,
-  [krilla](https://github.com/LaurenzV/krilla) for PDF) and is byte-stable, so
-  output is reproducible and snapshot-testable.
-- **One scene, three backends.** The *same* scene renders to PNG, SVG, and PDF
-  with consistent geometry, via `render(scene, "plot.svg")` or
-  `render(scene, "plot.pdf")`.
-- **A scene you can question, not just draw.** Named, **editable** nodes
-  (`node_names()` / `get_node()` / `edit_node()`) work much as `grid.ls()` /
-  `getGrob()` / `editGrob()` do, on a value rather than on device state. What grid
-  has no counterpart for is reading geometry back: **hit-testing** (`hit_test()`
-  picks the topmost grob under a point, via a pick-buffer built from the same
-  code that drew the scene) and `scene_model()` (one row per drawn element, with
-  its data key and resolved device-pixel bounding box).
+- **The scene reports its own geometry.** `scene_model()` returns one row per
+  drawn element — its data key, mark kind, enclosing panel, and resolved
+  device-pixel box — plus each panel's pixel rectangle and native ranges.
+  `hit_test()` answers the inverse question, picking the topmost node under a
+  point through a pick-buffer compiled by the same code that drew the scene, so it
+  cannot disagree with the picture. This is the part with no counterpart in grid,
+  and the seam that tooltips, brushing, accessibility, and layout debugging are all
+  built on.
+- **Layout is solved once, not once per device.** Because text is measured in
+  process, layout does not need an open device, and the *same* solved scene is
+  walked for each backend: `render(scene, "plot.png" | "plot.svg" | "plot.pdf")`
+  agree on geometry rather than each re-solving it against their own font metrics.
+  Raster and PDF output are byte-stable, so figures are reproducible and
+  snapshot-testable.
+- **Named, editable nodes.** `node_names()` / `get_node()` / `edit_node()` work
+  much as `grid.ls()` / `getGrob()` / `editGrob()` do — the difference is that
+  the tree is a value you hold rather than device state you recover, so an edit
+  returns a new scene and nothing has to be undrawn.
+- **Built-in big-data aggregation.** `datashade()` bins millions of points into a
+  density raster in one pass, so cost scales with output pixels rather than row
+  count, with no overplotting and no giant vector files.
+- **Text that matches the rest of R.** Shaping runs through
+  [textshaping](https://github.com/r-lib/textshaping) on
+  [systemfonts](https://github.com/r-lib/systemfonts) — the stack ragg and
+  svglite use — with per-glyph fallback, justification, rotation, and
+  Markdown-style rich labels (`md()`: bold/italic, super/subscript, coloured
+  spans). `vl_strwidth()` measures without opening a device.
 - **A modern paint model across all backends.** Linear & radial **gradients**,
   tiling **patterns**, alpha/luminance **masks**, and group opacity
   (`vl_viewport(alpha=)`).
-- **Built-in big-data aggregation.** `datashade()` bins millions of points into a
-  density raster in one pass, with no overplotting and no giant files.
-- **Device-independent, faithful text.** Shaping runs through
-  [textshaping](https://github.com/r-lib/textshaping) (which sits on
-  [systemfonts](https://github.com/r-lib/systemfonts)) — the same stack as
-  ragg/svglite — with per-glyph fallback, justification, rotation, and
-  Markdown-style rich labels (`md()`: bold/italic, super/subscript, coloured spans).
 - **Vectorised primitives and a flex layout engine.** Batched
   rects/circles/points/segments/text, nested viewports with rotation and
   arbitrary-path clipping, and a row/column layout solver with `"null"` (flexible)
   tracks.
 - **Grid interop.** `as_vellum()` / `render_grid()` render an existing grid grob
   tree, including **ggplot2** and **lattice**, through the vellum backend.
+
+The engine ([tiny-skia](https://github.com/linebender/tiny-skia) for raster, an
+SVG writer, [krilla](https://github.com/LaurenzV/krilla) for PDF) is written in
+Rust because owning the measuring and rasterising stack is what the first two
+points require — not as a performance claim.
 
 ## Installation
 
@@ -179,8 +197,9 @@ render(s, "out.pdf") # vector   (krilla)
 ## Relationship to grid and ggplot2
 
 vellum sits at grid's level of the stack: units, viewports, grobs, layout, and
-rendering, but with a Rust scene graph, multi-backend output, hit-testing, and a
-modern paint model. It is **not** a grammar of graphics (no scales, stats, geoms,
+rendering. What it adds is device-independent measurement (so layout is solved
+once, not once per output format), geometry read-back (`scene_model()`,
+`hit_test()`), a modern paint model, and built-in aggregation for large data. It is **not** a grammar of graphics (no scales, stats, geoms,
 or facets) — that is [vellumplot](https://github.com/r-vellum/vellumplot), which
 compiles a plot spec into a vellum scene. To render *existing* grid / ggplot2 /
 lattice output through the vellum backend, use `as_vellum()` / `render_grid()`.

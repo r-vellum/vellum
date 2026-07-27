@@ -4,11 +4,11 @@
 \name{vellum-package}
 \alias{vellum}
 \alias{vellum-package}
-\title{vellum: A Low-Level Graphics Framework with a Rust Backend}
+\title{vellum: Low-Level Graphics with Device-Independent Layout and Queryable Scenes}
 \description{
 \if{html}{\figure{logo.png}{options: style='float: right' alt='logo' width='120'}}
 
-A grid-like low-level graphics system for R whose scene graph, unit/layout engine, and rendering run in a Rust backend.
+A grid-like low-level graphics system for R. Text metrics and layout are resolved without a graphics device, so one solved scene renders to PNG, SVG, or PDF with the same geometry, and the finished scene can report that geometry back element by element (a data key and a resolved device-pixel box) or be queried by point. The scene graph, unit/layout engine, and rendering run in a Rust backend.
 }
 \seealso{
 Useful links:

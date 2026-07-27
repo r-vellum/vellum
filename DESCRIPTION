@@ -1,10 +1,14 @@
 Package: vellum
-Title: A Low-Level Graphics Framework with a Rust Backend
+Title: Low-Level Graphics with Device-Independent Layout and Queryable Scenes
 Version: 0.5.1.9000
 Authors@R: 
     person("David", "Schoch", , "david.schoch@cynkra.com", role = c("aut", "cre"))
-Description: A grid-like low-level graphics system for R whose scene
-    graph, unit/layout engine, and rendering run in a Rust backend.
+Description: A grid-like low-level graphics system for R. Text metrics and
+    layout are resolved without a graphics device, so one solved scene renders
+    to PNG, SVG, or PDF with the same geometry, and the finished scene can
+    report that geometry back element by element (a data key and a resolved
+    device-pixel box) or be queried by point. The scene graph, unit/layout
+    engine, and rendering run in a Rust backend.
 License: MIT + file LICENSE
 URL: https://github.com/r-vellum/vellum,
     https://r-vellum.github.io/vellum/,

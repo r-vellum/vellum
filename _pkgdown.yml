@@ -26,12 +26,14 @@ template:
       card: summary_large_image
 
 home:
-  title: A low-level graphics framework with a Rust backend
+  title: A low-level graphics framework whose scenes report their geometry
   description: >
-    vellum is the parchment of the vellum ecosystem: a grid-like scene
-    graph, unit/layout engine, and renderer that runs in Rust and draws
-    the same scene to PNG, SVG, or PDF. It is the foundation a grammar of
-    graphics builds on, not a plotting package itself.
+    vellum is the parchment of the vellum ecosystem: a grid-like scene graph,
+    unit/layout engine, and renderer. It measures text and solves layout without
+    a device, so one solved scene draws to PNG, SVG, or PDF with the same
+    geometry — and can report that geometry back, element by element, for a host
+    to build on. It is the foundation a grammar of graphics builds on, not a
+    plotting package itself.
   sidebar:
     structure: [ecosystem, links, license, community, citation, authors, dev]
     components:
@@ -152,10 +154,10 @@ reference:
   - spread
   - dynspread
 
-- title: Inspecting & editing scenes
+- title: Querying & editing scenes
   desc: >
-    Because the scene graph is retained, it can be queried, edited by
-    node name, hit-tested, and serialized to a per-element model.
+    A solved scene reports its geometry: a per-element model with data keys and
+    device-pixel boxes, picking by point, and editing by node name.
   contents:
   - node_names
   - hit_test
