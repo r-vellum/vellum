@@ -26,7 +26,7 @@ use extendr_api::prelude::*;
 use rayon::prelude::*;
 use tiny_skia::Pixmap;
 
-use super::{Node, Scene};
+use super::{MaskDef, Node, Scene};
 use crate::color::{Inh, Paint, PartialGpar, Rgba};
 use crate::oklab::{oklab_to_rgba, rgba_to_oklab};
 use crate::render::RasterBackend;
@@ -631,6 +631,31 @@ fn ee_rects(a: &Node, b: &Node, t: f64) -> Vec<Node> {
 
 // --- per-frame scene assembly + render --------------------------------------
 
+/// Tween the viewport masks between keyframes. Masks are the clip/reveal
+/// geometry attached to a viewport; interpolating them lets a `transition_reveal`
+/// grow a clip rectangle so the plot wipes into view. Structurally parallel masks
+/// (same count, same node counts) tween element-wise; anything else keeps `a`'s.
+fn tween_masks(a: &[MaskDef], b: &[MaskDef], t: f64) -> Vec<MaskDef> {
+    if a.len() != b.len() {
+        return a.to_vec();
+    }
+    a.iter()
+        .zip(b.iter())
+        .map(|(ma, mb)| {
+            let nodes = if ma.nodes.len() == mb.nodes.len() {
+                ma.nodes
+                    .iter()
+                    .zip(mb.nodes.iter())
+                    .map(|((vp, na), (_, nb))| (*vp, lerp_node(na, nb, t)))
+                    .collect()
+            } else {
+                ma.nodes.clone()
+            };
+            MaskDef { kind: ma.kind.clone(), nodes }
+        })
+        .collect()
+}
+
 /// Build the tweened scene for one frame: clone keyframe `a`'s structure
 /// (viewports, masks, meta — identical across keyframes under frozen scales) and
 /// replace its nodes with the interpolated ones. A different node count between
@@ -655,7 +680,7 @@ fn tween_scene(a: &Scene, b: &Scene, t: f64) -> Scene {
         viewports: a.viewports.clone(),
         current: a.current,
         nodes,
-        masks: a.masks.clone(),
+        masks: tween_masks(&a.masks, &b.masks, t),
         mask_target: a.mask_target.clone(),
         picks: a.picks.clone(),
         cur_pick: a.cur_pick,

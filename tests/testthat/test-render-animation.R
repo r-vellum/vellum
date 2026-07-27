@@ -148,6 +148,40 @@ test_that("keyed elements enter and exit (per-element fade)", {
   expect_lt(red_at(files[3], 0.5), 90)
 })
 
+test_that("viewport masks tween (a reveal wipe)", {
+  skip_if_not_installed("png")
+  # A full blue rect masked to the npc x-range [0, f]; the mask rect grows with f.
+  mk <- function(f) {
+    vl_scene(3, 2, dpi = 96, bg = "white") |>
+      push(vl_viewport(
+        mask = as_mask(
+          rect_grob(
+            x = vl_unit(f / 2, "npc"), width = vl_unit(f, "npc"),
+            gp = vl_gpar(fill = "white", col = NA)
+          ),
+          type = "alpha"
+        )
+      )) |>
+      draw(rect_grob(gp = vl_gpar(fill = "steelblue", col = NA))) |>
+      pop()
+  }
+  dir <- withr::local_tempdir()
+  vellum:::render_animation(
+    list(vellum:::.scene_to_backend(mk(0)), vellum:::.scene_to_backend(mk(1))),
+    seg = c(0L, 0L, 0L), frac = c(0, 0.5, 1),
+    format = "frames", path = dir, delay_num = 1L, delay_den = 10L
+  )
+  files <- sort(list.files(dir, pattern = "\\.png$", full.names = TRUE))
+  blue <- vapply(files, function(f) {
+    arr <- png::readPNG(f)
+    sum(arr[, , 3] > arr[, , 1]) # bluish pixels
+  }, numeric(1))
+  # The unmasked (revealed) blue region grows monotonically with the tweened mask.
+  expect_equal(blue[[1]], 0)
+  expect_gt(blue[[2]], 0)
+  expect_gt(blue[[3]], blue[[2]])
+})
+
 test_that("render_animation validates its inputs", {
   s <- anim_scenes()
   ba <- vellum:::.scene_to_backend(s$a)
