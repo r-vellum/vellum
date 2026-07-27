@@ -1,5 +1,15 @@
 # vellum (development version)
 
+* **Converting between the build tree and the immutable tree is ~4-10x faster.**
+  `.bnode_to_gtree()` (which runs the first time a built scene is rendered,
+  edited, or queried) read the child dict with one `get()` per child; it now uses
+  a single `mget()`. `.gtree_to_bnode()` (which runs when a materialised scene is
+  drawn on again, or when a branched scene forks) did an `assign()` per child and
+  an `S7_inherits()` type test per child; it now builds the dict with one
+  `list2env()` and tests the type by attribute. Neither changes the resulting
+  tree. On a scene of 20,000 sibling grobs: materialising 34 ms -> 9 ms, drawing
+  onto an edited scene 106 ms -> 11 ms, branching a scene 144 ms -> 21 ms.
+
 * **`edit_node()` is ~40x faster on large scenes.** An edit rebuilt the nodes on
   the path with `node@children[[i]] <- ...` and then wrote the new tree back with
   `S7::set_props(scene, root =)`. Both write into an *existing* S7 object, which

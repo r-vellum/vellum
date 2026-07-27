@@ -116,22 +116,36 @@ vellum_scene <- S7::new_class(
   on_path <- !is.na(depth)
   cap <- if (on_path) ocount[[depth]] else node$n
   nextnode <- if (on_path && depth < length(open)) open[[depth + 1L]] else NULL
-  children <- lapply(seq_len(cap), function(i) {
-    ch <- .bnode_kid(node, i)
-    if (!.is_bnode(ch)) {
-      return(ch)
+  # One `mget()` beats `cap` R-level `get()`s (~35ms vs ~8ms at 20k children).
+  children <- if (cap) mget(as.character(seq_len(cap)), envir = node$kids) else list()
+  names(children) <- NULL
+  for (i in seq_len(cap)) {
+    ch <- children[[i]]
+    if (.is_bnode(ch)) {
+      nd <- if (!is.null(nextnode) && identical(ch, nextnode)) depth + 1L else NA_integer_
+      children[[i]] <- .bnode_to_gtree(ch, open, ocount, nd)
     }
-    nd <- if (!is.null(nextnode) && identical(ch, nextnode)) depth + 1L else NA_integer_
-    .bnode_to_gtree(ch, open, ocount, nd)
-  })
+  }
   # Stamp a per-subtree identity token (FW4c). Memoised with the tree by
   # `.materialize_cached`, so it is stable across renders at a fixed scene cid.
   gtree(name = node$vp@name, vp = node$vp, children = children, nid = .new_scene_id())
 }
 # Reopen an immutable gtree into a build tree (for drawing after edit/render).
+# One `list2env()` beats a `.bnode_add()` per child, and the recursion test is an
+# attribute read rather than `S7_inherits()` (~3us/child, which was most of the
+# cost): ~110ms -> ~12ms at 20k children. Only a gtree carries `children`.
 .gtree_to_bnode <- function(g) {
-  node <- .bnode(vp = g@vp)
-  for (ch in g@children) .bnode_add(node, if (S7::S7_inherits(ch, gtree)) .gtree_to_bnode(ch) else ch)
+  node <- .bnode(vp = attr(g, "vp", exact = TRUE))
+  ch <- attr(g, "children", exact = TRUE)
+  n <- length(ch)
+  if (n) {
+    for (i in seq_len(n)) {
+      if (!is.null(attr(ch[[i]], "children", exact = TRUE))) ch[[i]] <- .gtree_to_bnode(ch[[i]])
+    }
+    names(ch) <- as.character(seq_len(n))
+    node$kids <- list2env(ch, envir = new.env(parent = emptyenv(), hash = TRUE, size = n))
+    node$n <- n
+  }
   node
 }
 
