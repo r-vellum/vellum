@@ -25,7 +25,8 @@ Suggests:
     png,
     base64enc,
     rmarkdown,
-    xml2
+    xml2,
+    magick
 VignetteBuilder: knitr
 Config/testthat/edition: 3
 Imports:
@@ -49,6 +50,7 @@ Collate:
     'spread.R'
     'style.R'
     'text.R'
+    'tween-oracle.R'
     'unit.R'
     'vellum-package.R'
     'zzz.R'
