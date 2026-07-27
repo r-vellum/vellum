@@ -111,6 +111,43 @@ test_that("render_animation writes a valid looping GIF", {
   expect_equal(info$width[1], vellum:::.scene_to_backend(s$a)$dim()[1])
 })
 
+test_that("keyed elements enter and exit (per-element fade)", {
+  skip_if_not_installed("png")
+  # One point batch, keyed. A has {a, b}; B has {b, c}: `a` exits, `c` enters,
+  # `b` is matched (stays put). All steelblue on white (red channel 70 opaque).
+  mk <- function(keys, xs) {
+    vl_scene(3, 2, dpi = 96, bg = "white") |>
+      push(vl_viewport(xscale = c(0, 1), yscale = c(0, 1), name = "p")) |>
+      draw(points_grob(
+        x = xs, y = rep(0.5, length(xs)), size = vl_unit(6, "mm"),
+        gp = vl_gpar(fill = "steelblue", col = NA), key = keys
+      )) |>
+      pop()
+  }
+  a <- mk(c("a", "b"), c(0.2, 0.5))
+  b <- mk(c("b", "c"), c(0.5, 0.8))
+  dir <- withr::local_tempdir()
+  vellum:::render_animation(
+    list(vellum:::.scene_to_backend(a), vellum:::.scene_to_backend(b)),
+    seg = c(0L, 0L, 0L), frac = c(0, 0.5, 1),
+    format = "frames", path = dir, delay_num = 1L, delay_den = 10L
+  )
+  files <- sort(list.files(dir, pattern = "\\.png$", full.names = TRUE))
+  red_at <- function(png, xnpc) {
+    arr <- png::readPNG(png)
+    round(arr[round(0.5 * dim(arr)[1]), round(xnpc * dim(arr)[2]), 1] * 255)
+  }
+  # Exiting point (x = 0.2): opaque -> half -> gone (white).
+  expect_lt(red_at(files[1], 0.2), 90)
+  expect_gt(red_at(files[3], 0.2), 240)
+  # Entering point (x = 0.8): gone -> half -> opaque.
+  expect_gt(red_at(files[1], 0.8), 240)
+  expect_lt(red_at(files[3], 0.8), 90)
+  # Matched point (x = 0.5): present throughout.
+  expect_lt(red_at(files[1], 0.5), 90)
+  expect_lt(red_at(files[3], 0.5), 90)
+})
+
 test_that("render_animation validates its inputs", {
   s <- anim_scenes()
   ba <- vellum:::.scene_to_backend(s$a)

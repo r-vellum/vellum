@@ -17,6 +17,7 @@
 //! `oklab.rs`); bounded gpar numerics lerp; discrete fields snap at `t >= 0.5`.
 
 use std::cell::RefCell;
+use std::collections::HashMap;
 use std::fs::File;
 use std::io::BufWriter;
 use std::path::Path;
@@ -391,6 +392,243 @@ fn snap_node_gp<'a>(b: &'a Node, fallback: &'a PartialGpar) -> &'a PartialGpar {
     b.gp().unwrap_or(fallback)
 }
 
+// --- enter / exit (per-element, keyed) --------------------------------------
+
+/// Multiply a gpar's alpha by `factor` (an inherited alpha is treated as 1.0),
+/// for fading an entering (0 -> target) or exiting (target -> 0) element.
+fn fade_gp(gp: &PartialGpar, factor: f64) -> PartialGpar {
+    let base = match gp.alpha {
+        Inh::Set(a) => a,
+        Inh::Inherit => 1.0,
+    };
+    let mut g = gp.clone();
+    g.alpha = Inh::Set(base * factor);
+    g
+}
+
+/// A per-element join between two keyed batches: `matched` are `(a_index,
+/// b_index)` pairs present in both (in A's order), `a_only` exit, `b_only` enter.
+struct KeyMatch {
+    matched: Vec<(usize, usize)>,
+    a_only: Vec<usize>,
+    b_only: Vec<usize>,
+}
+
+/// Join two element-key vectors by value. Returns `None` (caller falls back to a
+/// plain element-wise tween) when either side is unkeyed — so the stable-element
+/// path is unchanged — or when the two are already identical (no enter/exit, no
+/// reorder), so the common case skips the map entirely. A blank key never matches.
+fn match_keys(ka: &[String], kb: &[String]) -> Option<KeyMatch> {
+    if ka.is_empty() || kb.is_empty() || ka == kb {
+        return None;
+    }
+    let mut bmap: HashMap<&str, usize> = HashMap::with_capacity(kb.len());
+    for (j, k) in kb.iter().enumerate() {
+        if !k.is_empty() {
+            bmap.entry(k.as_str()).or_insert(j);
+        }
+    }
+    let mut matched = Vec::new();
+    let mut a_only = Vec::new();
+    let mut used = vec![false; kb.len()];
+    for (i, k) in ka.iter().enumerate() {
+        match (!k.is_empty()).then(|| bmap.get(k.as_str())).flatten() {
+            Some(&j) if !used[j] => {
+                matched.push((i, j));
+                used[j] = true;
+            }
+            _ => a_only.push(i),
+        }
+    }
+    let b_only = (0..kb.len()).filter(|&j| !used[j]).collect();
+    Some(KeyMatch { matched, a_only, b_only })
+}
+
+#[inline]
+fn gather<T: Clone>(v: &[T], idx: &[usize]) -> Vec<T> {
+    idx.iter().map(|&i| v[i].clone()).collect()
+}
+
+/// Tween one node pair, splitting a keyed batch into matched (tweened),
+/// exiting (faded out), and entering (faded in) sub-batches. Non-batched or
+/// unkeyed nodes fall through to the single-node tween.
+fn tween_node_multi(a: &Node, b: &Node, t: f64) -> Vec<Node> {
+    match (a, b) {
+        (Node::Markers { .. }, Node::Markers { .. }) => ee_markers(a, b, t),
+        (Node::Circles { .. }, Node::Circles { .. }) => ee_circles(a, b, t),
+        (Node::Rects { .. }, Node::Rects { .. }) => ee_rects(a, b, t),
+        _ => vec![lerp_node(a, b, t)],
+    }
+}
+
+fn ee_markers(a: &Node, b: &Node, t: f64) -> Vec<Node> {
+    let (
+        Node::Markers { x: xa, y: ya, size: sa, xu, yu, su, shape: sha, sketch, keys: ka, gp: gpa },
+        Node::Markers { x: xb, y: yb, size: sb, xu: xub, yu: yub, su: sub, shape: shb, keys: kb, gp: gpb, .. },
+    ) = (a, b)
+    else {
+        return vec![lerp_node(a, b, t)];
+    };
+    let Some(m) = match_keys(ka, kb) else { return vec![lerp_node(a, b, t)] };
+    let mut out = Vec::new();
+    if !m.matched.is_empty() {
+        let ia: Vec<usize> = m.matched.iter().map(|p| p.0).collect();
+        out.push(Node::Markers {
+            x: m.matched.iter().map(|(i, j)| lerp(xa[*i], xb[*j], t)).collect(),
+            y: m.matched.iter().map(|(i, j)| lerp(ya[*i], yb[*j], t)).collect(),
+            size: m.matched.iter().map(|(i, j)| lerp(sa[*i], sb[*j], t)).collect(),
+            xu: gather(xu, &ia),
+            yu: gather(yu, &ia),
+            su: gather(su, &ia),
+            shape: gather(sha, &ia),
+            sketch: sketch.clone(),
+            gp: lerp_gpar(gpa, gpb, t),
+            keys: gather(ka, &ia),
+        });
+    }
+    if !m.a_only.is_empty() {
+        out.push(Node::Markers {
+            x: gather(xa, &m.a_only),
+            y: gather(ya, &m.a_only),
+            size: gather(sa, &m.a_only),
+            xu: gather(xu, &m.a_only),
+            yu: gather(yu, &m.a_only),
+            su: gather(su, &m.a_only),
+            shape: gather(sha, &m.a_only),
+            sketch: sketch.clone(),
+            gp: fade_gp(gpa, 1.0 - t),
+            keys: gather(ka, &m.a_only),
+        });
+    }
+    if !m.b_only.is_empty() {
+        out.push(Node::Markers {
+            x: gather(xb, &m.b_only),
+            y: gather(yb, &m.b_only),
+            size: gather(sb, &m.b_only),
+            xu: gather(xub, &m.b_only),
+            yu: gather(yub, &m.b_only),
+            su: gather(sub, &m.b_only),
+            shape: gather(shb, &m.b_only),
+            sketch: sketch.clone(),
+            gp: fade_gp(gpb, t),
+            keys: gather(kb, &m.b_only),
+        });
+    }
+    out
+}
+
+fn ee_circles(a: &Node, b: &Node, t: f64) -> Vec<Node> {
+    let (
+        Node::Circles { x: xa, y: ya, r: ra, xu, yu, ru, sketch, keys: ka, gp: gpa },
+        Node::Circles { x: xb, y: yb, r: rb, xu: xub, yu: yub, ru: rub, keys: kb, gp: gpb, .. },
+    ) = (a, b)
+    else {
+        return vec![lerp_node(a, b, t)];
+    };
+    let Some(m) = match_keys(ka, kb) else { return vec![lerp_node(a, b, t)] };
+    let mut out = Vec::new();
+    if !m.matched.is_empty() {
+        let ia: Vec<usize> = m.matched.iter().map(|p| p.0).collect();
+        out.push(Node::Circles {
+            x: m.matched.iter().map(|(i, j)| lerp(xa[*i], xb[*j], t)).collect(),
+            y: m.matched.iter().map(|(i, j)| lerp(ya[*i], yb[*j], t)).collect(),
+            r: m.matched.iter().map(|(i, j)| lerp(ra[*i], rb[*j], t)).collect(),
+            xu: gather(xu, &ia),
+            yu: gather(yu, &ia),
+            ru: gather(ru, &ia),
+            sketch: sketch.clone(),
+            gp: lerp_gpar(gpa, gpb, t),
+            keys: gather(ka, &ia),
+        });
+    }
+    if !m.a_only.is_empty() {
+        out.push(Node::Circles {
+            x: gather(xa, &m.a_only),
+            y: gather(ya, &m.a_only),
+            r: gather(ra, &m.a_only),
+            xu: gather(xu, &m.a_only),
+            yu: gather(yu, &m.a_only),
+            ru: gather(ru, &m.a_only),
+            sketch: sketch.clone(),
+            gp: fade_gp(gpa, 1.0 - t),
+            keys: gather(ka, &m.a_only),
+        });
+    }
+    if !m.b_only.is_empty() {
+        out.push(Node::Circles {
+            x: gather(xb, &m.b_only),
+            y: gather(yb, &m.b_only),
+            r: gather(rb, &m.b_only),
+            xu: gather(xub, &m.b_only),
+            yu: gather(yub, &m.b_only),
+            ru: gather(rub, &m.b_only),
+            sketch: sketch.clone(),
+            gp: fade_gp(gpb, t),
+            keys: gather(kb, &m.b_only),
+        });
+    }
+    out
+}
+
+fn ee_rects(a: &Node, b: &Node, t: f64) -> Vec<Node> {
+    let (
+        Node::Rects { x: xa, y: ya, w: wa, h: ha, xu, yu, wu, hu, sketch, keys: ka, gp: gpa },
+        Node::Rects { x: xb, y: yb, w: wb, h: hb, xu: xub, yu: yub, wu: wub, hu: hub, keys: kb, gp: gpb, .. },
+    ) = (a, b)
+    else {
+        return vec![lerp_node(a, b, t)];
+    };
+    let Some(m) = match_keys(ka, kb) else { return vec![lerp_node(a, b, t)] };
+    let mut out = Vec::new();
+    if !m.matched.is_empty() {
+        let ia: Vec<usize> = m.matched.iter().map(|p| p.0).collect();
+        out.push(Node::Rects {
+            x: m.matched.iter().map(|(i, j)| lerp(xa[*i], xb[*j], t)).collect(),
+            y: m.matched.iter().map(|(i, j)| lerp(ya[*i], yb[*j], t)).collect(),
+            w: m.matched.iter().map(|(i, j)| lerp(wa[*i], wb[*j], t)).collect(),
+            h: m.matched.iter().map(|(i, j)| lerp(ha[*i], hb[*j], t)).collect(),
+            xu: gather(xu, &ia),
+            yu: gather(yu, &ia),
+            wu: gather(wu, &ia),
+            hu: gather(hu, &ia),
+            sketch: sketch.clone(),
+            gp: lerp_gpar(gpa, gpb, t),
+            keys: gather(ka, &ia),
+        });
+    }
+    if !m.a_only.is_empty() {
+        out.push(Node::Rects {
+            x: gather(xa, &m.a_only),
+            y: gather(ya, &m.a_only),
+            w: gather(wa, &m.a_only),
+            h: gather(ha, &m.a_only),
+            xu: gather(xu, &m.a_only),
+            yu: gather(yu, &m.a_only),
+            wu: gather(wu, &m.a_only),
+            hu: gather(hu, &m.a_only),
+            sketch: sketch.clone(),
+            gp: fade_gp(gpa, 1.0 - t),
+            keys: gather(ka, &m.a_only),
+        });
+    }
+    if !m.b_only.is_empty() {
+        out.push(Node::Rects {
+            x: gather(xb, &m.b_only),
+            y: gather(yb, &m.b_only),
+            w: gather(wb, &m.b_only),
+            h: gather(hb, &m.b_only),
+            xu: gather(xub, &m.b_only),
+            yu: gather(yub, &m.b_only),
+            wu: gather(wub, &m.b_only),
+            hu: gather(hub, &m.b_only),
+            sketch: sketch.clone(),
+            gp: fade_gp(gpb, t),
+            keys: gather(kb, &m.b_only),
+        });
+    }
+    out
+}
+
 // --- per-frame scene assembly + render --------------------------------------
 
 /// Build the tweened scene for one frame: clone keyframe `a`'s structure
@@ -402,7 +640,9 @@ fn tween_scene(a: &Scene, b: &Scene, t: f64) -> Scene {
         a.nodes
             .iter()
             .zip(b.nodes.iter())
-            .map(|((vp, na), (_, nb))| (*vp, lerp_node(na, nb, t)))
+            .flat_map(|((vp, na), (_, nb))| {
+                tween_node_multi(na, nb, t).into_iter().map(move |n| (*vp, n))
+            })
             .collect()
     } else {
         a.nodes.clone()
