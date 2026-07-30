@@ -19,7 +19,10 @@
   # Default options. `vellum.warn_on_degrade`: warn (once per render) when a
   # backend cannot fully honour the scene (e.g. a PDF pattern/mask it dropped).
   op <- options()
-  defaults <- list(vellum.warn_on_degrade = TRUE)
+  # `vellum.simplify`: Douglas-Peucker tolerance in device px for polylines and
+  # polygons. 0.1 px is well below one pixel, so a dropped vertex cannot change
+  # what is rasterised; 0 disables the pass entirely.
+  defaults <- list(vellum.warn_on_degrade = TRUE, vellum.simplify = 0.1)
   toset <- !(names(defaults) %in% names(op))
   if (any(toset)) options(defaults[toset])
   invisible()

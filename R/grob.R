@@ -939,3 +939,119 @@ grobheight <- function(grob, mult = 1) vl_unit(mult, "grobheight", data = grob)
   }
   n
 }
+
+#' Freeze a stroke into a fillable outline
+#'
+#' Converts the *stroke* of a line-like grob into a `path_grob` describing the
+#' region the stroke covers — the shape you would get by tracing round the drawn
+#' line. What was a one-pixel-wide path with a colour becomes an area with an
+#' interior, which is what you need in order to fill it with a gradient or a
+#' pattern, to send it to a cutting plotter or CNC tool, or to do geometry with
+#' it.
+#'
+#' The expansion uses the same stroker the rasterizer uses, so the outline is
+#' exactly the region that would have been inked, not a reimplementation that
+#' could drift from it.
+#'
+#' **The result is baked at one size.** A stroke width is a device quantity, so
+#' its outline only exists once a page size and resolution are chosen. Those are
+#' arguments here, and the returned coordinates are absolute (mm) — the outline
+#' will *not* rescale with the page the way the original stroke would. That is
+#' inherent: an outline is a shape, not a stroke.
+#'
+#' @param grob A [lines_grob()], [polygon_grob()], or [path_grob()]. Its
+#'   coordinates must be resolvable without a viewport: `npc`, an absolute unit,
+#'   or `native` (read against the root's default `0..1` scale, which is what a
+#'   bare numeric means).
+#' @param width,height Page size in inches to resolve the geometry against.
+#' @param dpi Resolution to resolve the stroke width against.
+#' @param gp Optional [vl_gpar()] overriding the grob's own for the stroke
+#'   parameters (`lwd`, `lineend`, `linejoin`, `linemitre`).
+#' @return A [path_grob()] in `mm` units, with `rule = "winding"`, whose fill is
+#'   the stroked region. Its `gp` starts from the source grob's stroke colour as
+#'   a fill, so drawing it looks like the original line.
+#' @seealso [path_grob()], [grob]
+#' @examples
+#' zig <- lines_grob(c(0.1, 0.35, 0.6, 0.9), c(0.2, 0.8, 0.2, 0.8),
+#'                   gp = vl_gpar(col = "steelblue", lwd = 12))
+#' outline <- stroke_to_path(zig, width = 3, height = 2)
+#' # Now fillable: a gradient across the ribbon the line traced.
+#' vl_scene(3, 2) |>
+#'   draw(S7::set_props(outline, gp = vl_gpar(
+#'     fill = linear_gradient(c("tomato", "gold")), col = "grey20", lwd = 0.5
+#'   )))
+#' @export
+stroke_to_path <- function(grob, width = 6, height = 4, dpi = 96, gp = NULL) {
+  ok <- S7::S7_inherits(grob, grob_lines) || S7::S7_inherits(grob, grob_polygon) ||
+    S7::S7_inherits(grob, grob_path)
+  if (!ok) {
+    cli::cli_abort(c(
+      "{.arg grob} must be a {.fn lines_grob}, {.fn polygon_grob} or {.fn path_grob}.",
+      i = "Only line-like grobs have a stroke to expand."
+    ))
+  }
+  style <- gp %||% grob@gp
+  closed <- !S7::S7_inherits(grob, grob_lines)
+
+  # Resolve the coordinates the way a render of this size would, so the outline
+  # matches what would actually have been drawn.
+  px_w <- width * dpi
+  px_h <- height * dpi
+  xs <- .stp_px(grob@x, px_w, dpi)
+  ys <- px_h - .stp_px(grob@y, px_h, dpi) # device y is top-down
+  nper <- if (S7::S7_inherits(grob, grob_path) && !is.null(grob@nper)) {
+    as.integer(grob@nper)
+  } else {
+    length(xs)
+  }
+  lwd_px <- (style@lwd %||% 1) * dpi / 96
+  v <- rs_stroke_to_path(
+    xs, ys, nper, closed, lwd_px,
+    .encode_code(style@lineend, .lineend_codes, "lineend") %||% 0L,
+    .encode_code(style@linejoin, .linejoin_codes, "linejoin") %||% 0L,
+    style@linemitre %||% 10
+  )
+  if (!length(v)) {
+    cli::cli_abort("The stroke expanded to nothing (a zero width, or no geometry).")
+  }
+  nsub <- as.integer(v[1])
+  lens <- as.integer(v[1 + seq_len(nsub)])
+  tot <- sum(lens)
+  off <- 1L + nsub
+  ox <- v[off + seq_len(tot)]
+  oy <- v[off + tot + seq_len(tot)]
+  # Back to absolute mm, y-up again.
+  path_grob(
+    x = vl_unit(ox / dpi * 25.4, "mm"),
+    y = vl_unit((px_h - oy) / dpi * 25.4, "mm"),
+    id = rep(seq_len(nsub), lens),
+    rule = "winding",
+    gp = vl_gpar(fill = style@col %||% "black", col = NA),
+    name = grob@name
+  )
+}
+
+# Resolve a unit vector to device px along one axis for `stroke_to_path()`.
+# Only the coordinate spaces meaningful outside a scene are accepted: `native`
+# needs an xscale/yscale that does not exist without a viewport.
+.stp_px <- function(u, extent_px, dpi) {
+  code <- vctrs::field(u, "unit")
+  val <- vctrs::field(u, "value")
+  off <- vctrs::field(u, "offset") # always mm
+  # `native` is resolved against the root viewport's default 0..1 scale, where it
+  # coincides with `npc` -- which is what a bare numeric in `lines_grob()` means.
+  # A grob destined for a viewport with a different scale must be resolved there
+  # first; there is no viewport here to ask.
+  rel <- unname(.unit_codes[c("npc", "native")])
+  abs_codes <- unname(.unit_codes[c("mm", "in", "pt")])
+  if (any(!(code %in% c(rel, abs_codes)))) {
+    cli::cli_abort(c(
+      "{.fn stroke_to_path} needs coordinates it can resolve without a viewport.",
+      x = "Found {.val null} units, which only a layout can size.",
+      i = "Use {.val npc}, {.val native}, or an absolute unit."
+    ))
+  }
+  mm_to_px <- dpi / 25.4
+  base <- ifelse(code %in% rel, val * extent_px, .abs_to_mm(val, code) * mm_to_px)
+  as.numeric(base) + off * mm_to_px
+}
