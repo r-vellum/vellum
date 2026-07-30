@@ -284,6 +284,61 @@ exactly the kind of control a grammar layer needs from its backend.</p>
 </div>
 </div>
 <div class="section level2">
+<h2 id="filling-a-line">Filling a line<a class="anchor" aria-label="anchor" href="#filling-a-line"></a>
+</h2>
+<p>Everything above fills an <em>area</em>. A line has no area: a stroke
+is a colour applied along a path, not a region, so <code>fill</code> on
+a <code><a href="../reference/grob.html">lines_grob()</a></code> has nothing to act on.
+<code><a href="../reference/stroke_to_path.html">stroke_to_path()</a></code> converts one into the other — it returns
+the region the stroke would have inked, as a <code><a href="../reference/grob.html">path_grob()</a></code>
+you can fill like any other:</p>
+<div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">zig</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/grob.html">lines_grob</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.08</span>, <span class="fl">0.3</span>, <span class="fl">0.52</span>, <span class="fl">0.74</span>, <span class="fl">0.94</span><span class="op">)</span>,</span>
+<span>                  <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.30</span>, <span class="fl">0.78</span>, <span class="fl">0.28</span>, <span class="fl">0.76</span>, <span class="fl">0.34</span><span class="op">)</span>,</span>
+<span>                  gp <span class="op">=</span> <span class="fu"><a href="../reference/vl_gpar.html">vl_gpar</a></span><span class="op">(</span>col <span class="op">=</span> <span class="st">"steelblue"</span>, lwd <span class="op">=</span> <span class="fl">16</span><span class="op">)</span><span class="op">)</span></span>
+<span></span>
+<span><span class="va">ribbon</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/stroke_to_path.html">stroke_to_path</a></span><span class="op">(</span><span class="va">zig</span>, width <span class="op">=</span> <span class="fl">6</span>, height <span class="op">=</span> <span class="fl">1.8</span><span class="op">)</span></span>
+<span></span>
+<span><span class="fu"><a href="../reference/display.html">display</a></span><span class="op">(</span></span>
+<span>  <span class="fu"><a href="../reference/vl_scene.html">vl_scene</a></span><span class="op">(</span><span class="fl">6</span>, <span class="fl">1.8</span><span class="op">)</span> <span class="op">|&gt;</span></span>
+<span>    <span class="fu"><a href="../reference/vl_scene.html">draw</a></span><span class="op">(</span><span class="fu">S7</span><span class="fu">::</span><span class="fu"><a href="https://rconsortium.github.io/S7/reference/props.html" class="external-link">set_props</a></span><span class="op">(</span><span class="va">ribbon</span>, gp <span class="op">=</span> <span class="fu"><a href="../reference/vl_gpar.html">vl_gpar</a></span><span class="op">(</span></span>
+<span>      fill <span class="op">=</span> <span class="fu"><a href="../reference/gradients.html">linear_gradient</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"#F97316"</span>, <span class="st">"#FACC15"</span>, <span class="st">"#22C55E"</span><span class="op">)</span><span class="op">)</span>, col <span class="op">=</span> <span class="cn">NA</span></span>
+<span>    <span class="op">)</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="op">)</span></span></code></pre></div>
+<p><img src="scene-and-paint_files/figure-html/unnamed-chunk-2-1.png" class="r-plt" alt="" width="576"></p>
+<p>The expansion uses the same stroker the rasterizer uses, so the
+outline is exactly the region that would have been inked rather than an
+approximation of it. The same conversion is what you want for a cutting
+plotter or a CNC tool, which need a closed shape rather than a
+centreline.</p>
+<p>One consequence is worth being explicit about: <strong>the result is
+baked at one size.</strong> A stroke width is a device quantity, so its
+outline only exists once a page size and resolution are chosen — they
+are arguments to <code><a href="../reference/stroke_to_path.html">stroke_to_path()</a></code>, and the returned
+coordinates are absolute millimetres. The outline will not rescale with
+the page the way the original stroke would. That is inherent: an outline
+is a shape, not a stroke.</p>
+</div>
+<div class="section level2">
+<h2 id="a-note-on-dense-paths">A note on dense paths<a class="anchor" aria-label="anchor" href="#a-note-on-dense-paths"></a>
+</h2>
+<p>Paths with thousands of vertices — a coastline, a long time series —
+carry far more detail than the canvas has pixels to distinguish. vellum
+simplifies them at <strong>render resolution</strong>, dropping vertices
+that could not have changed a pixel. The renderer is the only layer that
+knows the resolution, which is why this belongs here rather than in a
+data-preparation step.</p>
+<p>It is automatic and needs no code, but the dial is
+<code>options(vellum.simplify = )</code>: a Douglas–Peucker tolerance in
+device pixels, defaulting to <code>0.1</code>, with <code>0</code>
+disabling it. On a 50,000-vertex coastline it is worth roughly 1.7× on
+render time and 65% of the SVG size.</p>
+<p>Like the marker-sprite and glyph-bitmap fast paths, this is a
+deliberate fidelity trade rather than a free lunch, so it engages only
+where the win is real: paths under 1000 points are never touched, and
+stay byte-identical.</p>
+</div>
+<div class="section level2">
 <h2 id="recap">Recap<a class="anchor" aria-label="anchor" href="#recap"></a>
 </h2>
 <ul>
@@ -297,6 +352,10 @@ scales, and <code>"mm"</code> and friends are absolute.</li>
 <code>vl_gpar(fill = )</code> accepts gradients and patterns, and
 <code><a href="../reference/vl_viewport.html">vl_viewport()</a></code> accepts masks, group opacity, and blend
 modes, all consistent across backends.</li>
+<li>
+<code><a href="../reference/stroke_to_path.html">stroke_to_path()</a></code> turns a stroke into a fillable region,
+so a line can carry a gradient; dense paths are simplified at render
+resolution automatically.</li>
 </ul>
 <p>Next, see <code><a href="../articles/retained-mode.html">vignette("retained-mode")</a></code> for what a finished
 scene can tell you about itself. ```</p>

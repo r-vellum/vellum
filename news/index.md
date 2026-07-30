@@ -2,6 +2,36 @@
 
 ## vellum (development version)
 
+- **Dense paths are simplified at render resolution.** A coastline or a
+  long time series carries far more vertices than the canvas has pixels
+  to distinguish; vellum now drops the ones that could not have changed
+  a pixel. Worth **1.7–2.5× on render time and 65–75% of the SVG size**
+  at 50,000 vertices. It is automatic, and the dial is
+  `options(vellum.simplify)` — a Douglas–Peucker tolerance in device
+  pixels, default `0.1`, `0` to disable. Only the renderer knows the
+  output resolution, which is why this belongs here rather than in a
+  data-preparation step.
+
+  Like the marker-sprite and glyph-bitmap fast paths this is a
+  deliberate fidelity trade, so it engages only where the win is real:
+  paths under 1000 points per sub-path are never touched and stay
+  byte-identical.
+
+- **[`stroke_to_path()`](https://r-vellum.github.io/vellum/reference/stroke_to_path.md)**
+  converts the stroke of a line-like grob into a
+  [`path_grob()`](https://r-vellum.github.io/vellum/reference/grob.md)
+  describing the region it covers — so a line can be filled with a
+  gradient or a pattern, or handed to a cutting plotter that needs a
+  closed shape rather than a centreline. It uses the same stroker the
+  rasterizer uses, so the outline is exactly what would have been inked.
+  The result is absolute (mm): an outline is a shape baked at one size,
+  not a stroke that rescales.
+
+- New example `inst/examples/geometry.R` and benchmark
+  `inst/benchmarks/simplify.R`;
+  [`vignette("scene-and-paint")`](https://r-vellum.github.io/vellum/articles/scene-and-paint.md)
+  gains sections on filling a line and on dense paths.
+
 - **[`vl_lint()`](https://r-vellum.github.io/vellum/reference/vl_lint.md)
   — static analysis for graphics.** Resolves the scene and inspects the
   geometry the renderer would draw with, reporting the things people

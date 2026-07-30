@@ -212,6 +212,71 @@ accumulate the way per-element `vl_gpar(alpha = )` would. That
 distinction (compositing a group versus fading each mark) is exactly the
 kind of control a grammar layer needs from its backend.
 
+## Filling a line
+
+Everything above fills an *area*. A line has no area: a stroke is a
+colour applied along a path, not a region, so `fill` on a
+[`lines_grob()`](https://r-vellum.github.io/vellum/reference/grob.md)
+has nothing to act on.
+[`stroke_to_path()`](https://r-vellum.github.io/vellum/reference/stroke_to_path.md)
+converts one into the other — it returns the region the stroke would
+have inked, as a
+[`path_grob()`](https://r-vellum.github.io/vellum/reference/grob.md) you
+can fill like any other:
+
+``` r
+
+zig <- lines_grob(c(0.08, 0.3, 0.52, 0.74, 0.94),
+                  c(0.30, 0.78, 0.28, 0.76, 0.34),
+                  gp = vl_gpar(col = "steelblue", lwd = 16))
+
+ribbon <- stroke_to_path(zig, width = 6, height = 1.8)
+
+display(
+  vl_scene(6, 1.8) |>
+    draw(S7::set_props(ribbon, gp = vl_gpar(
+      fill = linear_gradient(c("#F97316", "#FACC15", "#22C55E")), col = NA
+    )))
+)
+```
+
+![](scene-and-paint_files/figure-html/unnamed-chunk-2-1.png)
+
+The expansion uses the same stroker the rasterizer uses, so the outline
+is exactly the region that would have been inked rather than an
+approximation of it. The same conversion is what you want for a cutting
+plotter or a CNC tool, which need a closed shape rather than a
+centreline.
+
+One consequence is worth being explicit about: **the result is baked at
+one size.** A stroke width is a device quantity, so its outline only
+exists once a page size and resolution are chosen — they are arguments
+to
+[`stroke_to_path()`](https://r-vellum.github.io/vellum/reference/stroke_to_path.md),
+and the returned coordinates are absolute millimetres. The outline will
+not rescale with the page the way the original stroke would. That is
+inherent: an outline is a shape, not a stroke.
+
+## A note on dense paths
+
+Paths with thousands of vertices — a coastline, a long time series —
+carry far more detail than the canvas has pixels to distinguish. vellum
+simplifies them at **render resolution**, dropping vertices that could
+not have changed a pixel. The renderer is the only layer that knows the
+resolution, which is why this belongs here rather than in a
+data-preparation step.
+
+It is automatic and needs no code, but the dial is
+`options(vellum.simplify = )`: a Douglas–Peucker tolerance in device
+pixels, defaulting to `0.1`, with `0` disabling it. On a 50,000-vertex
+coastline it is worth roughly 1.7× on render time and 65% of the SVG
+size.
+
+Like the marker-sprite and glyph-bitmap fast paths, this is a deliberate
+fidelity trade rather than a free lunch, so it engages only where the
+win is real: paths under 1000 points are never touched, and stay
+byte-identical.
+
 ## Recap
 
 - A scene is a retained tree of nested viewports and grobs, built with
@@ -226,6 +291,9 @@ kind of control a grammar layer needs from its backend.
   [`vl_viewport()`](https://r-vellum.github.io/vellum/reference/vl_viewport.md)
   accepts masks, group opacity, and blend modes, all consistent across
   backends.
+- [`stroke_to_path()`](https://r-vellum.github.io/vellum/reference/stroke_to_path.md)
+  turns a stroke into a fillable region, so a line can carry a gradient;
+  dense paths are simplified at render resolution automatically.
 
 Next, see
 [`vignette("retained-mode")`](https://r-vellum.github.io/vellum/articles/retained-mode.md)

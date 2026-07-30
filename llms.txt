@@ -315,6 +315,8 @@ The drawable primitives. Most are vectorised and batch internally.
   Graphical objects (grobs)
 - [`vl_arrow()`](https://r-vellum.github.io/vellum/reference/vl_arrow.md)
   : Arrowheads
+- [`stroke_to_path()`](https://r-vellum.github.io/vellum/reference/stroke_to_path.md)
+  : Freeze a stroke into a fillable outline
 
 ## Units, viewports & layout
 
