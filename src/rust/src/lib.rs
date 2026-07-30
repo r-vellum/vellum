@@ -2,6 +2,7 @@ use extendr_api::prelude::*;
 
 mod aggregate;
 mod cache;
+mod cvd;
 mod color;
 mod font;
 mod oklab;
@@ -52,6 +53,24 @@ fn rs_glyph_sprite_stats() -> Vec<i32> {
 #[extendr]
 fn rs_subraster_stats() -> Vec<i32> {
     scene::subraster_stats().into_iter().map(|v| v as i32).collect()
+}
+
+/// Set colour-vision-deficiency simulation for subsequent renders.
+///
+/// @param kind One of "protanopia", "deuteranopia", "tritanopia",
+///   "achromatopsia", or "" to disable.
+/// @keywords internal
+#[extendr]
+fn rs_set_cvd_mode(kind: &str) {
+    let mode = if kind.is_empty() {
+        None
+    } else {
+        match crate::cvd::Cvd::from_name(kind) {
+            Some(k) => Some(k),
+            None => throw_r_error(format!("unknown cvd kind '{kind}'")),
+        }
+    };
+    scene::set_cvd_mode(mode);
 }
 
 /// Decode a PNG file to straight (un-premultiplied) RGBA.
@@ -121,6 +140,7 @@ extendr_module! {
     fn rs_set_glyph_bitmap_mode;
     fn rs_glyph_sprite_stats;
     fn rs_read_png;
+    fn rs_set_cvd_mode;
     use scene;
     use aggregate;
 }

@@ -4,10 +4,20 @@
 \alias{scene_raster}
 \title{Read a rendered scene back as pixels}
 \usage{
-scene_raster(scene)
+scene_raster(scene, cvd = "none")
 }
 \arguments{
 \item{scene}{A \code{\link[=vl_scene]{vl_scene()}} (or anything with an \code{\link[=as_vellum_scene]{as_vellum_scene()}} method).}
+
+\item{cvd}{Simulate a colour-vision deficiency: \code{"none"} (default),
+\code{"protanopia"} (red-blind), \code{"deuteranopia"} (green-blind, the common one
+that breaks red/green encodings), \code{"tritanopia"} (blue-blind), or
+\code{"achromatopsia"} (total, and a fair proxy for greyscale printing). The
+simulation is a post-pass over the finished raster using the Machado et al.
+(2009) matrices applied in linear light, so it turns an accessibility check
+into a one-line change instead of an export-and-upload round trip. \strong{Raster
+output only} — a vector format has no pixels to transform, and \code{render()}
+warns if you ask for one.}
 }
 \value{
 \code{scene_raster()}: an integer array of dimension \code{c(4, width, height)}.

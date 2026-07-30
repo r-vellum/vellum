@@ -31,6 +31,15 @@
 #'   `"difference"`, `"exclusion"`, `"hue"`, `"saturation"`, `"color"`, or
 #'   `"luminosity"` (the CSS `mix-blend-mode` set). `NULL`/`"normal"` is ordinary
 #'   over-compositing.
+#' @param blur Optional Gaussian blur radius in points, applied to the
+#'   viewport's contents as one isolated layer. Because it is a *group* effect,
+#'   overlapping shapes inside the viewport blur together rather than each
+#'   blurring over the others. `NULL`/`0` (default) means no blur. Raster
+#'   convolves it; SVG emits a native `feGaussianBlur` and stays vector; PDF has
+#'   no filter model and warns.
+#' @param shadow Optional drop shadow from [vl_shadow()], cast by the viewport's
+#'   contents as one silhouette. A shadow with no offset is a glow. Same
+#'   per-backend behaviour as `blur`.
 #' @param name Optional name (for [edit_node()]).
 #' @param meta Optional free-form metadata for this viewport (any R object,
 #'   default `NULL`). Like a grob's `meta`, it never crosses to the rendering
@@ -65,7 +74,8 @@ vl_viewport <- function(x = 0.5, y = 0.5, width = 1, height = 1,
                      xscale = c(0, 1), yscale = c(0, 1), angle = 0, clip = FALSE,
                      gp = vl_gpar(), layout = NULL,
                      row = NULL, col = NULL, rowspan = 1, colspan = 1,
-                     mask = NULL, alpha = NULL, blend = NULL, name = NULL,
+                     mask = NULL, alpha = NULL, blend = NULL,
+                     blur = NULL, shadow = NULL, name = NULL,
                      meta = NULL, pannable = FALSE, cache = FALSE) {
   .check_cell <- function(v, arg) {
     if (!is.null(v) && (length(v) != 1L || is.na(v) || v < 1)) {
@@ -88,7 +98,8 @@ vl_viewport <- function(x = 0.5, y = 0.5, width = 1, height = 1,
     xscale = as.numeric(xscale), yscale = as.numeric(yscale),
     angle = as.numeric(angle), clip = clip, gp = gp, layout = layout,
     row = row, col = col, rowspan = as.integer(rowspan), colspan = as.integer(colspan),
-    mask = mask, alpha = alpha, blend = blend, name = name, meta = meta,
+    mask = mask, alpha = alpha, blend = blend, blur = blur, shadow = shadow,
+    name = name, meta = meta,
     pannable = as.logical(pannable), cache = cache
   )
 }
@@ -120,6 +131,8 @@ class_viewport <- S7::new_class(
     mask = S7::new_property(S7::class_any, default = NULL),
     alpha = S7::new_property(S7::class_any, default = NULL),
     blend = S7::new_property(S7::class_any, default = NULL),
+    blur = S7::new_property(S7::class_any, default = NULL),
+    shadow = S7::new_property(S7::class_any, default = NULL),
     name = S7::new_property(S7::class_any, default = NULL),
     meta = S7::new_property(S7::class_any, default = NULL),
     pannable = S7::new_property(S7::class_logical, default = FALSE),

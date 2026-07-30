@@ -137,6 +137,7 @@ reference:
   - gradients
   - vl_pattern
   - as_mask
+  - vl_shadow
   - sketch
 
 - title: Text

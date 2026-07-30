@@ -37,6 +37,16 @@
 #'   off, or `c(kern = 0)` to disable kerning. `NULL` (default) uses the font's
 #'   own defaults. A feature the font does not carry is silently ignored --
 #'   that is HarfBuzz's behaviour, not something vellum can check for you.
+#' @param antialias Anti-alias this element's edges? `NULL` (default) inherits;
+#'   the root default is `TRUE`. `FALSE` gives hard pixel edges, which is what
+#'   pixel art, QR codes, and heatmap cells that must tile without a seam want.
+#' @param crisp Snap axis-parallel strokes onto the pixel grid? `NULL` (default)
+#'   inherits; the root default is `FALSE`. A 1-px rule at a fractional
+#'   coordinate straddles two pixel rows and renders as two grey ones rather than
+#'   one solid — the reason gridlines look muddy on screen. `TRUE` snaps
+#'   horizontal and vertical runs so they land on whole pixels. Diagonals are
+#'   unaffected (there is no grid to snap them to), and it only applies to raster
+#'   output — a vector format has no pixel grid.
 #' @param lineheight Line-height multiple.
 #' @return A `gpar` object.
 #' @examples
@@ -61,7 +71,9 @@ vl_gpar <- S7::new_class(
     lineheight = S7::new_property(S7::class_any, default = NULL),
     halo_col   = S7::new_property(S7::class_any, default = NULL),
     halo_width = S7::new_property(S7::class_any, default = NULL),
-    features   = S7::new_property(S7::class_any, default = NULL)
+    features   = S7::new_property(S7::class_any, default = NULL),
+    antialias  = S7::new_property(S7::class_any, default = NULL),
+    crisp      = S7::new_property(S7::class_any, default = NULL)
   ),
   validator = function(self) {
     x <- self@cex

@@ -379,14 +379,25 @@ S7::method(as_vellum_scene, vellum_scene) <- function(x, ...) x
 #'   changes; text does not get relatively bigger or smaller. Only raster output
 #'   gains anything: a PDF's page size in points and an SVG's physical size are
 #'   unchanged by construction.
+#' @param cvd Simulate a colour-vision deficiency: `"none"` (default),
+#'   `"protanopia"` (red-blind), `"deuteranopia"` (green-blind, the common one
+#'   that breaks red/green encodings), `"tritanopia"` (blue-blind), or
+#'   `"achromatopsia"` (total, and a fair proxy for greyscale printing). The
+#'   simulation is a post-pass over the finished raster using the Machado et al.
+#'   (2009) matrices applied in linear light, so it turns an accessibility check
+#'   into a one-line change instead of an export-and-upload round trip. **Raster
+#'   output only** — a vector format has no pixels to transform, and `render()`
+#'   warns if you ask for one.
 #' @return `render()`: `path`, invisibly.
 #' @export
 render <- function(scene, path, text = c("native", "outline"), debug = FALSE,
-                   scale = 1) {
+                   scale = 1, cvd = "none") {
   text <- match.arg(text)
   scene <- .apply_scale(as_vellum_scene(scene), scale)
-  s <- .scene_to_backend(scene, debug = debug)
   ext <- tolower(tools::file_ext(path))
+  on.exit(.set_cvd("none"), add = TRUE)
+  .set_cvd(cvd, format = ext)
+  s <- .scene_to_backend(scene, debug = debug)
   warns <- switch(ext,
     png = s$render_png(path),
     svg = s$render_svg(path, identical(text, "outline")),
@@ -440,8 +451,8 @@ scene_svg <- function(scene, text = c("native", "outline")) {
 #' rawToChar(png_bytes[2:4]) # "PNG"
 #' @inheritParams render
 #' @export
-scene_png <- function(scene, scale = 1) {
-  .scene_bytes(scene, "png", scale)
+scene_png <- function(scene, scale = 1, cvd = "none") {
+  .scene_bytes(scene, "png", scale, cvd)
 }
 
 #' @rdname scene_png
@@ -452,8 +463,10 @@ scene_pdf <- function(scene) {
 
 # Shared body for `scene_png()`/`scene_pdf()`: render to bytes and surface the
 # backend's degradation warnings the same way `render()` does.
-.scene_bytes <- function(scene, kind, scale = 1) {
+.scene_bytes <- function(scene, kind, scale = 1, cvd = "none") {
   scene <- .apply_scale(as_vellum_scene(scene), scale)
+  on.exit(.set_cvd("none"), add = TRUE)
+  .set_cvd(cvd, format = kind)
   s <- .scene_to_backend(scene)
   res <- if (identical(kind, "png")) s$render_png_raw() else s$render_pdf_raw()
   .emit_degrade_warnings(res$warnings)
@@ -464,6 +477,30 @@ scene_pdf <- function(scene) {
 # height, held as absolute units) is untouched, so the layout solves identically
 # and every unit keeps its meaning -- the render simply lands on a finer pixel
 # grid. `dpi` is part of the render-cache key, so each scale caches separately.
+# Valid `cvd` values; "none" disables. Kept here so `render()`, `scene_png()` and
+# the error message can't drift apart.
+.CVD_KINDS <- c("none", "protanopia", "deuteranopia", "tritanopia", "achromatopsia")
+
+# Push the CVD mode for the coming render (a thread-local on the Rust side, like
+# the glyph-bitmap mode). Warns rather than errors for a vector target: asking for
+# a simulation and silently getting an unsimulated file is the bad outcome, but so
+# is refusing to render at all.
+.set_cvd <- function(cvd, format = NULL) {
+  if (length(cvd) != 1L || is.na(cvd) || !is.character(cvd)) {
+    cli::cli_abort("{.arg cvd} must be one of {.or {.val {.CVD_KINDS}}}.")
+  }
+  cvd <- match.arg(cvd, .CVD_KINDS)
+  if (!identical(cvd, "none") && !is.null(format) && !format %in% c("png")) {
+    cli::cli_warn(c(
+      "{.arg cvd} simulation applies to raster output only; {.val {format}} is unchanged.",
+      i = "Render to {.file .png} (or use {.fn scene_raster}) to see the simulation."
+    ))
+    cvd <- "none"
+  }
+  rs_set_cvd_mode(if (identical(cvd, "none")) "" else cvd)
+  invisible(cvd)
+}
+
 .apply_scale <- function(scene, scale) {
   if (length(scale) != 1L || is.na(scale) || !is.numeric(scale) || scale <= 0) {
     cli::cli_abort("{.arg scale} must be a single positive number.")
@@ -502,6 +539,7 @@ scene_pdf <- function(scene) {
 #' [grid::rasterGrob()].
 #'
 #' @param scene A [vl_scene()] (or anything with an [as_vellum_scene()] method).
+#' @inheritParams render
 #' @return `scene_raster()`: an integer array of dimension `c(4, width, height)`.
 #'   The `as.raster()` method: a `raster` (character matrix, `c(height, width)`).
 #' @examples
@@ -510,7 +548,9 @@ scene_pdf <- function(scene) {
 #' dim(scene_raster(s)) # c(4, width_px, height_px)
 #' @importFrom grDevices as.raster
 #' @export
-scene_raster <- function(scene) {
+scene_raster <- function(scene, cvd = "none") {
+  on.exit(.set_cvd("none"), add = TRUE)
+  .set_cvd(cvd)
   s <- .scene_to_backend(as_vellum_scene(scene))
   d <- s$dim()
   array(s$rgba(), dim = c(4L, d[1], d[2]))
@@ -1122,7 +1162,14 @@ S7::method(compile, gtree) <- function(node, scene) {
   if (cached) scene$subraster_start(node@nid)
   # A group (isolated layer) is needed for a mask, a sub-1 group opacity, and/or a
   # non-normal blend mode.
-  if (!is.null(mask) || (!is.null(alpha) && alpha < 1) || blend_code != 0L) {
+  # Blur / drop shadow are group effects: they act on the composited layer, so
+  # overlapping shapes inside the viewport blur (or cast one shadow) together.
+  # Points -> device px, like every other absolute length.
+  fx_scale <- scene$dpi() / 72
+  blur_px <- if (is.null(node@vp)) 0 else (node@vp@blur %||% 0) * fx_scale
+  shadow_v <- if (is.null(node@vp)) numeric(0) else .encode_shadow(node@vp@shadow, fx_scale)
+  has_fx <- blur_px > 0 || length(shadow_v) > 0
+  if (!is.null(mask) || (!is.null(alpha) && alpha < 1) || blend_code != 0L || has_fx) {
     idx <- -1L
     if (!is.null(mask)) {
       m <- .normalize_mask(mask)
@@ -1131,7 +1178,7 @@ S7::method(compile, gtree) <- function(node, scene) {
       scene$mask_end()
     }
     # mask + opacity + blend installed up front; content drawn into an isolated layer
-    scene$group_start(idx, alpha %||% 1, blend_code)
+    scene$group_start(idx, alpha %||% 1, blend_code, blur_px, shadow_v)
     for (child in node@children) compile(child, scene)
     scene$group_end()
   } else {

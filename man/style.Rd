@@ -21,6 +21,8 @@ style(
   halo_col = NULL,
   halo_width = NULL,
   features = NULL,
+  antialias = NULL,
+  crisp = NULL,
   name = NULL
 )
 }
@@ -74,6 +76,18 @@ caps, \code{c(onum = 1)} for oldstyle figures, \code{c(liga = 0)} to switch liga
 off, or \code{c(kern = 0)} to disable kerning. \code{NULL} (default) uses the font's
 own defaults. A feature the font does not carry is silently ignored --
 that is HarfBuzz's behaviour, not something vellum can check for you.}
+
+\item{antialias}{Anti-alias this element's edges? \code{NULL} (default) inherits;
+the root default is \code{TRUE}. \code{FALSE} gives hard pixel edges, which is what
+pixel art, QR codes, and heatmap cells that must tile without a seam want.}
+
+\item{crisp}{Snap axis-parallel strokes onto the pixel grid? \code{NULL} (default)
+inherits; the root default is \code{FALSE}. A 1-px rule at a fractional
+coordinate straddles two pixel rows and renders as two grey ones rather than
+one solid — the reason gridlines look muddy on screen. \code{TRUE} snaps
+horizontal and vertical runs so they land on whole pixels. Diagonals are
+unaffected (there is no grid to snap them to), and it only applies to raster
+output — a vector format has no pixel grid.}
 
 \item{name}{Optional style-class name, for identification only; it is ignored
 by rendering.}

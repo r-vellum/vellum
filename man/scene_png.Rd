@@ -5,7 +5,7 @@
 \alias{scene_pdf}
 \title{Render a scene to PNG or PDF bytes}
 \usage{
-scene_png(scene, scale = 1)
+scene_png(scene, scale = 1, cvd = "none")
 
 scene_pdf(scene)
 }
@@ -19,6 +19,16 @@ the device pixels while keeping the \strong{same physical size} — the retina /
 changes; text does not get relatively bigger or smaller. Only raster output
 gains anything: a PDF's page size in points and an SVG's physical size are
 unchanged by construction.}
+
+\item{cvd}{Simulate a colour-vision deficiency: \code{"none"} (default),
+\code{"protanopia"} (red-blind), \code{"deuteranopia"} (green-blind, the common one
+that breaks red/green encodings), \code{"tritanopia"} (blue-blind), or
+\code{"achromatopsia"} (total, and a fair proxy for greyscale printing). The
+simulation is a post-pass over the finished raster using the Machado et al.
+(2009) matrices applied in linear light, so it turns an accessibility check
+into a one-line change instead of an export-and-upload round trip. \strong{Raster
+output only} — a vector format has no pixels to transform, and \code{render()}
+warns if you ask for one.}
 }
 \value{
 A raw vector: the encoded PNG or PDF document.

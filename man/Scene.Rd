@@ -159,6 +159,9 @@ Open an isolated compositing group, modulated by mask index \code{mask}
 \code{blend} (a code; 0 = normal). Routed through \code{emit_node} so a group nested
 inside a mask (a mask grob that itself masks a viewport) lands in the same
 node list as its content, keeping markers and content in sync.
+
+\code{blur} is a Gaussian radius in device px (0 = none). \code{shadow} is
+\code{c(dx, dy, blur, r, g, b, a)} in device px / 0-255, or empty for none.
 }
 
 \subsection{Method \code{group_end}}{

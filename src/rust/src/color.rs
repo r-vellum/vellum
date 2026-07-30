@@ -312,6 +312,12 @@ pub struct PartialGpar {
     pub lineend: Inh<LineCap>,
     pub linejoin: Inh<LineJoin>,
     pub linemitre: Inh<f64>,
+    /// Anti-aliasing. `false` gives hard pixel edges -- pixel art, QR codes, and
+    /// heatmap cells that must tile without a seam.
+    pub antialias: Inh<bool>,
+    /// Snap axis-parallel strokes to the pixel grid, so a 1-px rule lands on one
+    /// row instead of straddling two as a pair of grey ones.
+    pub crisp: Inh<bool>,
 }
 
 impl PartialGpar {
@@ -319,10 +325,14 @@ impl PartialGpar {
     /// (each `NULL` = inherit), or `NULL` to inherit all of them.
     pub fn from_robj(fill: &Robj, col: &Robj, lwd: &Robj, alpha: &Robj, stroke: &Robj) -> Self {
         let field = |name: &str| stroke.dollar(name).unwrap_or_else(|_| ().into());
-        let (lty, lineend, linejoin, linemitre) = if stroke.is_list() {
-            (inh_lty(&field("lty")), inh_linecap(&field("lineend")), inh_linejoin(&field("linejoin")), inh_f64(&field("linemitre")))
+        let (lty, lineend, linejoin, linemitre, antialias, crisp) = if stroke.is_list() {
+            (
+                inh_lty(&field("lty")), inh_linecap(&field("lineend")),
+                inh_linejoin(&field("linejoin")), inh_f64(&field("linemitre")),
+                inh_bool(&field("antialias")), inh_bool(&field("crisp")),
+            )
         } else {
-            (Inh::Inherit, Inh::Inherit, Inh::Inherit, Inh::Inherit)
+            (Inh::Inherit, Inh::Inherit, Inh::Inherit, Inh::Inherit, Inh::Inherit, Inh::Inherit)
         };
         PartialGpar {
             fill: inh_paint(fill),
@@ -333,6 +343,8 @@ impl PartialGpar {
             lineend,
             linejoin,
             linemitre,
+            antialias,
+            crisp,
         }
     }
 }
@@ -380,6 +392,15 @@ fn inh_color(obj: &Robj) -> Inh<Option<Rgba>> {
     }
 }
 
+fn inh_bool(obj: &Robj) -> Inh<bool> {
+    match obj.as_logical() {
+        Some(v) => match v.to_bool() {
+            b => Inh::Set(b),
+        },
+        None => Inh::Inherit,
+    }
+}
+
 fn inh_f64(obj: &Robj) -> Inh<f64> {
     match obj.as_real() {
         Some(v) if v.is_finite() => Inh::Set(v),
@@ -399,6 +420,8 @@ pub struct GparAcc {
     pub lineend: LineCap,
     pub linejoin: LineJoin,
     pub linemitre: f64,
+    pub antialias: bool,
+    pub crisp: bool,
 }
 
 impl GparAcc {
@@ -414,6 +437,8 @@ impl GparAcc {
             lineend: LineCap::Round,
             linejoin: LineJoin::Round,
             linemitre: 10.0,
+            antialias: true,
+            crisp: false,
         }
     }
 
@@ -452,6 +477,14 @@ impl GparAcc {
                 Inh::Set(v) => v,
                 Inh::Inherit => self.linemitre,
             },
+            antialias: match p.antialias {
+                Inh::Set(v) => v,
+                Inh::Inherit => self.antialias,
+            },
+            crisp: match p.crisp {
+                Inh::Set(v) => v,
+                Inh::Inherit => self.crisp,
+            },
         }
     }
 
@@ -465,6 +498,8 @@ impl GparAcc {
             lineend: self.lineend,
             linejoin: self.linejoin,
             linemitre: self.linemitre,
+            antialias: self.antialias,
+            crisp: self.crisp,
         }
     }
 
@@ -596,6 +631,10 @@ pub struct Gpar {
     pub lineend: LineCap,
     pub linejoin: LineJoin,
     pub linemitre: f64,
+    /// Anti-aliasing (default `true`).
+    pub antialias: bool,
+    /// Snap axis-parallel strokes to the pixel grid (default `false`).
+    pub crisp: bool,
 }
 
 impl Gpar {

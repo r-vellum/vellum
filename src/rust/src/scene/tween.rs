@@ -132,6 +132,9 @@ fn lerp_gpar(a: &PartialGpar, b: &PartialGpar, t: f64) -> PartialGpar {
         lty: base.lty.clone(),
         lineend: base.lineend,
         linejoin: base.linejoin,
+        // Discrete render-quality flags: snap with the near side like lty.
+        antialias: base.antialias,
+        crisp: base.crisp,
     }
 }
 

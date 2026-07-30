@@ -331,15 +331,33 @@ print.vellum_mask <- function(x, ...) {
 }
 
 # Pack a gpar's stroke style into a list for the backend, or NULL if all inherit.
+# The stroke sub-record crossing to Rust. `antialias`/`crisp` ride here rather
+# than as top-level gpar fields because this list is already folded with
+# inheritance on the Rust side, so they cascade for free.
 .encode_stroke <- function(gp) {
   lty <- .encode_lty(gp@lty)
   lineend <- .encode_code(gp@lineend, .lineend_codes, "lineend")
   linejoin <- .encode_code(gp@linejoin, .linejoin_codes, "linejoin")
   linemitre <- if (is.null(gp@linemitre)) NULL else as.double(gp@linemitre)
-  if (is.null(lty) && is.null(lineend) && is.null(linejoin) && is.null(linemitre)) {
+  antialias <- .encode_flag(gp@antialias, "antialias")
+  crisp <- .encode_flag(gp@crisp, "crisp")
+  if (is.null(lty) && is.null(lineend) && is.null(linejoin) && is.null(linemitre) &&
+      is.null(antialias) && is.null(crisp)) {
     return(NULL)
   }
-  list(lty = lty, lineend = lineend, linejoin = linejoin, linemitre = linemitre)
+  list(lty = lty, lineend = lineend, linejoin = linejoin, linemitre = linemitre,
+       antialias = antialias, crisp = crisp)
+}
+
+# A tri-state flag: NULL inherits, TRUE/FALSE set.
+.encode_flag <- function(x, arg) {
+  if (is.null(x)) {
+    return(NULL)
+  }
+  if (length(x) != 1L || is.na(x) || !is.logical(x)) {
+    cli::cli_abort("{.arg {arg}} must be {.val TRUE}, {.val FALSE}, or {.val NULL} to inherit.")
+  }
+  x
 }
 
 # A length resolved to device pixels for tile sizing. npc/native are taken
@@ -353,4 +371,58 @@ print.vellum_mask <- function(x, ...) {
     pt = value / 72 * dpi,
     value * total_px
   )
+}
+
+#' Drop shadow for a viewport group
+#'
+#' Describes a shadow cast by everything drawn inside a [vl_viewport()]: the
+#' group's own silhouette, tinted, blurred and offset, painted underneath it.
+#' Because it is a *group* effect, overlapping shapes inside the viewport cast
+#' one shadow together rather than each casting its own onto the others.
+#'
+#' @param dx,dy Offset in points; positive `dy` moves the shadow down.
+#' @param blur Blur radius in points. `0` gives a hard offset silhouette.
+#' @param col Shadow colour; usually a translucent black.
+#' @return A `vellum_shadow` object, for `vl_viewport(shadow = )`.
+#' @seealso [vl_viewport()]
+#' @examples
+#' vl_scene(3, 2) |>
+#'   push(vl_viewport(width = 0.6, height = 0.6, shadow = vl_shadow())) |>
+#'   draw(circle_grob(gp = vl_gpar(fill = "steelblue", col = NA))) |>
+#'   pop()
+#' @export
+vl_shadow <- function(dx = 2, dy = 2, blur = 3, col = "#00000059") {
+  num <- function(v, arg) {
+    if (length(v) != 1L || is.na(v) || !is.numeric(v)) {
+      cli::cli_abort("{.arg {arg}} must be a single number.")
+    }
+    as.numeric(v)
+  }
+  if (num(blur, "blur") < 0) cli::cli_abort("{.arg blur} must be non-negative.")
+  structure(
+    list(dx = num(dx, "dx"), dy = num(dy, "dy"), blur = num(blur, "blur"), col = col),
+    class = "vellum_shadow"
+  )
+}
+
+#' @export
+print.vellum_shadow <- function(x, ...) {
+  cli::cli_text("{.cls vellum_shadow} dx={x$dx} dy={x$dy} blur={x$blur} col={.val {x$col}}")
+  invisible(x)
+}
+
+# Encode a shadow for the backend: c(dx, dy, blur, r, g, b, a) in device px.
+# `NULL` -> numeric(0), which the Rust side reads as "no shadow".
+.encode_shadow <- function(shadow, scale) {
+  if (is.null(shadow)) {
+    return(numeric(0))
+  }
+  if (!inherits(shadow, "vellum_shadow")) {
+    cli::cli_abort("{.arg shadow} must come from {.fn vl_shadow}.")
+  }
+  rgba <- .col2rgba(shadow$col)
+  if (is.null(rgba)) {
+    return(numeric(0))
+  }
+  c(shadow$dx * scale, shadow$dy * scale, shadow$blur * scale, as.numeric(rgba))
 }
