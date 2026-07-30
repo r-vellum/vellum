@@ -24,7 +24,10 @@ vellum is the backend for a small ecosystem: [vellumplot](https://r-vellum.githu
 compiles a grammar of graphics *into* a vellum scene, and
 [vellumwidget](https://r-vellum.github.io/vellumwidget/) turns a rendered scene into an
 interactive HTML widget. Both bind to a narrow seam: `scene_model()`,
-`scene_svg()`, and the per-element metadata that rides on grobs. Because the
+`scene_svg()`, and the per-element metadata that rides on grobs. Above the
+SVG-comfortable element count a host switches to a rasterised base layer, and
+takes those pixels from `scene_png()` (raw bytes, no temp file) — part of the
+same seam. Because the
 three packages are version-locked and co-released, a change to that seam can
 break the layers above it silently.
 
@@ -40,6 +43,7 @@ which is kept only as history.)
                                                         │
   vellum  ──renders──▶  scene_svg()   (data-key, data-vellum-*, role attrs)
                         scene_model()  (per-element table: identity + bbox)
+                        scene_png()    (raw PNG bytes, for the raster-base mode)
                                                         │
   vellumwidget  ──reads scene_svg() + scene_model()──▶  hover / select / brush / link
 ```

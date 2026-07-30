@@ -1,0 +1,200 @@
+---
+title: "Inspecting a scene: linting, coverage, profiling"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Inspecting a scene: linting, coverage, profiling}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r}
+#| include: false
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  fig.width = 6,
+  fig.height = 3,
+  dpi = 96,
+  dev = "png"
+)
+library(vellum)
+set.seed(1)
+```
+
+A vellum scene is not only something you render. Because layout and text metrics
+are resolved **before** anything is drawn, a finished scene can be asked
+questions — where will this land, how big will that text be, what is expensive —
+and answer them exactly, without opening a device.
+
+This article covers the three tools built on that: `vl_lint()` finds likely
+mistakes, `scene_stats()` measures coverage and crowding, and
+`profile_render()` says where the time goes.
+
+## Why this can exist here
+
+In grid, a grob's size and position are not knowable until draw time: text has
+no measurable width before a device is open, `native` units need a viewport, and
+`null` units need a layout context. Anything wanting to check "is this label
+readable at the rendered size" would have to re-implement the geometry and hope
+it stays in step with the renderer.
+
+vellum resolves all of it up front, and every tool below reads *the same
+resolved numbers the renderer draws with*. That is the whole trick.
+
+## `vl_lint()`: static analysis for graphics
+
+Here is a plot with four defects planted in it. Each is the kind of thing you
+normally discover by exporting the figure and squinting at it.
+
+```{r}
+bad <- vl_scene(5, 3, dpi = 96) |>
+  push(vl_viewport(name = "panel", y = 0.55, width = 0.85, height = 0.7,
+                   xscale = c(0, 1), yscale = c(0, 1), clip = TRUE)) |>
+  draw(rect_grob(gp = vl_gpar(fill = "grey96", col = "grey70"))) |>
+  draw(points_grob(runif(120), runif(120), size = vl_unit(1.6, "mm"),
+                   gp = vl_gpar(fill = "#7FB2E5", col = NA), name = "cloud")) |>
+  # 1. outside the panel's clip: silently never drawn
+  draw(points_grob(2.4, 0.5, size = vl_unit(3, "mm"),
+                   gp = vl_gpar(fill = "tomato", col = NA), name = "stray_point")) |>
+  # 2. too small to read
+  draw(text_grob("n = 120", x = 0.06, y = 0.93, just = c("left", "top"),
+                 gp = vl_gpar(fontsize = 2.5), name = "n_label")) |>
+  # 3. will not contrast with the panel behind it
+  draw(text_grob("watermark", gp = vl_gpar(fontsize = 22, col = "#F2F2F2"),
+                 name = "watermark")) |>
+  # 4. nothing will ever paint it
+  draw(rect_grob(x = 0.8, y = 0.2, width = 0.2, height = 0.1,
+                 gp = vl_gpar(fill = NA, col = NA), name = "empty_box")) |>
+  pop()
+
+vl_lint(bad)
+```
+
+Every finding names the grob, so you can go straight to it. Nothing here needed
+you to look at the picture.
+
+The rules that ship:
+
+```{r}
+vl_lint_rules()
+```
+
+Two are worth explaining.
+
+`tiny_text` measures in **device pixels at the size you are actually
+rendering**, not in points. A 6 pt label is fine in a print figure and illegible
+in a thumbnail, and the same scene rendered at two sizes should — correctly —
+lint differently. Adjust the floor with `min_text_px`.
+
+`low_contrast` samples the **rendered image** just outside each label's box, on
+four sides, and takes the worst. So it measures the backdrop the label really
+sits on, including any marks that happen to be behind it, rather than assuming
+the page colour:
+
+```{r}
+faint <- vl_scene(4, 1.2, dpi = 96, bg = "white") |>
+  draw(text_grob("hard to read", gp = vl_gpar(fontsize = 22, col = "#DDDDDD")))
+vl_lint(faint)
+
+# Same text colour, dark page: now it is fine, and the linter agrees.
+vl_lint(vl_scene(4, 1.2, dpi = 96, bg = "grey15") |>
+  draw(text_grob("easy to read", gp = vl_gpar(fontsize = 22, col = "#DDDDDD"))))
+```
+
+### Adding your own rules
+
+The rule set is a registry, which is the point: vellum knows about geometry, but
+it knows nothing about *your* semantics. A package layered on top can add rules
+that do, and both come back from one `vl_lint()` call.
+
+A rule is a function of `(scene, nodes, ctx)`. `nodes` is the resolved per-node
+table — device-px box, clip box, kind, name, element count, alpha, whether a
+fill or stroke is present, font size in px, colour, label — and `ctx` carries the
+page size, dpi, thresholds, and a `pixel(x, y)` sampler.
+
+```{r}
+vl_lint_rule(
+  "wide_marks",
+  function(scene, nodes, ctx) {
+    wide <- nodes[(nodes$x1 - nodes$x0) > 0.8 * ctx$w, , drop = FALSE]
+    vl_lint_finding("wide_marks", "note", wide, "spans almost the whole page")
+  },
+  description = "A mark spans nearly the full page width."
+)
+
+vl_lint(bad, rules = c("wide_marks", "tiny_text"))
+```
+
+Register from your package's `.onLoad()` and your users get your rules for free.
+
+## `scene_stats()`: how crowded is this, really?
+
+A mark count tells you nothing about whether the marks land on top of each
+other. `scene_stats()` measures what actually reached the canvas:
+
+```{r}
+cloud <- function(n, sd = NA) {
+  xy <- if (is.na(sd)) list(runif(n), runif(n)) else list(rnorm(n, .5, sd), rnorm(n, .5, sd))
+  vl_scene(4, 3, dpi = 96) |>
+    draw(points_grob(xy[[1]], xy[[2]], gp = vl_gpar(fill = "steelblue", col = NA)))
+}
+
+round(rbind(
+  scattered = scene_stats(cloud(2000)),
+  clustered = scene_stats(cloud(2000, sd = 0.03))
+), 3)
+```
+
+Identical element counts; wildly different plots. `overplot` estimates how many
+times an average inked pixel was painted over — `1` means no overlap — and it is
+the honest trigger for reaching for `datashade()`. Thirty thousand well-separated
+points are fine; eight thousand piled up are not, and only this number knows the
+difference.
+
+It is computed from bounding boxes, so treat it as an index rather than a
+measurement: a circle fills about 79% of its box, and text and unkeyed
+lines/polygons contribute to `ink` but not to `overplot`.
+
+## `profile_render()`: where the time goes
+
+```{r}
+heavy <- vl_scene(6, 4, dpi = 96) |>
+  draw(points_grob(runif(20000), runif(20000), name = "points")) |>
+  draw(segments_grob(runif(2000), runif(2000), runif(2000), runif(2000), name = "edges")) |>
+  draw(text_grob(format(1:200), x = runif(200), y = runif(200),
+                 gp = vl_gpar(fontsize = 8), name = "labels"))
+
+profile_render(heavy, reps = 1)
+```
+
+**Read the phase split first.** A render is three phases: *build* (constructing
+the R value), *compile* (the R→Rust replay, including text shaping), and *raster*
+(drawing). If compile dominates — which it does on scenes made of many small
+grobs, where the cost is S7 validation and grob construction — then the backend
+is not your problem and tuning it will not help. `profile_render()` says so
+explicitly when that happens.
+
+The per-mark table covers raster time, aggregated by mark rather than by node: a
+vectorised `text_grob()` of 200 labels compiles to 200 nodes, and 200 rows of
+almost nothing is noise rather than a profile.
+
+Timing is armed only for that call, so ordinary renders pay nothing for it.
+
+## Putting it in a test
+
+All three return plain data frames, so they drop straight into a test suite. A
+lint check is a reasonable thing to assert in CI:
+
+```{r}
+#| eval: false
+test_that("the figure has no lint findings", {
+  expect_equal(nrow(vl_lint(my_plot())), 0L)
+})
+```
+
+## Where to go next
+
+- `vignette("render-quality")`: colour-vision simulation, crisp gridlines, and
+  group effects — the other half of "will this actually read".
+- `vignette("retained-mode")`: `scene_model()`, `hit_test()`, and editing nodes
+  by name.
