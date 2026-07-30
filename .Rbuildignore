@@ -1,5 +1,6 @@
 ^LICENSE\.md$
 ^\.vscode$
+^\.claude$
 ^src/\.cargo$
 ^src/rust/vendor$
 ^tools/vendor\.sh$
