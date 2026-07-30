@@ -22,6 +22,7 @@ SystemRequirements: Cargo (Rust's package manager), rustc >= 1.92.0, xz
 Depends: 
     R (>= 4.2)
 Suggests:
+    jsonlite,
     testthat (>= 3.0.0),
     withr,
     ggplot2,
@@ -55,6 +56,7 @@ Collate:
     'lint.R'
     'paint.R'
     'scene-model.R'
+    'serialize.R'
     'spread.R'
     'style.R'
     'text.R'

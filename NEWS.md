@@ -1,5 +1,36 @@
 # vellum (development version)
 
+* **A scene is now a value you can save, fingerprint, compare and compose.**
+  `scene_write()` / `scene_read()` persist a built scene (`.rds`, or `.json`
+  with jsonlite) and rebuild it to byte-identical pixels; `as_scene_spec()` /
+  `from_scene_spec()` are the plain-list form underneath. The conversion is
+  generic over the S7 property model rather than written per grob type, so a
+  grob added later serializes with no change to the serializer.
+
+  This is one level below `vellumplot`'s *plot* spec and composes with it: a plot
+  spec is portable and re-renderable at any size, a scene spec reproduces exactly
+  this scene.
+
+* **`scene_hash()`** fingerprints content — two independently-built identical
+  scenes agree, any change to what is drawn does not. Usable as a cache key or a
+  test assertion.
+
+* **`scene_diff()`** reports *what* changed, in scene terms
+  (`root$children[1]$gp$fill: steelblue -> tomato`) rather than as a pixel diff.
+  That makes it a better basis for visual-regression testing than comparing
+  images, because an image diff is sensitive to the font stack and a structural
+  one is not.
+
+* **`scene_inset()`** places one scene inside a region of another. Because a
+  scene has a known resolved size this is a graft, not a re-render, and the
+  result is an ordinary scene: the inset is an addressable node that can be
+  edited by name, inset again, or serialized. The *policy* questions
+  (should panel edges align? should axes be shared?) stay above vellum, in a
+  grammar; the engine supplies the ability to nest at all.
+
+* New article `vignette("scenes-as-values")` and example
+  `inst/examples/serialize.R`.
+
 * **Gradient strokes.** `vl_gpar(col = linear_gradient(...))` strokes *with* a
   gradient — the same paint model `fill` already had, applied to the region the
   line covers instead of the region a shape encloses. A trajectory can carry its

@@ -89,6 +89,7 @@ articles:
   navbar: Inspecting
   contents:
   - inspecting-scenes
+  - scenes-as-values
 - title: Interop
   navbar: Interop
   contents:
@@ -144,6 +145,11 @@ reference:
   - vl_lint_finding
   - scene_stats
   - profile_render
+  - as_scene_spec
+  - scene_write
+  - scene_hash
+  - scene_diff
+  - scene_inset
 
 - title: Paint & appearance
   desc: >
