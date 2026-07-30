@@ -233,6 +233,7 @@ vl_viewport(xscale = c(0, 10), yscale = c(0, 100))
 #>  .. @ features  : NULL
 #>  .. @ antialias : NULL
 #>  .. @ crisp     : NULL
+#>  .. @ dash_phase: NULL
 #>  @ layout  : NULL
 #>  @ row     : NULL
 #>  @ col     : NULL

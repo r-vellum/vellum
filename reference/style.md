@@ -30,6 +30,7 @@ style(
   features = NULL,
   antialias = NULL,
   crisp = NULL,
+  dash_phase = NULL,
   name = NULL
 )
 ```
@@ -38,7 +39,14 @@ style(
 
 - col:
 
-  Stroke/text colour.
+  Stroke/text colour, or a gradient from
+  [`linear_gradient()`](https://r-vellum.github.io/vellum/reference/gradients.md)
+  /
+  [`radial_gradient()`](https://r-vellum.github.io/vellum/reference/gradients.md)
+  to **stroke with a gradient** — the same paint model as `fill`,
+  applied to the stroked region instead of the enclosed one. A gradient
+  here affects stroked paths; text and markers fall back to its first
+  stop, since a glyph run has no path to run a ramp along.
 
 - fill:
 
@@ -139,6 +147,13 @@ style(
   and it only applies to raster output — a vector format has no pixel
   grid.
 
+- dash_phase:
+
+  How far into the dash pattern a dashed line starts, as a multiple of
+  `lwd` (so it scales with the line width exactly as the dash nibbles
+  do). Use it to line up dashes across adjacent strokes, or animate it
+  for marching ants. `NULL` (default) means 0. Ignored for a solid line.
+
 - name:
 
   Optional style-class name, for identification only; it is ignored by
@@ -191,6 +206,7 @@ vl_viewport(gp = accent)
 #>  .. @ features  : NULL
 #>  .. @ antialias : NULL
 #>  .. @ crisp     : NULL
+#>  .. @ dash_phase: NULL
 #>  .. @ name      : chr "accent"
 #>  @ layout  : NULL
 #>  @ row     : NULL

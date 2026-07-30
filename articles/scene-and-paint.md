@@ -107,9 +107,10 @@ guessed.
 
 Any `fill` in
 [`vl_gpar()`](https://r-vellum.github.io/vellum/reference/vl_gpar.md)
-can be more than a flat colour. The same three paint types work
-identically on the raster, SVG, and PDF backends (with the documented
-exception that the PDF backend does not yet rasterise patterns).
+can be more than a flat colour — and so can `col`. The same three paint
+types work identically on the raster, SVG, and PDF backends (with the
+documented exception that the PDF backend does not yet rasterise
+patterns).
 
 ### Gradients
 
@@ -212,6 +213,55 @@ accumulate the way per-element `vl_gpar(alpha = )` would. That
 distinction (compositing a group versus fading each mark) is exactly the
 kind of control a grammar layer needs from its backend.
 
+### Stroking with a gradient
+
+`col` takes the same paints `fill` does. The difference is only *where*
+they apply: a fill paints the region a shape encloses, a stroke paints
+the region the line covers. So a trajectory can carry its colour along
+itself:
+
+``` r
+
+t <- seq(0, 1, length.out = 120)
+display(
+  vl_scene(6, 1.6) |>
+    draw(lines_grob(0.04 + 0.92 * t, 0.5 + 0.28 * sin(6 * pi * t),
+                    gp = vl_gpar(col = linear_gradient(c("#F97316", "#FACC15", "#22C55E")),
+                                 lwd = 9)))
+)
+```
+
+![](scene-and-paint_files/figure-html/unnamed-chunk-2-1.png)
+
+That is real paint on every backend — SVG emits `stroke="url(#…)"`, PDF
+a proper shading — not a rasterised approximation, and not the usual
+workaround of emitting hundreds of one-segment lines each in a slightly
+different flat colour. It applies to any stroked path, outlines
+included.
+
+One consequence: text and markers take the gradient’s **first stop**
+rather than the ramp, because a glyph run has no path to run a ramp
+along. They fall back to a colour rather than silently not drawing.
+
+### Dash phase
+
+`dash_phase` says how far into the dash pattern a line begins, in
+multiples of `lwd` — so it scales with the line width exactly as the
+dash nibbles do. Stepping it across a set of rules makes the dashes
+walk, which is also how you animate marching ants.
+
+``` r
+
+s <- vl_scene(6, 1.4)
+for (i in 0:3) {
+  s <- draw(s, segments_grob(0.04, 0.85 - i * 0.22, 0.96, 0.85 - i * 0.22,
+    gp = vl_gpar(col = "grey15", lwd = 5, lty = "dashed", dash_phase = i * 1.5)))
+}
+display(s)
+```
+
+![](scene-and-paint_files/figure-html/unnamed-chunk-3-1.png)
+
 ## Filling a line
 
 Everything above fills an *area*. A line has no area: a stroke is a
@@ -240,7 +290,7 @@ display(
 )
 ```
 
-![](scene-and-paint_files/figure-html/unnamed-chunk-2-1.png)
+![](scene-and-paint_files/figure-html/unnamed-chunk-4-1.png)
 
 The expansion uses the same stroker the rasterizer uses, so the outline
 is exactly the region that would have been inked rather than an
@@ -287,7 +337,8 @@ byte-identical.
   vectors express geometry; `"npc"` is relative to the viewport,
   `"native"` follows the data scales, and `"mm"` and friends are
   absolute.
-- `vl_gpar(fill = )` accepts gradients and patterns, and
+- `vl_gpar(fill = )` **and `vl_gpar(col = )`** accept gradients and
+  patterns, and
   [`vl_viewport()`](https://r-vellum.github.io/vellum/reference/vl_viewport.md)
   accepts masks, group opacity, and blend modes, all consistent across
   backends.

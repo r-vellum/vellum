@@ -108,6 +108,7 @@ rect_grob(gp = vl_gpar(fill = "steelblue", col = "black"), sketch = sketch())
 #>  .. @ features  : NULL
 #>  .. @ antialias : NULL
 #>  .. @ crisp     : NULL
+#>  .. @ dash_phase: NULL
 #>  @ vp    : NULL
 #>  @ id    : NULL
 #>  @ role  : NULL

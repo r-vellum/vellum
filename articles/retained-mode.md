@@ -66,6 +66,7 @@ get_node(dots, "b")
 #>  .. @ features  : NULL
 #>  .. @ antialias : NULL
 #>  .. @ crisp     : NULL
+#>  .. @ dash_phase: NULL
 #>  @ vp    : NULL
 #>  @ id    : NULL
 #>  @ role  : NULL

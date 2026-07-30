@@ -100,6 +100,7 @@ be passed anywhere a <code>gp</code> is accepted.</p>
 <span>  features <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  antialias <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  crisp <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  dash_phase <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  name <span class="op">=</span> <span class="cn">NULL</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
@@ -109,7 +110,11 @@ be passed anywhere a <code>gp</code> is accepted.</p>
 
 
 <dl><dt id="arg-col">col<a class="anchor" aria-label="anchor" href="#arg-col"></a></dt>
-<dd><p>Stroke/text colour.</p></dd>
+<dd><p>Stroke/text colour, or a gradient from <code><a href="gradients.html">linear_gradient()</a></code> /
+<code><a href="gradients.html">radial_gradient()</a></code> to <strong>stroke with a gradient</strong> — the same paint model as
+<code>fill</code>, applied to the stroked region instead of the enclosed one. A
+gradient here affects stroked paths; text and markers fall back to its first
+stop, since a glyph run has no path to run a ramp along.</p></dd>
 
 
 <dt id="arg-fill">fill<a class="anchor" aria-label="anchor" href="#arg-fill"></a></dt>
@@ -206,6 +211,13 @@ unaffected (there is no grid to snap them to), and it only applies to raster
 output — a vector format has no pixel grid.</p></dd>
 
 
+<dt id="arg-dash-phase">dash_phase<a class="anchor" aria-label="anchor" href="#arg-dash-phase"></a></dt>
+<dd><p>How far into the dash pattern a dashed line starts, as a
+multiple of <code>lwd</code> (so it scales with the line width exactly as the dash
+nibbles do). Use it to line up dashes across adjacent strokes, or animate it
+for marching ants. <code>NULL</code> (default) means 0. Ignored for a solid line.</p></dd>
+
+
 <dt id="arg-name">name<a class="anchor" aria-label="anchor" href="#arg-name"></a></dt>
 <dd><p>Optional style-class name, for identification only; it is ignored
 by rendering.</p></dd>
@@ -257,6 +269,7 @@ rather than setting gpar fields ad hoc on every element.</p>
 <span class="r-out co"><span class="r-pr">#&gt;</span>  .. @ features  : NULL</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>  .. @ antialias : NULL</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>  .. @ crisp     : NULL</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>  .. @ dash_phase: NULL</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>  .. @ name      : chr "accent"</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>  @ layout  : NULL</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>  @ row     : NULL</span>
