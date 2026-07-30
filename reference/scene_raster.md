@@ -9,7 +9,7 @@ the red value at pixel `(x, y)`).
 ## Usage
 
 ``` r
-scene_raster(scene)
+scene_raster(scene, cvd = "none")
 ```
 
 ## Arguments
@@ -21,6 +21,20 @@ scene_raster(scene)
   (or anything with an
   [`as_vellum_scene()`](https://r-vellum.github.io/vellum/reference/as_vellum_scene.md)
   method).
+
+- cvd:
+
+  Simulate a colour-vision deficiency: `"none"` (default),
+  `"protanopia"` (red-blind), `"deuteranopia"` (green-blind, the common
+  one that breaks red/green encodings), `"tritanopia"` (blue-blind), or
+  `"achromatopsia"` (total, and a fair proxy for greyscale printing).
+  The simulation is a post-pass over the finished raster using the
+  Machado et al. (2009) matrices applied in linear light, so it turns an
+  accessibility check into a one-line change instead of an
+  export-and-upload round trip. **Raster output only** — a vector format
+  has no pixels to transform, and
+  [`render()`](https://r-vellum.github.io/vellum/reference/vl_scene.md)
+  warns if you ask for one.
 
 ## Value
 

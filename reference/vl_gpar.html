@@ -87,7 +87,9 @@ the viewport tree. A colour value sets it; <code>NA</code> means "no paint".</p>
 <span>  lineheight <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  halo_col <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  halo_width <span class="op">=</span> <span class="cn">NULL</span>,</span>
-<span>  features <span class="op">=</span> <span class="cn">NULL</span></span>
+<span>  features <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  antialias <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  crisp <span class="op">=</span> <span class="cn">NULL</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
 
@@ -176,6 +178,22 @@ off, or <code>c(kern = 0)</code> to disable kerning. <code>NULL</code> (default)
 own defaults. A feature the font does not carry is silently ignored –
 that is HarfBuzz's behaviour, not something vellum can check for you.</p></dd>
 
+
+<dt id="arg-antialias">antialias<a class="anchor" aria-label="anchor" href="#arg-antialias"></a></dt>
+<dd><p>Anti-alias this element's edges? <code>NULL</code> (default) inherits;
+the root default is <code>TRUE</code>. <code>FALSE</code> gives hard pixel edges, which is what
+pixel art, QR codes, and heatmap cells that must tile without a seam want.</p></dd>
+
+
+<dt id="arg-crisp">crisp<a class="anchor" aria-label="anchor" href="#arg-crisp"></a></dt>
+<dd><p>Snap axis-parallel strokes onto the pixel grid? <code>NULL</code> (default)
+inherits; the root default is <code>FALSE</code>. A 1-px rule at a fractional
+coordinate straddles two pixel rows and renders as two grey ones rather than
+one solid — the reason gridlines look muddy on screen. <code>TRUE</code> snaps
+horizontal and vertical runs so they land on whole pixels. Diagonals are
+unaffected (there is no grid to snap them to), and it only applies to raster
+output — a vector format has no pixel grid.</p></dd>
+
 </dl></div>
     <div class="section level2">
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
@@ -202,6 +220,8 @@ that is HarfBuzz's behaviour, not something vellum can check for you.</p></dd>
 <span class="r-out co"><span class="r-pr">#&gt;</span>  @ halo_col  : NULL</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>  @ halo_width: NULL</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>  @ features  : NULL</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>  @ antialias : NULL</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>  @ crisp     : NULL</span>
 </code></pre></div>
     </div>
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>

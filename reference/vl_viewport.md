@@ -29,6 +29,8 @@ vl_viewport(
   mask = NULL,
   alpha = NULL,
   blend = NULL,
+  blur = NULL,
+  shadow = NULL,
   name = NULL,
   meta = NULL,
   pannable = FALSE,
@@ -111,6 +113,22 @@ grid_layout(
   `"soft-light"`, `"difference"`, `"exclusion"`, `"hue"`,
   `"saturation"`, `"color"`, or `"luminosity"` (the CSS `mix-blend-mode`
   set). `NULL`/`"normal"` is ordinary over-compositing.
+
+- blur:
+
+  Optional Gaussian blur radius in points, applied to the viewport's
+  contents as one isolated layer. Because it is a *group* effect,
+  overlapping shapes inside the viewport blur together rather than each
+  blurring over the others. `NULL`/`0` (default) means no blur. Raster
+  convolves it; SVG emits a native `feGaussianBlur` and stays vector;
+  PDF has no filter model and warns.
+
+- shadow:
+
+  Optional drop shadow from
+  [`vl_shadow()`](https://r-vellum.github.io/vellum/reference/vl_shadow.md),
+  cast by the viewport's contents as one silhouette. A shadow with no
+  offset is a glow. Same per-backend behaviour as `blur`.
 
 - name:
 
@@ -213,6 +231,8 @@ vl_viewport(xscale = c(0, 10), yscale = c(0, 100))
 #>  .. @ halo_col  : NULL
 #>  .. @ halo_width: NULL
 #>  .. @ features  : NULL
+#>  .. @ antialias : NULL
+#>  .. @ crisp     : NULL
 #>  @ layout  : NULL
 #>  @ row     : NULL
 #>  @ col     : NULL
@@ -221,6 +241,8 @@ vl_viewport(xscale = c(0, 10), yscale = c(0, 100))
 #>  @ mask    : NULL
 #>  @ alpha   : NULL
 #>  @ blend   : NULL
+#>  @ blur    : NULL
+#>  @ shadow  : NULL
 #>  @ name    : NULL
 #>  @ meta    : NULL
 #>  @ pannable: logi FALSE

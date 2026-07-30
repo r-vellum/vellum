@@ -28,7 +28,14 @@ draw(scene, grob)
 
 pop(scene, n = 1)
 
-render(scene, path, text = c("native", "outline"), debug = FALSE, scale = 1)
+render(
+  scene,
+  path,
+  text = c("native", "outline"),
+  debug = FALSE,
+  scale = 1,
+  cvd = "none"
+)
 ```
 
 ## Arguments
@@ -122,6 +129,18 @@ render(scene, path, text = c("native", "outline"), debug = FALSE, scale = 1)
   the layout changes; text does not get relatively bigger or smaller.
   Only raster output gains anything: a PDF's page size in points and an
   SVG's physical size are unchanged by construction.
+
+- cvd:
+
+  Simulate a colour-vision deficiency: `"none"` (default),
+  `"protanopia"` (red-blind), `"deuteranopia"` (green-blind, the common
+  one that breaks red/green encodings), `"tritanopia"` (blue-blind), or
+  `"achromatopsia"` (total, and a fair proxy for greyscale printing).
+  The simulation is a post-pass over the finished raster using the
+  Machado et al. (2009) matrices applied in linear light, so it turns an
+  accessibility check into a one-line change instead of an
+  export-and-upload round trip. **Raster output only** — a vector format
+  has no pixels to transform, and `render()` warns if you ask for one.
 
 ## Value
 

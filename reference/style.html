@@ -94,6 +94,8 @@ be passed anywhere a <code>gp</code> is accepted.</p>
 <span>  halo_col <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  halo_width <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  features <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  antialias <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  crisp <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  name <span class="op">=</span> <span class="cn">NULL</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
@@ -184,6 +186,22 @@ own defaults. A feature the font does not carry is silently ignored –
 that is HarfBuzz's behaviour, not something vellum can check for you.</p></dd>
 
 
+<dt id="arg-antialias">antialias<a class="anchor" aria-label="anchor" href="#arg-antialias"></a></dt>
+<dd><p>Anti-alias this element's edges? <code>NULL</code> (default) inherits;
+the root default is <code>TRUE</code>. <code>FALSE</code> gives hard pixel edges, which is what
+pixel art, QR codes, and heatmap cells that must tile without a seam want.</p></dd>
+
+
+<dt id="arg-crisp">crisp<a class="anchor" aria-label="anchor" href="#arg-crisp"></a></dt>
+<dd><p>Snap axis-parallel strokes onto the pixel grid? <code>NULL</code> (default)
+inherits; the root default is <code>FALSE</code>. A 1-px rule at a fractional
+coordinate straddles two pixel rows and renders as two grey ones rather than
+one solid — the reason gridlines look muddy on screen. <code>TRUE</code> snaps
+horizontal and vertical runs so they land on whole pixels. Diagonals are
+unaffected (there is no grid to snap them to), and it only applies to raster
+output — a vector format has no pixel grid.</p></dd>
+
+
 <dt id="arg-name">name<a class="anchor" aria-label="anchor" href="#arg-name"></a></dt>
 <dd><p>Optional style-class name, for identification only; it is ignored
 by rendering.</p></dd>
@@ -233,6 +251,8 @@ rather than setting gpar fields ad hoc on every element.</p>
 <span class="r-out co"><span class="r-pr">#&gt;</span>  .. @ halo_col  : NULL</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>  .. @ halo_width: NULL</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>  .. @ features  : NULL</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>  .. @ antialias : NULL</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>  .. @ crisp     : NULL</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>  .. @ name      : chr "accent"</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>  @ layout  : NULL</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>  @ row     : NULL</span>
@@ -242,6 +262,8 @@ rather than setting gpar fields ad hoc on every element.</p>
 <span class="r-out co"><span class="r-pr">#&gt;</span>  @ mask    : NULL</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>  @ alpha   : NULL</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>  @ blend   : NULL</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>  @ blur    : NULL</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>  @ shadow  : NULL</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>  @ name    : NULL</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>  @ meta    : NULL</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>  @ pannable: logi FALSE</span>

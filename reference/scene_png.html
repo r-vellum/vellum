@@ -77,7 +77,7 @@ to a connection — without a temp-file round-trip.</p>
 
     <div class="section level2">
     <h2 id="ref-usage">Usage<a class="anchor" aria-label="anchor" href="#ref-usage"></a></h2>
-    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">scene_png</span><span class="op">(</span><span class="va">scene</span>, scale <span class="op">=</span> <span class="fl">1</span><span class="op">)</span></span>
+    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">scene_png</span><span class="op">(</span><span class="va">scene</span>, scale <span class="op">=</span> <span class="fl">1</span>, cvd <span class="op">=</span> <span class="st">"none"</span><span class="op">)</span></span>
 <span></span>
 <span><span class="fu">scene_pdf</span><span class="op">(</span><span class="va">scene</span><span class="op">)</span></span></code></pre></div>
     </div>
@@ -98,6 +98,18 @@ the device pixels while keeping the <strong>same physical size</strong> — the 
 changes; text does not get relatively bigger or smaller. Only raster output
 gains anything: a PDF's page size in points and an SVG's physical size are
 unchanged by construction.</p></dd>
+
+
+<dt id="arg-cvd">cvd<a class="anchor" aria-label="anchor" href="#arg-cvd"></a></dt>
+<dd><p>Simulate a colour-vision deficiency: <code>"none"</code> (default),
+<code>"protanopia"</code> (red-blind), <code>"deuteranopia"</code> (green-blind, the common one
+that breaks red/green encodings), <code>"tritanopia"</code> (blue-blind), or
+<code>"achromatopsia"</code> (total, and a fair proxy for greyscale printing). The
+simulation is a post-pass over the finished raster using the Machado et al.
+(2009) matrices applied in linear light, so it turns an accessibility check
+into a one-line change instead of an export-and-upload round trip. <strong>Raster
+output only</strong> — a vector format has no pixels to transform, and <code><a href="vl_scene.html">render()</a></code>
+warns if you ask for one.</p></dd>
 
 </dl></div>
     <div class="section level2">

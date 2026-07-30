@@ -95,6 +95,8 @@ viewports are then placed into cells via <code>row</code>/<code>col</code>.</p>
 <span>  mask <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  alpha <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  blend <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  blur <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  shadow <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  name <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  meta <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  pannable <span class="op">=</span> <span class="cn">FALSE</span>,</span>
@@ -171,6 +173,21 @@ isolated layer) onto the backdrop below it. One of <code>"normal"</code> (defaul
 <code>"difference"</code>, <code>"exclusion"</code>, <code>"hue"</code>, <code>"saturation"</code>, <code>"color"</code>, or
 <code>"luminosity"</code> (the CSS <code>mix-blend-mode</code> set). <code>NULL</code>/<code>"normal"</code> is ordinary
 over-compositing.</p></dd>
+
+
+<dt id="arg-blur">blur<a class="anchor" aria-label="anchor" href="#arg-blur"></a></dt>
+<dd><p>Optional Gaussian blur radius in points, applied to the
+viewport's contents as one isolated layer. Because it is a <em>group</em> effect,
+overlapping shapes inside the viewport blur together rather than each
+blurring over the others. <code>NULL</code>/<code>0</code> (default) means no blur. Raster
+convolves it; SVG emits a native <code>feGaussianBlur</code> and stays vector; PDF has
+no filter model and warns.</p></dd>
+
+
+<dt id="arg-shadow">shadow<a class="anchor" aria-label="anchor" href="#arg-shadow"></a></dt>
+<dd><p>Optional drop shadow from <code><a href="vl_shadow.html">vl_shadow()</a></code>, cast by the viewport's
+contents as one silhouette. A shadow with no offset is a glow. Same
+per-backend behaviour as <code>blur</code>.</p></dd>
 
 
 <dt id="arg-name">name<a class="anchor" aria-label="anchor" href="#arg-name"></a></dt>
@@ -263,6 +280,8 @@ built on top of vellum.</p></dd>
 <span class="r-out co"><span class="r-pr">#&gt;</span>  .. @ halo_col  : NULL</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>  .. @ halo_width: NULL</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>  .. @ features  : NULL</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>  .. @ antialias : NULL</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>  .. @ crisp     : NULL</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>  @ layout  : NULL</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>  @ row     : NULL</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>  @ col     : NULL</span>
@@ -271,6 +290,8 @@ built on top of vellum.</p></dd>
 <span class="r-out co"><span class="r-pr">#&gt;</span>  @ mask    : NULL</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>  @ alpha   : NULL</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>  @ blend   : NULL</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>  @ blur    : NULL</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>  @ shadow  : NULL</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>  @ name    : NULL</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>  @ meta    : NULL</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>  @ pannable: logi FALSE</span>

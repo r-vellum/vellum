@@ -64,6 +64,8 @@ get_node(dots, "b")
 #>  .. @ halo_col  : NULL
 #>  .. @ halo_width: NULL
 #>  .. @ features  : NULL
+#>  .. @ antialias : NULL
+#>  .. @ crisp     : NULL
 #>  @ vp    : NULL
 #>  @ id    : NULL
 #>  @ role  : NULL

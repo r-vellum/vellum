@@ -351,6 +351,8 @@ masks, reusable styles, and hand-drawn rendering.
   : Tiling-pattern fills
 - [`as_mask()`](https://r-vellum.github.io/vellum/reference/as_mask.md)
   : Masks
+- [`vl_shadow()`](https://r-vellum.github.io/vellum/reference/vl_shadow.md)
+  : Drop shadow for a viewport group
 - [`sketch()`](https://r-vellum.github.io/vellum/reference/sketch.md) :
   Hand-drawn ("sketch") rendering
 

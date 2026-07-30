@@ -246,6 +246,8 @@ drawn scene. <code>kind</code> is 0 (alpha) or 1 (luminance). Returns its index.
 <code>blend</code> (a code; 0 = normal). Routed through <code>emit_node</code> so a group nested
 inside a mask (a mask grob that itself masks a viewport) lands in the same
 node list as its content, keeping markers and content in sync.</p>
+<p><code>blur</code> is a Gaussian radius in device px (0 = none). <code>shadow</code> is
+<code>c(dx, dy, blur, r, g, b, a)</code> in device px / 0-255, or empty for none.</p>
 </div>
 
 <div class="section">

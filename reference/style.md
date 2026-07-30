@@ -28,6 +28,8 @@ style(
   halo_col = NULL,
   halo_width = NULL,
   features = NULL,
+  antialias = NULL,
+  crisp = NULL,
   name = NULL
 )
 ```
@@ -120,6 +122,23 @@ style(
   silently ignored – that is HarfBuzz's behaviour, not something vellum
   can check for you.
 
+- antialias:
+
+  Anti-alias this element's edges? `NULL` (default) inherits; the root
+  default is `TRUE`. `FALSE` gives hard pixel edges, which is what pixel
+  art, QR codes, and heatmap cells that must tile without a seam want.
+
+- crisp:
+
+  Snap axis-parallel strokes onto the pixel grid? `NULL` (default)
+  inherits; the root default is `FALSE`. A 1-px rule at a fractional
+  coordinate straddles two pixel rows and renders as two grey ones
+  rather than one solid — the reason gridlines look muddy on screen.
+  `TRUE` snaps horizontal and vertical runs so they land on whole
+  pixels. Diagonals are unaffected (there is no grid to snap them to),
+  and it only applies to raster output — a vector format has no pixel
+  grid.
+
 - name:
 
   Optional style-class name, for identification only; it is ignored by
@@ -170,6 +189,8 @@ vl_viewport(gp = accent)
 #>  .. @ halo_col  : NULL
 #>  .. @ halo_width: NULL
 #>  .. @ features  : NULL
+#>  .. @ antialias : NULL
+#>  .. @ crisp     : NULL
 #>  .. @ name      : chr "accent"
 #>  @ layout  : NULL
 #>  @ row     : NULL
@@ -179,6 +200,8 @@ vl_viewport(gp = accent)
 #>  @ mask    : NULL
 #>  @ alpha   : NULL
 #>  @ blend   : NULL
+#>  @ blur    : NULL
+#>  @ shadow  : NULL
 #>  @ name    : NULL
 #>  @ meta    : NULL
 #>  @ pannable: logi FALSE

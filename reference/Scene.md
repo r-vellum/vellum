@@ -170,6 +170,9 @@ mode `blend` (a code; 0 = normal). Routed through `emit_node` so a group
 nested inside a mask (a mask grob that itself masks a viewport) lands in
 the same node list as its content, keeping markers and content in sync.
 
+`blur` is a Gaussian radius in device px (0 = none). `shadow` is
+`c(dx, dy, blur, r, g, b, a)` in device px / 0-255, or empty for none.
+
 ### Method `group_end`
 
 Close the most recently opened group.
