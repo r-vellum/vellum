@@ -35,14 +35,31 @@ differently on purpose.
 | `pushViewport()` / `popViewport()` | `push()` / `pop()` | functional: they take and return a scene, no global stack |
 | `grid.rect()`, `grid.circle()`, ... | `rect_grob()`, `circle_grob()`, ... plus `draw()` | the constructor builds a value; `draw()` adds it |
 | `rectGrob()`, `gTree()` | `rect_grob()`, the scene tree | grobs are immutable S7 values |
-| `gpar()` | `vl_gpar()` | familiar fields; `fill` also accepts gradients |
+| `gpar()` | `vl_gpar()` | familiar fields (including `cex`); `fill` also accepts gradients |
 | `grid.layout()` | `grid_layout()` | flexible `"null"` tracks work the same |
 | `grid.ls()` / `grid.get()` | `node_names()` / `get_node()` | list and read nodes by `name` |
 | `grid.edit()` / `editGrob()` | `edit_node()` | `editGrob()` also copies; `grid.edit()` mutates the display list, `edit_node()` never does |
 | `grid.grabExpr()` / display list | the retained scene | the tree is the model, not something you recover from a device |
 | `grid.locator()` | `hit_test()` | picking from a pick-buffer, not one interactive click |
 | (no counterpart) | `scene_model()` | per-element identity plus resolved device-pixel bbox |
+| (no counterpart) | `vl_lint()` | static analysis: off-canvas marks, illegible text, low contrast |
+| `convertWidth()` / `convertX()` | `vl_convert()` | one function; `axis` picks the extent, `what` a length vs a position |
 | device (`png()`, `pdf()`, ...) | `render(scene, path)` | the extension picks the backend |
+
+### Things grid has no equivalent for
+
+A few `vl_gpar()` fields exist because vellum controls the font stack and the
+rasterizer directly, so there is nothing to map them onto in grid:
+
+| field | what it does |
+|-------|--------------|
+| `halo_col` / `halo_width` | stroke the glyph outlines under the fill, so a label survives a busy background (see `vignette("typography")`) |
+| `features` | OpenType feature tags — tabular figures, small caps, ligature and kerning control |
+| `crisp` | snap axis-parallel strokes to the pixel grid, so gridlines are solid rather than two grey rows |
+| `antialias` | hard pixel edges, for pixel art and seamless heatmap cells |
+
+Packages built on grid emulate the first of these by drawing the label eight
+times at small offsets; the rest have no workaround at all.
 
 ## Side by side
 

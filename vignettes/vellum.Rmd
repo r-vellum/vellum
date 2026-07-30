@@ -135,6 +135,31 @@ The same scene value renders to all three formats with consistent geometry, and
 raster and PDF output is byte-stable, so it is reproducible and
 snapshot-testable.
 
+`render()` takes two arguments worth knowing about. `scale` renders at a
+multiple of the device pixels while keeping the same physical size — the retina
+idiom — so nothing about the layout or the relative size of text changes. `cvd`
+simulates a colour-vision deficiency, which is covered in
+`vignette("render-quality")`.
+
+```{r}
+#| label: render-args
+#| eval: false
+render(s, "out@2x.png", scale = 2) # twice the pixels, same physical size
+render(s, "check.png", cvd = "deuteranopia") # as a red/green-blind reader sees it
+```
+
+You do not have to go through a file. Every format is also available in memory,
+which is what a web handler or an HTML widget wants:
+
+```{r}
+#| label: in-memory
+#| eval: false
+scene_png(s) # raw vector: the encoded PNG
+scene_pdf(s) # raw vector: the encoded PDF
+scene_svg(s) # character: the SVG document
+scene_raster(s) # integer array: the pixels themselves
+```
+
 ## Where to go next
 
 - `vignette("scene-and-paint")`: the scene graph, units and viewports, and the
@@ -142,6 +167,12 @@ snapshot-testable.
 - `vignette("retained-mode")`: read back per-element geometry with
   `scene_model()`, pick a node under a point with `hit_test()`, and edit nodes by
   name.
+- `vignette("inspecting-scenes")`: `vl_lint()` to catch likely mistakes,
+  `scene_stats()` for coverage and crowding, `profile_render()` for where the
+  time goes.
+- `vignette("render-quality")`: colour-vision simulation, crisp gridlines, and
+  group blur/shadow effects.
+- `vignette("typography")`: text halos and OpenType features.
 - `vignette("coming-from-grid")`: a translation guide if you already know grid.
 - `vignette("grid-interop")`: render existing grid, ggplot2, and lattice output
   through the vellum backend.

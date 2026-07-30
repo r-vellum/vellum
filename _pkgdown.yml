@@ -81,8 +81,14 @@ articles:
   contents:
   - scene-and-paint
   - typography
+  - render-quality
   - retained-mode
   - datashading
+
+- title: Inspecting
+  navbar: Inspecting
+  contents:
+  - inspecting-scenes
 - title: Interop
   navbar: Interop
   contents:
