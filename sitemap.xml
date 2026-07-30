@@ -11,6 +11,7 @@
 <url><loc>https://r-vellum.github.io/vellum/articles/retained-mode.html</loc></url>
 <url><loc>https://r-vellum.github.io/vellum/articles/scene-and-paint.html</loc></url>
 <url><loc>https://r-vellum.github.io/vellum/articles/scene-contract.html</loc></url>
+<url><loc>https://r-vellum.github.io/vellum/articles/scenes-as-values.html</loc></url>
 <url><loc>https://r-vellum.github.io/vellum/articles/typography.html</loc></url>
 <url><loc>https://r-vellum.github.io/vellum/articles/vellum.html</loc></url>
 <url><loc>https://r-vellum.github.io/vellum/authors.html</loc></url>
@@ -18,6 +19,7 @@
 <url><loc>https://r-vellum.github.io/vellum/news/index.html</loc></url>
 <url><loc>https://r-vellum.github.io/vellum/reference/Scene.html</loc></url>
 <url><loc>https://r-vellum.github.io/vellum/reference/as_mask.html</loc></url>
+<url><loc>https://r-vellum.github.io/vellum/reference/as_scene_spec.html</loc></url>
 <url><loc>https://r-vellum.github.io/vellum/reference/as_vellum.html</loc></url>
 <url><loc>https://r-vellum.github.io/vellum/reference/as_vellum_scene.html</loc></url>
 <url><loc>https://r-vellum.github.io/vellum/reference/datashade.html</loc></url>
@@ -46,11 +48,15 @@
 <url><loc>https://r-vellum.github.io/vellum/reference/rs_stroke_to_path.html</loc></url>
 <url><loc>https://r-vellum.github.io/vellum/reference/rs_subraster_stats.html</loc></url>
 <url><loc>https://r-vellum.github.io/vellum/reference/rs_take_node_times.html</loc></url>
+<url><loc>https://r-vellum.github.io/vellum/reference/scene_diff.html</loc></url>
+<url><loc>https://r-vellum.github.io/vellum/reference/scene_hash.html</loc></url>
+<url><loc>https://r-vellum.github.io/vellum/reference/scene_inset.html</loc></url>
 <url><loc>https://r-vellum.github.io/vellum/reference/scene_model.html</loc></url>
 <url><loc>https://r-vellum.github.io/vellum/reference/scene_png.html</loc></url>
 <url><loc>https://r-vellum.github.io/vellum/reference/scene_raster.html</loc></url>
 <url><loc>https://r-vellum.github.io/vellum/reference/scene_stats.html</loc></url>
 <url><loc>https://r-vellum.github.io/vellum/reference/scene_svg.html</loc></url>
+<url><loc>https://r-vellum.github.io/vellum/reference/scene_write.html</loc></url>
 <url><loc>https://r-vellum.github.io/vellum/reference/sketch.html</loc></url>
 <url><loc>https://r-vellum.github.io/vellum/reference/spread.html</loc></url>
 <url><loc>https://r-vellum.github.io/vellum/reference/stroke_to_path.html</loc></url>

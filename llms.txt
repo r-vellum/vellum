@@ -353,6 +353,18 @@ the resolved geometry the renderer draws with.
   : Ink and overplotting statistics for a scene
 - [`profile_render()`](https://r-vellum.github.io/vellum/reference/profile_render.md)
   : Where a scene spends its render time
+- [`as_scene_spec()`](https://r-vellum.github.io/vellum/reference/as_scene_spec.md)
+  [`from_scene_spec()`](https://r-vellum.github.io/vellum/reference/as_scene_spec.md)
+  : Convert a scene to and from a plain list
+- [`scene_write()`](https://r-vellum.github.io/vellum/reference/scene_write.md)
+  [`scene_read()`](https://r-vellum.github.io/vellum/reference/scene_write.md)
+  : Write and read a scene
+- [`scene_hash()`](https://r-vellum.github.io/vellum/reference/scene_hash.md)
+  : A content fingerprint for a scene
+- [`scene_diff()`](https://r-vellum.github.io/vellum/reference/scene_diff.md)
+  : What changed between two scenes
+- [`scene_inset()`](https://r-vellum.github.io/vellum/reference/scene_inset.md)
+  : Inset one scene inside another
 
 ## Paint & appearance
 
@@ -455,6 +467,8 @@ through the vellum backend.
 
 - [Inspecting a scene: linting, coverage,
   profiling](https://r-vellum.github.io/vellum/articles/inspecting-scenes.md):
+- [Scenes as values: saving, comparing,
+  composing](https://r-vellum.github.io/vellum/articles/scenes-as-values.md):
 
 ### Interop
 

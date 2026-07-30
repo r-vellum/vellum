@@ -40,6 +40,7 @@ compile (the R→Rust replay, including text shaping), and raster
     <li><hr class="dropdown-divider"></li>
     <li><h6 class="dropdown-header" data-toc-skip>Inspecting</h6></li>
     <li><a class="dropdown-item" href="../articles/inspecting-scenes.html">Inspecting a scene: linting, coverage, profiling</a></li>
+    <li><a class="dropdown-item" href="../articles/scenes-as-values.html">Scenes as values: saving, comparing, composing</a></li>
     <li><hr class="dropdown-divider"></li>
     <li><h6 class="dropdown-header" data-toc-skip>Interop</h6></li>
     <li><a class="dropdown-item" href="../articles/coming-from-grid.html">Coming from grid</a></li>
@@ -125,7 +126,7 @@ per-node table only accounts for raster time.</p>
 <span class="r-msg co"><span class="r-pr">#&gt;</span> <span style="font-weight: bold;">Phases</span> (median of the timed reps):</span>
 <span class="r-msg co"><span class="r-pr">#&gt;</span> <span style="color: #00BBBB;">•</span> build 0.001 s (constructing the R value)</span>
 <span class="r-msg co"><span class="r-pr">#&gt;</span> <span style="color: #00BBBB;">•</span> compile 0.005 s (R -&gt; Rust replay, incl. text shaping)</span>
-<span class="r-msg co"><span class="r-pr">#&gt;</span> <span style="color: #00BBBB;">•</span> raster 0.038 s (drawing)</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> <span style="color: #00BBBB;">•</span> raster 0.039 s (drawing)</span>
 <span class="r-msg co"><span class="r-pr">#&gt;</span> </span>
 <span class="r-msg co"><span class="r-pr">#&gt;</span> <span style="font-weight: bold;">Slowest marks</span> (raster time):</span>
 <span class="r-msg co"><span class="r-pr">#&gt;</span> <span style="color: #00BBBB;">•</span> circle - 2000 elem 0.0079 s 99.6%</span>

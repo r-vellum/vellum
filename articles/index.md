@@ -17,6 +17,8 @@
 
 - [Inspecting a scene: linting, coverage,
   profiling](https://r-vellum.github.io/vellum/articles/inspecting-scenes.md):
+- [Scenes as values: saving, comparing,
+  composing](https://r-vellum.github.io/vellum/articles/scenes-as-values.md):
 
 ### Interop
 

@@ -34,6 +34,7 @@
     <li><hr class="dropdown-divider"></li>
     <li><h6 class="dropdown-header" data-toc-skip>Inspecting</h6></li>
     <li><a class="dropdown-item" href="../articles/inspecting-scenes.html">Inspecting a scene: linting, coverage, profiling</a></li>
+    <li><a class="dropdown-item" href="../articles/scenes-as-values.html">Scenes as values: saving, comparing, composing</a></li>
     <li><hr class="dropdown-divider"></li>
     <li><h6 class="dropdown-header" data-toc-skip>Interop</h6></li>
     <li><a class="dropdown-item" href="../articles/coming-from-grid.html">Coming from grid</a></li>
@@ -65,6 +66,14 @@
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="development version" id="vellum-development-version">vellum (development version)<a class="anchor" aria-label="anchor" href="#vellum-development-version"></a></h2>
 <ul><li>
+<p><strong>A scene is now a value you can save, fingerprint, compare and compose.</strong> <code><a href="../reference/scene_write.html">scene_write()</a></code> / <code><a href="../reference/scene_write.html">scene_read()</a></code> persist a built scene (<code>.rds</code>, or <code>.json</code> with jsonlite) and rebuild it to byte-identical pixels; <code><a href="../reference/as_scene_spec.html">as_scene_spec()</a></code> / <code><a href="../reference/as_scene_spec.html">from_scene_spec()</a></code> are the plain-list form underneath. The conversion is generic over the S7 property model rather than written per grob type, so a grob added later serializes with no change to the serializer.</p>
+<p>This is one level below <code>vellumplot</code>’s <em>plot</em> spec and composes with it: a plot spec is portable and re-renderable at any size, a scene spec reproduces exactly this scene.</p>
+</li>
+<li><p><strong><code><a href="../reference/scene_hash.html">scene_hash()</a></code></strong> fingerprints content — two independently-built identical scenes agree, any change to what is drawn does not. Usable as a cache key or a test assertion.</p></li>
+<li><p><strong><code><a href="../reference/scene_diff.html">scene_diff()</a></code></strong> reports <em>what</em> changed, in scene terms (<code>root$children[1]$gp$fill: steelblue -&gt; tomato</code>) rather than as a pixel diff. That makes it a better basis for visual-regression testing than comparing images, because an image diff is sensitive to the font stack and a structural one is not.</p></li>
+<li><p><strong><code><a href="../reference/scene_inset.html">scene_inset()</a></code></strong> places one scene inside a region of another. Because a scene has a known resolved size this is a graft, not a re-render, and the result is an ordinary scene: the inset is an addressable node that can be edited by name, inset again, or serialized. The <em>policy</em> questions (should panel edges align? should axes be shared?) stay above vellum, in a grammar; the engine supplies the ability to nest at all.</p></li>
+<li><p>New article <code><a href="../articles/scenes-as-values.html">vignette("scenes-as-values")</a></code> and example <code>inst/examples/serialize.R</code>.</p></li>
+<li>
 <p><strong>Gradient strokes.</strong> <code>vl_gpar(col = linear_gradient(...))</code> strokes <em>with</em> a gradient — the same paint model <code>fill</code> already had, applied to the region the line covers instead of the region a shape encloses. A trajectory can carry its colour along itself, and it is real paint on every backend (a tiny-skia shader, SVG <code>stroke="url(#…)"</code>, a krilla shading) rather than the usual workaround of emitting hundreds of one-segment lines in slightly different flat colours. It applies to any stroked path, outlines included, and inherits from a viewport like every other stroke property.</p>
 <p>Text and markers fall back to the gradient’s first stop, because a glyph run has no path to run a ramp along; a <em>pattern</em> in <code>col</code> falls back to the colour, because a pattern needs cell geometry a stroke does not have.</p>
 </li>
