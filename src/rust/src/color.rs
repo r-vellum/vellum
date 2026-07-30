@@ -318,6 +318,12 @@ pub struct PartialGpar {
     /// Snap axis-parallel strokes to the pixel grid, so a 1-px rule lands on one
     /// row instead of straddling two as a pair of grey ones.
     pub crisp: Inh<bool>,
+    /// A gradient/pattern to stroke with. Rides the stroke sub-record so it
+    /// inherits like every other stroke property.
+    pub col_paint: Inh<Option<Paint>>,
+    /// Dash phase, as a multiple of the line width (so it scales with `lwd`,
+    /// exactly as the dash nibbles do).
+    pub dash_phase: Inh<f64>,
 }
 
 impl PartialGpar {
@@ -325,14 +331,18 @@ impl PartialGpar {
     /// (each `NULL` = inherit), or `NULL` to inherit all of them.
     pub fn from_robj(fill: &Robj, col: &Robj, lwd: &Robj, alpha: &Robj, stroke: &Robj) -> Self {
         let field = |name: &str| stroke.dollar(name).unwrap_or_else(|_| ().into());
-        let (lty, lineend, linejoin, linemitre, antialias, crisp) = if stroke.is_list() {
+        let (lty, lineend, linejoin, linemitre, antialias, crisp, col_paint, dash_phase) = if stroke.is_list() {
             (
                 inh_lty(&field("lty")), inh_linecap(&field("lineend")),
                 inh_linejoin(&field("linejoin")), inh_f64(&field("linemitre")),
                 inh_bool(&field("antialias")), inh_bool(&field("crisp")),
+                inh_paint(&field("paint")), inh_f64(&field("phase")),
             )
         } else {
-            (Inh::Inherit, Inh::Inherit, Inh::Inherit, Inh::Inherit, Inh::Inherit, Inh::Inherit)
+            (
+                Inh::Inherit, Inh::Inherit, Inh::Inherit, Inh::Inherit,
+                Inh::Inherit, Inh::Inherit, Inh::Inherit, Inh::Inherit,
+            )
         };
         PartialGpar {
             fill: inh_paint(fill),
@@ -345,6 +355,8 @@ impl PartialGpar {
             linemitre,
             antialias,
             crisp,
+            col_paint,
+            dash_phase,
         }
     }
 }
@@ -422,6 +434,8 @@ pub struct GparAcc {
     pub linemitre: f64,
     pub antialias: bool,
     pub crisp: bool,
+    pub col_paint: Option<Paint>,
+    pub dash_phase: f64,
 }
 
 impl GparAcc {
@@ -439,6 +453,8 @@ impl GparAcc {
             linemitre: 10.0,
             antialias: true,
             crisp: false,
+            col_paint: None,
+            dash_phase: 0.0,
         }
     }
 
@@ -485,6 +501,14 @@ impl GparAcc {
                 Inh::Set(v) => v,
                 Inh::Inherit => self.crisp,
             },
+            col_paint: match &p.col_paint {
+                Inh::Set(v) => v.clone(),
+                Inh::Inherit => self.col_paint.clone(),
+            },
+            dash_phase: match p.dash_phase {
+                Inh::Set(v) => v,
+                Inh::Inherit => self.dash_phase,
+            },
         }
     }
 
@@ -500,6 +524,9 @@ impl GparAcc {
             linemitre: self.linemitre,
             antialias: self.antialias,
             crisp: self.crisp,
+            // The group alpha folds into a stroke paint exactly as it does a fill.
+            col_paint: self.col_paint.clone().map(|p| p.with_alpha(self.alpha)),
+            dash_phase: self.dash_phase,
         }
     }
 
@@ -635,6 +662,10 @@ pub struct Gpar {
     pub antialias: bool,
     /// Snap axis-parallel strokes to the pixel grid (default `false`).
     pub crisp: bool,
+    /// Gradient/pattern to stroke with (default `None` = the plain colour).
+    pub col_paint: Option<Paint>,
+    /// Dash phase as a multiple of the line width (default 0).
+    pub dash_phase: f64,
 }
 
 impl Gpar {

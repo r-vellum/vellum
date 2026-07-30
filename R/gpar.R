@@ -4,7 +4,11 @@
 #' left `NULL` is inherited from the enclosing viewport; `alpha` multiplies down
 #' the viewport tree. A colour value sets it; `NA` means "no paint".
 #'
-#' @param col Stroke/text colour.
+#' @param col Stroke/text colour, or a gradient from [linear_gradient()] /
+#'   [radial_gradient()] to **stroke with a gradient** — the same paint model as
+#'   `fill`, applied to the stroked region instead of the enclosed one. A
+#'   gradient here affects stroked paths; text and markers fall back to its first
+#'   stop, since a glyph run has no path to run a ramp along.
 #' @param fill Fill colour, or a gradient from [linear_gradient()] /
 #'   [radial_gradient()].
 #' @param lwd Line width (1 == 1/96 inch).
@@ -47,6 +51,10 @@
 #'   horizontal and vertical runs so they land on whole pixels. Diagonals are
 #'   unaffected (there is no grid to snap them to), and it only applies to raster
 #'   output — a vector format has no pixel grid.
+#' @param dash_phase How far into the dash pattern a dashed line starts, as a
+#'   multiple of `lwd` (so it scales with the line width exactly as the dash
+#'   nibbles do). Use it to line up dashes across adjacent strokes, or animate it
+#'   for marching ants. `NULL` (default) means 0. Ignored for a solid line.
 #' @param lineheight Line-height multiple.
 #' @return A `gpar` object.
 #' @examples
@@ -73,7 +81,8 @@ vl_gpar <- S7::new_class(
     halo_width = S7::new_property(S7::class_any, default = NULL),
     features   = S7::new_property(S7::class_any, default = NULL),
     antialias  = S7::new_property(S7::class_any, default = NULL),
-    crisp      = S7::new_property(S7::class_any, default = NULL)
+    crisp      = S7::new_property(S7::class_any, default = NULL),
+    dash_phase = S7::new_property(S7::class_any, default = NULL)
   ),
   validator = function(self) {
     x <- self@cex

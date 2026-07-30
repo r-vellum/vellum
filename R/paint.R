@@ -334,19 +334,28 @@ print.vellum_mask <- function(x, ...) {
 # The stroke sub-record crossing to Rust. `antialias`/`crisp` ride here rather
 # than as top-level gpar fields because this list is already folded with
 # inheritance on the Rust side, so they cascade for free.
-.encode_stroke <- function(gp) {
+.encode_stroke <- function(gp, scene = NULL) {
   lty <- .encode_lty(gp@lty)
   lineend <- .encode_code(gp@lineend, .lineend_codes, "lineend")
   linejoin <- .encode_code(gp@linejoin, .linejoin_codes, "linejoin")
   linemitre <- if (is.null(gp@linemitre)) NULL else as.double(gp@linemitre)
   antialias <- .encode_flag(gp@antialias, "antialias")
   crisp <- .encode_flag(gp@crisp, "crisp")
+  # A gradient handed to `col` strokes with that gradient. It rides the stroke
+  # record so it inherits like every other stroke property.
+  paint <- if (.is_paint(gp@col)) .encode_paint(gp@col, scene) else NULL
+  phase <- if (is.null(gp@dash_phase)) NULL else as.double(gp@dash_phase)
   if (is.null(lty) && is.null(lineend) && is.null(linejoin) && is.null(linemitre) &&
-      is.null(antialias) && is.null(crisp)) {
+      is.null(antialias) && is.null(crisp) && is.null(paint) && is.null(phase)) {
     return(NULL)
   }
   list(lty = lty, lineend = lineend, linejoin = linejoin, linemitre = linemitre,
-       antialias = antialias, crisp = crisp)
+       antialias = antialias, crisp = crisp, paint = paint, phase = phase)
+}
+
+# TRUE for a gradient/pattern object (as opposed to a colour).
+.is_paint <- function(x) {
+  inherits(x, "vellum_gradient") || inherits(x, "vellum_pattern")
 }
 
 # A tri-state flag: NULL inherits, TRUE/FALSE set.
@@ -425,4 +434,13 @@ print.vellum_shadow <- function(x, ...) {
     return(numeric(0))
   }
   c(shadow$dx * scale, shadow$dy * scale, shadow$blur * scale, as.numeric(rgba))
+}
+
+# The single colour that best stands in for a paint, for consumers that cannot
+# use a ramp (text, markers). The first stop, or black if there is none.
+.paint_first_colour <- function(x) {
+  if (inherits(x, "vellum_gradient") && length(x$colours)) {
+    return(x$colours[[1]])
+  }
+  "black"
 }
