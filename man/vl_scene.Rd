@@ -27,7 +27,14 @@ draw(scene, grob)
 
 pop(scene, n = 1)
 
-render(scene, path, text = c("native", "outline"), debug = FALSE, scale = 1)
+render(
+  scene,
+  path,
+  text = c("native", "outline"),
+  debug = FALSE,
+  scale = 1,
+  cvd = "none"
+)
 }
 \arguments{
 \item{width, height}{Page size (\code{\link[=vl_unit]{vl_unit()}} or numeric inches).}
@@ -79,6 +86,16 @@ the device pixels while keeping the \strong{same physical size} — the retina /
 changes; text does not get relatively bigger or smaller. Only raster output
 gains anything: a PDF's page size in points and an SVG's physical size are
 unchanged by construction.}
+
+\item{cvd}{Simulate a colour-vision deficiency: \code{"none"} (default),
+\code{"protanopia"} (red-blind), \code{"deuteranopia"} (green-blind, the common one
+that breaks red/green encodings), \code{"tritanopia"} (blue-blind), or
+\code{"achromatopsia"} (total, and a fair proxy for greyscale printing). The
+simulation is a post-pass over the finished raster using the Machado et al.
+(2009) matrices applied in linear light, so it turns an accessibility check
+into a one-line change instead of an export-and-upload round trip. \strong{Raster
+output only} — a vector format has no pixels to transform, and \code{render()}
+warns if you ask for one.}
 }
 \value{
 \code{vl_scene()}, \code{push()}, \code{draw()}, \code{pop()}: a \code{vellum_scene}.

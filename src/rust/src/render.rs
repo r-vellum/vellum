@@ -25,6 +25,41 @@ pub struct StrokeStyle {
     pub cap: LineCap,
     pub join: LineJoin,
     pub miter: f32,
+    /// Snap axis-parallel strokes onto the pixel grid (raster only). A 1-px rule
+    /// at a fractional coordinate otherwise straddles two rows and renders as two
+    /// grey ones instead of one solid -- the reason screen gridlines look muddy.
+    pub crisp: bool,
+}
+
+thread_local! {
+    /// Anti-aliasing for the primitive currently being drawn, set by the scene
+    /// walk from the folded gpar. A thread-local rather than a parameter on every
+    /// backend method: `ResolvedPaint` is an enum, so threading a flag through it
+    /// would touch every variant and every call site. The walk is single-threaded
+    /// per render (rayon parallelises across animation *frames*, each with its own
+    /// thread-local), which is the same assumption the glyph-bitmap mode makes.
+    static ANTIALIAS: std::cell::Cell<bool> = const { std::cell::Cell::new(true) };
+}
+
+/// Set anti-aliasing for subsequent draws on this thread.
+pub fn set_antialias(on: bool) {
+    ANTIALIAS.with(|c| c.set(on));
+}
+
+fn antialias() -> bool {
+    ANTIALIAS.with(|c| c.get())
+}
+
+/// Snap a device coordinate so a stroke of `width` covers whole pixels: an
+/// odd-pixel-wide stroke wants its centre on a half-integer, an even one on an
+/// integer. Only meaningful for axis-parallel edges.
+fn snap_coord(v: f32, width: f32) -> f32 {
+    let w = width.round().max(1.0);
+    if (w as i32) % 2 == 1 {
+        v.floor() + 0.5
+    } else {
+        v.round()
+    }
 }
 
 fn skia_cap(c: LineCap) -> tiny_skia::LineCap {
@@ -117,6 +152,92 @@ pub struct TextRun<'a> {
     pub dpi: f64,
 }
 
+/// A drop shadow cast by a group: the group's own coverage, tinted, blurred and
+/// offset, painted underneath it.
+#[derive(Clone, Copy, Debug)]
+pub struct Shadow {
+    pub dx: f32,
+    pub dy: f32,
+    /// Blur radius in device px. `0` gives a hard offset silhouette.
+    pub blur: f32,
+    pub col: Rgba,
+}
+
+/// Render effects applied when an isolated group closes. `None` fields are
+/// inactive, so a group without effects composites exactly as it always did.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct GroupEffect {
+    /// Gaussian blur radius in device px applied to the group itself.
+    pub blur: Option<f32>,
+    pub shadow: Option<Shadow>,
+}
+
+impl GroupEffect {
+    pub fn is_none(&self) -> bool {
+        self.blur.is_none() && self.shadow.is_none()
+    }
+}
+
+/// Blur a premultiplied pixmap in place: three box-blur passes, which is the
+/// standard cheap approximation to a Gaussian (the error is under 3% by the
+/// third pass, and it is what SVG's own `feGaussianBlur` is specified to do).
+/// Working on premultiplied data is correct here -- it is what compositing
+/// consumes, and blurring straight RGBA would bleed colour out of transparent
+/// pixels.
+pub fn box_blur(pm: &mut Pixmap, radius: f32) {
+    if !(radius > 0.0) {
+        return;
+    }
+    let (w, h) = (pm.width() as usize, pm.height() as usize);
+    if w == 0 || h == 0 {
+        return;
+    }
+    // Three box passes of this width approximate a Gaussian of `radius` sigma.
+    let r = ((radius * 3.0 * (std::f32::consts::TAU / 4.0).sqrt() / 4.0 + 0.5) as usize).max(1);
+    let mut buf: Vec<u8> = pm.data().to_vec();
+    let mut tmp: Vec<u8> = vec![0; buf.len()];
+    for _ in 0..3 {
+        blur_pass(&buf, &mut tmp, w, h, r, true);
+        blur_pass(&tmp, &mut buf, w, h, r, false);
+    }
+    pm.data_mut().copy_from_slice(&buf);
+}
+
+/// One axis of a box blur. A sliding window over each row (or column) keeps it
+/// O(pixels) rather than O(pixels x radius). Edges clamp to the border pixel.
+fn blur_pass(src: &[u8], dst: &mut [u8], w: usize, h: usize, r: usize, horizontal: bool) {
+    let (outer, inner) = if horizontal { (h, w) } else { (w, h) };
+    let idx = |o: usize, i: usize| if horizontal { (o * w + i) * 4 } else { (i * w + o) * 4 };
+    let win = (2 * r + 1) as u32;
+    for o in 0..outer {
+        let mut acc = [0u32; 4];
+        // Prime the window at position 0, clamping past the left edge.
+        for k in 0..=(r as isize) {
+            let i = k.clamp(0, inner as isize - 1) as usize;
+            let p = idx(o, i);
+            for c in 0..4 {
+                acc[c] += src[p + c] as u32;
+            }
+        }
+        // The r pixels before 0 all clamp to pixel 0.
+        let p0 = idx(o, 0);
+        for c in 0..4 {
+            acc[c] += src[p0 + c] as u32 * r as u32;
+        }
+        for i in 0..inner {
+            let p = idx(o, i);
+            for c in 0..4 {
+                dst[p + c] = (acc[c] / win) as u8;
+            }
+            let add = idx(o, (i + r + 1).min(inner - 1));
+            let sub = idx(o, i.saturating_sub(r));
+            for c in 0..4 {
+                acc[c] = acc[c] + src[add + c] as u32 - src[sub + c] as u32;
+            }
+        }
+    }
+}
+
 /// How a mask's pixels modulate the group they cover.
 #[derive(Clone, Copy, Debug)]
 pub enum MaskKind {
@@ -198,7 +319,7 @@ pub trait RenderBackend {
     fn fill_path(&mut self, path: &Path, transform: Transform, paint: &ResolvedPaint, rule: FillRule, clip: &Clip);
     fn stroke_path(&mut self, path: &Path, transform: Transform, color: Rgba, stroke: &StrokeStyle, clip: &Clip);
     fn draw_text(&mut self, run: &TextRun, transform: Transform, clip: &Clip);
-    fn begin_group(&mut self, mask: Option<MaskLayer>, alpha: f32, blend: BlendKind);
+    fn begin_group(&mut self, mask: Option<MaskLayer>, alpha: f32, blend: BlendKind, effect: GroupEffect);
     fn end_group(&mut self);
 
     /// Repaint boundaries (FW4c). `caches_subrasters` is `true` only for the
@@ -333,6 +454,7 @@ fn circles_by_path<B: RenderBackend>(
                 cap: st.cap,
                 join: st.join,
                 miter: st.miter,
+                crisp: st.crisp,
             };
             b.stroke_path(&unit, tr, *c, &scaled, clip);
         }
@@ -497,6 +619,9 @@ fn circle_sprite(r: f64, color: Rgba) -> Option<Pixmap> {
     let path = pb.finish()?;
     let mut paint = Paint::default();
     paint.set_color(color.to_skia());
+    // Always AA: this sprite is cached and shared across grobs, so it must not
+    // bake in one grob's `antialias` setting. Haloed/aliased text takes the exact
+    // outline path instead.
     paint.anti_alias = true;
     pm.fill_path(&path, &paint, FillRule::Winding, Transform::identity(), None);
     Some(pm)
@@ -570,6 +695,7 @@ pub struct RasterBackend {
     group_masks: Vec<Option<MaskLayer>>,
     group_alpha: Vec<f32>,
     group_blend: Vec<BlendKind>,
+    group_effect: Vec<GroupEffect>,
     /// Bounded LRU of compiled clip masks (most-recent first). tiny-skia requires
     /// a clip `Mask` to match the target pixmap size, so each entry is page-sized
     /// and cannot be shrunk to a bounding box; instead we cap how many stay
@@ -606,6 +732,7 @@ impl RasterBackend {
             targets: vec![pm],
             group_masks: Vec::new(),
             group_alpha: Vec::new(),
+            group_effect: Vec::new(),
             group_blend: Vec::new(),
             clip_cache: Vec::new(),
             w,
@@ -664,7 +791,7 @@ impl RasterBackend {
 fn solid_paint(color: Rgba) -> Paint<'static> {
     let mut paint = Paint::default();
     paint.set_color(color.to_skia());
-    paint.anti_alias = true;
+    paint.anti_alias = antialias();
     paint
 }
 
@@ -710,7 +837,7 @@ fn paint_for(paint: &ResolvedPaint) -> Option<Paint<'static>> {
     }?;
     let mut p = Paint::default();
     p.shader = shader;
-    p.anti_alias = true;
+    p.anti_alias = antialias();
     Some(p)
 }
 
@@ -727,7 +854,7 @@ impl RenderBackend for RasterBackend {
             let t = pattern_transform(*tw, *th, *x, *y, *w, *h);
             let mut p = Paint::default();
             p.shader = tiny_skia::Pattern::new(pm.as_ref(), skia_spread(*extend), FilterQuality::Bilinear, *opacity, t);
-            p.anti_alias = true;
+            p.anti_alias = antialias();
             self.target().fill_path(path, &p, rule, transform, mask.as_deref());
             return;
         }
@@ -777,8 +904,26 @@ impl RenderBackend for RasterBackend {
                 PathSegment::LineTo(p) => {
                     if let Some((ax, ay)) = prev {
                         let mut pb = PathBuilder::new();
+                        // Crisp mode: a horizontal or vertical run gets its
+                        // constant coordinate snapped so the stroke lands on whole
+                        // pixels. Diagonals are left alone -- there is no pixel
+                        // grid to snap them to.
+                        let (ax, ay, bx, by) = if stroke.crisp {
+                            let dev_w = stroke.width * transform.sx.abs().max(transform.sy.abs());
+                            if (ay - p.y).abs() < 1e-6 {
+                                let sy = (snap_coord(transform.ty + ay * transform.sy, dev_w) - transform.ty) / transform.sy;
+                                (ax, sy, p.x, sy)
+                            } else if (ax - p.x).abs() < 1e-6 {
+                                let sx = (snap_coord(transform.tx + ax * transform.sx, dev_w) - transform.tx) / transform.sx;
+                                (sx, ay, sx, p.y)
+                            } else {
+                                (ax, ay, p.x, p.y)
+                            }
+                        } else {
+                            (ax, ay, p.x, p.y)
+                        };
                         pb.move_to(ax, ay);
-                        pb.line_to(p.x, p.y);
+                        pb.line_to(bx, by);
                         if let Some(sp) = pb.finish() {
                             target.stroke_path(&sp, &paint, &sk, transform, mask.as_deref());
                         }
@@ -894,19 +1039,21 @@ impl RenderBackend for RasterBackend {
         }
     }
 
-    fn begin_group(&mut self, mask: Option<MaskLayer>, alpha: f32, blend: BlendKind) {
+    fn begin_group(&mut self, mask: Option<MaskLayer>, alpha: f32, blend: BlendKind, effect: GroupEffect) {
         // A transparent isolated layer; subsequent drawing targets it. The mask,
         // opacity, and blend mode are held until the group closes.
         self.targets.push(Pixmap::new(self.w, self.h).expect("non-zero layer dimensions"));
         self.group_masks.push(mask);
         self.group_alpha.push(alpha);
         self.group_blend.push(blend);
+        self.group_effect.push(effect);
     }
 
     fn end_group(&mut self) {
         let mask = self.group_masks.pop().flatten();
         let alpha = self.group_alpha.pop().unwrap_or(1.0);
         let blend = self.group_blend.pop().unwrap_or(BlendKind::Normal);
+        let effect = self.group_effect.pop().unwrap_or_default();
         let layer = match self.targets.pop() {
             Some(l) if !self.targets.is_empty() => l,
             other => {
@@ -917,6 +1064,38 @@ impl RenderBackend for RasterBackend {
                 return;
             }
         };
+        let mut layer = layer;
+        // Shadow first: the group's own coverage, tinted and blurred, painted
+        // underneath. Derived from the layer *before* it is blurred, so a blurred
+        // group still casts a sharp-ish shadow of its own shape.
+        let shadow_pm = effect.shadow.map(|sh| {
+            let mut sp = Pixmap::new(self.w, self.h).expect("non-zero layer dimensions");
+            // Recolour the layer's alpha with the shadow colour: the silhouette,
+            // not the artwork. Premultiplied throughout.
+            let (sr, sg, sb, sa) = (sh.col.r as u32, sh.col.g as u32, sh.col.b as u32, sh.col.a as u32);
+            for (dst, src) in sp.pixels_mut().iter_mut().zip(layer.pixels().iter()) {
+                let a = (src.alpha() as u32 * sa) / 255;
+                *dst = tiny_skia::ColorU8::from_rgba(
+                    (sr * a / 255) as u8, (sg * a / 255) as u8, (sb * a / 255) as u8, a as u8,
+                )
+                .premultiply();
+            }
+            box_blur(&mut sp, sh.blur);
+            sp
+        });
+        if let (Some(sp), Some(sh)) = (shadow_pm.as_ref(), effect.shadow) {
+            let paint = tiny_skia::PixmapPaint {
+                opacity: alpha.clamp(0.0, 1.0),
+                ..Default::default()
+            };
+            self.target().draw_pixmap(
+                sh.dx.round() as i32, sh.dy.round() as i32, sp.as_ref(), &paint,
+                Transform::identity(), None,
+            );
+        }
+        if let Some(r) = effect.blur {
+            box_blur(&mut layer, r);
+        }
         let m = mask.map(|ml| Mask::from_pixmap(ml.pixmap.as_ref(), skia_masktype(ml.kind)));
         // Compositing the layer as a whole at `alpha` (and through `blend`) is what
         // makes group opacity/blend differ from per-element: overlaps inside the
@@ -1054,6 +1233,7 @@ pub struct SvgBackend {
     group_masks: Vec<Option<MaskLayer>>,
     group_alpha: Vec<f32>,
     group_blend: Vec<BlendKind>,
+    group_effect: Vec<GroupEffect>,
     clip_attrs: HashMap<usize, String>,
     /// Deduplicates gradient/pattern `<defs>` by content signature so repeated
     /// identical fills reference one def instead of emitting N copies.
@@ -1115,6 +1295,7 @@ impl SvgBackend {
             group_masks: Vec::new(),
             group_alpha: Vec::new(),
             group_blend: Vec::new(),
+            group_effect: Vec::new(),
             clip_attrs: HashMap::new(),
             def_ids: HashMap::new(),
             next_clip: 0,
@@ -1528,18 +1709,44 @@ impl RenderBackend for SvgBackend {
         self.emit(&element, clip);
     }
 
-    fn begin_group(&mut self, mask: Option<MaskLayer>, alpha: f32, blend: BlendKind) {
+    fn begin_group(&mut self, mask: Option<MaskLayer>, alpha: f32, blend: BlendKind, effect: GroupEffect) {
         self.groups.push(String::new());
         self.group_masks.push(mask);
         self.group_alpha.push(alpha);
         self.group_blend.push(blend);
+        self.group_effect.push(effect);
     }
 
     fn end_group(&mut self) {
         let mask = self.group_masks.pop().flatten();
         let alpha = self.group_alpha.pop().unwrap_or(1.0);
         let blend = self.group_blend.pop().unwrap_or(BlendKind::Normal);
+        let effect = self.group_effect.pop().unwrap_or_default();
         let inner = self.groups.pop().unwrap_or_default();
+        // Blur and drop shadow are native SVG filter primitives, so the viewer
+        // does the work and the group stays vector. The filter region is widened
+        // past the default -10%/120% box, which clips a wide blur or a far offset.
+        let filter_attr = if effect.is_none() {
+            String::new()
+        } else {
+            let id = format!("fx{}", self.next_grad);
+            self.next_grad += 1;
+            let mut prims = String::new();
+            if let Some(sh) = effect.shadow {
+                prims.push_str(&format!(
+                    "<feDropShadow dx=\"{dx}\" dy=\"{dy}\" stdDeviation=\"{sd}\" \
+                     flood-color=\"{col}\" flood-opacity=\"{op}\"/>",
+                    dx = sh.dx, dy = sh.dy, sd = sh.blur, col = rgb_hex(sh.col), op = opacity(sh.col),
+                ));
+            }
+            if let Some(r) = effect.blur {
+                prims.push_str(&format!("<feGaussianBlur stdDeviation=\"{r}\"/>"));
+            }
+            self.defs.push_str(&format!(
+                "<filter id=\"{id}\" x=\"-50%\" y=\"-50%\" width=\"200%\" height=\"200%\">{prims}</filter>"
+            ));
+            format!(" filter=\"url(#{id})\"")
+        };
         // SVG masks are luminance-based; bake the chosen coverage into a grayscale
         // image (gray == coverage) so a single luminance mask serves both kinds.
         // Group opacity is a `<g opacity>` (applies to the composited layer).
@@ -1569,7 +1776,7 @@ impl RenderBackend for SvgBackend {
             Some(mode) => format!(" style=\"mix-blend-mode:{mode}\""),
             None => String::new(),
         };
-        self.out().push_str(&format!("<g{mask_attr}{opacity_attr}{blend_attr}>{inner}</g>"));
+        self.out().push_str(&format!("<g{mask_attr}{opacity_attr}{blend_attr}{filter_attr}>{inner}</g>"));
     }
 
     fn draw_image(&mut self, rgba: &[u8], iw: u32, ih: u32, x: f64, y: f64, w: f64, h: f64, interpolate: bool, transform: Transform, clip: &Clip) {
@@ -2207,7 +2414,13 @@ impl RenderBackend for PdfBackend<'_, '_> {
     // unifies alpha/luminance kinds and avoids premultiplied-color pitfalls. The
     // mask stream is drawn in device px, matching the root px->pt scale that is on
     // the surface stack throughout the walk, so it aligns with the content.
-    fn begin_group(&mut self, mask: Option<MaskLayer>, alpha: f32, blend: BlendKind) {
+    fn begin_group(&mut self, mask: Option<MaskLayer>, alpha: f32, blend: BlendKind, effect: GroupEffect) {
+        // PDF has no filter model: krilla exposes no blur or drop-shadow
+        // primitive, and emulating one would mean rasterising the group, which
+        // silently turns vector output into a bitmap. Fail visibly instead.
+        if !effect.is_none() {
+            self.warn("a group blur/shadow (PDF has no filter model; the group is drawn unfiltered)");
+        }
         let mut pushes = 0usize;
         if let Some(ml) = mask {
             let (w, h) = (ml.pixmap.width(), ml.pixmap.height());

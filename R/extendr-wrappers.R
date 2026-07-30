@@ -41,6 +41,13 @@ rs_glyph_sprite_stats <- function() .Call(wrap__rs_glyph_sprite_stats)
 #' @keywords internal
 rs_read_png <- function(path) .Call(wrap__rs_read_png, path)
 
+#' Set colour-vision-deficiency simulation for subsequent renders.
+#'
+#' @param kind One of "protanopia", "deuteranopia", "tritanopia",
+#'   "achromatopsia", or "" to disable.
+#' @keywords internal
+rs_set_cvd_mode <- function(kind) .Call(wrap__rs_set_cvd_mode, kind)
+
 #' Render a keyframe animation to `path`.
 #'
 #' * `keyframes` — a list of compiled `Scene` external pointers (the `K` states).
@@ -221,6 +228,9 @@ rs_attractor <- function(kind, n, a, b, c, d, x0, y0) .Call(wrap__rs_attractor, 
 #'`blend` (a code; 0 = normal). Routed through `emit_node` so a group nested
 #'inside a mask (a mask grob that itself masks a viewport) lands in the same
 #'node list as its content, keeping markers and content in sync.
+#'
+#'`blur` is a Gaussian radius in device px (0 = none). `shadow` is
+#'`c(dx, dy, blur, r, g, b, a)` in device px / 0-255, or empty for none.
 #'}
 #'
 #'\subsection{Method `group_end`}{
@@ -398,7 +408,7 @@ Scene$mask_begin <- function(kind) .Call(wrap__Scene__mask_begin, self, kind)
 
 Scene$mask_end <- function() .Call(wrap__Scene__mask_end, self)
 
-Scene$group_start <- function(mask, alpha, blend) .Call(wrap__Scene__group_start, self, mask, alpha, blend)
+Scene$group_start <- function(mask, alpha, blend, blur, shadow) .Call(wrap__Scene__group_start, self, mask, alpha, blend, blur, shadow)
 
 Scene$group_end <- function() .Call(wrap__Scene__group_end, self)
 

@@ -16,8 +16,8 @@ use extendr_api::prelude::*;
 use tiny_skia::{Color, FillRule, Mask, PathBuilder, Pixmap, Stroke, Transform};
 
 use crate::render::{
-    hexagon_path, hexagon_path_xy, rect_path, roundrect_path, sector_path, xml_escape, BlendKind, Clip, ClipShape, MaskKind, MaskLayer, PdfBackend, RasterBackend, RenderBackend,
-    ResolvedPaint, StrokeStyle, SvgBackend, TextRun,
+    hexagon_path, hexagon_path_xy, rect_path, roundrect_path, sector_path, xml_escape, BlendKind, Clip, ClipShape, GroupEffect, MaskKind, MaskLayer, PdfBackend, RasterBackend, RenderBackend,
+    ResolvedPaint, Shadow, StrokeStyle, SvgBackend, TextRun,
 };
 
 use crate::color::{opt_color, Gpar, GparAcc, Lty, Paint, PartialGpar, Rgba};
@@ -493,7 +493,7 @@ enum Node {
     /// modulated by mask `mask` (an index into `Scene::masks`), composited at group
     /// opacity `alpha` (1.0 = opaque) and blend mode `blend`. The mask/opacity/blend
     /// are attached at the start because PDF must install them before the content.
-    GroupStart { mask: Option<usize>, alpha: f32, blend: BlendKind },
+    GroupStart { mask: Option<usize>, alpha: f32, blend: BlendKind, effect: GroupEffect },
     /// Closes the layer and composites it.
     GroupEnd,
     /// Opens a repaint boundary (paired with `SubrasterEnd`): the raster backend
@@ -630,6 +630,22 @@ pub struct Scene {
     a11y_title: String,
     a11y_desc: String,
     a11y_prefix: String,
+}
+
+thread_local! {
+    /// CVD simulation for the current render, set from R per call (see
+    /// `rs_set_cvd_mode`). A post-pass over the finished pixmap, so it is off the
+    /// drawing path entirely and costs nothing when unset.
+    static CVD_MODE: std::cell::Cell<Option<crate::cvd::Cvd>> = const { std::cell::Cell::new(None) };
+}
+
+/// Set the CVD simulation for subsequent renders on this thread.
+pub fn set_cvd_mode(kind: Option<crate::cvd::Cvd>) {
+    CVD_MODE.with(|c| c.set(kind));
+}
+
+fn cvd_mode() -> Option<crate::cvd::Cvd> {
+    CVD_MODE.with(|c| c.get())
 }
 
 /// Enable the glyph-bitmap fast path once a render draws at least this many
@@ -1412,12 +1428,34 @@ impl Scene {
     /// `blend` (a code; 0 = normal). Routed through `emit_node` so a group nested
     /// inside a mask (a mask grob that itself masks a viewport) lands in the same
     /// node list as its content, keeping markers and content in sync.
-    fn group_start(&mut self, mask: i32, alpha: f64, blend: i32) {
+    ///
+    /// `blur` is a Gaussian radius in device px (0 = none). `shadow` is
+    /// `c(dx, dy, blur, r, g, b, a)` in device px / 0-255, or empty for none.
+    fn group_start(&mut self, mask: i32, alpha: f64, blend: i32, blur: f64, shadow: &[f64]) {
         let mask = if mask >= 0 { Some(mask as usize) } else { None };
+        let shadow = if shadow.len() >= 7 {
+            Some(Shadow {
+                dx: shadow[0] as f32,
+                dy: shadow[1] as f32,
+                blur: shadow[2].max(0.0) as f32,
+                col: Rgba {
+                    r: shadow[3].clamp(0.0, 255.0) as u8,
+                    g: shadow[4].clamp(0.0, 255.0) as u8,
+                    b: shadow[5].clamp(0.0, 255.0) as u8,
+                    a: shadow[6].clamp(0.0, 255.0) as u8,
+                },
+            })
+        } else {
+            None
+        };
         self.emit_node(Node::GroupStart {
             mask,
             alpha: alpha.clamp(0.0, 1.0) as f32,
             blend: BlendKind::from_code(blend),
+            effect: GroupEffect {
+                blur: if blur > 0.0 { Some(blur as f32) } else { None },
+                shadow,
+            },
         });
     }
 
@@ -1471,7 +1509,8 @@ impl Scene {
         // Scene); otherwise rasterise — capturing degradation warnings — and fill
         // the memo. On a hit the warnings were already surfaced by the cold call.
         if self.raster_cache.borrow().is_some() {
-            if let Err(e) = self.raster_cache.borrow().as_ref().unwrap().save_png(path) {
+            let out = self.output_pixmap();
+            if let Err(e) = out.save_png(path) {
                 throw_r_error(format!("failed to write PNG: {e}"));
             }
             return Vec::new();
@@ -1480,7 +1519,9 @@ impl Scene {
         b.set_bitmap_text(self.want_bitmap_text());
         let warnings = self.render_to(&mut b);
         let pm = b.into_pixmap();
-        if let Err(e) = pm.save_png(path) {
+        // Cache the clean raster, write the (possibly simulated) one.
+        let out = self.simulate(pm.clone());
+        if let Err(e) = out.save_png(path) {
             throw_r_error(format!("failed to write PNG: {e}"));
         }
         *self.raster_cache.borrow_mut() = Some(pm);
@@ -1502,6 +1543,7 @@ impl Scene {
             *self.raster_cache.borrow_mut() = Some(pm.clone());
             (pm, warnings)
         };
+        let pm = self.simulate(pm);
         let bytes = match pm.encode_png() {
             Ok(b) => b,
             Err(e) => throw_r_error(format!("failed to encode PNG: {e}")),
@@ -1554,7 +1596,7 @@ impl Scene {
     /// Render and return the whole image as row-major RGBA bytes
     /// `[r, g, b, a, ...]` (top-left origin, x fastest).
     fn rgba(&self) -> Vec<i32> {
-        let pm = self.cached_pixmap();
+        let pm = self.output_pixmap();
         let mut out = Vec::with_capacity((self.w_px as usize) * (self.h_px as usize) * 4);
         for p in pm.pixels() {
             let c = p.demultiply();
@@ -2205,6 +2247,22 @@ impl Scene {
     /// stored pixmap (see the `raster_cache` field invariant). The raster backend
     /// produces no degradation warnings, so none are surfaced here (unlike
     /// `render_svg`/`render_pdf`, which build their own backend to keep warnings).
+    /// The finished raster as it should be *output*: the cached pixmap, or a CVD
+    /// simulation of it. The simulation is deliberately never stored -- the render
+    /// cache is keyed without it, so caching a simulated pixmap would serve it back
+    /// to a later plain render.
+    fn output_pixmap(&self) -> Pixmap {
+        let pm = self.cached_pixmap().clone();
+        self.simulate(pm)
+    }
+
+    fn simulate(&self, mut pm: Pixmap) -> Pixmap {
+        if let Some(kind) = cvd_mode() {
+            crate::cvd::apply(&mut pm, kind);
+        }
+        pm
+    }
+
     fn cached_pixmap(&self) -> Ref<'_, Pixmap> {
         if self.raster_cache.borrow().is_none() {
             let mut b = RasterBackend::new(self.w_px, self.h_px, self.bg);
@@ -2286,13 +2344,13 @@ impl Scene {
                     }
                     continue;
                 }
-                Node::GroupStart { mask, alpha, blend } => {
+                Node::GroupStart { mask, alpha, blend, effect } => {
                     let ml = mask.and_then(|m| self.masks.get(m)).map(|md| {
                         let mut mb = RasterBackend::new(self.w_px, self.h_px, Rgba { r: 0, g: 0, b: 0, a: 0 });
                         self.render_nodes(&mut mb, resolved, &md.nodes, None);
                         MaskLayer { pixmap: mb.into_pixmap(), kind: md.kind }
                     });
-                    b.begin_group(ml, *alpha, *blend);
+                    b.begin_group(ml, *alpha, *blend, *effect);
                     continue;
                 }
                 Node::GroupEnd => {
@@ -2334,6 +2392,9 @@ impl Scene {
                 None => continue,
             };
             let gp = rv.gp_acc.apply(node_gp).resolve();
+            // Push this node's anti-aliasing to the backend before any draw call
+            // (see `render::set_antialias` for why it is a thread-local).
+            crate::render::set_antialias(gp.antialias);
             let t = vp.transform;
             let clip = Clip { id: *vp_id, shapes: &rv.clip_chain };
 
@@ -3211,7 +3272,7 @@ fn stroke_style(gp: &Gpar, dpi: f64) -> StrokeStyle {
         Lty::Solid => (width, Vec::new()),
         Lty::Dash(nibs) => (width, nibs.iter().map(|n| n * width).collect()),
     };
-    StrokeStyle { width, dash, cap: gp.lineend, join: gp.linejoin, miter: gp.linemitre as f32 }
+    StrokeStyle { width, dash, cap: gp.lineend, join: gp.linejoin, miter: gp.linemitre as f32, crisp: gp.crisp }
 }
 
 /// Resolve a paint's gradient geometry through the viewport into local px.

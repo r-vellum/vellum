@@ -1,5 +1,33 @@
 # vellum (development version)
 
+* **Colour-vision-deficiency simulation.** `render(scene, path, cvd =)`,
+  `scene_png(cvd =)` and `scene_raster(cvd =)` re-render the finished raster as
+  a viewer with `"protanopia"`, `"deuteranopia"`, `"tritanopia"` or
+  `"achromatopsia"` would see it, using the Machado et al. (2009) matrices
+  applied in **linear light** (doing it in sRGB is the common shortcut and it
+  shifts lightness). An accessibility check becomes an argument rather than an
+  export-and-upload round trip. Raster only -- a vector format has no pixels to
+  transform, and `render()` says so rather than silently writing an unsimulated
+  file. The simulation is never written into the render cache.
+
+* **Blur, drop shadow and glow as group effects.** `vl_viewport(blur =)` and
+  `vl_viewport(shadow = vl_shadow(dx, dy, blur, col))` act on the composited
+  layer, so overlapping shapes inside a viewport blur -- or cast a single
+  shadow -- *together* rather than each shadowing the others. A glow is a shadow
+  with no offset. Raster convolves (three box passes, the standard Gaussian
+  approximation); SVG emits native `feGaussianBlur` / `feDropShadow` and stays
+  vector; PDF has no filter model and reports it through the usual degradation
+  warning instead of quietly rasterising your vector output.
+
+* **`vl_gpar(crisp = TRUE)`** snaps axis-parallel strokes onto the pixel grid. A
+  1-px rule at a fractional coordinate straddles two rows and renders as two
+  grey ones -- the reason gridlines look muddy on screen. Diagonals are left
+  alone. **`vl_gpar(antialias = FALSE)`** gives hard pixel edges, for pixel art,
+  QR codes, and heatmap cells that must tile without a seam. Both inherit down
+  the tree like any other graphical parameter.
+
+* New examples `inst/examples/effects.R` and `inst/examples/cvd.R`.
+
 * **Text halos (`shadowtext`).** `vl_gpar(halo_col =, halo_width =)` strokes the
   glyph outlines *under* the fill, so a label stays legible over a dense scatter
   or map imagery. Because vellum holds the outlines, this is one real stroke

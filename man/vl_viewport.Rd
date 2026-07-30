@@ -23,6 +23,8 @@ vl_viewport(
   mask = NULL,
   alpha = NULL,
   blend = NULL,
+  blur = NULL,
+  shadow = NULL,
   name = NULL,
   meta = NULL,
   pannable = FALSE,
@@ -72,6 +74,17 @@ isolated layer) onto the backdrop below it. One of \code{"normal"} (default),
 \code{"difference"}, \code{"exclusion"}, \code{"hue"}, \code{"saturation"}, \code{"color"}, or
 \code{"luminosity"} (the CSS \code{mix-blend-mode} set). \code{NULL}/\code{"normal"} is ordinary
 over-compositing.}
+
+\item{blur}{Optional Gaussian blur radius in points, applied to the
+viewport's contents as one isolated layer. Because it is a \emph{group} effect,
+overlapping shapes inside the viewport blur together rather than each
+blurring over the others. \code{NULL}/\code{0} (default) means no blur. Raster
+convolves it; SVG emits a native \code{feGaussianBlur} and stays vector; PDF has
+no filter model and warns.}
+
+\item{shadow}{Optional drop shadow from \code{\link[=vl_shadow]{vl_shadow()}}, cast by the viewport's
+contents as one silhouette. A shadow with no offset is a glow. Same
+per-backend behaviour as \code{blur}.}
 
 \item{name}{Optional name (for \code{\link[=edit_node]{edit_node()}}).}
 
