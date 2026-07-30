@@ -15,7 +15,8 @@ vl_strwidth(
   fontface = "plain",
   fontsize = 12,
   cex = 1,
-  unit = "in"
+  unit = "in",
+  features = NULL
 )
 
 vl_strheight(
@@ -24,7 +25,8 @@ vl_strheight(
   fontface = "plain",
   fontsize = 12,
   cex = 1,
-  unit = "in"
+  unit = "in",
+  features = NULL
 )
 ```
 
@@ -59,6 +61,14 @@ vl_strheight(
 - unit:
 
   Output unit: one of `"in"`, `"pt"`, `"mm"`, `"cm"`.
+
+- features:
+
+  OpenType features as a named vector of four-character tags (e.g.
+  `c(tnum = 1)`), matching
+  [`vl_gpar()`](https://r-vellum.github.io/vellum/reference/vl_gpar.md)'s
+  `features`. Measurement must use the same features as drawing, or
+  reserved space will not match.
 
 ## Value
 

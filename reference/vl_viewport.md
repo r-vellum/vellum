@@ -210,6 +210,9 @@ vl_viewport(xscale = c(0, 10), yscale = c(0, 100))
 #>  .. @ fontsize  : NULL
 #>  .. @ cex       : NULL
 #>  .. @ lineheight: NULL
+#>  .. @ halo_col  : NULL
+#>  .. @ halo_width: NULL
+#>  .. @ features  : NULL
 #>  @ layout  : NULL
 #>  @ row     : NULL
 #>  @ col     : NULL

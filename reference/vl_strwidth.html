@@ -35,6 +35,7 @@ grDevices::strwidth().)"><meta property="og:image" content="https://r-vellum.git
   <ul class="dropdown-menu" aria-labelledby="dropdown-articles"><li><hr class="dropdown-divider"></li>
     <li><h6 class="dropdown-header" data-toc-skip>Concepts</h6></li>
     <li><a class="dropdown-item" href="../articles/scene-and-paint.html">The scene graph and the paint model</a></li>
+    <li><a class="dropdown-item" href="../articles/typography.html">Typography: halos and OpenType features</a></li>
     <li><a class="dropdown-item" href="../articles/retained-mode.html">Asking a scene what it drew: read-back, picking, and editing</a></li>
     <li><a class="dropdown-item" href="../articles/datashading.html">Datashading: millions of points, honestly</a></li>
     <li><hr class="dropdown-divider"></li>
@@ -82,7 +83,8 @@ not need an open scene). Vectorised over <code>label</code>. (Named <code>vl_*</
 <span>  fontface <span class="op">=</span> <span class="st">"plain"</span>,</span>
 <span>  fontsize <span class="op">=</span> <span class="fl">12</span>,</span>
 <span>  cex <span class="op">=</span> <span class="fl">1</span>,</span>
-<span>  unit <span class="op">=</span> <span class="st">"in"</span></span>
+<span>  unit <span class="op">=</span> <span class="st">"in"</span>,</span>
+<span>  features <span class="op">=</span> <span class="cn">NULL</span></span>
 <span><span class="op">)</span></span>
 <span></span>
 <span><span class="fu">vl_strheight</span><span class="op">(</span></span>
@@ -91,7 +93,8 @@ not need an open scene). Vectorised over <code>label</code>. (Named <code>vl_*</
 <span>  fontface <span class="op">=</span> <span class="st">"plain"</span>,</span>
 <span>  fontsize <span class="op">=</span> <span class="fl">12</span>,</span>
 <span>  cex <span class="op">=</span> <span class="fl">1</span>,</span>
-<span>  unit <span class="op">=</span> <span class="st">"in"</span></span>
+<span>  unit <span class="op">=</span> <span class="st">"in"</span>,</span>
+<span>  features <span class="op">=</span> <span class="cn">NULL</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
 
@@ -126,6 +129,12 @@ family name). <code>""</code> uses the system default.</p></dd>
 
 <dt id="arg-unit">unit<a class="anchor" aria-label="anchor" href="#arg-unit"></a></dt>
 <dd><p>Output unit: one of <code>"in"</code>, <code>"pt"</code>, <code>"mm"</code>, <code>"cm"</code>.</p></dd>
+
+
+<dt id="arg-features">features<a class="anchor" aria-label="anchor" href="#arg-features"></a></dt>
+<dd><p>OpenType features as a named vector of four-character tags
+(e.g. <code>c(tnum = 1)</code>), matching <code><a href="vl_gpar.html">vl_gpar()</a></code>'s <code>features</code>. Measurement must
+use the same features as drawing, or reserved space will not match.</p></dd>
 
 </dl></div>
     <div class="section level2">

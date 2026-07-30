@@ -25,6 +25,9 @@ style(
   fontsize = NULL,
   cex = NULL,
   lineheight = NULL,
+  halo_col = NULL,
+  halo_width = NULL,
+  features = NULL,
   name = NULL
 )
 ```
@@ -94,6 +97,29 @@ style(
 
   Line-height multiple.
 
+- halo_col:
+
+  Halo colour for text (a "shadowtext" outline drawn *under* the glyphs,
+  so a label stays legible over dense marks or map imagery). `NULL`
+  (default) means no halo. Needs `halo_width` to be visible.
+
+- halo_width:
+
+  Halo thickness in points – the visible width outside the glyph. `NULL`
+  or `0` means no halo. A good starting point is roughly an eighth of
+  `fontsize`.
+
+- features:
+
+  OpenType font features, as a named numeric vector of four-character
+  feature tags – e.g. `c(tnum = 1)` for tabular (fixed-width) figures so
+  axis labels stop jittering between ticks, `c(smcp = 1)` for small
+  caps, `c(onum = 1)` for oldstyle figures, `c(liga = 0)` to switch
+  ligatures off, or `c(kern = 0)` to disable kerning. `NULL` (default)
+  uses the font's own defaults. A feature the font does not carry is
+  silently ignored – that is HarfBuzz's behaviour, not something vellum
+  can check for you.
+
 - name:
 
   Optional style-class name, for identification only; it is ignored by
@@ -141,6 +167,9 @@ vl_viewport(gp = accent)
 #>  .. @ fontsize  : NULL
 #>  .. @ cex       : NULL
 #>  .. @ lineheight: NULL
+#>  .. @ halo_col  : NULL
+#>  .. @ halo_width: NULL
+#>  .. @ features  : NULL
 #>  .. @ name      : chr "accent"
 #>  @ layout  : NULL
 #>  @ row     : NULL

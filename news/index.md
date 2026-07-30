@@ -2,6 +2,36 @@
 
 ## vellum (development version)
 
+- **Text halos (`shadowtext`).** `vl_gpar(halo_col =, halo_width =)`
+  strokes the glyph outlines *under* the fill, so a label stays legible
+  over a dense scatter or map imagery. Because vellum holds the
+  outlines, this is one real stroke rather than the eight offset copies
+  packages layered on grid have to draw – and it works on all three
+  backends (raster and outline-SVG do two explicit passes, native SVG
+  uses `paint-order` and stays selectable, PDF strokes then fills).
+  `halo_width` is in points like `fontsize`, so a halo keeps its
+  proportion at any dpi. Haloed text bypasses the glyph-sprite fast
+  path, which bakes only the fill. Resolves
+  [\#13](https://github.com/r-vellum/vellum/issues/13).
+
+- **OpenType feature control.** `vl_gpar(features = c(tnum = 1))` passes
+  four-character OpenType tags to the shaper: tabular figures so axis
+  labels stop jittering between ticks, plus small caps (`smcp`),
+  oldstyle figures (`onum`), and ligature (`liga`) and kerning (`kern`)
+  control. Features reach **measurement** as well as drawing –
+  [`vl_strwidth()`](https://r-vellum.github.io/vellum/reference/vl_strwidth.md),
+  [`vl_strheight()`](https://r-vellum.github.io/vellum/reference/vl_strwidth.md),
+  [`grobwidth()`](https://r-vellum.github.io/vellum/reference/grobwidth.md)
+  and
+  [`grobheight()`](https://r-vellum.github.io/vellum/reference/grobwidth.md)
+  all take them, and the shape cache is keyed on them – so a
+  `grobwidth`-sized track reserves space for the glyphs that actually
+  get drawn. Nothing in R’s graphics stack has offered this.
+
+- New article,
+  [`vignette("typography")`](https://r-vellum.github.io/vellum/articles/typography.md),
+  and `inst/examples/typography.R`.
+
 - **Text renders ~3x faster on a cold plot with many distinct labels.**
   PERF-1 shaped every unique label in one
   [`textshaping::shape_text()`](https://rdrr.io/pkg/textshaping/man/shape_text.html)

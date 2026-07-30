@@ -61,6 +61,9 @@ get_node(dots, "b")
 #>  .. @ fontsize  : NULL
 #>  .. @ cex       : NULL
 #>  .. @ lineheight: NULL
+#>  .. @ halo_col  : NULL
+#>  .. @ halo_width: NULL
+#>  .. @ features  : NULL
 #>  @ vp    : NULL
 #>  @ id    : NULL
 #>  @ role  : NULL

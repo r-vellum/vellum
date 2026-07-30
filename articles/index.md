@@ -4,6 +4,8 @@
 
 - [The scene graph and the paint
   model](https://r-vellum.github.io/vellum/articles/scene-and-paint.md):
+- [Typography: halos and OpenType
+  features](https://r-vellum.github.io/vellum/articles/typography.md):
 - [Asking a scene what it drew: read-back, picking, and
   editing](https://r-vellum.github.io/vellum/articles/retained-mode.md):
 - [Datashading: millions of points,

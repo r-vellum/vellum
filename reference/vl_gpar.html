@@ -31,6 +31,7 @@ the viewport tree. A colour value sets it; NA means "no paint".'><meta property=
   <ul class="dropdown-menu" aria-labelledby="dropdown-articles"><li><hr class="dropdown-divider"></li>
     <li><h6 class="dropdown-header" data-toc-skip>Concepts</h6></li>
     <li><a class="dropdown-item" href="../articles/scene-and-paint.html">The scene graph and the paint model</a></li>
+    <li><a class="dropdown-item" href="../articles/typography.html">Typography: halos and OpenType features</a></li>
     <li><a class="dropdown-item" href="../articles/retained-mode.html">Asking a scene what it drew: read-back, picking, and editing</a></li>
     <li><a class="dropdown-item" href="../articles/datashading.html">Datashading: millions of points, honestly</a></li>
     <li><hr class="dropdown-divider"></li>
@@ -83,7 +84,10 @@ the viewport tree. A colour value sets it; <code>NA</code> means "no paint".</p>
 <span>  fontface <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  fontsize <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  cex <span class="op">=</span> <span class="cn">NULL</span>,</span>
-<span>  lineheight <span class="op">=</span> <span class="cn">NULL</span></span>
+<span>  lineheight <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  halo_col <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  halo_width <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  features <span class="op">=</span> <span class="cn">NULL</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
 
@@ -150,6 +154,28 @@ default) means 1.</p></dd>
 <dt id="arg-lineheight">lineheight<a class="anchor" aria-label="anchor" href="#arg-lineheight"></a></dt>
 <dd><p>Line-height multiple.</p></dd>
 
+
+<dt id="arg-halo-col">halo_col<a class="anchor" aria-label="anchor" href="#arg-halo-col"></a></dt>
+<dd><p>Halo colour for text (a "shadowtext" outline drawn <em>under</em>
+the glyphs, so a label stays legible over dense marks or map imagery).
+<code>NULL</code> (default) means no halo. Needs <code>halo_width</code> to be visible.</p></dd>
+
+
+<dt id="arg-halo-width">halo_width<a class="anchor" aria-label="anchor" href="#arg-halo-width"></a></dt>
+<dd><p>Halo thickness in points – the visible width outside the
+glyph. <code>NULL</code> or <code>0</code> means no halo. A good starting point is roughly an
+eighth of <code>fontsize</code>.</p></dd>
+
+
+<dt id="arg-features">features<a class="anchor" aria-label="anchor" href="#arg-features"></a></dt>
+<dd><p>OpenType font features, as a named numeric vector of
+four-character feature tags – e.g. <code>c(tnum = 1)</code> for tabular (fixed-width)
+figures so axis labels stop jittering between ticks, <code>c(smcp = 1)</code> for small
+caps, <code>c(onum = 1)</code> for oldstyle figures, <code>c(liga = 0)</code> to switch ligatures
+off, or <code>c(kern = 0)</code> to disable kerning. <code>NULL</code> (default) uses the font's
+own defaults. A feature the font does not carry is silently ignored –
+that is HarfBuzz's behaviour, not something vellum can check for you.</p></dd>
+
 </dl></div>
     <div class="section level2">
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
@@ -173,6 +199,9 @@ default) means 1.</p></dd>
 <span class="r-out co"><span class="r-pr">#&gt;</span>  @ fontsize  : NULL</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>  @ cex       : NULL</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>  @ lineheight: NULL</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>  @ halo_col  : NULL</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>  @ halo_width: NULL</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>  @ features  : NULL</span>
 </code></pre></div>
     </div>
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>
