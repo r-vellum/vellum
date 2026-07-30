@@ -1081,7 +1081,8 @@ S7::method(compile, grob_text) <- function(node, scene) {
       rot <- vctrs::vec_recycle(node@rot, n)
       .draw_richtext_batch(scene, node@label, x, y, hv[1], hv[2], rot,
                            node@gp@fontfamily %||% "", node@gp@fontface %||% "plain",
-                           .gp_fontsize(node@gp), node@gp@col, node@gp@alpha)
+                           .gp_fontsize(node@gp), node@gp@col, node@gp@alpha,
+                           .gp_halo(node@gp), .gp_features(node@gp))
       return(invisible())
     }
     labels <- .text_labels(node@label) # seam: rich labels -> strings (plain = identity)
@@ -1095,7 +1096,8 @@ S7::method(compile, grob_text) <- function(node, scene) {
     # every other primitive; the root default is black, so plain text stays black).
     .draw_text_batch(scene, lab, x, y, hv[1], hv[2], rot,
                      node@gp@fontfamily %||% "", node@gp@fontface %||% "plain",
-                     .gp_fontsize(node@gp), node@gp@col, node@gp@alpha)
+                     .gp_fontsize(node@gp), node@gp@col, node@gp@alpha,
+                     .gp_halo(node@gp), .gp_features(node@gp))
   })
 }
 

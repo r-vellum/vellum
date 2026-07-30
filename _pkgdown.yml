@@ -80,6 +80,7 @@ articles:
   navbar: Concepts
   contents:
   - scene-and-paint
+  - typography
   - retained-mode
   - datashading
 - title: Interop

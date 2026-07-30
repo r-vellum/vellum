@@ -106,6 +106,10 @@ pub struct TextRun<'a> {
     /// Per-glyph fill colour. **Empty** ⇒ every glyph uses `color` (the plain path).
     /// Non-empty ⇒ one entry per glyph (a rich multi-run label).
     pub gcolor: &'a [Rgba],
+    /// Optional halo: `(colour, width in local px)`. Backends stroke the glyph
+    /// outlines in this colour **under** the fill (SVG native text uses
+    /// `paint-order`). `None` leaves every text path exactly as it was.
+    pub halo: Option<(Rgba, f64)>,
     pub label: &'a str,
     pub family: &'a str,
     pub face: &'a str,
@@ -803,7 +807,11 @@ impl RenderBackend for RasterBackend {
         // fill (which also keeps SVG/PDF and small renders byte-identical). Large
         // glyphs stay exact (quantisation is visible there; per-blit cost grows).
         const GLYPH_SPRITE_MAX_PX: f64 = 40.0;
+        // A sprite bakes the *fill* only, so a halo forces the exact outline path
+        // (which is what draws the stroke). Haloed text is rare and usually a
+        // handful of labels, so the lost fast path costs nothing in practice.
         let sprite_ok = self.bitmap_text
+            && run.halo.is_none()
             && base.sx == 1.0 && base.sy == 1.0 && base.kx == 0.0 && base.ky == 0.0;
         let n = run.gid.len()
             .min(run.gx.len())
@@ -811,6 +819,33 @@ impl RenderBackend for RasterBackend {
             .min(run.gsize.len())
             .min(run.gpath.len())
             .min(run.gface.len());
+        // Halo pass. Every glyph is stroked before *any* is filled, so a wide halo
+        // on one glyph cannot paint over the neighbour that was already filled --
+        // the same reason SVG needs `paint-order: stroke fill`.
+        if let Some((hcol, hw)) = run.halo {
+            let hpaint = solid_paint(hcol);
+            // Stroke is centred on the outline, so half of it lands inside the
+            // glyph and is then covered by the fill. Double the width so `hw` is
+            // the visible outer thickness, which is what a caller means by it.
+            let stroke = tiny_skia::Stroke {
+                width: (hw * 2.0) as f32,
+                line_join: tiny_skia::LineJoin::Round,
+                line_cap: tiny_skia::LineCap::Round,
+                ..Default::default()
+            };
+            for i in 0..n {
+                let outline = match glyph_outline_cached(&run.gpath[i], run.gface[i], run.gid[i], run.gsize[i] as f32) {
+                    Some(p) => p,
+                    None => continue,
+                };
+                let ox = run.ax + run.gx[i] - run.hjust * run.w;
+                let oy = run.ay - (run.gy[i] - run.vjust * run.h);
+                let place = Transform::from_row(1.0, 0.0, 0.0, -1.0, ox as f32, oy as f32);
+                self.targets.last_mut().expect("at least the page target").stroke_path(
+                    outline.as_ref(), &hpaint, &stroke, base.pre_concat(place), mask.as_deref(),
+                );
+            }
+        }
         for i in 0..n {
             let ox = run.ax + run.gx[i] - run.hjust * run.w;
             let oy = run.ay - (run.gy[i] - run.vjust * run.h);
@@ -1394,6 +1429,27 @@ impl RenderBackend for SvgBackend {
             let n = run.gid.len().min(run.gx.len()).min(run.gy.len())
                 .min(run.gsize.len()).min(run.gpath.len()).min(run.gface.len());
             let mut paths = String::new();
+            // Halo first, as a complete pass: all outlines stroked before any is
+            // filled, so a wide halo cannot paint over an already-filled neighbour.
+            if let Some((hcol, hw)) = run.halo {
+                for i in 0..n {
+                    let outline = match glyph_outline_cached(&run.gpath[i], run.gface[i], run.gid[i], run.gsize[i] as f32) {
+                        Some(p) => p,
+                        None => continue,
+                    };
+                    let ox = run.ax + run.gx[i] - run.hjust * run.w;
+                    let oy = run.ay - (run.gy[i] - run.vjust * run.h);
+                    let place = base.pre_concat(Transform::from_row(1.0, 0.0, 0.0, -1.0, ox as f32, oy as f32));
+                    // `hw * 2` for the same reason as the raster backend: the stroke
+                    // is centred, so half is hidden under the fill.
+                    paths.push_str(&format!(
+                        "<path d=\"{}\" fill=\"none\" stroke=\"{}\" stroke-opacity=\"{}\" \
+                         stroke-width=\"{}\" stroke-linejoin=\"round\" stroke-linecap=\"round\"{}/>",
+                        path_to_d(outline.as_ref()), rgb_hex(hcol), opacity(hcol), hw * 2.0,
+                        transform_attr(place)
+                    ));
+                }
+            }
             for i in 0..n {
                 let outline = match glyph_outline_cached(&run.gpath[i], run.gface[i], run.gid[i], run.gsize[i] as f32) {
                     Some(p) => p,
@@ -1445,10 +1501,20 @@ impl RenderBackend for SvgBackend {
             String::new()
         };
         let family = if run.family.is_empty() { "sans-serif" } else { run.family };
+        // `paint-order="stroke fill"` is exactly the two-pass halo the raster and
+        // outline paths do by hand, and it keeps the text selectable.
+        let halo_attr = match run.halo {
+            Some((hcol, hw)) => format!(
+                " paint-order=\"stroke fill\" stroke=\"{}\" stroke-opacity=\"{}\" \
+                 stroke-width=\"{}\" stroke-linejoin=\"round\"",
+                rgb_hex(hcol), opacity(hcol), hw * 2.0
+            ),
+            None => String::new(),
+        };
         let element = format!(
             "<text x=\"{x}\" y=\"{y}\" transform=\"{t}{rot}\" fill=\"{col}\" fill-opacity=\"{op}\" \
              font-family=\"{fam}\" font-size=\"{size}\" text-anchor=\"{anchor}\" \
-             dominant-baseline=\"{baseline}\"{weight}{style}>{label}</text>",
+             dominant-baseline=\"{baseline}\"{weight}{style}{halo}>{label}</text>",
             x = run.ax,
             y = run.ay,
             t = matrix_str(transform),
@@ -1456,6 +1522,7 @@ impl RenderBackend for SvgBackend {
             op = opacity(run.color),
             fam = xml_escape(family),
             size = font_px,
+            halo = halo_attr,
             label = xml_escape(run.label),
         );
         self.emit(&element, clip);
@@ -2046,15 +2113,35 @@ impl RenderBackend for PdfBackend<'_, '_> {
         };
 
         let pushes = self.push_state(base, clip);
-        self.surface.set_stroke(None);
         let rich = !run.gcolor.is_empty();
-        // Plain labels set the single fill once; rich labels set it per colour run.
-        if !rich {
-            self.surface.set_fill(Some(Fill {
-                paint: rgb::Color::new(run.color.r, run.color.g, run.color.b).into(),
-                opacity: norm(run.color.a),
-                rule: KFillRule::NonZero,
+        // A halo means drawing the whole label twice: once stroke-only underneath,
+        // then normally on top. PDF has a fill-and-stroke text mode, but it paints
+        // the stroke *over* the fill, which is an outline, not a halo.
+        let passes: &[bool] = if run.halo.is_some() { &[true, false] } else { &[false] };
+        for &halo_pass in passes {
+        if halo_pass {
+            let (hcol, hw) = run.halo.expect("halo pass implies a halo");
+            self.surface.set_fill(None);
+            self.surface.set_stroke(Some(KStroke {
+                paint: rgb::Color::new(hcol.r, hcol.g, hcol.b).into(),
+                // Centred stroke: double it so `hw` is the visible outer width,
+                // matching the raster and SVG backends.
+                width: (hw * 2.0) as f32,
+                line_join: KLineJoin::Round,
+                line_cap: KLineCap::Round,
+                opacity: norm(hcol.a),
+                ..Default::default()
             }));
+        } else {
+            self.surface.set_stroke(None);
+            // Plain labels set the single fill once; rich labels set it per colour run.
+            if !rich {
+                self.surface.set_fill(Some(Fill {
+                    paint: rgb::Color::new(run.color.r, run.color.g, run.color.b).into(),
+                    opacity: norm(run.color.a),
+                    rule: KFillRule::NonZero,
+                }));
+            }
         }
 
         // Draw in runs of consecutive glyphs sharing a font AND a baseline (so a
@@ -2073,7 +2160,9 @@ impl RenderBackend for PdfBackend<'_, '_> {
             {
                 j += 1;
             }
-            if let Some(c) = col0 {
+            // Per-run fill for rich labels -- but not on the halo pass, which is
+            // stroke-only and must keep fill disabled.
+            if let (Some(c), false) = (col0, halo_pass) {
                 self.surface.set_fill(Some(Fill {
                     paint: rgb::Color::new(c.r, c.g, c.b).into(),
                     opacity: norm(c.a),
@@ -2106,6 +2195,8 @@ impl RenderBackend for PdfBackend<'_, '_> {
             }
             i = j;
         }
+        }
+        self.surface.set_stroke(None);
         self.pop_state(pushes);
     }
 

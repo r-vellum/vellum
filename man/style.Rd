@@ -18,6 +18,9 @@ style(
   fontsize = NULL,
   cex = NULL,
   lineheight = NULL,
+  halo_col = NULL,
+  halo_width = NULL,
+  features = NULL,
   name = NULL
 )
 }
@@ -55,6 +58,22 @@ units, and \code{\link[=grobwidth]{grobwidth()}}/\code{\link[=grobheight]{grobhe
 default) means 1.}
 
 \item{lineheight}{Line-height multiple.}
+
+\item{halo_col}{Halo colour for text (a "shadowtext" outline drawn \emph{under}
+the glyphs, so a label stays legible over dense marks or map imagery).
+\code{NULL} (default) means no halo. Needs \code{halo_width} to be visible.}
+
+\item{halo_width}{Halo thickness in points -- the visible width outside the
+glyph. \code{NULL} or \code{0} means no halo. A good starting point is roughly an
+eighth of \code{fontsize}.}
+
+\item{features}{OpenType font features, as a named numeric vector of
+four-character feature tags -- e.g. \code{c(tnum = 1)} for tabular (fixed-width)
+figures so axis labels stop jittering between ticks, \code{c(smcp = 1)} for small
+caps, \code{c(onum = 1)} for oldstyle figures, \code{c(liga = 0)} to switch ligatures
+off, or \code{c(kern = 0)} to disable kerning. \code{NULL} (default) uses the font's
+own defaults. A feature the font does not carry is silently ignored --
+that is HarfBuzz's behaviour, not something vellum can check for you.}
 
 \item{name}{Optional style-class name, for identification only; it is ignored
 by rendering.}

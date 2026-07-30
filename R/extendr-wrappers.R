@@ -388,11 +388,11 @@ Scene$path <- function(x, y, xu, xoff, yu, yoff, nper, evenodd, fill, col, lwd, 
 
 Scene$image <- function(rgba, iw, ih, x, y, w, h, xu, xoff, yu, yoff, wu, woff, hu, hoff, interpolate) .Call(wrap__Scene__image, self, rgba, iw, ih, x, y, w, h, xu, xoff, yu, yoff, wu, woff, hu, hoff, interpolate)
 
-Scene$text <- function(x, y, xu, xoff, yu, yoff, rot, hjust, vjust, w, h, gid, gx, gy, gsize, gpath, gface, label, family, face, size, col, alpha) .Call(wrap__Scene__text, self, x, y, xu, xoff, yu, yoff, rot, hjust, vjust, w, h, gid, gx, gy, gsize, gpath, gface, label, family, face, size, col, alpha)
+Scene$text <- function(x, y, xu, xoff, yu, yoff, rot, hjust, vjust, w, h, gid, gx, gy, gsize, gpath, gface, label, family, face, size, col, alpha, halo_col, halo_width) .Call(wrap__Scene__text, self, x, y, xu, xoff, yu, yoff, rot, hjust, vjust, w, h, gid, gx, gy, gsize, gpath, gface, label, family, face, size, col, alpha, halo_col, halo_width)
 
-Scene$texts <- function(x, y, xu, xoff, yu, yoff, rot, hjust, vjust, w, h, nper, gid, gx, gy, gsize, gpath, gface, label, family, face, size, col, alpha) .Call(wrap__Scene__texts, self, x, y, xu, xoff, yu, yoff, rot, hjust, vjust, w, h, nper, gid, gx, gy, gsize, gpath, gface, label, family, face, size, col, alpha)
+Scene$texts <- function(x, y, xu, xoff, yu, yoff, rot, hjust, vjust, w, h, nper, gid, gx, gy, gsize, gpath, gface, label, family, face, size, col, alpha, halo_col, halo_width) .Call(wrap__Scene__texts, self, x, y, xu, xoff, yu, yoff, rot, hjust, vjust, w, h, nper, gid, gx, gy, gsize, gpath, gface, label, family, face, size, col, alpha, halo_col, halo_width)
 
-Scene$texts_rich <- function(x, y, xu, xoff, yu, yoff, rot, hjust, vjust, w, h, nper, gid, gx, gy, gsize, gpath, gface, gcol, label, family, face, size, col, alpha) .Call(wrap__Scene__texts_rich, self, x, y, xu, xoff, yu, yoff, rot, hjust, vjust, w, h, nper, gid, gx, gy, gsize, gpath, gface, gcol, label, family, face, size, col, alpha)
+Scene$texts_rich <- function(x, y, xu, xoff, yu, yoff, rot, hjust, vjust, w, h, nper, gid, gx, gy, gsize, gpath, gface, gcol, label, family, face, size, col, alpha, halo_col, halo_width) .Call(wrap__Scene__texts_rich, self, x, y, xu, xoff, yu, yoff, rot, hjust, vjust, w, h, nper, gid, gx, gy, gsize, gpath, gface, gcol, label, family, face, size, col, alpha, halo_col, halo_width)
 
 Scene$mask_begin <- function(kind) .Call(wrap__Scene__mask_begin, self, kind)
 

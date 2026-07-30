@@ -291,6 +291,16 @@ struct ResolvedVp {
     clip_chain: Vec<ClipShape>,
 }
 
+/// Build the optional text halo from the R-side `(colour, width_px)` pair.
+/// Absent colour or a non-positive width means no halo, so a scene that never
+/// asks for one is unchanged.
+fn halo_of(col: &Robj, width_px: f64) -> Option<(Rgba, f64)> {
+    if !(width_px > 0.0) {
+        return None;
+    }
+    opt_color(col).map(|c| (c, width_px))
+}
+
 // --- primitives -------------------------------------------------------------
 
 #[derive(Clone, Debug)]
@@ -343,6 +353,11 @@ enum Node {
         /// plain single-style path leaves this empty so its rendering is unchanged.
         /// A rich (multi-run) label fills it with one `Rgba` per glyph.
         gcol: Vec<Rgba>,
+        /// Optional halo (shadowtext): `(colour, width_px)`. The glyph outlines are
+        /// stroked in this colour *under* the fill, so a label stays legible over
+        /// busy marks or map imagery. `None` (the default) leaves every backend's
+        /// text path byte-for-byte as it was.
+        halo: Option<(Rgba, f64)>,
         /// Source string + font descriptor, for vector backends that emit real
         /// `<text>` / embedded glyphs rather than filled outlines.
         label: String,
@@ -1242,8 +1257,11 @@ impl Scene {
         size: f64,
         col: Robj,
         alpha: Robj,
+        halo_col: Robj,
+        halo_width: f64,
     ) {
         let gp = PartialGpar::from_robj(&rnull(), &col, &rnull(), &alpha, &rnull());
+        let halo = halo_of(&halo_col, halo_width);
         self.emit_node(Node::Text {
             x,
             y,
@@ -1261,6 +1279,7 @@ impl Scene {
             gpath,
             gface: gface.iter().map(|&v| v.max(0) as u32).collect(),
             gcol: Vec::new(),
+            halo,
             label: label.to_string(),
             family: family.to_string(),
             face: face.to_string(),
@@ -1280,8 +1299,10 @@ impl Scene {
         hjust: f64, vjust: f64, w: &[f64], h: &[f64], nper: &[i32],
         gid: &[i32], gx: &[f64], gy: &[f64], gsize: &[f64], gpath: Vec<String>, gface: &[i32],
         label: Vec<String>, family: &str, face: &str, size: f64, col: Robj, alpha: Robj,
+        halo_col: Robj, halo_width: f64,
     ) {
         let gp = PartialGpar::from_robj(&rnull(), &col, &rnull(), &alpha, &rnull());
+        let halo = halo_of(&halo_col, halo_width);
         let nlab = [x.len(), y.len(), xu.len(), yu.len(), rot.len(), w.len(), h.len(), nper.len(), label.len()]
             .into_iter().min().unwrap_or(0);
         // All glyph arrays are parallel; clamp the per-label slice to the shortest
@@ -1305,6 +1326,7 @@ impl Scene {
                 gpath: gpath[lo..hi].to_vec(),
                 gface: gface[lo..hi].iter().map(|&v| v.max(0) as u32).collect(),
                 gcol: Vec::new(),
+                halo,
                 label: label[i].clone(),
                 family: family.to_string(),
                 face: face.to_string(),
@@ -1327,8 +1349,10 @@ impl Scene {
         gid: &[i32], gx: &[f64], gy: &[f64], gsize: &[f64], gpath: Vec<String>, gface: &[i32],
         gcol: &[i32],
         label: Vec<String>, family: &str, face: &str, size: f64, col: Robj, alpha: Robj,
+        halo_col: Robj, halo_width: f64,
     ) {
         let gp = PartialGpar::from_robj(&rnull(), &col, &rnull(), &alpha, &rnull());
+        let halo = halo_of(&halo_col, halo_width);
         let nlab = [x.len(), y.len(), xu.len(), yu.len(), rot.len(), w.len(), h.len(), nper.len(), label.len()]
             .into_iter().min().unwrap_or(0);
         let gmax = [gid.len(), gx.len(), gy.len(), gsize.len(), gpath.len(), gface.len(), gcol.len() / 4]
@@ -1358,6 +1382,7 @@ impl Scene {
                         a: c[3].clamp(0, 255) as u8,
                     })
                     .collect(),
+                halo,
                 label: label[i].clone(),
                 family: family.to_string(),
                 face: face.to_string(),
@@ -2838,7 +2863,7 @@ impl Scene {
                 }
                 Node::Text {
                     x, y, xu, yu, rot, hjust, vjust, w, h,
-                    gid, gx, gy, gsize, gpath, gface, gcol, label, family, face, size, ..
+                    gid, gx, gy, gsize, gpath, gface, gcol, halo, label, family, face, size, ..
                 } => {
                     // Per-glyph colours carry their own paint, so a rich label draws
                     // even when the shared `gp.col` is "inherit/none" (the base colour
@@ -2874,6 +2899,7 @@ impl Scene {
                         gpath,
                         gface,
                         gcolor: gcol,
+                        halo: *halo,
                         label,
                         family,
                         face,

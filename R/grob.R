@@ -900,17 +900,18 @@ grobheight <- function(grob, mult = 1) vl_unit(mult, "grobheight", data = grob)
     fs <- .gp_fontsize(g@gp)
     fam <- g@gp@fontfamily %||% ""
     face <- g@gp@fontface %||% "plain"
+    feat <- .gp_features(g@gp)
     if (S7::S7_inherits(g@label, vellum_label)) {
       # Rich label: measure the composed multi-run extent (points -> mm) so axis
       # gutters/tracks reserve the right space (shares `.md_compose` with drawing).
-      ext <- .md_extent_pt(g@label, fam, face, fs)
+      ext <- .md_extent_pt(g@label, fam, face, fs, feat)
       w <- ext[1] / 72 * 25.4
       h <- ext[2] / 72 * 25.4
     } else {
       labs <- .text_labels(g@label)
       if (length(labs) == 0L) return(c(0, 0))
-      w <- max(vl_strwidth(labs, fam, face, fs, unit = "mm"))
-      h <- max(vl_strheight(labs, fam, face, fs, unit = "mm"))
+      w <- max(vl_strwidth(labs, fam, face, fs, unit = "mm", features = feat))
+      h <- max(vl_strheight(labs, fam, face, fs, unit = "mm", features = feat))
     }
     # Rotation grows the axis-aligned bounding box; report the rotated extent so a
     # grobwidth/grobheight-sized region holds slanted/vertical text.
