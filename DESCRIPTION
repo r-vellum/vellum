@@ -38,6 +38,7 @@ Imports:
     grDevices,
     grid,
     S7,
+    systemfonts,
     textshaping,
     vctrs
 Collate:

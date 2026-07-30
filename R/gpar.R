@@ -24,6 +24,19 @@
 #'   equivalent to doubling `fontsize`: it scales drawn text, `char`/`line`
 #'   units, and [grobwidth()]/[grobheight()] measurement alike. `NULL` (the
 #'   default) means 1.
+#' @param halo_col Halo colour for text (a "shadowtext" outline drawn *under*
+#'   the glyphs, so a label stays legible over dense marks or map imagery).
+#'   `NULL` (default) means no halo. Needs `halo_width` to be visible.
+#' @param halo_width Halo thickness in points -- the visible width outside the
+#'   glyph. `NULL` or `0` means no halo. A good starting point is roughly an
+#'   eighth of `fontsize`.
+#' @param features OpenType font features, as a named numeric vector of
+#'   four-character feature tags -- e.g. `c(tnum = 1)` for tabular (fixed-width)
+#'   figures so axis labels stop jittering between ticks, `c(smcp = 1)` for small
+#'   caps, `c(onum = 1)` for oldstyle figures, `c(liga = 0)` to switch ligatures
+#'   off, or `c(kern = 0)` to disable kerning. `NULL` (default) uses the font's
+#'   own defaults. A feature the font does not carry is silently ignored --
+#'   that is HarfBuzz's behaviour, not something vellum can check for you.
 #' @param lineheight Line-height multiple.
 #' @return A `gpar` object.
 #' @examples
@@ -45,7 +58,10 @@ vl_gpar <- S7::new_class(
     fontface   = S7::new_property(S7::class_any, default = NULL),
     fontsize   = S7::new_property(S7::class_any, default = NULL),
     cex        = S7::new_property(S7::class_any, default = NULL),
-    lineheight = S7::new_property(S7::class_any, default = NULL)
+    lineheight = S7::new_property(S7::class_any, default = NULL),
+    halo_col   = S7::new_property(S7::class_any, default = NULL),
+    halo_width = S7::new_property(S7::class_any, default = NULL),
+    features   = S7::new_property(S7::class_any, default = NULL)
   ),
   validator = function(self) {
     x <- self@cex
@@ -56,6 +72,10 @@ vl_gpar <- S7::new_class(
     # NULL/NA mean "inherit"; any concrete alpha must lie in [0, 1].
     if (!is.null(a) && is.numeric(a) && any(!is.na(a) & (a < 0 | a > 1))) {
       return("@alpha must be in [0, 1] (or NULL to inherit)")
+    }
+    hw <- self@halo_width
+    if (!is.null(hw) && is.numeric(hw) && any(!is.na(hw) & hw < 0)) {
+      return("@halo_width must be non-negative (or NULL for no halo)")
     }
     m <- self@linemitre
     if (!is.null(m) && is.numeric(m) && any(!is.na(m) & m < 1)) {
@@ -72,6 +92,46 @@ vl_gpar <- S7::new_class(
 # measurement all route through it so they cannot disagree.
 .gp_fontsize <- function(gp) {
   (gp@fontsize %||% 12) * (gp@cex %||% 1)
+}
+
+# The text halo as `list(col, width_pt)`, or NULL when there is none. A halo needs
+# both a colour and a positive width; either alone is a no-op, so the backends
+# never see a half-specified halo.
+# Normalise `gp@features` to a named integer vector, or NULL. Accepts a named
+# numeric/logical vector; a `font_feature()` object from systemfonts passes
+# straight through (it is what `textshaping::shape_text()` wants anyway).
+.gp_features <- function(gp) {
+  f <- gp@features
+  if (is.null(f) || length(f) == 0L) {
+    return(NULL)
+  }
+  if (inherits(f, "font_feature")) {
+    return(f)
+  }
+  nm <- names(f)
+  if (is.null(nm) || any(!nzchar(nm))) {
+    cli::cli_abort(c(
+      "{.arg features} must be a {.emph named} vector of OpenType tags.",
+      i = 'For example {.code c(tnum = 1)} or {.code c(liga = 0)}.'
+    ))
+  }
+  bad <- nm[nchar(nm) != 4L]
+  if (length(bad)) {
+    cli::cli_abort(c(
+      "OpenType feature tags are exactly four characters.",
+      x = "Not a tag: {.val {bad}}."
+    ))
+  }
+  stats::setNames(as.integer(f), nm)
+}
+
+.gp_halo <- function(gp) {
+  col <- gp@halo_col
+  w <- gp@halo_width %||% 0
+  if (is.null(col) || length(col) == 0L || all(is.na(col)) || !isTRUE(w[1] > 0)) {
+    return(NULL)
+  }
+  list(col = col[1], width = as.numeric(w[1]))
 }
 
 # An S7 property typed as a `unit` vector, with a quoted default evaluated at

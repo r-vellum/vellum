@@ -16,26 +16,30 @@
 #' @param fontface One of `"plain"`, `"bold"`, `"italic"`, `"bold.italic"`.
 #' @param fontsize Font size in points.
 #' @param cex Multiplier applied to `fontsize`.
+#' @param features OpenType features as a named vector of four-character tags
+#'   (e.g. `c(tnum = 1)`), matching [vl_gpar()]'s `features`. Measurement must
+#'   use the same features as drawing, or reserved space will not match.
 #' @param unit Output unit: one of `"in"`, `"pt"`, `"mm"`, `"cm"`.
 #' @return A numeric vector (one per `label`) of widths/heights in `unit`.
 #' @examples
 #' vl_strwidth(c("short", "a longer label"), fontsize = 14)
 #' @export
 vl_strwidth <- function(label, family = "", fontface = "plain",
-                        fontsize = 12, cex = 1, unit = "in") {
-  .text_metric(label, family, fontface, fontsize, cex, unit, "width")
+                        fontsize = 12, cex = 1, unit = "in", features = NULL) {
+  .text_metric(label, family, fontface, fontsize, cex, unit, "width", features)
 }
 
 #' @rdname vl_strwidth
 #' @export
 vl_strheight <- function(label, family = "", fontface = "plain",
-                         fontsize = 12, cex = 1, unit = "in") {
-  .text_metric(label, family, fontface, fontsize, cex, unit, "height")
+                         fontsize = 12, cex = 1, unit = "in", features = NULL) {
+  .text_metric(label, family, fontface, fontsize, cex, unit, "height", features)
 }
 
 # Shared width/height measurement (vectorised over `label`); `which` is the
 # `shape_text` metric column ("width"/"height"). `res = 72` => points.
-.text_metric <- function(label, family, fontface, fontsize, cex, unit, which) {
+.text_metric <- function(label, family, fontface, fontsize, cex, unit, which,
+                         features = NULL) {
   unit <- match.arg(unit, c("in", "pt", "mm", "cm"))
   # Rich md() labels are measured through the same composition path the renderer
   # draws (`.md_extent_pt`), so reserved layout space matches drawn glyphs. A
@@ -45,7 +49,7 @@ vl_strheight <- function(label, family = "", fontface = "plain",
     labs <- if (S7::S7_inherits(label, vellum_label)) list(label) else label
     col <- if (which == "width") 1L else 2L
     pt <- vapply(labs, function(l) {
-      .md_extent_pt(l, family, fontface, fontsize * cex)[col]
+      .md_extent_pt(l, family, fontface, fontsize * cex, features)[col]
     }, numeric(1))
     return(.pt_to_unit(pt, unit))
   }
@@ -54,10 +58,12 @@ vl_strheight <- function(label, family = "", fontface = "plain",
     return(numeric(0))
   }
   face <- .rs_face(fontface)
+  # Measurement must use the same features as drawing, or a `grobwidth`-sized
+  # track reserves the wrong space for the glyphs that actually get drawn.
   pt <- textshaping::shape_text(
     label,
     family = family, italic = face$italic, weight = face$weight,
-    size = fontsize * cex, res = 72
+    size = fontsize * cex, res = 72, features = .as_font_feature(features)
   )$metrics[[which]]
   .pt_to_unit(pt, unit)
 }
@@ -93,8 +99,11 @@ vl_strheight <- function(label, family = "", fontface = "plain",
 # Shape `uniq` strings, returning a list aligned with `uniq`. Each element is
 # `list(w, h, n[, index, xoff, yoff, fsize, fpath, findex])` (the glyph fields are
 # present only when n > 0). Cache-missing strings are shaped together in one call.
-.shape_cached <- function(uniq, family, italic, weight, size) {
-  keys <- paste(family, italic, weight, size, uniq, sep = "")
+.shape_cached <- function(uniq, family, italic, weight, size, features = NULL) {
+  # The feature set is part of the font's identity for shaping: the same string
+  # in the same font shapes to different glyphs under `smcp` or `onum`, so it
+  # must be in the key, or a second grob would be served the first one's glyphs.
+  keys <- paste(family, italic, weight, size, .feature_key(features), uniq, sep = "")
   if (.shape_cache$.n > .SHAPE_CACHE_CAP) { # memory backstop: drop everything
     rm(list = setdiff(ls(.shape_cache, all.names = TRUE), ".n"), envir = .shape_cache)
     .shape_cache$.n <- 0L
@@ -103,7 +112,8 @@ vl_strheight <- function(label, family = "", fontface = "plain",
   miss <- which(!hit)
   if (length(miss)) {
     sh <- textshaping::shape_text(uniq[miss],
-      family = family, italic = italic, weight = weight, size = size
+      family = family, italic = italic, weight = weight, size = size,
+      features = .as_font_feature(features)
     )
     g <- sh$shape
     by_id <- split(seq_len(nrow(g)), g$metric_id) # glyph rows per shaped string
@@ -124,6 +134,31 @@ vl_strheight <- function(label, family = "", fontface = "plain",
     .shape_cache$.n <- .shape_cache$.n + length(miss)
   }
   lapply(keys, get, envir = .shape_cache, inherits = FALSE)
+}
+
+# A stable string for a feature set, for the shape-cache key. NULL and an empty
+# set collapse to "" so a scene that asks for no features keys exactly as before.
+.feature_key <- function(features) {
+  if (is.null(features) || length(features) == 0L) {
+    return("")
+  }
+  if (inherits(features, "font_feature")) {
+    features <- unlist(features[[2]])
+  }
+  o <- order(names(features))
+  paste0(names(features)[o], "=", features[o], collapse = ",")
+}
+
+# Convert our named-integer feature form to what `textshaping::shape_text()`
+# wants. A `font_feature()` object the caller built themselves passes through.
+.as_font_feature <- function(features) {
+  if (is.null(features) || length(features) == 0L) {
+    return(systemfonts::font_feature())
+  }
+  if (inherits(features, "font_feature")) {
+    return(features)
+  }
+  do.call(systemfonts::font_feature, as.list(features))
 }
 
 # Line spacing as a multiple of the font size (baseline-to-baseline), matching
@@ -166,11 +201,11 @@ vl_strheight <- function(label, family = "", fontface = "plain",
 #
 # Prefer `.compose_plain_batch()` when composing many labels: this one shapes a
 # single label per call, which defeats `.shape_cached()`'s miss-batching.
-.compose_plain <- function(label, family, italic, weight, size) {
+.compose_plain <- function(label, family, italic, weight, size, features = NULL) {
   if (!grepl("\n", label, fixed = TRUE)) {
-    return(.shape_cached(label, family, italic, weight, size)[[1]])
+    return(.shape_cached(label, family, italic, weight, size, features)[[1]])
   }
-  .stack_lines(.shape_cached(.label_lines(label), family, italic, weight, size), size)
+  .stack_lines(.shape_cached(.label_lines(label), family, italic, weight, size, features), size)
 }
 
 # Compose MANY plain labels, shaping every distinct line across ALL of them in a
@@ -185,12 +220,12 @@ vl_strheight <- function(label, family = "", fontface = "plain",
 # other label's before shaping, then re-stacked per label.
 #
 # Returns a list aligned with `labels`, each element a `.shape_cached`-shaped entry.
-.compose_plain_batch <- function(labels, family, italic, weight, size) {
+.compose_plain_batch <- function(labels, family, italic, weight, size, features = NULL) {
   multi <- grepl("\n", labels, fixed = TRUE)
   # Common case: nothing to split, so each label is its own only line and the
   # cache call is exactly the pre-e6d4d19 one.
   if (!any(multi)) {
-    return(.shape_cached(labels, family, italic, weight, size))
+    return(.shape_cached(labels, family, italic, weight, size, features))
   }
   parts <- as.list(labels)
   parts[multi] <- lapply(labels[multi], .label_lines)
@@ -198,7 +233,7 @@ vl_strheight <- function(label, family = "", fontface = "plain",
   # up by POSITION, not by name: a blank line ("a\n\nb") is the empty string, and
   # `x[""]` never matches a name, so a named lookup would silently drop it.
   need <- unique(unlist(parts, use.names = FALSE))
-  sh <- .shape_cached(need, family, italic, weight, size)
+  sh <- .shape_cached(need, family, italic, weight, size, features)
   at <- lapply(parts, match, table = need)
   out <- vector("list", length(labels))
   out[!multi] <- sh[unlist(at[!multi], use.names = FALSE)]
@@ -212,7 +247,8 @@ vl_strheight <- function(label, family = "", fontface = "plain",
 # recycled to the label count; `rot` is per-label; the rest are shared. Labels may
 # contain "\n" (multi-line); each unique label is composed once.
 .draw_text_batch <- function(scene, labels, x, y, hjust, vjust, rot,
-                             family, fontface, fontsize, col, alpha) {
+                             family, fontface, fontsize, col, alpha, halo = NULL,
+                             features = NULL) {
   labels <- as.character(labels)
   n <- length(labels)
   keep <- !is.na(labels) & nzchar(labels)
@@ -222,7 +258,7 @@ vl_strheight <- function(label, family = "", fontface = "plain",
   scale <- scene$dpi() / 72
   face <- .rs_face(fontface)
   uniq <- unique(labels[keep])
-  shaped <- .compose_plain_batch(uniq, family, face$italic, face$weight, fontsize)
+  shaped <- .compose_plain_batch(uniq, family, face$italic, face$weight, fontsize, features)
   umap <- match(labels, uniq)
   # Drawn labels: those kept that shaped to >= 1 glyph (drops e.g. control chars).
   drawn <- which(keep)
@@ -249,7 +285,8 @@ vl_strheight <- function(label, family = "", fontface = "plain",
     unlist(lapply(ent, `[[`, "fsize"), use.names = FALSE) * scale,
     unlist(lapply(ent, `[[`, "fpath"), use.names = FALSE),
     unlist(lapply(ent, `[[`, "findex"), use.names = FALSE),
-    labels[drawn], family, fontface, fontsize, .rs_col_inh(col), .rs_num_inh(alpha)
+    labels[drawn], family, fontface, fontsize, .rs_col_inh(col), .rs_num_inh(alpha),
+    .rs_col_inh(halo$col), (halo$width %||% 0) * scale
   )
   invisible()
 }
@@ -431,7 +468,7 @@ md <- function(text) {
 # per-glyph colour character vector, and the composed extent (w, h). All lengths
 # are in points (the caller scales by dpi/72 for drawing, or converts for
 # measurement). `base_col` resolves a run's inherited colour.
-.md_compose <- function(label, family, fontface, fontsize, base_col) {
+.md_compose <- function(label, family, fontface, fontsize, base_col, features = NULL) {
   # Split the flat run list into lines at the `brk` markers (single-line labels
   # yield one line and a zero line-offset, so their output is unchanged).
   lines <- list(); cur <- list()
@@ -454,7 +491,7 @@ md <- function(text) {
       if (!nzchar(run$text)) next
       face <- .rs_face(.md_run_face(fontface, run))
       rsize <- fontsize * run$size
-      sh <- .shape_cached(run$text, family, face$italic, face$weight, rsize)[[1]]
+      sh <- .shape_cached(run$text, family, face$italic, face$weight, rsize, features)[[1]]
       dyp <- run$dy * fontsize + loff
       if (sh$n > 0L) {
         gid <- c(gid, sh$index)
@@ -482,7 +519,8 @@ md <- function(text) {
 # case). Distinct labels are composed once (deduped by plain text). Mirrors
 # `.draw_text_batch` but calls `texts_rich` with the per-glyph colour stream.
 .draw_richtext_batch <- function(scene, label, x, y, hjust, vjust, rot,
-                                 family, fontface, fontsize, col, alpha) {
+                                 family, fontface, fontsize, col, alpha, halo = NULL,
+                                 features = NULL) {
   base_col <- if (is.null(col) || is.na(col)) "black" else col
   scale <- scene$dpi() / 72
   n <- vctrs::vec_size_common(x, y)
@@ -507,7 +545,7 @@ md <- function(text) {
   }
   keytxt <- vapply(labs, function(l) l@text, character(1))
   uk <- unique(keytxt)
-  comp <- lapply(uk, function(t) .md_compose(labs[[match(t, keytxt)]], family, fontface, fontsize, base_col))
+  comp <- lapply(uk, function(t) .md_compose(labs[[match(t, keytxt)]], family, fontface, fontsize, base_col, features))
   names(comp) <- uk
   # Concatenate the per-position glyph sets into the flat FFI arrays; `gp$alpha`
   # folds into the per-glyph RGBA alpha channel (mirrors hexagon_grob's fill).
@@ -530,15 +568,16 @@ md <- function(text) {
     cx$value[drawn], cy$value[drawn], cx$code[drawn], cx$offset[drawn], cy$code[drawn], cy$offset[drawn],
     rot[drawn], hjust, vjust, w, h, as.integer(nper),
     gid, gx, gy, gsize, gpath, gface, gcol,
-    keytxt, family, fontface, fontsize, .rs_col_inh(base_col), .rs_num_inh(alpha)
+    keytxt, family, fontface, fontsize, .rs_col_inh(base_col), .rs_num_inh(alpha),
+    .rs_col_inh(halo$col), (halo$width %||% 0) * scale
   )
   invisible()
 }
 
 # Composed extent of a rich label in points (w, h) — measurement path. Shares
 # `.md_compose` with the draw path so reserved layout space matches drawn text.
-.md_extent_pt <- function(label, family, fontface, fontsize) {
-  g <- .md_compose(label, family, fontface, fontsize, "black")
+.md_extent_pt <- function(label, family, fontface, fontsize, features = NULL) {
+  g <- .md_compose(label, family, fontface, fontsize, "black", features)
   c(g$w, g$h)
 }
 

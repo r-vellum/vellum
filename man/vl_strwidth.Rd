@@ -11,7 +11,8 @@ vl_strwidth(
   fontface = "plain",
   fontsize = 12,
   cex = 1,
-  unit = "in"
+  unit = "in",
+  features = NULL
 )
 
 vl_strheight(
@@ -20,7 +21,8 @@ vl_strheight(
   fontface = "plain",
   fontsize = 12,
   cex = 1,
-  unit = "in"
+  unit = "in",
+  features = NULL
 )
 }
 \arguments{
@@ -40,6 +42,10 @@ family name). \code{""} uses the system default.}
 \item{cex}{Multiplier applied to \code{fontsize}.}
 
 \item{unit}{Output unit: one of \code{"in"}, \code{"pt"}, \code{"mm"}, \code{"cm"}.}
+
+\item{features}{OpenType features as a named vector of four-character tags
+(e.g. \code{c(tnum = 1)}), matching \code{\link[=vl_gpar]{vl_gpar()}}'s \code{features}. Measurement must
+use the same features as drawing, or reserved space will not match.}
 }
 \value{
 A numeric vector (one per \code{label}) of widths/heights in \code{unit}.
