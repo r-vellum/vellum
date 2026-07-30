@@ -121,6 +121,7 @@ reference:
   contents:
   - grob
   - vl_arrow
+  - stroke_to_path
 
 - title: Units, viewports & layout
   desc: >

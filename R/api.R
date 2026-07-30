@@ -802,6 +802,17 @@ vl_clear_render_cache <- function() {
 }
 
 # Map `options(vellum.glyph_bitmap)` to the Rust mode code (0 off / 1 auto / 2 on).
+# Resolve `options(vellum.simplify)` to a tolerance in device px.
+.simplify_tol <- function() {
+  v <- getOption("vellum.simplify", 0.1)
+  if (is.null(v) || length(v) != 1L || is.na(v) || !is.numeric(v) || v < 0) {
+    cli::cli_abort(
+      '{.code options(vellum.simplify)} must be a single non-negative number (device px); 0 disables.'
+    )
+  }
+  as.numeric(v)
+}
+
 .glyph_bitmap_code <- function() {
   switch(as.character(getOption("vellum.glyph_bitmap", "auto")),
     off = 0L, on = 2L, auto = 1L, 1L)
@@ -813,6 +824,9 @@ vl_clear_render_cache <- function() {
   # returned as-is without re-reading the mode; that is fine because the mode is a
   # perf-only fast path with output identical to the vector text path.
   rs_set_glyph_bitmap_mode(.glyph_bitmap_code())
+  # Path simplification tolerance (device px). Sub-pixel by default, so it can
+  # only drop vertices that could not have changed a pixel; 0 disables it.
+  rs_set_simplify_tol(.simplify_tol())
   cid <- .scene_cid(scene)
   # Bypass for debug overlays, when disabled, or when the scene carries no id
   # (foreign-built / raw `set_props`) — compute fresh rather than risk a stale

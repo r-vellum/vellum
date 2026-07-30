@@ -48,6 +48,24 @@ rs_read_png <- function(path) .Call(wrap__rs_read_png, path)
 #' @keywords internal
 rs_set_cvd_mode <- function(kind) .Call(wrap__rs_set_cvd_mode, kind)
 
+#' Set the path-simplification tolerance in device pixels (0 disables).
+#' @param tol Tolerance in device px.
+#' @keywords internal
+rs_set_simplify_tol <- function(tol) .Call(wrap__rs_set_simplify_tol, tol)
+
+#' Expand a stroked polyline into the outline of the stroke, as a fillable path.
+#'
+#' Input and output are device pixels. `nper` gives the point count of each
+#' sub-path in `x`/`y`. Returns `c(n_subpaths, len1, len2, ..., x..., y...)`:
+#' the sub-path lengths followed by the flattened coordinates.
+#'
+#' tiny-skia already ships the stroker the rasterizer uses, so this is the exact
+#' same expansion that drawing performs -- not a reimplementation that could
+#' drift from it.
+#'
+#' @keywords internal
+rs_stroke_to_path <- function(x, y, nper, closed, width, cap, join, miter) .Call(wrap__rs_stroke_to_path, x, y, nper, closed, width, cap, join, miter)
+
 #' Arm or disarm per-node render timing on this thread.
 #' @param on Logical.
 #' @keywords internal

@@ -3734,11 +3734,124 @@ fn build_poly(x: &[f64], y: &[f64], xu: &[Unit], yu: &[Unit], vp: &Vp, close: bo
     build_poly_px(&pts, close)
 }
 
+thread_local! {
+    /// Douglas-Peucker tolerance in device px for polyline/polygon simplification,
+    /// set from R per render. `0` disables it.
+    static SIMPLIFY_TOL: std::cell::Cell<f32> = const { std::cell::Cell::new(0.0) };
+}
+
+/// Set the path-simplification tolerance (device px) for subsequent renders.
+pub fn set_simplify_tol(tol: f64) {
+    SIMPLIFY_TOL.with(|c| c.set(tol.max(0.0) as f32));
+}
+
+fn simplify_tol() -> f32 {
+    SIMPLIFY_TOL.with(|c| c.get())
+}
+
+/// Below this many points a path is passed through untouched.
+///
+/// Deliberately high. Simplification is not free -- it is a *fidelity* trade, the
+/// same kind as the marker-sprite and glyph-bitmap fast paths, and like those it
+/// should only engage where the win is real and the input is already too dense to
+/// scrutinise vertex by vertex. A hand-placed polygon, a spline, an arrow head:
+/// every vertex was chosen, the saving would be nil, and they stay byte-identical.
+/// A coastline or a long time series: thousands of vertices land inside one pixel
+/// of a neighbour, and dropping them is the whole point.
+const SIMPLIFY_MIN_PTS: usize = 1000;
+
+/// Douglas-Peucker on points already in device pixels, which is what makes the
+/// tolerance meaningful: a vertex that moves the outline by less than `tol` of a
+/// pixel cannot change what is rasterised, so dropping it is free.
+///
+/// This is where an `sf` polygon's 100k vertices meet an 800 px canvas. Almost all
+/// of them land inside one pixel of a neighbour.
+///
+/// Iterative rather than recursive — a degenerate path (a spiral, a coastline)
+/// can otherwise recurse thousands deep.
+fn douglas_peucker(pts: &[(f32, f32)], tol: f32) -> Vec<(f32, f32)> {
+    let n = pts.len();
+    if n < 3 {
+        return pts.to_vec();
+    }
+    let mut keep = vec![false; n];
+    keep[0] = true;
+    keep[n - 1] = true;
+    let tol2 = tol * tol;
+    let mut stack = vec![(0usize, n - 1)];
+    while let Some((lo, hi)) = stack.pop() {
+        if hi <= lo + 1 {
+            continue;
+        }
+        let (ax, ay) = pts[lo];
+        let (bx, by) = pts[hi];
+        let (dx, dy) = (bx - ax, by - ay);
+        let len2 = dx * dx + dy * dy;
+        let mut worst = 0.0f32;
+        let mut worst_i = lo;
+        for i in (lo + 1)..hi {
+            let (px, py) = pts[i];
+            // Squared perpendicular distance to the segment; for a degenerate
+            // segment (endpoints coincide) fall back to distance from the point.
+            let d2 = if len2 <= f32::EPSILON {
+                let (ex, ey) = (px - ax, py - ay);
+                ex * ex + ey * ey
+            } else {
+                let cross = dx * (py - ay) - dy * (px - ax);
+                cross * cross / len2
+            };
+            if d2 > worst {
+                worst = d2;
+                worst_i = i;
+            }
+        }
+        if worst > tol2 {
+            keep[worst_i] = true;
+            stack.push((lo, worst_i));
+            stack.push((worst_i, hi));
+        }
+    }
+    pts.iter().zip(keep).filter(|(_, k)| *k).map(|(p, _)| *p).collect()
+}
+
+/// Simplify each run of finite points, leaving the `NA` breaks in place so the
+/// sub-path structure (and grid's NA-as-gap semantics) is preserved exactly.
+fn simplify_runs(pts: &[(f32, f32)], tol: f32) -> Vec<(f32, f32)> {
+    let mut out = Vec::with_capacity(pts.len());
+    let mut run: Vec<(f32, f32)> = Vec::new();
+    let flush = |run: &mut Vec<(f32, f32)>, out: &mut Vec<(f32, f32)>| {
+        if run.len() >= SIMPLIFY_MIN_PTS {
+            out.extend(douglas_peucker(run, tol));
+        } else {
+            out.extend(run.iter().copied());
+        }
+        run.clear();
+    };
+    for &p in pts {
+        if p.0.is_finite() && p.1.is_finite() {
+            run.push(p);
+        } else {
+            flush(&mut run, &mut out);
+            out.push(p);
+        }
+    }
+    flush(&mut run, &mut out);
+    out
+}
+
 /// Build a polyline/polygon path from points already resolved to local pixels.
 /// A non-finite point (an R `NA`/`NaN`) breaks the line, matching grid: the
 /// polyline splits into independent sub-paths, and for a polygon each run of
 /// finite points becomes its own closed sub-polygon.
 fn build_poly_px(pts: &[(f32, f32)], close: bool) -> Option<tiny_skia::Path> {
+    let tol = simplify_tol();
+    let simplified;
+    let pts = if tol > 0.0 && pts.len() >= SIMPLIFY_MIN_PTS {
+        simplified = simplify_runs(pts, tol);
+        &simplified[..]
+    } else {
+        pts
+    };
     let mut pb = PathBuilder::new();
     let mut open = false; // a sub-path is currently being built
     let mut run = 0; // points in the current sub-path

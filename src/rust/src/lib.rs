@@ -88,6 +88,151 @@ fn rs_take_node_times() -> Vec<f64> {
     scene::take_node_times()
 }
 
+/// Set the path-simplification tolerance in device pixels (0 disables).
+/// @param tol Tolerance in device px.
+/// @keywords internal
+#[extendr]
+fn rs_set_simplify_tol(tol: f64) {
+    scene::set_simplify_tol(tol);
+}
+
+/// Expand a stroked polyline into the outline of the stroke, as a fillable path.
+///
+/// Input and output are device pixels. `nper` gives the point count of each
+/// sub-path in `x`/`y`. Returns `c(n_subpaths, len1, len2, ..., x..., y...)`:
+/// the sub-path lengths followed by the flattened coordinates.
+///
+/// tiny-skia already ships the stroker the rasterizer uses, so this is the exact
+/// same expansion that drawing performs -- not a reimplementation that could
+/// drift from it.
+///
+/// @keywords internal
+#[extendr]
+fn rs_stroke_to_path(
+    x: &[f64], y: &[f64], nper: &[i32], closed: bool,
+    width: f64, cap: i32, join: i32, miter: f64,
+) -> Vec<f64> {
+    use tiny_skia::{LineCap, LineJoin, PathBuilder, Stroke};
+    let mut pb = PathBuilder::new();
+    let mut at = 0usize;
+    for &cnt in nper {
+        let cnt = cnt.max(0) as usize;
+        if at + cnt > x.len().min(y.len()) || cnt < 2 {
+            at += cnt;
+            continue;
+        }
+        pb.move_to(x[at] as f32, y[at] as f32);
+        for k in 1..cnt {
+            pb.line_to(x[at + k] as f32, y[at + k] as f32);
+        }
+        if closed {
+            pb.close();
+        }
+        at += cnt;
+    }
+    let path = match pb.finish() {
+        Some(p) => p,
+        None => return Vec::new(),
+    };
+    let stroke = Stroke {
+        width: width as f32,
+        miter_limit: miter as f32,
+        line_cap: match cap {
+            1 => LineCap::Butt,
+            2 => LineCap::Square,
+            _ => LineCap::Round,
+        },
+        line_join: match join {
+            1 => LineJoin::Miter,
+            2 => LineJoin::Bevel,
+            _ => LineJoin::Round,
+        },
+        ..Stroke::default()
+    };
+    let outline = match path.stroke(&stroke, 1.0) {
+        Some(o) => o,
+        None => return Vec::new(),
+    };
+    // Flatten to polylines: the caller wants coordinates, and a fillable outline
+    // of a polyline stroke is straight segments plus arcs, which flatten cleanly.
+    let mut subs: Vec<Vec<(f64, f64)>> = Vec::new();
+    let mut cur: Vec<(f64, f64)> = Vec::new();
+    for seg in outline.segments() {
+        use tiny_skia::PathSegment::*;
+        match seg {
+            MoveTo(p) => {
+                if cur.len() >= 2 { subs.push(std::mem::take(&mut cur)); } else { cur.clear(); }
+                cur.push((p.x as f64, p.y as f64));
+            }
+            LineTo(p) => cur.push((p.x as f64, p.y as f64)),
+            QuadTo(c, p) => flatten_quad(&mut cur, c, p),
+            CubicTo(c1, c2, p) => flatten_cubic(&mut cur, c1, c2, p),
+            Close => {
+                if let Some(&first) = cur.first() {
+                    cur.push(first);
+                }
+                if cur.len() >= 2 { subs.push(std::mem::take(&mut cur)); } else { cur.clear(); }
+            }
+        }
+    }
+    if cur.len() >= 2 {
+        subs.push(cur);
+    }
+    let mut out = Vec::with_capacity(1 + subs.len() + subs.iter().map(|s| s.len() * 2).sum::<usize>());
+    out.push(subs.len() as f64);
+    for sp in &subs {
+        out.push(sp.len() as f64);
+    }
+    for sp in &subs {
+        for p in sp {
+            out.push(p.0);
+        }
+    }
+    for sp in &subs {
+        for p in sp {
+            out.push(p.1);
+        }
+    }
+    out
+}
+
+/// Flatten a quadratic segment into line segments at roughly pixel accuracy.
+fn flatten_quad(out: &mut Vec<(f64, f64)>, c: tiny_skia::Point, p: tiny_skia::Point) {
+    let a = *out.last().unwrap_or(&(c.x as f64, c.y as f64));
+    let steps = curve_steps(a, (p.x as f64, p.y as f64));
+    for i in 1..=steps {
+        let t = i as f64 / steps as f64;
+        let mt = 1.0 - t;
+        out.push((
+            mt * mt * a.0 + 2.0 * mt * t * c.x as f64 + t * t * p.x as f64,
+            mt * mt * a.1 + 2.0 * mt * t * c.y as f64 + t * t * p.y as f64,
+        ));
+    }
+}
+
+/// Flatten a cubic segment into line segments at roughly pixel accuracy.
+fn flatten_cubic(out: &mut Vec<(f64, f64)>, c1: tiny_skia::Point, c2: tiny_skia::Point, p: tiny_skia::Point) {
+    let a = *out.last().unwrap_or(&(c1.x as f64, c1.y as f64));
+    let steps = curve_steps(a, (p.x as f64, p.y as f64));
+    for i in 1..=steps {
+        let t = i as f64 / steps as f64;
+        let mt = 1.0 - t;
+        out.push((
+            mt * mt * mt * a.0 + 3.0 * mt * mt * t * c1.x as f64
+                + 3.0 * mt * t * t * c2.x as f64 + t * t * t * p.x as f64,
+            mt * mt * mt * a.1 + 3.0 * mt * mt * t * c1.y as f64
+                + 3.0 * mt * t * t * c2.y as f64 + t * t * t * p.y as f64,
+        ));
+    }
+}
+
+/// Segment count for flattening: proportional to the chord, clamped so a tiny
+/// join does not cost 24 points and a long sweep is still smooth.
+fn curve_steps(a: (f64, f64), b: (f64, f64)) -> usize {
+    let d = ((b.0 - a.0).powi(2) + (b.1 - a.1).powi(2)).sqrt();
+    (d.ceil() as usize).clamp(2, 24)
+}
+
 /// Decode a PNG file to straight (un-premultiplied) RGBA.
 ///
 /// Returns `c(width, height, r, g, b, a, r, g, b, a, ...)` -- the two dimensions
@@ -156,6 +301,8 @@ extendr_module! {
     fn rs_glyph_sprite_stats;
     fn rs_read_png;
     fn rs_set_cvd_mode;
+    fn rs_set_simplify_tol;
+    fn rs_stroke_to_path;
     fn rs_set_profiling;
     fn rs_take_node_times;
     use scene;
