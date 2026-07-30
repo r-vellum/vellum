@@ -59,6 +59,7 @@ get_node(dots, "b")
 #>  .. @ fontfamily: NULL
 #>  .. @ fontface  : NULL
 #>  .. @ fontsize  : NULL
+#>  .. @ cex       : NULL
 #>  .. @ lineheight: NULL
 #>  @ vp    : NULL
 #>  @ id    : NULL

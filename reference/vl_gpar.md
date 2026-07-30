@@ -20,6 +20,7 @@ vl_gpar(
   fontfamily = NULL,
   fontface = NULL,
   fontsize = NULL,
+  cex = NULL,
   lineheight = NULL
 )
 ```
@@ -76,6 +77,15 @@ vl_gpar(
 
   Font size in points.
 
+- cex:
+
+  Multiplier applied to `fontsize` (grid semantics), so a theme can ask
+  for a relative size without knowing the base one. `cex = 2` is exactly
+  equivalent to doubling `fontsize`: it scales drawn text, `char`/`line`
+  units, and
+  [`grobwidth()`](https://r-vellum.github.io/vellum/reference/grobwidth.md)/[`grobheight()`](https://r-vellum.github.io/vellum/reference/grobwidth.md)
+  measurement alike. `NULL` (the default) means 1.
+
 - lineheight:
 
   Line-height multiple.
@@ -100,5 +110,6 @@ vl_gpar(col = "steelblue", lwd = 2, lty = "dashed", lineend = "round")
 #>  @ fontfamily: NULL
 #>  @ fontface  : NULL
 #>  @ fontsize  : NULL
+#>  @ cex       : NULL
 #>  @ lineheight: NULL
 ```

@@ -58,6 +58,7 @@ lines_grob(c(0.1, 0.9), c(0.1, 0.9), arrow = vl_arrow(type = "closed"))
 #>  .. @ fontfamily: NULL
 #>  .. @ fontface  : NULL
 #>  .. @ fontsize  : NULL
+#>  .. @ cex       : NULL
 #>  .. @ lineheight: NULL
 #>  @ vp       : NULL
 #>  @ id       : NULL

@@ -211,6 +211,19 @@ Device resolution in dots per inch.
 Render the scene to a PNG file. Returns any degradation warnings (none
 for the raster backend today; uniform with the SVG/PDF signatures).
 
+### Method `render_png_raw`
+
+Render the scene and return the PNG bytes rather than writing a file.
+`list(bytes = <raw>, warnings = <character>)` – warnings are returned
+rather than dropped so the caller can surface them exactly as
+[`render()`](https://r-vellum.github.io/vellum/reference/vl_scene.md)
+does. Shares the memoised pixmap with `render_png`.
+
+### Method `render_pdf_raw`
+
+Render the scene and return the PDF bytes rather than writing a file.
+Same shape as `render_png_raw`.
+
 ### Method `render_svg`
 
 Render the scene to an SVG file. `outline_text` emits glyph outlines

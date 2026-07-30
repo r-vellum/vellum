@@ -297,6 +297,20 @@ the raster backend today; uniform with the SVG/PDF signatures).</p>
 </div>
 
 <div class="section">
+<h3 id="method-render-png-raw">Method <code>render_png_raw</code><a class="anchor" aria-label="anchor" href="#method-render-png-raw"></a></h3>
+<p>Render the scene and return the PNG bytes rather than writing a file.
+<code>list(bytes = &lt;raw&gt;, warnings = &lt;character&gt;)</code> – warnings are returned
+rather than dropped so the caller can surface them exactly as <code><a href="vl_scene.html">render()</a></code>
+does. Shares the memoised pixmap with <code>render_png</code>.</p>
+</div>
+
+<div class="section">
+<h3 id="method-render-pdf-raw">Method <code>render_pdf_raw</code><a class="anchor" aria-label="anchor" href="#method-render-pdf-raw"></a></h3>
+<p>Render the scene and return the PDF bytes rather than writing a file.
+Same shape as <code>render_png_raw</code>.</p>
+</div>
+
+<div class="section">
 <h3 id="method-render-svg">Method <code>render_svg</code><a class="anchor" aria-label="anchor" href="#method-render-svg"></a></h3>
 <p>Render the scene to an SVG file. <code>outline_text</code> emits glyph outlines
 instead of selectable <code>&lt;text&gt;</code> (pixel-faithful, matches raster/PDF).

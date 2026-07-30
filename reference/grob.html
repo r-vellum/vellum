@@ -463,8 +463,12 @@ bulges away from the vertex, e.g. away from the layout centroid).</p></dd>
 
 
 <dt id="arg-image">image<a class="anchor" aria-label="anchor" href="#arg-image"></a></dt>
-<dd><p>A raster image: a <code><a href="https://rdrr.io/r/grDevices/as.raster.html" class="external-link">grDevices::as.raster()</a></code>-compatible object — a
-matrix/array of colours or greyscale values, or a <code>raster</code> object.</p></dd>
+<dd><p>A raster image. Either a <code><a href="https://rdrr.io/r/grDevices/as.raster.html" class="external-link">grDevices::as.raster()</a></code>-compatible
+object — a matrix/array of colours or greyscale values, or a <code>raster</code> — or a
+<strong>path to a PNG file</strong>, decoded in the Rust backend so no R image package is
+needed. A numeric RGB/RGBA array in <code>[0, 1]</code> (what <code><a href="https://rdrr.io/pkg/png/man/readPNG.html" class="external-link">png::readPNG()</a></code> returns)
+takes a fast path that skips the per-pixel colour-string round-trip
+<code><a href="https://rdrr.io/r/grDevices/as.raster.html" class="external-link">as.raster()</a></code> would otherwise do; the pixels are identical either way.</p></dd>
 
 
 <dt id="arg-interpolate">interpolate<a class="anchor" aria-label="anchor" href="#arg-interpolate"></a></dt>

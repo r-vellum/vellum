@@ -88,6 +88,7 @@ be passed anywhere a <code>gp</code> is accepted.</p>
 <span>  fontfamily <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  fontface <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  fontsize <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  cex <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  lineheight <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  name <span class="op">=</span> <span class="cn">NULL</span></span>
 <span><span class="op">)</span></span></code></pre></div>
@@ -145,6 +146,14 @@ be passed anywhere a <code>gp</code> is accepted.</p>
 <dd><p>Font size in points.</p></dd>
 
 
+<dt id="arg-cex">cex<a class="anchor" aria-label="anchor" href="#arg-cex"></a></dt>
+<dd><p>Multiplier applied to <code>fontsize</code> (grid semantics), so a theme can
+ask for a relative size without knowing the base one. <code>cex = 2</code> is exactly
+equivalent to doubling <code>fontsize</code>: it scales drawn text, <code>char</code>/<code>line</code>
+units, and <code><a href="grobwidth.html">grobwidth()</a></code>/<code><a href="grobwidth.html">grobheight()</a></code> measurement alike. <code>NULL</code> (the
+default) means 1.</p></dd>
+
+
 <dt id="arg-lineheight">lineheight<a class="anchor" aria-label="anchor" href="#arg-lineheight"></a></dt>
 <dd><p>Line-height multiple.</p></dd>
 
@@ -193,6 +202,7 @@ rather than setting gpar fields ad hoc on every element.</p>
 <span class="r-out co"><span class="r-pr">#&gt;</span>  .. @ fontfamily: NULL</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>  .. @ fontface  : NULL</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>  .. @ fontsize  : NULL</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>  .. @ cex       : NULL</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>  .. @ lineheight: NULL</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>  .. @ name      : chr "accent"</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>  @ layout  : NULL</span>

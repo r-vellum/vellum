@@ -34,4 +34,5 @@ A length-1 character vector: the SVG document.
 ## See also
 
 [`render()`](https://r-vellum.github.io/vellum/reference/vl_scene.md),
+[`scene_png()`](https://r-vellum.github.io/vellum/reference/scene_png.md),
 [`scene_model()`](https://r-vellum.github.io/vellum/reference/scene_model.md)

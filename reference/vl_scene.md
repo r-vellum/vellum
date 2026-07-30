@@ -28,7 +28,7 @@ draw(scene, grob)
 
 pop(scene, n = 1)
 
-render(scene, path, text = c("native", "outline"), debug = FALSE)
+render(scene, path, text = c("native", "outline"), debug = FALSE, scale = 1)
 ```
 
 ## Arguments
@@ -112,6 +112,16 @@ render(scene, path, text = c("native", "outline"), debug = FALSE)
   [`why_size()`](https://r-vellum.github.io/vellum/reference/why_size.md);
   useful for understanding why elements land where they do. Default
   `FALSE`.
+
+- scale:
+
+  Resolution multiplier (default `1`). `scale = 2` renders at twice the
+  device pixels while keeping the **same physical size** — the retina /
+  `ggsave(scaling=)` idiom. It multiplies `dpi`, so absolute units
+  (`mm`, `pt`, `in`) cover proportionally more pixels and nothing about
+  the layout changes; text does not get relatively bigger or smaller.
+  Only raster output gains anything: a PDF's page size in points and an
+  SVG's physical size are unchanged by construction.
 
 ## Value
 

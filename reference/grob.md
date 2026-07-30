@@ -434,10 +434,15 @@ text_grob(
 
 - image:
 
-  A raster image: a
+  A raster image. Either a
   [`grDevices::as.raster()`](https://rdrr.io/r/grDevices/as.raster.html)-compatible
   object — a matrix/array of colours or greyscale values, or a `raster`
-  object.
+  — or a **path to a PNG file**, decoded in the Rust backend so no R
+  image package is needed. A numeric RGB/RGBA array in `[0, 1]` (what
+  [`png::readPNG()`](https://rdrr.io/pkg/png/man/readPNG.html) returns)
+  takes a fast path that skips the per-pixel colour-string round-trip
+  [`as.raster()`](https://rdrr.io/r/grDevices/as.raster.html) would
+  otherwise do; the pixels are identical either way.
 
 - interpolate:
 

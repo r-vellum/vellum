@@ -285,6 +285,9 @@ picks the backend (PNG / SVG / PDF) from the file extension.
   : Read a rendered scene back as pixels
 - [`scene_svg()`](https://r-vellum.github.io/vellum/reference/scene_svg.md)
   : Render a scene to an SVG string
+- [`scene_png()`](https://r-vellum.github.io/vellum/reference/scene_png.md)
+  [`scene_pdf()`](https://r-vellum.github.io/vellum/reference/scene_png.md)
+  : Render a scene to PNG or PDF bytes
 - [`as_vellum_scene()`](https://r-vellum.github.io/vellum/reference/as_vellum_scene.md)
   : Coerce an object to a vellum scene
 - [`vl_render_animation()`](https://r-vellum.github.io/vellum/reference/vl_render_animation.md)
@@ -321,6 +324,8 @@ and the row/column layout solver.
 - [`vl_unit()`](https://r-vellum.github.io/vellum/reference/vl_unit.md)
   [`is_unit()`](https://r-vellum.github.io/vellum/reference/vl_unit.md)
   : Units of measurement
+- [`vl_convert()`](https://r-vellum.github.io/vellum/reference/vl_convert.md)
+  : Convert a unit to another unit, in a scene's context
 - [`vl_viewport()`](https://r-vellum.github.io/vellum/reference/vl_viewport.md)
   [`grid_layout()`](https://r-vellum.github.io/vellum/reference/vl_viewport.md)
   : Viewports and layouts

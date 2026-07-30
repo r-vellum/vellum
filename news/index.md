@@ -2,6 +2,61 @@
 
 ## vellum (development version)
 
+- **Text renders ~3x faster on a cold plot with many distinct labels.**
+  PERF-1 shaped every unique label in one
+  [`textshaping::shape_text()`](https://rdrr.io/pkg/textshaping/man/shape_text.html)
+  call; the multi-line-text change replaced that with a per-label loop,
+  so each distinct label re-resolved its font and font resolution grew
+  to 56% of a cold render. Shaping is batched across labels again –
+  lines are pooled before shaping and re-stacked afterwards, so
+  multi-line labels keep working. A cold 5000-label render goes from
+  1.78 s to 0.55 s. Output is byte-identical.
+
+- **Images are ~4x cheaper to convert, and can be read from a file.**
+  [`raster_grob()`](https://r-vellum.github.io/vellum/reference/grob.md)
+  now takes a **path to a PNG**, decoded in the Rust backend, so no R
+  image package is needed to put a picture in a plot. A numeric RGB/RGBA
+  array – what
+  [`png::readPNG()`](https://rdrr.io/pkg/png/man/readPNG.html) returns –
+  takes a fast path that skips the per-pixel colour-string round-trip
+  [`as.raster()`](https://rdrr.io/r/grDevices/as.raster.html) performs:
+  0.21 s to 0.055 s at 1 megapixel, which turns an image draw from
+  slower than grid (0.69x) into faster (1.38x). The pixels are identical
+  either way.
+
+- **`vl_gpar(cex =)`.** A multiplier on `fontsize`, as in grid, so a
+  theme can ask for “20% larger” without knowing the base size. It folds
+  into text drawing, `char`/`line` units, and grob measurement, so
+  `cex = 2` is exactly equivalent to doubling `fontsize` everywhere.
+
+- **[`vl_convert()`](https://r-vellum.github.io/vellum/reference/vl_convert.md)**
+  resolves a unit to a plain number in another unit – grid’s
+  [`convertWidth()`](https://rdrr.io/r/grid/grid.convert.html)/[`convertX()`](https://rdrr.io/r/grid/grid.convert.html)
+  and friends. Absolute units need no context; `npc`/`native` resolve
+  against the page or a named viewport. `axis` picks the extent and
+  `what` distinguishes a length from a position (they differ for
+  `native` when the scale does not start at zero).
+
+- **[`scene_png()`](https://r-vellum.github.io/vellum/reference/scene_png.md)
+  and
+  [`scene_pdf()`](https://r-vellum.github.io/vellum/reference/scene_png.md)**
+  return the encoded document as a raw vector instead of writing a file,
+  alongside the existing
+  [`scene_svg()`](https://r-vellum.github.io/vellum/reference/scene_svg.md)
+  (a string) and
+  [`scene_raster()`](https://r-vellum.github.io/vellum/reference/scene_raster.md)
+  (pixels). Every output format can now be produced in memory – for a
+  data URI, a web response, or a connection – with no temp-file
+  round-trip. Backend degradation warnings are surfaced just as
+  [`render()`](https://r-vellum.github.io/vellum/reference/vl_scene.md)
+  surfaces them.
+
+- **`render(scale =)`** renders at a multiple of the device pixels while
+  keeping the same physical size – the retina / `ggsave(scaling =)`
+  idiom. It scales `dpi`, so the layout is untouched and text does not
+  change relative size. Also available on
+  [`scene_png()`](https://r-vellum.github.io/vellum/reference/scene_png.md).
+
 - **[`print()`](https://rdrr.io/r/base/print.html) works again on
   gradients, patterns, masks, and
   [`why_size()`](https://r-vellum.github.io/vellum/reference/why_size.md)

@@ -101,6 +101,7 @@ rect_grob(gp = vl_gpar(fill = "steelblue", col = "black"), sketch = sketch())
 #>  .. @ fontfamily: NULL
 #>  .. @ fontface  : NULL
 #>  .. @ fontsize  : NULL
+#>  .. @ cex       : NULL
 #>  .. @ lineheight: NULL
 #>  @ vp    : NULL
 #>  @ id    : NULL
