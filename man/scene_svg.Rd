@@ -24,5 +24,5 @@ for hosting a scene interactively (an htmlwidget embeds the markup directly)
 and for tests that assert on emitted attributes such as \code{data-key}.
 }
 \seealso{
-\code{\link[=render]{render()}}, \code{\link[=scene_model]{scene_model()}}
+\code{\link[=render]{render()}}, \code{\link[=scene_png]{scene_png()}}, \code{\link[=scene_model]{scene_model()}}
 }

@@ -68,3 +68,59 @@ test_that("render() writes a PNG file", {
   # PNG magic bytes
   expect_equal(readBin(path, "raw", 4), as.raw(c(0x89, 0x50, 0x4e, 0x47)))
 })
+
+# --- in-memory output and render(scale=) (Phase 2) --------------------------
+
+test_that("scene_png()/scene_pdf() return the same bytes as writing a file", {
+  s <- vl_scene(2, 2, dpi = 100) |> draw(circle_grob(gp = vl_gpar(fill = "steelblue")))
+  f <- withr::local_tempfile(fileext = ".png")
+  vl_clear_render_cache(); render(s, f)
+  expect_identical(scene_png(s), readBin(f, "raw", file.size(f)))
+
+  fp <- withr::local_tempfile(fileext = ".pdf")
+  vl_clear_render_cache(); render(s, fp)
+  expect_identical(scene_pdf(s), readBin(fp, "raw", file.size(fp)))
+})
+
+test_that("scene_png()/scene_pdf() return well-formed documents", {
+  s <- vl_scene(1, 1, dpi = 72) |> draw(rect_grob(gp = vl_gpar(fill = "red")))
+  png <- scene_png(s)
+  expect_true(is.raw(png))
+  expect_identical(rawToChar(png[2:4]), "PNG")
+  pdf <- scene_pdf(s)
+  expect_true(is.raw(pdf))
+  expect_identical(rawToChar(pdf[1:5]), "%PDF-")
+})
+
+test_that("render(scale=) multiplies device pixels but not physical size", {
+  s <- vl_scene(4, 3, dpi = 100) |>
+    draw(rect_grob(width = vl_unit(2, "in"), height = vl_unit(1, "in"),
+                   gp = vl_gpar(fill = "blue", col = NA)))
+  blue_frac <- function(scale) {
+    f <- withr::local_tempfile(fileext = ".png")
+    vl_clear_render_cache()
+    render(s, f, scale = scale)
+    i <- png::readPNG(f)
+    list(dim = dim(i)[1:2], frac = mean(i[, , 1] < 0.5 & i[, , 3] > 0.5))
+  }
+  skip_if_not_installed("png")
+  a <- blue_frac(1); b <- blue_frac(2)
+  expect_identical(b$dim, a$dim * 2L)
+  # A 2x1in rect on a 4x3in page is exactly one sixth of the area, at any scale.
+  expect_equal(a$frac, 1 / 6, tolerance = 1e-6)
+  expect_equal(b$frac, 1 / 6, tolerance = 1e-6)
+})
+
+test_that("scale = 1 is the default and changes nothing", {
+  s <- vl_scene(2, 2, dpi = 100) |> draw(circle_grob(gp = vl_gpar(fill = "grey")))
+  expect_identical(scene_png(s), scene_png(s, scale = 1))
+})
+
+test_that("an invalid scale is rejected", {
+  s <- vl_scene(1, 1)
+  f <- withr::local_tempfile(fileext = ".png")
+  expect_error(render(s, f, scale = 0), "scale")
+  expect_error(render(s, f, scale = -2), "scale")
+  expect_error(render(s, f, scale = c(1, 2)), "scale")
+  expect_error(render(s, f, scale = NA), "scale")
+})

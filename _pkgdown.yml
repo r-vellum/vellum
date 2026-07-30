@@ -104,6 +104,7 @@ reference:
   - display
   - scene_raster
   - scene_svg
+  - scene_png
   - as_vellum_scene
   - vl_render_animation
 
@@ -120,6 +121,7 @@ reference:
     rotation, and the row/column layout solver.
   contents:
   - vl_unit
+  - vl_convert
   - vl_viewport
   - grobwidth
   - why_size

@@ -130,19 +130,18 @@ vl_strheight <- function(label, family = "", fontface = "plain",
 # grid's default `lineheight`.
 .LINEHEIGHT <- 1.2
 
-# Compose one (possibly multi-line) plain label into a single flat glyph set.
-# Lines are split on "\n", shaped via the cache, and stacked baseline-to-baseline
-# with the lines centred symmetrically about y = 0, so a single-line label gets a
-# zero offset and is byte-for-byte identical to the pre-multi-line path. Returns
-# the same shape as a `.shape_cached` entry (w/h/n + glyph arrays), in points.
-.compose_plain <- function(label, family, italic, weight, size) {
-  if (!grepl("\n", label, fixed = TRUE)) {
-    return(.shape_cached(label, family, italic, weight, size)[[1]])
-  }
+# Split a label into its lines, matching `strsplit()`'s handling of a trailing or
+# lone separator (a label is never empty here — callers filter those out).
+.label_lines <- function(label) {
   lines <- strsplit(label, "\n", fixed = TRUE)[[1]]
-  if (!length(lines)) lines <- ""
-  sh <- .shape_cached(lines, family, italic, weight, size)
-  nl <- length(lines)
+  if (!length(lines)) "" else lines
+}
+
+# Stack already-shaped lines baseline-to-baseline, centred symmetrically about
+# y = 0, into one flat glyph set (points). `sh` is a list of `.shape_cached`
+# entries, one per line, in order.
+.stack_lines <- function(sh, size) {
+  nl <- length(sh)
   lead <- size * .LINEHEIGHT
   idx <- integer(0); xo <- numeric(0); yo <- numeric(0)
   fs <- numeric(0); fp <- character(0); fi <- integer(0)
@@ -158,6 +157,53 @@ vl_strheight <- function(label, family = "", fontface = "plain",
   }
   list(w = wmax, h = (nl - 1) * lead + hmax, n = length(idx),
        index = idx, xoff = xo, yoff = yo, fsize = fs, fpath = fp, findex = fi)
+}
+
+# Compose one (possibly multi-line) plain label into a single flat glyph set.
+# A single-line label delegates straight to the cache, so it is byte-for-byte
+# identical to the pre-multi-line path. Returns the same shape as a
+# `.shape_cached` entry (w/h/n + glyph arrays), in points.
+#
+# Prefer `.compose_plain_batch()` when composing many labels: this one shapes a
+# single label per call, which defeats `.shape_cached()`'s miss-batching.
+.compose_plain <- function(label, family, italic, weight, size) {
+  if (!grepl("\n", label, fixed = TRUE)) {
+    return(.shape_cached(label, family, italic, weight, size)[[1]])
+  }
+  .stack_lines(.shape_cached(.label_lines(label), family, italic, weight, size), size)
+}
+
+# Compose MANY plain labels, shaping every distinct line across ALL of them in a
+# single `.shape_cached()` call.
+#
+# This is the batching PERF-1 introduced and commit e6d4d19 (multi-line text)
+# inadvertently gave back: composing label-by-label sends one string per call to
+# `.shape_cached()`, so its "shape the misses together" path never fires and every
+# distinct label re-resolves its font through `systemfonts`. At 5000 distinct
+# labels that cost ~4x (1.57 s vs 0.39 s) and made font resolution 56% of a cold
+# render. Multi-line support is kept — the lines are simply pooled with every
+# other label's before shaping, then re-stacked per label.
+#
+# Returns a list aligned with `labels`, each element a `.shape_cached`-shaped entry.
+.compose_plain_batch <- function(labels, family, italic, weight, size) {
+  multi <- grepl("\n", labels, fixed = TRUE)
+  # Common case: nothing to split, so each label is its own only line and the
+  # cache call is exactly the pre-e6d4d19 one.
+  if (!any(multi)) {
+    return(.shape_cached(labels, family, italic, weight, size))
+  }
+  parts <- as.list(labels)
+  parts[multi] <- lapply(labels[multi], .label_lines)
+  # One shaping call for the union of every line of every label. Lines are looked
+  # up by POSITION, not by name: a blank line ("a\n\nb") is the empty string, and
+  # `x[""]` never matches a name, so a named lookup would silently drop it.
+  need <- unique(unlist(parts, use.names = FALSE))
+  sh <- .shape_cached(need, family, italic, weight, size)
+  at <- lapply(parts, match, table = need)
+  out <- vector("list", length(labels))
+  out[!multi] <- sh[unlist(at[!multi], use.names = FALSE)]
+  out[multi] <- lapply(at[multi], function(i) .stack_lines(sh[i], size))
+  out
 }
 
 # Shape and emit many labels that share one font (a vectorised text grob). Unique
@@ -176,7 +222,7 @@ vl_strheight <- function(label, family = "", fontface = "plain",
   scale <- scene$dpi() / 72
   face <- .rs_face(fontface)
   uniq <- unique(labels[keep])
-  shaped <- lapply(uniq, .compose_plain, family, face$italic, face$weight, fontsize)
+  shaped <- .compose_plain_batch(uniq, family, face$italic, face$weight, fontsize)
   umap <- match(labels, uniq)
   # Drawn labels: those kept that shaped to >= 1 glyph (drops e.g. control chars).
   drawn <- which(keep)

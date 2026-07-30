@@ -201,6 +201,18 @@ Render the scene to a PNG file. Returns any degradation warnings (none for
 the raster backend today; uniform with the SVG/PDF signatures).
 }
 
+\subsection{Method \code{render_png_raw}}{
+Render the scene and return the PNG bytes rather than writing a file.
+\verb{list(bytes = <raw>, warnings = <character>)} -- warnings are returned
+rather than dropped so the caller can surface them exactly as \code{render()}
+does. Shares the memoised pixmap with \code{render_png}.
+}
+
+\subsection{Method \code{render_pdf_raw}}{
+Render the scene and return the PDF bytes rather than writing a file.
+Same shape as \code{render_png_raw}.
+}
+
 \subsection{Method \code{render_svg}}{
 Render the scene to an SVG file. \code{outline_text} emits glyph outlines
 instead of selectable \verb{<text>} (pixel-faithful, matches raster/PDF).

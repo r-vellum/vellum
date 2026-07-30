@@ -27,7 +27,7 @@ draw(scene, grob)
 
 pop(scene, n = 1)
 
-render(scene, path, text = c("native", "outline"), debug = FALSE)
+render(scene, path, text = c("native", "outline"), debug = FALSE, scale = 1)
 }
 \arguments{
 \item{width, height}{Page size (\code{\link[=vl_unit]{vl_unit()}} or numeric inches).}
@@ -71,6 +71,14 @@ selectable). Ignored for PNG/PDF.}
 viewport region (outlined and labelled by name), its layout track boundaries,
 and its clip region. Built from the resolved scene with \code{\link[=why_size]{why_size()}}; useful
 for understanding why elements land where they do. Default \code{FALSE}.}
+
+\item{scale}{Resolution multiplier (default \code{1}). \code{scale = 2} renders at twice
+the device pixels while keeping the \strong{same physical size} — the retina /
+\code{ggsave(scaling=)} idiom. It multiplies \code{dpi}, so absolute units (\code{mm},
+\code{pt}, \verb{in}) cover proportionally more pixels and nothing about the layout
+changes; text does not get relatively bigger or smaller. Only raster output
+gains anything: a PDF's page size in points and an SVG's physical size are
+unchanged by construction.}
 }
 \value{
 \code{vl_scene()}, \code{push()}, \code{draw()}, \code{pop()}: a \code{vellum_scene}.

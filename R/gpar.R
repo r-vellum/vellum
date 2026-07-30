@@ -19,6 +19,11 @@
 #' @param fontfamily Font family (text grobs).
 #' @param fontface One of `"plain"`, `"bold"`, `"italic"`, `"bold.italic"`.
 #' @param fontsize Font size in points.
+#' @param cex Multiplier applied to `fontsize` (grid semantics), so a theme can
+#'   ask for a relative size without knowing the base one. `cex = 2` is exactly
+#'   equivalent to doubling `fontsize`: it scales drawn text, `char`/`line`
+#'   units, and [grobwidth()]/[grobheight()] measurement alike. `NULL` (the
+#'   default) means 1.
 #' @param lineheight Line-height multiple.
 #' @return A `gpar` object.
 #' @examples
@@ -39,9 +44,14 @@ vl_gpar <- S7::new_class(
     fontfamily = S7::new_property(S7::class_any, default = NULL),
     fontface   = S7::new_property(S7::class_any, default = NULL),
     fontsize   = S7::new_property(S7::class_any, default = NULL),
+    cex        = S7::new_property(S7::class_any, default = NULL),
     lineheight = S7::new_property(S7::class_any, default = NULL)
   ),
   validator = function(self) {
+    x <- self@cex
+    if (!is.null(x) && is.numeric(x) && any(!is.na(x) & x < 0)) {
+      return("@cex must be non-negative (or NULL to inherit)")
+    }
     a <- self@alpha
     # NULL/NA mean "inherit"; any concrete alpha must lie in [0, 1].
     if (!is.null(a) && is.numeric(a) && any(!is.na(a) & (a < 0 | a > 1))) {
@@ -54,6 +64,15 @@ vl_gpar <- S7::new_class(
     NULL
   }
 )
+
+# The effective type size for a gpar: `fontsize` scaled by `cex`, matching grid
+# (where `cex` is a multiplier on the base size, not a size itself). Both default
+# to "unset", so a plain gpar gives 12pt exactly as before. This is the single
+# place the two combine -- text drawing, `char`/`line` unit resolution, and grob
+# measurement all route through it so they cannot disagree.
+.gp_fontsize <- function(gp) {
+  (gp@fontsize %||% 12) * (gp@cex %||% 1)
+}
 
 # An S7 property typed as a `unit` vector, with a quoted default evaluated at
 # construction (so it works regardless of file collation order). Shared by grob

@@ -93,6 +93,133 @@ new_unit <- function(value = double(), unit = integer(), offset = NULL) {
 #' @export
 is_unit <- function(x) inherits(x, "vellum_unit")
 
+#' Convert a unit to another unit, in a scene's context
+#'
+#' The counterpart to grid's `convertWidth()`/`convertHeight()`/`convertX()`/
+#' `convertY()`: resolve a [vl_unit()] vector to a plain number in some other
+#' unit. [why_size()] explains a *named node's* resolved size and
+#' [scene_model()] reports resolved boxes for *keyed elements*; this answers the
+#' remaining question — "how big is this particular unit, here?" — which a layer
+#' built on vellum needs whenever it has to size something itself.
+#'
+#' Absolute units (`mm`, `cm`, `in`, `pt`) convert with no context, so `scene`
+#' may be omitted. Relative units (`npc`, `native`) need to know the region they
+#' are relative to, and therefore need a `scene` — and, for anything other than
+#' the whole page, the `name` of a viewport in it.
+#'
+#' Where grid uses four functions, this uses two arguments: `axis` picks the
+#' x or y extent, and `what` distinguishes a **length** from a **position**.
+#' They differ only for `native`, and only when the scale does not start at
+#' zero: on `xscale = c(10, 20)`, `unit(12, "native")` is *two tenths* of the
+#' width as a position, but *twelve tenths* as a length.
+#'
+#' @param u A [vl_unit()] vector (or a bare numeric, read as `npc`).
+#' @param to Target unit: `"mm"` (default), `"cm"`, `"in"`, `"pt"`, `"px"`,
+#'   `"npc"`, or `"native"`.
+#' @param scene A [vl_scene()] (or anything with an [as_vellum_scene()] method)
+#'   giving the context. Required unless every input *and* `to` is absolute.
+#' @param name Name of the viewport to resolve against. `NULL` (default) uses
+#'   the whole page.
+#' @param axis Which extent relative units refer to: `"x"` (default) or `"y"`.
+#' @param what `"length"` (default) for a size, `"position"` for a coordinate.
+#'   Only affects `native`.
+#' @return A numeric vector the same length as `u`, in `to` units.
+#' @seealso [why_size()], [scene_model()], [vl_unit()]
+#' @examples
+#' s <- vl_scene(4, 3, dpi = 100)
+#' vl_convert(vl_unit(1, "in"), "mm") # absolute: no scene needed
+#' vl_convert(vl_unit(0.5, "npc"), "mm", s) # half the page width
+#' vl_convert(vl_unit(0.5, "npc"), "mm", s, axis = "y")
+#'
+#' # A named viewport, and the length/position distinction on a shifted scale.
+#' s2 <- s |> push(vl_viewport(width = 0.5, xscale = c(10, 20), name = "panel"))
+#' vl_convert(vl_unit(12, "native"), "mm", s2, name = "panel")
+#' vl_convert(vl_unit(12, "native"), "mm", s2, name = "panel", what = "position")
+#' @export
+vl_convert <- function(u, to = "mm", scene = NULL, name = NULL,
+                       axis = c("x", "y"), what = c("length", "position")) {
+  axis <- match.arg(axis)
+  what <- match.arg(what)
+  to <- match.arg(to, c("mm", "cm", "in", "pt", "px", "npc", "native"))
+  if (!is_unit(u)) u <- as_unit(u)
+  if (vctrs::vec_size(u) == 0L) {
+    return(numeric(0))
+  }
+  p <- .unit_parts(u)
+  null_code <- .unit_codes[["null"]]
+  if (any(!is.na(p$code) & p$code == null_code)) {
+    cli::cli_abort(c(
+      "Can't convert a {.val null} unit.",
+      i = "{.val null} is a flexible layout weight, not a length; it only has a size once a layout solves."
+    ))
+  }
+  # Relative input, or a relative/device target, needs a resolved region.
+  needs_ctx <- any(!is.na(p$code)) || to %in% c("npc", "native", "px")
+  ctx <- if (needs_ctx) .convert_context(scene, name, axis) else NULL
+
+  npc_code <- .unit_codes[["npc"]]
+  native_code <- .unit_codes[["native"]]
+  # Everything lands in mm first (`p$off` is already mm), then converts out.
+  rel <- rep(0, length(p$pos))
+  is_npc <- !is.na(p$code) & p$code == npc_code
+  is_nat <- !is.na(p$code) & p$code == native_code
+  rel[is_npc] <- p$pos[is_npc] * ctx$extent_mm
+  if (any(is_nat)) {
+    span <- ctx$hi - ctx$lo
+    if (!is.finite(span) || span == 0) {
+      cli::cli_abort("Can't convert {.val native} units: the viewport's {axis}-scale is degenerate.")
+    }
+    v <- p$pos[is_nat]
+    frac <- if (identical(what, "position")) (v - ctx$lo) / span else v / span
+    rel[is_nat] <- frac * ctx$extent_mm
+  }
+  mm <- rel + p$off
+
+  switch(to,
+    mm = mm,
+    cm = mm / 10,
+    `in` = mm / 25.4,
+    pt = mm / 25.4 * 72,
+    px = mm / 25.4 * ctx$dpi,
+    npc = mm / ctx$extent_mm,
+    native = {
+      span <- ctx$hi - ctx$lo
+      f <- mm / ctx$extent_mm * span
+      if (identical(what, "position")) f + ctx$lo else f
+    }
+  )
+}
+
+# Resolve the region relative units are measured against: the whole page, or a
+# named viewport in the scene. Returns its extent along `axis` in mm, that axis'
+# scale, and the scene dpi.
+.convert_context <- function(scene, name, axis) {
+  if (is.null(scene)) {
+    cli::cli_abort(c(
+      "{.arg scene} is required to convert relative units.",
+      i = "{.val npc}/{.val native} have no size until a scene gives them one; {.val mm}/{.val cm}/{.val in}/{.val pt} convert without one."
+    ))
+  }
+  scene <- as_vellum_scene(scene)
+  if (is.null(name)) {
+    inches <- if (identical(axis, "x")) .to_inches(scene@width) else .to_inches(scene@height)
+    # The page's implicit root viewport spans 0..1 in native.
+    return(list(extent_mm = inches * 25.4, lo = 0, hi = 1, dpi = scene@dpi))
+  }
+  cap <- .capture_geometry(scene)
+  item <- Find(function(it) identical(it$name, name), cap$items)
+  if (is.null(item)) {
+    cli::cli_abort(c(
+      "No viewport named {.val {name}} in the scene.",
+      i = "Named viewports in this scene: {.or {.val {Filter(Negate(is.null), lapply(cap$items, `[[`, \"name\"))}}}."
+    ))
+  }
+  i <- match(item$id, cap$geom$id)
+  px <- if (identical(axis, "x")) cap$geom$w_px[i] else cap$geom$h_px[i]
+  sc <- if (identical(axis, "x")) item$vp@xscale else item$vp@yscale
+  list(extent_mm = px / cap$dpi * 25.4, lo = sc[1], hi = sc[2], dpi = cap$dpi)
+}
+
 # Coerce a bare numeric to a unit with `default` units; pass units through.
 as_unit <- function(x, default = "npc") {
   if (is_unit(x)) x else vl_unit(x, default)
@@ -103,7 +230,9 @@ as_unit <- function(x, default = "npc") {
 # kinds, or a grob (or `list(grob =)`) for grobwidth/grobheight.
 .resolve_to_mm <- function(values, units, data) {
   is_grob <- !is.null(data) && S7::S7_inherits(data, grob)
-  fontsize <- if (is_grob) 12 else (data$fontsize %||% 12)[1]
+  # `cex` multiplies `fontsize` (grid semantics), so `char`/`line`/`strwidth`/
+  # `strheight` all scale with it -- see `.gp_fontsize()`.
+  fontsize <- if (is_grob) 12 else (data$fontsize %||% 12)[1] * (data$cex %||% 1)[1]
   lineheight <- if (is_grob) 1.2 else (data$lineheight %||% 1.2)[1]
   family <- if (is_grob) "" else (data$fontfamily %||% "")[1]
   face <- if (is_grob) "plain" else (data$fontface %||% "plain")[1]
