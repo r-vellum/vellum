@@ -359,7 +359,7 @@ R joins this with the viewport names it recorded during compilation.</p>
 </div>
 
 <div class="section">
-<h3 id="method-element-table">Method <code>element_table</code><a class="anchor" aria-label="anchor" href="#method-element-table"></a></h3>
+<h3 id="method-lint-table">Method <code>lint_table</code><a class="anchor" aria-label="anchor" href="#method-lint-table"></a></h3>
 <p>Per-element device-px bounding boxes for the batched mark nodes (the ones
 that can carry data keys): rects, circles, points/markers, hexagons,
 sectors, segments. Rows are emitted in paint order (the compiler's DFS),
@@ -368,7 +368,19 @@ so <code><a href="scene_model.html">scene_model()</a></code> zips this with R-si
 cross-checks the <code>key</code> column). Columns: <code>key</code> ("" = none), enclosing
 <code>panel</code> ("" = none), and device-px bbox <code>x0,y0,x1,y1</code> (y-down). Sector boxes
 use the outer-radius disk and hexagon boxes the circumscribed extent — safe
-over-approximations sufficient for a spatial index.</p>
+over-approximations sufficient for a spatial index.
+Per-node facts a linter needs, in paint order: one row per drawn node
+(not per element – the rules that matter are about a whole mark).</p>
+<p>Everything here is measured from the <em>resolved</em> scene, which is the point:
+a linter built on top of the drawing code can say "this text is 4 px tall"
+or "this mark is entirely off-canvas" with the same numbers the renderer
+used, rather than re-deriving geometry and drifting from it.</p>
+</div>
+
+<div class="section">
+<h3 id="method-node-index">Method <code>node_index</code><a class="anchor" aria-label="anchor" href="#method-node-index"></a></h3>
+<p>Node identity for the profiler: kind, name, and element count, in node
+order – the same order <code><a href="rs_take_node_times.html">rs_take_node_times()</a></code> reports.</p>
 </div>
 
 <div class="section">

@@ -270,7 +270,7 @@ layout track edges (local px, plus the `respect` centering offset), and
 the device-px bbox of its innermost clip. R joins this with the viewport
 names it recorded during compilation.
 
-### Method `element_table`
+### Method `lint_table`
 
 Per-element device-px bounding boxes for the batched mark nodes (the
 ones that can carry data keys): rects, circles, points/markers,
@@ -282,7 +282,21 @@ zips this with R-side semantics positionally (and cross-checks the `key`
 column). Columns: `key` ("" = none), enclosing `panel` ("" = none), and
 device-px bbox `x0,y0,x1,y1` (y-down). Sector boxes use the outer-radius
 disk and hexagon boxes the circumscribed extent — safe
-over-approximations sufficient for a spatial index.
+over-approximations sufficient for a spatial index. Per-node facts a
+linter needs, in paint order: one row per drawn node (not per element –
+the rules that matter are about a whole mark).
+
+Everything here is measured from the *resolved* scene, which is the
+point: a linter built on top of the drawing code can say "this text is 4
+px tall" or "this mark is entirely off-canvas" with the same numbers the
+renderer used, rather than re-deriving geometry and drifting from it.
+
+### Method `node_index`
+
+Node identity for the profiler: kind, name, and element count, in node
+order – the same order
+[`rs_take_node_times()`](https://r-vellum.github.io/vellum/reference/rs_take_node_times.md)
+reports.
 
 ### Method `pixel`
 

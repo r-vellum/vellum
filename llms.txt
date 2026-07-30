@@ -335,6 +335,23 @@ and the row/column layout solver.
 - [`why_size()`](https://r-vellum.github.io/vellum/reference/why_size.md)
   : Explain why a node has its resolved size
 
+## Inspecting a scene
+
+Static analysis, coverage statistics, and render profiling — all reading
+the resolved geometry the renderer draws with.
+
+- [`vl_lint()`](https://r-vellum.github.io/vellum/reference/vl_lint.md)
+  : Check a scene for likely mistakes
+- [`vl_lint_rule()`](https://r-vellum.github.io/vellum/reference/vl_lint_rule.md)
+  [`vl_lint_rules()`](https://r-vellum.github.io/vellum/reference/vl_lint_rule.md)
+  : Register a lint rule
+- [`vl_lint_finding()`](https://r-vellum.github.io/vellum/reference/vl_lint_finding.md)
+  : Build a lint finding
+- [`scene_stats()`](https://r-vellum.github.io/vellum/reference/scene_stats.md)
+  : Ink and overplotting statistics for a scene
+- [`profile_render()`](https://r-vellum.github.io/vellum/reference/profile_render.md)
+  : Where a scene spends its render time
+
 ## Paint & appearance
 
 The paint model shared across all backends: gradients, tiling patterns,

@@ -30,6 +30,7 @@
 <url><loc>https://r-vellum.github.io/vellum/reference/index.html</loc></url>
 <url><loc>https://r-vellum.github.io/vellum/reference/md.html</loc></url>
 <url><loc>https://r-vellum.github.io/vellum/reference/node_names.html</loc></url>
+<url><loc>https://r-vellum.github.io/vellum/reference/profile_render.html</loc></url>
 <url><loc>https://r-vellum.github.io/vellum/reference/render_animation.html</loc></url>
 <url><loc>https://r-vellum.github.io/vellum/reference/rs_backend_info.html</loc></url>
 <url><loc>https://r-vellum.github.io/vellum/reference/rs_clear_glyph_cache.html</loc></url>
@@ -38,10 +39,13 @@
 <url><loc>https://r-vellum.github.io/vellum/reference/rs_read_png.html</loc></url>
 <url><loc>https://r-vellum.github.io/vellum/reference/rs_set_cvd_mode.html</loc></url>
 <url><loc>https://r-vellum.github.io/vellum/reference/rs_set_glyph_bitmap_mode.html</loc></url>
+<url><loc>https://r-vellum.github.io/vellum/reference/rs_set_profiling.html</loc></url>
 <url><loc>https://r-vellum.github.io/vellum/reference/rs_subraster_stats.html</loc></url>
+<url><loc>https://r-vellum.github.io/vellum/reference/rs_take_node_times.html</loc></url>
 <url><loc>https://r-vellum.github.io/vellum/reference/scene_model.html</loc></url>
 <url><loc>https://r-vellum.github.io/vellum/reference/scene_png.html</loc></url>
 <url><loc>https://r-vellum.github.io/vellum/reference/scene_raster.html</loc></url>
+<url><loc>https://r-vellum.github.io/vellum/reference/scene_stats.html</loc></url>
 <url><loc>https://r-vellum.github.io/vellum/reference/scene_svg.html</loc></url>
 <url><loc>https://r-vellum.github.io/vellum/reference/sketch.html</loc></url>
 <url><loc>https://r-vellum.github.io/vellum/reference/spread.html</loc></url>
@@ -51,6 +55,9 @@
 <url><loc>https://r-vellum.github.io/vellum/reference/vl_clear_render_cache.html</loc></url>
 <url><loc>https://r-vellum.github.io/vellum/reference/vl_convert.html</loc></url>
 <url><loc>https://r-vellum.github.io/vellum/reference/vl_gpar.html</loc></url>
+<url><loc>https://r-vellum.github.io/vellum/reference/vl_lint.html</loc></url>
+<url><loc>https://r-vellum.github.io/vellum/reference/vl_lint_finding.html</loc></url>
+<url><loc>https://r-vellum.github.io/vellum/reference/vl_lint_rule.html</loc></url>
 <url><loc>https://r-vellum.github.io/vellum/reference/vl_pattern.html</loc></url>
 <url><loc>https://r-vellum.github.io/vellum/reference/vl_render_animation.html</loc></url>
 <url><loc>https://r-vellum.github.io/vellum/reference/vl_scene.html</loc></url>
