@@ -622,6 +622,67 @@ pub struct Scene {
 /// pointless for a handful of labels. Mirrors the marker-sprite `SPRITE_MIN`.
 const GLYPH_BITMAP_MIN: usize = 2_000;
 
+// Non-exported helpers on `Scene`. extendr exports every method of an
+// `#[extendr] impl` block, so anything with a non-FFI signature lives here.
+impl Scene {
+    /// Serialize the scene as a PDF document, returning `(bytes, warnings)`.
+    /// Shared by `render_pdf` (writes a file) and `render_pdf_raw` (returns the
+    /// bytes to R), so the two can never drift.
+    fn pdf_bytes(&self) -> (Vec<u8>, Vec<String>) {
+        let scale = 72.0 / self.dpi as f32;
+        let w_pt = self.w_px as f32 * scale;
+        let h_pt = self.h_px as f32 * scale;
+        let mut doc = krilla::Document::new();
+        let settings = match krilla::page::PageSettings::from_wh(w_pt, h_pt) {
+            Some(s) => s,
+            None => throw_r_error("invalid PDF page size"),
+        };
+        let mut page = doc.start_page_with(settings);
+        let mut surface = page.surface();
+        // One root transform maps device pixels -> PDF points.
+        surface.push_transform(&krilla::geom::Transform::from_scale(scale, scale));
+        // Accessibility: when the scene is described, bracket all drawn content
+        // with a tagged marker so it can be attached to a Figure (with Alt text)
+        // in the structure tree below — a tagged PDF (WCAG 1.1.1). Absent => an
+        // ordinary, untagged PDF (unchanged).
+        let alt = if !self.a11y_desc.is_empty() {
+            self.a11y_desc.as_str()
+        } else {
+            self.a11y_title.as_str()
+        };
+        let tag_id = if alt.is_empty() {
+            None
+        } else {
+            Some(surface.start_tagged(krilla::tagging::ContentTag::Other))
+        };
+        let warnings = {
+            let mut b = PdfBackend::new(&mut surface);
+            b.fill_background(self.w_px, self.h_px, self.bg);
+            self.render_to(&mut b)
+        };
+        if tag_id.is_some() {
+            surface.end_tagged();
+        }
+        surface.pop();
+        surface.finish();
+        page.finish();
+        // Attach the tagged content to a Figure(alt) in the structure tree.
+        if let Some(id) = tag_id {
+            let mut figure = krilla::tagging::TagGroup::new(
+                krilla::tagging::Tag::Figure(Some(alt.to_string())),
+            );
+            figure.push(id);
+            let mut tree = krilla::tagging::TagTree::new();
+            tree.push(figure);
+            doc.set_tag_tree(tree);
+        }
+        match doc.finish() {
+            Ok(bytes) => (bytes, warnings),
+            Err(e) => throw_r_error(format!("failed to serialize PDF: {e}")),
+        }
+    }
+}
+
 #[extendr]
 impl Scene {
     /// Create a scene `width` x `height` inches at `dpi`, with background `bg`
@@ -1401,6 +1462,35 @@ impl Scene {
         warnings
     }
 
+    /// Render the scene and return the PNG bytes rather than writing a file.
+    /// `list(bytes = <raw>, warnings = <character>)` -- warnings are returned
+    /// rather than dropped so the caller can surface them exactly as `render()`
+    /// does. Shares the memoised pixmap with `render_png`.
+    fn render_png_raw(&self) -> List {
+        let (pm, warnings) = if self.raster_cache.borrow().is_some() {
+            (self.raster_cache.borrow().as_ref().unwrap().clone(), Vec::new())
+        } else {
+            let mut b = RasterBackend::new(self.w_px, self.h_px, self.bg);
+            b.set_bitmap_text(self.want_bitmap_text());
+            let warnings = self.render_to(&mut b);
+            let pm = b.into_pixmap();
+            *self.raster_cache.borrow_mut() = Some(pm.clone());
+            (pm, warnings)
+        };
+        let bytes = match pm.encode_png() {
+            Ok(b) => b,
+            Err(e) => throw_r_error(format!("failed to encode PNG: {e}")),
+        };
+        list!(bytes = Raw::from_bytes(&bytes), warnings = warnings)
+    }
+
+    /// Render the scene and return the PDF bytes rather than writing a file.
+    /// Same shape as `render_png_raw`.
+    fn render_pdf_raw(&self) -> List {
+        let (bytes, warnings) = self.pdf_bytes();
+        list!(bytes = Raw::from_bytes(&bytes), warnings = warnings)
+    }
+
     /// Render the scene to an SVG file. `outline_text` emits glyph outlines
     /// instead of selectable `<text>` (pixel-faithful, matches raster/PDF).
     /// Returns any degradation warnings.
@@ -1429,60 +1519,9 @@ impl Scene {
     /// Render the scene to a PDF file. Returns any degradation warnings (e.g. a
     /// tiling pattern or mask the PDF walk could not honour).
     fn render_pdf(&self, path: &str) -> Vec<String> {
-        let scale = 72.0 / self.dpi as f32;
-        let w_pt = self.w_px as f32 * scale;
-        let h_pt = self.h_px as f32 * scale;
-        let mut doc = krilla::Document::new();
-        let settings = match krilla::page::PageSettings::from_wh(w_pt, h_pt) {
-            Some(s) => s,
-            None => throw_r_error("invalid PDF page size"),
-        };
-        let mut page = doc.start_page_with(settings);
-        let mut surface = page.surface();
-        // One root transform maps device pixels -> PDF points.
-        surface.push_transform(&krilla::geom::Transform::from_scale(scale, scale));
-        // Accessibility: when the scene is described, bracket all drawn content
-        // with a tagged marker so it can be attached to a Figure (with Alt text)
-        // in the structure tree below — a tagged PDF (WCAG 1.1.1). Absent => an
-        // ordinary, untagged PDF (unchanged).
-        let alt = if !self.a11y_desc.is_empty() {
-            self.a11y_desc.as_str()
-        } else {
-            self.a11y_title.as_str()
-        };
-        let tag_id = if alt.is_empty() {
-            None
-        } else {
-            Some(surface.start_tagged(krilla::tagging::ContentTag::Other))
-        };
-        let warnings = {
-            let mut b = PdfBackend::new(&mut surface);
-            b.fill_background(self.w_px, self.h_px, self.bg);
-            self.render_to(&mut b)
-        };
-        if tag_id.is_some() {
-            surface.end_tagged();
-        }
-        surface.pop();
-        surface.finish();
-        page.finish();
-        // Attach the tagged content to a Figure(alt) in the structure tree.
-        if let Some(id) = tag_id {
-            let mut figure = krilla::tagging::TagGroup::new(
-                krilla::tagging::Tag::Figure(Some(alt.to_string())),
-            );
-            figure.push(id);
-            let mut tree = krilla::tagging::TagTree::new();
-            tree.push(figure);
-            doc.set_tag_tree(tree);
-        }
-        match doc.finish() {
-            Ok(bytes) => {
-                if let Err(e) = std::fs::write(path, bytes) {
-                    throw_r_error(format!("failed to write PDF: {e}"));
-                }
-            }
-            Err(e) => throw_r_error(format!("failed to serialize PDF: {e}")),
+        let (bytes, warnings) = self.pdf_bytes();
+        if let Err(e) = std::fs::write(path, bytes) {
+            throw_r_error(format!("failed to write PDF: {e}"));
         }
         warnings
     }

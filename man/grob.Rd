@@ -352,8 +352,12 @@ bulges away from the vertex, e.g. away from the layout centroid).}
 
 \item{rule}{Fill rule: \code{"winding"} (non-zero, default) or \code{"evenodd"}.}
 
-\item{image}{A raster image: a \code{\link[grDevices:as.raster]{grDevices::as.raster()}}-compatible object — a
-matrix/array of colours or greyscale values, or a \code{raster} object.}
+\item{image}{A raster image. Either a \code{\link[grDevices:as.raster]{grDevices::as.raster()}}-compatible
+object — a matrix/array of colours or greyscale values, or a \code{raster} — or a
+\strong{path to a PNG file}, decoded in the Rust backend so no R image package is
+needed. A numeric RGB/RGBA array in \verb{[0, 1]} (what \code{png::readPNG()} returns)
+takes a fast path that skips the per-pixel colour-string round-trip
+\code{as.raster()} would otherwise do; the pixels are identical either way.}
 
 \item{interpolate}{Smoothly interpolate when scaling (default \code{TRUE})? \code{FALSE}
 keeps hard pixel edges.}

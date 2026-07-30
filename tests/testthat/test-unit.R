@@ -82,3 +82,56 @@ test_that("derived units resolve to absolute millimetres at construction", {
   expect_equal(w2, 2 * w1, tolerance = 1e-9)
   expect_error(vl_unit(1, "strwidth"), "label")
 })
+
+# --- vl_convert() (Phase 2) --------------------------------------------------
+
+test_that("vl_convert() handles absolute units with no scene", {
+  expect_equal(vl_convert(vl_unit(1, "in"), "mm"), 25.4)
+  expect_equal(vl_convert(vl_unit(25.4, "mm"), "in"), 1)
+  expect_equal(vl_convert(vl_unit(1, "in"), "pt"), 72)
+  expect_equal(vl_convert(vl_unit(c(1, 2), "cm"), "mm"), c(10, 20))
+  expect_equal(vl_convert(numeric(0), "mm"), numeric(0))
+})
+
+test_that("vl_convert() resolves npc against the page, per axis", {
+  s <- vl_scene(4, 3, dpi = 100)
+  expect_equal(vl_convert(vl_unit(0.5, "npc"), "mm", s), 4 * 25.4 / 2)
+  expect_equal(vl_convert(vl_unit(0.5, "npc"), "mm", s, axis = "y"), 3 * 25.4 / 2)
+  expect_equal(vl_convert(vl_unit(1, "in"), "px", s), 100)
+  expect_equal(vl_convert(vl_unit(0.3, "npc"), "npc", s), 0.3)
+})
+
+test_that("vl_convert() resolves against a named viewport", {
+  s <- vl_scene(4, 3, dpi = 100) |>
+    push(vl_viewport(width = 0.5, xscale = c(10, 20), name = "panel"))
+  # Half of a 4in page is 2in = 50.8mm; half of that again is 25.4mm.
+  expect_equal(vl_convert(vl_unit(0.5, "npc"), "mm", s, name = "panel"), 25.4)
+})
+
+test_that("vl_convert() distinguishes a native length from a native position", {
+  s <- vl_scene(4, 3, dpi = 100) |>
+    push(vl_viewport(width = 0.5, xscale = c(10, 20), name = "panel"))
+  # Panel is 50.8mm across a scale spanning 10 units.
+  expect_equal(vl_convert(vl_unit(12, "native"), "mm", s, name = "panel"), 12 / 10 * 50.8)
+  expect_equal(
+    vl_convert(vl_unit(12, "native"), "mm", s, name = "panel", what = "position"),
+    (12 - 10) / 10 * 50.8
+  )
+  # Round-trips both ways.
+  expect_equal(
+    vl_convert(vl_unit(50.8, "mm"), "native", s, name = "panel", what = "position"),
+    20
+  )
+})
+
+test_that("vl_convert() carries the absolute offset of a compound unit", {
+  s <- vl_scene(4, 3, dpi = 100)
+  expect_equal(vl_convert(vl_unit(1, "npc") + vl_unit(2, "mm"), "mm", s), 4 * 25.4 + 2)
+})
+
+test_that("vl_convert() errors informatively without the context it needs", {
+  s <- vl_scene(4, 3)
+  expect_error(vl_convert(vl_unit(1, "npc"), "mm"), "scene")
+  expect_error(vl_convert(vl_unit(1, "null"), "mm", s), "null")
+  expect_error(vl_convert(vl_unit(1, "npc"), "mm", s, name = "nope"), "No viewport named")
+})

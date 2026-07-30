@@ -372,11 +372,19 @@ S7::method(as_vellum_scene, vellum_scene) <- function(x, ...) x
 #'   viewport region (outlined and labelled by name), its layout track boundaries,
 #'   and its clip region. Built from the resolved scene with [why_size()]; useful
 #'   for understanding why elements land where they do. Default `FALSE`.
+#' @param scale Resolution multiplier (default `1`). `scale = 2` renders at twice
+#'   the device pixels while keeping the **same physical size** — the retina /
+#'   `ggsave(scaling=)` idiom. It multiplies `dpi`, so absolute units (`mm`,
+#'   `pt`, `in`) cover proportionally more pixels and nothing about the layout
+#'   changes; text does not get relatively bigger or smaller. Only raster output
+#'   gains anything: a PDF's page size in points and an SVG's physical size are
+#'   unchanged by construction.
 #' @return `render()`: `path`, invisibly.
 #' @export
-render <- function(scene, path, text = c("native", "outline"), debug = FALSE) {
+render <- function(scene, path, text = c("native", "outline"), debug = FALSE,
+                   scale = 1) {
   text <- match.arg(text)
-  scene <- as_vellum_scene(scene)
+  scene <- .apply_scale(as_vellum_scene(scene), scale)
   s <- .scene_to_backend(scene, debug = debug)
   ext <- tolower(tools::file_ext(path))
   warns <- switch(ext,
@@ -398,13 +406,72 @@ render <- function(scene, path, text = c("native", "outline"), debug = FALSE) {
 #'
 #' @inheritParams render
 #' @return A length-1 character vector: the SVG document.
-#' @seealso [render()], [scene_model()]
+#' @seealso [render()], [scene_png()], [scene_model()]
 #' @export
 scene_svg <- function(scene, text = c("native", "outline")) {
   text <- match.arg(text)
   scene <- as_vellum_scene(scene)
   s <- .scene_to_backend(scene)
   s$render_svg_string(identical(text, "outline"))
+}
+
+#' Render a scene to PNG or PDF bytes
+#'
+#' Like [render()] with a `.png` / `.pdf` path, but returns the encoded document
+#' as a raw vector instead of writing a file. These are the in-memory entry
+#' points for a host that needs the bytes rather than a path — embedding a
+#' base64 data URI in an HTML widget, serving a plot from a web API, or writing
+#' to a connection — without a temp-file round-trip.
+#'
+#' Together with [scene_svg()] (a string) and [scene_raster()] (pixels), every
+#' output format vellum supports can now be produced without touching disk.
+#'
+#' Backend degradation warnings (see [render()]) are surfaced here too, so a PDF
+#' that could not honour a pattern or mask reports it exactly as writing a file
+#' would.
+#'
+#' @param scene A [vl_scene()], or anything with an [as_vellum_scene()] method.
+#' @return A raw vector: the encoded PNG or PDF document.
+#' @seealso [render()], [scene_svg()], [scene_raster()]
+#' @examples
+#' s <- vl_scene(2, 2) |> draw(circle_grob(gp = vl_gpar(fill = "steelblue")))
+#' png_bytes <- scene_png(s)
+#' length(png_bytes)
+#' rawToChar(png_bytes[2:4]) # "PNG"
+#' @inheritParams render
+#' @export
+scene_png <- function(scene, scale = 1) {
+  .scene_bytes(scene, "png", scale)
+}
+
+#' @rdname scene_png
+#' @export
+scene_pdf <- function(scene) {
+  .scene_bytes(scene, "pdf")
+}
+
+# Shared body for `scene_png()`/`scene_pdf()`: render to bytes and surface the
+# backend's degradation warnings the same way `render()` does.
+.scene_bytes <- function(scene, kind, scale = 1) {
+  scene <- .apply_scale(as_vellum_scene(scene), scale)
+  s <- .scene_to_backend(scene)
+  res <- if (identical(kind, "png")) s$render_png_raw() else s$render_pdf_raw()
+  .emit_degrade_warnings(res$warnings)
+  res$bytes
+}
+
+# Apply a resolution multiplier by scaling `dpi` only. Physical size (width and
+# height, held as absolute units) is untouched, so the layout solves identically
+# and every unit keeps its meaning -- the render simply lands on a finer pixel
+# grid. `dpi` is part of the render-cache key, so each scale caches separately.
+.apply_scale <- function(scene, scale) {
+  if (length(scale) != 1L || is.na(scale) || !is.numeric(scale) || scale <= 0) {
+    cli::cli_abort("{.arg scale} must be a single positive number.")
+  }
+  if (scale == 1) {
+    return(scene)
+  }
+  S7::set_props(scene, dpi = scene@dpi * scale)
 }
 
 # Surface backend degradation warnings (e.g. a PDF pattern/mask that couldn't be
@@ -1014,7 +1081,7 @@ S7::method(compile, grob_text) <- function(node, scene) {
       rot <- vctrs::vec_recycle(node@rot, n)
       .draw_richtext_batch(scene, node@label, x, y, hv[1], hv[2], rot,
                            node@gp@fontfamily %||% "", node@gp@fontface %||% "plain",
-                           node@gp@fontsize %||% 12, node@gp@col, node@gp@alpha)
+                           .gp_fontsize(node@gp), node@gp@col, node@gp@alpha)
       return(invisible())
     }
     labels <- .text_labels(node@label) # seam: rich labels -> strings (plain = identity)
@@ -1028,7 +1095,7 @@ S7::method(compile, grob_text) <- function(node, scene) {
     # every other primitive; the root default is black, so plain text stays black).
     .draw_text_batch(scene, lab, x, y, hv[1], hv[2], rot,
                      node@gp@fontfamily %||% "", node@gp@fontface %||% "plain",
-                     node@gp@fontsize %||% 12, node@gp@col, node@gp@alpha)
+                     .gp_fontsize(node@gp), node@gp@col, node@gp@alpha)
   })
 }
 

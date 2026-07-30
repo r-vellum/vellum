@@ -73,3 +73,72 @@ test_that("PDF honours the image interpolate flag (BUGFIX1 Phase 6)", {
 test_that("raster_grob rejects an empty image", {
   expect_error(raster_grob(matrix(character(0), 0, 0)), "no pixels")
 })
+
+# --- array fast path + file input (Phase 2) ---------------------------------
+# `.array_to_rgba()` skips the per-pixel colour-string round-trip `as.raster()`
+# does. It must be byte-exact against that fallback, or images shift colour.
+
+slow_rgba <- function(image) {
+  r <- grDevices::as.raster(image)
+  d <- dim(r)
+  list(rgba = as.integer(grDevices::col2rgb(as.vector(r), alpha = TRUE)),
+       iw = as.integer(d[2]), ih = as.integer(d[1]))
+}
+
+test_that("the numeric-array fast path is byte-exact against as.raster()", {
+  set.seed(42)
+  for (dims in list(c(7, 5), c(4, 9), c(1, 6), c(6, 1))) {
+    for (nc in 3:4) {
+      a <- array(runif(dims[1] * dims[2] * nc), dim = c(dims, nc))
+      expect_identical(.array_to_rgba(a), slow_rgba(a))
+    }
+  }
+})
+
+test_that("the fast path rounds exactly like rgb() at the boundaries", {
+  # `as.integer(255 * v + 0.5)` must reproduce R's ScaleColor, including the
+  # half-way cases where a different rounding rule would differ by one.
+  e <- array(c(0, 1, 0.5, 1 / 255, 0.5 / 255, 254.5 / 255, 1e-9, 1 - 1e-9, 0.2),
+             dim = c(3, 3, 3))
+  expect_identical(.array_to_rgba(e), slow_rgba(e))
+})
+
+test_that("the fast path declines anything as.raster() would treat differently", {
+  expect_null(.array_to_rgba(array(0.5, dim = c(3, 3, 2)))) # 2 planes: as.raster errors
+  expect_null(.array_to_rgba(array(0.5, dim = c(3, 3, 1))))
+  expect_null(.array_to_rgba(matrix(0.5, 3, 3)))            # 2-D: greyscale path
+  expect_null(.array_to_rgba(array(c(-0.1, rep(0.5, 26)), dim = c(3, 3, 3))))
+  expect_null(.array_to_rgba(array(c(1.5, rep(0.5, 26)), dim = c(3, 3, 3))))
+  expect_null(.array_to_rgba(array(c(NA, rep(0.5, 26)), dim = c(3, 3, 3))))
+  expect_null(.array_to_rgba(quad_img()))                   # character raster
+})
+
+test_that("raster_grob() reads a PNG path identically to reading it in R", {
+  skip_if_not_installed("png")
+  set.seed(7)
+  for (nc in 3:4) {
+    a <- array(runif(6 * 4 * nc), dim = c(6, 4, nc))
+    f <- withr::local_tempfile(fileext = ".png")
+    png::writePNG(a, f)
+    expect_identical(.image_to_rgba(f), .image_to_rgba(png::readPNG(f)))
+  }
+})
+
+test_that("a PNG path and an in-memory image render to the same bytes", {
+  skip_if_not_installed("png")
+  set.seed(3)
+  f <- withr::local_tempfile(fileext = ".png")
+  png::writePNG(array(runif(20 * 15 * 3), dim = c(20, 15, 3)), f)
+  out1 <- withr::local_tempfile(fileext = ".png")
+  out2 <- withr::local_tempfile(fileext = ".png")
+  vl_clear_render_cache(); render(vl_scene(2, 2) |> draw(raster_grob(f)), out1)
+  vl_clear_render_cache(); render(vl_scene(2, 2) |> draw(raster_grob(png::readPNG(f))), out2)
+  expect_identical(tools::md5sum(out1)[[1]], tools::md5sum(out2)[[1]])
+})
+
+test_that("a bad image path fails with a clear error", {
+  expect_error(raster_grob(file.path(tempdir(), "no-such-file.png")), "does not exist")
+  bad <- withr::local_tempfile(fileext = ".png")
+  writeLines("not a png", bad)
+  expect_error(raster_grob(bad), "PNG")
+})

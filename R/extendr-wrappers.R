@@ -30,6 +30,17 @@ rs_set_glyph_bitmap_mode <- function(mode) .Call(wrap__rs_set_glyph_bitmap_mode,
 #' @keywords internal
 rs_glyph_sprite_stats <- function() .Call(wrap__rs_glyph_sprite_stats)
 
+#' Decode a PNG file to straight (un-premultiplied) RGBA.
+#'
+#' Returns `c(width, height, r, g, b, a, r, g, b, a, ...)` -- the two dimensions
+#' followed by the pixels in row-major order, top-left first. The `png` crate is
+#' already vendored for the encode path, so this needs no new dependency and no
+#' R-side image package.
+#'
+#' @param path Path to a PNG file.
+#' @keywords internal
+rs_read_png <- function(path) .Call(wrap__rs_read_png, path)
+
 #' Render a keyframe animation to `path`.
 #'
 #' * `keyframes` — a list of compiled `Scene` external pointers (the `K` states).
@@ -252,6 +263,18 @@ rs_attractor <- function(kind, n, a, b, c, d, x0, y0) .Call(wrap__rs_attractor, 
 #'the raster backend today; uniform with the SVG/PDF signatures).
 #'}
 #'
+#'\subsection{Method `render_png_raw`}{
+#'Render the scene and return the PNG bytes rather than writing a file.
+#'`list(bytes = <raw>, warnings = <character>)` -- warnings are returned
+#'rather than dropped so the caller can surface them exactly as `render()`
+#'does. Shares the memoised pixmap with `render_png`.
+#'}
+#'
+#'\subsection{Method `render_pdf_raw`}{
+#'Render the scene and return the PDF bytes rather than writing a file.
+#'Same shape as `render_png_raw`.
+#'}
+#'
 #'\subsection{Method `render_svg`}{
 #'Render the scene to an SVG file. `outline_text` emits glyph outlines
 #'instead of selectable `<text>` (pixel-faithful, matches raster/PDF).
@@ -394,6 +417,10 @@ Scene$dim <- function() .Call(wrap__Scene__dim, self)
 Scene$dpi <- function() .Call(wrap__Scene__dpi, self)
 
 Scene$render_png <- function(path) .Call(wrap__Scene__render_png, self, path)
+
+Scene$render_png_raw <- function() .Call(wrap__Scene__render_png_raw, self)
+
+Scene$render_pdf_raw <- function() .Call(wrap__Scene__render_pdf_raw, self)
 
 Scene$render_svg <- function(path, outline_text) .Call(wrap__Scene__render_svg, self, path, outline_text)
 

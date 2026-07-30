@@ -16,6 +16,7 @@ vl_gpar(
   fontfamily = NULL,
   fontface = NULL,
   fontsize = NULL,
+  cex = NULL,
   lineheight = NULL
 )
 }
@@ -45,6 +46,12 @@ vl_gpar(
 \item{fontface}{One of \code{"plain"}, \code{"bold"}, \code{"italic"}, \code{"bold.italic"}.}
 
 \item{fontsize}{Font size in points.}
+
+\item{cex}{Multiplier applied to \code{fontsize} (grid semantics), so a theme can
+ask for a relative size without knowing the base one. \code{cex = 2} is exactly
+equivalent to doubling \code{fontsize}: it scales drawn text, \code{char}/\code{line}
+units, and \code{\link[=grobwidth]{grobwidth()}}/\code{\link[=grobheight]{grobheight()}} measurement alike. \code{NULL} (the
+default) means 1.}
 
 \item{lineheight}{Line-height multiple.}
 }
