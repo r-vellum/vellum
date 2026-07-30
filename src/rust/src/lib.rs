@@ -73,6 +73,21 @@ fn rs_set_cvd_mode(kind: &str) {
     scene::set_cvd_mode(mode);
 }
 
+/// Arm or disarm per-node render timing on this thread.
+/// @param on Logical.
+/// @keywords internal
+#[extendr]
+fn rs_set_profiling(on: bool) {
+    scene::set_profiling(on);
+}
+
+/// Take the per-node render times (seconds) collected since the last take.
+/// @keywords internal
+#[extendr]
+fn rs_take_node_times() -> Vec<f64> {
+    scene::take_node_times()
+}
+
 /// Decode a PNG file to straight (un-premultiplied) RGBA.
 ///
 /// Returns `c(width, height, r, g, b, a, r, g, b, a, ...)` -- the two dimensions
@@ -141,6 +156,8 @@ extendr_module! {
     fn rs_glyph_sprite_stats;
     fn rs_read_png;
     fn rs_set_cvd_mode;
+    fn rs_set_profiling;
+    fn rs_take_node_times;
     use scene;
     use aggregate;
 }

@@ -42,15 +42,17 @@ Imports:
     textshaping,
     vctrs
 Collate:
-    'animate.R'
     'gpar.R'
     'viewport.R'
     'grob.R'
     'api.R'
+    'analysis.R'
+    'animate.R'
     'datashade.R'
     'debug.R'
     'device.R'
     'extendr-wrappers.R'
+    'lint.R'
     'paint.R'
     'scene-model.R'
     'spread.R'

@@ -639,6 +639,51 @@ thread_local! {
     static CVD_MODE: std::cell::Cell<Option<crate::cvd::Cvd>> = const { std::cell::Cell::new(None) };
 }
 
+thread_local! {
+    /// Per-node render times (seconds), indexed by node position, accumulated
+    /// during the walk when profiling is on. Off by default so a normal render
+    /// pays nothing -- `Instant::now()` twice per node is cheap but not free.
+    static NODE_TIMES: RefCell<Option<Vec<f64>>> = const { RefCell::new(None) };
+}
+
+/// Start (or stop) collecting per-node render times on this thread.
+pub fn set_profiling(on: bool) {
+    NODE_TIMES.with(|t| *t.borrow_mut() = if on { Some(Vec::new()) } else { None });
+}
+
+/// Take the collected per-node times, leaving collection armed and empty.
+pub fn take_node_times() -> Vec<f64> {
+    NODE_TIMES.with(|t| {
+        let mut b = t.borrow_mut();
+        match b.as_mut() {
+            Some(v) => std::mem::take(v),
+            None => Vec::new(),
+        }
+    })
+}
+
+/// Records one node's elapsed time on drop, so every exit from the (heavily
+/// `continue`-d) walk body is measured without threading a timer through each arm.
+struct NodeTimer {
+    idx: usize,
+    start: std::time::Instant,
+}
+
+impl Drop for NodeTimer {
+    fn drop(&mut self) {
+        let dt = self.start.elapsed().as_secs_f64();
+        let idx = self.idx;
+        NODE_TIMES.with(|t| {
+            if let Some(v) = t.borrow_mut().as_mut() {
+                if v.len() <= idx {
+                    v.resize(idx + 1, 0.0);
+                }
+                v[idx] += dt;
+            }
+        });
+    }
+}
+
 /// Set the CVD simulation for subsequent renders on this thread.
 pub fn set_cvd_mode(kind: Option<crate::cvd::Cvd>) {
     CVD_MODE.with(|c| c.set(kind));
@@ -1718,6 +1763,98 @@ impl Scene {
     /// `panel` ("" = none), and device-px bbox `x0,y0,x1,y1` (y-down). Sector boxes
     /// use the outer-radius disk and hexagon boxes the circumscribed extent — safe
     /// over-approximations sufficient for a spatial index.
+    /// Per-node facts a linter needs, in paint order: one row per drawn node
+    /// (not per element -- the rules that matter are about a whole mark).
+    ///
+    /// Everything here is measured from the *resolved* scene, which is the point:
+    /// a linter built on top of the drawing code can say "this text is 4 px tall"
+    /// or "this mark is entirely off-canvas" with the same numbers the renderer
+    /// used, rather than re-deriving geometry and drifting from it.
+    fn lint_table(&self) -> List {
+        let resolved = self.resolve_all();
+        let n = self.nodes.len();
+        let (mut kind, mut name, mut id) = (Vec::with_capacity(n), Vec::with_capacity(n), Vec::with_capacity(n));
+        let (mut x0, mut y0, mut x1, mut y1) = (Vec::new(), Vec::new(), Vec::new(), Vec::new());
+        let (mut cx0, mut cy0, mut cx1, mut cy1) = (Vec::new(), Vec::new(), Vec::new(), Vec::new());
+        let (mut nelem, mut alpha, mut has_fill, mut has_col) = (Vec::new(), Vec::new(), Vec::new(), Vec::new());
+        let (mut font_px, mut col_rgba, mut label) = (Vec::new(), Vec::new(), Vec::new());
+
+        let mut acc_stack: Vec<GparAcc> = Vec::new();
+        for (i, (vp_id, node)) in self.nodes.iter().enumerate() {
+            let k = node_kind(node);
+            if k.is_empty() {
+                continue; // structural marker, nothing drawn
+            }
+            let rv = &resolved[*vp_id];
+            let vp = &rv.vp;
+            let acc = match node.gp() {
+                Some(g) => rv.gp_acc.apply(g),
+                None => rv.gp_acc.clone(),
+            };
+            let gp = acc.resolve();
+            let bb = match node_bbox(node, vp) {
+                Some(b) => b,
+                None => continue, // nothing measurable (e.g. an empty batch)
+            };
+            // The innermost clip, in device px; the whole page when unclipped.
+            let clip = rv
+                .clip_chain
+                .iter()
+                .filter_map(clip_bbox)
+                .fold(None::<(f64, f64, f64, f64)>, |a, c| match a {
+                    None => Some(c),
+                    Some(p) => Some((p.0.max(c.0), p.1.max(c.1), p.2.min(c.2), p.3.min(c.3))),
+                })
+                .unwrap_or((0.0, 0.0, self.w_px as f64, self.h_px as f64));
+
+            let md = self.meta.get(i);
+            kind.push(k.to_string());
+            name.push(md.map(|m| m.name.clone()).unwrap_or_default());
+            id.push(md.map(|m| m.id.clone()).unwrap_or_default());
+            x0.push(bb.0); y0.push(bb.1); x1.push(bb.2); y1.push(bb.3);
+            cx0.push(clip.0); cy0.push(clip.1); cx1.push(clip.2); cy1.push(clip.3);
+            nelem.push(node_count(node) as i32);
+            alpha.push(acc.alpha);
+            has_fill.push(i32::from(gp.fill.is_some()));
+            has_col.push(i32::from(gp.col.is_some_and(|c| c.a > 0)));
+            // Text-only fields; 0 / "" elsewhere.
+            match node {
+                Node::Text { gsize, label: l, .. } => {
+                    font_px.push(gsize.iter().cloned().fold(0.0_f64, f64::max));
+                    label.push(l.clone());
+                }
+                _ => {
+                    font_px.push(0.0);
+                    label.push(String::new());
+                }
+            }
+            let c = gp.col.unwrap_or(Rgba { r: 0, g: 0, b: 0, a: 0 });
+            col_rgba.push(((c.r as i32) << 24) | ((c.g as i32) << 16) | ((c.b as i32) << 8) | c.a as i32);
+            acc_stack.clear();
+        }
+        list!(
+            kind = kind, name = name, id = id,
+            x0 = x0, y0 = y0, x1 = x1, y1 = y1,
+            clip_x0 = cx0, clip_y0 = cy0, clip_x1 = cx1, clip_y1 = cy1,
+            n = nelem, alpha = alpha, has_fill = has_fill, has_col = has_col,
+            font_px = font_px, col = col_rgba, label = label
+        )
+    }
+
+    /// Node identity for the profiler: kind, name, and element count, in node
+    /// order -- the same order `rs_take_node_times()` reports.
+    fn node_index(&self) -> List {
+        let mut kind = Vec::with_capacity(self.nodes.len());
+        let mut name = Vec::with_capacity(self.nodes.len());
+        let mut n = Vec::with_capacity(self.nodes.len());
+        for (i, (_, node)) in self.nodes.iter().enumerate() {
+            kind.push(node_kind(node).to_string());
+            name.push(self.meta.get(i).map(|m| m.name.clone()).unwrap_or_default());
+            n.push(node_count(node) as i32);
+        }
+        list!(kind = kind, name = name, n = n)
+    }
+
     fn element_table(&self) -> List {
         let resolved = self.resolve_all();
         let mut key: Vec<String> = Vec::new();
@@ -2308,6 +2445,14 @@ impl Scene {
             // no-ops on raster/PDF), so build the attribute string — two `format!`s
             // in `svg_attrs` — only when the backend actually emits it. Empty attrs
             // ⇒ has_meta false ⇒ the (no-op) bracketing is skipped downstream.
+            // Profiling: time this node. Only the top-level walk is measured --
+            // `meta` is `None` for the nested walks that rasterise mask content,
+            // whose node indices would otherwise collide with the page's.
+            let _timer = if meta.is_some() && NODE_TIMES.with(|t| t.borrow().is_some()) {
+                Some(NodeTimer { idx: i, start: std::time::Instant::now() })
+            } else {
+                None
+            };
             let attrs = match meta.and_then(|m| m.get(i)).filter(|md| !md.is_empty()) {
                 Some(md) if b.wants_element_keys() => md.svg_attrs(),
                 _ => String::new(),
@@ -3859,6 +4004,150 @@ fn vertex_bbox(vp: &Vp, x: &[f64], y: &[f64], xu: &[Unit], yu: &[Unit]) -> Optio
 
 /// Map a local-pixel axis-aligned bbox through a viewport's affine transform to a
 /// device-pixel bbox (the min/max of the four mapped corners; handles rotation).
+/// A short, stable name for a node kind, used by the linter and by
+/// `profile_render()`. Empty for structural markers (group/panel/subraster
+/// brackets), which draw nothing.
+fn node_kind(node: &Node) -> &'static str {
+    match node {
+        Node::Rect { .. } | Node::Rects { .. } => "rect",
+        Node::RoundRect { .. } => "roundrect",
+        Node::Circle { .. } | Node::Circles { .. } => "circle",
+        Node::Markers { .. } => "points",
+        Node::Hexagons { .. } => "hexagon",
+        Node::Sectors { .. } => "sector",
+        Node::Segments { .. } => "segments",
+        Node::Loop { .. } => "loop",
+        Node::Lines { .. } => "lines",
+        Node::Polygon { .. } => "polygon",
+        Node::Path { .. } => "path",
+        Node::Text { .. } => "text",
+        Node::Image { .. } => "raster",
+        _ => "",
+    }
+}
+
+/// How many elements a node draws (1 for single-shape marks).
+fn node_count(node: &Node) -> usize {
+    match node {
+        Node::Rects { x, .. } | Node::Circles { x, .. } | Node::Markers { x, .. }
+        | Node::Hexagons { x, .. } | Node::Sectors { x, .. } | Node::Loop { x, .. } => x.len(),
+        Node::Segments { x0, .. } => x0.len(),
+        _ => 1,
+    }
+}
+
+/// A node's device-px bounding box. Built from the same per-element geometry the
+/// element table uses, unioned over the batch; `None` when there is nothing to
+/// measure.
+fn node_bbox(node: &Node, vp: &Vp) -> Option<(f64, f64, f64, f64)> {
+    let mut acc: Option<(f64, f64, f64, f64)> = None;
+    let mut add = |b: (f64, f64, f64, f64)| {
+        acc = Some(match acc {
+            None => b,
+            Some(a) => (a.0.min(b.0), a.1.min(b.1), a.2.max(b.2), a.3.max(b.3)),
+        });
+    };
+    match node {
+        Node::Rect { x, y, w, h, xu, yu, wu, hu, .. }
+        | Node::RoundRect { x, y, w, h, xu, yu, wu, hu, .. } => {
+            let (cx, cy) = (vp.x_pos(*x, *xu), vp.y_pos(*y, *yu));
+            let (pw, ph) = (vp.x_len(*w, *wu), vp.y_len(*h, *hu));
+            add((cx - pw / 2.0, cy - ph / 2.0, cx + pw / 2.0, cy + ph / 2.0));
+        }
+        Node::Circle { x, y, r, xu, yu, ru, .. } => {
+            let (cx, cy) = (vp.x_pos(*x, *xu), vp.y_pos(*y, *yu));
+            let rr = vp.r_len(*r, *ru);
+            add((cx - rr, cy - rr, cx + rr, cy + rr));
+        }
+        Node::Rects { x, y, w, h, xu, yu, wu, hu, .. } => {
+            let n = [x.len(), y.len(), w.len(), h.len()].into_iter().min().unwrap_or(0);
+            for i in 0..n {
+                let (cx, cy) = (vp.x_pos(x[i], xu[i]), vp.y_pos(y[i], yu[i]));
+                let (pw, ph) = (vp.x_len(w[i], wu[i]), vp.y_len(h[i], hu[i]));
+                add((cx - pw / 2.0, cy - ph / 2.0, cx + pw / 2.0, cy + ph / 2.0));
+            }
+        }
+        Node::Circles { x, y, r, xu, yu, ru, .. } => {
+            let n = [x.len(), y.len(), r.len()].into_iter().min().unwrap_or(0);
+            for i in 0..n {
+                let (cx, cy) = (vp.x_pos(x[i], xu[i]), vp.y_pos(y[i], yu[i]));
+                let rr = vp.r_len(r[i], ru[i]);
+                add((cx - rr, cy - rr, cx + rr, cy + rr));
+            }
+        }
+        Node::Markers { x, y, size, xu, yu, su, .. }
+        | Node::Loop { x, y, size, xu, yu, su, .. } => {
+            let n = [x.len(), y.len(), size.len()].into_iter().min().unwrap_or(0);
+            for i in 0..n {
+                let (cx, cy) = (vp.x_pos(x[i], xu[i]), vp.y_pos(y[i], yu[i]));
+                let rr = vp.r_len(size[i], su[i]);
+                add((cx - rr, cy - rr, cx + rr, cy + rr));
+            }
+        }
+        Node::Hexagons { x, y, size, xu, yu, su, .. } => {
+            let n = [x.len(), y.len()].into_iter().min().unwrap_or(0);
+            for i in 0..n {
+                let (cx, cy) = (vp.x_pos(x[i], xu[i]), vp.y_pos(y[i], yu[i]));
+                let rr = vp.r_len(*size.get(i).unwrap_or(&0.0), su[i.min(su.len().saturating_sub(1))]);
+                add((cx - rr, cy - rr, cx + rr, cy + rr));
+            }
+        }
+        Node::Sectors { x, y, r1, xu, yu, r1u, .. } => {
+            let n = [x.len(), y.len(), r1.len()].into_iter().min().unwrap_or(0);
+            for i in 0..n {
+                let (cx, cy) = (vp.x_pos(x[i], xu[i]), vp.y_pos(y[i], yu[i]));
+                let rr = vp.r_len(r1[i], r1u[i]);
+                add((cx - rr, cy - rr, cx + rr, cy + rr));
+            }
+        }
+        Node::Segments { x0, y0, x1, y1, x0u, y0u, x1u, y1u, .. } => {
+            let n = [x0.len(), y0.len(), x1.len(), y1.len()].into_iter().min().unwrap_or(0);
+            for i in 0..n {
+                let (ax, ay) = (vp.x_pos(x0[i], x0u[i]), vp.y_pos(y0[i], y0u[i]));
+                let (bx, by) = (vp.x_pos(x1[i], x1u[i]), vp.y_pos(y1[i], y1u[i]));
+                add((ax.min(bx), ay.min(by), ax.max(bx), ay.max(by)));
+            }
+        }
+        Node::Lines { x, y, xu, yu, .. }
+        | Node::Polygon { x, y, xu, yu, .. }
+        | Node::Path { x, y, xu, yu, .. } => {
+            let n = x.len().min(y.len());
+            for i in 0..n {
+                let (px, py) = (vp.x_pos(x[i], xu[i]), vp.y_pos(y[i], yu[i]));
+                add((px, py, px, py));
+            }
+        }
+        Node::Text { x, y, xu, yu, w, h, hjust, vjust, .. } => {
+            let (ax, ay) = (vp.x_pos(*x, *xu), vp.y_pos(*y, *yu));
+            let (lx, ty) = (ax - hjust * w, ay - (1.0 - vjust) * h);
+            add((lx, ty, lx + w, ty + h));
+        }
+        Node::Image { x, y, w, h, xu, yu, wu, hu, .. } => {
+            let (cx, cy) = (vp.x_pos(*x, *xu), vp.y_pos(*y, *yu));
+            let (pw, ph) = (vp.x_len(*w, *wu), vp.y_len(*h, *hu));
+            add((cx - pw / 2.0, cy - ph / 2.0, cx + pw / 2.0, cy + ph / 2.0));
+        }
+        _ => return None,
+    }
+    acc
+}
+
+/// The device-px bounds of a clip shape (a path clip is reduced to its bbox --
+/// enough for "is this entirely clipped away", which is all the linter asks).
+fn clip_bbox(c: &ClipShape) -> Option<(f64, f64, f64, f64)> {
+    match c {
+        ClipShape::Rect { w, h, transform } => {
+            let vpx = Vp { transform: *transform, w: *w, h: *h, xscale: (0.0, 1.0), yscale: (0.0, 1.0), dpi: 96.0 };
+            Some(dev_bbox(&vpx, 0.0, 0.0, *w, *h))
+        }
+        ClipShape::Path { path, transform, .. } => {
+            let b = path.bounds();
+            let vpx = Vp { transform: *transform, w: 1.0, h: 1.0, xscale: (0.0, 1.0), yscale: (0.0, 1.0), dpi: 96.0 };
+            Some(dev_bbox(&vpx, b.left() as f64, b.top() as f64, b.right() as f64, b.bottom() as f64))
+        }
+    }
+}
+
 fn dev_bbox(vp: &Vp, lx0: f64, ly0: f64, lx1: f64, ly1: f64) -> (f64, f64, f64, f64) {
     let t = vp.transform;
     let (sx, ky, kx, sy, tx, ty) =

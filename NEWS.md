@@ -1,5 +1,32 @@
 # vellum (development version)
 
+* **`vl_lint()` — static analysis for graphics.** Resolves the scene and
+  inspects the geometry the renderer would draw with, reporting the things
+  people otherwise find by squinting at a PNG: a mark that landed off-canvas or
+  outside its viewport's clip, an element nothing will paint (no fill, no
+  stroke, or zero alpha), text below a legibility floor, overlapping labels, and
+  text whose contrast against its actual rendered backdrop falls below the WCAG
+  threshold. This is possible because vellum resolves layout and text metrics
+  *before* drawing — a layer above grid cannot ask how many pixels tall a label
+  is, because the answer does not exist until a device is open.
+
+  The rule set is a registry: `vl_lint_rule()` lets a package layered on vellum
+  add its own, so a grammar's semantic rules and vellum's geometric ones come
+  back from one call.
+
+* **`scene_stats()`** reports ink coverage, distinct colours, and an
+  **overplotting index** — the honest signal for "should this be
+  `datashade()`-ed?". A mark count says nothing about overlap: 2000 scattered
+  points score 4.3, the same 2000 clustered score 91.
+
+* **`profile_render()`** attributes render cost to the marks that caused it, and
+  splits **build** / **compile** / **raster**. Read the phase split first:
+  compile time is R-side, and on scenes with many small grobs it dominates, in
+  which case tuning the backend cannot help. Timing is armed only for that call,
+  so ordinary renders pay nothing.
+
+* New example `inst/examples/linting.R`.
+
 * **Colour-vision-deficiency simulation.** `render(scene, path, cvd =)`,
   `scene_png(cvd =)` and `scene_raster(cvd =)` re-render the finished raster as
   a viewer with `"protanopia"`, `"deuteranopia"`, `"tritanopia"` or

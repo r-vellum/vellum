@@ -255,7 +255,7 @@ local px -> device px), solved layout track edges (local px, plus the
 R joins this with the viewport names it recorded during compilation.
 }
 
-\subsection{Method \code{element_table}}{
+\subsection{Method \code{lint_table}}{
 Per-element device-px bounding boxes for the batched mark nodes (the ones
 that can carry data keys): rects, circles, points/markers, hexagons,
 sectors, segments. Rows are emitted in paint order (the compiler's DFS),
@@ -265,6 +265,18 @@ cross-checks the \code{key} column). Columns: \code{key} ("" = none), enclosing
 \code{panel} ("" = none), and device-px bbox \verb{x0,y0,x1,y1} (y-down). Sector boxes
 use the outer-radius disk and hexagon boxes the circumscribed extent — safe
 over-approximations sufficient for a spatial index.
+Per-node facts a linter needs, in paint order: one row per drawn node
+(not per element -- the rules that matter are about a whole mark).
+
+Everything here is measured from the \emph{resolved} scene, which is the point:
+a linter built on top of the drawing code can say "this text is 4 px tall"
+or "this mark is entirely off-canvas" with the same numbers the renderer
+used, rather than re-deriving geometry and drifting from it.
+}
+
+\subsection{Method \code{node_index}}{
+Node identity for the profiler: kind, name, and element count, in node
+order -- the same order \code{rs_take_node_times()} reports.
 }
 
 \subsection{Method \code{pixel}}{
