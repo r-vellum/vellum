@@ -48,6 +48,14 @@ Rscript inst/benchmarks/scatter.R 1e6 /tmp   # choose N and output dir
   pre-warming measures the shape cache warming up rather than the thing under test.
   That bias is where an earlier, wrong "8.7×" glyph-bitmap figure came from.
 
+- **`queries.R`** — the *query* entry points rather than drawing:
+  `scene_model()`, `scene_svg()` and `render()` over one scene, which is what
+  `vellumwidget::as_widget()` does. It also splits the R-side cost from the Rust
+  one, because that split is counter-intuitive: at 1600 viewports `scene_model()`
+  costs ~1.5 s of which the Rust `element_table()` is ~1 ms. A round of predicted
+  Rust optimisations against these paths measured as pure noise for exactly that
+  reason; keep any work here on the R side.
+
 The `grid` timing depends on the active PNG device (cairo/quartz/…).
 
 Timings are wall-clock and machine/device dependent; treat them as relative, not
