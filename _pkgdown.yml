@@ -127,6 +127,17 @@ reference:
   - grobwidth
   - why_size
 
+- title: Inspecting a scene
+  desc: >
+    Static analysis, coverage statistics, and render profiling — all reading the
+    resolved geometry the renderer draws with.
+  contents:
+  - vl_lint
+  - vl_lint_rule
+  - vl_lint_finding
+  - scene_stats
+  - profile_render
+
 - title: Paint & appearance
   desc: >
     The paint model shared across all backends: gradients, tiling

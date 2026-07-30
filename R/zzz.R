@@ -12,6 +12,10 @@
   }))
   # Register S7 methods (compile generic etc.) so dispatch works once installed.
   S7::methods_register()
+  # Populate the lint registry. Done here, not at build time, so the rules
+  # survive a `load_all()` and so a downstream package can add its own with
+  # `vl_lint_rule()` from its own `.onLoad`.
+  .register_builtin_lint_rules()
   # Default options. `vellum.warn_on_degrade`: warn (once per render) when a
   # backend cannot fully honour the scene (e.g. a PDF pattern/mask it dropped).
   op <- options()

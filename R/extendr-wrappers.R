@@ -48,6 +48,15 @@ rs_read_png <- function(path) .Call(wrap__rs_read_png, path)
 #' @keywords internal
 rs_set_cvd_mode <- function(kind) .Call(wrap__rs_set_cvd_mode, kind)
 
+#' Arm or disarm per-node render timing on this thread.
+#' @param on Logical.
+#' @keywords internal
+rs_set_profiling <- function(on) .Call(wrap__rs_set_profiling, on)
+
+#' Take the per-node render times (seconds) collected since the last take.
+#' @keywords internal
+rs_take_node_times <- function() .Call(wrap__rs_take_node_times)
+
 #' Render a keyframe animation to `path`.
 #'
 #' * `keyframes` — a list of compiled `Scene` external pointers (the `K` states).
@@ -324,7 +333,7 @@ rs_attractor <- function(kind, n, a, b, c, d, x0, y0) .Call(wrap__rs_attractor, 
 #'R joins this with the viewport names it recorded during compilation.
 #'}
 #'
-#'\subsection{Method `element_table`}{
+#'\subsection{Method `lint_table`}{
 #'Per-element device-px bounding boxes for the batched mark nodes (the ones
 #'that can carry data keys): rects, circles, points/markers, hexagons,
 #'sectors, segments. Rows are emitted in paint order (the compiler's DFS),
@@ -334,6 +343,18 @@ rs_attractor <- function(kind, n, a, b, c, d, x0, y0) .Call(wrap__rs_attractor, 
 #'`panel` ("" = none), and device-px bbox `x0,y0,x1,y1` (y-down). Sector boxes
 #'use the outer-radius disk and hexagon boxes the circumscribed extent — safe
 #'over-approximations sufficient for a spatial index.
+#'Per-node facts a linter needs, in paint order: one row per drawn node
+#'(not per element -- the rules that matter are about a whole mark).
+#'
+#'Everything here is measured from the *resolved* scene, which is the point:
+#'a linter built on top of the drawing code can say "this text is 4 px tall"
+#'or "this mark is entirely off-canvas" with the same numbers the renderer
+#'used, rather than re-deriving geometry and drifting from it.
+#'}
+#'
+#'\subsection{Method `node_index`}{
+#'Node identity for the profiler: kind, name, and element count, in node
+#'order -- the same order `rs_take_node_times()` reports.
 #'}
 #'
 #'\subsection{Method `pixel`}{
@@ -443,6 +464,10 @@ Scene$rgba <- function() .Call(wrap__Scene__rgba, self)
 Scene$content_bbox <- function() .Call(wrap__Scene__content_bbox, self)
 
 Scene$resolved_geometry <- function() .Call(wrap__Scene__resolved_geometry, self)
+
+Scene$lint_table <- function() .Call(wrap__Scene__lint_table, self)
+
+Scene$node_index <- function() .Call(wrap__Scene__node_index, self)
 
 Scene$element_table <- function() .Call(wrap__Scene__element_table, self)
 
