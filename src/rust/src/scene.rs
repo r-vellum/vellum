@@ -2594,7 +2594,7 @@ impl Scene {
                             if sc > 0.0 || ec > 0.0 {
                                 trim_poly_ends(&mut pts, sc, ec);
                             }
-                            let style = stroke_style(&gp, vp.dpi);
+                            let style = stroke_style(&gp, vp);
                             if let Some(path) = build_poly_px(&pts, false) {
                                 if style.width > 0.0 {
                                     b.stroke_lines(&path, t, col, &style, &clip);
@@ -2705,7 +2705,7 @@ impl Scene {
                     } else {
                         // Stroke (non-uniform scale would distort it) or a gradient
                         // that must be resolved in local px: build each rect.
-                        let style = stroke_style(&gp, vp.dpi);
+                        let style = stroke_style(&gp, vp);
                         for i in 0..n {
                             b.set_element_key(key_at(keys, i));
                             let cx = vp.x_pos(x[i], xu[i]);
@@ -2767,12 +2767,12 @@ impl Scene {
                             cy.push(vp.y_pos(y[i], yu[i]));
                             rr.push(vp.r_len(r[i], ru[i]));
                         }
-                        b.draw_circles(&cx, &cy, &rr, rf.as_ref(), stroke.map(|c| (c, stroke_style(&gp, vp.dpi))), t, &clip);
+                        b.draw_circles(&cx, &cy, &rr, rf.as_ref(), stroke.map(|c| (c, stroke_style(&gp, vp))), t, &clip);
                     } else {
                         // Per-element build: either a gradient/pattern fill (resolved in
                         // local px, so position-dependent) or a keyed batch that needs a
                         // `data-key` per circle.
-                        let style = stroke_style(&gp, vp.dpi);
+                        let style = stroke_style(&gp, vp);
                         for i in 0..n {
                             b.set_element_key(key_at(keys, i));
                             let cx = vp.x_pos(x[i], xu[i]);
@@ -2800,7 +2800,7 @@ impl Scene {
                         // rough stroke arms. Per-element seed.
                         let o = resolve_sketch(sk, &gp, vp.dpi);
                         let col = gp.col;
-                        let style = stroke_style(&gp, vp.dpi);
+                        let style = stroke_style(&gp, vp);
                         for i in 0..n {
                             b.set_element_key(key_at(keys, i));
                             let cx = vp.x_pos(x[i], xu[i]);
@@ -2861,7 +2861,7 @@ impl Scene {
                     let stroke = gp.col.filter(|_| lwd > 0.0);
                     let rf = gp.fill.as_ref().map(|p| resolve_paint(p, vp));
                     let solid = matches!(gp.fill, Some(Paint::Solid(_)) | None);
-                    let style = stroke_style(&gp, vp.dpi);
+                    let style = stroke_style(&gp, vp);
                     // Fast path: a solid (transform-invariant) fill with no stroke
                     // reuses one unit shape per marker kind, placed by an affine
                     // transform — mirrors the Rects fast path and is pixel-identical.
@@ -2961,7 +2961,7 @@ impl Scene {
                     let n = [x.len(), y.len(), xu.len(), yu.len(), fill.len()]
                         .into_iter().min().unwrap_or(0);
                     let nonreg = !w.is_empty();
-                    let style = stroke_style(&gp, vp.dpi);
+                    let style = stroke_style(&gp, vp);
                     let stroke = gp.col.filter(|_| style.width > 0.0);
                     for i in 0..n {
                         b.set_element_key(key_at(keys, i));
@@ -3019,7 +3019,7 @@ impl Scene {
                         if has_meta { b.end_node(); }
                         continue;
                     }
-                    let style = stroke_style(&gp, vp.dpi);
+                    let style = stroke_style(&gp, vp);
                     let stroke = gp.col.filter(|_| style.width > 0.0);
                     // Arrowheads (directed self-loops) accumulate across the batch and
                     // are drawn once at the end, tangent to each outer arc's end(s).
@@ -3119,7 +3119,7 @@ impl Scene {
                         // Hand-drawn: rough each segment (ignores offset/caps/arrow —
                         // §4 exception 4). Per-segment seed so they don't look cloned.
                         if let Some(col) = gp.col {
-                            let style = stroke_style(&gp, vp.dpi);
+                            let style = stroke_style(&gp, vp);
                             if style.width > 0.0 {
                                 let n = [x0.len(), y0.len(), x1.len(), y1.len(),
                                          x0u.len(), y0u.len(), x1u.len(), y1u.len()]
@@ -3145,7 +3145,7 @@ impl Scene {
                         continue;
                     }
                     if let Some(col) = gp.col {
-                        let style = stroke_style(&gp, vp.dpi);
+                        let style = stroke_style(&gp, vp);
                         let n = [x0.len(), y0.len(), x1.len(), y1.len(), x0u.len(), y0u.len(), x1u.len(), y1u.len()]
                             .into_iter().min().unwrap_or(0);
                         let has_caps = !scap.is_empty() || !ecap.is_empty();
@@ -3225,7 +3225,7 @@ impl Scene {
                 }
                 Node::Loop { x, y, xu, yu, size, su, foot, fu, angle, width, arrow, .. } => {
                     if let Some(col) = gp.col {
-                        let style = stroke_style(&gp, vp.dpi);
+                        let style = stroke_style(&gp, vp);
                         let n = [x.len(), y.len(), xu.len(), yu.len(), size.len(), su.len(),
                                  foot.len(), fu.len(), angle.len(), width.len()].into_iter().min().unwrap_or(0);
                         let mut ends: Vec<(f32, f32, f64, f64)> = Vec::new();
@@ -3399,7 +3399,7 @@ fn fill_then_stroke<B: RenderBackend>(b: &mut B, path: &tiny_skia::Path, gp: &Gp
         b.fill_path(path, t, &resolve_paint(fill, vp), rule, clip);
     }
     if let Some(col) = gp.col {
-        let style = stroke_style(gp, vp.dpi);
+        let style = stroke_style(gp, vp);
         if style.width > 0.0 {
             b.stroke_path(path, t, col, &style, clip);
         }
@@ -3408,8 +3408,8 @@ fn fill_then_stroke<B: RenderBackend>(b: &mut B, path: &tiny_skia::Path, gp: &Gp
 
 /// Build a device-space [`StrokeStyle`] from a resolved gpar. The dash nibbles are
 /// scaled by the line width (grid's convention, so thicker lines get longer dashes).
-fn stroke_style(gp: &Gpar, dpi: f64) -> StrokeStyle {
-    let width = gp.lwd_px(dpi);
+fn stroke_style(gp: &Gpar, vp: &Vp) -> StrokeStyle {
+    let width = gp.lwd_px(vp.dpi);
     // `blank` suppresses the stroke (width 0 -> backends skip it). A dash pattern
     // scales by the line width (grid convention).
     let (width, dash) = match &gp.lty {
@@ -3417,7 +3417,14 @@ fn stroke_style(gp: &Gpar, dpi: f64) -> StrokeStyle {
         Lty::Solid => (width, Vec::new()),
         Lty::Dash(nibs) => (width, nibs.iter().map(|n| n * width).collect()),
     };
-    StrokeStyle { width, dash, cap: gp.lineend, join: gp.linejoin, miter: gp.linemitre as f32, crisp: gp.crisp }
+    // A gradient/pattern stroke resolves its geometry against the viewport exactly
+    // as a fill does, so the two cannot disagree about where the ramp sits.
+    let paint = gp.col_paint.as_ref().map(|p| resolve_paint(p, vp));
+    StrokeStyle {
+        width, dash, cap: gp.lineend, join: gp.linejoin,
+        miter: gp.linemitre as f32, crisp: gp.crisp, paint,
+        phase: gp.dash_phase as f32 * gp.lwd_px(vp.dpi),
+    }
 }
 
 /// Resolve a paint's gradient geometry through the viewport into local px.
@@ -3541,7 +3548,7 @@ fn paint_sketch<B: RenderBackend>(
         };
         match hachure_col {
             Some(c) => {
-                let mut style = stroke_style(gp, vp.dpi);
+                let mut style = stroke_style(gp, vp);
                 style.width = fill_weight.max(0.1) as f32;
                 style.dash = Vec::new();
                 for p in &s.fill_sketch {
@@ -3556,7 +3563,7 @@ fn paint_sketch<B: RenderBackend>(
         }
     }
     if let Some(col) = gp.col {
-        let style = stroke_style(gp, vp.dpi);
+        let style = stroke_style(gp, vp);
         if style.width > 0.0 {
             for p in &s.stroke {
                 b.stroke_path(p, t, col, &style, clip);
@@ -3585,7 +3592,7 @@ fn draw_sketch_polyline<B: RenderBackend>(
     }
     let o = resolve_sketch(sk, gp, vp.dpi);
     let s = crate::sketch::polyline(&pts, &o);
-    let style = stroke_style(gp, vp.dpi);
+    let style = stroke_style(gp, vp);
     if style.width > 0.0 {
         for p in &s.stroke {
             b.stroke_path(p, t, col, &style, clip);

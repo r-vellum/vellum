@@ -1,5 +1,26 @@
 # vellum (development version)
 
+* **Gradient strokes.** `vl_gpar(col = linear_gradient(...))` strokes *with* a
+  gradient — the same paint model `fill` already had, applied to the region the
+  line covers instead of the region a shape encloses. A trajectory can carry its
+  colour along itself, and it is real paint on every backend (a tiny-skia
+  shader, SVG `stroke="url(#…)"`, a krilla shading) rather than the usual
+  workaround of emitting hundreds of one-segment lines in slightly different
+  flat colours. It applies to any stroked path, outlines included, and inherits
+  from a viewport like every other stroke property.
+
+  Text and markers fall back to the gradient's first stop, because a glyph run
+  has no path to run a ramp along; a *pattern* in `col` falls back to the colour,
+  because a pattern needs cell geometry a stroke does not have.
+
+* **`vl_gpar(dash_phase = )`** sets how far into the dash pattern a line starts,
+  in multiples of `lwd` so it scales with the line width exactly as the nibbles
+  do. Aligns dashes across adjacent strokes, and animating it gives marching
+  ants. Reaches SVG as `stroke-dashoffset` and PDF as krilla's dash offset.
+
+* New example `inst/examples/strokes-paint.R`; `vignette("scene-and-paint")`
+  gains sections on stroking with a gradient and on dash phase.
+
 * **Dense paths are simplified at render resolution.** A coastline or a long
   time series carries far more vertices than the canvas has pixels to
   distinguish; vellum now drops the ones that could not have changed a pixel.

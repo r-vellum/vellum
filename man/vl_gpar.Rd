@@ -22,11 +22,16 @@ vl_gpar(
   halo_width = NULL,
   features = NULL,
   antialias = NULL,
-  crisp = NULL
+  crisp = NULL,
+  dash_phase = NULL
 )
 }
 \arguments{
-\item{col}{Stroke/text colour.}
+\item{col}{Stroke/text colour, or a gradient from \code{\link[=linear_gradient]{linear_gradient()}} /
+\code{\link[=radial_gradient]{radial_gradient()}} to \strong{stroke with a gradient} — the same paint model as
+\code{fill}, applied to the stroked region instead of the enclosed one. A
+gradient here affects stroked paths; text and markers fall back to its first
+stop, since a glyph run has no path to run a ramp along.}
 
 \item{fill}{Fill colour, or a gradient from \code{\link[=linear_gradient]{linear_gradient()}} /
 \code{\link[=radial_gradient]{radial_gradient()}}.}
@@ -87,6 +92,11 @@ one solid — the reason gridlines look muddy on screen. \code{TRUE} snaps
 horizontal and vertical runs so they land on whole pixels. Diagonals are
 unaffected (there is no grid to snap them to), and it only applies to raster
 output — a vector format has no pixel grid.}
+
+\item{dash_phase}{How far into the dash pattern a dashed line starts, as a
+multiple of \code{lwd} (so it scales with the line width exactly as the dash
+nibbles do). Use it to line up dashes across adjacent strokes, or animate it
+for marching ants. \code{NULL} (default) means 0. Ignored for a solid line.}
 }
 \value{
 A \code{gpar} object.

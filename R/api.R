@@ -1379,6 +1379,13 @@ edit_node <- function(scene, name, ...) {
   if (is.null(x)) {
     return(NULL)
   }
+  # A gradient in `col` strokes with that gradient (encoded separately, into the
+  # stroke record). Consumers that need one flat colour -- text, markers, the
+  # pick buffer -- get its first stop, which is the closest single colour the
+  # ramp has to offer.
+  if (.is_paint(x)) {
+    return(.col2rgba(.paint_first_colour(x)))
+  }
   if (length(x) != 1L) {
     cli::cli_abort("A colour must be a single value, {.code NA} (none), or {.code NULL} (inherit).")
   }
@@ -1461,7 +1468,7 @@ edit_node <- function(scene, name, ...) {
 .gp4 <- function(gp, scene = NULL) {
   list(fill = .encode_paint(gp@fill, scene), col = .rs_col_inh(gp@col),
        lwd = .rs_num_inh(gp@lwd), alpha = .rs_num_inh(gp@alpha),
-       stroke = .encode_stroke(gp))
+       stroke = .encode_stroke(gp, scene))
 }
 
 .push_vp <- function(scene, vp) {
@@ -1478,7 +1485,7 @@ edit_node <- function(scene, name, ...) {
     as.numeric(vp@xscale), as.numeric(vp@yscale), vp@angle, clip_flag,
     lrow, lcol, vp@rowspan, vp@colspan,
     .encode_paint(vp@gp@fill, scene), .rs_col_inh(vp@gp@col), .rs_num_inh(vp@gp@lwd), .rs_num_inh(vp@gp@alpha),
-    .encode_stroke(vp@gp)
+    .encode_stroke(vp@gp, scene)
   )
   # Debug capture: record this viewport's backend id, name, and node for the
   # layout-debug overlay / why_size() (only active during a debug render).

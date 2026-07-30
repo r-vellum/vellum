@@ -135,6 +135,10 @@ fn lerp_gpar(a: &PartialGpar, b: &PartialGpar, t: f64) -> PartialGpar {
         // Discrete render-quality flags: snap with the near side like lty.
         antialias: base.antialias,
         crisp: base.crisp,
+        // A stroke paint interpolates like a fill paint; the dash phase is a
+        // continuous quantity, so it tweens (which is what animates marching ants).
+        col_paint: lerp_paint_inh(&a.col_paint, &b.col_paint, t),
+        dash_phase: lerp_f64_inh(&a.dash_phase, &b.dash_phase, t),
     }
 }
 

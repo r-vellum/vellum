@@ -29,6 +29,13 @@ pub struct StrokeStyle {
     /// at a fractional coordinate otherwise straddles two rows and renders as two
     /// grey ones instead of one solid -- the reason screen gridlines look muddy.
     pub crisp: bool,
+    /// A gradient/pattern to stroke with, resolved to local px like a fill.
+    /// `None` (the overwhelmingly common case) strokes with the plain colour the
+    /// backend was handed, and every path stays exactly as it was.
+    pub paint: Option<ResolvedPaint>,
+    /// Dash phase in device px: how far into the dash pattern the line starts.
+    /// Lets adjacent dashed strokes line up, and animates as marching ants.
+    pub phase: f32,
 }
 
 thread_local! {
@@ -84,13 +91,14 @@ fn skia_stroke(s: &StrokeStyle) -> Stroke {
         miter_limit: s.miter,
         line_cap: skia_cap(s.cap),
         line_join: skia_join(s.join),
-        dash: if s.dash.is_empty() { None } else { StrokeDash::new(s.dash.clone(), 0.0) },
+        dash: if s.dash.is_empty() { None } else { StrokeDash::new(s.dash.clone(), s.phase) },
         ..Stroke::default()
     }
 }
 
 /// A fill paint with geometry resolved to viewport-local pixels (the backend's
 /// own draw transform then maps it to device space, exactly like the path).
+#[derive(Clone, Debug)]
 pub enum ResolvedPaint {
     Solid(Rgba),
     Linear { x1: f64, y1: f64, x2: f64, y2: f64, stops: Vec<Stop>, extend: Extend },
@@ -455,6 +463,8 @@ fn circles_by_path<B: RenderBackend>(
                 join: st.join,
                 miter: st.miter,
                 crisp: st.crisp,
+                paint: st.paint.clone(),
+                phase: st.phase / rr as f32,
             };
             b.stroke_path(&unit, tr, *c, &scaled, clip);
         }
@@ -809,6 +819,18 @@ fn skia_stops(stops: &[Stop]) -> Vec<tiny_skia::GradientStop> {
 
 /// Build a tiny-skia paint for a resolved fill. Gradient geometry is in local px
 /// with an identity gradient transform; `fill_path`'s ctm maps it like the path.
+/// The paint to stroke with: the style's gradient/pattern shader when it has
+/// one, otherwise the plain colour the walk resolved. A pattern stroke has no
+/// shader here (patterns borrow a pixmap and are handled inline for fills), so it
+/// falls back to the colour rather than vanishing.
+fn stroke_paint_or(stroke: &StrokeStyle, color: Rgba) -> Paint<'static> {
+    stroke
+        .paint
+        .as_ref()
+        .and_then(paint_for)
+        .unwrap_or_else(|| solid_paint(color))
+}
+
 fn paint_for(paint: &ResolvedPaint) -> Option<Paint<'static>> {
     let shader = match paint {
         ResolvedPaint::Solid(c) => return Some(solid_paint(*c)),
@@ -869,7 +891,10 @@ impl RenderBackend for RasterBackend {
         }
         let mask = self.mask_for(clip);
         let sk = skia_stroke(stroke);
-        self.target().stroke_path(path, &solid_paint(color), &sk, transform, mask.as_deref());
+        // A gradient/pattern stroke is the same shader a fill would use, applied
+        // to the stroked region instead of the enclosed one.
+        let p = stroke_paint_or(stroke, color);
+        self.target().stroke_path(path, &p, &sk, transform, mask.as_deref());
     }
 
     fn stroke_lines(&mut self, path: &Path, transform: Transform, color: Rgba, stroke: &StrokeStyle, clip: &Clip) {
@@ -885,6 +910,7 @@ impl RenderBackend for RasterBackend {
         // intersecting polyline (many outline edges crossing every scanline) or a
         // page-spanning batch of disjoint segments that is the dominant cost.
         let fast = color.a == 255
+            && stroke.paint.is_none() // a shader must see the whole path at once
             && stroke.dash.is_empty()
             && matches!(stroke.cap, LineCap::Round)
             && matches!(stroke.join, LineJoin::Round);
@@ -894,7 +920,7 @@ impl RenderBackend for RasterBackend {
         }
         let mask = self.mask_for(clip);
         let sk = skia_stroke(stroke);
-        let paint = solid_paint(color);
+        let paint = stroke_paint_or(stroke, color);
         let target = self.targets.last_mut().expect("at least the page target");
         use tiny_skia::PathSegment;
         let mut prev: Option<(f32, f32)> = None;
@@ -1573,14 +1599,24 @@ impl RenderBackend for SvgBackend {
             String::new()
         } else {
             let arr: Vec<String> = stroke.dash.iter().map(|d| d.to_string()).collect();
-            format!(" stroke-dasharray=\"{}\"", arr.join(","))
+            let off = if stroke.phase != 0.0 {
+                format!(" stroke-dashoffset=\"{}\"", stroke.phase)
+            } else {
+                String::new()
+            };
+            format!(" stroke-dasharray=\"{}\"{off}", arr.join(","))
+        };
+        // A gradient stroke reuses the fill machinery: `svg_fill` already emits the
+        // <defs> entry and returns `fill="url(#id)"`, so rewrite the attribute name.
+        let stroke_attr = match &stroke.paint {
+            Some(p) => self.svg_fill(p).replace("fill=", "stroke="),
+            None => format!("stroke=\"{}\" stroke-opacity=\"{}\"", rgb_hex(color), opacity(color)),
         };
         let element = format!(
-            "<path d=\"{}\" fill=\"none\" stroke=\"{}\" stroke-opacity=\"{}\" stroke-width=\"{}\" \
+            "<path d=\"{}\" fill=\"none\" {} stroke-width=\"{}\" \
              stroke-linecap=\"{}\" stroke-linejoin=\"{}\" stroke-miterlimit=\"{}\"{}{}/>",
             path_to_d(path),
-            rgb_hex(color),
-            opacity(color),
+            stroke_attr,
             stroke.width,
             svg_cap(stroke.cap),
             svg_join(stroke.join),
@@ -2169,6 +2205,37 @@ impl<'a, 'b> PdfBackend<'a, 'b> {
     }
 }
 
+/// The krilla paint for a gradient stroke. Gradients only: a pattern needs a
+/// tile stream built against the fill's cell geometry, which a stroke has no
+/// equivalent of, so it falls back to the plain colour.
+fn krilla_paint(paint: &ResolvedPaint) -> Option<KPaint> {
+    match paint {
+        ResolvedPaint::Linear { x1, y1, x2, y2, stops, extend } => Some(KPaint::from(KLinear {
+            x1: *x1 as f32,
+            y1: *y1 as f32,
+            x2: *x2 as f32,
+            y2: *y2 as f32,
+            transform: KTransform::identity(),
+            spread_method: krilla_spread(*extend),
+            stops: krilla_stops(stops),
+            anti_alias: true,
+        })),
+        ResolvedPaint::Radial { cx, cy, r, fx, fy, fr, stops, extend } => Some(KPaint::from(KRadial {
+            fx: *fx as f32,
+            fy: *fy as f32,
+            fr: *fr as f32,
+            cx: *cx as f32,
+            cy: *cy as f32,
+            cr: *r as f32,
+            transform: KTransform::identity(),
+            spread_method: krilla_spread(*extend),
+            stops: krilla_stops(stops),
+            anti_alias: true,
+        })),
+        ResolvedPaint::Solid(_) | ResolvedPaint::Pattern { .. } => None,
+    }
+}
+
 impl RenderBackend for PdfBackend<'_, '_> {
     fn fill_path(&mut self, path: &Path, transform: Transform, paint: &ResolvedPaint, rule: FillRule, clip: &Clip) {
         let kp = match to_kpath(path) {
@@ -2262,17 +2329,23 @@ impl RenderBackend for PdfBackend<'_, '_> {
         };
         let n = self.push_state(transform, clip);
         self.surface.set_fill(None);
+        // A gradient stroke uses the same krilla paint a fill would; `krilla_paint`
+        // returns `None` for a pattern, which falls back to the plain colour.
+        let (kpaint, kopacity) = match stroke.paint.as_ref().and_then(krilla_paint) {
+            Some(p) => (p, NormalizedF32::ONE),
+            None => (rgb::Color::new(color.r, color.g, color.b).into(), norm(color.a)),
+        };
         self.surface.set_stroke(Some(KStroke {
-            paint: rgb::Color::new(color.r, color.g, color.b).into(),
+            paint: kpaint,
             width: stroke.width,
-            opacity: norm(color.a),
+            opacity: kopacity,
             miter_limit: stroke.miter,
             line_cap: krilla_cap(stroke.cap),
             line_join: krilla_join(stroke.join),
             dash: if stroke.dash.is_empty() {
                 None
             } else {
-                Some(KStrokeDash { array: stroke.dash.clone(), offset: 0.0 })
+                Some(KStrokeDash { array: stroke.dash.clone(), offset: stroke.phase })
             },
             ..KStroke::default()
         }));
