@@ -53,8 +53,12 @@
     <li><h6 class="dropdown-header" data-toc-skip>Concepts</h6></li>
     <li><a class="dropdown-item" href="../articles/scene-and-paint.html">The scene graph and the paint model</a></li>
     <li><a class="dropdown-item" href="../articles/typography.html">Typography: halos and OpenType features</a></li>
+    <li><a class="dropdown-item" href="../articles/render-quality.html">Render quality: accessibility, crisp edges, group effects</a></li>
     <li><a class="dropdown-item" href="../articles/retained-mode.html">Asking a scene what it drew: read-back, picking, and editing</a></li>
     <li><a class="dropdown-item" href="../articles/datashading.html">Datashading: millions of points, honestly</a></li>
+    <li><hr class="dropdown-divider"></li>
+    <li><h6 class="dropdown-header" data-toc-skip>Inspecting</h6></li>
+    <li><a class="dropdown-item" href="../articles/inspecting-scenes.html">Inspecting a scene: linting, coverage, profiling</a></li>
     <li><hr class="dropdown-divider"></li>
     <li><h6 class="dropdown-header" data-toc-skip>Interop</h6></li>
     <li><a class="dropdown-item" href="../articles/coming-from-grid.html">Coming from grid</a></li>
@@ -162,7 +166,8 @@ front</td>
 <tr class="odd">
 <td><code><a href="https://rdrr.io/r/grid/gpar.html" class="external-link">gpar()</a></code></td>
 <td><code><a href="../reference/vl_gpar.html">vl_gpar()</a></code></td>
-<td>familiar fields; <code>fill</code> also accepts gradients</td>
+<td>familiar fields (including <code>cex</code>); <code>fill</code> also
+accepts gradients</td>
 </tr>
 <tr class="even">
 <td><code><a href="https://rdrr.io/r/grid/grid.layout.html" class="external-link">grid.layout()</a></code></td>
@@ -205,12 +210,68 @@ mutates the display list, <code><a href="../reference/node_names.html">edit_node
 <td>per-element identity plus resolved device-pixel bbox</td>
 </tr>
 <tr class="even">
+<td>(no counterpart)</td>
+<td><code><a href="../reference/vl_lint.html">vl_lint()</a></code></td>
+<td>static analysis: off-canvas marks, illegible text, low contrast</td>
+</tr>
+<tr class="odd">
+<td>
+<code><a href="https://rdrr.io/r/grid/grid.convert.html" class="external-link">convertWidth()</a></code> / <code><a href="https://rdrr.io/r/grid/grid.convert.html" class="external-link">convertX()</a></code>
+</td>
+<td><code><a href="../reference/vl_convert.html">vl_convert()</a></code></td>
+<td>one function; <code>axis</code> picks the extent, <code>what</code>
+a length vs a position</td>
+</tr>
+<tr class="even">
 <td>device (<code><a href="https://rdrr.io/r/grDevices/png.html" class="external-link">png()</a></code>, <code><a href="https://rdrr.io/r/grDevices/pdf.html" class="external-link">pdf()</a></code>, …)</td>
 <td><code>render(scene, path)</code></td>
 <td>the extension picks the backend</td>
 </tr>
 </tbody>
 </table>
+<div class="section level3">
+<h3 id="things-grid-has-no-equivalent-for">Things grid has no equivalent for<a class="anchor" aria-label="anchor" href="#things-grid-has-no-equivalent-for"></a>
+</h3>
+<p>A few <code><a href="../reference/vl_gpar.html">vl_gpar()</a></code> fields exist because vellum controls the
+font stack and the rasterizer directly, so there is nothing to map them
+onto in grid:</p>
+<table class="table">
+<colgroup>
+<col width="33%">
+<col width="66%">
+</colgroup>
+<thead><tr class="header">
+<th>field</th>
+<th>what it does</th>
+</tr></thead>
+<tbody>
+<tr class="odd">
+<td>
+<code>halo_col</code> / <code>halo_width</code>
+</td>
+<td>stroke the glyph outlines under the fill, so a label survives a busy
+background (see <code><a href="../articles/typography.html">vignette("typography")</a></code>)</td>
+</tr>
+<tr class="even">
+<td><code>features</code></td>
+<td>OpenType feature tags — tabular figures, small caps, ligature and
+kerning control</td>
+</tr>
+<tr class="odd">
+<td><code>crisp</code></td>
+<td>snap axis-parallel strokes to the pixel grid, so gridlines are solid
+rather than two grey rows</td>
+</tr>
+<tr class="even">
+<td><code>antialias</code></td>
+<td>hard pixel edges, for pixel art and seamless heatmap cells</td>
+</tr>
+</tbody>
+</table>
+<p>Packages built on grid emulate the first of these by drawing the
+label eight times at small offsets; the rest have no workaround at
+all.</p>
+</div>
 </div>
 <div class="section level2">
 <h2 id="side-by-side">Side by side<a class="anchor" aria-label="anchor" href="#side-by-side"></a>

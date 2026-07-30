@@ -53,8 +53,12 @@
     <li><h6 class="dropdown-header" data-toc-skip>Concepts</h6></li>
     <li><a class="dropdown-item" href="../articles/scene-and-paint.html">The scene graph and the paint model</a></li>
     <li><a class="dropdown-item" href="../articles/typography.html">Typography: halos and OpenType features</a></li>
+    <li><a class="dropdown-item" href="../articles/render-quality.html">Render quality: accessibility, crisp edges, group effects</a></li>
     <li><a class="dropdown-item" href="../articles/retained-mode.html">Asking a scene what it drew: read-back, picking, and editing</a></li>
     <li><a class="dropdown-item" href="../articles/datashading.html">Datashading: millions of points, honestly</a></li>
+    <li><hr class="dropdown-divider"></li>
+    <li><h6 class="dropdown-header" data-toc-skip>Inspecting</h6></li>
+    <li><a class="dropdown-item" href="../articles/inspecting-scenes.html">Inspecting a scene: linting, coverage, profiling</a></li>
     <li><hr class="dropdown-divider"></li>
     <li><h6 class="dropdown-header" data-toc-skip>Interop</h6></li>
     <li><a class="dropdown-item" href="../articles/coming-from-grid.html">Coming from grid</a></li>
@@ -101,9 +105,12 @@
 grammar of graphics <em>into</em> a vellum scene, and <a href="https://r-vellum.github.io/vellumwidget/">vellumwidget</a> turns a
 rendered scene into an interactive HTML widget. Both bind to a narrow
 seam: <code><a href="../reference/scene_model.html">scene_model()</a></code>, <code><a href="../reference/scene_svg.html">scene_svg()</a></code>, and the
-per-element metadata that rides on grobs. Because the three packages are
-version-locked and co-released, a change to that seam can break the
-layers above it silently.</p>
+per-element metadata that rides on grobs. Above the SVG-comfortable
+element count a host switches to a rasterised base layer, and takes
+those pixels from <code><a href="../reference/scene_png.html">scene_png()</a></code> (raw bytes, no temp file) —
+part of the same seam. Because the three packages are version-locked and
+co-released, a change to that seam can break the layers above it
+silently.</p>
 <p><strong>This article is the authoritative description of that
 seam.</strong> If you are building on vellum, or changing vellum’s
 output, this is the contract to hold to. (It supersedes the internal
@@ -116,6 +123,7 @@ only as history.)</p>
                                                         │
   vellum  ──renders──▶  scene_svg()   (data-key, data-vellum-*, role attrs)
                         scene_model()  (per-element table: identity + bbox)
+                        scene_png()    (raw PNG bytes, for the raster-base mode)
                                                         │
   vellumwidget  ──reads scene_svg() + scene_model()──▶  hover / select / brush / link</code></pre>
 <p>Everything below the grammar is <em>pure metadata</em>: a static

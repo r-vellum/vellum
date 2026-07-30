@@ -138,6 +138,30 @@ The same scene value renders to all three formats with consistent
 geometry, and raster and PDF output is byte-stable, so it is
 reproducible and snapshot-testable.
 
+[`render()`](https://r-vellum.github.io/vellum/reference/vl_scene.md)
+takes two arguments worth knowing about. `scale` renders at a multiple
+of the device pixels while keeping the same physical size — the retina
+idiom — so nothing about the layout or the relative size of text
+changes. `cvd` simulates a colour-vision deficiency, which is covered in
+[`vignette("render-quality")`](https://r-vellum.github.io/vellum/articles/render-quality.md).
+
+``` r
+
+render(s, "out@2x.png", scale = 2) # twice the pixels, same physical size
+render(s, "check.png", cvd = "deuteranopia") # as a red/green-blind reader sees it
+```
+
+You do not have to go through a file. Every format is also available in
+memory, which is what a web handler or an HTML widget wants:
+
+``` r
+
+scene_png(s) # raw vector: the encoded PNG
+scene_pdf(s) # raw vector: the encoded PDF
+scene_svg(s) # character: the SVG document
+scene_raster(s) # integer array: the pixels themselves
+```
+
 ## Where to go next
 
 - [`vignette("scene-and-paint")`](https://r-vellum.github.io/vellum/articles/scene-and-paint.md):
@@ -149,6 +173,18 @@ reproducible and snapshot-testable.
   pick a node under a point with
   [`hit_test()`](https://r-vellum.github.io/vellum/reference/hit_test.md),
   and edit nodes by name.
+- [`vignette("inspecting-scenes")`](https://r-vellum.github.io/vellum/articles/inspecting-scenes.md):
+  [`vl_lint()`](https://r-vellum.github.io/vellum/reference/vl_lint.md)
+  to catch likely mistakes,
+  [`scene_stats()`](https://r-vellum.github.io/vellum/reference/scene_stats.md)
+  for coverage and crowding,
+  [`profile_render()`](https://r-vellum.github.io/vellum/reference/profile_render.md)
+  for where the time goes.
+- [`vignette("render-quality")`](https://r-vellum.github.io/vellum/articles/render-quality.md):
+  colour-vision simulation, crisp gridlines, and group blur/shadow
+  effects.
+- [`vignette("typography")`](https://r-vellum.github.io/vellum/articles/typography.md):
+  text halos and OpenType features.
 - [`vignette("coming-from-grid")`](https://r-vellum.github.io/vellum/articles/coming-from-grid.md):
   a translation guide if you already know grid.
 - [`vignette("grid-interop")`](https://r-vellum.github.io/vellum/articles/grid-interop.md):

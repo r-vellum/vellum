@@ -5,12 +5,14 @@ articles:
   coming-from-grid: coming-from-grid.html
   datashading: datashading.html
   grid-interop: grid-interop.html
+  inspecting-scenes: inspecting-scenes.html
+  render-quality: render-quality.html
   retained-mode: retained-mode.html
   scene-and-paint: scene-and-paint.html
   scene-contract: scene-contract.html
   typography: typography.html
   vellum: vellum.html
-last_built: 2026-07-30T19:45Z
+last_built: 2026-07-30T20:08Z
 urls:
   reference: https://r-vellum.github.io/vellum/reference
   article: https://r-vellum.github.io/vellum/articles

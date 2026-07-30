@@ -15,14 +15,33 @@ places where vellum works differently on purpose.
 | [`pushViewport()`](https://rdrr.io/r/grid/viewports.html) / [`popViewport()`](https://rdrr.io/r/grid/viewports.html) | [`push()`](https://r-vellum.github.io/vellum/reference/vl_scene.md) / [`pop()`](https://r-vellum.github.io/vellum/reference/vl_scene.md) | functional: they take and return a scene, no global stack |
 | [`grid.rect()`](https://rdrr.io/r/grid/grid.rect.html), [`grid.circle()`](https://rdrr.io/r/grid/grid.circle.html), … | [`rect_grob()`](https://r-vellum.github.io/vellum/reference/grob.md), [`circle_grob()`](https://r-vellum.github.io/vellum/reference/grob.md), … plus [`draw()`](https://r-vellum.github.io/vellum/reference/vl_scene.md) | the constructor builds a value; [`draw()`](https://r-vellum.github.io/vellum/reference/vl_scene.md) adds it |
 | [`rectGrob()`](https://rdrr.io/r/grid/grid.rect.html), [`gTree()`](https://rdrr.io/r/grid/grid.grob.html) | [`rect_grob()`](https://r-vellum.github.io/vellum/reference/grob.md), the scene tree | grobs are immutable S7 values |
-| [`gpar()`](https://rdrr.io/r/grid/gpar.html) | [`vl_gpar()`](https://r-vellum.github.io/vellum/reference/vl_gpar.md) | familiar fields; `fill` also accepts gradients |
+| [`gpar()`](https://rdrr.io/r/grid/gpar.html) | [`vl_gpar()`](https://r-vellum.github.io/vellum/reference/vl_gpar.md) | familiar fields (including `cex`); `fill` also accepts gradients |
 | [`grid.layout()`](https://rdrr.io/r/grid/grid.layout.html) | [`grid_layout()`](https://r-vellum.github.io/vellum/reference/vl_viewport.md) | flexible `"null"` tracks work the same |
 | [`grid.ls()`](https://rdrr.io/r/grid/grid.ls.html) / [`grid.get()`](https://rdrr.io/r/grid/grid.get.html) | [`node_names()`](https://r-vellum.github.io/vellum/reference/node_names.md) / [`get_node()`](https://r-vellum.github.io/vellum/reference/node_names.md) | list and read nodes by `name` |
 | [`grid.edit()`](https://rdrr.io/r/grid/grid.edit.html) / [`editGrob()`](https://rdrr.io/r/grid/grid.edit.html) | [`edit_node()`](https://r-vellum.github.io/vellum/reference/node_names.md) | [`editGrob()`](https://rdrr.io/r/grid/grid.edit.html) also copies; [`grid.edit()`](https://rdrr.io/r/grid/grid.edit.html) mutates the display list, [`edit_node()`](https://r-vellum.github.io/vellum/reference/node_names.md) never does |
 | [`grid.grabExpr()`](https://rdrr.io/r/grid/grid.grab.html) / display list | the retained scene | the tree is the model, not something you recover from a device |
 | [`grid.locator()`](https://rdrr.io/r/grid/grid.locator.html) | [`hit_test()`](https://r-vellum.github.io/vellum/reference/hit_test.md) | picking from a pick-buffer, not one interactive click |
 | (no counterpart) | [`scene_model()`](https://r-vellum.github.io/vellum/reference/scene_model.md) | per-element identity plus resolved device-pixel bbox |
+| (no counterpart) | [`vl_lint()`](https://r-vellum.github.io/vellum/reference/vl_lint.md) | static analysis: off-canvas marks, illegible text, low contrast |
+| [`convertWidth()`](https://rdrr.io/r/grid/grid.convert.html) / [`convertX()`](https://rdrr.io/r/grid/grid.convert.html) | [`vl_convert()`](https://r-vellum.github.io/vellum/reference/vl_convert.md) | one function; `axis` picks the extent, `what` a length vs a position |
 | device ([`png()`](https://rdrr.io/r/grDevices/png.html), [`pdf()`](https://rdrr.io/r/grDevices/pdf.html), …) | `render(scene, path)` | the extension picks the backend |
+
+### Things grid has no equivalent for
+
+A few
+[`vl_gpar()`](https://r-vellum.github.io/vellum/reference/vl_gpar.md)
+fields exist because vellum controls the font stack and the rasterizer
+directly, so there is nothing to map them onto in grid:
+
+| field | what it does |
+|----|----|
+| `halo_col` / `halo_width` | stroke the glyph outlines under the fill, so a label survives a busy background (see [`vignette("typography")`](https://r-vellum.github.io/vellum/articles/typography.md)) |
+| `features` | OpenType feature tags — tabular figures, small caps, ligature and kerning control |
+| `crisp` | snap axis-parallel strokes to the pixel grid, so gridlines are solid rather than two grey rows |
+| `antialias` | hard pixel edges, for pixel art and seamless heatmap cells |
+
+Packages built on grid emulate the first of these by drawing the label
+eight times at small offsets; the rest have no workaround at all.
 
 ## Side by side
 

@@ -8,7 +8,11 @@ rendered scene into an interactive HTML widget. Both bind to a narrow
 seam:
 [`scene_model()`](https://r-vellum.github.io/vellum/reference/scene_model.md),
 [`scene_svg()`](https://r-vellum.github.io/vellum/reference/scene_svg.md),
-and the per-element metadata that rides on grobs. Because the three
+and the per-element metadata that rides on grobs. Above the
+SVG-comfortable element count a host switches to a rasterised base
+layer, and takes those pixels from
+[`scene_png()`](https://r-vellum.github.io/vellum/reference/scene_png.md)
+(raw bytes, no temp file) — part of the same seam. Because the three
 packages are version-locked and co-released, a change to that seam can
 break the layers above it silently.
 
@@ -23,6 +27,7 @@ contract to hold to. (It supersedes the internal design note
                                                             │
       vellum  ──renders──▶  scene_svg()   (data-key, data-vellum-*, role attrs)
                             scene_model()  (per-element table: identity + bbox)
+                            scene_png()    (raw PNG bytes, for the raster-base mode)
                                                             │
       vellumwidget  ──reads scene_svg() + scene_model()──▶  hover / select / brush / link
 
