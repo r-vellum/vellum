@@ -243,9 +243,15 @@ print.vellum_lint <- function(x, ...) {
         c((txt$x0[i] + txt$x1[i]) / 2, txt$y1[i] + pad)
       )
       lums <- vapply(pts, function(p) .lint_luminance(ctx$pixel(p[1], p[2])[1:3]), 0)
-      # Worst case of the four: a label only needs one bad side to be hard work.
+      # The SECOND-worst of the four sides. Taking the outright worst (`min`)
+      # flagged any label a single 2 px probe happened to graze against a nearby
+      # tick, gridline or axis rule -- so ordinary dark axis text on white read
+      # as ~1:1 because one probe landed on the black axis line. Requiring at
+      # least two low-contrast sides ignores that incidental adjacent ink while
+      # still catching a label genuinely sitting on a low-contrast field (all
+      # sides bad) or straddling a dark region (two sides bad).
       fgl <- .lint_luminance(fg[1:3])
-      min(vapply(lums, function(bl) .lint_contrast(fgl, bl), 0))
+      sort(vapply(lums, function(bl) .lint_contrast(fgl, bl), 0))[2L]
     }, 0)
     bad <- ratios < ctx$min_contrast
     hits <- txt[bad, , drop = FALSE]

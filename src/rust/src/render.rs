@@ -2513,7 +2513,15 @@ pub fn pdf_tag(meta: &NodeMeta) -> krilla::tagging::TagKind {
 /// which is how PDF says "skip this": a screen reader announcing every gridline
 /// is worse than one announcing none.
 fn is_decorative(meta: &NodeMeta) -> bool {
-    matches!(meta.role.as_str(), "presentation" | "none" | "decorative")
+    // `grid` is the role a downstream (e.g. vellumplot gridlines) sets so an
+    // interactive SVG host can find and hide the gridlines; it is also, plainly,
+    // decorative furniture that a screen reader must not read. Treating it as
+    // decorative here skips it in the PDF structure tree without disturbing the
+    // SVG role the host relies on.
+    matches!(
+        meta.role.as_str(),
+        "presentation" | "none" | "decorative" | "grid"
+    )
 }
 
 impl RenderBackend for PdfBackend<'_, '_> {
