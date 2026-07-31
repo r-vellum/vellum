@@ -83,6 +83,13 @@ vapply(c("none", "protanopia", "deuteranopia", "tritanopia", "achromatopsia"),
 
 `achromatopsia` doubles as a greyscale-printing check.
 
+**And when the simulation says your palette fails, the fix is texture.**
+Encoding a category by hatch angle as well as hue survives any of these
+simulations, and greyscale printing too — see
+[`vl_hatch()`](https://r-vellum.github.io/vellum/reference/vl_hatch.md)
+in
+[`vignette("scene-and-paint")`](https://r-vellum.github.io/vellum/articles/scene-and-paint.md).
+
 The simulation uses the Machado et al. (2009) matrices applied in
 **linear light** — the common shortcut of applying them in sRGB shifts
 lightness as well as hue. It is a raster post-pass: vector formats have

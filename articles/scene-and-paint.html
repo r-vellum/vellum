@@ -263,13 +263,52 @@ cell whose size you choose.</p>
 <p><img src="scene-and-paint_files/figure-html/pattern-1.png" class="r-plt" alt="" width="384"></p>
 </div>
 <div class="section level3">
+<h3 id="hatching">Hatching<a class="anchor" aria-label="anchor" href="#hatching"></a>
+</h3>
+<p><code><a href="../reference/vl_hatch.html">vl_hatch()</a></code> fills a shape with ruled lines. Unlike
+<code><a href="../reference/vl_pattern.html">vl_pattern()</a></code>, which rasterises a tile, a hatch is
+<strong>geometry</strong> — it stays crisp at any zoom, prints
+correctly, and is real <code>&lt;path&gt;</code> data in SVG rather than
+an embedded image.</p>
+<div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">pal</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"#D62728"</span>, <span class="st">"#2CA02C"</span>, <span class="st">"#1F77B4"</span>, <span class="st">"#FF7F0E"</span><span class="op">)</span></span>
+<span><span class="va">angles</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0</span>, <span class="fl">45</span>, <span class="fl">90</span>, <span class="fl">135</span><span class="op">)</span></span>
+<span><span class="va">s</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/vl_scene.html">vl_scene</a></span><span class="op">(</span><span class="fl">6</span>, <span class="fl">1.8</span><span class="op">)</span></span>
+<span><span class="kw">for</span> <span class="op">(</span><span class="va">i</span> <span class="kw">in</span> <span class="fl">1</span><span class="op">:</span><span class="fl">4</span><span class="op">)</span> <span class="op">{</span></span>
+<span>  <span class="va">s</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/vl_scene.html">draw</a></span><span class="op">(</span><span class="va">s</span>, <span class="fu"><a href="../reference/grob.html">rect_grob</a></span><span class="op">(</span></span>
+<span>    x <span class="op">=</span> <span class="op">(</span><span class="va">i</span> <span class="op">-</span> <span class="fl">0.5</span><span class="op">)</span> <span class="op">/</span> <span class="fl">4</span>, width <span class="op">=</span> <span class="fl">0.2</span>, height <span class="op">=</span> <span class="fl">0.7</span>,</span>
+<span>    gp <span class="op">=</span> <span class="fu"><a href="../reference/vl_gpar.html">vl_gpar</a></span><span class="op">(</span>fill <span class="op">=</span> <span class="fu"><a href="../reference/vl_hatch.html">vl_hatch</a></span><span class="op">(</span>angle <span class="op">=</span> <span class="va">angles</span><span class="op">[</span><span class="va">i</span><span class="op">]</span>, spacing <span class="op">=</span> <span class="fl">3.2</span>, col <span class="op">=</span> <span class="va">pal</span><span class="op">[</span><span class="va">i</span><span class="op">]</span>,</span>
+<span>                                 bg <span class="op">=</span> <span class="st">"white"</span><span class="op">)</span>,</span>
+<span>                 col <span class="op">=</span> <span class="st">"grey25"</span>, lwd <span class="op">=</span> <span class="fl">0.8</span><span class="op">)</span></span>
+<span>  <span class="op">)</span><span class="op">)</span></span>
+<span><span class="op">}</span></span>
+<span><span class="fu"><a href="../reference/display.html">display</a></span><span class="op">(</span><span class="va">s</span><span class="op">)</span></span></code></pre></div>
+<p><img src="scene-and-paint_files/figure-html/unnamed-chunk-2-1.png" class="r-plt" alt="" width="576"></p>
+<p><code>spacing</code> and <code>width</code> are in points, so a hatch
+keeps its proportions at any dpi — the same convention
+<code>fontsize</code> and the text halo use.</p>
+<p><strong>The reason to reach for it</strong> is that a hatch survives
+being seen without colour. A categorical encoding that fails for a
+red/green-blind reader — which <code>render(cvd = )</code> will show you
+and <code><a href="../reference/vl_lint.html">vl_lint()</a></code> will flag — is fixed by encoding with texture
+<em>as well as</em> hue. Distinct angles (0, 45, 90, 135) read as
+distinct categories whatever happens to the colours. See
+<code><a href="../articles/render-quality.html">vignette("render-quality")</a></code> for the simulation, and
+<code><a href="../articles/inspecting-scenes.html">vignette("inspecting-scenes")</a></code> for the linter.</p>
+<p>Hatching is expanded in the scene walk into stroked spans, computed
+by scanline crossing against the shape, so no backend needs a hatch
+primitive of its own and only the spans actually inside the shape are
+emitted. The trade is that SVG gets one path of spans rather than a
+<code>&lt;pattern&gt;</code> reference.</p>
+</div>
+<div class="section level3">
 <h3 id="masks-and-group-opacity">Masks and group opacity<a class="anchor" aria-label="anchor" href="#masks-and-group-opacity"></a>
 </h3>
 <p>A mask is a grob whose coverage modulates the visibility of a
 viewport’s contents. Wrap it with <code><a href="../reference/as_mask.html">as_mask()</a></code> and pass it to
 <code>vl_viewport(mask = ...)</code>. Here a linear gradient is clipped
 to a circular alpha mask.</p>
-<div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/vl_scene.html">vl_scene</a></span><span class="op">(</span><span class="fl">4</span>, <span class="fl">2.4</span>, bg <span class="op">=</span> <span class="st">"white"</span><span class="op">)</span> <span class="op">|&gt;</span></span>
 <span>  <span class="fu"><a href="../reference/vl_scene.html">push</a></span><span class="op">(</span><span class="fu"><a href="../reference/vl_viewport.html">vl_viewport</a></span><span class="op">(</span></span>
 <span>    mask <span class="op">=</span> <span class="fu"><a href="../reference/as_mask.html">as_mask</a></span><span class="op">(</span><span class="fu"><a href="../reference/grob.html">circle_grob</a></span><span class="op">(</span>r <span class="op">=</span> <span class="fl">0.42</span>, gp <span class="op">=</span> <span class="fu"><a href="../reference/vl_gpar.html">vl_gpar</a></span><span class="op">(</span>fill <span class="op">=</span> <span class="st">"white"</span>, col <span class="op">=</span> <span class="cn">NA</span><span class="op">)</span><span class="op">)</span><span class="op">)</span></span>
@@ -291,7 +330,7 @@ exactly the kind of control a grammar layer needs from its backend.</p>
 difference is only <em>where</em> they apply: a fill paints the region a
 shape encloses, a stroke paints the region the line covers. So a
 trajectory can carry its colour along itself:</p>
-<div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">t</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/seq.html" class="external-link">seq</a></span><span class="op">(</span><span class="fl">0</span>, <span class="fl">1</span>, length.out <span class="op">=</span> <span class="fl">120</span><span class="op">)</span></span>
 <span><span class="fu"><a href="../reference/display.html">display</a></span><span class="op">(</span></span>
 <span>  <span class="fu"><a href="../reference/vl_scene.html">vl_scene</a></span><span class="op">(</span><span class="fl">6</span>, <span class="fl">1.6</span><span class="op">)</span> <span class="op">|&gt;</span></span>
@@ -299,7 +338,7 @@ trajectory can carry its colour along itself:</p>
 <span>                    gp <span class="op">=</span> <span class="fu"><a href="../reference/vl_gpar.html">vl_gpar</a></span><span class="op">(</span>col <span class="op">=</span> <span class="fu"><a href="../reference/gradients.html">linear_gradient</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"#F97316"</span>, <span class="st">"#FACC15"</span>, <span class="st">"#22C55E"</span><span class="op">)</span><span class="op">)</span>,</span>
 <span>                                 lwd <span class="op">=</span> <span class="fl">9</span><span class="op">)</span><span class="op">)</span><span class="op">)</span></span>
 <span><span class="op">)</span></span></code></pre></div>
-<p><img src="scene-and-paint_files/figure-html/unnamed-chunk-2-1.png" class="r-plt" alt="" width="576"></p>
+<p><img src="scene-and-paint_files/figure-html/unnamed-chunk-3-1.png" class="r-plt" alt="" width="576"></p>
 <p>That is real paint on every backend — SVG emits
 <code>stroke="url(#…)"</code>, PDF a proper shading — not a rasterised
 approximation, and not the usual workaround of emitting hundreds of
@@ -317,14 +356,14 @@ drawing.</p>
 begins, in multiples of <code>lwd</code> — so it scales with the line
 width exactly as the dash nibbles do. Stepping it across a set of rules
 makes the dashes walk, which is also how you animate marching ants.</p>
-<div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb10"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">s</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/vl_scene.html">vl_scene</a></span><span class="op">(</span><span class="fl">6</span>, <span class="fl">1.4</span><span class="op">)</span></span>
 <span><span class="kw">for</span> <span class="op">(</span><span class="va">i</span> <span class="kw">in</span> <span class="fl">0</span><span class="op">:</span><span class="fl">3</span><span class="op">)</span> <span class="op">{</span></span>
 <span>  <span class="va">s</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/vl_scene.html">draw</a></span><span class="op">(</span><span class="va">s</span>, <span class="fu"><a href="../reference/grob.html">segments_grob</a></span><span class="op">(</span><span class="fl">0.04</span>, <span class="fl">0.85</span> <span class="op">-</span> <span class="va">i</span> <span class="op">*</span> <span class="fl">0.22</span>, <span class="fl">0.96</span>, <span class="fl">0.85</span> <span class="op">-</span> <span class="va">i</span> <span class="op">*</span> <span class="fl">0.22</span>,</span>
 <span>    gp <span class="op">=</span> <span class="fu"><a href="../reference/vl_gpar.html">vl_gpar</a></span><span class="op">(</span>col <span class="op">=</span> <span class="st">"grey15"</span>, lwd <span class="op">=</span> <span class="fl">5</span>, lty <span class="op">=</span> <span class="st">"dashed"</span>, dash_phase <span class="op">=</span> <span class="va">i</span> <span class="op">*</span> <span class="fl">1.5</span><span class="op">)</span><span class="op">)</span><span class="op">)</span></span>
 <span><span class="op">}</span></span>
 <span><span class="fu"><a href="../reference/display.html">display</a></span><span class="op">(</span><span class="va">s</span><span class="op">)</span></span></code></pre></div>
-<p><img src="scene-and-paint_files/figure-html/unnamed-chunk-3-1.png" class="r-plt" alt="" width="576"></p>
+<p><img src="scene-and-paint_files/figure-html/unnamed-chunk-4-1.png" class="r-plt" alt="" width="576"></p>
 </div>
 </div>
 <div class="section level2">
@@ -336,7 +375,7 @@ a <code><a href="../reference/grob.html">lines_grob()</a></code> has nothing to 
 <code><a href="../reference/stroke_to_path.html">stroke_to_path()</a></code> converts one into the other — it returns
 the region the stroke would have inked, as a <code><a href="../reference/grob.html">path_grob()</a></code>
 you can fill like any other:</p>
-<div class="sourceCode" id="cb10"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb11"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">zig</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/grob.html">lines_grob</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.08</span>, <span class="fl">0.3</span>, <span class="fl">0.52</span>, <span class="fl">0.74</span>, <span class="fl">0.94</span><span class="op">)</span>,</span>
 <span>                  <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.30</span>, <span class="fl">0.78</span>, <span class="fl">0.28</span>, <span class="fl">0.76</span>, <span class="fl">0.34</span><span class="op">)</span>,</span>
 <span>                  gp <span class="op">=</span> <span class="fu"><a href="../reference/vl_gpar.html">vl_gpar</a></span><span class="op">(</span>col <span class="op">=</span> <span class="st">"steelblue"</span>, lwd <span class="op">=</span> <span class="fl">16</span><span class="op">)</span><span class="op">)</span></span>
@@ -349,7 +388,7 @@ you can fill like any other:</p>
 <span>      fill <span class="op">=</span> <span class="fu"><a href="../reference/gradients.html">linear_gradient</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"#F97316"</span>, <span class="st">"#FACC15"</span>, <span class="st">"#22C55E"</span><span class="op">)</span><span class="op">)</span>, col <span class="op">=</span> <span class="cn">NA</span></span>
 <span>    <span class="op">)</span><span class="op">)</span><span class="op">)</span></span>
 <span><span class="op">)</span></span></code></pre></div>
-<p><img src="scene-and-paint_files/figure-html/unnamed-chunk-4-1.png" class="r-plt" alt="" width="576"></p>
+<p><img src="scene-and-paint_files/figure-html/unnamed-chunk-5-1.png" class="r-plt" alt="" width="576"></p>
 <p>The expansion uses the same stroker the rasterizer uses, so the
 outline is exactly the region that would have been inked rather than an
 approximation of it. The same conversion is what you want for a cutting
@@ -394,9 +433,9 @@ is relative to the viewport, <code>"native"</code> follows the data
 scales, and <code>"mm"</code> and friends are absolute.</li>
 <li>
 <code>vl_gpar(fill = )</code> <strong>and
-<code>vl_gpar(col = )</code></strong> accept gradients and patterns, and
-<code><a href="../reference/vl_viewport.html">vl_viewport()</a></code> accepts masks, group opacity, and blend
-modes, all consistent across backends.</li>
+<code>vl_gpar(col = )</code></strong> accept gradients, patterns and
+hatches, and <code><a href="../reference/vl_viewport.html">vl_viewport()</a></code> accepts masks, group opacity,
+and blend modes, all consistent across backends.</li>
 <li>
 <code><a href="../reference/stroke_to_path.html">stroke_to_path()</a></code> turns a stroke into a fillable region,
 so a line can carry a gradient; dense paths are simplified at render

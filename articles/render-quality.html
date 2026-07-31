@@ -162,6 +162,10 @@ separability rather than eyeball it:</p>
 <span><span class="co">#&gt;          none    protanopia  deuteranopia    tritanopia achromatopsia </span></span>
 <span><span class="co">#&gt;           295           136            48           485            84</span></span></code></pre></div>
 <p><code>achromatopsia</code> doubles as a greyscale-printing check.</p>
+<p><strong>And when the simulation says your palette fails, the fix is
+texture.</strong> Encoding a category by hatch angle as well as hue
+survives any of these simulations, and greyscale printing too — see
+<code><a href="../reference/vl_hatch.html">vl_hatch()</a></code> in <code><a href="../articles/scene-and-paint.html">vignette("scene-and-paint")</a></code>.</p>
 <p>The simulation uses the Machado et al. (2009) matrices applied in
 <strong>linear light</strong> — the common shortcut of applying them in
 sRGB shifts lightness as well as hue. It is a raster post-pass: vector

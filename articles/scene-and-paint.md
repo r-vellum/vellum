@@ -186,6 +186,54 @@ vl_scene(4, 2.4, bg = "white") |>
 
 ![](scene-and-paint_files/figure-html/pattern-1.png)
 
+### Hatching
+
+[`vl_hatch()`](https://r-vellum.github.io/vellum/reference/vl_hatch.md)
+fills a shape with ruled lines. Unlike
+[`vl_pattern()`](https://r-vellum.github.io/vellum/reference/vl_pattern.md),
+which rasterises a tile, a hatch is **geometry** — it stays crisp at any
+zoom, prints correctly, and is real `<path>` data in SVG rather than an
+embedded image.
+
+``` r
+
+pal <- c("#D62728", "#2CA02C", "#1F77B4", "#FF7F0E")
+angles <- c(0, 45, 90, 135)
+s <- vl_scene(6, 1.8)
+for (i in 1:4) {
+  s <- draw(s, rect_grob(
+    x = (i - 0.5) / 4, width = 0.2, height = 0.7,
+    gp = vl_gpar(fill = vl_hatch(angle = angles[i], spacing = 3.2, col = pal[i],
+                                 bg = "white"),
+                 col = "grey25", lwd = 0.8)
+  ))
+}
+display(s)
+```
+
+![](scene-and-paint_files/figure-html/unnamed-chunk-2-1.png)
+
+`spacing` and `width` are in points, so a hatch keeps its proportions at
+any dpi — the same convention `fontsize` and the text halo use.
+
+**The reason to reach for it** is that a hatch survives being seen
+without colour. A categorical encoding that fails for a red/green-blind
+reader — which `render(cvd = )` will show you and
+[`vl_lint()`](https://r-vellum.github.io/vellum/reference/vl_lint.md)
+will flag — is fixed by encoding with texture *as well as* hue. Distinct
+angles (0, 45, 90, 135) read as distinct categories whatever happens to
+the colours. See
+[`vignette("render-quality")`](https://r-vellum.github.io/vellum/articles/render-quality.md)
+for the simulation, and
+[`vignette("inspecting-scenes")`](https://r-vellum.github.io/vellum/articles/inspecting-scenes.md)
+for the linter.
+
+Hatching is expanded in the scene walk into stroked spans, computed by
+scanline crossing against the shape, so no backend needs a hatch
+primitive of its own and only the spans actually inside the shape are
+emitted. The trade is that SVG gets one path of spans rather than a
+`<pattern>` reference.
+
 ### Masks and group opacity
 
 A mask is a grob whose coverage modulates the visibility of a viewport’s
@@ -231,7 +279,7 @@ display(
 )
 ```
 
-![](scene-and-paint_files/figure-html/unnamed-chunk-2-1.png)
+![](scene-and-paint_files/figure-html/unnamed-chunk-3-1.png)
 
 That is real paint on every backend — SVG emits `stroke="url(#…)"`, PDF
 a proper shading — not a rasterised approximation, and not the usual
@@ -260,7 +308,7 @@ for (i in 0:3) {
 display(s)
 ```
 
-![](scene-and-paint_files/figure-html/unnamed-chunk-3-1.png)
+![](scene-and-paint_files/figure-html/unnamed-chunk-4-1.png)
 
 ## Filling a line
 
@@ -290,7 +338,7 @@ display(
 )
 ```
 
-![](scene-and-paint_files/figure-html/unnamed-chunk-4-1.png)
+![](scene-and-paint_files/figure-html/unnamed-chunk-5-1.png)
 
 The expansion uses the same stroker the rasterizer uses, so the outline
 is exactly the region that would have been inked rather than an
@@ -337,8 +385,8 @@ byte-identical.
   vectors express geometry; `"npc"` is relative to the viewport,
   `"native"` follows the data scales, and `"mm"` and friends are
   absolute.
-- `vl_gpar(fill = )` **and `vl_gpar(col = )`** accept gradients and
-  patterns, and
+- `vl_gpar(fill = )` **and `vl_gpar(col = )`** accept gradients,
+  patterns and hatches, and
   [`vl_viewport()`](https://r-vellum.github.io/vellum/reference/vl_viewport.md)
   accepts masks, group opacity, and blend modes, all consistent across
   backends.

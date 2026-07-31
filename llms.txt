@@ -380,6 +380,8 @@ masks, reusable styles, and hand-drawn rendering.
   : Gradient fills
 - [`vl_pattern()`](https://r-vellum.github.io/vellum/reference/vl_pattern.md)
   : Tiling-pattern fills
+- [`vl_hatch()`](https://r-vellum.github.io/vellum/reference/vl_hatch.md)
+  : Hatch fill
 - [`as_mask()`](https://r-vellum.github.io/vellum/reference/as_mask.md)
   : Masks
 - [`vl_shadow()`](https://r-vellum.github.io/vellum/reference/vl_shadow.md)
