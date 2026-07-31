@@ -36,7 +36,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">vellum</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.6.2</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.6.3</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -102,7 +102,7 @@
       <img src="../logo.png" class="logo" alt=""><h1>Inspecting a scene: linting, coverage, profiling</h1>
             
       
-      <small class="dont-index">Source: <a href="https://github.com/r-vellum/vellum/blob/v0.6.2/vignettes/inspecting-scenes.Rmd" class="external-link"><code>vignettes/inspecting-scenes.Rmd</code></a></small>
+      <small class="dont-index">Source: <a href="https://github.com/r-vellum/vellum/blob/main/vignettes/inspecting-scenes.Rmd" class="external-link"><code>vignettes/inspecting-scenes.Rmd</code></a></small>
       <div class="d-none name"><code>inspecting-scenes.Rmd</code></div>
     </div>
 
@@ -277,14 +277,14 @@ unkeyed lines/polygons contribute to <code>ink</code> but not to
 <span></span>
 <span><span class="fu"><a href="../reference/profile_render.html">profile_render</a></span><span class="op">(</span><span class="va">heavy</span>, reps <span class="op">=</span> <span class="fl">1</span><span class="op">)</span></span>
 <span><span class="co">#&gt; <span style="font-weight: bold;">Phases</span> (median of the timed reps):</span></span>
-<span><span class="co">#&gt; <span style="color: #00BBBB;">•</span> build 0.000 s (constructing the R value)</span></span>
-<span><span class="co">#&gt; <span style="color: #00BBBB;">•</span> compile 0.019 s (R -&gt; Rust replay, incl. text shaping)</span></span>
-<span><span class="co">#&gt; <span style="color: #00BBBB;">•</span> raster 0.150 s (drawing)</span></span>
+<span><span class="co">#&gt; <span style="color: #00BBBB;">•</span> build 0.001 s (constructing the R value)</span></span>
+<span><span class="co">#&gt; <span style="color: #00BBBB;">•</span> compile 0.023 s (R -&gt; Rust replay, incl. text shaping)</span></span>
+<span><span class="co">#&gt; <span style="color: #00BBBB;">•</span> raster 0.184 s (drawing)</span></span>
 <span><span class="co">#&gt; </span></span>
 <span><span class="co">#&gt; <span style="font-weight: bold;">Slowest marks</span> (raster time):</span></span>
-<span><span class="co">#&gt; <span style="color: #00BBBB;">•</span> circle points 20000 elem 0.0937 s 76.0%</span></span>
-<span><span class="co">#&gt; <span style="color: #00BBBB;">•</span> segments edges 2000 elem 0.0273 s 22.1%</span></span>
-<span><span class="co">#&gt; <span style="color: #00BBBB;">•</span> text labels 200 elem 0.0024 s 1.9%</span></span></code></pre></div>
+<span><span class="co">#&gt; <span style="color: #00BBBB;">•</span> circle points 20000 elem 0.1178 s 76.7%</span></span>
+<span><span class="co">#&gt; <span style="color: #00BBBB;">•</span> segments edges 2000 elem 0.0331 s 21.6%</span></span>
+<span><span class="co">#&gt; <span style="color: #00BBBB;">•</span> text labels 200 elem 0.0027 s 1.7%</span></span></code></pre></div>
 <p><strong>Read the phase split first.</strong> A render is three
 phases: <em>build</em> (constructing the R value), <em>compile</em> (the
 R→Rust replay, including text shaping), and <em>raster</em> (drawing).

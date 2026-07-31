@@ -1,5 +1,29 @@
 # Changelog
 
+## vellum 0.6.3
+
+- **Fixed: a keyed multi-box
+  [`roundrect_grob()`](https://r-vellum.github.io/vellum/reference/grob.md)
+  aborted
+  [`scene_model()`](https://r-vellum.github.io/vellum/reference/scene_model.md),
+  and a keyed one silently dropped every key past the first.**
+  [`roundrect_grob()`](https://r-vellum.github.io/vellum/reference/grob.md)
+  is a batch — one rounded box per `(x, y, width, height, r)` element —
+  but it recycled `key`/`meta` to length 1, so
+  `roundrect_grob(key = c("a", "b"))` kept only `"a"`. And
+  [`scene_model()`](https://r-vellum.github.io/vellum/reference/scene_model.md)
+  classed roundrect as a single shape (one row per grob), so a grob
+  drawing N keyed boxes reported one element against the backend’s N and
+  aborted on the count check. Roundrect is now a keyed batch, like
+  [`text_grob()`](https://r-vellum.github.io/vellum/reference/grob.md):
+  each keyed box is one
+  [`scene_model()`](https://r-vellum.github.io/vellum/reference/scene_model.md)
+  row carrying its own key/meta, and an unkeyed roundrect stays out of
+  the model. Rendering is unaffected
+  ([`scene_model()`](https://r-vellum.github.io/vellum/reference/scene_model.md)
+  is interactivity metadata only). Found while wiring keyed data-label
+  backgrounds in `vellumplot`.
+
 ## vellum 0.6.2
 
 - **Fixed (breaking):

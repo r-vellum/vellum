@@ -13,7 +13,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">vellum</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.6.2</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.6.3</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -66,9 +66,14 @@
 <div class="row">
   <main id="main" class="col-md-9"><div class="page-header">
       <img src="../logo.png" class="logo" alt=""><h1>Changelog</h1>
-      <small>Source: <a href="https://github.com/r-vellum/vellum/blob/v0.6.2/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
+      <small>Source: <a href="https://github.com/r-vellum/vellum/blob/main/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.6.3" id="vellum-063">vellum 0.6.3<a class="anchor" aria-label="anchor" href="#vellum-063"></a></h2>
+<ul><li>
+<strong>Fixed: a keyed multi-box <code><a href="../reference/grob.html">roundrect_grob()</a></code> aborted <code><a href="../reference/scene_model.html">scene_model()</a></code>, and a keyed one silently dropped every key past the first.</strong> <code><a href="../reference/grob.html">roundrect_grob()</a></code> is a batch — one rounded box per <code>(x, y, width, height, r)</code> element — but it recycled <code>key</code>/<code>meta</code> to length 1, so <code>roundrect_grob(key = c("a", "b"))</code> kept only <code>"a"</code>. And <code><a href="../reference/scene_model.html">scene_model()</a></code> classed roundrect as a single shape (one row per grob), so a grob drawing N keyed boxes reported one element against the backend’s N and aborted on the count check. Roundrect is now a keyed batch, like <code><a href="../reference/grob.html">text_grob()</a></code>: each keyed box is one <code><a href="../reference/scene_model.html">scene_model()</a></code> row carrying its own key/meta, and an unkeyed roundrect stays out of the model. Rendering is unaffected (<code><a href="../reference/scene_model.html">scene_model()</a></code> is interactivity metadata only). Found while wiring keyed data-label backgrounds in <code>vellumplot</code>.</li>
+</ul></div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.6.2" id="vellum-062">vellum 0.6.2<a class="anchor" aria-label="anchor" href="#vellum-062"></a></h2>
 <ul><li>
