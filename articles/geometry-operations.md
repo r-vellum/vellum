@@ -99,18 +99,20 @@ runs marching squares over any matrix.
 ``` r
 
 gx <- seq(-3, 3, length.out = 160)
-z <- outer(gx, gx, function(a, b) {
-  exp(-((a - 1)^2 + (b - 0.6)^2) / 0.8) +
-    0.8 * exp(-((a + 1.2)^2 + (b + 0.9)^2) / 1.4) +
-    0.4 * exp(-((a - 0.4)^2 + (b + 1.6)^2) / 0.4)
+# `outer(xs, ys, f)` puts rows on x and columns on y, which is what
+# `vl_contour()` wants -- the same convention as `image()` and `contour()`.
+z <- outer(gx, gx, function(x, y) {
+  exp(-((x - 1)^2 + (y - 0.6)^2) / 0.8) +
+    0.8 * exp(-((x + 1.2)^2 + (y + 0.9)^2) / 1.4) +
+    0.4 * exp(-((x - 0.4)^2 + (y + 1.6)^2) / 0.4)
 })
 levels <- seq(0.1, 0.9, by = 0.1)
 cl <- vl_contour(z, levels = levels, xlim = c(-3, 3), ylim = c(-3, 3))
 head(cl, 3)
 #>   level id         x         y closed
-#> 1   0.1  1 -1.150943 -2.887705   TRUE
-#> 2   0.1  1 -1.156494 -2.886792   TRUE
-#> 3   0.1  1 -1.188679 -2.881780   TRUE
+#> 1   0.1  1 -1.452830 -2.587502   TRUE
+#> 2   0.1  1 -1.468483 -2.584906   TRUE
+#> 3   0.1  1 -1.490566 -2.581434   TRUE
 ```
 
 ``` r
@@ -183,9 +185,9 @@ py <- c(rnorm(N / 2, 0.5, 0.6), rnorm(N / 2, -0.8, 0.9))
 base <- datashade(px, py, width = 420, height = 420, xlim = c(-4, 4), ylim = c(-4, 4))
 
 dens <- outer(seq(-4, 4, length.out = 120), seq(-4, 4, length.out = 120),
-              function(a, b) {
-                0.5 * exp(-((a + 1)^2 / (2 * 0.7^2) + (b - 0.5)^2 / (2 * 0.6^2))) +
-                  0.5 * exp(-((a - 1.2)^2 / (2 * 0.5^2) + (b + 0.8)^2 / (2 * 0.9^2)))
+              function(x, y) {
+                0.5 * exp(-((x + 1)^2 / (2 * 0.7^2) + (y - 0.5)^2 / (2 * 0.6^2))) +
+                  0.5 * exp(-((x - 1.2)^2 / (2 * 0.5^2) + (y + 0.8)^2 / (2 * 0.9^2)))
               })
 iso <- vl_contour(dens, levels = c(0.1, 0.25, 0.45), xlim = c(-4, 4), ylim = c(-4, 4))
 

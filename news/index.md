@@ -1,5 +1,37 @@
 # Changelog
 
+## vellum 0.6.2
+
+- **Fixed (breaking):
+  [`vl_contour()`](https://r-vellum.github.io/vellum/reference/vl_contour.md)
+  transposed its input matrix.** It assumed rows indexed y and
+  columns x. Base R is the opposite —
+  [`image()`](https://rdrr.io/r/graphics/image.html),
+  [`contour()`](https://rdrr.io/r/graphics/contour.html),
+  [`persp()`](https://rdrr.io/r/graphics/persp.html) and
+  [`contourLines()`](https://rdrr.io/r/grDevices/contourLines.html) all
+  take `dim(z) == c(length(x), length(y))`, i.e. **rows index x** — and
+  that is also the shape `outer(xs, ys, f)` produces, which is how a
+  grid is normally built.
+
+  So every contour came back reflected across the diagonal. On a
+  symmetric surface that is invisible; over a density with a reference
+  layer under it, it is obvious. The documentation compounded it by
+  citing [`image()`](https://rdrr.io/r/graphics/image.html) as the
+  authority for the opposite of what
+  [`image()`](https://rdrr.io/r/graphics/image.html) does.
+
+  [`vl_contour()`](https://r-vellum.github.io/vellum/reference/vl_contour.md)
+  now matches base R. **If you were transposing your matrix to work
+  around this, stop.** Code that passed `outer(xs, ys, f)` directly was
+  getting transposed output and is now correct with no change.
+
+  The test suite missed it because every contour test used a grid
+  symmetric in its two arguments. The new tests use an asymmetric
+  surface and check against
+  [`grDevices::contourLines()`](https://rdrr.io/r/grDevices/contourLines.html)
+  rather than against our own expectation.
+
 ## vellum 0.6.1
 
 - **Fixed: node bounding boxes were viewport-local, not device

@@ -24,8 +24,12 @@ contour_grob(
 
 - z:
 
-  A numeric matrix. Rows are y, columns are x — the
-  [`image()`](https://rdrr.io/r/graphics/image.html) convention.
+  A numeric matrix, with **rows indexing x and columns indexing y** —
+  `dim(z) == c(length(x), length(y))`, the same convention as
+  [`graphics::image()`](https://rdrr.io/r/graphics/image.html),
+  [`graphics::contour()`](https://rdrr.io/r/graphics/contour.html) and
+  [`graphics::persp()`](https://rdrr.io/r/graphics/persp.html), and the
+  shape `outer(xs, ys, f)` produces.
 
 - levels:
 
@@ -74,8 +78,9 @@ around missing data rather than being drawn through it.
 
 ``` r
 # A ring contour around a Gaussian bump.
+# rows index x, columns index y -- exactly what `outer(xs, ys, f)` gives.
 g <- outer(seq(-3, 3, length.out = 60), seq(-3, 3, length.out = 60),
-           function(a, b) exp(-(a^2 + b^2) / 2))
+           function(x, y) exp(-(x^2 + y^2) / 2))
 head(vl_contour(g, levels = c(0.2, 0.5, 0.8)))
 #>   level id         x         y closed
 #> 1   0.2  1 0.4745763 0.2019822   TRUE
@@ -85,8 +90,9 @@ head(vl_contour(g, levels = c(0.2, 0.5, 0.8)))
 #> 5   0.2  1 0.4237288 0.2106261   TRUE
 #> 6   0.2  1 0.4067797 0.2156898   TRUE
 # Draw them: one grob per contour, because each is its own polyline.
+# rows index x, columns index y -- exactly what `outer(xs, ys, f)` gives.
 g <- outer(seq(-3, 3, length.out = 60), seq(-3, 3, length.out = 60),
-           function(a, b) exp(-(a^2 + b^2) / 2))
+           function(x, y) exp(-(x^2 + y^2) / 2))
 vl_scene(3, 3, dpi = 96, bg = "white") |>
   push(vl_viewport(xscale = c(-3, 3), yscale = c(-3, 3))) |>
   draw(contour_grob(vl_contour(g, levels = c(0.2, 0.5, 0.8)),
