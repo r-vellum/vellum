@@ -1,5 +1,25 @@
 # Changelog
 
+## vellum 0.6.5
+
+- **[`vl_lint()`](https://r-vellum.github.io/vellum/reference/vl_lint.md)’s
+  contrast rule no longer cries wolf on ordinary axis text.** It sampled
+  the backdrop at four points just outside a label’s box and took the
+  *worst*, so any label a single 2 px probe happened to graze against a
+  nearby tick, gridline or axis rule read as ~1:1 — flagging dark axis
+  text on white on essentially every plot. It now takes the
+  **second-worst** of the four sides: incidental adjacent ink on one
+  side is ignored, while a label genuinely on a low-contrast field (all
+  sides) or straddling a dark region (two sides) is still flagged.
+
+- **Gridlines (`role = "grid"`) are treated as decorative in tagged
+  PDF.** A node with `role = "grid"` — the role a downstream sets so an
+  interactive SVG host can find and hide the gridlines — is now a PDF
+  *artifact* (skipped by a screen reader) alongside
+  `"presentation"`/`"none"`/`"decorative"`, rather than a bogus `Figure`
+  in the structure tree. The SVG role is unchanged, so the host selector
+  still works. Found while wiring `vellumplot`’s accessibility pass.
+
 ## vellum 0.6.4
 
 - **Fixed:

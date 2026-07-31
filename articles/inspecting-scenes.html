@@ -36,7 +36,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">vellum</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.6.4</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.6.5</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -278,13 +278,13 @@ unkeyed lines/polygons contribute to <code>ink</code> but not to
 <span><span class="fu"><a href="../reference/profile_render.html">profile_render</a></span><span class="op">(</span><span class="va">heavy</span>, reps <span class="op">=</span> <span class="fl">1</span><span class="op">)</span></span>
 <span><span class="co">#&gt; <span style="font-weight: bold;">Phases</span> (median of the timed reps):</span></span>
 <span><span class="co">#&gt; <span style="color: #00BBBB;">•</span> build 0.001 s (constructing the R value)</span></span>
-<span><span class="co">#&gt; <span style="color: #00BBBB;">•</span> compile 0.025 s (R -&gt; Rust replay, incl. text shaping)</span></span>
-<span><span class="co">#&gt; <span style="color: #00BBBB;">•</span> raster 0.185 s (drawing)</span></span>
+<span><span class="co">#&gt; <span style="color: #00BBBB;">•</span> compile 0.019 s (R -&gt; Rust replay, incl. text shaping)</span></span>
+<span><span class="co">#&gt; <span style="color: #00BBBB;">•</span> raster 0.162 s (drawing)</span></span>
 <span><span class="co">#&gt; </span></span>
 <span><span class="co">#&gt; <span style="font-weight: bold;">Slowest marks</span> (raster time):</span></span>
-<span><span class="co">#&gt; <span style="color: #00BBBB;">•</span> circle points 20000 elem 0.1181 s 76.7%</span></span>
-<span><span class="co">#&gt; <span style="color: #00BBBB;">•</span> segments edges 2000 elem 0.0332 s 21.6%</span></span>
-<span><span class="co">#&gt; <span style="color: #00BBBB;">•</span> text labels 200 elem 0.0027 s 1.7%</span></span></code></pre></div>
+<span><span class="co">#&gt; <span style="color: #00BBBB;">•</span> circle points 20000 elem 0.1032 s 76.8%</span></span>
+<span><span class="co">#&gt; <span style="color: #00BBBB;">•</span> segments edges 2000 elem 0.0290 s 21.6%</span></span>
+<span><span class="co">#&gt; <span style="color: #00BBBB;">•</span> text labels 200 elem 0.0022 s 1.7%</span></span></code></pre></div>
 <p><strong>Read the phase split first.</strong> A render is three
 phases: <em>build</em> (constructing the R value), <em>compile</em> (the
 R→Rust replay, including text shaping), and <em>raster</em> (drawing).

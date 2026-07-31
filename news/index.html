@@ -13,7 +13,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">vellum</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.6.4</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.6.5</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -69,6 +69,11 @@
       <small>Source: <a href="https://github.com/r-vellum/vellum/blob/main/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.6.5" id="vellum-065">vellum 0.6.5<a class="anchor" aria-label="anchor" href="#vellum-065"></a></h2>
+<ul><li><p><strong><code><a href="../reference/vl_lint.html">vl_lint()</a></code>’s contrast rule no longer cries wolf on ordinary axis text.</strong> It sampled the backdrop at four points just outside a label’s box and took the <em>worst</em>, so any label a single 2 px probe happened to graze against a nearby tick, gridline or axis rule read as ~1:1 — flagging dark axis text on white on essentially every plot. It now takes the <strong>second-worst</strong> of the four sides: incidental adjacent ink on one side is ignored, while a label genuinely on a low-contrast field (all sides) or straddling a dark region (two sides) is still flagged.</p></li>
+<li><p><strong>Gridlines (<code>role = "grid"</code>) are treated as decorative in tagged PDF.</strong> A node with <code>role = "grid"</code> — the role a downstream sets so an interactive SVG host can find and hide the gridlines — is now a PDF <em>artifact</em> (skipped by a screen reader) alongside <code>"presentation"</code>/<code>"none"</code>/<code>"decorative"</code>, rather than a bogus <code>Figure</code> in the structure tree. The SVG role is unchanged, so the host selector still works. Found while wiring <code>vellumplot</code>’s accessibility pass.</p></li>
+</ul></div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.6.4" id="vellum-064">vellum 0.6.4<a class="anchor" aria-label="anchor" href="#vellum-064"></a></h2>
 <ul><li>
