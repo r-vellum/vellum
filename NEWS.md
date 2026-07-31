@@ -1,5 +1,49 @@
 # vellum (development version)
 
+* **`vl_path_op()` — boolean operations on paths.** Union, intersection,
+  difference and exclusive-or over closed rings.
+
+  The result is **geometry**, not a render-time mask, and that is the point: it
+  is an ordinary path, so it can be measured, hit-tested, simplified, filled
+  with its own gradient, stroked along the boundary the operation created,
+  exported as `<path>` data, and used as the operand of another boolean. A clip
+  can do none of those, rasterises, and degrades on some PDF paths.
+
+  `rule` describes how to read the **inputs** — whether a ring inside another is
+  a hole or an island — and operands must be in a single coordinate space, since
+  a boolean has to be computed somewhere.
+
+* **`vl_contour()` and `contour_grob()` — contours from a grid.** Marching
+  squares over any matrix, with saddle cells resolved from the centre value
+  rather than an arbitrary fixed choice, and cells with missing corners skipped
+  so a contour breaks around a hole instead of being drawn through it.
+
+  Segments are chained into continuous polylines. Under a solid stroke that is
+  invisible; for everything else it is not — an unchained contour restarts its
+  dash pattern in every grid cell and cannot be simplified, measured or closed.
+  Closed contours come back marked `closed`, so a filled density contour is a
+  `path_grob()` away.
+
+* **`svg_grob()` and `vl_svg_path()` — SVG path data as scene geometry.** The
+  full `d` grammar, including relative forms, implicit repeated commands, the
+  smooth-curve reflection rules, and elliptical arcs with the packed flag form
+  minified icon files use. Icon sets ship one `<path d="...">` per glyph, so
+  this is what makes crisp vector markers possible.
+
+  It reads path *data*, not SVG documents — no stylesheets, gradients, `<use>`,
+  clip paths or element transforms. Use an XML parser to pull `d` strings out of
+  a file.
+
+* **Fixed: `draw()` accepted a list of grobs and then failed to compile it.**
+  The list was appended as one child and the failure surfaced much later as
+  `Can't find method for compile(<list>)`. A list now draws each element.
+
+* **`lines_grob()` now rejects a multi-value `id`.** Its `id` is the
+  accessibility identifier, but `path_grob()`'s is a *grouping* variable — the
+  same argument name with the opposite meaning. Passing a grouping vector by
+  analogy silently drew one polyline through every group, joining them with
+  straight lines across the plot.
+
 * **`vl_repel()` / `vl_place()` — label placement as an engine service.**
   `vl_place()` solves label collisions over a scene's resolved geometry and
   reports each label's displacement; `vl_repel()` applies it and returns a new

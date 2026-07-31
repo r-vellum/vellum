@@ -84,6 +84,7 @@ articles:
   - render-quality
   - retained-mode
   - placement
+  - geometry-operations
   - datashading
 
 - title: Inspecting
@@ -184,6 +185,15 @@ reference:
   - vl_empty_region
   - vl_hull
   - vl_buffer
+
+- title: Geometry operations
+  desc: >
+    Producing paths: boolean combinations, contours from a grid, and SVG path
+    data imported as real vector geometry.
+  contents:
+  - vl_path_op
+  - vl_contour
+  - vl_svg_path
 
 - title: Big data
   desc: >

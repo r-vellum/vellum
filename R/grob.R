@@ -309,6 +309,17 @@ roundrect_grob <- function(x = 0.5, y = 0.5, width = 1, height = 1, r = 0.1,
 lines_grob <- function(x, y, arrow = NULL, start_cap = NULL, end_cap = NULL, offset = NULL,
                        sketch = NULL, gp = vl_gpar(), name = NULL, vp = NULL, id = NULL, role = NULL) {
   n <- .coord_n(x, y)
+  # `id` here is the accessibility identifier, NOT a grouping variable — unlike
+  # `path_grob(id=)`, which splits points into rings. Passing a grouping vector
+  # by analogy used to draw one polyline through every group, joining them with
+  # straight lines; catch it rather than silently drawing that.
+  if (length(id) > 1L) {
+    cli::cli_abort(c(
+      "{.arg id} is an accessibility identifier and must be a single value.",
+      i = "{.fn lines_grob} draws ONE polyline. Unlike {.fn path_grob}, it has no grouping argument.",
+      i = "To draw several polylines, pass a list of grobs — see {.fn contour_grob} for an example."
+    ))
+  }
   start_cap <- .check_cap(start_cap, "start_cap", scalar = TRUE)
   end_cap <- .check_cap(end_cap, "end_cap", scalar = TRUE)
   offset <- .check_cap(offset, "offset", scalar = TRUE, nonneg = FALSE)

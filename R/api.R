@@ -306,7 +306,17 @@ draw <- function(scene, grob) {
   bs <- scene@bstate
   k <- length(bs$open)
   cur <- bs$open[[k]]
-  .bnode_add(cur, grob) # O(1) env append
+  # A plain list of grobs draws as if each had been passed in turn. Several
+  # constructors naturally produce one grob per piece -- `contour_grob()` returns
+  # one polyline per contour -- and without this the list is appended as a single
+  # child that nothing can compile, which fails later and further away.
+  # (`S7_inherits(x)` with no class asks "is this any S7 object" — naming the
+  # `grob` class here would resolve to this function's argument.)
+  if (is.list(grob) && !S7::S7_inherits(grob)) {
+    for (g in grob) .bnode_add(cur, g)
+  } else {
+    .bnode_add(cur, grob) # O(1) env append
+  }
   bs$ocount[k] <- cur$n
   scene@bstate <- .bstate_claim(bs)
   scene
