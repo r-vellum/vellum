@@ -1900,6 +1900,10 @@ impl Scene {
         let resolved = self.resolve_all();
         let n = self.nodes.len();
         let (mut kind, mut name, mut id) = (Vec::with_capacity(n), Vec::with_capacity(n), Vec::with_capacity(n));
+        // The node's position in the draw order. Stable within one compile, and
+        // shared with `element_table()` so the per-node and per-element views of
+        // the same scene can be joined.
+        let mut node_ix: Vec<i32> = Vec::with_capacity(n);
         let (mut x0, mut y0, mut x1, mut y1) = (Vec::new(), Vec::new(), Vec::new(), Vec::new());
         let (mut cx0, mut cy0, mut cx1, mut cy1) = (Vec::new(), Vec::new(), Vec::new(), Vec::new());
         let (mut nelem, mut alpha, mut has_fill, mut has_col) = (Vec::new(), Vec::new(), Vec::new(), Vec::new());
@@ -1937,6 +1941,7 @@ impl Scene {
             kind.push(k.to_string());
             name.push(md.map(|m| m.name.clone()).unwrap_or_default());
             id.push(md.map(|m| m.id.clone()).unwrap_or_default());
+            node_ix.push(i as i32);
             x0.push(bb.0); y0.push(bb.1); x1.push(bb.2); y1.push(bb.3);
             cx0.push(clip.0); cy0.push(clip.1); cx1.push(clip.2); cy1.push(clip.3);
             nelem.push(node_count(node) as i32);
@@ -1959,7 +1964,7 @@ impl Scene {
             acc_stack.clear();
         }
         list!(
-            kind = kind, name = name, id = id,
+            kind = kind, name = name, id = id, node = node_ix,
             x0 = x0, y0 = y0, x1 = x1, y1 = y1,
             clip_x0 = cx0, clip_y0 = cy0, clip_x1 = cx1, clip_y1 = cy1,
             n = nelem, alpha = alpha, has_fill = has_fill, has_col = has_col,
@@ -1985,25 +1990,38 @@ impl Scene {
         let resolved = self.resolve_all();
         let mut key: Vec<String> = Vec::new();
         let mut panel: Vec<String> = Vec::new();
+        // Grob name and kind per element, so a caller can select elements by the
+        // grob they came from. Without these, a batched mark is only reachable
+        // through `lint_table()`'s per-NODE union box -- which for a 2000-point
+        // scatter is the whole panel, and useless as an obstacle.
+        let mut name: Vec<String> = Vec::new();
+        let mut kind: Vec<String> = Vec::new();
+        let mut node_ix: Vec<i32> = Vec::new();
         let mut x0: Vec<f64> = Vec::new();
         let mut y0: Vec<f64> = Vec::new();
         let mut x1: Vec<f64> = Vec::new();
         let mut y1: Vec<f64> = Vec::new();
         let mut panel_stack: Vec<String> = Vec::new();
-        for (vp_id, node) in self.nodes.iter() {
+        for (ni, (vp_id, node)) in self.nodes.iter().enumerate() {
             match node {
-                Node::PanelStart { name, .. } => { panel_stack.push(name.clone()); continue; }
+                Node::PanelStart { name: pn, .. } => { panel_stack.push(pn.clone()); continue; }
                 Node::PanelEnd => { panel_stack.pop(); continue; }
                 _ => {}
             }
             let vp = &resolved[*vp_id].vp;
             let cur_panel = panel_stack.last().cloned().unwrap_or_default();
+            let cur_name = self.meta.get(ni).map(|m| m.name.clone()).unwrap_or_default();
+            let cur_kind = node_kind(node).to_string();
+            let cur_node = ni as i32;
             // Emit one row per drawn element (batched marks: one per element;
             // single-shape marks: one per grob).
             let mut emit = |k: Option<&str>, lx0: f64, ly0: f64, lx1: f64, ly1: f64| {
                 let bb = dev_bbox(vp, lx0, ly0, lx1, ly1);
                 key.push(k.unwrap_or("").to_string());
                 panel.push(cur_panel.clone());
+                name.push(cur_name.clone());
+                kind.push(cur_kind.clone());
+                node_ix.push(cur_node);
                 x0.push(bb.0); y0.push(bb.1); x1.push(bb.2); y1.push(bb.3);
             };
             match node {
@@ -2082,7 +2100,8 @@ impl Scene {
                 _ => {}
             }
         }
-        list!(key = key, panel = panel, x0 = x0, y0 = y0, x1 = x1, y1 = y1)
+        list!(key = key, panel = panel, name = name, kind = kind, node = node_ix,
+              x0 = x0, y0 = y0, x1 = x1, y1 = y1)
     }
 
     /// Render and return the RGBA of device pixel `(x, y)` as `c(r, g, b, a)`.

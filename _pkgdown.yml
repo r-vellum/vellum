@@ -83,6 +83,7 @@ articles:
   - typography
   - render-quality
   - retained-mode
+  - placement
   - datashading
 
 - title: Inspecting
@@ -173,6 +174,16 @@ reference:
   - vl_strwidth
   - md
   - text_path_grob
+
+- title: Placement
+  desc: >
+    Geometry services over a scene's resolved boxes: move labels apart, find the
+    emptiest region, outline and buffer a group.
+  contents:
+  - vl_place
+  - vl_empty_region
+  - vl_hull
+  - vl_buffer
 
 - title: Big data
   desc: >
