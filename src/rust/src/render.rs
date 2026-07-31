@@ -102,6 +102,10 @@ fn skia_stroke(s: &StrokeStyle) -> Stroke {
 pub enum ResolvedPaint {
     Solid(Rgba),
     Linear { x1: f64, y1: f64, x2: f64, y2: f64, stops: Vec<Stop>, extend: Extend },
+    /// Ruled lines filling the shape: geometry, not a tile. `spacing`/`width` are
+    /// device px; the walk turns this into stroked spans, so no backend needs a
+    /// hatch primitive of its own.
+    Hatch { angle: f64, spacing: f64, width: f64, col: Rgba, bg: Option<Rgba> },
     /// Two circles in local px: the focal/start circle `(fx, fy, fr)` at stop
     /// offset 0 and the outer/end circle `(cx, cy, r)` at offset 1 (concentric
     /// when `fr == 0` and `(fx, fy) == (cx, cy)`).
@@ -158,6 +162,139 @@ pub struct TextRun<'a> {
     pub face: &'a str,
     pub size: f64,
     pub dpi: f64,
+}
+
+/// Flatten a path into closed rings of points (device-local px), so a scanline
+/// algorithm can work on straight edges. Curves are subdivided by chord length.
+pub fn flatten_rings(path: &Path) -> Vec<Vec<(f32, f32)>> {
+    let mut rings: Vec<Vec<(f32, f32)>> = Vec::new();
+    let mut cur: Vec<(f32, f32)> = Vec::new();
+    let steps = |a: (f32, f32), b: (f32, f32)| {
+        let d = ((b.0 - a.0).powi(2) + (b.1 - a.1).powi(2)).sqrt();
+        (d.ceil() as usize).clamp(2, 24)
+    };
+    for seg in path.segments() {
+        use tiny_skia::PathSegment::*;
+        match seg {
+            MoveTo(p) => {
+                if cur.len() >= 3 {
+                    rings.push(std::mem::take(&mut cur));
+                } else {
+                    cur.clear();
+                }
+                cur.push((p.x, p.y));
+            }
+            LineTo(p) => cur.push((p.x, p.y)),
+            QuadTo(c, p) => {
+                let a = *cur.last().unwrap_or(&(c.x, c.y));
+                let n = steps(a, (p.x, p.y));
+                for i in 1..=n {
+                    let t = i as f32 / n as f32;
+                    let mt = 1.0 - t;
+                    cur.push((
+                        mt * mt * a.0 + 2.0 * mt * t * c.x + t * t * p.x,
+                        mt * mt * a.1 + 2.0 * mt * t * c.y + t * t * p.y,
+                    ));
+                }
+            }
+            CubicTo(c1, c2, p) => {
+                let a = *cur.last().unwrap_or(&(c1.x, c1.y));
+                let n = steps(a, (p.x, p.y));
+                for i in 1..=n {
+                    let t = i as f32 / n as f32;
+                    let mt = 1.0 - t;
+                    cur.push((
+                        mt * mt * mt * a.0 + 3.0 * mt * mt * t * c1.x + 3.0 * mt * t * t * c2.x + t * t * t * p.x,
+                        mt * mt * mt * a.1 + 3.0 * mt * mt * t * c1.y + 3.0 * mt * t * t * c2.y + t * t * t * p.y,
+                    ));
+                }
+            }
+            Close => {
+                if cur.len() >= 3 {
+                    rings.push(std::mem::take(&mut cur));
+                } else {
+                    cur.clear();
+                }
+            }
+        }
+    }
+    if cur.len() >= 3 {
+        rings.push(cur);
+    }
+    rings
+}
+
+/// Build the hatch lines for a shape: the parts of a family of parallel lines
+/// that fall *inside* it, as a stroke-ready path.
+///
+/// Computed by scanline crossing rather than by clipping. Clipping would mean a
+/// page-sized mask per hatched shape (and the raster clip cache is keyed on the
+/// viewport id, so an ad-hoc clip would collide with it), whereas this emits only
+/// the spans that are actually drawn -- which is also far less SVG.
+///
+/// `angle` is in degrees counter-clockwise, `spacing` in device px. Spans are
+/// paired even-odd, the standard rule for hatching.
+pub fn hatch_path(path: &Path, angle: f64, spacing: f64) -> Option<Path> {
+    if !(spacing > 0.0) {
+        return None;
+    }
+    let rings = flatten_rings(path);
+    if rings.is_empty() {
+        return None;
+    }
+    // Rotate into a frame where the hatch lines are horizontal, scan, rotate back.
+    let th = -(angle.to_radians()) as f32;
+    let (c, s) = (th.cos(), th.sin());
+    let fwd = |p: (f32, f32)| (p.0 * c - p.1 * s, p.0 * s + p.1 * c);
+    let inv = |p: (f32, f32)| (p.0 * c + p.1 * s, -p.0 * s + p.1 * c);
+
+    let rot: Vec<Vec<(f32, f32)>> = rings.iter().map(|r| r.iter().map(|&p| fwd(p)).collect()).collect();
+    let (mut lo, mut hi) = (f32::INFINITY, f32::NEG_INFINITY);
+    for r in &rot {
+        for p in r {
+            lo = lo.min(p.1);
+            hi = hi.max(p.1);
+        }
+    }
+    if !lo.is_finite() || !hi.is_finite() || hi <= lo {
+        return None;
+    }
+    // Anchor the ladder to a global grid, so abutting shapes hatch in register
+    // instead of each starting from its own top edge.
+    let sp = spacing as f32;
+    let start = (lo / sp).ceil() * sp;
+    let mut pb = PathBuilder::new();
+    let mut xs: Vec<f32> = Vec::new();
+    let mut y = start;
+    // Guard against a pathological spacing producing millions of lines.
+    let max_lines = 20_000;
+    let mut drawn = 0;
+    while y <= hi && drawn < max_lines {
+        xs.clear();
+        for r in &rot {
+            let n = r.len();
+            for i in 0..n {
+                let (x1, y1) = r[i];
+                let (x2, y2) = r[(i + 1) % n];
+                // Half-open in y so a vertex on the scanline counts once.
+                if (y1 <= y && y2 > y) || (y2 <= y && y1 > y) {
+                    let t = (y - y1) / (y2 - y1);
+                    xs.push(x1 + t * (x2 - x1));
+                }
+            }
+        }
+        if xs.len() >= 2 {
+            xs.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+            for pair in xs.chunks_exact(2) {
+                let (a, b) = (inv((pair[0], y)), inv((pair[1], y)));
+                pb.move_to(a.0, a.1);
+                pb.line_to(b.0, b.1);
+            }
+        }
+        y += sp;
+        drawn += 1;
+    }
+    pb.finish()
 }
 
 /// A drop shadow cast by a group: the group's own coverage, tinted, blurred and
@@ -854,8 +991,9 @@ fn paint_for(paint: &ResolvedPaint) -> Option<Paint<'static>> {
             skia_spread(*extend),
             Transform::identity(),
         ),
-        // Patterns borrow a Pixmap and are handled inline in RasterBackend::fill_path.
-        ResolvedPaint::Pattern { .. } => return None,
+        // Patterns borrow a Pixmap and are handled inline in RasterBackend::fill_path;
+        // a hatch is expanded to stroked spans by the walk before it gets here.
+        ResolvedPaint::Pattern { .. } | ResolvedPaint::Hatch { .. } => return None,
     }?;
     let mut p = Paint::default();
     p.shader = shader;
@@ -1386,6 +1524,8 @@ impl SvgBackend {
     /// own `transform` maps them to device, exactly like the path geometry.
     fn svg_fill(&mut self, paint: &ResolvedPaint) -> String {
         match paint {
+            // Expanded to stroked spans by the walk; nothing to reference here.
+            ResolvedPaint::Hatch { .. } => String::from("fill=\"none\""),
             ResolvedPaint::Solid(c) => {
                 if let Some((pc, s)) = &self.last_solid_fill {
                     if pc == c {
@@ -2232,7 +2372,7 @@ fn krilla_paint(paint: &ResolvedPaint) -> Option<KPaint> {
             stops: krilla_stops(stops),
             anti_alias: true,
         })),
-        ResolvedPaint::Solid(_) | ResolvedPaint::Pattern { .. } => None,
+        ResolvedPaint::Solid(_) | ResolvedPaint::Pattern { .. } | ResolvedPaint::Hatch { .. } => None,
     }
 }
 
@@ -2245,6 +2385,8 @@ impl RenderBackend for PdfBackend<'_, '_> {
         // Gradient geometry is local px (identity gradient transform); the
         // primitive `transform` pushed below maps it to device, like the path.
         let (kpaint, opacity) = match paint {
+            // Expanded to stroked spans by the walk before it reaches a backend.
+            ResolvedPaint::Hatch { .. } => return,
             ResolvedPaint::Solid(c) => (rgb::Color::new(c.r, c.g, c.b).into(), norm(c.a)),
             ResolvedPaint::Linear { x1, y1, x2, y2, stops, extend } => (
                 KPaint::from(KLinear {

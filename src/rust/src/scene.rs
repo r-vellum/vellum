@@ -1142,9 +1142,10 @@ impl Scene {
         xu: &[i32], xoff: &[f64], yu: &[i32], yoff: &[f64], su: &[i32], soff: &[f64], wu: &[i32], woff: &[f64], hu: &[i32], hoff: &[f64],
         fill: &[i32], flat: bool,
         col: Robj, lwd: Robj, alpha: Robj, stroke: Robj,
+        gfill: Robj,
         keys: Vec<String>,
     ) {
-        let gp = PartialGpar::from_robj(&rnull(), &col, &lwd, &alpha, &stroke);
+        let gp = PartialGpar::from_robj(&gfill, &col, &lwd, &alpha, &stroke);
         let fill = fill
             .chunks_exact(4)
             .map(|c| Rgba {
@@ -1177,9 +1178,10 @@ impl Scene {
         sroughness: f64, sbowing: f64, sfill_style: i32, sfill_weight: f64,
         shachure_angle: f64, shachure_gap: f64, scurve_tightness: f64,
         sdisable_multi: bool, spreserve: bool, sseed: f64,
+        gfill: Robj,
         keys: Vec<String>,
     ) {
-        let gp = PartialGpar::from_robj(&rnull(), &col, &lwd, &alpha, &stroke);
+        let gp = PartialGpar::from_robj(&gfill, &col, &lwd, &alpha, &stroke);
         let fill = fill
             .chunks_exact(4)
             .map(|c| Rgba {
@@ -2699,7 +2701,7 @@ impl Scene {
                                     continue;
                                 }
                                 let tr = t.pre_concat(Transform::from_row(pw as f32, 0.0, 0.0, ph as f32, cx as f32, cy as f32));
-                                b.fill_path(&unit, tr, rp, FillRule::Winding, &clip);
+                                fill_or_hatch(b, &unit, tr, rp, FillRule::Winding, &clip);
                             }
                         }
                     } else {
@@ -2714,7 +2716,7 @@ impl Scene {
                             let ph = vp.y_len(h[i], hu[i]);
                             if let Some(path) = rect_path(cx - pw / 2.0, cy - ph / 2.0, pw, ph) {
                                 if let Some(rp) = &rf {
-                                    b.fill_path(&path, t, rp, FillRule::Winding, &clip);
+                                    fill_or_hatch(b, &path, t, rp, FillRule::Winding, &clip);
                                 }
                                 if let Some(c) = stroke {
                                     b.stroke_path(&path, t, c, &style, &clip);
@@ -2782,7 +2784,7 @@ impl Scene {
                             pb.push_circle(cx as f32, cy as f32, rr as f32);
                             if let Some(path) = pb.finish() {
                                 if let Some(rp) = &rf {
-                                    b.fill_path(&path, t, rp, FillRule::Winding, &clip);
+                                    fill_or_hatch(b, &path, t, rp, FillRule::Winding, &clip);
                                 }
                                 if let Some(c) = stroke {
                                     b.stroke_path(&path, t, c, &style, &clip);
@@ -2886,7 +2888,7 @@ impl Scene {
                                 let slot = (sh as usize).min(7);
                                 let unit = unit_cache[slot].get_or_insert_with(|| unit_marker(sh));
                                 let tr = t.pre_concat(Transform::from_row(rr as f32, 0.0, 0.0, rr as f32, cx as f32, cy as f32));
-                                b.fill_path(unit, tr, rp, FillRule::Winding, &clip);
+                                fill_or_hatch(b, unit, tr, rp, FillRule::Winding, &clip);
                             }
                             continue;
                         }
@@ -2958,7 +2960,10 @@ impl Scene {
                 }
                 Node::Hexagons { x, y, size, w, h, xu, yu, su, wu, hu, fill, flat, keys, .. } => {
                     // n excludes w/h: they are empty for the regular (size-driven) path.
-                    let n = [x.len(), y.len(), xu.len(), yu.len(), fill.len()]
+                    // `fill` is empty when the shared `gp` paint applies to every
+                    // element (a gradient/pattern/hatch), so it must not bound the
+                    // element count -- that would draw nothing at all.
+                    let n = [x.len(), y.len(), xu.len(), yu.len()]
                         .into_iter().min().unwrap_or(0);
                     let nonreg = !w.is_empty();
                     let style = stroke_style(&gp, vp);
@@ -2979,7 +2984,15 @@ impl Scene {
                         };
                         if let Some(path) = path {
                             // Per-element fill (the binned-count colour); uniform stroke.
-                            b.fill_path(&path, t, &ResolvedPaint::Solid(fill[i]), FillRule::Winding, &clip);
+                            // Per-element colour when given; otherwise the shared `gp` paint, which
+                            // is how a gradient/pattern/hatch reaches a batched mark at all.
+                            let rp = match fill.get(i) {
+                                Some(c) => Some(ResolvedPaint::Solid(*c)),
+                                None => gp.fill.as_ref().map(|p| resolve_paint(p, vp)),
+                            };
+                            if let Some(rp) = rp {
+                                fill_or_hatch(b, &path, t, &rp, FillRule::Winding, &clip);
+                            }
                             if let Some(c) = stroke {
                                 b.stroke_path(&path, t, c, &style, &clip);
                             }
@@ -2988,7 +3001,7 @@ impl Scene {
                 }
                 Node::Sectors { x, y, r0, r1, theta0, theta1, xu, yu, r0u, r1u, fill, arrow, sketch, keys, .. } => {
                     let n = [x.len(), y.len(), r0.len(), r1.len(), theta0.len(), theta1.len(),
-                             xu.len(), yu.len(), r0u.len(), r1u.len(), fill.len()]
+                             xu.len(), yu.len(), r0u.len(), r1u.len()]
                         .into_iter().min().unwrap_or(0);
                     if let Some(sk) = sketch {
                         // Hand-drawn pie/donut wedges: per-element fill colour, curve-fit
@@ -3035,7 +3048,15 @@ impl Scene {
                         let rr1 = vp.r_len(r1[i], r1u[i]);
                         if let Some(path) = sector_path(cx, cy, rr0, rr1, theta0[i], theta1[i]) {
                             // Per-element fill; uniform stroke (matches hexagons).
-                            b.fill_path(&path, t, &ResolvedPaint::Solid(fill[i]), FillRule::Winding, &clip);
+                            // Per-element colour when given; otherwise the shared `gp` paint, which
+                            // is how a gradient/pattern/hatch reaches a batched mark at all.
+                            let rp = match fill.get(i) {
+                                Some(c) => Some(ResolvedPaint::Solid(*c)),
+                                None => gp.fill.as_ref().map(|p| resolve_paint(p, vp)),
+                            };
+                            if let Some(rp) = rp {
+                                fill_or_hatch(b, &path, t, &rp, FillRule::Winding, &clip);
+                            }
                             if let Some(c) = stroke {
                                 b.stroke_path(&path, t, c, &style, &clip);
                             }
@@ -3396,7 +3417,7 @@ fn build_subpaths(x: &[f64], y: &[f64], xu: &[Unit], yu: &[Unit], nper: &[usize]
 /// fill. Gradient fill geometry is resolved against `vp` into viewport-local px.
 fn fill_then_stroke<B: RenderBackend>(b: &mut B, path: &tiny_skia::Path, gp: &Gpar, t: Transform, clip: &Clip, vp: &Vp, rule: FillRule) {
     if let Some(fill) = &gp.fill {
-        b.fill_path(path, t, &resolve_paint(fill, vp), rule, clip);
+        fill_or_hatch(b, path, t, &resolve_paint(fill, vp), rule, clip);
     }
     if let Some(col) = gp.col {
         let style = stroke_style(gp, vp);
@@ -3428,9 +3449,51 @@ fn stroke_style(gp: &Gpar, vp: &Vp) -> StrokeStyle {
 }
 
 /// Resolve a paint's gradient geometry through the viewport into local px.
+/// Fill a path, expanding a hatch paint into stroked spans.
+///
+/// A hatch is geometry rather than a tile, and every backend already knows how
+/// to stroke, so it is expanded here in the shared walk instead of becoming a
+/// primitive each backend must implement. One consequence worth knowing: SVG
+/// gets one `<path>` of spans rather than a `<pattern>` reference.
+fn fill_or_hatch<B: RenderBackend>(
+    b: &mut B, path: &tiny_skia::Path, t: Transform, paint: &ResolvedPaint,
+    rule: FillRule, clip: &Clip,
+) {
+    let (angle, spacing, width, col, bg) = match paint {
+        ResolvedPaint::Hatch { angle, spacing, width, col, bg } => (*angle, *spacing, *width, *col, *bg),
+        _ => {
+            b.fill_path(path, t, paint, rule, clip);
+            return;
+        }
+    };
+    // An opaque background behind the rules, when asked for: a hatch over white
+    // and a hatch over the map beneath it are different designs.
+    if let Some(c) = bg {
+        b.fill_path(path, t, &ResolvedPaint::Solid(c), rule, clip);
+    }
+    if let Some(lines) = crate::render::hatch_path(path, angle, spacing) {
+        let style = StrokeStyle {
+            width: width as f32,
+            dash: Vec::new(),
+            cap: crate::color::LineCap::Butt,
+            join: crate::color::LineJoin::Round,
+            miter: 10.0,
+            crisp: false,
+            paint: None,
+            phase: 0.0,
+        };
+        b.stroke_lines(&lines, t, col, &style, clip);
+    }
+}
+
 fn resolve_paint(paint: &Paint, vp: &Vp) -> ResolvedPaint {
     match paint {
         Paint::Solid(c) => ResolvedPaint::Solid(*c),
+        // Spacing and width arrive in device px already (scaled R-side from
+        // points, like the text halo), so there is nothing to resolve.
+        Paint::Hatch { angle, spacing, width, col, bg } => ResolvedPaint::Hatch {
+            angle: *angle, spacing: *spacing, width: *width, col: *col, bg: *bg,
+        },
         Paint::Linear { x1, y1, x2, y2, unit, stops, extend } => ResolvedPaint::Linear {
             x1: vp.x_pos(*x1, *unit),
             y1: vp.y_pos(*y1, *unit),
@@ -3557,7 +3620,7 @@ fn paint_sketch<B: RenderBackend>(
             }
             None => {
                 if let Some(region) = &s.fill_solid {
-                    b.fill_path(region, t, &resolve_paint(fill, vp), FillRule::Winding, clip);
+                    fill_or_hatch(b, region, t, &resolve_paint(fill, vp), FillRule::Winding, clip);
                 }
             }
         }
@@ -3723,7 +3786,7 @@ fn draw_arrows<B: RenderBackend>(
         }
     }
     if let Some(path) = fill.finish() {
-        b.fill_path(&path, t, &ResolvedPaint::Solid(col), FillRule::Winding, clip);
+        fill_or_hatch(b, &path, t, &ResolvedPaint::Solid(col), FillRule::Winding, clip);
         if style.width > 0.0 {
             b.stroke_lines(&path, t, col, style, clip);
         }

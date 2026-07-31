@@ -1,5 +1,30 @@
 # vellum (development version)
 
+* **`vl_hatch()` — hatch fills as geometry.** Fills a shape with ruled lines at
+  a given angle, spacing and width. Unlike `vl_pattern()`, which rasterises a
+  tile, a hatch is real geometry: crisp at any zoom, correct in print, and
+  emitted as `<path>` data in SVG rather than an embedded image.
+
+  The reason it matters is accessibility. A categorical encoding that fails for
+  a red/green-blind reader — which `render(cvd = )` shows you and `vl_lint()`
+  flags — is fixed by encoding with **texture as well as hue**. vellum could
+  already diagnose that problem; now it can solve it.
+
+  It is expanded in the scene walk into stroked spans, computed by scanline
+  crossing against the shape, so no backend needs a hatch primitive and only the
+  spans actually inside the shape are emitted.
+
+* **Fixed: `gp$fill` never reached `hexagon_grob()` or `sector_grob()`.** Those
+  marks take a per-element fill *colour*, and the shared gpar fill was not passed
+  to them at all — so a gradient or pattern there silently drew nothing. Both now
+  fall back to the shared paint when no per-element `fill` is given, which means
+  gradients, patterns and hatches work on them for the first time. An explicit
+  per-element `fill` still takes precedence.
+
+* New example `inst/examples/hatching.R`; `vignette("scene-and-paint")` gains a
+  hatching section and `vignette("render-quality")` now points at it as the fix
+  its CVD section was missing.
+
 * **A scene is now a value you can save, fingerprint, compare and compose.**
   `scene_write()` / `scene_read()` persist a built scene (`.rds`, or `.json`
   with jsonlite) and rebuild it to byte-identical pixels; `as_scene_spec()` /
