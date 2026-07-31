@@ -83,6 +83,7 @@ articles:
   - typography
   - render-quality
   - retained-mode
+  - accessible-output
   - placement
   - geometry-operations
   - datashading
@@ -194,6 +195,14 @@ reference:
   - vl_path_op
   - vl_contour
   - vl_svg_path
+
+- title: Accessibility & fonts
+  desc: >
+    Tagged PDF output from the per-mark metadata channel, and a check on the one
+    part of the determinism claim vellum does not control.
+  contents:
+  - scene_fonts
+  - font_pin
 
 - title: Big data
   desc: >

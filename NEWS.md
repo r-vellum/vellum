@@ -1,5 +1,33 @@
 # vellum (development version)
 
+* **Tagged PDF output.** The per-mark `id`/`role`/`name` channel now builds a PDF
+  structure tree: a `StructTreeRoot`, a `Figure` for the plot as a whole carrying
+  the `describe()` text, and one structure element per marked-up mark, in draw
+  order — which for a graphic is reading order.
+
+  This needs no new annotation API: a scene already marked up for the web is
+  already marked up for PDF. `role = "presentation"` marks a node a PDF
+  *artifact*, so gridlines and panel backgrounds are skipped by assistive
+  technology rather than read aloud.
+
+  Structure is metadata — the rendered pixels are unchanged — and a scene with no
+  marked-up nodes produces exactly the PDF it always did.
+
+* **`scene_fonts()`, `font_pin()` and `font_check()`.** vellum claims identical
+  pixels on every OS and in CI. Layout, shaping and rasterisation deliver that;
+  font *resolution* does not and cannot, since `"sans"` is a different file on
+  every platform.
+
+  These make that gap visible rather than pretending it away: `scene_fonts()`
+  reports the faces the text actually resolved to (read off the shaped glyphs),
+  and a pin next to a reference image lets a failing comparison be attributed —
+  your change, or the machine's fonts.
+
+  They deliberately do not bundle fonts. vellum resolves through
+  \pkg{systemfonts} so it agrees with the rest of R's graphics stack; for a
+  guarantee rather than a check, register the exact file with
+  `systemfonts::register_font()`.
+
 * **`vl_path_op()` — boolean operations on paths.** Union, intersection,
   difference and exclusive-or over closed rings.
 

@@ -286,6 +286,15 @@ Node identity for the profiler: kind, name, and element count, in node
 order -- the same order \code{rs_take_node_times()} reports.
 }
 
+\subsection{Method \code{font_table}}{
+The font files this scene's text actually resolved to.
+
+Read off the shaped glyphs rather than re-resolved from family names, so
+it reports what was \emph{used}, not what would be picked if asked again.
+Returns \code{path}, \code{index} (face within a collection) and \code{glyphs} (how many
+glyphs came from that face).
+}
+
 \subsection{Method \code{pixel}}{
 Render and return the RGBA of device pixel \verb{(x, y)} as \code{c(r, g, b, a)}.
 }

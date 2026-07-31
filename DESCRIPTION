@@ -53,6 +53,7 @@ Collate:
     'debug.R'
     'device.R'
     'extendr-wrappers.R'
+    'fonts.R'
     'geometry2.R'
     'lint.R'
     'paint.R'

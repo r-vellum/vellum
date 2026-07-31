@@ -433,6 +433,15 @@ rs_attractor <- function(kind, n, a, b, c, d, x0, y0) .Call(wrap__rs_attractor, 
 #'order -- the same order `rs_take_node_times()` reports.
 #'}
 #'
+#'\subsection{Method `font_table`}{
+#'The font files this scene's text actually resolved to.
+#'
+#'Read off the shaped glyphs rather than re-resolved from family names, so
+#'it reports what was *used*, not what would be picked if asked again.
+#'Returns `path`, `index` (face within a collection) and `glyphs` (how many
+#'glyphs came from that face).
+#'}
+#'
 #'\subsection{Method `pixel`}{
 #'Render and return the RGBA of device pixel `(x, y)` as `c(r, g, b, a)`.
 #'}
@@ -546,6 +555,8 @@ Scene$resolved_geometry <- function() .Call(wrap__Scene__resolved_geometry, self
 Scene$lint_table <- function() .Call(wrap__Scene__lint_table, self)
 
 Scene$node_index <- function() .Call(wrap__Scene__node_index, self)
+
+Scene$font_table <- function() .Call(wrap__Scene__font_table, self)
 
 Scene$element_table <- function() .Call(wrap__Scene__element_table, self)
 

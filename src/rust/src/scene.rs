@@ -597,18 +597,18 @@ struct MaskDef {
 /// each drawn node and emitted by vector backends (SVG `data-*`/`role`) for
 /// interactivity, accessibility, and testing. Empty fields are omitted.
 #[derive(Clone, Default, Debug)]
-struct NodeMeta {
-    id: String,
-    role: String,
-    name: String,
+pub struct NodeMeta {
+    pub id: String,
+    pub role: String,
+    pub name: String,
 }
 
 impl NodeMeta {
-    fn is_empty(&self) -> bool {
+    pub fn is_empty(&self) -> bool {
         self.id.is_empty() && self.role.is_empty() && self.name.is_empty()
     }
     /// Pre-formatted SVG attributes (`data-vellum-*` + ARIA `role`) for this node.
-    fn svg_attrs(&self) -> String {
+    pub fn svg_attrs(&self) -> String {
         let mut s = String::new();
         if !self.id.is_empty() {
             s.push_str(&format!("data-vellum-id=\"{}\"", xml_escape(&self.id)));
@@ -766,15 +766,25 @@ impl Scene {
         } else {
             self.a11y_title.as_str()
         };
-        let tag_id = if alt.is_empty() {
+        // Per-mark tagging and a single whole-content span are mutually
+        // exclusive: PDF does not allow one tagged content span inside another,
+        // and krilla aborts rather than emitting an invalid stream.
+        //
+        // So when any node carries metadata, the marks own the tagging and the
+        // root Figure is built from them. When none does, the old single-span
+        // behaviour is kept exactly, which is what keeps every existing scene's
+        // PDF byte-for-byte unchanged.
+        let per_mark = self.meta.iter().any(|m| !m.is_empty());
+        let tag_id = if alt.is_empty() || per_mark {
             None
         } else {
             Some(surface.start_tagged(krilla::tagging::ContentTag::Other))
         };
-        let warnings = {
+        let (warnings, marks) = {
             let mut b = PdfBackend::new(&mut surface);
             b.fill_background(self.w_px, self.h_px, self.bg);
-            self.render_to(&mut b)
+            let w = self.render_to(&mut b);
+            (w, b.take_tagged())
         };
         if tag_id.is_some() {
             surface.end_tagged();
@@ -782,13 +792,30 @@ impl Scene {
         surface.pop();
         surface.finish();
         page.finish();
-        // Attach the tagged content to a Figure(alt) in the structure tree.
-        if let Some(id) = tag_id {
-            let mut figure = krilla::tagging::TagGroup::new(
-                krilla::tagging::Tag::Figure(Some(alt.to_string())),
-            );
-            figure.push(id);
+        // Build the structure tree.
+        //
+        // Two levels: the figure as a whole (carrying the scene's `describe()`
+        // text), and one entry per named/roled mark inside it. Draw order IS
+        // reading order for a graphic -- it is the order the author put the
+        // marks in -- so the children go in unchanged.
+        //
+        // A scene with neither a description nor any marked-up node gets no tree
+        // at all, and its PDF is byte-for-byte what it was before tagging
+        // existed.
+        if tag_id.is_some() || !marks.is_empty() {
             let mut tree = krilla::tagging::TagTree::new();
+            let root_alt = if alt.is_empty() { "figure" } else { alt };
+            let mut figure = krilla::tagging::TagGroup::new(
+                krilla::tagging::Tag::Figure(Some(root_alt.to_string())),
+            );
+            if let Some(id) = tag_id {
+                figure.push(id);
+            }
+            for (id, meta) in marks {
+                let mut g = krilla::tagging::TagGroup::new(crate::render::pdf_tag(&meta));
+                g.push(id);
+                figure.push(g);
+            }
             tree.push(figure);
             doc.set_tag_tree(tree);
         }
@@ -1986,6 +2013,33 @@ impl Scene {
         list!(kind = kind, name = name, n = n)
     }
 
+    /// The font files this scene's text actually resolved to.
+    ///
+    /// Read off the shaped glyphs rather than re-resolved from family names, so
+    /// it reports what was *used*, not what would be picked if asked again.
+    /// Returns `path`, `index` (face within a collection) and `glyphs` (how many
+    /// glyphs came from that face).
+    fn font_table(&self) -> List {
+        use std::collections::BTreeMap;
+        let mut counts: BTreeMap<(String, u32), i32> = BTreeMap::new();
+        for (_, node) in self.nodes.iter() {
+            if let Node::Text { gpath, gface, .. } = node {
+                for i in 0..gpath.len().min(gface.len()) {
+                    *counts.entry((gpath[i].clone(), gface[i])).or_insert(0) += 1;
+                }
+            }
+        }
+        let mut path = Vec::with_capacity(counts.len());
+        let mut index = Vec::with_capacity(counts.len());
+        let mut glyphs = Vec::with_capacity(counts.len());
+        for ((p, i), n) in counts {
+            path.push(p);
+            index.push(i as i32);
+            glyphs.push(n);
+        }
+        list!(path = path, index = index, glyphs = glyphs)
+    }
+
     fn element_table(&self) -> List {
         let resolved = self.resolve_all();
         let mut key: Vec<String> = Vec::new();
@@ -2598,11 +2652,15 @@ impl Scene {
             } else {
                 None
             };
-            let attrs = match meta.and_then(|m| m.get(i)).filter(|md| !md.is_empty()) {
-                Some(md) if b.wants_element_keys() => md.svg_attrs(),
-                _ => String::new(),
+            // Both the SVG and PDF backends consume node metadata (as `<g>`
+            // attributes and as structure-tree tags respectively); raster does
+            // not, and should not pay to carry it.
+            let node_meta = match meta.and_then(|m| m.get(i)).filter(|md| !md.is_empty()) {
+                Some(md) if b.wants_node_meta() => Some(md),
+                _ => None,
             };
-            let has_meta = !attrs.is_empty();
+            let has_meta = node_meta.is_some();
+            let attrs = node_meta.cloned().unwrap_or_default();
             match node {
                 Node::SubrasterStart { nid } => {
                     // Vector backends ignore the boundary (render subtree inline).
