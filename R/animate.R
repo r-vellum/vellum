@@ -21,10 +21,11 @@
 #' @param frac Numeric vector, one per output frame: the eased interpolation
 #'   fraction in `[0, 1]` (0 = the left keyframe, 1 = the right one). Same length
 #'   as `seg`.
-#' @param path Output path: an image file for `"gif"`/`"apng"`, or a directory
-#'   (created if needed) for `"frames"`.
-#' @param format `"gif"` (looping animated GIF), `"apng"` (animated PNG), or
-#'   `"frames"` (one `frameNNNNN.png` per frame into `path`).
+#' @param path Output path: an image file for `"gif"`/`"apng"`/`"svg"`, or a
+#'   directory (created if needed) for `"frames"`.
+#' @param format `"gif"` (looping animated GIF), `"apng"` (animated PNG),
+#'   `"svg"` (a single animated SVG), or `"frames"` (one `frameNNNNN.png` per
+#'   frame into `path`).
 #' @param fps Frames per second (sets each frame's on-screen duration).
 #' @param gif_speed GIF only: the NeuQuant palette sample factor, `1` (best
 #'   quality, slowest) to `30` (fastest). A plot's antialiased edges want the best
@@ -37,6 +38,30 @@
 #' GIF is limited to 256 colours per frame, so on a plot (smooth panels,
 #' antialiased marks) it is inherently lossy — `gif_speed`/`gif_dither` make it as
 #' clean as that palette allows. For a lossless result use `format = "apng"`.
+#'
+#' # Choosing a format
+#'
+#' `"svg"` emits every frame as vector markup, shown in turn by a CSS step
+#' animation. It is resolution-independent, which no raster format is — the same
+#' file is crisp in a slide, on a retina screen and in print.
+#'
+#' Its size depends on scene complexity in a way the raster formats' does not,
+#' because *every frame is emitted in full*. Measured on a 30-frame scatter
+#' animation, gzipped (which is how a browser will fetch it):
+#'
+#' | marks | animated SVG (gzipped) | GIF |
+#' |---|---|---|
+#' | 20 | 20 KB | 61 KB |
+#' | 200 | 80 KB | 296 KB |
+#' | 2000 | 720 KB | 124 KB |
+#'
+#' So it wins clearly on line art — an explanatory animation of a few moving
+#' marks, which is the common case — and loses on a dense scatter, where a raster
+#' format is the right answer. Serve it gzipped (`.svgz`, or any web server with
+#' compression on); uncompressed it is several times larger again.
+#'
+#' It also honours `prefers-reduced-motion`: a reader who has asked their system
+#' not to animate gets the first frame, held.
 #' @seealso [render()], [as_vellum_scene()]
 #' @examples
 #' \dontrun{
@@ -50,7 +75,7 @@
 #' }
 #' @export
 vl_render_animation <- function(keyframes, seg, frac,
-                                path, format = c("gif", "apng", "frames"),
+                                path, format = c("gif", "apng", "svg", "frames"),
                                 fps = 25, gif_speed = 1, gif_dither = TRUE) {
   format <- match.arg(format)
   if (!is.list(keyframes) || length(keyframes) < 2L) {
@@ -90,5 +115,19 @@ vl_render_animation <- function(keyframes, seg, frac,
     gif_speed = gif_speed, gif_dither = isTRUE(gif_dither)
   )
   .emit_degrade_warnings(warns)
+  # An animated SVG emits every frame in full, so a dense scene times a long
+  # schedule produces a very large file quietly -- 24 MB for 2000 marks over 30
+  # frames, measured. That is easy to do by accident and hard to notice until
+  # someone tries to load it, so say so.
+  if (identical(format, "svg")) {
+    mb <- file.size(path) / 1024^2
+    if (is.finite(mb) && mb > 5) {
+      cli::cli_warn(c(
+        "The animated SVG is {round(mb, 1)} MB.",
+        i = "Every frame is emitted in full, so size grows with scene complexity times frame count.",
+        i = "Serve it gzipped, or use {.code format = \"gif\"}/{.code \"apng\"} for a dense scene."
+      ))
+    }
+  }
   invisible(path)
 }

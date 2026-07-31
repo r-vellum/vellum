@@ -93,6 +93,11 @@ articles:
   contents:
   - inspecting-scenes
   - scenes-as-values
+- title: Output
+  navbar: Output
+  contents:
+  - output-formats
+
 - title: Interop
   navbar: Interop
   contents:
@@ -195,6 +200,14 @@ reference:
   - vl_path_op
   - vl_contour
   - vl_svg_path
+
+- title: Output reach
+  desc: >
+    Destinations for a finished scene beyond a single file: a multi-page
+    document, and a batch rendered across cores.
+  contents:
+  - pdf_pages
+  - render_all
 
 - title: Accessibility & fonts
   desc: >

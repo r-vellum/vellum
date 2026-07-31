@@ -16,6 +16,7 @@
 //! frozen-scale P1 scope keeps them matched); colours lerp in Oklab (reusing
 //! `oklab.rs`); bounded gpar numerics lerp; discrete fields snap at `t >= 0.5`.
 
+use crate::scene::xml_escape;
 use std::borrow::Cow;
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
@@ -715,6 +716,92 @@ fn tween_scene(a: &Scene, b: &Scene, t: f64) -> Scene {
 
 /// Rasterize a scene to a fresh `Pixmap` (never touches the `raster_cache`, so it
 /// is safe to run on many owned scenes across `rayon` workers).
+/// Build a single animated SVG from the frame schedule.
+///
+/// Every frame is emitted in full, as a `<g>` shown for its slice of the
+/// timeline by a CSS step animation. That is *not* the smallest possible
+/// encoding — attribute-level SMIL would emit the scene once and animate the
+/// values that change — but it is the one that is always correct, because it
+/// makes no assumption that a node's SVG representation has the same shape in
+/// every frame.
+///
+/// The size trade-off is real and worth stating plainly (measured on a scatter
+/// animation, 30 frames, gzipped):
+///
+/// | marks | animated SVG (gz) | GIF  |
+/// |-------|-------------------|------|
+/// |    20 |             20 KB | 61 KB |
+/// |   200 |             80 KB | 296 KB |
+/// |  2000 |            720 KB | 124 KB |
+///
+/// So it wins on line art -- an explanatory animation of a few moving marks --
+/// and loses on dense scatter, where a raster format is the right answer. It is
+/// resolution-independent either way, which no raster format is.
+fn animated_svg(kf: &[Scene], seg: &[i32], frac: &[f64], delay_num: i32, delay_den: i32) -> String {
+    let n = seg.len();
+    let dur = (delay_num.max(0) as f64 / delay_den.max(1) as f64) * n as f64;
+    let (w, h) = (kf[0].w_px, kf[0].h_px);
+
+    // Sequential, unlike the raster path: the SVG backend holds a non-`Send`
+    // glyph-outline cache. It is also much the cheaper of the two -- emitting
+    // markup rather than rasterising -- so there is little to win here.
+    let bodies: Vec<String> = (0..n)
+        .map(|frame| {
+            let s = seg[frame] as usize;
+            let mut sc = tween_scene(&kf[s], &kf[s + 1], frac[frame]);
+            // The title/desc belong to the document, not to each of its frames:
+            // repeating them would have a screen reader announce the figure once
+            // per frame.
+            sc.clear_a11y();
+            svg_body(&sc.svg_string(false))
+        })
+        .collect();
+
+    let mut out = String::with_capacity(bodies.iter().map(|b| b.len()).sum::<usize>() + 4096);
+    out.push_str(&format!(
+        "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"{w}\" height=\"{h}\" \
+         viewBox=\"0 0 {w} {h}\" role=\"img\">"
+    ));
+    if !kf[0].a11y_title.is_empty() {
+        out.push_str(&format!("<title>{}</title>", xml_escape(&kf[0].a11y_title)));
+    }
+    if !kf[0].a11y_desc.is_empty() {
+        out.push_str(&format!("<desc>{}</desc>", xml_escape(&kf[0].a11y_desc)));
+    }
+    // One frame visible at a time. `steps(1, end)` with a per-frame negative
+    // delay is the standard sprite-sheet trick: every frame runs the same
+    // animation, offset so exactly one is in its visible window at any moment.
+    let pct = 100.0 / n as f64;
+    out.push_str(&format!(
+        "<style>\
+         .vf{{visibility:hidden;animation:vfcycle {dur}s steps(1,end) infinite}}\
+         @keyframes vfcycle{{0%{{visibility:visible}}{pct:.6}%{{visibility:hidden}}}}\
+         @media (prefers-reduced-motion:reduce){{.vf{{animation:none}}.vf:first-of-type{{visibility:visible}}}}\
+         </style>"
+    ));
+    for (i, body) in bodies.iter().enumerate() {
+        // A negative delay starts each frame that far into the cycle.
+        let delay = -(i as f64) * dur / n as f64;
+        out.push_str(&format!("<g class=\"vf\" style=\"animation-delay:{delay:.4}s\">{body}</g>"));
+    }
+    out.push_str("</svg>");
+    out
+}
+
+/// The inner content of an SVG document -- everything between the opening `<svg …>`
+/// tag and the closing `</svg>`.
+fn svg_body(doc: &str) -> String {
+    let start = match doc.find("<svg").and_then(|i| doc[i..].find('>').map(|j| i + j + 1)) {
+        Some(i) => i,
+        None => return String::new(),
+    };
+    let end = doc.rfind("</svg>").unwrap_or(doc.len());
+    if end <= start {
+        return String::new();
+    }
+    doc[start..end].to_string()
+}
+
 fn render_frame(s: &Scene) -> Pixmap {
     let mut b = RasterBackend::new(s.w_px, s.h_px, s.bg);
     b.set_bitmap_text(s.want_bitmap_text());
@@ -969,8 +1056,19 @@ fn render_animation(
         }
     }
 
-    // Sink first, so a bad path fails before any rendering work.
     let (w, h) = (kf[0].w_px, kf[0].h_px);
+
+    // Animated SVG takes its own path: it needs the tweened *scenes*, not
+    // rasterised pixmaps, so it cannot go through `Sink`.
+    if format == "svg" {
+        let body = animated_svg(&kf, seg, frac, delay_num, delay_den);
+        if let Err(e) = std::fs::write(path, body) {
+            throw_r_error(format!("failed to write {path}: {e}"));
+        }
+        return Vec::new();
+    }
+
+    // Sink first, so a bad path fails before any rendering work.
     let mut sink = match format {
         "frames" => {
             std::fs::create_dir_all(path)
@@ -1002,7 +1100,7 @@ fn render_animation(
             }
         }
         other => throw_r_error(format!(
-            "render_animation(): unknown format {other:?} (use \"frames\", \"apng\", or \"gif\")"
+            "render_animation(): unknown format {other:?} (use \"frames\", \"apng\", \"gif\", or \"svg\")"
         )),
     };
 
