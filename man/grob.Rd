@@ -265,9 +265,15 @@ regardless of device aspect); a \emph{regular} flat hexagon is
 \code{size}; must be given together. For \code{\link[=loop_grob]{loop_grob()}}, \code{width} is instead a
 dimensionless lateral petal scale in \verb{(0, 1]} (recycled per loop): \code{1}
 (default) is the full teardrop, smaller narrows the petal's \strong{waist}
-without shortening it (the igraph "narrowing" factor).}
+without shortening it (the igraph "narrowing" factor).
 
-\item{height}{Optional box height (absolute unit), used only by \code{fit}.}
+For \code{\link[=text_grob]{text_grob()}} these mean something different: \code{width} is an
+\strong{absolute} wrapping measure (\code{mm}/\code{cm}/\verb{in}/\code{pt}), and giving it breaks
+the label into lines that fit, making the drawn block a box of exactly that
+width — so \code{just} anchors the box rather than the longest line. \code{height} is
+used only by \code{fit}. Relative units are rejected there on purpose: wrapping
+happens when the grob is built, and a viewport has no size in
+\code{npc}/\code{native} until render time.}
 
 \item{sketch}{Optional \code{\link[=sketch]{sketch()}} spec for a hand-drawn look; \code{NULL} = crisp.}
 
@@ -406,16 +412,6 @@ line of each paragraph left as-is).}
 shrinks the font — never grows it — until the wrapped block fits
 \code{width} × \code{height}, down to a floor of 4 pt; a number sets that floor
 instead. Requires \code{width}.}
-
-\item{width}{Optional wrapping width, as an \strong{absolute} unit
-(\code{\link[=vl_unit]{vl_unit()}} in \code{mm}/\code{cm}/\verb{in}/\code{pt}). When given, the label is broken into
-lines that fit, and the drawn block becomes a box of exactly this width —
-so \code{just} anchors the box, not the longest line. \code{NULL} (the default) leaves
-text unwrapped.
-
-Relative units are rejected on purpose: wrapping happens when the grob is
-built, and a viewport's size in \code{npc}/\code{native} is not known until render
-time. Pass the physical width you want to wrap to.}
 }
 \value{
 A grob object.

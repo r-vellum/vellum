@@ -117,7 +117,10 @@ test_that("scene_fonts reports the faces text actually resolved to", {
   expect_gte(nrow(f), 1L)
   expect_true(all(c("path", "index", "glyphs", "file", "exists") %in% names(f)))
   expect_true(all(f$exists))
-  expect_equal(sum(f$glyphs), 5L) # one per glyph in "hello"
+  # One glyph per character for "hello" in any Latin font -- but a font with an
+  # "ll" ligature would shape it to four, so assert the range rather than the
+  # exact count.
+  expect_true(sum(f$glyphs) %in% 4:5)
 })
 
 test_that("a scene with no text has no fonts", {

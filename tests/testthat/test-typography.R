@@ -8,6 +8,10 @@ inked <- function(scene, thresh = 200) {
   r[1, , ] < thresh
 }
 # Row bands occupied by text, as contiguous runs of inked rows.
+#
+# Only good enough for counting bands. Do NOT use it to locate individual lines:
+# a descender can form a band of its own, which made an earlier version of the
+# alignment tests pass on macOS and fail on Linux.
 row_bands <- function(scene) {
   rows <- which(apply(inked(scene), 2, any))
   if (!length(rows)) {
@@ -72,41 +76,78 @@ test_that("a wrapped label never renders wider than the width it was given", {
   }
 })
 
-test_that("align shifts lines within the box", {
-  ref <- wrapped(width = vl_unit(50, "mm"), align = "left")
-  bands <- row_bands(ref)
-  left <- line_starts(ref, bands)
-  right <- line_starts(wrapped(width = vl_unit(50, "mm"), align = "right"), bands)
-  centre <- line_starts(wrapped(width = vl_unit(50, "mm"), align = "centre"), bands)
-  expect_gt(length(bands), 1L)
+test_that("align places a line against the right edge of the box", {
+  # Deliberately a SINGLE short line in a wide box, so this tests alignment and
+  # nothing else. The earlier version measured per-line ink of a wrapped
+  # paragraph, which depended on where the font happened to break the lines and
+  # on a row-banding heuristic that a descender could split -- it passed on
+  # macOS and failed on Linux for reasons that had nothing to do with alignment.
+  box_mm <- 60
+  box_px <- box_mm / 25.4 * 96
+  one <- function(align) {
+    s <- vl_scene(4, 1.2, dpi = 96, bg = "white") |>
+      draw(text_grob("xx", x = 0.5, y = 0.5, width = vl_unit(box_mm, "mm"),
+                     align = align, gp = vl_gpar(fontsize = 12)))
+    ink_box(s)[1:2]
+  }
+  page_mid <- 4 * 96 / 2
+  box_lo <- page_mid - box_px / 2
+  box_hi <- page_mid + box_px / 2
+  tol <- 4 # glyph side bearings differ between fonts
 
-  # Left-aligned lines all begin at the same column; right-aligned ones do not,
-  # and each starts no earlier than its left-aligned counterpart.
-  expect_lt(diff(range(left)), 3)
-  expect_gt(diff(range(right)), 20)
-  expect_true(all(right >= left - 1))
-  # Centred sits between the two.
-  expect_true(all(centre >= left - 1 & centre <= right + 1))
-
-  # "center" is a synonym, not a separate layout.
-  expect_identical(
-    scene_png(wrapped(width = vl_unit(50, "mm"), align = "center")),
-    scene_png(wrapped(width = vl_unit(50, "mm"), align = "centre"))
-  )
+  l <- one("left")
+  r <- one("right")
+  c_ <- one("centre")
+  expect_lt(abs(l[1] - box_lo), tol) # flush left
+  expect_lt(abs(r[2] - box_hi), tol) # flush right
+  expect_lt(abs(mean(c_) - page_mid), tol) # centred
+  # And they are genuinely different placements, in the expected order.
+  expect_lt(l[1], c_[1])
+  expect_lt(c_[1], r[1])
 })
 
-test_that("justify flushes both edges except on the last line", {
-  s <- wrapped(width = vl_unit(50, "mm"), align = "justify")
-  d <- inked(s)
-  rows <- which(apply(d, 2, any))
-  grp <- cumsum(c(1, diff(rows) > 1))
-  ends <- vapply(split(rows, grp), function(rr) {
-    max(which(apply(d[, rr, drop = FALSE], 1, any)))
-  }, integer(1), USE.NAMES = FALSE)
-  # Every line but the last reaches the same right edge.
-  expect_lt(diff(range(ends[-length(ends)])), 3)
-  # Justified output differs from ragged-right.
-  expect_false(identical(scene_png(s), scene_png(wrapped(width = vl_unit(50, "mm")))))
+test_that("align is applied per line, not to the block", {
+  # Hard newlines, so the line partition is fixed whatever the font does. A
+  # left-aligned block of unequal lines is ragged on the right; a right-aligned
+  # one is ragged on the left. Compare the two renders rather than trying to
+  # locate individual lines in the pixels.
+  lab <- "x\nxxxx\nxxxxxxxx"
+  mk <- function(align) {
+    vl_scene(4, 1.6, dpi = 96, bg = "white") |>
+      draw(text_grob(lab, width = vl_unit(50, "mm"), align = align,
+                     gp = vl_gpar(fontsize = 12)))
+  }
+  expect_false(identical(scene_png(mk("left")), scene_png(mk("right"))))
+  expect_false(identical(scene_png(mk("left")), scene_png(mk("centre"))))
+  # The longest line is the same width in all three, so the block's total ink
+  # width matches; only its position within the box changes.
+  wl <- diff(ink_box(mk("left"))[1:2])
+  wr <- diff(ink_box(mk("right"))[1:2])
+  expect_equal(wl, wr, tolerance = 0.02)
+  # Left-aligned starts further left than right-aligned.
+  expect_lt(ink_box(mk("left"))[1], ink_box(mk("right"))[1])
+
+  # "center" is a synonym, not a separate layout.
+  expect_identical(scene_png(mk("center")), scene_png(mk("centre")))
+})
+
+test_that("justify stretches short lines to the full measure", {
+  # Hard newlines and deliberately short lines: left-aligned they occupy a
+  # fraction of the box, justified the non-final ones must reach both edges. The
+  # signal is the block's total ink width, which needs no per-line banding.
+  lab <- "a b\nc d\ne"
+  box_mm <- 60
+  mk <- function(align) {
+    vl_scene(4, 1.6, dpi = 96, bg = "white") |>
+      draw(text_grob(lab, width = vl_unit(box_mm, "mm"), align = align,
+                     gp = vl_gpar(fontsize = 12)))
+  }
+  box_px <- box_mm / 25.4 * 96
+  w_left <- diff(ink_box(mk("left"))[1:2])
+  w_just <- diff(ink_box(mk("justify"))[1:2])
+  expect_lt(w_left, box_px / 2) # nowhere near filling the box
+  expect_gt(w_just, box_px - 6) # stretched to it
+  expect_false(identical(scene_png(mk("justify")), scene_png(mk("left"))))
 })
 
 test_that("fit shrinks the font until the block fits, and never grows it", {
@@ -136,7 +177,10 @@ test_that("hard newlines survive wrapping, including blank lines", {
   s <- vl_scene(4, 3, dpi = 96, bg = "white") |>
     draw(text_grob("first\n\nthird", gp = vl_gpar(fontsize = 12),
                    width = vl_unit(60, "mm")))
-  expect_length(line_starts(s), 2L) # two inked lines, with a gap between
+  # At least two inked bands with a gap between. Not an exact count: a
+  # descender can split a band on some fonts, which is why the alignment tests
+  # above stopped relying on banding altogether.
+  expect_gte(length(line_starts(s)), 2L)
   gap <- vl_scene(4, 3, dpi = 96, bg = "white") |>
     draw(text_grob("first\nthird", gp = vl_gpar(fontsize = 12),
                    width = vl_unit(60, "mm")))

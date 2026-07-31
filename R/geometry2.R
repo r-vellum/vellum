@@ -190,6 +190,7 @@ vl_contour <- function(z, levels = NULL, xlim = c(0, 1), ylim = c(0, 1)) {
 
 #' @rdname vl_contour
 #' @param contours The data frame returned by `vl_contour()`.
+#' @param gp,name,vp,role Passed to each [lines_grob()] the contours become.
 #' @param close Draw closed contours as closed rings. `TRUE` (the default) joins
 #'   the last point back to the first for contours `vl_contour()` marked
 #'   `closed`; open contours are never closed.

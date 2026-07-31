@@ -337,7 +337,8 @@ pub fn parse(d: &str) -> SvgPath {
                 last_q = None;
             }
             b'Z' => {
-                cur_closed = true;
+                // Flushed as closed explicitly; the flag only carries state to
+                // the *final* flush after the loop, for a subpath with no `Z`.
                 flush(&mut cur, true, &mut subpaths);
                 cur_closed = false;
                 px = sx;

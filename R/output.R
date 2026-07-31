@@ -113,9 +113,25 @@ render_all <- function(scenes, paths, workers = NULL, ...) {
   invisible(paths)
 }
 
-# Available cores, conservatively: `detectCores()` can report hyperthreads and
-# ignores container limits, and over-subscribing a render is a slowdown.
+# Available cores, conservatively.
+#
+# Three things to respect, in order:
+#
+#  * `_R_CHECK_LIMIT_CORES_`, which `R CMD check` sets. `parallel::mclapply()`
+#    *errors* if more than two processes are spawned under it, so a package that
+#    ignores this makes `R CMD check` fail for anyone using it -- and on CRAN.
+#  * `options(mc.cores)`, the user's explicit answer to this question.
+#  * `detectCores(logical = FALSE)` otherwise, since hyperthreads do not help a
+#    render and over-subscribing is a slowdown.
 .cores <- function() {
+  chk <- Sys.getenv("_R_CHECK_LIMIT_CORES_", "")
+  if (nzchar(chk) && !identical(tolower(chk), "false")) {
+    return(2L)
+  }
+  opt <- getOption("mc.cores")
+  if (!is.null(opt) && is.finite(opt) && opt >= 1) {
+    return(as.integer(opt))
+  }
   n <- tryCatch(parallel::detectCores(logical = FALSE), error = function(e) 1L)
   if (!is.finite(n) || n < 1L) 1L else as.integer(n)
 }

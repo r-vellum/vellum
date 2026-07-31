@@ -220,6 +220,14 @@ grob_raster <- S7::new_class("grob_raster", parent = grob, package = "vellum",
 #'   dimensionless lateral petal scale in `(0, 1]` (recycled per loop): `1`
 #'   (default) is the full teardrop, smaller narrows the petal's **waist**
 #'   without shortening it (the igraph "narrowing" factor).
+#'
+#'   For [text_grob()] these mean something different: `width` is an
+#'   **absolute** wrapping measure (`mm`/`cm`/`in`/`pt`), and giving it breaks
+#'   the label into lines that fit, making the drawn block a box of exactly that
+#'   width — so `just` anchors the box rather than the longest line. `height` is
+#'   used only by `fit`. Relative units are rejected there on purpose: wrapping
+#'   happens when the grob is built, and a viewport has no size in
+#'   `npc`/`native` until render time.
 #' @param gp Graphical parameters, from [vl_gpar()].
 #' @param name Optional name (for [edit_node()]).
 #' @param vp Optional [vl_viewport()] to draw this grob inside.
@@ -320,7 +328,7 @@ lines_grob <- function(x, y, arrow = NULL, start_cap = NULL, end_cap = NULL, off
     cli::cli_abort(c(
       "{.arg id} is an accessibility identifier and must be a single value.",
       i = "{.fn lines_grob} draws ONE polyline. Unlike {.fn path_grob}, it has no grouping argument.",
-      i = "To draw several polylines, pass a list of grobs — see {.fn contour_grob} for an example."
+      i = "To draw several polylines, pass a list of grobs; see {.fn contour_grob} for an example."
     ))
   }
   start_cap <- .check_cap(start_cap, "start_cap", scalar = TRUE)
@@ -905,16 +913,6 @@ raster_grob <- function(image, x = 0.5, y = 0.5, width = 1, height = 1,
 #' @param just Justification: `c(hjust, vjust)` as names (`"left"`, `"centre"`,
 #'   `"right"`, `"bottom"`, `"top"`) or numbers in `[0, 1]`.
 #' @param rot Rotation in degrees, counter-clockwise.
-#' @param width Optional wrapping width, as an **absolute** unit
-#'   ([vl_unit()] in `mm`/`cm`/`in`/`pt`). When given, the label is broken into
-#'   lines that fit, and the drawn block becomes a box of exactly this width —
-#'   so `just` anchors the box, not the longest line. `NULL` (the default) leaves
-#'   text unwrapped.
-#'
-#'   Relative units are rejected on purpose: wrapping happens when the grob is
-#'   built, and a viewport's size in `npc`/`native` is not known until render
-#'   time. Pass the physical width you want to wrap to.
-#' @param height Optional box height (absolute unit), used only by `fit`.
 #' @param align Alignment of lines within the box: `"left"` (default),
 #'   `"centre"`/`"center"`, `"right"`, or `"justify"` (flush both edges, last
 #'   line of each paragraph left as-is).

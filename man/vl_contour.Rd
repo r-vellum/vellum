@@ -32,6 +32,8 @@ placed at the ends of these ranges, matching \code{image()}.}
 \item{close}{Draw closed contours as closed rings. \code{TRUE} (the default) joins
 the last point back to the first for contours \code{vl_contour()} marked
 \code{closed}; open contours are never closed.}
+
+\item{gp, name, vp, role}{Passed to each \code{\link[=lines_grob]{lines_grob()}} the contours become.}
 }
 \value{
 A data frame with one row per point: \code{level}, \code{id} (a distinct
