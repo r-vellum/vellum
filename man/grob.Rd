@@ -45,7 +45,9 @@ roundrect_grob(
   name = NULL,
   vp = NULL,
   id = NULL,
-  role = NULL
+  role = NULL,
+  key = NULL,
+  meta = NULL
 )
 
 lines_grob(
@@ -60,7 +62,9 @@ lines_grob(
   name = NULL,
   vp = NULL,
   id = NULL,
-  role = NULL
+  role = NULL,
+  key = NULL,
+  meta = NULL
 )
 
 polygon_grob(
@@ -71,7 +75,9 @@ polygon_grob(
   name = NULL,
   vp = NULL,
   id = NULL,
-  role = NULL
+  role = NULL,
+  key = NULL,
+  meta = NULL
 )
 
 bezier_grob(
@@ -208,7 +214,9 @@ path_grob(
   gp = vl_gpar(),
   name = NULL,
   vp = NULL,
-  role = NULL
+  role = NULL,
+  key = NULL,
+  meta = NULL
 )
 
 raster_grob(
@@ -239,7 +247,9 @@ text_grob(
   width = NULL,
   height = NULL,
   align = "left",
-  fit = FALSE
+  fit = FALSE,
+  key = NULL,
+  meta = NULL
 )
 }
 \arguments{

@@ -166,7 +166,7 @@ fn lerp_node(a: &Node, b: &Node, t: f64) -> Node {
             gp: lerp_gpar(agp, bgp, t),
         },
         (
-            Node::RoundRect { x: ax, y: ay, w: aw, h: ah, r: ar, xu, yu, wu, hu, ru, sketch, gp: agp },
+            Node::RoundRect { x: ax, y: ay, w: aw, h: ah, r: ar, xu, yu, wu, hu, ru, sketch, key, gp: agp },
             Node::RoundRect { x: bx, y: by, w: bw, h: bh, r: br, gp: bgp, .. },
         ) => Node::RoundRect {
             x: lerp(*ax, *bx, t),
@@ -181,6 +181,7 @@ fn lerp_node(a: &Node, b: &Node, t: f64) -> Node {
             ru: *ru,
             sketch: sketch.clone(),
             gp: lerp_gpar(agp, bgp, t),
+            key: key.clone(),
         },
         (
             Node::Circle { x: ax, y: ay, r: ar, xu, yu, ru, sketch, gp: agp },
@@ -366,7 +367,7 @@ fn lerp_node(a: &Node, b: &Node, t: f64) -> Node {
             key: key.clone(),
         },
         (
-            Node::Text { x: ax, y: ay, xu, yu, rot: arot, hjust, vjust, w, h, gid, gx, gy, gsize, gpath, gface, gcol, halo, label, family, face, size, tpath, gp: agp },
+            Node::Text { x: ax, y: ay, xu, yu, rot: arot, hjust, vjust, w, h, gid, gx, gy, gsize, gpath, gface, gcol, halo, label, family, face, size, tpath, key, gp: agp },
             Node::Text { x: bx, y: by, rot: brot, gp: bgp, .. },
         ) => Node::Text {
             // Halo is a discrete style, not a continuous quantity: snap to
@@ -397,6 +398,7 @@ fn lerp_node(a: &Node, b: &Node, t: f64) -> Node {
             // A baseline path is layout, not a continuous quantity: snap to the
             // left keyframe's like the glyphs it positions.
             tpath: tpath.clone(),
+            key: key.clone(),
             gp: lerp_gpar(agp, bgp, t),
         },
         // Structural nodes (image/group/subraster/panel) and any variant mismatch

@@ -301,6 +301,18 @@ fn halo_of(col: &Robj, width_px: f64) -> Option<(Rgba, f64)> {
     opt_color(col).map(|c| (c, width_px))
 }
 
+/// Resolve a node's coordinate arrays to device px.
+fn resolve_pts(vp: &Vp, x: &[f64], y: &[f64], xu: &[Unit], yu: &[Unit]) -> Vec<(f64, f64)> {
+    let n = x.len().min(y.len());
+    (0..n)
+        .map(|i| {
+            let ux = xu.get(i).copied().unwrap_or(Unit::from_code_off(0, 0.0));
+            let uy = yu.get(i).copied().unwrap_or(Unit::from_code_off(0, 0.0));
+            (vp.x_pos(x[i], ux), vp.y_pos(y[i], uy))
+        })
+        .collect()
+}
+
 /// Zip parallel code/offset arrays from R into resolved units, tolerating a
 /// short offset vector (absent offsets are 0).
 fn units_of(codes: &[i32], offs: &[f64]) -> Vec<Unit> {
@@ -335,7 +347,7 @@ struct TextPath {
 #[derive(Clone, Debug)]
 enum Node {
     Rect { x: f64, y: f64, w: f64, h: f64, xu: Unit, yu: Unit, wu: Unit, hu: Unit, gp: PartialGpar },
-    RoundRect { x: f64, y: f64, w: f64, h: f64, r: f64, xu: Unit, yu: Unit, wu: Unit, hu: Unit, ru: Unit, sketch: Option<crate::sketch::SketchOpts>, gp: PartialGpar },
+    RoundRect { x: f64, y: f64, w: f64, h: f64, r: f64, xu: Unit, yu: Unit, wu: Unit, hu: Unit, ru: Unit, sketch: Option<crate::sketch::SketchOpts>, key: Option<String>, gp: PartialGpar },
     Lines {
         x: Vec<f64>, y: Vec<f64>, xu: Vec<Unit>, yu: Vec<Unit>,
         /// Optional whole-path end caps (absolute-length units): trim the first/
@@ -398,6 +410,9 @@ enum Node {
         /// length and places each glyph at its pen position along it, rotated to
         /// the local tangent — see `TextPath`.
         tpath: Option<TextPath>,
+        /// Optional data key (see `Lines.key`). A vectorised text grob compiles to
+        /// one node per label, so this is genuinely per-label.
+        key: Option<String>,
         gp: PartialGpar,
     },
     /// A batch of rectangles sharing one gpar (one FFI call, one resolve).
@@ -1142,7 +1157,7 @@ impl Scene {
     fn roundrect(&mut self, x: f64, y: f64, w: f64, h: f64, r: f64, xu: i32, xoff: f64, yu: i32, yoff: f64, wu: i32, woff: f64, hu: i32, hoff: f64, ru: i32, roff: f64, fill: Robj, col: Robj, lwd: Robj, alpha: Robj, stroke: Robj,
         sroughness: f64, sbowing: f64, sfill_style: i32, sfill_weight: f64,
         shachure_angle: f64, shachure_gap: f64, scurve_tightness: f64,
-        sdisable_multi: bool, spreserve: bool, sseed: f64,
+        sdisable_multi: bool, spreserve: bool, sseed: f64, key: String,
     ) {
         let gp = PartialGpar::from_robj(&fill, &col, &lwd, &alpha, &stroke);
         let sketch = sketch_from(
@@ -1161,6 +1176,7 @@ impl Scene {
             hu: Unit::from_code_off(hu, hoff),
             ru: Unit::from_code_off(ru, roff),
             sketch,
+            key: opt_key(key),
             gp,
         });
     }
@@ -1496,6 +1512,7 @@ impl Scene {
         alpha: Robj,
         halo_col: Robj,
         halo_width: f64,
+        key: String,
     ) {
         let gp = PartialGpar::from_robj(&rnull(), &col, &rnull(), &alpha, &rnull());
         let halo = halo_of(&halo_col, halo_width);
@@ -1522,6 +1539,7 @@ impl Scene {
             face: face.to_string(),
             size,
             tpath: None,
+            key: opt_key(key),
             gp,
         });
     }
@@ -1585,6 +1603,7 @@ impl Scene {
             family: family.to_string(),
             face: face.to_string(),
             size,
+            key: None,
             tpath: Some(TextPath {
                 px: px.to_vec(),
                 py: py.to_vec(),
@@ -1607,7 +1626,7 @@ impl Scene {
         hjust: f64, vjust: f64, w: &[f64], h: &[f64], nper: &[i32],
         gid: &[i32], gx: &[f64], gy: &[f64], gsize: &[f64], gpath: Vec<String>, gface: &[i32],
         label: Vec<String>, family: &str, face: &str, size: f64, col: Robj, alpha: Robj,
-        halo_col: Robj, halo_width: f64,
+        halo_col: Robj, halo_width: f64, keys: Vec<String>,
     ) {
         let gp = PartialGpar::from_robj(&rnull(), &col, &rnull(), &alpha, &rnull());
         let halo = halo_of(&halo_col, halo_width);
@@ -1640,6 +1659,7 @@ impl Scene {
                 face: face.to_string(),
                 size,
                 tpath: None,
+                key: key_at(&keys, i).map(str::to_string),
                 gp: gp.clone(),
             });
         }
@@ -1658,7 +1678,7 @@ impl Scene {
         gid: &[i32], gx: &[f64], gy: &[f64], gsize: &[f64], gpath: Vec<String>, gface: &[i32],
         gcol: &[i32],
         label: Vec<String>, family: &str, face: &str, size: f64, col: Robj, alpha: Robj,
-        halo_col: Robj, halo_width: f64,
+        halo_col: Robj, halo_width: f64, keys: Vec<String>,
     ) {
         let gp = PartialGpar::from_robj(&rnull(), &col, &rnull(), &alpha, &rnull());
         let halo = halo_of(&halo_col, halo_width);
@@ -1697,6 +1717,7 @@ impl Scene {
                 face: face.to_string(),
                 size,
                 tpath: None,
+                key: key_at(&keys, i).map(str::to_string),
                 gp: gp.clone(),
             });
         }
@@ -2109,6 +2130,117 @@ impl Scene {
         list!(kind = kind, name = name, n = n)
     }
 
+    /// Exact distance from a device-px point to every keyed element, and the
+    /// element's true geometry.
+    ///
+    /// `scene_model()` reports bounding boxes, which is the right thing for a
+    /// rectangular brush and misleading for anything diagonal or thin: a
+    /// segment's bbox is the whole rectangle its endpoints span. This walks the
+    /// same elements and reports the distance to their actual geometry, plus the
+    /// geometry itself (flat `gx`/`gy` split by `gn`) so a client that must
+    /// hit-test locally can do it exactly rather than asking per event.
+    ///
+    /// Filled shapes contain their interior — a point inside a polygon is at
+    /// distance zero, so clicking the middle of a choropleth region hits it.
+    fn pick_table(&self, px: f64, py: f64) -> List {
+        use crate::pick::{circle_dist, poly_dist, rect_dist};
+        let resolved = self.resolve_all();
+        let (mut key, mut kind) = (Vec::new(), Vec::new());
+        let (mut dist, mut gn) = (Vec::new(), Vec::new());
+        let (mut gx, mut gy) = (Vec::new(), Vec::new());
+
+        for (vp_id, node) in self.nodes.iter() {
+            let vp = &resolved[*vp_id].vp;
+            let mut emit = |k: &str, knd: &str, d: f64, pts: &[(f64, f64)]| {
+                key.push(k.to_string());
+                kind.push(knd.to_string());
+                dist.push(d);
+                gn.push(pts.len() as i32);
+                for &(x, y) in pts {
+                    gx.push(x);
+                    gy.push(y);
+                }
+            };
+            match node {
+                // The case this exists for: a real point-to-segment distance.
+                Node::Segments { x0, y0, x1, y1, x0u, y0u, x1u, y1u, keys, .. } => {
+                    let n = [x0.len(), y0.len(), x1.len(), y1.len()].into_iter().min().unwrap_or(0);
+                    for i in 0..n {
+                        let Some(k) = key_at(keys, i) else { continue };
+                        let a = (vp.x_pos(x0[i], x0u[i]), vp.y_pos(y0[i], y0u[i]));
+                        let b = (vp.x_pos(x1[i], x1u[i]), vp.y_pos(y1[i], y1u[i]));
+                        let d = poly_dist(px, py, &[a.0, b.0], &[a.1, b.1], false);
+                        emit(k, "segment", d, &[a, b]);
+                    }
+                }
+                Node::Lines { x, y, xu, yu, key: k, .. } => {
+                    let Some(k) = k.as_deref() else { continue };
+                    let pts = resolve_pts(vp, x, y, xu, yu);
+                    let (xs, ys): (Vec<f64>, Vec<f64>) = pts.iter().copied().unzip();
+                    emit(k, "line", poly_dist(px, py, &xs, &ys, false), &pts);
+                }
+                Node::Polygon { x, y, xu, yu, key: k, .. } => {
+                    let Some(k) = k.as_deref() else { continue };
+                    let pts = resolve_pts(vp, x, y, xu, yu);
+                    let (xs, ys): (Vec<f64>, Vec<f64>) = pts.iter().copied().unzip();
+                    emit(k, "polygon", poly_dist(px, py, &xs, &ys, true), &pts);
+                }
+                Node::Path { x, y, xu, yu, nper, key: k, .. } => {
+                    let Some(k) = k.as_deref() else { continue };
+                    let pts = resolve_pts(vp, x, y, xu, yu);
+                    // A path is rings: nearest over all of them, and inside any
+                    // ring counts as a hit.
+                    let mut best = f64::INFINITY;
+                    let mut at = 0usize;
+                    for len in nper {
+                        let len = (*len).max(0) as usize;
+                        let hi = (at + len).min(pts.len());
+                        if hi > at {
+                            let (xs, ys): (Vec<f64>, Vec<f64>) = pts[at..hi].iter().copied().unzip();
+                            best = best.min(poly_dist(px, py, &xs, &ys, true));
+                        }
+                        at = hi;
+                    }
+                    emit(k, "path", best, &pts);
+                }
+                // Round marks: distance to the disc, not to the bounding square.
+                Node::Circles { x, y, r, xu, yu, ru, keys, .. }
+                | Node::Markers { x, y, size: r, xu, yu, su: ru, keys, .. } => {
+                    let n = [x.len(), y.len(), r.len()].into_iter().min().unwrap_or(0);
+                    for i in 0..n {
+                        let Some(k) = key_at(keys, i) else { continue };
+                        let (cx, cy) = (vp.x_pos(x[i], xu[i]), vp.y_pos(y[i], yu[i]));
+                        let rr = vp.r_len(r[i], ru[i]);
+                        emit(k, "point", circle_dist(px, py, cx, cy, rr), &[(cx, cy)]);
+                    }
+                }
+                Node::Rects { x, y, w, h, xu, yu, wu, hu, keys, .. } => {
+                    let n = [x.len(), y.len(), w.len(), h.len()].into_iter().min().unwrap_or(0);
+                    for i in 0..n {
+                        let Some(k) = key_at(keys, i) else { continue };
+                        let (cx, cy) = (vp.x_pos(x[i], xu[i]), vp.y_pos(y[i], yu[i]));
+                        let (pw, ph) = (vp.x_len(w[i], wu[i]), vp.y_len(h[i], hu[i]));
+                        let (a, b) = ((cx - pw / 2.0, cy - ph / 2.0), (cx + pw / 2.0, cy + ph / 2.0));
+                        emit(k, "rect", rect_dist(px, py, a.0, a.1, b.0, b.1), &[a, b]);
+                    }
+                }
+                // Everything else falls back to its bounding box, which for a
+                // label or a hexagon is a fair description of the target.
+                other => {
+                    let k = match other {
+                        Node::Text { key, .. } | Node::RoundRect { key, .. } => key.as_deref(),
+                        _ => None,
+                    };
+                    let Some(k) = k else { continue };
+                    let Some((x0, y0, x1, y1)) = node_bbox(other, vp) else { continue };
+                    emit(k, node_kind(other), rect_dist(px, py, x0, y0, x1, y1),
+                         &[(x0, y0), (x1, y1)]);
+                }
+            }
+        }
+        list!(key = key, kind = kind, dist = dist, n = gn, x = gx, y = gy)
+    }
+
     /// The font files this scene's text actually resolved to.
     ///
     /// Read off the shaped glyphs rather than re-resolved from family names, so
@@ -2232,6 +2364,22 @@ impl Scene {
                 // Single-shape keyable marks (one row per grob): a Path (e.g. one
                 // sf polygon feature, holes and all), a Polygon, or a Lines poly.
                 // Emit only when keyed; bbox = the extent of all its vertices.
+                Node::Text { x, y, xu, yu, w, h, hjust, vjust, key, .. } if key.is_some() => {
+                    // Same anchor arithmetic the renderer uses, so the reported
+                    // box is where the label actually lands.
+                    let ax = vp.x_pos(*x, *xu);
+                    let ay = vp.y_pos(*y, *yu);
+                    let x0 = ax - hjust * w;
+                    let y0 = ay - (1.0 - vjust) * h;
+                    emit(key.as_deref(), x0, y0, x0 + w, y0 + h);
+                }
+                Node::RoundRect { x, y, w, h, xu, yu, wu, hu, key, .. } if key.is_some() => {
+                    let cx = vp.x_pos(*x, *xu);
+                    let cy = vp.y_pos(*y, *yu);
+                    let pw = vp.x_len(*w, *wu);
+                    let ph = vp.y_len(*h, *hu);
+                    emit(key.as_deref(), cx - pw / 2.0, cy - ph / 2.0, cx + pw / 2.0, cy + ph / 2.0);
+                }
                 Node::Path { x, y, xu, yu, key, .. } if key.is_some() => {
                     if let Some(bb) = vertex_bbox(vp, x, y, xu, yu) {
                         emit(key.as_deref(), bb.0, bb.1, bb.2, bb.3);
@@ -2856,7 +3004,8 @@ impl Scene {
                         fill_then_stroke(b, &path, &gp, t, &clip, vp, FillRule::Winding);
                     }
                 }
-                Node::RoundRect { x, y, w, h, r, xu, yu, wu, hu, ru, sketch, .. } => {
+                Node::RoundRect { x, y, w, h, r, xu, yu, wu, hu, ru, sketch, key, .. } => {
+                    b.set_element_key(key.as_deref());
                     let cx = vp.x_pos(*x, *xu);
                     let cy = vp.y_pos(*y, *yu);
                     let pw = vp.x_len(*w, *wu);
@@ -3388,8 +3537,11 @@ impl Scene {
                 Node::Text {
                     x, y, xu, yu, rot, hjust, vjust, w, h,
                     gid, gx, gy, gsize, gpath, gface, gcol, halo, label, family, face, size,
-                    tpath, ..
+                    tpath, key, ..
                 } => {
+                    // A keyed label is an addressable element like any other
+                    // mark, so it carries `data-key` into the SVG.
+                    b.set_element_key(key.as_deref());
                     // Per-glyph colours carry their own paint, so a rich label draws
                     // even when the shared `gp.col` is "inherit/none" (the base colour
                     // is folded into `gcol` on the R side). A plain label still needs a

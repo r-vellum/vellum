@@ -10,9 +10,15 @@
 # positionally, in paint order. Two families:
 #   * batched (rect/point/circle/hexagon/sector/segment) — one row per element,
 #     always (keys may be NA), mirroring the batched arms of `element_table()`.
-#   * single-shape (path/lines/polygon) — one row per grob, and only when keyed
-#     (mirroring `element_table()`'s `key.is_some()` guard); a single sf feature's
-#     polygon/linestring is one such element.
+#   * single-shape (path/lines/polygon/roundrect) — one row per grob, and only
+#     when keyed (mirroring `element_table()`'s `key.is_some()` guard); a single
+#     sf feature's polygon/linestring is one such element.
+#   * batched-but-keyed-only (text) — a vectorised text grob compiles to one node
+#     per label, each carrying its own key, and `element_table()` emits only the
+#     keyed ones. So it counts like a batch but, like the single shapes,
+#     contributes nothing at all when unkeyed. Labels are the case that makes this
+#     distinction worth having: a plot is full of unkeyed axis text that must not
+#     turn into thousands of phantom elements.
 .sm_mark_of <- function(node) {
   if (S7::S7_inherits(node, grob_rect)) "rect"
   else if (S7::S7_inherits(node, grob_points)) "point"
@@ -23,10 +29,13 @@
   else if (S7::S7_inherits(node, grob_path)) "path"
   else if (S7::S7_inherits(node, grob_lines)) "line"
   else if (S7::S7_inherits(node, grob_polygon)) "polygon"
+  else if (S7::S7_inherits(node, grob_roundrect)) "roundrect"
+  else if (S7::S7_inherits(node, grob_text)) "text"
   else NA_character_
 }
 
-.SM_SINGLE <- c("path", "line", "polygon")
+.SM_SINGLE <- c("path", "line", "polygon", "roundrect")
+.SM_KEYED_BATCH <- c("text")
 
 # Element count of a batched keyable grob (its recycled common length).
 .sm_n <- function(node) {
@@ -77,7 +86,19 @@ scene_model <- function(scene) {
     }
     mark <- .sm_mark_of(node)
     if (is.na(mark)) return(invisible())
-    if (mark %in% .SM_SINGLE) {
+    if (mark %in% .SM_KEYED_BATCH) {
+      # Keyed-only batch: one row per label, but only if the grob has keys at
+      # all. Individual NA keys within a keyed grob still count, because the
+      # backend emitted a node for each.
+      n <- .sm_n(node)
+      if (n == 0L || is.null(node@keys)) return(invisible())
+      k <- rep_len(as.character(node@keys), n)
+      keep <- !is.na(k) & nzchar(k)
+      if (!any(keep)) return(invisible())
+      keys <- k[keep]
+      meta <- if (is.null(node@meta)) vector("list", length(keys)) else rep_len(node@meta, n)[keep]
+      n <- length(keys)
+    } else if (mark %in% .SM_SINGLE) {
       # A single-shape mark: one element, and only in scene_model when keyed
       # (element_table() skips unkeyed paths/lines/polygons).
       key1 <- .sm_key1(node)

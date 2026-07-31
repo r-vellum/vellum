@@ -8,6 +8,7 @@ mod cvd;
 mod color;
 mod font;
 mod oklab;
+mod pick;
 mod place;
 mod render;
 mod scene;

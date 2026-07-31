@@ -914,6 +914,10 @@ S7::method(compile, grob_roundrect) <- function(node, scene) {
     er <- .coord(node@r, "npc", n)
     g <- .gp4(node@gp, scene)
     sk <- .encode_sketch(node@sketch)
+    # `.keys_vec()` is empty when the grob has no key at all; the loop below
+    # indexes it per element, so widen it to n empty strings.
+    kv <- .keys_vec(node, n)
+    if (!length(kv)) kv <- rep("", n)
     # Rounded rects are typically few (keys/labels); one FFI call each, shared gpar.
     for (i in seq_len(n)) {
       scene$roundrect(ex$value[i], ey$value[i], ew$value[i], eh$value[i], er$value[i],
@@ -921,7 +925,8 @@ S7::method(compile, grob_roundrect) <- function(node, scene) {
                       eh$code[i], eh$offset[i], er$code[i], er$offset[i],
                       g$fill, g$col, g$lwd, g$alpha, g$stroke,
                       sk$roughness, sk$bowing, sk$fill_style, sk$fill_weight, sk$hachure_angle,
-                      sk$hachure_gap, sk$curve_tightness, sk$disable_multi, sk$preserve, sk$seed)
+                      sk$hachure_gap, sk$curve_tightness, sk$disable_multi, sk$preserve, sk$seed,
+                      kv[i])
     }
   })
 }
@@ -1167,7 +1172,8 @@ S7::method(compile, grob_text) <- function(node, scene) {
       .draw_richtext_batch(scene, node@label, x, y, hv[1], hv[2], rot,
                            node@gp@fontfamily %||% "", node@gp@fontface %||% "plain",
                            .gp_fontsize(node@gp), node@gp@col, node@gp@alpha,
-                           .gp_halo(node@gp), .gp_features(node@gp))
+                           .gp_halo(node@gp), .gp_features(node@gp),
+                           keys = .keys_or_null(node, n))
       return(invisible())
     }
     labels <- .text_labels(node@label) # seam: rich labels -> strings (plain = identity)
@@ -1182,7 +1188,8 @@ S7::method(compile, grob_text) <- function(node, scene) {
     .draw_text_batch(scene, lab, x, y, hv[1], hv[2], rot,
                      node@gp@fontfamily %||% "", node@gp@fontface %||% "plain",
                      .gp_fontsize(node@gp), node@gp@col, node@gp@alpha,
-                     .gp_halo(node@gp), .gp_features(node@gp), .text_wrap(node))
+                     .gp_halo(node@gp), .gp_features(node@gp), .text_wrap(node),
+                     keys = .keys_or_null(node, n))
   })
 }
 
@@ -1537,6 +1544,13 @@ edit_node <- function(scene, name, ...) {
   k <- as.character(k)
   k[is.na(k)] <- ""
   rep_len(k, n)
+}
+
+# Per-element keys recycled to `n`, or NULL when the grob has none -- the form
+# the text draw paths want, since they index it by drawn-label position.
+.keys_or_null <- function(node, n) {
+  k <- .keys_vec(node, n)
+  if (!length(k)) NULL else k
 }
 
 # The single data key of a single-element shape grob (path/lines/polygon):
