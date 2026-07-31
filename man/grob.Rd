@@ -235,7 +235,11 @@ text_grob(
   name = NULL,
   vp = NULL,
   id = NULL,
-  role = NULL
+  role = NULL,
+  width = NULL,
+  height = NULL,
+  align = "left",
+  fit = FALSE
 )
 }
 \arguments{
@@ -252,6 +256,8 @@ regardless of device aspect); a \emph{regular} flat hexagon is
 dimensionless lateral petal scale in \verb{(0, 1]} (recycled per loop): \code{1}
 (default) is the full teardrop, smaller narrows the petal's \strong{waist}
 without shortening it (the igraph "narrowing" factor).}
+
+\item{height}{Optional box height (absolute unit), used only by \code{fit}.}
 
 \item{sketch}{Optional \code{\link[=sketch]{sketch()}} spec for a hand-drawn look; \code{NULL} = crisp.}
 
@@ -381,6 +387,25 @@ keeps hard pixel edges.}
 \code{"right"}, \code{"bottom"}, \code{"top"}) or numbers in \verb{[0, 1]}.}
 
 \item{rot}{Rotation in degrees, counter-clockwise.}
+
+\item{align}{Alignment of lines within the box: \code{"left"} (default),
+\code{"centre"}/\code{"center"}, \code{"right"}, or \code{"justify"} (flush both edges, last
+line of each paragraph left as-is).}
+
+\item{fit}{Auto-fit sizing. \code{FALSE} (default) keeps \code{gp$fontsize}. \code{TRUE}
+shrinks the font — never grows it — until the wrapped block fits
+\code{width} × \code{height}, down to a floor of 4 pt; a number sets that floor
+instead. Requires \code{width}.}
+
+\item{width}{Optional wrapping width, as an \strong{absolute} unit
+(\code{\link[=vl_unit]{vl_unit()}} in \code{mm}/\code{cm}/\verb{in}/\code{pt}). When given, the label is broken into
+lines that fit, and the drawn block becomes a box of exactly this width —
+so \code{just} anchors the box, not the longest line. \code{NULL} (the default) leaves
+text unwrapped.
+
+Relative units are rejected on purpose: wrapping happens when the grob is
+built, and a viewport's size in \code{npc}/\code{native} is not known until render
+time. Pass the physical width you want to wrap to.}
 }
 \value{
 A grob object.

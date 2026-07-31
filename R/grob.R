@@ -149,7 +149,23 @@ grob_text <- S7::new_class("grob_text", parent = grob, package = "vellum",
     label = S7::new_property(S7::new_union(S7::class_character, vellum_label, S7::class_list)),
     x = .unit_prop(), y = .unit_prop(),
     just = S7::new_property(S7::class_character, default = c("centre", "centre")),
-    rot  = S7::new_property(S7::class_double, default = 0)
+    rot  = S7::new_property(S7::class_double, default = 0),
+    # Width-constrained text. `width`/`height` are absolute millimetres (see
+    # `text_grob()`), NA when unset; `align` is line alignment within the box and
+    # `fit` the floor for auto-fit sizing (NA = no auto-fit).
+    width  = S7::new_property(S7::class_double, default = NA_real_),
+    height = S7::new_property(S7::class_double, default = NA_real_),
+    align  = S7::new_property(S7::class_character, default = "left"),
+    fit    = S7::new_property(S7::class_double, default = NA_real_)
+  )
+)
+grob_textpath <- S7::new_class("grob_textpath", parent = grob, package = "vellum",
+  properties = list(
+    label = S7::new_property(S7::class_character),
+    x = .unit_prop(), y = .unit_prop(),
+    just = S7::new_property(S7::class_character, default = c("centre", "centre")),
+    # Baseline shift perpendicular to the path, in points (+ = left of travel).
+    offset = S7::new_property(S7::class_double, default = 0)
   )
 )
 grob_segments <- S7::new_class("grob_segments", parent = grob, package = "vellum",
@@ -870,14 +886,113 @@ raster_grob <- function(image, x = 0.5, y = 0.5, width = 1, height = 1,
 #' @param just Justification: `c(hjust, vjust)` as names (`"left"`, `"centre"`,
 #'   `"right"`, `"bottom"`, `"top"`) or numbers in `[0, 1]`.
 #' @param rot Rotation in degrees, counter-clockwise.
+#' @param width Optional wrapping width, as an **absolute** unit
+#'   ([vl_unit()] in `mm`/`cm`/`in`/`pt`). When given, the label is broken into
+#'   lines that fit, and the drawn block becomes a box of exactly this width —
+#'   so `just` anchors the box, not the longest line. `NULL` (the default) leaves
+#'   text unwrapped.
+#'
+#'   Relative units are rejected on purpose: wrapping happens when the grob is
+#'   built, and a viewport's size in `npc`/`native` is not known until render
+#'   time. Pass the physical width you want to wrap to.
+#' @param height Optional box height (absolute unit), used only by `fit`.
+#' @param align Alignment of lines within the box: `"left"` (default),
+#'   `"centre"`/`"center"`, `"right"`, or `"justify"` (flush both edges, last
+#'   line of each paragraph left as-is).
+#' @param fit Auto-fit sizing. `FALSE` (default) keeps `gp$fontsize`. `TRUE`
+#'   shrinks the font — never grows it — until the wrapped block fits
+#'   `width` × `height`, down to a floor of 4 pt; a number sets that floor
+#'   instead. Requires `width`.
 #' @export
 text_grob <- function(label, x = 0.5, y = 0.5, just = "centre", rot = 0,
-                      gp = vl_gpar(), name = NULL, vp = NULL, id = NULL, role = NULL) {
+                      gp = vl_gpar(), name = NULL, vp = NULL, id = NULL, role = NULL,
+                      width = NULL, height = NULL, align = "left", fit = FALSE) {
   # Rich labels pass through untouched; everything else coerces to character.
   if (!S7::S7_inherits(label, vellum_label)) label <- as.character(label)
+  align <- match.arg(align, c("left", "centre", "center", "right", "justify"))
+  if (!isFALSE(fit) && is.null(width)) {
+    cli::cli_abort("{.arg fit} needs a {.arg width} to fit into.")
+  }
   grob_text(label = label, x = as_unit(x), y = as_unit(y),
             just = as.character(just), rot = as.numeric(rot),
+            width = .abs_mm(width, "width"), height = .abs_mm(height, "height"),
+            align = align,
+            fit = if (isFALSE(fit)) NA_real_ else if (isTRUE(fit)) 4 else as.numeric(fit),
             gp = gp, name = name, vp = vp, id = id, role = role)
+}
+
+#' Text set along a path
+#'
+#' `text_path_grob()` places a label along a polyline baseline instead of at a
+#' point: each glyph keeps the pen position shaping gave it and is drawn at that
+#' distance along the path, rotated to the local tangent. Use it for labels that
+#' follow an arc, a contour, a river or a curved axis.
+#'
+#' The path is a sequence of points, exactly like [lines_grob()] — pass the
+#' output of [bezier_grob()]-style control points already flattened, or any
+#' polyline. Arc length is measured on the *rendered* path, so the result adapts
+#' to the viewport the grob is drawn in.
+#'
+#' `just` does double duty: the horizontal component slides the run along the
+#' baseline (`"left"` starts at the first point, `"centre"` centres it,
+#' `"right"` ends at the last), and the vertical component positions the glyphs
+#' against the baseline as it would for ordinary text. For finer control of the
+#' standoff — a label riding just above a curve rather than sitting on it — use
+#' `offset`.
+#'
+#' Glyphs follow the tangent, as in SVG `textPath`: a label on the underside
+#' of a closed curve reads upside-down. That is the honest result of the
+#' geometry, and the fix is to reverse the path rather than the glyphs — set the
+#' lower arc as a second `text_path_grob()` whose points run the other way.
+#'
+#' Glyphs are placed one per character. For Latin text that is exact; scripts
+#' where shaping produces a different number of glyphs than characters (Arabic,
+#' Devanagari, and ligature-heavy fonts) will still draw, but the per-glyph
+#' text recovered by PDF copy-paste and by SVG native text degrades to the whole
+#' label on the first glyph.
+#'
+#' @inheritParams grob
+#' @param label A single character string.
+#' @param x,y The baseline path, as unit vectors of equal length.
+#' @param offset Perpendicular standoff from the baseline in points; positive is
+#'   to the left of the direction of travel.
+#' @return A grob.
+#' @examples
+#' th <- seq(pi, 0, length.out = 60)
+#' vl_scene(4, 2.2, dpi = 96, bg = "white") |>
+#'   draw(text_path_grob(
+#'     "text that follows a curve",
+#'     x = 0.5 + 0.42 * cos(th), y = 0.15 + 0.7 * sin(th),
+#'     offset = 3, gp = vl_gpar(fontsize = 13)
+#'   ))
+#' @export
+text_path_grob <- function(label, x, y, just = "centre", offset = 0,
+                           gp = vl_gpar(), name = NULL, vp = NULL, id = NULL,
+                           role = NULL) {
+  label <- as.character(label)
+  if (length(label) != 1L) {
+    cli::cli_abort("{.arg label} must be a single string; got {length(label)}.")
+  }
+  grob_textpath(label = label, x = as_unit(x), y = as_unit(y),
+                just = as.character(just), offset = as.numeric(offset),
+                gp = gp, name = name, vp = vp, id = id, role = role)
+}
+
+# Resolve a text-box dimension to millimetres, insisting it be absolute. NULL
+# stays NA (unset).
+.abs_mm <- function(u, arg) {
+  if (is.null(u)) {
+    return(NA_real_)
+  }
+  u <- as_unit(u)
+  mm <- try(.to_inches(u) * 25.4, silent = TRUE)
+  if (inherits(mm, "try-error") || !is.finite(mm)) {
+    cli::cli_abort(c(
+      "{.arg {arg}} must be an absolute unit ({.val mm}/{.val cm}/{.val in}/{.val pt}).",
+      i = "Text is wrapped when the grob is built, and {.val npc}/{.val native} have no size until render time."
+    ))
+  }
+  mm
 }
 
 #' Size a unit by a grob's extent

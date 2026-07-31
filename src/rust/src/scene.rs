@@ -301,6 +301,35 @@ fn halo_of(col: &Robj, width_px: f64) -> Option<(Rgba, f64)> {
     opt_color(col).map(|c| (c, width_px))
 }
 
+/// Zip parallel code/offset arrays from R into resolved units, tolerating a
+/// short offset vector (absent offsets are 0).
+fn units_of(codes: &[i32], offs: &[f64]) -> Vec<Unit> {
+    codes
+        .iter()
+        .enumerate()
+        .map(|(i, &c)| Unit::from_code_off(c, offs.get(i).copied().unwrap_or(0.0)))
+        .collect()
+}
+
+/// A baseline for text set along a curve.
+///
+/// The points resolve exactly like any other coordinate pair, and arc length is
+/// measured on the *resolved device-px* polyline. That is why this lives here
+/// rather than on the R side: a viewport's pixel extent is not known until
+/// render time, so glyph advances (points) and path length (npc/native) cannot
+/// be put in the same space any earlier.
+#[derive(Clone, Debug)]
+struct TextPath {
+    px: Vec<f64>,
+    py: Vec<f64>,
+    /// Per-vertex units, like every other multi-point primitive. A scalar unit
+    /// would quietly misplace a path whose points came from mixed units.
+    pxu: Vec<Unit>,
+    pyu: Vec<Unit>,
+    /// Baseline shift perpendicular to the path, in points (+ = left of travel).
+    offset: f64,
+}
+
 // --- primitives -------------------------------------------------------------
 
 #[derive(Clone, Debug)]
@@ -364,6 +393,11 @@ enum Node {
         family: String,
         face: String,
         size: f64,
+        /// Optional baseline path. `None` (every ordinary label) places the glyph
+        /// run at `(x, y)` exactly as before. `Some` walks the polyline by arc
+        /// length and places each glyph at its pen position along it, rotated to
+        /// the local tangent — see `TextPath`.
+        tpath: Option<TextPath>,
         gp: PartialGpar,
     },
     /// A batch of rectangles sharing one gpar (one FFI call, one resolve).
@@ -1364,6 +1398,77 @@ impl Scene {
             family: family.to_string(),
             face: face.to_string(),
             size,
+            tpath: None,
+            gp,
+        });
+    }
+
+    /// Add one pre-shaped label set along a polyline baseline. Identical to
+    /// `text()` except that the anchor is the path rather than a point: `hjust`
+    /// slides the run along it (0 = start, 1 = end) and `vjust` still positions
+    /// the line box against the baseline.
+    #[allow(clippy::too_many_arguments)]
+    fn text_path(
+        &mut self,
+        px: &[f64],
+        py: &[f64],
+        pxu: &[i32],
+        pxoff: &[f64],
+        pyu: &[i32],
+        pyoff: &[f64],
+        offset: f64,
+        hjust: f64,
+        vjust: f64,
+        w: f64,
+        h: f64,
+        gid: &[i32],
+        gx: &[f64],
+        gy: &[f64],
+        gsize: &[f64],
+        gpath: Vec<String>,
+        gface: &[i32],
+        label: &str,
+        family: &str,
+        face: &str,
+        size: f64,
+        col: Robj,
+        alpha: Robj,
+        halo_col: Robj,
+        halo_width: f64,
+    ) {
+        let gp = PartialGpar::from_robj(&rnull(), &col, &rnull(), &alpha, &rnull());
+        let halo = halo_of(&halo_col, halo_width);
+        self.emit_node(Node::Text {
+            // The anchor is unused when `tpath` is set, but keep it meaningful so
+            // bbox/lint queries on this node still land somewhere sensible.
+            x: px.first().copied().unwrap_or(0.5),
+            y: py.first().copied().unwrap_or(0.5),
+            xu: units_of(pxu, pxoff).first().copied().unwrap_or(Unit::from_code_off(0, 0.0)),
+            yu: units_of(pyu, pyoff).first().copied().unwrap_or(Unit::from_code_off(0, 0.0)),
+            rot: 0.0,
+            hjust,
+            vjust,
+            w,
+            h,
+            gid: gid.iter().map(|&v| v.max(0) as u32).collect(),
+            gx: gx.to_vec(),
+            gy: gy.to_vec(),
+            gsize: gsize.to_vec(),
+            gpath,
+            gface: gface.iter().map(|&v| v.max(0) as u32).collect(),
+            gcol: Vec::new(),
+            halo,
+            label: label.to_string(),
+            family: family.to_string(),
+            face: face.to_string(),
+            size,
+            tpath: Some(TextPath {
+                px: px.to_vec(),
+                py: py.to_vec(),
+                pxu: units_of(pxu, pxoff),
+                pyu: units_of(pyu, pyoff),
+                offset,
+            }),
             gp,
         });
     }
@@ -1411,6 +1516,7 @@ impl Scene {
                 family: family.to_string(),
                 face: face.to_string(),
                 size,
+                tpath: None,
                 gp: gp.clone(),
             });
         }
@@ -1467,6 +1573,7 @@ impl Scene {
                 family: family.to_string(),
                 face: face.to_string(),
                 size,
+                tpath: None,
                 gp: gp.clone(),
             });
         }
@@ -3107,7 +3214,8 @@ impl Scene {
                 }
                 Node::Text {
                     x, y, xu, yu, rot, hjust, vjust, w, h,
-                    gid, gx, gy, gsize, gpath, gface, gcol, halo, label, family, face, size, ..
+                    gid, gx, gy, gsize, gpath, gface, gcol, halo, label, family, face, size,
+                    tpath, ..
                 } => {
                     // Per-glyph colours carry their own paint, so a rich label draws
                     // even when the shared `gp.col` is "inherit/none" (the base colour
@@ -3150,7 +3258,15 @@ impl Scene {
                         size: *size,
                         dpi: vp.dpi,
                     };
-                    b.draw_text(&run, t, &clip);
+                    match tpath {
+                        // Ordinary label: one run at one anchor, exactly as before.
+                        None => b.draw_text(&run, t, &clip),
+                        // Set along a curve: fan the run out into one single-glyph
+                        // run per glyph, each at its own point and tangent angle.
+                        // Every backend then draws it through the path it already
+                        // has, so raster/SVG/PDF need no new code.
+                        Some(tp) => draw_text_on_path(b, &run, tp, vp, t, &clip),
+                    }
                 }
                 Node::Segments { x0, y0, x1, y1, x0u, y0u, x1u, y1u, scap, ecap, scapu, ecapu, off, offu, arrow, sketch, keys, cols, lwds, .. } => {
                     if let Some(sk) = sketch {
@@ -3820,6 +3936,125 @@ fn push_arrow_head(
 /// Draw the arrowheads for a polyline / batch of segments: `ends` is a list of
 /// `(point, incoming-direction)` already resolved to local px. Open barbs stroke
 /// in `col`; closed heads fill with `col` (and outline). Shared by both nodes.
+/// Set one shaped run along a polyline baseline.
+///
+/// Each glyph keeps the pen position shaping gave it (`gx[i]`, device px) and is
+/// re-placed at the point that far along the resolved path, rotated to the local
+/// tangent. The run is emitted one glyph at a time through the backend's normal
+/// `draw_text`, so raster, SVG and PDF all get correct output — including halos,
+/// per-glyph colours and clipping — without any backend changes.
+///
+/// Assumes one glyph per character: the per-glyph label slice used for PDF
+/// `ToUnicode` and SVG `<text>` falls back to the whole label if shaping produced
+/// a different glyph count (ligatures, complex scripts), which is why
+/// `text_path_grob()` documents itself as Latin-oriented.
+fn draw_text_on_path<B: RenderBackend>(
+    b: &mut B, run: &TextRun, tp: &TextPath, vp: &Vp, t: Transform, clip: &Clip,
+) {
+    let n = run.gid.len().min(run.gx.len()).min(run.gy.len())
+        .min(run.gsize.len()).min(run.gpath.len()).min(run.gface.len());
+    if n == 0 {
+        return;
+    }
+    // Resolve the baseline to device px, dropping repeated points (a zero-length
+    // segment has no tangent).
+    let mut ptx: Vec<f64> = Vec::with_capacity(tp.px.len());
+    let mut pty: Vec<f64> = Vec::with_capacity(tp.py.len());
+    for i in 0..tp.px.len().min(tp.py.len()) {
+        let (qx, qy) = (
+            vp.x_pos(tp.px[i], tp.pxu.get(i).copied().unwrap_or(Unit::from_code_off(0, 0.0))),
+            vp.y_pos(tp.py[i], tp.pyu.get(i).copied().unwrap_or(Unit::from_code_off(0, 0.0))),
+        );
+        if let (Some(&lx), Some(&ly)) = (ptx.last(), pty.last()) {
+            if (qx - lx).abs() < 1e-9 && (qy - ly).abs() < 1e-9 {
+                continue;
+            }
+        }
+        ptx.push(qx);
+        pty.push(qy);
+    }
+    if ptx.len() < 2 {
+        return;
+    }
+    // Cumulative arc length at each vertex.
+    let mut cum: Vec<f64> = Vec::with_capacity(ptx.len());
+    cum.push(0.0);
+    for i in 1..ptx.len() {
+        let d = ((ptx[i] - ptx[i - 1]).powi(2) + (pty[i] - pty[i - 1]).powi(2)).sqrt();
+        cum.push(cum[i - 1] + d);
+    }
+    let total = *cum.last().expect("cum is non-empty");
+    if total <= 0.0 {
+        return;
+    }
+    // `hjust` slides the run along the baseline, mirroring what it does to a
+    // straight label: 0 starts at the path start, 1 ends at the path end.
+    let start = run.hjust * (total - run.w);
+    // Perpendicular offset, points -> device px, same scale glyph sizes use.
+    let off_px = tp.offset * vp.dpi / 72.0;
+
+    // Point and tangent angle (radians, +y down in device space) at arc length s.
+    let at = |s: f64| -> (f64, f64, f64) {
+        let s = s.clamp(0.0, total);
+        let mut k = match cum.binary_search_by(|v| v.partial_cmp(&s).unwrap_or(std::cmp::Ordering::Less)) {
+            Ok(i) => i,
+            Err(i) => i.saturating_sub(1),
+        };
+        k = k.min(ptx.len() - 2);
+        let seg = cum[k + 1] - cum[k];
+        let u = if seg > 0.0 { (s - cum[k]) / seg } else { 0.0 };
+        let (dx, dy) = (ptx[k + 1] - ptx[k], pty[k + 1] - pty[k]);
+        (ptx[k] + u * dx, pty[k] + u * dy, dy.atan2(dx))
+    };
+
+    let bounds: Vec<usize> = run.label.char_indices().map(|(bi, _)| bi)
+        .chain(std::iter::once(run.label.len()))
+        .collect();
+    let exact = n + 1 == bounds.len();
+
+    for i in 0..n {
+        let (cx, cy, ang) = at(start + run.gx[i]);
+        // Glyphs follow the tangent unconditionally, which is what SVG
+        // `textPath` does: on the underside of a closed curve they read
+        // upside-down. Flipping them individually would turn the run into
+        // mirror-writing, so the fix is to reverse the path, not the glyph.
+        // Normal to the path, pointing left of travel in device space (+y down).
+        let (nx, ny) = (ang.sin() * off_px, -ang.cos() * off_px);
+        let glyph_label: &str = if exact { &run.label[bounds[i]..bounds[i + 1]] } else { run.label };
+        let one = TextRun {
+            // `w = 0` with `hjust = 0` puts this glyph's pen exactly at (ax, ay);
+            // the along-path offset is already baked into the point.
+            ax: cx + nx,
+            ay: cy + ny,
+            w: 0.0,
+            h: run.h,
+            hjust: 0.0,
+            vjust: run.vjust,
+            // Device y grows downward, `rot` is counter-clockwise in user space.
+            rot: -ang.to_degrees(),
+            color: run.color,
+            gid: &run.gid[i..i + 1],
+            gx: &ZERO_GX,
+            gy: &run.gy[i..i + 1],
+            gsize: &run.gsize[i..i + 1],
+            gpath: &run.gpath[i..i + 1],
+            gface: &run.gface[i..i + 1],
+            gcolor: if run.gcolor.len() > i { &run.gcolor[i..i + 1] } else { &[] },
+            halo: run.halo,
+            label: glyph_label,
+            family: run.family,
+            face: run.face,
+            size: run.size,
+            dpi: run.dpi,
+        };
+        b.draw_text(&one, t, clip);
+    }
+}
+
+/// The single-element `gx` every on-path glyph uses (its pen offset is folded
+/// into the anchor instead).
+static ZERO_GX: [f64; 1] = [0.0];
+
 fn draw_arrows<B: RenderBackend>(
     b: &mut B, arrow: &Arrow, ends: &[(f32, f32, f64, f64)], col: Rgba,
     style: &StrokeStyle, t: Transform, clip: &Clip, dpi: f64,

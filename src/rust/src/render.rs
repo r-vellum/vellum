@@ -127,6 +127,27 @@ pub enum ClipShape {
 /// The clip applying to a draw: the intersection of `shapes` (empty = no clip).
 /// `id` identifies the originating viewport so backends can cache per-viewport
 /// clip artifacts (a raster `Mask`, an SVG `<clipPath>`).
+/// Split a shaped run into lines as `[lo, hi)` glyph index ranges, breaking on a
+/// change of baseline. Glyphs within a line share one `gy`; a new line is a new
+/// `gy`. A single-line run yields exactly one range, which keeps every
+/// single-line caller on its original code path.
+fn line_runs(run: &TextRun) -> Vec<(usize, usize)> {
+    let n = run.gid.len().min(run.gx.len()).min(run.gy.len());
+    if n == 0 {
+        return Vec::new();
+    }
+    let mut out = Vec::new();
+    let mut lo = 0usize;
+    for i in 1..n {
+        if run.gy[i] != run.gy[lo] {
+            out.push((lo, i));
+            lo = i;
+        }
+    }
+    out.push((lo, n));
+    out
+}
+
 pub struct Clip<'a> {
     pub id: usize,
     pub shapes: &'a [ClipShape],
@@ -1774,7 +1795,17 @@ impl RenderBackend for SvgBackend {
         // A rich (per-glyph colour) label can't be a single `<text>` element, so it
         // always takes the outline path even when native text is otherwise preferred.
         let rich = !run.gcolor.is_empty();
-        if self.outline_text || rich {
+        // Glyph runs grouped into lines by a change of baseline. SVG `<text>`
+        // ignores newlines outright, so a multi-line run emitted as one element
+        // would silently collapse onto one line -- which it did until wrapped
+        // text made that a headline feature rather than a corner case.
+        let lines = line_runs(run);
+        let label_lines: Vec<&str> = run.label.split('\n').collect();
+        // Per-line native text needs the label split to agree with the glyph
+        // grouping. When it doesn't, outlines are the honest fallback: they carry
+        // no such assumption and already place every glyph by its own baseline.
+        let multiline_ok = lines.len() == label_lines.len();
+        if self.outline_text || rich || (lines.len() > 1 && !multiline_ok) {
             // Glyph-faithful: fill the same skrifa outlines the raster backend uses,
             // each placed by the shared glyph transform — so SVG matches raster/PDF
             // exactly (no dependence on the viewer's fonts).
@@ -1868,6 +1899,39 @@ impl RenderBackend for SvgBackend {
             ),
             None => String::new(),
         };
+        // Multi-line: one `<text>` per line, positioned from that line's own
+        // glyphs. Anchoring is explicit (`start` / alphabetic baseline) rather
+        // than inherited from hjust/vjust, because the per-line geometry has
+        // already applied both -- including any `align` shift, which is baked
+        // into the glyph offsets and would be lost by re-anchoring here.
+        if lines.len() > 1 {
+            let mut out = String::new();
+            for (li, &(lo, hi)) in lines.iter().enumerate() {
+                let text = label_lines[li];
+                if text.is_empty() || lo >= hi {
+                    continue; // a blank line has no glyphs and needs no element
+                }
+                out.push_str(&format!(
+                    "<text x=\"{x}\" y=\"{y}\" transform=\"{t}{rot}\" fill=\"{col}\" \
+                     fill-opacity=\"{op}\" font-family=\"{fam}\" font-size=\"{size}\" \
+                     text-anchor=\"start\" dominant-baseline=\"alphabetic\"\
+                     {weight}{style}{halo}>{label}</text>",
+                    x = run.ax + run.gx[lo] - run.hjust * run.w,
+                    y = run.ay - (run.gy[lo] - run.vjust * run.h),
+                    t = matrix_str(transform),
+                    col = rgb_hex(run.color),
+                    op = opacity(run.color),
+                    fam = xml_escape(family),
+                    size = font_px,
+                    halo = halo_attr,
+                    label = xml_escape(text),
+                ));
+            }
+            if !out.is_empty() {
+                self.emit(&out, clip);
+            }
+            return;
+        }
         let element = format!(
             "<text x=\"{x}\" y=\"{y}\" transform=\"{t}{rot}\" fill=\"{col}\" fill-opacity=\"{op}\" \
              font-family=\"{fam}\" font-size=\"{size}\" text-anchor=\"{anchor}\" \

@@ -24,6 +24,7 @@ NULL
     grob_rect = grob_rect, grob_roundrect = grob_roundrect, grob_lines = grob_lines,
     grob_polygon = grob_polygon, grob_circle = grob_circle, grob_points = grob_points,
     grob_hexagon = grob_hexagon, grob_sector = grob_sector, grob_text = grob_text,
+    grob_textpath = grob_textpath,
     grob_segments = grob_segments, grob_loop = grob_loop, grob_path = grob_path,
     grob_raster = grob_raster
   )
