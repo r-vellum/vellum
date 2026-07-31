@@ -113,3 +113,89 @@ test_that("dash_phase scales with lwd, like the nibbles do", {
       gp = vl_gpar(col = "black", lwd = 2, lty = "dashed", dash_phase = 1))))
   expect_false(identical(as.numeric(wide), as.numeric(narrow)))
 })
+
+# --- per-element stroke style on segments_grob (Phase 8a) --------------------
+# Mirrors the per-element `fill` that hexagon_grob()/sector_grob() carry. Absent
+# by default, and the batch then draws in one combined stroke exactly as before.
+
+seg_scene <- function(...) {
+  n <- 6
+  x <- seq(0.1, 0.9, length.out = n)
+  vl_scene(4, 1, dpi = 100, bg = "white") |>
+    draw(segments_grob(x, 0.2, x, 0.8, gp = vl_gpar(col = "grey20", lwd = 4), ...))
+}
+
+test_that("per-segment lwd varies the drawn width", {
+  s <- seg_scene(lwd = c(1, 3, 5, 7, 9, 11))
+  r <- scene_raster(s)
+  col_at <- function(i) {
+    x <- round(seq(0.1, 0.9, length.out = 6)[i] * dim(r)[2])
+    sum(r[1, x, ] < 200)
+  }
+  # Thin first, thick last: the inked column height grows.
+  expect_lt(col_at(1), col_at(6))
+})
+
+test_that("per-segment col varies the drawn colour", {
+  s <- seg_scene(col = c("red", "red", "red", "blue", "blue", "blue"))
+  r <- scene_raster(s)
+  at <- function(i) {
+    x <- round(seq(0.1, 0.9, length.out = 6)[i] * dim(r)[2])
+    as.integer(r[1:3, x, 50])
+  }
+  expect_gt(at(1)[1], at(6)[1]) # red channel higher on the left
+  expect_lt(at(1)[3], at(6)[3]) # blue channel higher on the right
+})
+
+test_that("absent per-element style is byte-identical to before", {
+  a <- withr::local_tempfile(fileext = ".png")
+  b <- withr::local_tempfile(fileext = ".png")
+  vl_clear_render_cache(); render(seg_scene(), a)
+  vl_clear_render_cache(); render(seg_scene(col = NULL, lwd = NULL), b)
+  expect_identical(tools::md5sum(a)[[1]], tools::md5sum(b)[[1]])
+})
+
+test_that("per-element style is recycled to the segment count", {
+  expect_no_error(scene_raster(seg_scene(col = "red")))
+  expect_no_error(scene_raster(seg_scene(lwd = 2)))
+  expect_no_error(scene_raster(seg_scene(col = c("red", "blue"))))
+})
+
+test_that("one grob with per-element style matches many grobs without", {
+  # The whole point: this replaces building one grob per segment.
+  n <- 5
+  x <- seq(0.1, 0.9, length.out = n)
+  w <- c(2, 4, 6, 8, 10)
+  one <- vl_scene(4, 1, dpi = 100, bg = "white") |>
+    draw(segments_grob(x, 0.2, x, 0.8, lwd = w, gp = vl_gpar(col = "black")))
+  many <- vl_scene(4, 1, dpi = 100, bg = "white")
+  for (i in seq_len(n)) {
+    many <- draw(many, segments_grob(x[i], 0.2, x[i], 0.8,
+                                     gp = vl_gpar(col = "black", lwd = w[i])))
+  }
+  a <- withr::local_tempfile(fileext = ".png")
+  b <- withr::local_tempfile(fileext = ".png")
+  vl_clear_render_cache(); render(one, a)
+  vl_clear_render_cache(); render(many, b)
+  expect_identical(tools::md5sum(a)[[1]], tools::md5sum(b)[[1]])
+})
+
+test_that("a per-segment NA colour draws nothing for that segment", {
+  s <- seg_scene(col = c("black", NA, "black", NA, "black", NA))
+  r <- scene_raster(s)
+  at <- function(i) {
+    x <- round(seq(0.1, 0.9, length.out = 6)[i] * dim(r)[2])
+    sum(r[1, x, ] < 200)
+  }
+  expect_gt(at(1), 0)
+  expect_equal(at(2), 0)
+})
+
+test_that("per-element style composes with keys and caps", {
+  expect_no_error(scene_raster(seg_scene(
+    col = c("red", "blue"), lwd = c(2, 6), key = paste0("k", 1:6)
+  )))
+  expect_no_error(scene_raster(seg_scene(
+    lwd = 1:6, start_cap = vl_unit(1, "mm"), end_cap = vl_unit(1, "mm")
+  )))
+})

@@ -1107,6 +1107,7 @@ S7::method(compile, grob_segments) <- function(node, scene) {
                    a$angle, a$len, a$ends, a$closed,
                    sk$roughness, sk$bowing, sk$fill_style, sk$fill_weight, sk$hachure_angle,
                    sk$hachure_gap, sk$curve_tightness, sk$disable_multi, sk$preserve, sk$seed,
+                   .seg_cols(node, n), .seg_lwds(node, n),
                    .keys_vec(node, n))
   })
 }
@@ -1465,6 +1466,32 @@ edit_node <- function(scene, name, ...) {
 # `data-key`, so a non-interactive scene is byte-for-byte unchanged); otherwise a
 # length-`n` character vector with "" for NA/absent entries (no attribute emitted
 # for those elements).
+# Per-segment stroke colour as a flat RGBA int vector (empty = use the shared
+# gp), with the uniform gp alpha folded in exactly as the per-element fills do.
+.seg_cols <- function(node, n) {
+  cols <- node@ecol
+  if (is.null(cols)) {
+    return(integer(0))
+  }
+  cols <- rep_len(cols, n)
+  cols[is.na(cols)] <- "transparent"
+  m <- grDevices::col2rgb(cols, alpha = TRUE)
+  a <- node@gp@alpha
+  if (!is.null(a) && !is.na(a)) m[4L, ] <- round(m[4L, ] * a)
+  as.integer(m)
+}
+
+# Per-segment line widths in R `lwd` units (empty = use the shared gp).
+.seg_lwds <- function(node, n) {
+  w <- node@elwd
+  if (is.null(w)) {
+    return(numeric(0))
+  }
+  w <- rep_len(as.numeric(w), n)
+  w[!is.finite(w)] <- 0
+  w
+}
+
 .keys_vec <- function(node, n) {
   k <- if ("keys" %in% S7::prop_names(node)) node@keys else NULL
   if (is.null(k)) return(character(0))

@@ -454,6 +454,12 @@ enum Node {
         /// Per-element data keys (see `Rects.keys`). Non-empty forces per-segment
         /// emission (the batch is otherwise stroked as one combined path).
         keys: Vec<String>,
+        /// Per-segment stroke colour / width. **Empty** => the shared `gp` applies
+        /// to the whole batch, and the combined fast path stays byte-identical.
+        /// Non-empty => one entry per segment, and each is stroked on its own
+        /// (which is what varying them costs).
+        cols: Vec<Rgba>,
+        lwds: Vec<f64>,
     },
     /// A batch of igraph-style self-loops: a cubic-Bézier teardrop per element,
     /// leaving/re-entering the vertex `(x,y)`, sized by an absolute `size` (and
@@ -1216,6 +1222,7 @@ impl Scene {
         sroughness: f64, sbowing: f64, sfill_style: i32, sfill_weight: f64,
         shachure_angle: f64, shachure_gap: f64, scurve_tightness: f64,
         sdisable_multi: bool, spreserve: bool, sseed: f64,
+        ecols: &[i32], elwds: &[f64],
         keys: Vec<String>,
     ) {
         let gp = PartialGpar::from_robj(&rnull(), &col, &lwd, &alpha, &stroke);
@@ -1230,6 +1237,16 @@ impl Scene {
             off: off.to_vec(), offu: codes(offu),
             arrow: arrow_from(aangle, alen, aends, aclosed), sketch, gp,
             keys,
+            cols: ecols
+                .chunks_exact(4)
+                .map(|c| Rgba {
+                    r: c[0].clamp(0, 255) as u8,
+                    g: c[1].clamp(0, 255) as u8,
+                    b: c[2].clamp(0, 255) as u8,
+                    a: c[3].clamp(0, 255) as u8,
+                })
+                .collect(),
+            lwds: elwds.to_vec(),
         });
     }
 
@@ -3135,7 +3152,7 @@ impl Scene {
                     };
                     b.draw_text(&run, t, &clip);
                 }
-                Node::Segments { x0, y0, x1, y1, x0u, y0u, x1u, y1u, scap, ecap, scapu, ecapu, off, offu, arrow, sketch, keys, .. } => {
+                Node::Segments { x0, y0, x1, y1, x0u, y0u, x1u, y1u, scap, ecap, scapu, ecapu, off, offu, arrow, sketch, keys, cols, lwds, .. } => {
                     if let Some(sk) = sketch {
                         // Hand-drawn: rough each segment (ignores offset/caps/arrow —
                         // §4 exception 4). Per-segment seed so they don't look cloned.
@@ -3202,7 +3219,39 @@ impl Scene {
                                 segs.push((sx, sy, ex, ey, i));
                             }
                         }
-                        if style.width > 0.0 {
+                        // Per-element stroke style forces one stroke per segment --
+                        // there is no "stroke each differently in one call" anywhere,
+                        // so this is inherent, not a missed optimisation. The win is
+                        // on the R side: one grob instead of N.
+                        let per_el = !cols.is_empty() || !lwds.is_empty();
+                        if per_el {
+                            for &(sx, sy, ex, ey, gi) in &segs {
+                                let c = cols.get(gi).copied().unwrap_or(col);
+                                let mut st = style.clone();
+                                if let Some(w) = lwds.get(gi) {
+                                    st.width = (w * vp.dpi / 96.0) as f32;
+                                    // Dash nibbles scale with the width (grid's rule),
+                                    // so rescale them from the shared style's width.
+                                    if !st.dash.is_empty() && style.width > 0.0 {
+                                        let k = st.width / style.width;
+                                        for d in st.dash.iter_mut() {
+                                            *d *= k;
+                                        }
+                                    }
+                                }
+                                if st.width <= 0.0 || c.a == 0 {
+                                    continue;
+                                }
+                                b.set_element_key(key_at(keys, gi));
+                                let mut pb = PathBuilder::new();
+                                pb.move_to(sx, sy);
+                                pb.line_to(ex, ey);
+                                if let Some(path) = pb.finish() {
+                                    b.stroke_lines(&path, t, c, &st, &clip);
+                                }
+                            }
+                            b.set_element_key(None);
+                        } else if style.width > 0.0 {
                             if keys.is_empty() || !b.wants_element_keys() {
                                 // Fast path: all segments in one combined stroke.
                                 // (Also taken by raster/PDF for keyed batches — they
