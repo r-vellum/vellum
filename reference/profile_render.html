@@ -72,7 +72,7 @@ compile (the R→Rust replay, including text shaping), and raster
 <div class="row">
   <main id="main" class="col-md-9"><div class="page-header">
       <img src="../logo.png" class="logo" alt=""><h1>Where a scene spends its render time</h1>
-      <small class="dont-index">Source: <a href="https://github.com/r-vellum/vellum/blob/main/R/analysis.R" class="external-link"><code>R/analysis.R</code></a></small>
+      <small class="dont-index">Source: <a href="https://github.com/r-vellum/vellum/blob/v0.6.1/R/analysis.R" class="external-link"><code>R/analysis.R</code></a></small>
       <div class="d-none name"><code>profile_render.Rd</code></div>
     </div>
 
@@ -132,10 +132,10 @@ per-node table only accounts for raster time.</p>
 <span class="r-msg co"><span class="r-pr">#&gt;</span> <span style="font-weight: bold;">Phases</span> (median of the timed reps):</span>
 <span class="r-msg co"><span class="r-pr">#&gt;</span> <span style="color: #00BBBB;">•</span> build 0.001 s (constructing the R value)</span>
 <span class="r-msg co"><span class="r-pr">#&gt;</span> <span style="color: #00BBBB;">•</span> compile 0.003 s (R -&gt; Rust replay, incl. text shaping)</span>
-<span class="r-msg co"><span class="r-pr">#&gt;</span> <span style="color: #00BBBB;">•</span> raster 0.038 s (drawing)</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> <span style="color: #00BBBB;">•</span> raster 0.042 s (drawing)</span>
 <span class="r-msg co"><span class="r-pr">#&gt;</span> </span>
 <span class="r-msg co"><span class="r-pr">#&gt;</span> <span style="font-weight: bold;">Slowest marks</span> (raster time):</span>
-<span class="r-msg co"><span class="r-pr">#&gt;</span> <span style="color: #00BBBB;">•</span> circle - 2000 elem 0.0078 s 99.6%</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> <span style="color: #00BBBB;">•</span> circle - 2000 elem 0.0086 s 99.6%</span>
 <span class="r-msg co"><span class="r-pr">#&gt;</span> <span style="color: #00BBBB;">•</span> text - 1 elem 0.0000 s 0.4%</span>
 </code></pre></div>
     </div>
