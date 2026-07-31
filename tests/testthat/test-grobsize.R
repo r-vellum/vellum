@@ -70,3 +70,26 @@ test_that("a 45-degree label has a larger bounding box than upright", {
   g45 <- text_grob("Wide label", rot = 45, gp = vl_gpar(fontsize = 20))
   expect_gt(mm(grobheight(g45)), mm(grobheight(g))) # slanted text is taller
 })
+
+test_that("a width-constrained text grob measures its wrapped height, not one line", {
+  # Regression: `grobheight()` used to ignore the wrapping `width`, so a track
+  # sized by it reserved a single line for text that draws as several -- and the
+  # wrapped label overran whatever sat above it.
+  long <- paste(rep("word", 40), collapse = " ")
+  g0 <- text_grob(long, gp = vl_gpar(fontsize = 10))
+  gw <- text_grob(long, width = vl_unit(60, "mm"), gp = vl_gpar(fontsize = 10))
+  # wrapping to 60 mm makes the box that wide and stacks many lines
+  expect_equal(mm(grobwidth(gw)), 60, tolerance = 1e-6)
+  expect_gt(mm(grobheight(gw)), 4 * mm(grobheight(g0))) # several lines tall
+})
+
+test_that("auto-fit shrinks a text grob to its box, and the extent reflects it", {
+  long <- paste(rep("word", 40), collapse = " ")
+  big <- text_grob(long, width = vl_unit(60, "mm"), gp = vl_gpar(fontsize = 10))
+  fit <- text_grob(long, width = vl_unit(60, "mm"), height = vl_unit(10, "mm"),
+                   fit = TRUE, gp = vl_gpar(fontsize = 10))
+  # fitting into a 10 mm box shrinks the font, so the measured block is shorter
+  # and fits the height it was given
+  expect_lt(mm(grobheight(fit)), mm(grobheight(big)))
+  expect_lte(mm(grobheight(fit)), 10 + 1e-6)
+})

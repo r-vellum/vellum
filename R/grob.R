@@ -1060,6 +1060,30 @@ grobheight <- function(grob, mult = 1) vl_unit(mult, "grobheight", data = grob)
       ext <- .md_extent_pt(g@label, fam, face, fs, feat)
       w <- ext[1] / 72 * 25.4
       h <- ext[2] / 72 * 25.4
+    } else if (!is.na(g@width)) {
+      # Width-constrained (wrapping / auto-fit) plain text: measure the *wrapped*
+      # block, not the natural line, or a `grobheight`-sized track reserves one
+      # line for text that draws as several. Mirrors `.text_wrap()` +
+      # `.draw_text_batch()` so the reserved extent matches the drawn glyphs: the
+      # box is `width` mm wide, and its height is the stacked wrapped-line count
+      # (after auto-fit shrinks the font, if `fit` is set).
+      labs <- .text_labels(g@label)
+      if (length(labs) == 0L) return(c(0, 0))
+      rf <- .rs_face(face)
+      wpt <- g@width / 25.4 * 72
+      hpt <- if (is.na(g@height)) NULL else g@height / 25.4 * 72
+      size <- fs
+      if (!is.na(g@fit)) {
+        size <- min(vapply(labs, .fit_size, double(1),
+          width = wpt, height = hpt, align = g@align, family = fam,
+          italic = rf$italic, weight = rf$weight, size = fs, min_size = g@fit,
+          features = feat, USE.NAMES = FALSE))
+      }
+      ext <- lapply(labs, .compose_wrapped, width = wpt, align = g@align,
+        family = fam, italic = rf$italic, weight = rf$weight, size = size,
+        features = feat)
+      w <- max(vapply(ext, function(e) e$w, double(1))) / 72 * 25.4
+      h <- max(vapply(ext, function(e) e$h, double(1))) / 72 * 25.4
     } else {
       labs <- .text_labels(g@label)
       if (length(labs) == 0L) return(c(0, 0))

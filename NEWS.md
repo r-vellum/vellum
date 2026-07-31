@@ -1,3 +1,17 @@
+# vellum 0.6.4
+
+* **Fixed: `grobwidth()`/`grobheight()` of a width-constrained `text_grob()`
+  ignored the wrapping.** The renderer wraps a `text_grob(width=)` to its box and
+  auto-fits when `fit=` is set, but the measurement path (`.grob_extent()`, what a
+  `grobheight`/`grobwidth` unit resolves to) measured the *unwrapped* line. So a
+  layout track sized by `grobheight()` reserved a single line for a label that
+  drew as several, and the wrapped text overran whatever sat above it. Extent now
+  wraps the label to `width` (in mm), stacks the resulting lines, and applies the
+  same auto-fit shrink as drawing — so a reserved region matches the glyphs that
+  land in it. Plain labels only; rich `md()` labels are unchanged (the renderer
+  does not width-wrap them either). Found while wiring wrapped plot
+  titles/subtitles/captions in `vellumplot`.
+
 # vellum 0.6.3
 
 * **Fixed: a keyed multi-box `roundrect_grob()` aborted `scene_model()`, and a
