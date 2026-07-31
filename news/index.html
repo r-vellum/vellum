@@ -66,6 +66,10 @@
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="development version" id="vellum-development-version">vellum (development version)<a class="anchor" aria-label="anchor" href="#vellum-development-version"></a></h2>
 <ul><li>
+<p><strong>Per-segment stroke style.</strong> <code>segments_grob(col = , lwd = )</code> take one value per segment, mirroring the per-element <code>fill</code> that <code><a href="../reference/grob.html">hexagon_grob()</a></code> and <code><a href="../reference/grob.html">sector_grob()</a></code> already carry. Previously varying either meant building <strong>one grob per segment</strong>, and grob construction is the dominant expense on scenes made of many small marks.</p>
+<p>A single grob with per-element style renders byte-identically to N grobs each with its own <code>gp</code> (asserted in tests). No backend can stroke segments differently in one call, so each is still stroked on its own in the output — the saving is in R, not in the file size. Absent, the batch draws in one combined stroke exactly as before.</p>
+</li>
+<li>
 <p><strong><code><a href="../reference/vl_hatch.html">vl_hatch()</a></code> — hatch fills as geometry.</strong> Fills a shape with ruled lines at a given angle, spacing and width. Unlike <code><a href="../reference/vl_pattern.html">vl_pattern()</a></code>, which rasterises a tile, a hatch is real geometry: crisp at any zoom, correct in print, and emitted as <code>&lt;path&gt;</code> data in SVG rather than an embedded image.</p>
 <p>The reason it matters is accessibility. A categorical encoding that fails for a red/green-blind reader — which <code>render(cvd = )</code> shows you and <code><a href="../reference/vl_lint.html">vl_lint()</a></code> flags — is fixed by encoding with <strong>texture as well as hue</strong>. vellum could already diagnose that problem; now it can solve it.</p>
 <p>It is expanded in the scene walk into stroked spans, computed by scanline crossing against the shape, so no backend needs a hatch primitive and only the spans actually inside the shape are emitted.</p>

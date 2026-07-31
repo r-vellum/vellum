@@ -365,6 +365,31 @@ makes the dashes walk, which is also how you animate marching ants.</p>
 <span><span class="fu"><a href="../reference/display.html">display</a></span><span class="op">(</span><span class="va">s</span><span class="op">)</span></span></code></pre></div>
 <p><img src="scene-and-paint_files/figure-html/unnamed-chunk-4-1.png" class="r-plt" alt="" width="576"></p>
 </div>
+<div class="section level3">
+<h3 id="per-segment-style">Per-segment style<a class="anchor" aria-label="anchor" href="#per-segment-style"></a>
+</h3>
+<p><code><a href="../reference/grob.html">segments_grob()</a></code> takes a <code>col</code> and an
+<code>lwd</code> per segment, mirroring the per-element
+<code>fill</code> that <code><a href="../reference/grob.html">hexagon_grob()</a></code> and
+<code><a href="../reference/grob.html">sector_grob()</a></code> carry:</p>
+<div class="sourceCode" id="cb11"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">n</span> <span class="op">&lt;-</span> <span class="fl">14</span></span>
+<span><span class="va">x</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/seq.html" class="external-link">seq</a></span><span class="op">(</span><span class="fl">0.06</span>, <span class="fl">0.94</span>, length.out <span class="op">=</span> <span class="va">n</span><span class="op">)</span></span>
+<span><span class="fu"><a href="../reference/display.html">display</a></span><span class="op">(</span></span>
+<span>  <span class="fu"><a href="../reference/vl_scene.html">vl_scene</a></span><span class="op">(</span><span class="fl">6</span>, <span class="fl">1.2</span><span class="op">)</span> <span class="op">|&gt;</span></span>
+<span>    <span class="fu"><a href="../reference/vl_scene.html">draw</a></span><span class="op">(</span><span class="fu"><a href="../reference/grob.html">segments_grob</a></span><span class="op">(</span><span class="va">x</span>, <span class="fl">0.2</span>, <span class="va">x</span>, <span class="fl">0.8</span>,</span>
+<span>                       lwd <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/seq.html" class="external-link">seq</a></span><span class="op">(</span><span class="fl">1</span>, <span class="fl">13</span>, length.out <span class="op">=</span> <span class="va">n</span><span class="op">)</span>,</span>
+<span>                       col <span class="op">=</span> <span class="fu">grDevices</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/r/grDevices/palettes.html" class="external-link">hcl.colors</a></span><span class="op">(</span><span class="va">n</span>, <span class="st">"Zissou1"</span><span class="op">)</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="op">)</span></span></code></pre></div>
+<p><img src="scene-and-paint_files/figure-html/unnamed-chunk-5-1.png" class="r-plt" alt="" width="576"></p>
+<p>Without this you would build one grob per segment. That renders the
+same pixels — identical, in fact — but costs an R-side grob each, and
+grob construction is the dominant expense on scenes made of many small
+marks.</p>
+<p>No backend can stroke segments differently in a single call, so each
+segment is still stroked on its own in the output. The saving is in R,
+not in the file size.</p>
+</div>
 </div>
 <div class="section level2">
 <h2 id="filling-a-line">Filling a line<a class="anchor" aria-label="anchor" href="#filling-a-line"></a>
@@ -375,7 +400,7 @@ a <code><a href="../reference/grob.html">lines_grob()</a></code> has nothing to 
 <code><a href="../reference/stroke_to_path.html">stroke_to_path()</a></code> converts one into the other — it returns
 the region the stroke would have inked, as a <code><a href="../reference/grob.html">path_grob()</a></code>
 you can fill like any other:</p>
-<div class="sourceCode" id="cb11"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb12"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">zig</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/grob.html">lines_grob</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.08</span>, <span class="fl">0.3</span>, <span class="fl">0.52</span>, <span class="fl">0.74</span>, <span class="fl">0.94</span><span class="op">)</span>,</span>
 <span>                  <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.30</span>, <span class="fl">0.78</span>, <span class="fl">0.28</span>, <span class="fl">0.76</span>, <span class="fl">0.34</span><span class="op">)</span>,</span>
 <span>                  gp <span class="op">=</span> <span class="fu"><a href="../reference/vl_gpar.html">vl_gpar</a></span><span class="op">(</span>col <span class="op">=</span> <span class="st">"steelblue"</span>, lwd <span class="op">=</span> <span class="fl">16</span><span class="op">)</span><span class="op">)</span></span>
@@ -388,7 +413,7 @@ you can fill like any other:</p>
 <span>      fill <span class="op">=</span> <span class="fu"><a href="../reference/gradients.html">linear_gradient</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"#F97316"</span>, <span class="st">"#FACC15"</span>, <span class="st">"#22C55E"</span><span class="op">)</span><span class="op">)</span>, col <span class="op">=</span> <span class="cn">NA</span></span>
 <span>    <span class="op">)</span><span class="op">)</span><span class="op">)</span></span>
 <span><span class="op">)</span></span></code></pre></div>
-<p><img src="scene-and-paint_files/figure-html/unnamed-chunk-5-1.png" class="r-plt" alt="" width="576"></p>
+<p><img src="scene-and-paint_files/figure-html/unnamed-chunk-6-1.png" class="r-plt" alt="" width="576"></p>
 <p>The expansion uses the same stroker the rasterizer uses, so the
 outline is exactly the region that would have been inked rather than an
 approximation of it. The same conversion is what you want for a cutting

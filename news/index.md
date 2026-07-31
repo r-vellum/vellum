@@ -2,6 +2,21 @@
 
 ## vellum (development version)
 
+- **Per-segment stroke style.** `segments_grob(col = , lwd = )` take one
+  value per segment, mirroring the per-element `fill` that
+  [`hexagon_grob()`](https://r-vellum.github.io/vellum/reference/grob.md)
+  and
+  [`sector_grob()`](https://r-vellum.github.io/vellum/reference/grob.md)
+  already carry. Previously varying either meant building **one grob per
+  segment**, and grob construction is the dominant expense on scenes
+  made of many small marks.
+
+  A single grob with per-element style renders byte-identically to N
+  grobs each with its own `gp` (asserted in tests). No backend can
+  stroke segments differently in one call, so each is still stroked on
+  its own in the output — the saving is in R, not in the file size.
+  Absent, the batch draws in one combined stroke exactly as before.
+
 - **[`vl_hatch()`](https://r-vellum.github.io/vellum/reference/vl_hatch.md)
   — hatch fills as geometry.** Fills a shape with ruled lines at a given
   angle, spacing and width. Unlike

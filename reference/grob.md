@@ -188,7 +188,9 @@ segments_grob(
   id = NULL,
   role = NULL,
   key = NULL,
-  meta = NULL
+  meta = NULL,
+  col = NULL,
+  lwd = NULL
 )
 
 path_grob(
@@ -427,6 +429,21 @@ text_grob(
   Segment start/end coordinates
   ([`vl_unit()`](https://r-vellum.github.io/vellum/reference/vl_unit.md)
   or numeric).
+
+- col, lwd:
+
+  **`segments_grob()` only** — per-segment stroke colour and width,
+  recycled to the segment count, mirroring the per-element `fill` that
+  `hexagon_grob()` and `sector_grob()` carry. `NULL` (default) uses the
+  shared `gp`, and the batch is drawn in one combined stroke exactly as
+  before.
+
+  Reach for these instead of building one grob per segment: varying
+  width or colour that way costs an R-side grob each, which is the
+  dominant expense on scenes made of many small marks. Note that no
+  backend can stroke segments differently in a single call, so each
+  segment is stroked on its own here — the saving is in R, not in the
+  output size.
 
 - rule:
 

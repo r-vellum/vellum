@@ -254,7 +254,9 @@ with <code><a href="vl_scene.html">render()</a></code>. Coordinates accept a <co
 <span>  id <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  role <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  key <span class="op">=</span> <span class="cn">NULL</span>,</span>
-<span>  meta <span class="op">=</span> <span class="cn">NULL</span></span>
+<span>  meta <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  col <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  lwd <span class="op">=</span> <span class="cn">NULL</span></span>
 <span><span class="op">)</span></span>
 <span></span>
 <span><span class="fu">path_grob</span><span class="op">(</span></span>
@@ -462,6 +464,18 @@ bulges away from the vertex, e.g. away from the layout centroid).</p></dd>
 
 <dt id="arg-x-y-x-y-">x0, y0, x1, y1<a class="anchor" aria-label="anchor" href="#arg-x-y-x-y-"></a></dt>
 <dd><p>Segment start/end coordinates (<code><a href="vl_unit.html">vl_unit()</a></code> or numeric).</p></dd>
+
+
+<dt id="arg-col-lwd">col, lwd<a class="anchor" aria-label="anchor" href="#arg-col-lwd"></a></dt>
+<dd><p><strong><code>segments_grob()</code> only</strong> — per-segment stroke colour and
+width, recycled to the segment count, mirroring the per-element <code>fill</code> that
+<code>hexagon_grob()</code> and <code>sector_grob()</code> carry. <code>NULL</code> (default) uses the shared
+<code>gp</code>, and the batch is drawn in one combined stroke exactly as before.</p>
+<p>Reach for these instead of building one grob per segment: varying width or
+colour that way costs an R-side grob each, which is the dominant expense on
+scenes made of many small marks. Note that no backend can stroke segments
+differently in a single call, so each segment is stroked on its own here —
+the saving is in R, not in the output size.</p></dd>
 
 
 <dt id="arg-rule">rule<a class="anchor" aria-label="anchor" href="#arg-rule"></a></dt>
