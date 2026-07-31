@@ -75,6 +75,23 @@ rs_set_profiling <- function(on) .Call(wrap__rs_set_profiling, on)
 #' @keywords internal
 rs_take_node_times <- function() .Call(wrap__rs_take_node_times)
 
+#' Largest axis-aligned empty rectangle in `region`, avoiding `boxes`.
+#'
+#' @param boxes Flat numeric `c(x0, y0, x1, y1, ...)` of obstacles.
+#' @param region Numeric `c(x0, y0, x1, y1)` to search within.
+#' @param nx,ny Grid resolution; the answer is exact on this grid.
+#' @return Numeric `c(x0, y0, x1, y1)`, all zero if there is no room.
+#' @keywords internal
+rs_largest_empty_rect <- function(boxes, region, nx, ny) .Call(wrap__rs_largest_empty_rect, boxes, region, nx, ny)
+
+#' Convex or concave hull of a point set, as 1-based point indices in order.
+#'
+#' @param x,y Point coordinates.
+#' @param concavity Threshold; non-finite or non-positive gives the convex hull.
+#' @return Integer vector of 1-based indices.
+#' @keywords internal
+rs_hull <- function(x, y, concavity) .Call(wrap__rs_hull, x, y, concavity)
+
 #' Render a keyframe animation to `path`.
 #'
 #' * `keyframes` — a list of compiled `Scene` external pointers (the `K` states).

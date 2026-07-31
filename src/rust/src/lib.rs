@@ -6,6 +6,7 @@ mod cvd;
 mod color;
 mod font;
 mod oklab;
+mod place;
 mod render;
 mod scene;
 mod sketch;
@@ -291,6 +292,38 @@ fn rs_read_png(path: &str) -> Vec<i32> {
 // Macro to generate exports.
 // This ensures exported functions are registered with R.
 // See corresponding C code in `entrypoint.c`.
+/// Largest axis-aligned empty rectangle in `region`, avoiding `boxes`.
+///
+/// @param boxes Flat numeric `c(x0, y0, x1, y1, ...)` of obstacles.
+/// @param region Numeric `c(x0, y0, x1, y1)` to search within.
+/// @param nx,ny Grid resolution; the answer is exact on this grid.
+/// @return Numeric `c(x0, y0, x1, y1)`, all zero if there is no room.
+/// @keywords internal
+#[extendr]
+fn rs_largest_empty_rect(boxes: &[f64], region: &[f64], nx: i32, ny: i32) -> Vec<f64> {
+    if region.len() < 4 {
+        return vec![0.0; 4];
+    }
+    let r = [region[0], region[1], region[2], region[3]];
+    place::largest_empty_rect(boxes, r, nx.max(1) as usize, ny.max(1) as usize).to_vec()
+}
+
+/// Convex or concave hull of a point set, as 1-based point indices in order.
+///
+/// @param x,y Point coordinates.
+/// @param concavity Threshold; non-finite or non-positive gives the convex hull.
+/// @return Integer vector of 1-based indices.
+/// @keywords internal
+#[extendr]
+fn rs_hull(x: &[f64], y: &[f64], concavity: f64) -> Vec<i32> {
+    let idx = if concavity.is_finite() && concavity > 0.0 {
+        place::concave_hull(x, y, concavity)
+    } else {
+        place::convex_hull(x, y)
+    };
+    idx.into_iter().map(|i| i as i32 + 1).collect()
+}
+
 extendr_module! {
     mod vellum;
     fn rs_backend_info;
@@ -305,6 +338,8 @@ extendr_module! {
     fn rs_stroke_to_path;
     fn rs_set_profiling;
     fn rs_take_node_times;
+    fn rs_largest_empty_rect;
+    fn rs_hull;
     use scene;
     use aggregate;
 }

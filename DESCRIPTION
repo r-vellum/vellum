@@ -55,6 +55,7 @@ Collate:
     'extendr-wrappers.R'
     'lint.R'
     'paint.R'
+    'place.R'
     'scene-model.R'
     'serialize.R'
     'spread.R'

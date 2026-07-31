@@ -1,5 +1,40 @@
 # vellum (development version)
 
+* **`vl_repel()` / `vl_place()` — label placement as an engine service.**
+  `vl_place()` solves label collisions over a scene's resolved geometry and
+  reports each label's displacement; `vl_repel()` applies it and returns a new
+  scene.
+
+  The solve runs in device pixels and the answer is applied as an absolute
+  millimetre offset on top of each label's existing coordinate. That is what
+  makes it coordinate-system-agnostic: a label anchored in `native` units inside
+  a polar, faceted or warped panel moves by the same mechanism as one in `npc`
+  on the page, and every panel is solved together rather than one at a time.
+
+  It moves labels; it does not decide which to drop, shrink or abbreviate.
+  Labels that cannot be placed are reported with `resolved = FALSE` rather than
+  silently piled up or quietly deleted — that call needs to know what the labels
+  mean, and belongs above the engine.
+
+* **`vl_empty_region()` — the largest empty rectangle in a scene.** Where a
+  legend, annotation or watermark can go. Occupancy is rasterised onto a grid,
+  so the answer is exact on that grid and conservative off it: boxes round
+  outward, and it will never claim space that is in fact occupied. It reports
+  millimetres on request, which is the absolute measure `text_grob(width = )`
+  wants — so an annotation can be fitted to the gap that was just found.
+
+* **`vl_hull()` and `vl_buffer()`.** Convex and concave hulls of a point set,
+  and outward offsetting of a ring — for outlining a cluster and building the
+  exclusion zone around it. Note that `concavity` runs the opposite way to what
+  the name suggests: larger is *more* convex, `Inf` is the convex hull, and
+  below about 3 the boundary starts to self-intersect.
+
+* **`element_table()` gains `name`, `kind` and a node index**, and
+  `lint_table()` gains the matching node index, so the per-element and per-node
+  views of a scene can be joined. Without this a batched mark is a single node
+  whose box is the union of every element, which makes a scatter read as one
+  panel-sized obstacle.
+
 * **Text that fits a box.** `text_grob(width = )` wraps a label to an absolute
   measure; `align` sets `"left"` / `"centre"` / `"right"` / `"justify"` within
   the box; `fit = TRUE` shrinks the font until the wrapped block fits
