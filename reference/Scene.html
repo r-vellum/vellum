@@ -32,12 +32,17 @@ S7 layer (vl_scene(), grobs, render()), which compiles to this object."><meta pr
     <li><a class="dropdown-item" href="../articles/typography.html">Typography: layout, halos and OpenType features</a></li>
     <li><a class="dropdown-item" href="../articles/render-quality.html">Render quality: accessibility, crisp edges, group effects</a></li>
     <li><a class="dropdown-item" href="../articles/retained-mode.html">Asking a scene what it drew: read-back, picking, and editing</a></li>
+    <li><a class="dropdown-item" href="../articles/accessible-output.html">Accessible output, and fonts you can trust</a></li>
     <li><a class="dropdown-item" href="../articles/placement.html">Placement: repelling labels, finding room, outlining groups</a></li>
+    <li><a class="dropdown-item" href="../articles/geometry-operations.html">Geometry operations: booleans, contours, imported paths</a></li>
     <li><a class="dropdown-item" href="../articles/datashading.html">Datashading: millions of points, honestly</a></li>
     <li><hr class="dropdown-divider"></li>
     <li><h6 class="dropdown-header" data-toc-skip>Inspecting</h6></li>
     <li><a class="dropdown-item" href="../articles/inspecting-scenes.html">Inspecting a scene: linting, coverage, profiling</a></li>
     <li><a class="dropdown-item" href="../articles/scenes-as-values.html">Scenes as values: saving, comparing, composing</a></li>
+    <li><hr class="dropdown-divider"></li>
+    <li><h6 class="dropdown-header" data-toc-skip>Output</h6></li>
+    <li><a class="dropdown-item" href="../articles/output-formats.html">Choosing an output format</a></li>
     <li><hr class="dropdown-divider"></li>
     <li><h6 class="dropdown-header" data-toc-skip>Interop</h6></li>
     <li><a class="dropdown-item" href="../articles/coming-from-grid.html">Coming from grid</a></li>
@@ -395,6 +400,29 @@ used, rather than re-deriving geometry and drifting from it.</p>
 <h3 id="method-node-index">Method <code>node_index</code><a class="anchor" aria-label="anchor" href="#method-node-index"></a></h3>
 <p>Node identity for the profiler: kind, name, and element count, in node
 order – the same order <code><a href="rs_take_node_times.html">rs_take_node_times()</a></code> reports.</p>
+</div>
+
+<div class="section">
+<h3 id="method-pick-table">Method <code>pick_table</code><a class="anchor" aria-label="anchor" href="#method-pick-table"></a></h3>
+<p>Exact distance from a device-px point to every keyed element, and the
+element's true geometry.</p>
+<p><code><a href="scene_model.html">scene_model()</a></code> reports bounding boxes, which is the right thing for a
+rectangular brush and misleading for anything diagonal or thin: a
+segment's bbox is the whole rectangle its endpoints span. This walks the
+same elements and reports the distance to their actual geometry, plus the
+geometry itself (flat <code>gx</code>/<code>gy</code> split by <code>gn</code>) so a client that must
+hit-test locally can do it exactly rather than asking per event.</p>
+<p>Filled shapes contain their interior — a point inside a polygon is at
+distance zero, so clicking the middle of a choropleth region hits it.</p>
+</div>
+
+<div class="section">
+<h3 id="method-font-table">Method <code>font_table</code><a class="anchor" aria-label="anchor" href="#method-font-table"></a></h3>
+<p>The font files this scene's text actually resolved to.</p>
+<p>Read off the shaped glyphs rather than re-resolved from family names, so
+it reports what was <em>used</em>, not what would be picked if asked again.
+Returns <code>path</code>, <code>index</code> (face within a collection) and <code>glyphs</code> (how many
+glyphs came from that face).</p>
 </div>
 
 <div class="section">

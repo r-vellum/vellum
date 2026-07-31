@@ -55,12 +55,17 @@
     <li><a class="dropdown-item" href="../articles/typography.html">Typography: layout, halos and OpenType features</a></li>
     <li><a class="dropdown-item" href="../articles/render-quality.html">Render quality: accessibility, crisp edges, group effects</a></li>
     <li><a class="dropdown-item" href="../articles/retained-mode.html">Asking a scene what it drew: read-back, picking, and editing</a></li>
+    <li><a class="dropdown-item" href="../articles/accessible-output.html">Accessible output, and fonts you can trust</a></li>
     <li><a class="dropdown-item" href="../articles/placement.html">Placement: repelling labels, finding room, outlining groups</a></li>
+    <li><a class="dropdown-item" href="../articles/geometry-operations.html">Geometry operations: booleans, contours, imported paths</a></li>
     <li><a class="dropdown-item" href="../articles/datashading.html">Datashading: millions of points, honestly</a></li>
     <li><hr class="dropdown-divider"></li>
     <li><h6 class="dropdown-header" data-toc-skip>Inspecting</h6></li>
     <li><a class="dropdown-item" href="../articles/inspecting-scenes.html">Inspecting a scene: linting, coverage, profiling</a></li>
     <li><a class="dropdown-item" href="../articles/scenes-as-values.html">Scenes as values: saving, comparing, composing</a></li>
+    <li><hr class="dropdown-divider"></li>
+    <li><h6 class="dropdown-header" data-toc-skip>Output</h6></li>
+    <li><a class="dropdown-item" href="../articles/output-formats.html">Choosing an output format</a></li>
     <li><hr class="dropdown-divider"></li>
     <li><h6 class="dropdown-header" data-toc-skip>Interop</h6></li>
     <li><a class="dropdown-item" href="../articles/coming-from-grid.html">Coming from grid</a></li>
@@ -275,13 +280,13 @@ unkeyed lines/polygons contribute to <code>ink</code> but not to
 <span><span class="fu"><a href="../reference/profile_render.html">profile_render</a></span><span class="op">(</span><span class="va">heavy</span>, reps <span class="op">=</span> <span class="fl">1</span><span class="op">)</span></span>
 <span><span class="co">#&gt; <span style="font-weight: bold;">Phases</span> (median of the timed reps):</span></span>
 <span><span class="co">#&gt; <span style="color: #00BBBB;">•</span> build 0.001 s (constructing the R value)</span></span>
-<span><span class="co">#&gt; <span style="color: #00BBBB;">•</span> compile 0.019 s (R -&gt; Rust replay, incl. text shaping)</span></span>
-<span><span class="co">#&gt; <span style="color: #00BBBB;">•</span> raster 0.152 s (drawing)</span></span>
+<span><span class="co">#&gt; <span style="color: #00BBBB;">•</span> compile 0.024 s (R -&gt; Rust replay, incl. text shaping)</span></span>
+<span><span class="co">#&gt; <span style="color: #00BBBB;">•</span> raster 0.184 s (drawing)</span></span>
 <span><span class="co">#&gt; </span></span>
 <span><span class="co">#&gt; <span style="font-weight: bold;">Slowest marks</span> (raster time):</span></span>
-<span><span class="co">#&gt; <span style="color: #00BBBB;">•</span> circle points 20000 elem 0.0991 s 76.7%</span></span>
-<span><span class="co">#&gt; <span style="color: #00BBBB;">•</span> segments edges 2000 elem 0.0277 s 21.4%</span></span>
-<span><span class="co">#&gt; <span style="color: #00BBBB;">•</span> text labels 200 elem 0.0024 s 1.9%</span></span></code></pre></div>
+<span><span class="co">#&gt; <span style="color: #00BBBB;">•</span> circle points 20000 elem 0.1178 s 76.7%</span></span>
+<span><span class="co">#&gt; <span style="color: #00BBBB;">•</span> segments edges 2000 elem 0.0331 s 21.5%</span></span>
+<span><span class="co">#&gt; <span style="color: #00BBBB;">•</span> text labels 200 elem 0.0026 s 1.7%</span></span></code></pre></div>
 <p><strong>Read the phase split first.</strong> A render is three
 phases: <em>build</em> (constructing the R value), <em>compile</em> (the
 R→Rust replay, including text shaping), and <em>raster</em> (drawing).

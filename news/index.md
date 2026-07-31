@@ -2,6 +2,179 @@
 
 ## vellum (development version)
 
+- **Every mark family can now carry an element `key`.**
+  [`lines_grob()`](https://r-vellum.github.io/vellum/reference/grob.md),
+  [`polygon_grob()`](https://r-vellum.github.io/vellum/reference/grob.md),
+  [`path_grob()`](https://r-vellum.github.io/vellum/reference/grob.md),
+  [`roundrect_grob()`](https://r-vellum.github.io/vellum/reference/grob.md)
+  and
+  [`text_grob()`](https://r-vellum.github.io/vellum/reference/grob.md)
+  gain `key`/`meta`, joining the batched marks that already had them;
+  [`bezier_grob()`](https://r-vellum.github.io/vellum/reference/grob.md),
+  [`spline_grob()`](https://r-vellum.github.io/vellum/reference/grob.md),
+  [`svg_grob()`](https://r-vellum.github.io/vellum/reference/vl_svg_path.md)
+  and
+  [`contour_grob()`](https://r-vellum.github.io/vellum/reference/vl_contour.md)
+  inherit it.
+
+  A key is what makes a mark addressable — it becomes `data-key` in the
+  SVG and a row in
+  [`scene_model()`](https://r-vellum.github.io/vellum/reference/scene_model.md).
+  Until now a line, an area, a choropleth region or a data label could
+  not carry one, so they could never be hovered, tooltipped, brushed or
+  cross-filtered by an interactive host. Now a whole series can be one
+  addressable thing.
+
+  Keyed text reports one element per label. Note the deliberate
+  asymmetry with the batched marks: lines, polygons, paths and text
+  appear in
+  [`scene_model()`](https://r-vellum.github.io/vellum/reference/scene_model.md)
+  **only when keyed**, because a plot is full of unkeyed gridlines and
+  axis labels that would otherwise bury the marks that mean something.
+
+- **[`vl_nearest()`](https://r-vellum.github.io/vellum/reference/vl_nearest.md)
+  and
+  [`element_geometry()`](https://r-vellum.github.io/vellum/reference/element_geometry.md)
+  — hit-testing that respects the shape.** A bounding box is the right
+  answer for a rectangular brush and the wrong one for anything diagonal
+  or thin: a line across a panel has a bounding box covering the whole
+  panel, so a box-based “what is nearest” matches it from anywhere in
+  the plot.
+
+  [`vl_nearest()`](https://r-vellum.github.io/vellum/reference/vl_nearest.md)
+  measures to the real geometry — perpendicular to a segment, to the
+  disc for round marks, and **zero anywhere inside** a closed polygon,
+  so clicking the middle of a choropleth region hits the region.
+
+  [`element_geometry()`](https://r-vellum.github.io/vellum/reference/element_geometry.md)
+  returns that geometry instead of the answer, for hosts that cannot
+  call R on every mouse move: a browser takes the vertices once and
+  computes distances locally.
+
+- **Animated SVG.** `vl_render_animation(format = "svg")` emits the same
+  keyframe schedule as vector markup, shown in turn by a CSS step
+  animation — resolution-independent, and honouring
+  `prefers-reduced-motion`.
+
+  Choose it by scene complexity, not by preference. Every frame is
+  emitted in full, so size grows with complexity times frame count where
+  a raster format’s does not. Measured on a 30-frame scatter, gzipped:
+  20 marks → 20 KB vs GIF’s 61 KB; 2000 marks → 720 KB vs GIF’s 124 KB.
+  Line art wins clearly; dense marks do not. Above 5 MB vellum warns
+  rather than letting you find out later.
+
+- **[`pdf_pages()`](https://r-vellum.github.io/vellum/reference/pdf_pages.md)
+  — several scenes as the pages of one PDF.** A report’s figures, one
+  facet per page, an animation as a contact sheet. Pages may differ in
+  size, and each page’s tagging survives into the document’s structure
+  tree.
+
+- **[`render_all()`](https://r-vellum.github.io/vellum/reference/render_all.md)
+  — render many scenes across cores.** Embarrassingly parallel, one
+  whole scene per worker. About 3× on four report figures, and asserted
+  byte-identical to rendering them one at a time. Named scenes plus a
+  directory names the files.
+
+- **Fixed: a tagged multi-page PDF orphaned its earlier pages’
+  structure.** A document has exactly one tag tree; each page was
+  setting its own, discarding the previous. Found by building
+  [`pdf_pages()`](https://r-vellum.github.io/vellum/reference/pdf_pages.md),
+  and only reachable there.
+
+- **Tagged PDF output.** The per-mark `id`/`role`/`name` channel now
+  builds a PDF structure tree: a `StructTreeRoot`, a `Figure` for the
+  plot as a whole carrying the
+  [`describe()`](https://r-vellum.github.io/vellum/reference/describe.md)
+  text, and one structure element per marked-up mark, in draw order —
+  which for a graphic is reading order.
+
+  This needs no new annotation API: a scene already marked up for the
+  web is already marked up for PDF. `role = "presentation"` marks a node
+  a PDF *artifact*, so gridlines and panel backgrounds are skipped by
+  assistive technology rather than read aloud.
+
+  Structure is metadata — the rendered pixels are unchanged — and a
+  scene with no marked-up nodes produces exactly the PDF it always did.
+
+- **[`scene_fonts()`](https://r-vellum.github.io/vellum/reference/scene_fonts.md),
+  [`font_pin()`](https://r-vellum.github.io/vellum/reference/font_pin.md)
+  and
+  [`font_check()`](https://r-vellum.github.io/vellum/reference/font_pin.md).**
+  vellum claims identical pixels on every OS and in CI. Layout, shaping
+  and rasterisation deliver that; font *resolution* does not and cannot,
+  since `"sans"` is a different file on every platform.
+
+  These make that gap visible rather than pretending it away:
+  [`scene_fonts()`](https://r-vellum.github.io/vellum/reference/scene_fonts.md)
+  reports the faces the text actually resolved to (read off the shaped
+  glyphs), and a pin next to a reference image lets a failing comparison
+  be attributed — your change, or the machine’s fonts.
+
+  They deliberately do not bundle fonts. vellum resolves through so it
+  agrees with the rest of R’s graphics stack; for a guarantee rather
+  than a check, register the exact file with
+  [`systemfonts::register_font()`](https://systemfonts.r-lib.org/reference/register_font.html).
+
+- **[`vl_path_op()`](https://r-vellum.github.io/vellum/reference/vl_path_op.md)
+  — boolean operations on paths.** Union, intersection, difference and
+  exclusive-or over closed rings.
+
+  The result is **geometry**, not a render-time mask, and that is the
+  point: it is an ordinary path, so it can be measured, hit-tested,
+  simplified, filled with its own gradient, stroked along the boundary
+  the operation created, exported as `<path>` data, and used as the
+  operand of another boolean. A clip can do none of those, rasterises,
+  and degrades on some PDF paths.
+
+  `rule` describes how to read the **inputs** — whether a ring inside
+  another is a hole or an island — and operands must be in a single
+  coordinate space, since a boolean has to be computed somewhere.
+
+- **[`vl_contour()`](https://r-vellum.github.io/vellum/reference/vl_contour.md)
+  and
+  [`contour_grob()`](https://r-vellum.github.io/vellum/reference/vl_contour.md)
+  — contours from a grid.** Marching squares over any matrix, with
+  saddle cells resolved from the centre value rather than an arbitrary
+  fixed choice, and cells with missing corners skipped so a contour
+  breaks around a hole instead of being drawn through it.
+
+  Segments are chained into continuous polylines. Under a solid stroke
+  that is invisible; for everything else it is not — an unchained
+  contour restarts its dash pattern in every grid cell and cannot be
+  simplified, measured or closed. Closed contours come back marked
+  `closed`, so a filled density contour is a
+  [`path_grob()`](https://r-vellum.github.io/vellum/reference/grob.md)
+  away.
+
+- **[`svg_grob()`](https://r-vellum.github.io/vellum/reference/vl_svg_path.md)
+  and
+  [`vl_svg_path()`](https://r-vellum.github.io/vellum/reference/vl_svg_path.md)
+  — SVG path data as scene geometry.** The full `d` grammar, including
+  relative forms, implicit repeated commands, the smooth-curve
+  reflection rules, and elliptical arcs with the packed flag form
+  minified icon files use. Icon sets ship one `<path d="...">` per
+  glyph, so this is what makes crisp vector markers possible.
+
+  It reads path *data*, not SVG documents — no stylesheets, gradients,
+  `<use>`, clip paths or element transforms. Use an XML parser to pull
+  `d` strings out of a file.
+
+- **Fixed:
+  [`draw()`](https://r-vellum.github.io/vellum/reference/vl_scene.md)
+  accepted a list of grobs and then failed to compile it.** The list was
+  appended as one child and the failure surfaced much later as
+  `Can't find method for compile(<list>)`. A list now draws each
+  element.
+
+- **[`lines_grob()`](https://r-vellum.github.io/vellum/reference/grob.md)
+  now rejects a multi-value `id`.** Its `id` is the accessibility
+  identifier, but
+  [`path_grob()`](https://r-vellum.github.io/vellum/reference/grob.md)’s
+  is a *grouping* variable — the same argument name with the opposite
+  meaning. Passing a grouping vector by analogy silently drew one
+  polyline through every group, joining them with straight lines across
+  the plot.
+
 - **[`vl_repel()`](https://r-vellum.github.io/vellum/reference/vl_place.md)
   /
   [`vl_place()`](https://r-vellum.github.io/vellum/reference/vl_place.md)

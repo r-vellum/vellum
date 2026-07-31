@@ -10,8 +10,12 @@
   effects](https://r-vellum.github.io/vellum/articles/render-quality.md):
 - [Asking a scene what it drew: read-back, picking, and
   editing](https://r-vellum.github.io/vellum/articles/retained-mode.md):
+- [Accessible output, and fonts you can
+  trust](https://r-vellum.github.io/vellum/articles/accessible-output.md):
 - [Placement: repelling labels, finding room, outlining
   groups](https://r-vellum.github.io/vellum/articles/placement.md):
+- [Geometry operations: booleans, contours, imported
+  paths](https://r-vellum.github.io/vellum/articles/geometry-operations.md):
 - [Datashading: millions of points,
   honestly](https://r-vellum.github.io/vellum/articles/datashading.md):
 
@@ -21,6 +25,11 @@
   profiling](https://r-vellum.github.io/vellum/articles/inspecting-scenes.md):
 - [Scenes as values: saving, comparing,
   composing](https://r-vellum.github.io/vellum/articles/scenes-as-values.md):
+
+### Output
+
+- [Choosing an output
+  format](https://r-vellum.github.io/vellum/articles/output-formats.md):
 
 ### Interop
 

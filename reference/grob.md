@@ -39,7 +39,9 @@ roundrect_grob(
   name = NULL,
   vp = NULL,
   id = NULL,
-  role = NULL
+  role = NULL,
+  key = NULL,
+  meta = NULL
 )
 
 lines_grob(
@@ -54,7 +56,9 @@ lines_grob(
   name = NULL,
   vp = NULL,
   id = NULL,
-  role = NULL
+  role = NULL,
+  key = NULL,
+  meta = NULL
 )
 
 polygon_grob(
@@ -65,7 +69,9 @@ polygon_grob(
   name = NULL,
   vp = NULL,
   id = NULL,
-  role = NULL
+  role = NULL,
+  key = NULL,
+  meta = NULL
 )
 
 bezier_grob(
@@ -202,7 +208,9 @@ path_grob(
   gp = vl_gpar(),
   name = NULL,
   vp = NULL,
-  role = NULL
+  role = NULL,
+  key = NULL,
+  meta = NULL
 )
 
 raster_grob(
@@ -233,7 +241,9 @@ text_grob(
   width = NULL,
   height = NULL,
   align = "left",
-  fit = FALSE
+  fit = FALSE,
+  key = NULL,
+  meta = NULL
 )
 ```
 
@@ -261,9 +271,13 @@ text_grob(
   `1` (default) is the full teardrop, smaller narrows the petal's
   **waist** without shortening it (the igraph "narrowing" factor).
 
-- height:
-
-  Optional box height (absolute unit), used only by `fit`.
+  For `text_grob()` these mean something different: `width` is an
+  **absolute** wrapping measure (`mm`/`cm`/`in`/`pt`), and giving it
+  breaks the label into lines that fit, making the drawn block a box of
+  exactly that width — so `just` anchors the box rather than the longest
+  line. `height` is used only by `fit`. Relative units are rejected
+  there on purpose: wrapping happens when the grob is built, and a
+  viewport has no size in `npc`/`native` until render time.
 
 - sketch:
 
@@ -499,19 +513,6 @@ text_grob(
   the font — never grows it — until the wrapped block fits `width` ×
   `height`, down to a floor of 4 pt; a number sets that floor instead.
   Requires `width`.
-
-- width:
-
-  Optional wrapping width, as an **absolute** unit
-  ([`vl_unit()`](https://r-vellum.github.io/vellum/reference/vl_unit.md)
-  in `mm`/`cm`/`in`/`pt`). When given, the label is broken into lines
-  that fit, and the drawn block becomes a box of exactly this width — so
-  `just` anchors the box, not the longest line. `NULL` (the default)
-  leaves text unwrapped.
-
-  Relative units are rejected on purpose: wrapping happens when the grob
-  is built, and a viewport's size in `npc`/`native` is not known until
-  render time. Pass the physical width you want to wrap to.
 
 ## Value
 

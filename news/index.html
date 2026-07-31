@@ -30,12 +30,17 @@
     <li><a class="dropdown-item" href="../articles/typography.html">Typography: layout, halos and OpenType features</a></li>
     <li><a class="dropdown-item" href="../articles/render-quality.html">Render quality: accessibility, crisp edges, group effects</a></li>
     <li><a class="dropdown-item" href="../articles/retained-mode.html">Asking a scene what it drew: read-back, picking, and editing</a></li>
+    <li><a class="dropdown-item" href="../articles/accessible-output.html">Accessible output, and fonts you can trust</a></li>
     <li><a class="dropdown-item" href="../articles/placement.html">Placement: repelling labels, finding room, outlining groups</a></li>
+    <li><a class="dropdown-item" href="../articles/geometry-operations.html">Geometry operations: booleans, contours, imported paths</a></li>
     <li><a class="dropdown-item" href="../articles/datashading.html">Datashading: millions of points, honestly</a></li>
     <li><hr class="dropdown-divider"></li>
     <li><h6 class="dropdown-header" data-toc-skip>Inspecting</h6></li>
     <li><a class="dropdown-item" href="../articles/inspecting-scenes.html">Inspecting a scene: linting, coverage, profiling</a></li>
     <li><a class="dropdown-item" href="../articles/scenes-as-values.html">Scenes as values: saving, comparing, composing</a></li>
+    <li><hr class="dropdown-divider"></li>
+    <li><h6 class="dropdown-header" data-toc-skip>Output</h6></li>
+    <li><a class="dropdown-item" href="../articles/output-formats.html">Choosing an output format</a></li>
     <li><hr class="dropdown-divider"></li>
     <li><h6 class="dropdown-header" data-toc-skip>Interop</h6></li>
     <li><a class="dropdown-item" href="../articles/coming-from-grid.html">Coming from grid</a></li>
@@ -67,6 +72,48 @@
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="development version" id="vellum-development-version">vellum (development version)<a class="anchor" aria-label="anchor" href="#vellum-development-version"></a></h2>
 <ul><li>
+<p><strong>Every mark family can now carry an element <code>key</code>.</strong> <code><a href="../reference/grob.html">lines_grob()</a></code>, <code><a href="../reference/grob.html">polygon_grob()</a></code>, <code><a href="../reference/grob.html">path_grob()</a></code>, <code><a href="../reference/grob.html">roundrect_grob()</a></code> and <code><a href="../reference/grob.html">text_grob()</a></code> gain <code>key</code>/<code>meta</code>, joining the batched marks that already had them; <code><a href="../reference/grob.html">bezier_grob()</a></code>, <code><a href="../reference/grob.html">spline_grob()</a></code>, <code><a href="../reference/vl_svg_path.html">svg_grob()</a></code> and <code><a href="../reference/vl_contour.html">contour_grob()</a></code> inherit it.</p>
+<p>A key is what makes a mark addressable — it becomes <code>data-key</code> in the SVG and a row in <code><a href="../reference/scene_model.html">scene_model()</a></code>. Until now a line, an area, a choropleth region or a data label could not carry one, so they could never be hovered, tooltipped, brushed or cross-filtered by an interactive host. Now a whole series can be one addressable thing.</p>
+<p>Keyed text reports one element per label. Note the deliberate asymmetry with the batched marks: lines, polygons, paths and text appear in <code><a href="../reference/scene_model.html">scene_model()</a></code> <strong>only when keyed</strong>, because a plot is full of unkeyed gridlines and axis labels that would otherwise bury the marks that mean something.</p>
+</li>
+<li>
+<p><strong><code><a href="../reference/vl_nearest.html">vl_nearest()</a></code> and <code><a href="../reference/element_geometry.html">element_geometry()</a></code> — hit-testing that respects the shape.</strong> A bounding box is the right answer for a rectangular brush and the wrong one for anything diagonal or thin: a line across a panel has a bounding box covering the whole panel, so a box-based “what is nearest” matches it from anywhere in the plot.</p>
+<p><code><a href="../reference/vl_nearest.html">vl_nearest()</a></code> measures to the real geometry — perpendicular to a segment, to the disc for round marks, and <strong>zero anywhere inside</strong> a closed polygon, so clicking the middle of a choropleth region hits the region.</p>
+<p><code><a href="../reference/element_geometry.html">element_geometry()</a></code> returns that geometry instead of the answer, for hosts that cannot call R on every mouse move: a browser takes the vertices once and computes distances locally.</p>
+</li>
+<li>
+<p><strong>Animated SVG.</strong> <code>vl_render_animation(format = "svg")</code> emits the same keyframe schedule as vector markup, shown in turn by a CSS step animation — resolution-independent, and honouring <code>prefers-reduced-motion</code>.</p>
+<p>Choose it by scene complexity, not by preference. Every frame is emitted in full, so size grows with complexity times frame count where a raster format’s does not. Measured on a 30-frame scatter, gzipped: 20 marks → 20 KB vs GIF’s 61 KB; 2000 marks → 720 KB vs GIF’s 124 KB. Line art wins clearly; dense marks do not. Above 5 MB vellum warns rather than letting you find out later.</p>
+</li>
+<li><p><strong><code><a href="../reference/pdf_pages.html">pdf_pages()</a></code> — several scenes as the pages of one PDF.</strong> A report’s figures, one facet per page, an animation as a contact sheet. Pages may differ in size, and each page’s tagging survives into the document’s structure tree.</p></li>
+<li><p><strong><code><a href="../reference/render_all.html">render_all()</a></code> — render many scenes across cores.</strong> Embarrassingly parallel, one whole scene per worker. About 3× on four report figures, and asserted byte-identical to rendering them one at a time. Named scenes plus a directory names the files.</p></li>
+<li><p><strong>Fixed: a tagged multi-page PDF orphaned its earlier pages’ structure.</strong> A document has exactly one tag tree; each page was setting its own, discarding the previous. Found by building <code><a href="../reference/pdf_pages.html">pdf_pages()</a></code>, and only reachable there.</p></li>
+<li>
+<p><strong>Tagged PDF output.</strong> The per-mark <code>id</code>/<code>role</code>/<code>name</code> channel now builds a PDF structure tree: a <code>StructTreeRoot</code>, a <code>Figure</code> for the plot as a whole carrying the <code><a href="../reference/describe.html">describe()</a></code> text, and one structure element per marked-up mark, in draw order — which for a graphic is reading order.</p>
+<p>This needs no new annotation API: a scene already marked up for the web is already marked up for PDF. <code>role = "presentation"</code> marks a node a PDF <em>artifact</em>, so gridlines and panel backgrounds are skipped by assistive technology rather than read aloud.</p>
+<p>Structure is metadata — the rendered pixels are unchanged — and a scene with no marked-up nodes produces exactly the PDF it always did.</p>
+</li>
+<li>
+<p><strong><code><a href="../reference/scene_fonts.html">scene_fonts()</a></code>, <code><a href="../reference/font_pin.html">font_pin()</a></code> and <code><a href="../reference/font_pin.html">font_check()</a></code>.</strong> vellum claims identical pixels on every OS and in CI. Layout, shaping and rasterisation deliver that; font <em>resolution</em> does not and cannot, since <code>"sans"</code> is a different file on every platform.</p>
+<p>These make that gap visible rather than pretending it away: <code><a href="../reference/scene_fonts.html">scene_fonts()</a></code> reports the faces the text actually resolved to (read off the shaped glyphs), and a pin next to a reference image lets a failing comparison be attributed — your change, or the machine’s fonts.</p>
+<p>They deliberately do not bundle fonts. vellum resolves through  so it agrees with the rest of R’s graphics stack; for a guarantee rather than a check, register the exact file with <code><a href="https://systemfonts.r-lib.org/reference/register_font.html" class="external-link">systemfonts::register_font()</a></code>.</p>
+</li>
+<li>
+<p><strong><code><a href="../reference/vl_path_op.html">vl_path_op()</a></code> — boolean operations on paths.</strong> Union, intersection, difference and exclusive-or over closed rings.</p>
+<p>The result is <strong>geometry</strong>, not a render-time mask, and that is the point: it is an ordinary path, so it can be measured, hit-tested, simplified, filled with its own gradient, stroked along the boundary the operation created, exported as <code>&lt;path&gt;</code> data, and used as the operand of another boolean. A clip can do none of those, rasterises, and degrades on some PDF paths.</p>
+<p><code>rule</code> describes how to read the <strong>inputs</strong> — whether a ring inside another is a hole or an island — and operands must be in a single coordinate space, since a boolean has to be computed somewhere.</p>
+</li>
+<li>
+<p><strong><code><a href="../reference/vl_contour.html">vl_contour()</a></code> and <code><a href="../reference/vl_contour.html">contour_grob()</a></code> — contours from a grid.</strong> Marching squares over any matrix, with saddle cells resolved from the centre value rather than an arbitrary fixed choice, and cells with missing corners skipped so a contour breaks around a hole instead of being drawn through it.</p>
+<p>Segments are chained into continuous polylines. Under a solid stroke that is invisible; for everything else it is not — an unchained contour restarts its dash pattern in every grid cell and cannot be simplified, measured or closed. Closed contours come back marked <code>closed</code>, so a filled density contour is a <code><a href="../reference/grob.html">path_grob()</a></code> away.</p>
+</li>
+<li>
+<p><strong><code><a href="../reference/vl_svg_path.html">svg_grob()</a></code> and <code><a href="../reference/vl_svg_path.html">vl_svg_path()</a></code> — SVG path data as scene geometry.</strong> The full <code>d</code> grammar, including relative forms, implicit repeated commands, the smooth-curve reflection rules, and elliptical arcs with the packed flag form minified icon files use. Icon sets ship one <code>&lt;path d="..."&gt;</code> per glyph, so this is what makes crisp vector markers possible.</p>
+<p>It reads path <em>data</em>, not SVG documents — no stylesheets, gradients, <code>&lt;use&gt;</code>, clip paths or element transforms. Use an XML parser to pull <code>d</code> strings out of a file.</p>
+</li>
+<li><p><strong>Fixed: <code><a href="../reference/vl_scene.html">draw()</a></code> accepted a list of grobs and then failed to compile it.</strong> The list was appended as one child and the failure surfaced much later as <code>Can't find method for compile(&lt;list&gt;)</code>. A list now draws each element.</p></li>
+<li><p><strong><code><a href="../reference/grob.html">lines_grob()</a></code> now rejects a multi-value <code>id</code>.</strong> Its <code>id</code> is the accessibility identifier, but <code><a href="../reference/grob.html">path_grob()</a></code>’s is a <em>grouping</em> variable — the same argument name with the opposite meaning. Passing a grouping vector by analogy silently drew one polyline through every group, joining them with straight lines across the plot.</p></li>
+<li>
 <p><strong><code><a href="../reference/vl_place.html">vl_repel()</a></code> / <code><a href="../reference/vl_place.html">vl_place()</a></code> — label placement as an engine service.</strong> <code><a href="../reference/vl_place.html">vl_place()</a></code> solves label collisions over a scene’s resolved geometry and reports each label’s displacement; <code><a href="../reference/vl_place.html">vl_repel()</a></code> applies it and returns a new scene.</p>
 <p>The solve runs in device pixels and the answer is applied as an absolute millimetre offset on top of each label’s existing coordinate. That is what makes it coordinate-system-agnostic: a label anchored in <code>native</code> units inside a polar, faceted or warped panel moves by the same mechanism as one in <code>npc</code> on the page, and every panel is solved together rather than one at a time.</p>
 <p>It moves labels; it does not decide which to drop, shrink or abbreviate. Labels that cannot be placed are reported with <code>resolved = FALSE</code> rather than silently piled up or quietly deleted — that call needs to know what the labels mean, and belongs above the engine.</p>

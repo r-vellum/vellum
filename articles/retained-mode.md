@@ -156,9 +156,8 @@ route a click back to the datum that drew the mark.
 picks one node;
 [`scene_model()`](https://r-vellum.github.io/vellum/reference/scene_model.md)
 returns the whole picture. It walks a rendered scene and returns one row
-per drawn element of the *keyable* marks (points, circles, rects,
-hexagons, sectors, segments), pairing each element’s identity with its
-resolved device-pixel bounding box.
+per drawn element, pairing each element’s identity with its resolved
+device-pixel bounding box.
 
 ``` r
 
@@ -199,6 +198,112 @@ scene_model(keyed)$elements[, c("mark", "key", "x", "y")]
 #> 3 point row-3 408 144
 ```
 
+### Every mark family can be keyed
+
+Points, rects, circles, hexagons, sectors and segments are *batched*
+marks: they report a row whether or not they carry a key, so a plain
+scene still yields a geometry table.
+
+Lines, polygons, paths, rounded rects and text carry keys too, and
+report a row **only when keyed**. The asymmetry is deliberate: a plot is
+full of unkeyed gridlines and axis labels, and reporting those would
+bury the marks that mean something in thousands of phantom elements.
+
+``` r
+
+series <- vl_scene(5, 2.4, bg = "white") |>
+  push(vl_viewport(name = "panel", xscale = c(1, 6), yscale = c(0, 10))) |>
+  draw(lines_grob(vl_unit(1:6, "native"), vl_unit(c(2, 5, 4, 8, 6, 9), "native"),
+                  gp = vl_gpar(col = "#2C6FA6", lwd = 2),
+                  key = "series-A", meta = list(list(series = "A")))) |>
+  draw(text_grob(c("low", "high"), x = vl_unit(c(1, 6), "native"),
+                 y = vl_unit(c(2, 9), "native"), gp = vl_gpar(fontsize = 8),
+                 key = c("lbl-low", "lbl-high"))) |>
+  pop()
+
+scene_model(series)$elements[, c("mark", "key", "x0", "x1")]
+#>   mark      key         x0         x1
+#> 1 line series-A   0.000000 480.000000
+#> 2 text  lbl-low  -9.104167   9.104167
+#> 3 text lbl-high 468.364583 491.635417
+```
+
+A whole series as one addressable thing — hover the line, highlight the
+series — and per-label keys on the annotations. Neither was possible
+before: the marks existed, but nothing could refer to them.
+
+## Hit-testing that respects the shape
+
+A bounding box is the right answer for a rectangular brush and the wrong
+one for anything diagonal or thin. The line above runs from the
+bottom-left of its panel to the top-right, so **its bounding box is
+almost the whole panel**:
+
+``` r
+
+el <- scene_model(series)$elements
+el[el$key == "series-A", c("x0", "y0", "x1", "y1")]
+#>   x0 y0  x1  y1
+#> 1  0 23 480 184
+```
+
+Ask “what is nearest?” with only that, and the line answers from
+anywhere in the plot.
+[`vl_nearest()`](https://r-vellum.github.io/vellum/reference/vl_nearest.md)
+measures to the geometry instead:
+
+``` r
+
+demo <- vl_scene(4, 3, bg = "white") |>
+  draw(segments_grob(0.12, 0.12, 0.88, 0.88,
+                     gp = vl_gpar(col = "#C0392B", lwd = 2), key = "diagonal")) |>
+  draw(points_grob(0.82, 0.18, size = vl_unit(3, "mm"),
+                   gp = vl_gpar(fill = "#2C6FA6", col = NA), key = "corner"))
+
+# This probe is INSIDE the diagonal's bounding box, and far from the diagonal.
+vl_nearest(demo, 0.82, 0.18, n = 2)
+#>        key    kind    dist
+#> 2   corner   point   0.000
+#> 1 diagonal segment 147.456
+```
+
+Distances are to the real shape: perpendicular to a segment, to the disc
+for round marks, to the nearest edge of an open polyline, and **zero
+anywhere inside** a closed polygon or path — so clicking the middle of a
+choropleth region hits the region rather than its nearest border.
+
+``` r
+
+region <- vl_scene(3, 3, bg = "white") |>
+  draw(polygon_grob(c(.2, .8, .5), c(.2, .2, .8),
+                    gp = vl_gpar(fill = "#F1C40F", col = "grey30"), key = "tri"))
+vl_nearest(region, 0.5, 0.4)
+#>   key    kind dist
+#> 1 tri polygon    0
+```
+
+### For a host that cannot ask
+
+A browser cannot call back into R on every mouse move.
+[`element_geometry()`](https://r-vellum.github.io/vellum/reference/element_geometry.md)
+hands over the same true geometry **once**, so the client computes
+distances locally at whatever rate it likes — typically an R-tree over
+the boxes to shortlist candidates, then an exact test against these
+vertices to rank them.
+
+``` r
+
+element_geometry(demo)
+#>        key    kind vertex      x      y
+#> 1 diagonal segment      1  46.08 253.44
+#> 2 diagonal segment      2 337.92  34.56
+#> 3   corner   point      1 314.88 236.16
+```
+
+Two endpoints for the segment and one centre for the point — not four
+box corners. That is the difference that lets a client hit-test a
+diagonal at all.
+
 ## Why this matters
 
 Ranked by how much of it you cannot get elsewhere:
@@ -208,6 +313,14 @@ Ranked by how much of it you cannot get elsewhere:
   ([`scene_model()`](https://r-vellum.github.io/vellum/reference/scene_model.md)),
   which is the host-agnostic bridge an interactive layer, a
   screen-reader description, or a positional test binds to;
+- **any mark can be made addressable** — including lines, polygons and
+  labels, which is what lets a whole series or an annotation be a thing
+  the user can point at;
+- marks can be picked by their **true geometry**
+  ([`vl_nearest()`](https://r-vellum.github.io/vellum/reference/vl_nearest.md)),
+  or that geometry handed to a client to do it itself
+  ([`element_geometry()`](https://r-vellum.github.io/vellum/reference/element_geometry.md)),
+  so a diagonal is not matched from the far corner of its bounding box;
 - **any point can be picked** back to the node that drew it
   ([`hit_test()`](https://r-vellum.github.io/vellum/reference/hit_test.md)),
   through the same compile path that rendered the scene, so the answer

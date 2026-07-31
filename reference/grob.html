@@ -36,12 +36,17 @@ with render(). Coordinates accept a vl_unit() vector or a bare numeric
     <li><a class="dropdown-item" href="../articles/typography.html">Typography: layout, halos and OpenType features</a></li>
     <li><a class="dropdown-item" href="../articles/render-quality.html">Render quality: accessibility, crisp edges, group effects</a></li>
     <li><a class="dropdown-item" href="../articles/retained-mode.html">Asking a scene what it drew: read-back, picking, and editing</a></li>
+    <li><a class="dropdown-item" href="../articles/accessible-output.html">Accessible output, and fonts you can trust</a></li>
     <li><a class="dropdown-item" href="../articles/placement.html">Placement: repelling labels, finding room, outlining groups</a></li>
+    <li><a class="dropdown-item" href="../articles/geometry-operations.html">Geometry operations: booleans, contours, imported paths</a></li>
     <li><a class="dropdown-item" href="../articles/datashading.html">Datashading: millions of points, honestly</a></li>
     <li><hr class="dropdown-divider"></li>
     <li><h6 class="dropdown-header" data-toc-skip>Inspecting</h6></li>
     <li><a class="dropdown-item" href="../articles/inspecting-scenes.html">Inspecting a scene: linting, coverage, profiling</a></li>
     <li><a class="dropdown-item" href="../articles/scenes-as-values.html">Scenes as values: saving, comparing, composing</a></li>
+    <li><hr class="dropdown-divider"></li>
+    <li><h6 class="dropdown-header" data-toc-skip>Output</h6></li>
+    <li><a class="dropdown-item" href="../articles/output-formats.html">Choosing an output format</a></li>
     <li><hr class="dropdown-divider"></li>
     <li><h6 class="dropdown-header" data-toc-skip>Interop</h6></li>
     <li><a class="dropdown-item" href="../articles/coming-from-grid.html">Coming from grid</a></li>
@@ -106,7 +111,9 @@ with <code><a href="vl_scene.html">render()</a></code>. Coordinates accept a <co
 <span>  name <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  vp <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  id <span class="op">=</span> <span class="cn">NULL</span>,</span>
-<span>  role <span class="op">=</span> <span class="cn">NULL</span></span>
+<span>  role <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  key <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  meta <span class="op">=</span> <span class="cn">NULL</span></span>
 <span><span class="op">)</span></span>
 <span></span>
 <span><span class="fu">lines_grob</span><span class="op">(</span></span>
@@ -121,7 +128,9 @@ with <code><a href="vl_scene.html">render()</a></code>. Coordinates accept a <co
 <span>  name <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  vp <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  id <span class="op">=</span> <span class="cn">NULL</span>,</span>
-<span>  role <span class="op">=</span> <span class="cn">NULL</span></span>
+<span>  role <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  key <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  meta <span class="op">=</span> <span class="cn">NULL</span></span>
 <span><span class="op">)</span></span>
 <span></span>
 <span><span class="fu">polygon_grob</span><span class="op">(</span></span>
@@ -132,7 +141,9 @@ with <code><a href="vl_scene.html">render()</a></code>. Coordinates accept a <co
 <span>  name <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  vp <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  id <span class="op">=</span> <span class="cn">NULL</span>,</span>
-<span>  role <span class="op">=</span> <span class="cn">NULL</span></span>
+<span>  role <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  key <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  meta <span class="op">=</span> <span class="cn">NULL</span></span>
 <span><span class="op">)</span></span>
 <span></span>
 <span><span class="fu">bezier_grob</span><span class="op">(</span></span>
@@ -269,7 +280,9 @@ with <code><a href="vl_scene.html">render()</a></code>. Coordinates accept a <co
 <span>  gp <span class="op">=</span> <span class="fu"><a href="vl_gpar.html">vl_gpar</a></span><span class="op">(</span><span class="op">)</span>,</span>
 <span>  name <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  vp <span class="op">=</span> <span class="cn">NULL</span>,</span>
-<span>  role <span class="op">=</span> <span class="cn">NULL</span></span>
+<span>  role <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  key <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  meta <span class="op">=</span> <span class="cn">NULL</span></span>
 <span><span class="op">)</span></span>
 <span></span>
 <span><span class="fu">raster_grob</span><span class="op">(</span></span>
@@ -300,7 +313,9 @@ with <code><a href="vl_scene.html">render()</a></code>. Coordinates accept a <co
 <span>  width <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  height <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  align <span class="op">=</span> <span class="st">"left"</span>,</span>
-<span>  fit <span class="op">=</span> <span class="cn">FALSE</span></span>
+<span>  fit <span class="op">=</span> <span class="cn">FALSE</span>,</span>
+<span>  key <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  meta <span class="op">=</span> <span class="cn">NULL</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
 
@@ -323,11 +338,14 @@ regardless of device aspect); a <em>regular</em> flat hexagon is
 <code>size</code>; must be given together. For <code>loop_grob()</code>, <code>width</code> is instead a
 dimensionless lateral petal scale in <code>(0, 1]</code> (recycled per loop): <code>1</code>
 (default) is the full teardrop, smaller narrows the petal's <strong>waist</strong>
-without shortening it (the igraph "narrowing" factor).</p></dd>
-
-
-<dt id="arg-height">height<a class="anchor" aria-label="anchor" href="#arg-height"></a></dt>
-<dd><p>Optional box height (absolute unit), used only by <code>fit</code>.</p></dd>
+without shortening it (the igraph "narrowing" factor).</p>
+<p>For <code>text_grob()</code> these mean something different: <code>width</code> is an
+<strong>absolute</strong> wrapping measure (<code>mm</code>/<code>cm</code>/<code>in</code>/<code>pt</code>), and giving it breaks
+the label into lines that fit, making the drawn block a box of exactly that
+width — so <code>just</code> anchors the box rather than the longest line. <code>height</code> is
+used only by <code>fit</code>. Relative units are rejected there on purpose: wrapping
+happens when the grob is built, and a viewport has no size in
+<code>npc</code>/<code>native</code> until render time.</p></dd>
 
 
 <dt id="arg-sketch">sketch<a class="anchor" aria-label="anchor" href="#arg-sketch"></a></dt>
@@ -529,17 +547,6 @@ line of each paragraph left as-is).</p></dd>
 shrinks the font — never grows it — until the wrapped block fits
 <code>width</code> × <code>height</code>, down to a floor of 4 pt; a number sets that floor
 instead. Requires <code>width</code>.</p></dd>
-
-
-<dt id="arg-width">width<a class="anchor" aria-label="anchor" href="#arg-width"></a></dt>
-<dd><p>Optional wrapping width, as an <strong>absolute</strong> unit
-(<code><a href="vl_unit.html">vl_unit()</a></code> in <code>mm</code>/<code>cm</code>/<code>in</code>/<code>pt</code>). When given, the label is broken into
-lines that fit, and the drawn block becomes a box of exactly this width —
-so <code>just</code> anchors the box, not the longest line. <code>NULL</code> (the default) leaves
-text unwrapped.</p>
-<p>Relative units are rejected on purpose: wrapping happens when the grob is
-built, and a viewport's size in <code>npc</code>/<code>native</code> is not known until render
-time. Pass the physical width you want to wrap to.</p></dd>
 
 </dl></div>
     <div class="section level2">

@@ -42,12 +42,17 @@ every frame."><meta property="og:image" content="https://r-vellum.github.io/vell
     <li><a class="dropdown-item" href="../articles/typography.html">Typography: layout, halos and OpenType features</a></li>
     <li><a class="dropdown-item" href="../articles/render-quality.html">Render quality: accessibility, crisp edges, group effects</a></li>
     <li><a class="dropdown-item" href="../articles/retained-mode.html">Asking a scene what it drew: read-back, picking, and editing</a></li>
+    <li><a class="dropdown-item" href="../articles/accessible-output.html">Accessible output, and fonts you can trust</a></li>
     <li><a class="dropdown-item" href="../articles/placement.html">Placement: repelling labels, finding room, outlining groups</a></li>
+    <li><a class="dropdown-item" href="../articles/geometry-operations.html">Geometry operations: booleans, contours, imported paths</a></li>
     <li><a class="dropdown-item" href="../articles/datashading.html">Datashading: millions of points, honestly</a></li>
     <li><hr class="dropdown-divider"></li>
     <li><h6 class="dropdown-header" data-toc-skip>Inspecting</h6></li>
     <li><a class="dropdown-item" href="../articles/inspecting-scenes.html">Inspecting a scene: linting, coverage, profiling</a></li>
     <li><a class="dropdown-item" href="../articles/scenes-as-values.html">Scenes as values: saving, comparing, composing</a></li>
+    <li><hr class="dropdown-divider"></li>
+    <li><h6 class="dropdown-header" data-toc-skip>Output</h6></li>
+    <li><a class="dropdown-item" href="../articles/output-formats.html">Choosing an output format</a></li>
     <li><hr class="dropdown-divider"></li>
     <li><h6 class="dropdown-header" data-toc-skip>Interop</h6></li>
     <li><a class="dropdown-item" href="../articles/coming-from-grid.html">Coming from grid</a></li>
@@ -94,7 +99,7 @@ every frame.</p>
 <span>  <span class="va">seg</span>,</span>
 <span>  <span class="va">frac</span>,</span>
 <span>  <span class="va">path</span>,</span>
-<span>  format <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"gif"</span>, <span class="st">"apng"</span>, <span class="st">"frames"</span><span class="op">)</span>,</span>
+<span>  format <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"gif"</span>, <span class="st">"apng"</span>, <span class="st">"svg"</span>, <span class="st">"frames"</span><span class="op">)</span>,</span>
 <span>  fps <span class="op">=</span> <span class="fl">25</span>,</span>
 <span>  gif_speed <span class="op">=</span> <span class="fl">1</span>,</span>
 <span>  gif_dither <span class="op">=</span> <span class="cn">TRUE</span></span>
@@ -122,13 +127,14 @@ as <code>seg</code>.</p></dd>
 
 
 <dt id="arg-path">path<a class="anchor" aria-label="anchor" href="#arg-path"></a></dt>
-<dd><p>Output path: an image file for <code>"gif"</code>/<code>"apng"</code>, or a directory
-(created if needed) for <code>"frames"</code>.</p></dd>
+<dd><p>Output path: an image file for <code>"gif"</code>/<code>"apng"</code>/<code>"svg"</code>, or a
+directory (created if needed) for <code>"frames"</code>.</p></dd>
 
 
 <dt id="arg-format">format<a class="anchor" aria-label="anchor" href="#arg-format"></a></dt>
-<dd><p><code>"gif"</code> (looping animated GIF), <code>"apng"</code> (animated PNG), or
-<code>"frames"</code> (one <code>frameNNNNN.png</code> per frame into <code>path</code>).</p></dd>
+<dd><p><code>"gif"</code> (looping animated GIF), <code>"apng"</code> (animated PNG),
+<code>"svg"</code> (a single animated SVG), or <code>"frames"</code> (one <code>frameNNNNN.png</code> per
+frame into <code>path</code>).</p></dd>
 
 
 <dt id="arg-fps">fps<a class="anchor" aria-label="anchor" href="#arg-fps"></a></dt>
@@ -161,6 +167,20 @@ animation, not a live/reactive runtime.</p>
 <p>GIF is limited to 256 colours per frame, so on a plot (smooth panels,
 antialiased marks) it is inherently lossy — <code>gif_speed</code>/<code>gif_dither</code> make it as
 clean as that palette allows. For a lossless result use <code>format = "apng"</code>.</p>
+    </div>
+    <div class="section level2">
+    <h2 id="choosing-a-format">Choosing a format<a class="anchor" aria-label="anchor" href="#choosing-a-format"></a></h2>
+    <p><code>"svg"</code> emits every frame as vector markup, shown in turn by a CSS step
+animation. It is resolution-independent, which no raster format is — the same
+file is crisp in a slide, on a retina screen and in print.</p>
+<p>Its size depends on scene complexity in a way the raster formats' does not,
+because <em>every frame is emitted in full</em>. Measured on a 30-frame scatter
+animation, gzipped (which is how a browser will fetch it):</p><table class="table table"><tr><td>marks</td><td>animated SVG (gzipped)</td><td>GIF</td></tr><tr><td>20</td><td>20 KB</td><td>61 KB</td></tr><tr><td>200</td><td>80 KB</td><td>296 KB</td></tr><tr><td>2000</td><td>720 KB</td><td>124 KB</td></tr></table><p>So it wins clearly on line art — an explanatory animation of a few moving
+marks, which is the common case — and loses on a dense scatter, where a raster
+format is the right answer. Serve it gzipped (<code>.svgz</code>, or any web server with
+compression on); uncompressed it is several times larger again.</p>
+<p>It also honours <code>prefers-reduced-motion</code>: a reader who has asked their system
+not to animate gets the first frame, held.</p>
     </div>
     <div class="section level2">
     <h2 id="see-also">See also<a class="anchor" aria-label="anchor" href="#see-also"></a></h2>

@@ -158,6 +158,41 @@ the emptiest region, outline and buffer a group.
 - [`vl_buffer()`](https://r-vellum.github.io/vellum/reference/vl_buffer.md)
   : Buffer a polygon outward
 
+## Geometry operations
+
+Producing paths: boolean combinations, contours from a grid, and SVG
+path data imported as real vector geometry.
+
+- [`vl_path_op()`](https://r-vellum.github.io/vellum/reference/vl_path_op.md)
+  : Boolean operations on paths
+- [`vl_contour()`](https://r-vellum.github.io/vellum/reference/vl_contour.md)
+  [`contour_grob()`](https://r-vellum.github.io/vellum/reference/vl_contour.md)
+  : Contour lines from a grid
+- [`vl_svg_path()`](https://r-vellum.github.io/vellum/reference/vl_svg_path.md)
+  [`svg_grob()`](https://r-vellum.github.io/vellum/reference/vl_svg_path.md)
+  : SVG path data as scene geometry
+
+## Output reach
+
+Destinations for a finished scene beyond a single file: a multi-page
+document, and a batch rendered across cores.
+
+- [`pdf_pages()`](https://r-vellum.github.io/vellum/reference/pdf_pages.md)
+  : Write several scenes as the pages of one PDF
+- [`render_all()`](https://r-vellum.github.io/vellum/reference/render_all.md)
+  : Render many scenes in parallel
+
+## Accessibility & fonts
+
+Tagged PDF output from the per-mark metadata channel, and a check on the
+one part of the determinism claim vellum does not control.
+
+- [`scene_fonts()`](https://r-vellum.github.io/vellum/reference/scene_fonts.md)
+  : Which fonts a scene actually used
+- [`font_pin()`](https://r-vellum.github.io/vellum/reference/font_pin.md)
+  [`font_check()`](https://r-vellum.github.io/vellum/reference/font_pin.md)
+  : Pin a scene's fonts, and check them later
+
 ## Big data
 
 Aggregate-then-shade rendering for large point clouds, dense timeseries,
@@ -186,6 +221,10 @@ and device-pixel boxes, picking by point, and editing by node name.
   : Hit-test a scene
 - [`scene_model()`](https://r-vellum.github.io/vellum/reference/scene_model.md)
   : A serializable, per-element model of a scene
+- [`vl_nearest()`](https://r-vellum.github.io/vellum/reference/vl_nearest.md)
+  : Find the marks nearest a point, by true geometry
+- [`element_geometry()`](https://r-vellum.github.io/vellum/reference/element_geometry.md)
+  : The true geometry of a scene's addressable elements
 
 ## Grid & ggplot2 interop
 

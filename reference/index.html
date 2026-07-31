@@ -30,12 +30,17 @@
     <li><a class="dropdown-item" href="../articles/typography.html">Typography: layout, halos and OpenType features</a></li>
     <li><a class="dropdown-item" href="../articles/render-quality.html">Render quality: accessibility, crisp edges, group effects</a></li>
     <li><a class="dropdown-item" href="../articles/retained-mode.html">Asking a scene what it drew: read-back, picking, and editing</a></li>
+    <li><a class="dropdown-item" href="../articles/accessible-output.html">Accessible output, and fonts you can trust</a></li>
     <li><a class="dropdown-item" href="../articles/placement.html">Placement: repelling labels, finding room, outlining groups</a></li>
+    <li><a class="dropdown-item" href="../articles/geometry-operations.html">Geometry operations: booleans, contours, imported paths</a></li>
     <li><a class="dropdown-item" href="../articles/datashading.html">Datashading: millions of points, honestly</a></li>
     <li><hr class="dropdown-divider"></li>
     <li><h6 class="dropdown-header" data-toc-skip>Inspecting</h6></li>
     <li><a class="dropdown-item" href="../articles/inspecting-scenes.html">Inspecting a scene: linting, coverage, profiling</a></li>
     <li><a class="dropdown-item" href="../articles/scenes-as-values.html">Scenes as values: saving, comparing, composing</a></li>
+    <li><hr class="dropdown-divider"></li>
+    <li><h6 class="dropdown-header" data-toc-skip>Output</h6></li>
+    <li><a class="dropdown-item" href="../articles/output-formats.html">Choosing an output format</a></li>
     <li><hr class="dropdown-divider"></li>
     <li><h6 class="dropdown-header" data-toc-skip>Interop</h6></li>
     <li><a class="dropdown-item" href="../articles/coming-from-grid.html">Coming from grid</a></li>
@@ -414,6 +419,82 @@
         </dt>
         <dd>Buffer a polygon outward</dd>
       </dl></div><div class="section level2">
+      <h2 id="geometry-operations">Geometry operations<a class="anchor" aria-label="anchor" href="#geometry-operations"></a></h2>
+
+      <div class="section-desc"><p>Producing paths: boolean combinations, contours from a grid, and SVG path data imported as real vector geometry.</p></div>
+
+      <dl></dl></div><div class="section level2">
+
+
+
+
+      <dl><dt>
+
+          <code><a href="vl_path_op.html">vl_path_op()</a></code>
+
+        </dt>
+        <dd>Boolean operations on paths</dd>
+
+        <dt>
+
+          <code><a href="vl_contour.html">vl_contour()</a></code> <code><a href="vl_contour.html">contour_grob()</a></code>
+
+        </dt>
+        <dd>Contour lines from a grid</dd>
+
+        <dt>
+
+          <code><a href="vl_svg_path.html">vl_svg_path()</a></code> <code><a href="vl_svg_path.html">svg_grob()</a></code>
+
+        </dt>
+        <dd>SVG path data as scene geometry</dd>
+      </dl></div><div class="section level2">
+      <h2 id="output-reach">Output reach<a class="anchor" aria-label="anchor" href="#output-reach"></a></h2>
+
+      <div class="section-desc"><p>Destinations for a finished scene beyond a single file: a multi-page document, and a batch rendered across cores.</p></div>
+
+      <dl></dl></div><div class="section level2">
+
+
+
+
+      <dl><dt>
+
+          <code><a href="pdf_pages.html">pdf_pages()</a></code>
+
+        </dt>
+        <dd>Write several scenes as the pages of one PDF</dd>
+
+        <dt>
+
+          <code><a href="render_all.html">render_all()</a></code>
+
+        </dt>
+        <dd>Render many scenes in parallel</dd>
+      </dl></div><div class="section level2">
+      <h2 id="accessibility-fonts">Accessibility &amp; fonts<a class="anchor" aria-label="anchor" href="#accessibility-fonts"></a></h2>
+
+      <div class="section-desc"><p>Tagged PDF output from the per-mark metadata channel, and a check on the one part of the determinism claim vellum does not control.</p></div>
+
+      <dl></dl></div><div class="section level2">
+
+
+
+
+      <dl><dt>
+
+          <code><a href="scene_fonts.html">scene_fonts()</a></code>
+
+        </dt>
+        <dd>Which fonts a scene actually used</dd>
+
+        <dt>
+
+          <code><a href="font_pin.html">font_pin()</a></code> <code><a href="font_pin.html">font_check()</a></code>
+
+        </dt>
+        <dd>Pin a scene's fonts, and check them later</dd>
+      </dl></div><div class="section level2">
       <h2 id="big-data">Big data<a class="anchor" aria-label="anchor" href="#big-data"></a></h2>
 
       <div class="section-desc"><p>Aggregate-then-shade rendering for large point clouds, dense timeseries, and network edges.</p></div>
@@ -480,6 +561,20 @@
 
         </dt>
         <dd>A serializable, per-element model of a scene</dd>
+
+        <dt>
+
+          <code><a href="vl_nearest.html">vl_nearest()</a></code>
+
+        </dt>
+        <dd>Find the marks nearest a point, by true geometry</dd>
+
+        <dt>
+
+          <code><a href="element_geometry.html">element_geometry()</a></code>
+
+        </dt>
+        <dd>The true geometry of a scene's addressable elements</dd>
       </dl></div><div class="section level2">
       <h2 id="grid-ggplot-interop">Grid &amp; ggplot2 interop<a class="anchor" aria-label="anchor" href="#grid-ggplot-interop"></a></h2>
 

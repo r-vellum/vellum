@@ -16,7 +16,7 @@ vl_render_animation(
   seg,
   frac,
   path,
-  format = c("gif", "apng", "frames"),
+  format = c("gif", "apng", "svg", "frames"),
   fps = 25,
   gif_speed = 1,
   gif_dither = TRUE
@@ -47,13 +47,14 @@ vl_render_animation(
 
 - path:
 
-  Output path: an image file for `"gif"`/`"apng"`, or a directory
-  (created if needed) for `"frames"`.
+  Output path: an image file for `"gif"`/`"apng"`/`"svg"`, or a
+  directory (created if needed) for `"frames"`.
 
 - format:
 
-  `"gif"` (looping animated GIF), `"apng"` (animated PNG), or `"frames"`
-  (one `frameNNNNN.png` per frame into `path`).
+  `"gif"` (looping animated GIF), `"apng"` (animated PNG), `"svg"` (a
+  single animated SVG), or `"frames"` (one `frameNNNNN.png` per frame
+  into `path`).
 
 - fps:
 
@@ -88,6 +89,32 @@ GIF is limited to 256 colours per frame, so on a plot (smooth panels,
 antialiased marks) it is inherently lossy — `gif_speed`/`gif_dither`
 make it as clean as that palette allows. For a lossless result use
 `format = "apng"`.
+
+## Choosing a format
+
+`"svg"` emits every frame as vector markup, shown in turn by a CSS step
+animation. It is resolution-independent, which no raster format is — the
+same file is crisp in a slide, on a retina screen and in print.
+
+Its size depends on scene complexity in a way the raster formats' does
+not, because *every frame is emitted in full*. Measured on a 30-frame
+scatter animation, gzipped (which is how a browser will fetch it):
+
+|       |                        |        |
+|-------|------------------------|--------|
+| marks | animated SVG (gzipped) | GIF    |
+| 20    | 20 KB                  | 61 KB  |
+| 200   | 80 KB                  | 296 KB |
+| 2000  | 720 KB                 | 124 KB |
+
+So it wins clearly on line art — an explanatory animation of a few
+moving marks, which is the common case — and loses on a dense scatter,
+where a raster format is the right answer. Serve it gzipped (`.svgz`, or
+any web server with compression on); uncompressed it is several times
+larger again.
+
+It also honours `prefers-reduced-motion`: a reader who has asked their
+system not to animate gets the first frame, held.
 
 ## See also
 

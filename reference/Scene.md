@@ -306,6 +306,31 @@ order – the same order
 [`rs_take_node_times()`](https://r-vellum.github.io/vellum/reference/rs_take_node_times.md)
 reports.
 
+### Method `pick_table`
+
+Exact distance from a device-px point to every keyed element, and the
+element's true geometry.
+
+[`scene_model()`](https://r-vellum.github.io/vellum/reference/scene_model.md)
+reports bounding boxes, which is the right thing for a rectangular brush
+and misleading for anything diagonal or thin: a segment's bbox is the
+whole rectangle its endpoints span. This walks the same elements and
+reports the distance to their actual geometry, plus the geometry itself
+(flat `gx`/`gy` split by `gn`) so a client that must hit-test locally
+can do it exactly rather than asking per event.
+
+Filled shapes contain their interior — a point inside a polygon is at
+distance zero, so clicking the middle of a choropleth region hits it.
+
+### Method `font_table`
+
+The font files this scene's text actually resolved to.
+
+Read off the shaped glyphs rather than re-resolved from family names, so
+it reports what was *used*, not what would be picked if asked again.
+Returns `path`, `index` (face within a collection) and `glyphs` (how
+many glyphs came from that face).
+
 ### Method `pixel`
 
 Render and return the RGBA of device pixel `(x, y)` as `c(r, g, b, a)`.
