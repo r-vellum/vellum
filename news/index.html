@@ -13,7 +13,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">vellum</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.6.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.6.1</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -66,9 +66,17 @@
 <div class="row">
   <main id="main" class="col-md-9"><div class="page-header">
       <img src="../logo.png" class="logo" alt=""><h1>Changelog</h1>
-      <small>Source: <a href="https://github.com/r-vellum/vellum/blob/v0.6.0/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
+      <small>Source: <a href="https://github.com/r-vellum/vellum/blob/main/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.6.1" id="vellum-061">vellum 0.6.1<a class="anchor" aria-label="anchor" href="#vellum-061"></a></h2>
+<ul><li>
+<p><strong>Fixed: node bounding boxes were viewport-local, not device coordinates.</strong> <code>lint_table()</code> resolved a node’s box through its viewport’s <em>scales</em> but never applied the viewport’s own <em>placement</em>, so for any viewport not at the page origin it disagreed with <code>element_table()</code> by the viewport’s offset — which is every real plot with a panel.</p>
+<p>Everything built on it inherited the error. <code><a href="../reference/vl_place.html">vl_repel()</a></code> solved labels against obstacles it believed were elsewhere, so on a panelled scatter it left labels sitting on top of the very markers it was asked to avoid (22 of 22 in the regression case, now 0). <code><a href="../reference/vl_lint.html">vl_lint()</a></code>’s <code>offscreen</code> and <code>low_contrast</code> rules looked at the wrong part of the page, and <code><a href="../reference/vl_nearest.html">vl_nearest()</a></code> misplaced text and rounded rects.</p>
+<p>It was invisible in the test suite because tests draw into the default full-page viewport, where the transform is the identity and local <em>is</em> device. <code><a href="../reference/scene_model.html">scene_model()</a></code> was never affected — it takes geometry from <code>element_table()</code>, which was correct — so <code>vellumwidget</code> is unaffected.</p>
+</li>
+</ul></div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.6.0" id="vellum-060">vellum 0.6.0<a class="anchor" aria-label="anchor" href="#vellum-060"></a></h2>
 <p>Six phases of engine work: a typography layer, label placement, geometry operations, accessible output, new output destinations, and addressable marks. Every mark family can now carry a data key, text can be wrapped or set along a curve, labels can be repelled, paths can be combined, PDFs are tagged, and scenes render to animated SVG, multi-page PDF or a parallel batch.</p>
