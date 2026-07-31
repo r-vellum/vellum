@@ -92,6 +92,40 @@ rs_largest_empty_rect <- function(boxes, region, nx, ny) .Call(wrap__rs_largest_
 #' @keywords internal
 rs_hull <- function(x, y, concavity) .Call(wrap__rs_hull, x, y, concavity)
 
+#' Boolean operation over two sets of closed rings.
+#'
+#' @param ax,ay,anper,bx,by,bnper Flat ring coordinates and per-ring lengths.
+#' @param op 0 union, 1 intersect, 2 difference, 3 xor.
+#' @param even_odd Interpret the inputs with the even-odd rule.
+#' @return List of `x`, `y`, `nper`.
+#' @keywords internal
+rs_path_op <- function(ax, ay, anper, bx, by, bnper, op, even_odd) .Call(wrap__rs_path_op, ax, ay, anper, bx, by, bnper, op, even_odd)
+
+#' Marching-squares contour segments at one level.
+#'
+#' @param z Row-major grid values, `nx` wide by `ny` tall.
+#' @param nx,ny Grid dimensions.
+#' @param level Contour level.
+#' @return Flat `c(x0, y0, x1, y1, ...)` in grid coordinates.
+#' @keywords internal
+rs_contour <- function(z, nx, ny, level) .Call(wrap__rs_contour, z, nx, ny, level)
+
+#' Marching-squares contours at one level, chained into polylines.
+#'
+#' @param z Row-major grid values, `nx` wide by `ny` tall.
+#' @param nx,ny Grid dimensions.
+#' @param level Contour level.
+#' @return List of `x`, `y`, `nper`, `closed` in grid coordinates.
+#' @keywords internal
+rs_contour_lines <- function(z, nx, ny, level) .Call(wrap__rs_contour_lines, z, nx, ny, level)
+
+#' Parse SVG path data into flattened rings.
+#'
+#' @param d The `d` attribute of an SVG `<path>`.
+#' @return List of `x`, `y`, `nper`, `closed`.
+#' @keywords internal
+rs_svg_path <- function(d) .Call(wrap__rs_svg_path, d)
+
 #' Render a keyframe animation to `path`.
 #'
 #' * `keyframes` — a list of compiled `Scene` external pointers (the `K` states).

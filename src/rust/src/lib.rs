@@ -1,7 +1,9 @@
 use extendr_api::prelude::*;
 
 mod aggregate;
+mod booleans;
 mod cache;
+mod contour;
 mod cvd;
 mod color;
 mod font;
@@ -10,6 +12,7 @@ mod place;
 mod render;
 mod scene;
 mod sketch;
+mod svgpath;
 mod units;
 
 /// Backend identity and build info (internal diagnostic).
@@ -324,6 +327,62 @@ fn rs_hull(x: &[f64], y: &[f64], concavity: f64) -> Vec<i32> {
     idx.into_iter().map(|i| i as i32 + 1).collect()
 }
 
+/// Boolean operation over two sets of closed rings.
+///
+/// @param ax,ay,anper,bx,by,bnper Flat ring coordinates and per-ring lengths.
+/// @param op 0 union, 1 intersect, 2 difference, 3 xor.
+/// @param even_odd Interpret the inputs with the even-odd rule.
+/// @return List of `x`, `y`, `nper`.
+/// @keywords internal
+#[extendr]
+fn rs_path_op(
+    ax: &[f64], ay: &[f64], anper: &[i32],
+    bx: &[f64], by: &[f64], bnper: &[i32],
+    op: i32, even_odd: bool,
+) -> List {
+    let (x, y, nper) = booleans::path_op(
+        ax, ay, anper, bx, by, bnper, booleans::Op::from_code(op), even_odd,
+    );
+    list!(x = x, y = y, nper = nper)
+}
+
+/// Marching-squares contour segments at one level.
+///
+/// @param z Row-major grid values, `nx` wide by `ny` tall.
+/// @param nx,ny Grid dimensions.
+/// @param level Contour level.
+/// @return Flat `c(x0, y0, x1, y1, ...)` in grid coordinates.
+/// @keywords internal
+#[extendr]
+fn rs_contour(z: &[f64], nx: i32, ny: i32, level: f64) -> Vec<f64> {
+    contour::marching_squares(z, nx.max(0) as usize, ny.max(0) as usize, level).coords
+}
+
+/// Marching-squares contours at one level, chained into polylines.
+///
+/// @param z Row-major grid values, `nx` wide by `ny` tall.
+/// @param nx,ny Grid dimensions.
+/// @param level Contour level.
+/// @return List of `x`, `y`, `nper`, `closed` in grid coordinates.
+/// @keywords internal
+#[extendr]
+fn rs_contour_lines(z: &[f64], nx: i32, ny: i32, level: f64) -> List {
+    let segs = contour::marching_squares(z, nx.max(0) as usize, ny.max(0) as usize, level);
+    let (x, y, nper, closed) = contour::chain(&segs.coords);
+    list!(x = x, y = y, nper = nper, closed = closed)
+}
+
+/// Parse SVG path data into flattened rings.
+///
+/// @param d The `d` attribute of an SVG `<path>`.
+/// @return List of `x`, `y`, `nper`, `closed`.
+/// @keywords internal
+#[extendr]
+fn rs_svg_path(d: &str) -> List {
+    let p = svgpath::parse(d);
+    list!(x = p.x, y = p.y, nper = p.nper, closed = p.closed)
+}
+
 extendr_module! {
     mod vellum;
     fn rs_backend_info;
@@ -340,6 +399,10 @@ extendr_module! {
     fn rs_take_node_times;
     fn rs_largest_empty_rect;
     fn rs_hull;
+    fn rs_path_op;
+    fn rs_contour;
+    fn rs_contour_lines;
+    fn rs_svg_path;
     use scene;
     use aggregate;
 }

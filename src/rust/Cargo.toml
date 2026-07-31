@@ -23,6 +23,7 @@ png = '0.18'
 rayon = '1.10'
 gif = '0.14'
 color_quant = '1.1'
+i_overlay = { version = "7.0.3", default-features = false }
 
 [profile.release]
 lto = true
