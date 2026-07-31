@@ -347,6 +347,41 @@ test_that("halo and OpenType features carry through to on-path text", {
   expect_gt(sum(inked(haloed)), 200)
 })
 
+test_that("a halo does not eat the neighbouring glyphs on a path", {
+  # Regression: fanning the run out into one draw per glyph broke the invariant
+  # that every glyph is stroked before ANY is filled, so each glyph's halo
+  # painted over the previous glyph's fill and visibly chewed the letters.
+  #
+  # Rendered with the halo the same colour as the background, the halo is
+  # invisible, so the white ink must match the unhaloed render closely. With the
+  # bug it was substantially eroded.
+  bg <- "#20304A"
+  mk <- function(...) {
+    vl_scene(5, 1.6, dpi = 96, bg = bg) |>
+      draw(text_path_grob("ammmmmmmma", x = seq(0.05, 0.95, length.out = 60),
+                          y = 0.5, just = "left",
+                          gp = vl_gpar(fontsize = 15, col = "white", ...)))
+  }
+  white <- function(s) sum(scene_raster(s)[1, , ] > 200)
+  plain <- white(mk())
+  haloed <- white(mk(halo_col = bg, halo_width = 3))
+  expect_gt(plain, 100)
+  expect_gt(haloed, plain * 0.9)
+})
+
+test_that("an on-path halo still renders", {
+  # ...and the fix did not simply disable it: a contrasting halo must add ink.
+  mk <- function(...) {
+    vl_scene(5, 1.6, dpi = 96, bg = "white") |>
+      draw(text_path_grob("halo here", x = seq(0.05, 0.95, length.out = 60),
+                          y = 0.5, just = "left",
+                          gp = vl_gpar(fontsize = 15, col = "white", ...)))
+  }
+  ink <- function(s) sum(scene_raster(s)[1, , ] < 200)
+  expect_equal(ink(mk()), 0) # white on white draws nothing visible
+  expect_gt(ink(mk(halo_col = "black", halo_width = 3)), 200)
+})
+
 test_that("text_path_grob takes exactly one label", {
   expect_error(text_path_grob(c("a", "b"), x = c(0, 1), y = c(0, 1)), "single string")
 })

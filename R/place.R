@@ -127,6 +127,35 @@ vl_place <- function(scene, labels = NULL, avoid = NULL, padding = 1,
   ay <- (lab$y0 + lab$y1) / 2
   cx <- ax
   cy <- ay
+
+  # Keep labels on the page.
+  #
+  # Without this the solver will happily push a label off the canvas to resolve
+  # a collision, which is strictly worse than the collision: an overlapping
+  # label is hard to read, an off-canvas one is gone. Measured on a two-panel
+  # scene it turned 3 off-page labels into 9.
+  #
+  # The bound is the label's own clip region intersected with the page, so a
+  # label inside a clipped panel is kept inside that panel. It is widened to
+  # include the label's anchor, which means a label the author deliberately
+  # placed off-page is left where they put it -- this constrains the *solver*,
+  # it does not reposition anything on its own.
+  dim <- .scene_to_backend(scene)$dim()
+  clip_lo_x <- pmax(0, lab$clip_x0)
+  clip_lo_y <- pmax(0, lab$clip_y0)
+  clip_hi_x <- pmin(dim[1], lab$clip_x1)
+  clip_hi_y <- pmin(dim[2], lab$clip_y1)
+  lo_x <- pmin(clip_lo_x + hw, ax)
+  hi_x <- pmax(clip_hi_x - hw, ax)
+  lo_y <- pmin(clip_lo_y + hh, ay)
+  hi_y <- pmax(clip_hi_y - hh, ay)
+  # A region narrower than the label leaves nothing to choose; pin to the anchor.
+  bad <- !is.finite(lo_x) | !is.finite(hi_x) | lo_x > hi_x
+  lo_x[bad] <- ax[bad]; hi_x[bad] <- ax[bad]
+  bad <- !is.finite(lo_y) | !is.finite(hi_y) | lo_y > hi_y
+  lo_y[bad] <- ay[bad]; hi_y[bad] <- ay[bad]
+  in_bounds <- function(px, py, i) px >= lo_x[i] & px <= hi_x[i] & py >= lo_y[i] & py <= hi_y[i]
+
   # Resolve collisions to just BEYOND contact. Pushing to exactly zero overlap
   # leaves every separation on a floating-point knife edge, where "do these
   # boxes touch" is decided by the last bit of the arithmetic -- so labels the
@@ -137,6 +166,42 @@ vl_place <- function(scene, labels = NULL, avoid = NULL, padding = 1,
   ox <- (obs$x0 + obs$x1) / 2
   oy <- (obs$y0 + obs$y1) / 2
   n <- nrow(lab)
+
+  # An obstacle a label cannot escape is not an obstacle -- it is background.
+  #
+  # This matters because the default obstacle set is "everything that is not a
+  # label", which on any real plot includes the **panel background rectangle**.
+  # A label inside it collides with it no matter where it goes, so it is
+  # permanently unresolvable and its collision force is a constant nudge in an
+  # arbitrary direction that drowns out the real ones. Measured on a two-panel
+  # scene: 29 of 32 labels unresolved with the panel rect in the set, 0 without.
+  #
+  # An obstacle is background *for a given label* when it wholly contains that
+  # label where it sits. Two cases, and the rule is right for both:
+  #
+  #   * a panel background, gridline block or facet strip -- the label cannot
+  #     leave it, so treating it as an obstacle only injects a constant nudge in
+  #     an arbitrary direction;
+  #   * a bar or region the label deliberately annotates from the inside, where
+  #     pushing the label *out* would be exactly wrong.
+  #
+  # It is judged on the label's anchor, not its current position, so the set is
+  # fixed for the whole solve. Tying it to `max_shift` instead was tried and is
+  # worse in a way that is easy to miss: a larger budget makes more obstacles
+  # "escapable", so raising `max_shift` re-admitted the panel background and made
+  # the result worse (12 unresolved at 10 mm, 22 at 25 mm).
+  #
+  # Naming an obstacle explicitly via `avoid` does not bypass this. An obstacle
+  # that contains the label cannot be avoided by moving the label, whoever asked.
+  contains_label <- function(i) {
+    if (!nrow(obs)) {
+      return(integer(0))
+    }
+    inside <- obs$x0 <= lab$x0[i] & obs$x1 >= lab$x1[i] &
+      obs$y0 <= lab$y0[i] & obs$y1 >= lab$y1[i]
+    which(!inside)
+  }
+  live <- lapply(seq_len(n), contains_label)
 
   # Force relaxation. Overlaps are resolved along the axis of *least* separation
   # (the minimum-translation direction), which moves a label out of a collision
@@ -188,10 +253,12 @@ vl_place <- function(scene, labels = NULL, avoid = NULL, padding = 1,
     # Label vs obstacle: only the label yields.
     if (nrow(obs)) {
       for (i in seq_len(n)) {
-        dx <- cx[i] - ox
-        dy <- cy[i] - oy
-        ox_ <- (hw[i] + ohw) - abs(dx)
-        oy_ <- (hh[i] + ohh) - abs(dy)
+        j <- live[[i]]
+        if (!length(j)) next
+        dx <- cx[i] - ox[j]
+        dy <- cy[i] - oy[j]
+        ox_ <- (hw[i] + ohw[j]) - abs(dx)
+        oy_ <- (hh[i] + ohh[j]) - abs(dy)
         hit <- which(ox_ > 0 & oy_ > 0)
         for (k in hit) {
           if (ox_[k] < oy_[k]) {
@@ -245,6 +312,10 @@ vl_place <- function(scene, labels = NULL, avoid = NULL, padding = 1,
       cx[over] <- ax[over] + (cx[over] - ax[over]) * f
       cy[over] <- ay[over] + (cy[over] - ay[over]) * f
     }
+    # ...and to the page/clip region, so a collision is never resolved by
+    # pushing a label out of sight.
+    cx <- pmin(pmax(cx, lo_x), hi_x)
+    cy <- pmin(pmax(cy, lo_y), hi_y)
   }
 
   cx <- best_cx
@@ -261,8 +332,10 @@ vl_place <- function(scene, labels = NULL, avoid = NULL, padding = 1,
     lab_hit <- length(others) > 0 &&
       any(abs(cx[others] - px) < (hw[others] + hw[i]) - 1e-9 &
             abs(cy[others] - py) < (hh[others] + hh[i]) - 1e-9)
-    obs_hit <- nrow(obs) > 0 &&
-      any(abs(ox - px) < (ohw + hw[i]) - 1e-9 & abs(oy - py) < (ohh + hh[i]) - 1e-9)
+    j <- live[[i]]
+    obs_hit <- length(j) > 0 &&
+      any(abs(ox[j] - px) < (ohw[j] + hw[i]) - 1e-9 &
+            abs(oy[j] - py) < (ohh[j] + hh[i]) - 1e-9)
     lab_hit || obs_hit
   }
   ang <- seq(0, 2 * pi, length.out = 17)[-17]
@@ -275,7 +348,8 @@ vl_place <- function(scene, labels = NULL, avoid = NULL, padding = 1,
     for (rad in seq(max(hw[i], hh[i]) * 0.6, cap, length.out = 8)) {
       px <- ax[i] + rad * cos(ang)
       py <- ay[i] + rad * sin(ang)
-      ok <- which(!vapply(seq_along(ang), function(k) hits(i, px[k], py[k]), logical(1)))
+      ok <- which(in_bounds(px, py, i) &
+                    !vapply(seq_along(ang), function(k) hits(i, px[k], py[k]), logical(1)))
       if (length(ok)) {
         # Among the clear candidates at this radius, the one closest to where
         # relaxation had already pushed the label -- so the two passes agree
@@ -293,8 +367,9 @@ vl_place <- function(scene, labels = NULL, avoid = NULL, padding = 1,
     others <- setdiff(seq_len(n), i)
     lab_hit <- any(abs(cx[others] - cx[i]) < (hw[others] + hw[i]) &
                      abs(cy[others] - cy[i]) < (hh[others] + hh[i]))
-    obs_hit <- nrow(obs) > 0 && any(abs(ox - cx[i]) < (ohw + hw[i]) &
-                                      abs(oy - cy[i]) < (ohh + hh[i]))
+    j <- live[[i]]
+    obs_hit <- length(j) > 0 && any(abs(ox[j] - cx[i]) < (ohw[j] + hw[i]) &
+                                      abs(oy[j] - cy[i]) < (ohh[j] + hh[i]))
     !(lab_hit || obs_hit)
   }, logical(1))
 

@@ -4337,6 +4337,20 @@ fn draw_text_on_path<B: RenderBackend>(
         .collect();
     let exact = n + 1 == bounds.len();
 
+    // Two rounds when there is a halo: every glyph stroked, then every glyph
+    // filled.
+    //
+    // Fanning one run out into per-glyph runs quietly broke the invariant the
+    // raster backend spells out for ordinary text -- "every glyph is stroked
+    // before *any* is filled, so a wide halo on one glyph cannot paint over the
+    // neighbour that was already filled". Doing stroke-then-fill per glyph meant
+    // each glyph's halo chewed into the previous one, which on a tight curve ate
+    // the letters visibly.
+    //
+    // Round 1 asks for a stroke with a fully transparent fill; round 2 fills with
+    // no halo. Unhaloed text runs round 2 only, so the common path is unchanged.
+    let passes: &[bool] = if run.halo.is_some() { &[true, false] } else { &[false] };
+    for &halo_pass in passes {
     for i in 0..n {
         let (cx, cy, ang) = at(start + run.gx[i]);
         // Glyphs follow the tangent unconditionally, which is what SVG
@@ -4357,15 +4371,16 @@ fn draw_text_on_path<B: RenderBackend>(
             vjust: run.vjust,
             // Device y grows downward, `rot` is counter-clockwise in user space.
             rot: -ang.to_degrees(),
-            color: run.color,
+            // A transparent fill on the halo pass leaves the stroke alone.
+            color: if halo_pass { TRANSPARENT } else { run.color },
             gid: &run.gid[i..i + 1],
             gx: &ZERO_GX,
             gy: &run.gy[i..i + 1],
             gsize: &run.gsize[i..i + 1],
             gpath: &run.gpath[i..i + 1],
             gface: &run.gface[i..i + 1],
-            gcolor: if run.gcolor.len() > i { &run.gcolor[i..i + 1] } else { &[] },
-            halo: run.halo,
+            gcolor: if halo_pass { &[] } else if run.gcolor.len() > i { &run.gcolor[i..i + 1] } else { &[] },
+            halo: if halo_pass { run.halo } else { None },
             label: glyph_label,
             family: run.family,
             face: run.face,
@@ -4374,7 +4389,11 @@ fn draw_text_on_path<B: RenderBackend>(
         };
         b.draw_text(&one, t, clip);
     }
+    }
 }
+
+/// A fully transparent fill, for the halo-only pass of on-path text.
+const TRANSPARENT: Rgba = Rgba { r: 0, g: 0, b: 0, a: 0 };
 
 /// The single-element `gx` every on-path glyph uses (its pen offset is folded
 /// into the anchor instead).

@@ -112,6 +112,54 @@ test_that("repel works in a scaled viewport, and in more than one at once", {
   expect_lt(overlap_pairs(vl_repel(s)), overlap_pairs(s) / 2)
 })
 
+test_that("repel never pushes a label off the page", {
+  # Regression: with no bound the solver resolved collisions by shoving labels
+  # off the canvas, which is strictly worse than the collision -- an overlapping
+  # label is hard to read, an off-canvas one is gone. Measured 3 -> 9 off-page.
+  s <- anchored(40)
+  d <- .scene_to_backend(s)$dim()
+  off <- function(sc) {
+    b <- label_boxes(sc)
+    sum(b$x0 < 0 | b$y0 < 0 | b$x1 > d[1] | b$y1 > d[2])
+  }
+  expect_lte(off(vl_repel(s)), off(s))
+})
+
+test_that("a panel background does not defeat the solver", {
+  # Regression, and the one that mattered most: the default obstacle set is
+  # "everything that is not a label", which on a real plot includes the panel
+  # background rect. A label inside it collides with it wherever it goes, so it
+  # was permanently unresolvable -- 29 of 32 labels on a two-panel scene.
+  set.seed(3)
+  x <- runif(24)
+  y <- runif(24)
+  withbg <- vl_scene(5, 3, dpi = 96, bg = "white") |>
+    push(vl_viewport(name = "panel", width = 0.9, height = 0.9)) |>
+    draw(rect_grob(gp = vl_gpar(fill = "grey96", col = "grey80"), name = "panelbg")) |>
+    draw(points_grob(x, y, gp = vl_gpar(fill = "steelblue", col = NA), name = "pts")) |>
+    draw(text_grob(paste0("item ", seq_along(x)), x = x, y = y,
+                   gp = vl_gpar(fontsize = 9), name = "lab")) |>
+    pop()
+  expect_gt(overlap_pairs(withbg), 0L)
+  expect_equal(overlap_pairs(vl_repel(withbg)), 0L)
+  # And the background is genuinely in the obstacle set -- it is ignored per
+  # label because it *contains* the label, not because it was filtered out.
+  expect_true("panelbg" %in% .obstacle_boxes(withbg)$name)
+})
+
+test_that("an obstacle containing a label is not treated as an obstacle", {
+  # A label deliberately annotating the inside of a bar must not be pushed out
+  # of it -- the same rule that ignores the panel background.
+  s <- vl_scene(4, 3, dpi = 96, bg = "white") |>
+    draw(rect_grob(x = 0.5, y = 0.5, width = 0.6, height = 0.6,
+                   gp = vl_gpar(fill = "steelblue"), name = "bar")) |>
+    draw(text_grob("42", x = 0.5, y = 0.5, gp = vl_gpar(fontsize = 10), name = "lab"))
+  sol <- vl_place(s)
+  expect_equal(sol$dx, 0)
+  expect_equal(sol$dy, 0)
+  expect_true(sol$resolved)
+})
+
 test_that("labels and obstacles can be chosen by name", {
   s <- anchored(20)
   # Ignoring the points entirely gives the solver more room, so it can never do

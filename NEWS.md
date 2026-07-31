@@ -1,5 +1,31 @@
 # vellum (development version)
 
+* **Fixed: `vl_repel()` was defeated by a panel background.** The default
+  obstacle set is "everything that is not a label", which on a real plot
+  includes the panel background rectangle — and a label inside it collides with
+  it wherever it goes, so it could never be placed. On a two-panel scene, 29 of
+  32 labels were unresolvable; now 2.
+
+  An obstacle that wholly contains a label is no longer treated as an obstacle
+  for that label. That is also right for a bar or region a label deliberately
+  annotates from the inside, where pushing the label out would be exactly wrong.
+
+* **Fixed: `vl_repel()` could push labels off the page.** Resolving a collision
+  by shoving a label off the canvas is strictly worse than the collision — an
+  overlapping label is hard to read, an off-canvas one is gone. Solved positions
+  are now bounded by the label's clip region intersected with the page, widened
+  to include its own anchor so a label deliberately placed off-page stays put.
+
+* **Fixed: a halo ate the neighbouring glyphs on `text_path_grob()`.** Placing
+  each glyph as its own draw broke the rule that every glyph is stroked before
+  any is filled, so each halo painted over the previous glyph's fill. Haloed
+  text on a curve is now stroked in one pass and filled in another, as straight
+  text already was.
+
+* **Fixed: `render_all()` ignored `_R_CHECK_LIMIT_CORES_`.** `R CMD check` sets
+  it and `parallel::mclapply()` errors above two processes under it, so any
+  package depending on vellum would have failed its own check.
+
 * **Every mark family can now carry an element `key`.** `lines_grob()`,
   `polygon_grob()`, `path_grob()`, `roundrect_grob()` and `text_grob()` gain
   `key`/`meta`, joining the batched marks that already had them;
