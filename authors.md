@@ -7,7 +7,7 @@
 ## Citation
 
 Source:
-[`DESCRIPTION`](https://github.com/r-vellum/vellum/blob/v0.6.4/DESCRIPTION)
+[`DESCRIPTION`](https://github.com/r-vellum/vellum/blob/main/DESCRIPTION)
 
 Schoch D (2026). *vellum: Low-Level Graphics with Device-Independent
 Layout and Queryable Scenes*. R package version 0.6.4,
