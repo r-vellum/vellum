@@ -160,6 +160,7 @@ reference:
   - style
   - gradients
   - vl_pattern
+  - vl_hatch
   - as_mask
   - vl_shadow
   - sketch

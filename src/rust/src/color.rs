@@ -104,6 +104,10 @@ pub enum Paint {
     /// gradient; a non-zero focal offset places the highlight off-centre.
     Radial { cx: f64, cy: f64, r: f64, fx: f64, fy: f64, fr: f64, unit: Unit, stops: Vec<Stop>, extend: Extend },
     Pattern(PatternFill),
+    /// Parallel ruled lines filling a shape. Unlike `Pattern` this is geometry,
+    /// not a rasterised tile, so it stays crisp at any zoom and prints correctly
+    /// -- and it is the accessible alternative to a colour encoding.
+    Hatch { angle: f64, spacing: f64, width: f64, col: Rgba, bg: Option<Rgba> },
 }
 
 impl Paint {
@@ -125,6 +129,13 @@ impl Paint {
                 p.opacity *= alpha.clamp(0.0, 1.0);
                 Paint::Pattern(p)
             }
+            Paint::Hatch { angle, spacing, width, col, bg } => Paint::Hatch {
+                angle,
+                spacing,
+                width,
+                col: col.with_alpha(alpha),
+                bg: bg.map(|c| c.with_alpha(alpha)),
+            },
         }
     }
 }
@@ -140,10 +151,23 @@ pub fn parse_paint(obj: &Robj) -> Option<Paint> {
             if kind == "pattern" {
                 return parse_pattern(obj);
             }
+            if kind == "hatch" {
+                return parse_hatch(obj);
+            }
             return parse_gradient(obj, kind);
         }
     }
     opt_color(obj).map(Paint::Solid)
+}
+
+fn parse_hatch(obj: &Robj) -> Option<Paint> {
+    Some(Paint::Hatch {
+        angle: obj.dollar("angle").ok()?.as_real()?,
+        spacing: obj.dollar("spacing").ok()?.as_real()?,
+        width: obj.dollar("width").ok()?.as_real()?,
+        col: opt_color(&obj.dollar("col").ok()?)?,
+        bg: obj.dollar("bg").ok().and_then(|b| opt_color(&b)),
+    })
 }
 
 fn parse_pattern(obj: &Robj) -> Option<Paint> {
@@ -631,6 +655,17 @@ fn hash_paint(p: &Paint, h: &mut impl std::hash::Hasher) {
             hash_unit(&pf.unit, h);
             std::mem::discriminant(&pf.extend).hash(h);
             pf.opacity.to_bits().hash(h);
+        }
+        Paint::Hatch { angle, spacing, width, col, bg } => {
+            4u8.hash(h);
+            angle.to_bits().hash(h);
+            spacing.to_bits().hash(h);
+            width.to_bits().hash(h);
+            hash_rgba(*col, h);
+            match bg {
+                Some(c) => { 1u8.hash(h); hash_rgba(*c, h); }
+                None => 0u8.hash(h),
+            }
         }
     }
 }

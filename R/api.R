@@ -1006,19 +1006,29 @@ S7::method(compile, grob_hexagon) <- function(node, scene) {
     # the per-hex fill alpha (the fill bypasses the shared-gpar resolve).
     cols <- node@fill
     if (is.null(cols)) cols <- node@gp@fill
-    if (is.null(cols)) cols <- NA
-    cols <- rep_len(cols, n)
-    cols[is.na(cols)] <- "transparent"
-    m <- grDevices::col2rgb(cols, alpha = TRUE)
-    a <- node@gp@alpha
-    if (!is.null(a) && !is.na(a)) m[4L, ] <- round(m[4L, ] * a)
-    frgba <- as.integer(m)
+    # A gradient/pattern/hatch is not a per-element colour. Send an *empty* fill
+    # vector so the backend falls back to the shared `gp` paint for every element
+    # -- which is what lets a batched mark take the full paint model at all. (An
+    # NA-filled vector would not do: that means "explicitly transparent".)
+    paint_fill <- .is_paint(cols)
+    if (paint_fill) {
+      frgba <- integer(0)
+    } else {
+      if (is.null(cols)) cols <- NA
+      cols <- rep_len(cols, n)
+      cols[is.na(cols)] <- "transparent"
+      m <- grDevices::col2rgb(cols, alpha = TRUE)
+      a <- node@gp@alpha
+      if (!is.null(a) && !is.na(a)) m[4L, ] <- round(m[4L, ] * a)
+      frgba <- as.integer(m)
+    }
     g <- .gp4(node@gp, scene)
     scene$hexagons(ex$value, ey$value, es$value, ew$value, eh$value,
                    ex$code, ex$offset, ey$code, ey$offset, es$code, es$offset,
                    ew$code, ew$offset, eh$code, eh$offset,
                    frgba, identical(node@orientation, "flat"),
                    g$col, g$lwd, g$alpha, g$stroke,
+                   if (paint_fill) g$fill else NULL,
                    .keys_vec(node, n))
   })
 }
@@ -1034,13 +1044,22 @@ S7::method(compile, grob_sector) <- function(node, scene) {
     # col2rgb(alpha=TRUE) -> contiguous RGBA quads; fold the uniform gp$alpha in.
     cols <- node@fill
     if (is.null(cols)) cols <- node@gp@fill
-    if (is.null(cols)) cols <- NA
-    cols <- rep_len(cols, n)
-    cols[is.na(cols)] <- "transparent"
-    m <- grDevices::col2rgb(cols, alpha = TRUE)
-    a <- node@gp@alpha
-    if (!is.null(a) && !is.na(a)) m[4L, ] <- round(m[4L, ] * a)
-    frgba <- as.integer(m)
+    # A gradient/pattern/hatch is not a per-element colour. Send an *empty* fill
+    # vector so the backend falls back to the shared `gp` paint for every element
+    # -- which is what lets a batched mark take the full paint model at all. (An
+    # NA-filled vector would not do: that means "explicitly transparent".)
+    paint_fill <- .is_paint(cols)
+    if (paint_fill) {
+      frgba <- integer(0)
+    } else {
+      if (is.null(cols)) cols <- NA
+      cols <- rep_len(cols, n)
+      cols[is.na(cols)] <- "transparent"
+      m <- grDevices::col2rgb(cols, alpha = TRUE)
+      a <- node@gp@alpha
+      if (!is.null(a) && !is.na(a)) m[4L, ] <- round(m[4L, ] * a)
+      frgba <- as.integer(m)
+    }
     g <- .gp4(node@gp, scene)
     a <- .encode_arrow(node@arrow)
     sk <- .encode_sketch(node@sketch)
@@ -1050,6 +1069,7 @@ S7::method(compile, grob_sector) <- function(node, scene) {
                   a$angle, a$len, a$ends, a$closed,
                   sk$roughness, sk$bowing, sk$fill_style, sk$fill_weight, sk$hachure_angle,
                   sk$hachure_gap, sk$curve_tightness, sk$disable_multi, sk$preserve, sk$seed,
+                  if (paint_fill) g$fill else NULL,
                   .keys_vec(node, n))
   })
 }

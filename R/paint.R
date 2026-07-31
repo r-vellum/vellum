@@ -132,6 +132,9 @@ print.vellum_gradient <- function(x, ...) {
   if (inherits(x, "vellum_gradient")) {
     return(.encode_gradient(x))
   }
+  if (inherits(x, "vellum_hatch")) {
+    return(.encode_hatch(x, scene))
+  }
   .rs_col_inh(x)
 }
 
@@ -355,7 +358,8 @@ print.vellum_mask <- function(x, ...) {
 
 # TRUE for a gradient/pattern object (as opposed to a colour).
 .is_paint <- function(x) {
-  inherits(x, "vellum_gradient") || inherits(x, "vellum_pattern")
+  inherits(x, "vellum_gradient") || inherits(x, "vellum_pattern") ||
+    inherits(x, "vellum_hatch")
 }
 
 # A tri-state flag: NULL inherits, TRUE/FALSE set.
@@ -443,4 +447,72 @@ print.vellum_shadow <- function(x, ...) {
     return(x$colours[[1]])
   }
   "black"
+}
+
+#' Hatch fill
+#'
+#' Fills a shape with ruled parallel lines. Unlike [vl_pattern()], which
+#' rasterises a tile, a hatch is **geometry**: it stays crisp at any zoom, prints
+#' correctly, and survives being converted to greyscale.
+#'
+#' That last point is the reason to reach for it. A colour encoding that fails
+#' for a red/green-blind reader — which [render()]'s `cvd` argument will show you
+#' and [vl_lint()] will flag — is fixed by encoding with *texture* as well as
+#' hue. Hatching is the standard way to do that.
+#'
+#' @param angle Direction of the rules, in degrees counter-clockwise from
+#'   horizontal. Distinct angles (0, 45, 90, 135) read as distinct categories.
+#' @param spacing Distance between rules, in points.
+#' @param width Rule width, in points.
+#' @param col Rule colour.
+#' @param bg Optional background painted behind the rules. `NA` (default) leaves
+#'   whatever is underneath showing through.
+#' @return A `vellum_hatch` object, usable anywhere a `fill` is.
+#' @seealso [vl_pattern()] for a tiled grob, [linear_gradient()], [vl_lint()]
+#' @examples
+#' vl_scene(3, 2) |>
+#'   draw(rect_grob(width = 0.8, height = 0.8, gp = vl_gpar(
+#'     fill = vl_hatch(angle = 45, spacing = 4), col = "grey30"
+#'   )))
+#' @export
+vl_hatch <- function(angle = 45, spacing = 3, width = 0.75, col = "black", bg = NA) {
+  num1 <- function(v, arg) {
+    if (length(v) != 1L || is.na(v) || !is.numeric(v)) {
+      cli::cli_abort("{.arg {arg}} must be a single number.")
+    }
+    as.numeric(v)
+  }
+  spacing <- num1(spacing, "spacing")
+  width <- num1(width, "width")
+  if (spacing <= 0) cli::cli_abort("{.arg spacing} must be positive.")
+  if (width <= 0) cli::cli_abort("{.arg width} must be positive.")
+  structure(
+    list(angle = num1(angle, "angle"), spacing = spacing, width = width,
+         col = col, bg = bg),
+    class = "vellum_hatch"
+  )
+}
+
+#' @export
+print.vellum_hatch <- function(x, ...) {
+  cli::cli_text(
+    "{.cls vellum_hatch} {x$angle}deg, spacing {x$spacing}pt, width {x$width}pt, {.val {x$col}}"
+  )
+  invisible(x)
+}
+
+# Encode a hatch for the backend. Spacing/width are points on the R side and
+# device px on the Rust side, converted here with the scene dpi -- the same
+# convention the text halo uses, so a hatch keeps its proportions at any dpi.
+.encode_hatch <- function(h, scene) {
+  scale <- if (is.null(scene)) 1 else scene$dpi() / 72
+  rgba <- .col2rgba(h$col)
+  if (is.null(rgba)) {
+    return(NULL)
+  }
+  list(
+    kind = "hatch", angle = h$angle,
+    spacing = h$spacing * scale, width = h$width * scale,
+    col = rgba, bg = .col2rgba(h$bg)
+  )
 }
