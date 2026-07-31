@@ -158,7 +158,9 @@ grob_segments <- S7::new_class("grob_segments", parent = grob, package = "vellum
                     start_cap = S7::new_property(S7::class_any, default = NULL),
                     end_cap = S7::new_property(S7::class_any, default = NULL),
                     offset = S7::new_property(S7::class_any, default = NULL),
-                    sketch = S7::new_property(S7::class_any, default = NULL)))
+                    sketch = S7::new_property(S7::class_any, default = NULL),
+                    ecol = S7::new_property(S7::class_any, default = NULL),
+                    elwd = S7::new_property(S7::class_any, default = NULL)))
 
 grob_loop <- S7::new_class("grob_loop", parent = grob, package = "vellum",
   properties = list(
@@ -690,7 +692,7 @@ loop_grob <- function(x = 0.5, y = 0.5, size = vl_unit(4, "mm"), foot = vl_unit(
 #' @export
 segments_grob <- function(x0, y0, x1, y1, arrow = NULL, start_cap = NULL, end_cap = NULL,
                           offset = NULL, sketch = NULL, gp = vl_gpar(), name = NULL, vp = NULL, id = NULL, role = NULL,
-                          key = NULL, meta = NULL) {
+                          key = NULL, meta = NULL, col = NULL, lwd = NULL) {
   n <- .common_n(x0, y0, x1, y1)
   start_cap <- .check_cap(start_cap, "start_cap")
   end_cap <- .check_cap(end_cap, "end_cap")
@@ -705,7 +707,9 @@ segments_grob <- function(x0, y0, x1, y1, arrow = NULL, start_cap = NULL, end_ca
     y1 = vctrs::vec_recycle(as_unit(y1, "native"), n),
     arrow = arrow, start_cap = start_cap, end_cap = end_cap, offset = offset,
     sketch = sketch, gp = gp, name = name, vp = vp, id = id, role = role,
-    keys = .recycle_keys(key, n), meta = .recycle_meta(meta, n)
+    keys = .recycle_keys(key, n), meta = .recycle_meta(meta, n),
+    ecol = if (is.null(col)) NULL else rep_len(col, n),
+    elwd = if (is.null(lwd)) NULL else rep_len(as.numeric(lwd), n)
   )
 }
 
@@ -717,6 +721,16 @@ segments_grob <- function(x0, y0, x1, y1, arrow = NULL, start_cap = NULL, end_ca
 #'   one sub-path (so a hole is a separate `id`), in first-appearance order (à la
 #'   grid); `NULL` makes a single sub-path.
 #' @param rule Fill rule: `"winding"` (non-zero, default) or `"evenodd"`.
+#' @param col,lwd **`segments_grob()` only** — per-segment stroke colour and
+#'   width, recycled to the segment count, mirroring the per-element `fill` that
+#'   `hexagon_grob()` and `sector_grob()` carry. `NULL` (default) uses the shared
+#'   `gp`, and the batch is drawn in one combined stroke exactly as before.
+#'
+#'   Reach for these instead of building one grob per segment: varying width or
+#'   colour that way costs an R-side grob each, which is the dominant expense on
+#'   scenes made of many small marks. Note that no backend can stroke segments
+#'   differently in a single call, so each segment is stroked on its own here —
+#'   the saving is in R, not in the output size.
 #' @param key Optional per-element data key(s) for the batched marks
 #'   (`points_grob`, `circle_grob`, `rect_grob`, `segments_grob`, `hexagon_grob`,
 #'   `sector_grob`), recycled to the element count like `fill`. Emitted by the SVG

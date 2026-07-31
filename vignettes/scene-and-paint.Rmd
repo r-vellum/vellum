@@ -286,6 +286,30 @@ for (i in 0:3) {
 display(s)
 ```
 
+### Per-segment style
+
+`segments_grob()` takes a `col` and an `lwd` per segment, mirroring the
+per-element `fill` that `hexagon_grob()` and `sector_grob()` carry:
+
+```{r}
+#| fig.height: 1.2
+n <- 14
+x <- seq(0.06, 0.94, length.out = n)
+display(
+  vl_scene(6, 1.2) |>
+    draw(segments_grob(x, 0.2, x, 0.8,
+                       lwd = seq(1, 13, length.out = n),
+                       col = grDevices::hcl.colors(n, "Zissou1")))
+)
+```
+
+Without this you would build one grob per segment. That renders the same pixels
+— identical, in fact — but costs an R-side grob each, and grob construction is
+the dominant expense on scenes made of many small marks.
+
+No backend can stroke segments differently in a single call, so each segment is
+still stroked on its own in the output. The saving is in R, not in the file size.
+
 ## Filling a line
 
 Everything above fills an *area*. A line has no area: a stroke is a colour

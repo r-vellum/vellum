@@ -194,7 +194,9 @@ segments_grob(
   id = NULL,
   role = NULL,
   key = NULL,
-  meta = NULL
+  meta = NULL,
+  col = NULL,
+  lwd = NULL
 )
 
 path_grob(
@@ -349,6 +351,17 @@ the marker. Recycled per loop.}
 bulges away from the vertex, e.g. away from the layout centroid).}
 
 \item{x0, y0, x1, y1}{Segment start/end coordinates (\code{\link[=vl_unit]{vl_unit()}} or numeric).}
+
+\item{col, lwd}{\strong{\code{segments_grob()} only} — per-segment stroke colour and
+width, recycled to the segment count, mirroring the per-element \code{fill} that
+\code{hexagon_grob()} and \code{sector_grob()} carry. \code{NULL} (default) uses the shared
+\code{gp}, and the batch is drawn in one combined stroke exactly as before.
+
+Reach for these instead of building one grob per segment: varying width or
+colour that way costs an R-side grob each, which is the dominant expense on
+scenes made of many small marks. Note that no backend can stroke segments
+differently in a single call, so each segment is stroked on its own here —
+the saving is in R, not in the output size.}
 
 \item{rule}{Fill rule: \code{"winding"} (non-zero, default) or \code{"evenodd"}.}
 

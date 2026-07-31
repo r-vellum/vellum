@@ -307,9 +307,13 @@ fn lerp_node(a: &Node, b: &Node, t: f64) -> Node {
             keys: keys.clone(),
         },
         (
-            Node::Segments { x0: ax0, y0: ay0, x1: ax1, y1: ay1, x0u, y0u, x1u, y1u, scap, ecap, scapu, ecapu, off, offu, arrow, sketch, gp: agp, keys },
+            Node::Segments { x0: ax0, y0: ay0, x1: ax1, y1: ay1, x0u, y0u, x1u, y1u, scap, ecap, scapu, ecapu, off, offu, arrow, sketch, gp: agp, keys, cols, lwds },
             Node::Segments { x0: bx0, y0: by0, x1: bx1, y1: by1, gp: bgp, .. },
         ) => Node::Segments {
+            // Per-element stroke style is discrete data, not a continuous
+            // quantity: snap to the left keyframe like keys and sketch.
+            cols: cols.clone(),
+            lwds: lwds.clone(),
             x0: lerp_vec(ax0, bx0, t),
             y0: lerp_vec(ay0, by0, t),
             x1: lerp_vec(ax1, bx1, t),
