@@ -1,6 +1,6 @@
 Package: vellum
 Title: Low-Level Graphics with Device-Independent Layout and Queryable Scenes
-Version: 0.6.0
+Version: 0.6.1
 Authors@R: 
     person("David", "Schoch", , "david.schoch@cynkra.com", role = c("aut", "cre"))
 Description: A grid-like low-level graphics system for R. Text metrics and

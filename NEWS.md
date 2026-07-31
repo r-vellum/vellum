@@ -1,3 +1,23 @@
+# vellum 0.6.1
+
+* **Fixed: node bounding boxes were viewport-local, not device coordinates.**
+  `lint_table()` resolved a node's box through its viewport's *scales* but never
+  applied the viewport's own *placement*, so for any viewport not at the page
+  origin it disagreed with `element_table()` by the viewport's offset — which is
+  every real plot with a panel.
+
+  Everything built on it inherited the error. `vl_repel()` solved labels against
+  obstacles it believed were elsewhere, so on a panelled scatter it left labels
+  sitting on top of the very markers it was asked to avoid (22 of 22 in the
+  regression case, now 0). `vl_lint()`'s `offscreen` and `low_contrast` rules
+  looked at the wrong part of the page, and `vl_nearest()` misplaced text and
+  rounded rects.
+
+  It was invisible in the test suite because tests draw into the default
+  full-page viewport, where the transform is the identity and local *is*
+  device. `scene_model()` was never affected — it takes geometry from
+  `element_table()`, which was correct — so `vellumwidget` is unaffected.
+
 # vellum 0.6.0
 
 Six phases of engine work: a typography layer, label placement, geometry

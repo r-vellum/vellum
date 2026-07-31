@@ -84,6 +84,72 @@ test_that("labels stay near their anchors", {
   expect_true(all(abs(moved$y0 - orig$y0) <= px + 1))
 })
 
+test_that("node boxes are device coordinates, not viewport-local ones", {
+  # Regression, and a bad one: `lint_table()` resolved boxes through the
+  # viewport's scales but never applied the viewport's own *placement*, so it
+  # reported viewport-LOCAL pixels while `element_table()` reported device ones.
+  # For any viewport not at the page origin the two disagreed by the offset.
+  #
+  # Everything downstream inherited it -- `vl_repel()` solved labels against
+  # obstacles it thought were elsewhere, and `vl_lint()`'s offscreen and
+  # low-contrast rules looked at the wrong part of the page. It was invisible
+  # because tests draw into the default full-page viewport, where the transform
+  # is the identity and local == device.
+  s <- vl_scene(7.5, 5, dpi = 150, bg = "white") |>
+    push(vl_viewport(name = "panel", x = 0.53, y = 0.42, width = 0.86, height = 0.62,
+                     xscale = c(0, 10), yscale = c(0, 100))) |>
+    draw(points_grob(vl_unit(5, "native"), vl_unit(50, "native"),
+                     size = vl_unit(4, "mm"), gp = vl_gpar(fill = "red"), name = "pt")) |>
+    draw(text_grob("X", x = vl_unit(5, "native"), y = vl_unit(50, "native"),
+                   gp = vl_gpar(fontsize = 20), name = "tx")) |>
+    pop()
+  b <- .scene_to_backend(s)
+  lt <- as.data.frame(b$lint_table(), stringsAsFactors = FALSE)
+  et <- as.data.frame(b$element_table(), stringsAsFactors = FALSE)
+  mid <- function(d) c((d$x0 + d$x1) / 2, (d$y0 + d$y1) / 2)
+
+  # The panel is centred at 0.53 x 1125 = 596.25 across, and 0.42 up the page,
+  # which in device space (y down) is 0.58 x 750 = 435.
+  expect_equal(mid(lt[lt$kind == "circle", ]), c(596.25, 435), tolerance = 1e-6)
+  # Both marks sit on the same anchor, so both tables must agree on it.
+  expect_equal(mid(lt[lt$kind == "text", ]), mid(lt[lt$kind == "circle", ]),
+               tolerance = 0.5)
+  expect_equal(mid(et[et$kind == "circle", ]), mid(lt[lt$kind == "circle", ]),
+               tolerance = 1e-6)
+})
+
+test_that("repel clears markers inside an offset panel", {
+  # The consequence of the bug above, and the case every real plot is: labels
+  # start centred on their markers inside a panel that is not at the page
+  # origin. With local-vs-device boxes mixed, the solver thought the markers
+  # were 112px away and left labels sitting on top of them.
+  set.seed(7)
+  k <- 22
+  px <- runif(k) * 10
+  py <- 30 + cumsum(rnorm(k, 1.5, 6))
+  s <- vl_scene(7.5, 5, dpi = 150, bg = "white") |>
+    push(vl_viewport(name = "panel", x = 0.53, y = 0.42, width = 0.86, height = 0.62,
+                     xscale = c(0, 10), yscale = range(py) + c(-12, 12))) |>
+    draw(points_grob(vl_unit(px, "native"), vl_unit(py, "native"),
+                     size = vl_unit(2.4, "mm"), gp = vl_gpar(fill = "steelblue"),
+                     name = "sites")) |>
+    draw(text_grob(paste0("site ", seq_len(k)), x = vl_unit(px, "native"),
+                   y = vl_unit(py, "native"), gp = vl_gpar(fontsize = 7.5),
+                   name = "labels")) |>
+    pop()
+  touching <- function(sc) {
+    nd <- .resolved_nodes(sc)
+    L <- nd[nd$kind == "text", , drop = FALSE]
+    M <- .obstacle_boxes(sc)
+    M <- M[M$name == "sites", , drop = FALSE]
+    sum(vapply(seq_len(nrow(L)), function(i) {
+      any(L$x0[i] < M$x1 & L$x1[i] > M$x0 & L$y0[i] < M$y1 & L$y1[i] > M$y0)
+    }, logical(1)))
+  }
+  expect_equal(touching(s), k) # every label starts on its own marker
+  expect_equal(touching(vl_repel(s, labels = "labels", padding = 0.4)), 0L)
+})
+
 test_that("repel works in a scaled viewport, and in more than one at once", {
   # The point of solving in device space and applying an absolute offset: the
   # coordinate system the label was anchored in does not matter.

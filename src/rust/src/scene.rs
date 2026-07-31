@@ -4940,7 +4940,17 @@ fn node_bbox(node: &Node, vp: &Vp) -> Option<(f64, f64, f64, f64)> {
         }
         _ => return None,
     }
-    acc
+    // Every arm above resolves through `vp.x_pos`/`x_len`, which are
+    // viewport-LOCAL pixels. The viewport's own placement lives in
+    // `vp.transform`, so the box has to go through it to be a device box like
+    // everything else reports.
+    //
+    // Omitting this was a real bug: `lint_table()` returned local coordinates
+    // while `element_table()` returned device ones, so for any viewport not at
+    // the page origin the two disagreed by the viewport's offset. It was
+    // invisible in tests because they draw into the default full-page viewport,
+    // where the transform is the identity and local == device.
+    acc.map(|(x0, y0, x1, y1)| dev_bbox(vp, x0, y0, x1, y1))
 }
 
 /// The device-px bounds of a clip shape (a path clip is reduced to its bbox --
