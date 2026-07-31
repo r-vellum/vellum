@@ -132,14 +132,16 @@ masks, reusable styles, and hand-drawn rendering.
 
 ## Text
 
-Device-independent shaping and measurement, plus Markdown-style rich
-labels.
+Device-independent shaping and measurement, Markdown-style rich labels,
+and layout: text wrapped to a box or set along a curve.
 
 - [`vl_strwidth()`](https://r-vellum.github.io/vellum/reference/vl_strwidth.md)
   [`vl_strheight()`](https://r-vellum.github.io/vellum/reference/vl_strwidth.md)
   : Measure text
 - [`md()`](https://r-vellum.github.io/vellum/reference/md.md) :
   Rich-text labels (markdown subset)
+- [`text_path_grob()`](https://r-vellum.github.io/vellum/reference/text_path_grob.md)
+  : Text set along a path
 
 ## Big data
 

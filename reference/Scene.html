@@ -29,7 +29,7 @@ S7 layer (vl_scene(), grobs, render()), which compiles to this object."><meta pr
   <ul class="dropdown-menu" aria-labelledby="dropdown-articles"><li><hr class="dropdown-divider"></li>
     <li><h6 class="dropdown-header" data-toc-skip>Concepts</h6></li>
     <li><a class="dropdown-item" href="../articles/scene-and-paint.html">The scene graph and the paint model</a></li>
-    <li><a class="dropdown-item" href="../articles/typography.html">Typography: halos and OpenType features</a></li>
+    <li><a class="dropdown-item" href="../articles/typography.html">Typography: layout, halos and OpenType features</a></li>
     <li><a class="dropdown-item" href="../articles/render-quality.html">Render quality: accessibility, crisp edges, group effects</a></li>
     <li><a class="dropdown-item" href="../articles/retained-mode.html">Asking a scene what it drew: read-back, picking, and editing</a></li>
     <li><a class="dropdown-item" href="../articles/datashading.html">Datashading: millions of points, honestly</a></li>
@@ -213,6 +213,14 @@ top-left, 4 per pixel), drawn into a <code>w</code> x <code>h</code> cell centre
 <h3 id="method-text">Method <code>text</code><a class="anchor" aria-label="anchor" href="#method-text"></a></h3>
 <p>Add pre-shaped text. The R wrapper does shaping (via <code>textshaping</code>) and
 passes per-glyph ids/positions/fonts plus the block size.</p>
+</div>
+
+<div class="section">
+<h3 id="method-text-path">Method <code>text_path</code><a class="anchor" aria-label="anchor" href="#method-text-path"></a></h3>
+<p>Add one pre-shaped label set along a polyline baseline. Identical to
+<code><a href="https://rdrr.io/r/graphics/text.html" class="external-link">text()</a></code> except that the anchor is the path rather than a point: <code>hjust</code>
+slides the run along it (0 = start, 1 = end) and <code>vjust</code> still positions
+the line box against the baseline.</p>
 </div>
 
 <div class="section">

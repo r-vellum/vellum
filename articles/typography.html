@@ -5,7 +5,7 @@
 <meta charset="utf-8">
 <meta http-equiv="X-UA-Compatible" content="IE=edge">
 <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
-<title>Typography: halos and OpenType features • vellum</title>
+<title>Typography: layout, halos and OpenType features • vellum</title>
 <!-- favicons --><link rel="icon" type="image/png" sizes="96x96" href="../favicon-96x96.png">
 <link rel="icon" type="”image/svg+xml”" href="../favicon.svg">
 <link rel="apple-touch-icon" sizes="180x180" href="../apple-touch-icon.png">
@@ -25,7 +25,7 @@
 <link href="../deps/font-awesome-6.5.2/css/all.min.css" rel="stylesheet">
 <link href="../deps/font-awesome-6.5.2/css/v4-shims.min.css" rel="stylesheet">
 <script src="../deps/headroom-0.11.0/headroom.min.js"></script><script src="../deps/headroom-0.11.0/jQuery.headroom.min.js"></script><script src="../deps/bootstrap-toc-1.0.1/bootstrap-toc.min.js"></script><script src="../deps/clipboard.js-2.0.11/clipboard.min.js"></script><script src="../deps/search-1.0.0/autocomplete.jquery.min.js"></script><script src="../deps/search-1.0.0/fuse.min.js"></script><script src="../deps/search-1.0.0/mark.min.js"></script><!-- pkgdown --><script src="../pkgdown.js"></script><link href="../extra.css" rel="stylesheet">
-<meta property="og:title" content="Typography: halos and OpenType features">
+<meta property="og:title" content="Typography: layout, halos and OpenType features">
 <meta name="theme-color" content="#efe6d2">
 </head>
 <body>
@@ -52,7 +52,7 @@
 <li><hr class="dropdown-divider"></li>
     <li><h6 class="dropdown-header" data-toc-skip>Concepts</h6></li>
     <li><a class="dropdown-item" href="../articles/scene-and-paint.html">The scene graph and the paint model</a></li>
-    <li><a class="dropdown-item" href="../articles/typography.html">Typography: halos and OpenType features</a></li>
+    <li><a class="dropdown-item" href="../articles/typography.html">Typography: layout, halos and OpenType features</a></li>
     <li><a class="dropdown-item" href="../articles/render-quality.html">Render quality: accessibility, crisp edges, group effects</a></li>
     <li><a class="dropdown-item" href="../articles/retained-mode.html">Asking a scene what it drew: read-back, picking, and editing</a></li>
     <li><a class="dropdown-item" href="../articles/datashading.html">Datashading: millions of points, honestly</a></li>
@@ -93,7 +93,7 @@
 
 <div class="row">
   <main id="main" class="col-md-9"><div class="page-header">
-      <img src="../logo.png" class="logo" alt=""><h1>Typography: halos and OpenType features</h1>
+      <img src="../logo.png" class="logo" alt=""><h1>Typography: layout, halos and OpenType features</h1>
             
       
       <small class="dont-index">Source: <a href="https://github.com/r-vellum/vellum/blob/main/vignettes/typography.Rmd" class="external-link"><code>vignettes/typography.Rmd</code></a></small>
@@ -102,9 +102,157 @@
 
     
     
-<p>vellum ships the shaper and the font tables in-process, which means
-it can do two things with text that R’s graphics stack otherwise cannot:
-stroke the glyph outlines, and ask the font for alternate glyphs.</p>
+<p>vellum ships the shaper and the font tables in-process, and it
+measures text when a scene is <em>built</em> rather than when it is
+drawn. Between them, those two facts let it do things with text that R’s
+graphics stack otherwise cannot: fit text to a box, set it along a
+curve, stroke the glyph outlines, and ask the font for alternate
+glyphs.</p>
+<div class="section level2">
+<h2 id="text-that-fits-a-box">Text that fits a box<a class="anchor" aria-label="anchor" href="#text-that-fits-a-box"></a>
+</h2>
+<p>Give <code><a href="../reference/grob.html">text_grob()</a></code> a <code>width</code> and it wraps:</p>
+<div class="sourceCode" id="cb1"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">caption</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/paste.html" class="external-link">paste</a></span><span class="op">(</span></span>
+<span>  <span class="st">"Text that has to fit a fixed measure is the ordinary case for a subtitle, a"</span>,</span>
+<span>  <span class="st">"caption, or an annotation pinned to a panel. Breaking it by hand is guesswork,"</span>,</span>
+<span>  <span class="st">"because the right break depends on the font, the size, and the OpenType"</span>,</span>
+<span>  <span class="st">"features actually in force."</span></span>
+<span><span class="op">)</span></span>
+<span></span>
+<span><span class="fu"><a href="../reference/display.html">display</a></span><span class="op">(</span></span>
+<span>  <span class="fu"><a href="../reference/vl_scene.html">vl_scene</a></span><span class="op">(</span><span class="fl">6</span>, <span class="fl">1.8</span>, dpi <span class="op">=</span> <span class="fl">96</span>, bg <span class="op">=</span> <span class="st">"white"</span><span class="op">)</span> <span class="op">|&gt;</span></span>
+<span>    <span class="fu"><a href="../reference/vl_scene.html">draw</a></span><span class="op">(</span><span class="fu"><a href="../reference/grob.html">rect_grob</a></span><span class="op">(</span>width <span class="op">=</span> <span class="fu"><a href="../reference/vl_unit.html">vl_unit</a></span><span class="op">(</span><span class="fl">80</span>, <span class="st">"mm"</span><span class="op">)</span>, height <span class="op">=</span> <span class="fu"><a href="../reference/vl_unit.html">vl_unit</a></span><span class="op">(</span><span class="fl">38</span>, <span class="st">"mm"</span><span class="op">)</span>,</span>
+<span>                   gp <span class="op">=</span> <span class="fu"><a href="../reference/vl_gpar.html">vl_gpar</a></span><span class="op">(</span>fill <span class="op">=</span> <span class="st">"grey97"</span>, col <span class="op">=</span> <span class="st">"grey85"</span><span class="op">)</span><span class="op">)</span><span class="op">)</span> <span class="op">|&gt;</span></span>
+<span>    <span class="fu"><a href="../reference/vl_scene.html">draw</a></span><span class="op">(</span><span class="fu"><a href="../reference/grob.html">text_grob</a></span><span class="op">(</span><span class="va">caption</span>, width <span class="op">=</span> <span class="fu"><a href="../reference/vl_unit.html">vl_unit</a></span><span class="op">(</span><span class="fl">74</span>, <span class="st">"mm"</span><span class="op">)</span>, gp <span class="op">=</span> <span class="fu"><a href="../reference/vl_gpar.html">vl_gpar</a></span><span class="op">(</span>fontsize <span class="op">=</span> <span class="fl">9</span><span class="op">)</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="op">)</span></span></code></pre></div>
+<p><img src="typography_files/figure-html/unnamed-chunk-2-1.png" class="r-plt" alt="" width="576"></p>
+<p>The break decision is made on the <strong>shaped</strong> width of
+each candidate line, not on a sum of per-word advances. Kerning and any
+active feature are therefore accounted for, and a line can never render
+wider than it measured — which is a guarantee, not a tendency, and is
+what makes auto-fit below trustworthy.</p>
+<p><code>width</code> has to be an <em>absolute</em> unit
+(<code>mm</code>/<code>cm</code>/<code>in</code>/<code>pt</code>), and
+that restriction is the interesting part. Wrapping happens when the grob
+is constructed, and a viewport’s size in <code>npc</code> or
+<code>native</code> does not exist until render time. Rather than
+pretend otherwise, vellum asks for the physical measure you want to wrap
+to. A layout engine above vellum knows its panel widths in millimetres,
+so this costs it nothing.</p>
+<div class="section level3">
+<h3 id="alignment">Alignment<a class="anchor" aria-label="anchor" href="#alignment"></a>
+</h3>
+<p><code>align</code> positions lines within the box. Note that the
+block <em>is</em> a box of exactly the requested width, so
+<code>just</code> anchors the box rather than the longest line — which
+is what lets a right-aligned caption line up with a panel edge.</p>
+<div class="sourceCode" id="cb2"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">box</span> <span class="op">&lt;-</span> <span class="kw">function</span><span class="op">(</span><span class="va">scene</span>, <span class="va">x</span>, <span class="va">align</span><span class="op">)</span> <span class="op">{</span></span>
+<span>  <span class="va">scene</span> <span class="op">|&gt;</span></span>
+<span>    <span class="fu"><a href="../reference/vl_scene.html">draw</a></span><span class="op">(</span><span class="fu"><a href="../reference/grob.html">rect_grob</a></span><span class="op">(</span>x <span class="op">=</span> <span class="va">x</span>, y <span class="op">=</span> <span class="fl">0.46</span>, width <span class="op">=</span> <span class="fu"><a href="../reference/vl_unit.html">vl_unit</a></span><span class="op">(</span><span class="fl">40</span>, <span class="st">"mm"</span><span class="op">)</span>,</span>
+<span>                   height <span class="op">=</span> <span class="fu"><a href="../reference/vl_unit.html">vl_unit</a></span><span class="op">(</span><span class="fl">34</span>, <span class="st">"mm"</span><span class="op">)</span>,</span>
+<span>                   gp <span class="op">=</span> <span class="fu"><a href="../reference/vl_gpar.html">vl_gpar</a></span><span class="op">(</span>fill <span class="op">=</span> <span class="st">"grey97"</span>, col <span class="op">=</span> <span class="st">"grey85"</span><span class="op">)</span><span class="op">)</span><span class="op">)</span> <span class="op">|&gt;</span></span>
+<span>    <span class="fu"><a href="../reference/vl_scene.html">draw</a></span><span class="op">(</span><span class="fu"><a href="../reference/grob.html">text_grob</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/sprintf.html" class="external-link">sprintf</a></span><span class="op">(</span><span class="st">'"%s"'</span>, <span class="va">align</span><span class="op">)</span>, x <span class="op">=</span> <span class="va">x</span>, y <span class="op">=</span> <span class="fl">0.92</span>,</span>
+<span>                   gp <span class="op">=</span> <span class="fu"><a href="../reference/vl_gpar.html">vl_gpar</a></span><span class="op">(</span>fontsize <span class="op">=</span> <span class="fl">9</span>, col <span class="op">=</span> <span class="st">"grey40"</span><span class="op">)</span><span class="op">)</span><span class="op">)</span> <span class="op">|&gt;</span></span>
+<span>    <span class="fu"><a href="../reference/vl_scene.html">draw</a></span><span class="op">(</span><span class="fu"><a href="../reference/grob.html">text_grob</a></span><span class="op">(</span><span class="va">caption</span>, x <span class="op">=</span> <span class="va">x</span>, y <span class="op">=</span> <span class="fl">0.46</span>, width <span class="op">=</span> <span class="fu"><a href="../reference/vl_unit.html">vl_unit</a></span><span class="op">(</span><span class="fl">36</span>, <span class="st">"mm"</span><span class="op">)</span>,</span>
+<span>                   align <span class="op">=</span> <span class="va">align</span>, gp <span class="op">=</span> <span class="fu"><a href="../reference/vl_gpar.html">vl_gpar</a></span><span class="op">(</span>fontsize <span class="op">=</span> <span class="fl">6</span><span class="op">)</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="op">}</span></span>
+<span><span class="fu"><a href="../reference/display.html">display</a></span><span class="op">(</span></span>
+<span>  <span class="fu"><a href="../reference/vl_scene.html">vl_scene</a></span><span class="op">(</span><span class="fl">6</span>, <span class="fl">2.6</span>, dpi <span class="op">=</span> <span class="fl">96</span>, bg <span class="op">=</span> <span class="st">"white"</span><span class="op">)</span> <span class="op">|&gt;</span></span>
+<span>    <span class="fu"><a href="https://rdrr.io/r/graphics/box.html" class="external-link">box</a></span><span class="op">(</span><span class="fl">0.14</span>, <span class="st">"left"</span><span class="op">)</span> <span class="op">|&gt;</span> <span class="fu"><a href="https://rdrr.io/r/graphics/box.html" class="external-link">box</a></span><span class="op">(</span><span class="fl">0.38</span>, <span class="st">"centre"</span><span class="op">)</span> <span class="op">|&gt;</span></span>
+<span>    <span class="fu"><a href="https://rdrr.io/r/graphics/box.html" class="external-link">box</a></span><span class="op">(</span><span class="fl">0.62</span>, <span class="st">"right"</span><span class="op">)</span> <span class="op">|&gt;</span> <span class="fu"><a href="https://rdrr.io/r/graphics/box.html" class="external-link">box</a></span><span class="op">(</span><span class="fl">0.86</span>, <span class="st">"justify"</span><span class="op">)</span></span>
+<span><span class="op">)</span></span></code></pre></div>
+<p><img src="typography_files/figure-html/unnamed-chunk-3-1.png" class="r-plt" alt="" width="576"></p>
+<p><code>"justify"</code> stretches the inter-word spaces to flush both
+edges, leaving the last line of each paragraph ragged — a two-word final
+line stretched to full measure is the classic ugly artifact.</p>
+</div>
+<div class="section level3">
+<h3 id="auto-fit">Auto-fit<a class="anchor" aria-label="anchor" href="#auto-fit"></a>
+</h3>
+<p><code>fit = TRUE</code> shrinks the font — never grows it — until the
+wrapped block fits <code>width</code> × <code>height</code>:</p>
+<div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">fitted</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/vl_scene.html">vl_scene</a></span><span class="op">(</span><span class="fl">6</span>, <span class="fl">2.2</span>, dpi <span class="op">=</span> <span class="fl">96</span>, bg <span class="op">=</span> <span class="st">"white"</span><span class="op">)</span></span>
+<span><span class="kw">for</span> <span class="op">(</span><span class="va">i</span> <span class="kw">in</span> <span class="fu"><a href="https://rdrr.io/r/base/seq.html" class="external-link">seq_along</a></span><span class="op">(</span><span class="va">hs</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">30</span>, <span class="fl">20</span>, <span class="fl">12</span><span class="op">)</span><span class="op">)</span><span class="op">)</span> <span class="op">{</span></span>
+<span>  <span class="va">x</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.18</span>, <span class="fl">0.5</span>, <span class="fl">0.82</span><span class="op">)</span><span class="op">[</span><span class="va">i</span><span class="op">]</span></span>
+<span>  <span class="va">fitted</span> <span class="op">&lt;-</span> <span class="va">fitted</span> <span class="op">|&gt;</span></span>
+<span>    <span class="fu"><a href="../reference/vl_scene.html">draw</a></span><span class="op">(</span><span class="fu"><a href="../reference/grob.html">rect_grob</a></span><span class="op">(</span>x <span class="op">=</span> <span class="va">x</span>, y <span class="op">=</span> <span class="fl">0.45</span>, width <span class="op">=</span> <span class="fu"><a href="../reference/vl_unit.html">vl_unit</a></span><span class="op">(</span><span class="fl">38</span>, <span class="st">"mm"</span><span class="op">)</span>,</span>
+<span>                   height <span class="op">=</span> <span class="fu"><a href="../reference/vl_unit.html">vl_unit</a></span><span class="op">(</span><span class="va">hs</span><span class="op">[</span><span class="va">i</span><span class="op">]</span>, <span class="st">"mm"</span><span class="op">)</span>,</span>
+<span>                   gp <span class="op">=</span> <span class="fu"><a href="../reference/vl_gpar.html">vl_gpar</a></span><span class="op">(</span>fill <span class="op">=</span> <span class="cn">NA</span>, col <span class="op">=</span> <span class="st">"grey80"</span>, lty <span class="op">=</span> <span class="st">"dashed"</span><span class="op">)</span><span class="op">)</span><span class="op">)</span> <span class="op">|&gt;</span></span>
+<span>    <span class="fu"><a href="../reference/vl_scene.html">draw</a></span><span class="op">(</span><span class="fu"><a href="../reference/grob.html">text_grob</a></span><span class="op">(</span><span class="va">caption</span>, x <span class="op">=</span> <span class="va">x</span>, y <span class="op">=</span> <span class="fl">0.45</span>, width <span class="op">=</span> <span class="fu"><a href="../reference/vl_unit.html">vl_unit</a></span><span class="op">(</span><span class="fl">36</span>, <span class="st">"mm"</span><span class="op">)</span>,</span>
+<span>                   height <span class="op">=</span> <span class="fu"><a href="../reference/vl_unit.html">vl_unit</a></span><span class="op">(</span><span class="va">hs</span><span class="op">[</span><span class="va">i</span><span class="op">]</span> <span class="op">-</span> <span class="fl">2</span>, <span class="st">"mm"</span><span class="op">)</span>, fit <span class="op">=</span> <span class="cn">TRUE</span>,</span>
+<span>                   gp <span class="op">=</span> <span class="fu"><a href="../reference/vl_gpar.html">vl_gpar</a></span><span class="op">(</span>fontsize <span class="op">=</span> <span class="fl">11</span><span class="op">)</span><span class="op">)</span><span class="op">)</span> <span class="op">|&gt;</span></span>
+<span>    <span class="fu"><a href="../reference/vl_scene.html">draw</a></span><span class="op">(</span><span class="fu"><a href="../reference/grob.html">text_grob</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/paste.html" class="external-link">paste0</a></span><span class="op">(</span><span class="va">hs</span><span class="op">[</span><span class="va">i</span><span class="op">]</span>, <span class="st">"mm tall"</span><span class="op">)</span>, x <span class="op">=</span> <span class="va">x</span>, y <span class="op">=</span> <span class="fl">0.93</span>,</span>
+<span>                   gp <span class="op">=</span> <span class="fu"><a href="../reference/vl_gpar.html">vl_gpar</a></span><span class="op">(</span>fontsize <span class="op">=</span> <span class="fl">8</span>, col <span class="op">=</span> <span class="st">"grey40"</span><span class="op">)</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="op">}</span></span>
+<span><span class="fu"><a href="../reference/display.html">display</a></span><span class="op">(</span><span class="va">fitted</span><span class="op">)</span></span></code></pre></div>
+<p><img src="typography_files/figure-html/unnamed-chunk-4-1.png" class="r-plt" alt="" width="576"></p>
+<p>Each probe re-wraps, because the line breaks depend on the size —
+this is a search, not a scale factor. One size is chosen for the whole
+grob: a row of labels at four different sizes is a defect, not a
+feature.</p>
+<p>This is the piece that genuinely cannot be built on grid. Fitting
+text to a box requires measuring it before it is drawn, and in grid a
+string has no width until a device is open.</p>
+</div>
+</div>
+<div class="section level2">
+<h2 id="text-on-a-path">Text on a path<a class="anchor" aria-label="anchor" href="#text-on-a-path"></a>
+</h2>
+<p><code><a href="../reference/text_path_grob.html">text_path_grob()</a></code> takes a polyline baseline instead of a
+point. Each glyph keeps the pen position shaping gave it and is placed
+that far along the path, rotated to the local tangent.</p>
+<div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">arc</span> <span class="op">&lt;-</span> <span class="kw">function</span><span class="op">(</span><span class="va">from</span>, <span class="va">to</span>, <span class="va">r</span> <span class="op">=</span> <span class="fl">0.34</span><span class="op">)</span> <span class="op">{</span></span>
+<span>  <span class="va">th</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/seq.html" class="external-link">seq</a></span><span class="op">(</span><span class="va">from</span>, <span class="va">to</span>, length.out <span class="op">=</span> <span class="fl">120</span><span class="op">)</span></span>
+<span>  <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>x <span class="op">=</span> <span class="fl">0.5</span> <span class="op">+</span> <span class="va">r</span> <span class="op">*</span> <span class="fu"><a href="https://rdrr.io/r/base/Trig.html" class="external-link">cos</a></span><span class="op">(</span><span class="va">th</span><span class="op">)</span>, y <span class="op">=</span> <span class="fl">0.5</span> <span class="op">+</span> <span class="va">r</span> <span class="op">*</span> <span class="fu"><a href="https://rdrr.io/r/base/Trig.html" class="external-link">sin</a></span><span class="op">(</span><span class="va">th</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="op">}</span></span>
+<span><span class="va">upper</span> <span class="op">&lt;-</span> <span class="fu">arc</span><span class="op">(</span><span class="va">pi</span>, <span class="fl">0</span><span class="op">)</span></span>
+<span><span class="va">lower</span> <span class="op">&lt;-</span> <span class="fu">arc</span><span class="op">(</span><span class="va">pi</span>, <span class="fl">2</span> <span class="op">*</span> <span class="va">pi</span><span class="op">)</span> <span class="co"># reversed, so it reads the right way up</span></span>
+<span></span>
+<span><span class="fu"><a href="../reference/display.html">display</a></span><span class="op">(</span></span>
+<span>  <span class="fu"><a href="../reference/vl_scene.html">vl_scene</a></span><span class="op">(</span><span class="fl">3.2</span>, <span class="fl">3.2</span>, dpi <span class="op">=</span> <span class="fl">96</span>, bg <span class="op">=</span> <span class="st">"white"</span><span class="op">)</span> <span class="op">|&gt;</span></span>
+<span>    <span class="fu"><a href="../reference/vl_scene.html">draw</a></span><span class="op">(</span><span class="fu"><a href="../reference/grob.html">circle_grob</a></span><span class="op">(</span>r <span class="op">=</span> <span class="fl">0.4</span>, gp <span class="op">=</span> <span class="fu"><a href="../reference/vl_gpar.html">vl_gpar</a></span><span class="op">(</span>fill <span class="op">=</span> <span class="cn">NA</span>, col <span class="op">=</span> <span class="st">"grey75"</span>, lwd <span class="op">=</span> <span class="fl">1.5</span><span class="op">)</span><span class="op">)</span><span class="op">)</span> <span class="op">|&gt;</span></span>
+<span>    <span class="fu"><a href="../reference/vl_scene.html">draw</a></span><span class="op">(</span><span class="fu"><a href="../reference/text_path_grob.html">text_path_grob</a></span><span class="op">(</span><span class="st">"MEASURED AT CONSTRUCTION"</span>, x <span class="op">=</span> <span class="va">upper</span><span class="op">$</span><span class="va">x</span>, y <span class="op">=</span> <span class="va">upper</span><span class="op">$</span><span class="va">y</span>,</span>
+<span>                        offset <span class="op">=</span> <span class="fl">5</span>, gp <span class="op">=</span> <span class="fu"><a href="../reference/vl_gpar.html">vl_gpar</a></span><span class="op">(</span>fontsize <span class="op">=</span> <span class="fl">10</span><span class="op">)</span><span class="op">)</span><span class="op">)</span> <span class="op">|&gt;</span></span>
+<span>    <span class="fu"><a href="../reference/vl_scene.html">draw</a></span><span class="op">(</span><span class="fu"><a href="../reference/text_path_grob.html">text_path_grob</a></span><span class="op">(</span><span class="st">"NOT AT DRAW TIME"</span>, x <span class="op">=</span> <span class="va">lower</span><span class="op">$</span><span class="va">x</span>, y <span class="op">=</span> <span class="va">lower</span><span class="op">$</span><span class="va">y</span>,</span>
+<span>                        offset <span class="op">=</span> <span class="op">-</span><span class="fl">12</span>, gp <span class="op">=</span> <span class="fu"><a href="../reference/vl_gpar.html">vl_gpar</a></span><span class="op">(</span>fontsize <span class="op">=</span> <span class="fl">10</span><span class="op">)</span><span class="op">)</span><span class="op">)</span> <span class="op">|&gt;</span></span>
+<span>    <span class="fu"><a href="../reference/vl_scene.html">draw</a></span><span class="op">(</span><span class="fu"><a href="../reference/grob.html">text_grob</a></span><span class="op">(</span><span class="st">"vellum"</span>, gp <span class="op">=</span> <span class="fu"><a href="../reference/vl_gpar.html">vl_gpar</a></span><span class="op">(</span>fontsize <span class="op">=</span> <span class="fl">14</span>, col <span class="op">=</span> <span class="st">"grey35"</span><span class="op">)</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="op">)</span></span></code></pre></div>
+<p><img src="typography_files/figure-html/unnamed-chunk-5-1.png" class="r-plt" alt="" width="307.2"></p>
+<p>Two things to know.</p>
+<p>Glyphs follow the tangent unconditionally, exactly as SVG
+<code>textPath</code> does, so a label on the underside of a closed
+curve reads upside-down. The fix is to reverse the
+<strong>path</strong>, as <code>lower</code> does above — not the
+glyphs. Flipping glyphs individually would put them the right way up but
+in reverse order, which is mirror-writing, so vellum does not offer
+it.</p>
+<p>Arc length is measured on the <em>rendered</em> path, which is why
+this lives in the engine rather than in R: glyph advances are in points
+and the baseline is in <code>npc</code> or <code>native</code>, and
+nothing can put those in the same space until the viewport’s pixel
+extent is known.</p>
+<p>On-path text is an ordinary text node with a baseline attached, so
+everything else still applies — halos, features, colour, clipping, and
+all three backends. The run is fanned out into one glyph per position at
+draw time, so SVG output is still real <code>&lt;text&gt;</code> and PDF
+still carries copyable text:</p>
+<div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">x</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/seq.html" class="external-link">seq</a></span><span class="op">(</span><span class="fl">0.04</span>, <span class="fl">0.96</span>, length.out <span class="op">=</span> <span class="fl">200</span><span class="op">)</span></span>
+<span><span class="fu"><a href="../reference/display.html">display</a></span><span class="op">(</span></span>
+<span>  <span class="fu"><a href="../reference/vl_scene.html">vl_scene</a></span><span class="op">(</span><span class="fl">6</span>, <span class="fl">1.8</span>, dpi <span class="op">=</span> <span class="fl">96</span>, bg <span class="op">=</span> <span class="st">"#20304A"</span><span class="op">)</span> <span class="op">|&gt;</span></span>
+<span>    <span class="fu"><a href="../reference/vl_scene.html">draw</a></span><span class="op">(</span><span class="fu"><a href="../reference/text_path_grob.html">text_path_grob</a></span><span class="op">(</span></span>
+<span>      <span class="st">"a halo keeps a label legible wherever the curve takes it"</span>,</span>
+<span>      x <span class="op">=</span> <span class="va">x</span>, y <span class="op">=</span> <span class="fl">0.5</span> <span class="op">+</span> <span class="fl">0.22</span> <span class="op">*</span> <span class="fu"><a href="https://rdrr.io/r/base/Trig.html" class="external-link">sin</a></span><span class="op">(</span><span class="va">x</span> <span class="op">*</span> <span class="fl">3</span> <span class="op">*</span> <span class="va">pi</span><span class="op">)</span>, just <span class="op">=</span> <span class="st">"left"</span>, offset <span class="op">=</span> <span class="fl">3</span>,</span>
+<span>      gp <span class="op">=</span> <span class="fu"><a href="../reference/vl_gpar.html">vl_gpar</a></span><span class="op">(</span>fontsize <span class="op">=</span> <span class="fl">12</span>, col <span class="op">=</span> <span class="st">"white"</span>,</span>
+<span>                   halo_col <span class="op">=</span> <span class="st">"#20304A"</span>, halo_width <span class="op">=</span> <span class="fl">2.5</span><span class="op">)</span></span>
+<span>    <span class="op">)</span><span class="op">)</span></span>
+<span><span class="op">)</span></span></code></pre></div>
+<p><img src="typography_files/figure-html/unnamed-chunk-6-1.png" class="r-plt" alt="" width="576"></p>
+</div>
 <div class="section level2">
 <h2 id="halos">Halos<a class="anchor" aria-label="anchor" href="#halos"></a>
 </h2>
@@ -115,7 +263,7 @@ read whatever colour you make it. The usual fix is a <em>halo</em> (or
 <p>Packages that do this on top of grid draw the label eight times at
 small offsets, because grid gives them no way to stroke a glyph. vellum
 has the outlines, so it strokes them once:</p>
-<div class="sourceCode" id="cb1"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/base/Random.html" class="external-link">set.seed</a></span><span class="op">(</span><span class="fl">1</span><span class="op">)</span></span>
 <span><span class="va">n</span> <span class="op">&lt;-</span> <span class="fl">500</span></span>
 <span><span class="va">cloud</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/vl_scene.html">vl_scene</a></span><span class="op">(</span><span class="fl">6</span>, <span class="fl">2</span>, dpi <span class="op">=</span> <span class="fl">96</span>, bg <span class="op">=</span> <span class="st">"grey20"</span><span class="op">)</span> <span class="op">|&gt;</span></span>
@@ -130,7 +278,7 @@ has the outlines, so it strokes them once:</p>
 <span>                   gp <span class="op">=</span> <span class="fu"><a href="../reference/vl_gpar.html">vl_gpar</a></span><span class="op">(</span>fontsize <span class="op">=</span> <span class="fl">26</span>, col <span class="op">=</span> <span class="st">"white"</span>,</span>
 <span>                                halo_col <span class="op">=</span> <span class="st">"black"</span>, halo_width <span class="op">=</span> <span class="fl">3</span><span class="op">)</span><span class="op">)</span><span class="op">)</span></span>
 <span><span class="op">)</span></span></code></pre></div>
-<p><img src="typography_files/figure-html/unnamed-chunk-2-1.png" class="r-plt" alt="" width="576"></p>
+<p><img src="typography_files/figure-html/unnamed-chunk-7-1.png" class="r-plt" alt="" width="576"></p>
 <p><code>halo_width</code> is in <strong>points</strong>, like
 <code>fontsize</code>, so a halo keeps its proportion at any dpi or
 figure size. Roughly an eighth of the font size is a good starting
@@ -153,14 +301,14 @@ practice.</p>
 tabular figures, small caps, oldstyle numerals, alternate ligatures.
 <code>features</code> takes a named vector of four-character OpenType
 tags and passes them to the shaper.</p>
-<div class="sourceCode" id="cb2"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">kerned</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/grob.html">text_grob</a></span><span class="op">(</span><span class="st">"AV Wa To Ty"</span>, x <span class="op">=</span> <span class="fl">0.5</span>, y <span class="op">=</span> <span class="fl">0.72</span>,</span>
 <span>                    gp <span class="op">=</span> <span class="fu"><a href="../reference/vl_gpar.html">vl_gpar</a></span><span class="op">(</span>fontfamily <span class="op">=</span> <span class="st">"Times"</span>, fontsize <span class="op">=</span> <span class="fl">30</span><span class="op">)</span><span class="op">)</span></span>
 <span><span class="va">loose</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/grob.html">text_grob</a></span><span class="op">(</span><span class="st">"AV Wa To Ty"</span>, x <span class="op">=</span> <span class="fl">0.5</span>, y <span class="op">=</span> <span class="fl">0.28</span>,</span>
 <span>                   gp <span class="op">=</span> <span class="fu"><a href="../reference/vl_gpar.html">vl_gpar</a></span><span class="op">(</span>fontfamily <span class="op">=</span> <span class="st">"Times"</span>, fontsize <span class="op">=</span> <span class="fl">30</span>,</span>
 <span>                                features <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span>kern <span class="op">=</span> <span class="fl">0</span><span class="op">)</span><span class="op">)</span><span class="op">)</span></span>
 <span><span class="fu"><a href="../reference/display.html">display</a></span><span class="op">(</span><span class="fu"><a href="../reference/vl_scene.html">vl_scene</a></span><span class="op">(</span><span class="fl">6</span>, <span class="fl">2</span>, dpi <span class="op">=</span> <span class="fl">96</span><span class="op">)</span> <span class="op">|&gt;</span> <span class="fu"><a href="../reference/vl_scene.html">draw</a></span><span class="op">(</span><span class="va">kerned</span><span class="op">)</span> <span class="op">|&gt;</span> <span class="fu"><a href="../reference/vl_scene.html">draw</a></span><span class="op">(</span><span class="va">loose</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
-<p><img src="typography_files/figure-html/unnamed-chunk-3-1.png" class="r-plt" alt="" width="576"></p>
+<p><img src="typography_files/figure-html/unnamed-chunk-8-1.png" class="r-plt" alt="" width="576"></p>
 <p>The tags worth knowing:</p>
 <table class="table">
 <colgroup>
@@ -213,7 +361,7 @@ reserve the wrong space. <code><a href="../reference/vl_strwidth.html">vl_strwid
 <code><a href="../reference/vl_strwidth.html">vl_strheight()</a></code>, <code><a href="../reference/grobwidth.html">grobwidth()</a></code> and
 <code><a href="../reference/grobwidth.html">grobheight()</a></code> all honour the same <code>features</code>, and
 the shape cache is keyed on them:</p>
-<div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span>kerned <span class="op">=</span> <span class="fu"><a href="../reference/vl_strwidth.html">vl_strwidth</a></span><span class="op">(</span><span class="st">"AV Wa To Ty"</span>, <span class="st">"Times"</span>, fontsize <span class="op">=</span> <span class="fl">30</span>, unit <span class="op">=</span> <span class="st">"mm"</span><span class="op">)</span>,</span>
 <span>  unkerned <span class="op">=</span> <span class="fu"><a href="../reference/vl_strwidth.html">vl_strwidth</a></span><span class="op">(</span><span class="st">"AV Wa To Ty"</span>, <span class="st">"Times"</span>, fontsize <span class="op">=</span> <span class="fl">30</span>, unit <span class="op">=</span> <span class="st">"mm"</span>,</span>
 <span>                         features <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span>kern <span class="op">=</span> <span class="fl">0</span><span class="op">)</span><span class="op">)</span><span class="op">)</span></span>
@@ -226,7 +374,7 @@ the shape cache is keyed on them:</p>
 </h2>
 <p>Neither costs anything when unused: a scene with no halo and no
 features renders byte-for-byte as it did before either existed.</p>
-<div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/display.html">display</a></span><span class="op">(</span></span>
 <span>  <span class="fu"><a href="../reference/vl_scene.html">vl_scene</a></span><span class="op">(</span><span class="fl">6</span>, <span class="fl">1.6</span>, dpi <span class="op">=</span> <span class="fl">96</span>, bg <span class="op">=</span> <span class="st">"#22303C"</span><span class="op">)</span> <span class="op">|&gt;</span></span>
 <span>    <span class="fu"><a href="../reference/vl_scene.html">draw</a></span><span class="op">(</span><span class="fu"><a href="../reference/grob.html">text_grob</a></span><span class="op">(</span><span class="st">"1,234.56"</span>, x <span class="op">=</span> <span class="fl">0.5</span>, y <span class="op">=</span> <span class="fl">0.5</span>,</span>
@@ -234,7 +382,7 @@ features renders byte-for-byte as it did before either existed.</p>
 <span>                                col <span class="op">=</span> <span class="st">"#F5D76E"</span>, features <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span>tnum <span class="op">=</span> <span class="fl">1</span><span class="op">)</span>,</span>
 <span>                                halo_col <span class="op">=</span> <span class="st">"#101820"</span>, halo_width <span class="op">=</span> <span class="fl">2.5</span><span class="op">)</span><span class="op">)</span><span class="op">)</span></span>
 <span><span class="op">)</span></span></code></pre></div>
-<p><img src="typography_files/figure-html/unnamed-chunk-5-1.png" class="r-plt" alt="" width="576"></p>
+<p><img src="typography_files/figure-html/unnamed-chunk-10-1.png" class="r-plt" alt="" width="576"></p>
 </div>
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>
     </nav></aside>

@@ -4,7 +4,7 @@
 
 - [The scene graph and the paint
   model](https://r-vellum.github.io/vellum/articles/scene-and-paint.md):
-- [Typography: halos and OpenType
+- [Typography: layout, halos and OpenType
   features](https://r-vellum.github.io/vellum/articles/typography.md):
 - [Render quality: accessibility, crisp edges, group
   effects](https://r-vellum.github.io/vellum/articles/render-quality.md):

@@ -2,6 +2,48 @@
 
 ## vellum (development version)
 
+- **Text that fits a box.** `text_grob(width = )` wraps a label to an
+  absolute measure; `align` sets `"left"` / `"centre"` / `"right"` /
+  `"justify"` within the box; `fit = TRUE` shrinks the font until the
+  wrapped block fits `width` × `height`.
+
+  Break decisions are made on the **shaped** width of each candidate
+  line rather than a sum of word advances, so kerning and any active
+  OpenType feature are accounted for and a line can never render wider
+  than it measured. That is what makes auto-fit trustworthy rather than
+  approximate.
+
+  `width` must be an absolute unit (`mm`/`cm`/`in`/`pt`), and relative
+  units are rejected with an explanation. Wrapping happens when the grob
+  is *built*, and a viewport’s size in `npc`/`native` does not exist
+  until render time — which is also the reason this cannot be built on
+  grid at all, where a string has no width until a device is open.
+
+- **[`text_path_grob()`](https://r-vellum.github.io/vellum/reference/text_path_grob.md)
+  — text set along a curve.** Each glyph keeps the pen position shaping
+  gave it and is placed that far along a polyline baseline, rotated to
+  the local tangent. `offset` sets a perpendicular standoff.
+
+  Halos, OpenType features, per-glyph colour and clipping all still
+  apply, and all three backends handle it — SVG stays real `<text>`, PDF
+  stays copyable. Glyphs follow the tangent as in SVG `textPath`, so a
+  label on the underside of a closed curve reads upside-down; reverse
+  the *path* to fix that, not the glyphs.
+
+- **Fixed: multi-line text hung below its anchor.** A block of *n* lines
+  was centred `(n-1)·lineheight/2` too low — at 12 pt a six-line block
+  sat half an inch below where it should. Vertical justification is now
+  correct at top, centre and bottom for any line count. **This changes
+  the rendering of existing multi-line labels.**
+
+- **Fixed: multi-line text collapsed to one line in SVG.** SVG `<text>`
+  ignores newlines, and vellum emitted one element per label, so a
+  multi-line label rendered as a single run of text with the breaks
+  turned into spaces. Each line is now its own element. Single-line
+  labels are untouched, and a label whose lines cannot be matched to its
+  glyphs (a blank line, which produces none) falls back to glyph
+  outlines rather than guessing.
+
 - **Per-segment stroke style.** `segments_grob(col = , lwd = )` take one
   value per segment, mirroring the per-element `fill` that
   [`hexagon_grob()`](https://r-vellum.github.io/vellum/reference/grob.md)

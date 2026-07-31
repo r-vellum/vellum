@@ -27,7 +27,7 @@
   <ul class="dropdown-menu" aria-labelledby="dropdown-articles"><li><hr class="dropdown-divider"></li>
     <li><h6 class="dropdown-header" data-toc-skip>Concepts</h6></li>
     <li><a class="dropdown-item" href="../articles/scene-and-paint.html">The scene graph and the paint model</a></li>
-    <li><a class="dropdown-item" href="../articles/typography.html">Typography: halos and OpenType features</a></li>
+    <li><a class="dropdown-item" href="../articles/typography.html">Typography: layout, halos and OpenType features</a></li>
     <li><a class="dropdown-item" href="../articles/render-quality.html">Render quality: accessibility, crisp edges, group effects</a></li>
     <li><a class="dropdown-item" href="../articles/retained-mode.html">Asking a scene what it drew: read-back, picking, and editing</a></li>
     <li><a class="dropdown-item" href="../articles/datashading.html">Datashading: millions of points, honestly</a></li>
@@ -66,6 +66,17 @@
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="development version" id="vellum-development-version">vellum (development version)<a class="anchor" aria-label="anchor" href="#vellum-development-version"></a></h2>
 <ul><li>
+<p><strong>Text that fits a box.</strong> <code>text_grob(width = )</code> wraps a label to an absolute measure; <code>align</code> sets <code>"left"</code> / <code>"centre"</code> / <code>"right"</code> / <code>"justify"</code> within the box; <code>fit = TRUE</code> shrinks the font until the wrapped block fits <code>width</code> × <code>height</code>.</p>
+<p>Break decisions are made on the <strong>shaped</strong> width of each candidate line rather than a sum of word advances, so kerning and any active OpenType feature are accounted for and a line can never render wider than it measured. That is what makes auto-fit trustworthy rather than approximate.</p>
+<p><code>width</code> must be an absolute unit (<code>mm</code>/<code>cm</code>/<code>in</code>/<code>pt</code>), and relative units are rejected with an explanation. Wrapping happens when the grob is <em>built</em>, and a viewport’s size in <code>npc</code>/<code>native</code> does not exist until render time — which is also the reason this cannot be built on grid at all, where a string has no width until a device is open.</p>
+</li>
+<li>
+<p><strong><code><a href="../reference/text_path_grob.html">text_path_grob()</a></code> — text set along a curve.</strong> Each glyph keeps the pen position shaping gave it and is placed that far along a polyline baseline, rotated to the local tangent. <code>offset</code> sets a perpendicular standoff.</p>
+<p>Halos, OpenType features, per-glyph colour and clipping all still apply, and all three backends handle it — SVG stays real <code>&lt;text&gt;</code>, PDF stays copyable. Glyphs follow the tangent as in SVG <code>textPath</code>, so a label on the underside of a closed curve reads upside-down; reverse the <em>path</em> to fix that, not the glyphs.</p>
+</li>
+<li><p><strong>Fixed: multi-line text hung below its anchor.</strong> A block of <em>n</em> lines was centred <code>(n-1)·lineheight/2</code> too low — at 12 pt a six-line block sat half an inch below where it should. Vertical justification is now correct at top, centre and bottom for any line count. <strong>This changes the rendering of existing multi-line labels.</strong></p></li>
+<li><p><strong>Fixed: multi-line text collapsed to one line in SVG.</strong> SVG <code>&lt;text&gt;</code> ignores newlines, and vellum emitted one element per label, so a multi-line label rendered as a single run of text with the breaks turned into spaces. Each line is now its own element. Single-line labels are untouched, and a label whose lines cannot be matched to its glyphs (a blank line, which produces none) falls back to glyph outlines rather than guessing.</p></li>
+<li>
 <p><strong>Per-segment stroke style.</strong> <code>segments_grob(col = , lwd = )</code> take one value per segment, mirroring the per-element <code>fill</code> that <code><a href="../reference/grob.html">hexagon_grob()</a></code> and <code><a href="../reference/grob.html">sector_grob()</a></code> already carry. Previously varying either meant building <strong>one grob per segment</strong>, and grob construction is the dominant expense on scenes made of many small marks.</p>
 <p>A single grob with per-element style renders byte-identically to N grobs each with its own <code>gp</code> (asserted in tests). No backend can stroke segments differently in one call, so each is still stroked on its own in the output — the saving is in R, not in the file size. Absent, the batch draws in one combined stroke exactly as before.</p>
 </li>

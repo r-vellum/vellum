@@ -136,6 +136,14 @@ A raster image: `rgba` is a flat straight-RGBA integer vector (`iw` x
 Add pre-shaped text. The R wrapper does shaping (via `textshaping`) and
 passes per-glyph ids/positions/fonts plus the block size.
 
+### Method `text_path`
+
+Add one pre-shaped label set along a polyline baseline. Identical to
+[`text()`](https://rdrr.io/r/graphics/text.html) except that the anchor
+is the path rather than a point: `hjust` slides the run along it (0 =
+start, 1 = end) and `vjust` still positions the line box against the
+baseline.
+
 ### Method `texts`
 
 Add a whole batch of pre-shaped text labels in one call (one shaping

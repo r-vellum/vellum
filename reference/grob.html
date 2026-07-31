@@ -33,7 +33,7 @@ with render(). Coordinates accept a vl_unit() vector or a bare numeric
   <ul class="dropdown-menu" aria-labelledby="dropdown-articles"><li><hr class="dropdown-divider"></li>
     <li><h6 class="dropdown-header" data-toc-skip>Concepts</h6></li>
     <li><a class="dropdown-item" href="../articles/scene-and-paint.html">The scene graph and the paint model</a></li>
-    <li><a class="dropdown-item" href="../articles/typography.html">Typography: halos and OpenType features</a></li>
+    <li><a class="dropdown-item" href="../articles/typography.html">Typography: layout, halos and OpenType features</a></li>
     <li><a class="dropdown-item" href="../articles/render-quality.html">Render quality: accessibility, crisp edges, group effects</a></li>
     <li><a class="dropdown-item" href="../articles/retained-mode.html">Asking a scene what it drew: read-back, picking, and editing</a></li>
     <li><a class="dropdown-item" href="../articles/datashading.html">Datashading: millions of points, honestly</a></li>
@@ -295,7 +295,11 @@ with <code><a href="vl_scene.html">render()</a></code>. Coordinates accept a <co
 <span>  name <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  vp <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  id <span class="op">=</span> <span class="cn">NULL</span>,</span>
-<span>  role <span class="op">=</span> <span class="cn">NULL</span></span>
+<span>  role <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  width <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  height <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  align <span class="op">=</span> <span class="st">"left"</span>,</span>
+<span>  fit <span class="op">=</span> <span class="cn">FALSE</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
 
@@ -319,6 +323,10 @@ regardless of device aspect); a <em>regular</em> flat hexagon is
 dimensionless lateral petal scale in <code>(0, 1]</code> (recycled per loop): <code>1</code>
 (default) is the full teardrop, smaller narrows the petal's <strong>waist</strong>
 without shortening it (the igraph "narrowing" factor).</p></dd>
+
+
+<dt id="arg-height">height<a class="anchor" aria-label="anchor" href="#arg-height"></a></dt>
+<dd><p>Optional box height (absolute unit), used only by <code>fit</code>.</p></dd>
 
 
 <dt id="arg-sketch">sketch<a class="anchor" aria-label="anchor" href="#arg-sketch"></a></dt>
@@ -507,6 +515,30 @@ keeps hard pixel edges.</p></dd>
 
 <dt id="arg-rot">rot<a class="anchor" aria-label="anchor" href="#arg-rot"></a></dt>
 <dd><p>Rotation in degrees, counter-clockwise.</p></dd>
+
+
+<dt id="arg-align">align<a class="anchor" aria-label="anchor" href="#arg-align"></a></dt>
+<dd><p>Alignment of lines within the box: <code>"left"</code> (default),
+<code>"centre"</code>/<code>"center"</code>, <code>"right"</code>, or <code>"justify"</code> (flush both edges, last
+line of each paragraph left as-is).</p></dd>
+
+
+<dt id="arg-fit">fit<a class="anchor" aria-label="anchor" href="#arg-fit"></a></dt>
+<dd><p>Auto-fit sizing. <code>FALSE</code> (default) keeps <code>gp$fontsize</code>. <code>TRUE</code>
+shrinks the font — never grows it — until the wrapped block fits
+<code>width</code> × <code>height</code>, down to a floor of 4 pt; a number sets that floor
+instead. Requires <code>width</code>.</p></dd>
+
+
+<dt id="arg-width">width<a class="anchor" aria-label="anchor" href="#arg-width"></a></dt>
+<dd><p>Optional wrapping width, as an <strong>absolute</strong> unit
+(<code><a href="vl_unit.html">vl_unit()</a></code> in <code>mm</code>/<code>cm</code>/<code>in</code>/<code>pt</code>). When given, the label is broken into
+lines that fit, and the drawn block becomes a box of exactly this width —
+so <code>just</code> anchors the box, not the longest line. <code>NULL</code> (the default) leaves
+text unwrapped.</p>
+<p>Relative units are rejected on purpose: wrapping happens when the grob is
+built, and a viewport's size in <code>npc</code>/<code>native</code> is not known until render
+time. Pass the physical width you want to wrap to.</p></dd>
 
 </dl></div>
     <div class="section level2">

@@ -229,7 +229,11 @@ text_grob(
   name = NULL,
   vp = NULL,
   id = NULL,
-  role = NULL
+  role = NULL,
+  width = NULL,
+  height = NULL,
+  align = "left",
+  fit = FALSE
 )
 ```
 
@@ -256,6 +260,10 @@ text_grob(
   a dimensionless lateral petal scale in `(0, 1]` (recycled per loop):
   `1` (default) is the full teardrop, smaller narrows the petal's
   **waist** without shortening it (the igraph "narrowing" factor).
+
+- height:
+
+  Optional box height (absolute unit), used only by `fit`.
 
 - sketch:
 
@@ -478,6 +486,32 @@ text_grob(
 - rot:
 
   Rotation in degrees, counter-clockwise.
+
+- align:
+
+  Alignment of lines within the box: `"left"` (default),
+  `"centre"`/`"center"`, `"right"`, or `"justify"` (flush both edges,
+  last line of each paragraph left as-is).
+
+- fit:
+
+  Auto-fit sizing. `FALSE` (default) keeps `gp$fontsize`. `TRUE` shrinks
+  the font — never grows it — until the wrapped block fits `width` ×
+  `height`, down to a floor of 4 pt; a number sets that floor instead.
+  Requires `width`.
+
+- width:
+
+  Optional wrapping width, as an **absolute** unit
+  ([`vl_unit()`](https://r-vellum.github.io/vellum/reference/vl_unit.md)
+  in `mm`/`cm`/`in`/`pt`). When given, the label is broken into lines
+  that fit, and the drawn block becomes a box of exactly this width — so
+  `just` anchors the box, not the longest line. `NULL` (the default)
+  leaves text unwrapped.
+
+  Relative units are rejected on purpose: wrapping happens when the grob
+  is built, and a viewport's size in `npc`/`native` is not known until
+  render time. Pass the physical width you want to wrap to.
 
 ## Value
 
