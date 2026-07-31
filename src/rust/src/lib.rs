@@ -383,6 +383,28 @@ fn rs_svg_path(d: &str) -> List {
     list!(x = p.x, y = p.y, nper = p.nper, closed = p.closed)
 }
 
+/// Write several scenes as the pages of one PDF.
+///
+/// @param scenes A list of compiled scenes.
+/// @param path Output file.
+/// @return Degradation warnings, de-duplicated across pages.
+/// @keywords internal
+#[extendr]
+fn rs_pdf_pages(scenes: List, path: &str) -> Vec<String> {
+    scene::pdf_pages(scenes, Some(path)).0
+}
+
+/// Several scenes as the pages of one PDF, returned as raw bytes.
+///
+/// @param scenes A list of compiled scenes.
+/// @return A list of `bytes` and `warnings`.
+/// @keywords internal
+#[extendr]
+fn rs_pdf_pages_raw(scenes: List) -> List {
+    let (warnings, bytes) = scene::pdf_pages(scenes, None);
+    list!(bytes = bytes, warnings = warnings)
+}
+
 extendr_module! {
     mod vellum;
     fn rs_backend_info;
@@ -403,6 +425,8 @@ extendr_module! {
     fn rs_contour;
     fn rs_contour_lines;
     fn rs_svg_path;
+    fn rs_pdf_pages;
+    fn rs_pdf_pages_raw;
     use scene;
     use aggregate;
 }

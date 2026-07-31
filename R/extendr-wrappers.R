@@ -126,6 +126,21 @@ rs_contour_lines <- function(z, nx, ny, level) .Call(wrap__rs_contour_lines, z, 
 #' @keywords internal
 rs_svg_path <- function(d) .Call(wrap__rs_svg_path, d)
 
+#' Write several scenes as the pages of one PDF.
+#'
+#' @param scenes A list of compiled scenes.
+#' @param path Output file.
+#' @return Degradation warnings, de-duplicated across pages.
+#' @keywords internal
+rs_pdf_pages <- function(scenes, path) .Call(wrap__rs_pdf_pages, scenes, path)
+
+#' Several scenes as the pages of one PDF, returned as raw bytes.
+#'
+#' @param scenes A list of compiled scenes.
+#' @return A list of `bytes` and `warnings`.
+#' @keywords internal
+rs_pdf_pages_raw <- function(scenes) .Call(wrap__rs_pdf_pages_raw, scenes)
+
 #' Render a keyframe animation to `path`.
 #'
 #' * `keyframes` — a list of compiled `Scene` external pointers (the `K` states).

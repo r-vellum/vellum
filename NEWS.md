@@ -1,5 +1,28 @@
 # vellum (development version)
 
+* **Animated SVG.** `vl_render_animation(format = "svg")` emits the same
+  keyframe schedule as vector markup, shown in turn by a CSS step animation —
+  resolution-independent, and honouring `prefers-reduced-motion`.
+
+  Choose it by scene complexity, not by preference. Every frame is emitted in
+  full, so size grows with complexity times frame count where a raster format's
+  does not. Measured on a 30-frame scatter, gzipped: 20 marks → 20 KB vs GIF's
+  61 KB; 2000 marks → 720 KB vs GIF's 124 KB. Line art wins clearly; dense marks
+  do not. Above 5 MB vellum warns rather than letting you find out later.
+
+* **`pdf_pages()` — several scenes as the pages of one PDF.** A report's
+  figures, one facet per page, an animation as a contact sheet. Pages may differ
+  in size, and each page's tagging survives into the document's structure tree.
+
+* **`render_all()` — render many scenes across cores.** Embarrassingly parallel,
+  one whole scene per worker. About 3× on four report figures, and asserted
+  byte-identical to rendering them one at a time. Named scenes plus a directory
+  names the files.
+
+* **Fixed: a tagged multi-page PDF orphaned its earlier pages' structure.** A
+  document has exactly one tag tree; each page was setting its own, discarding
+  the previous. Found by building `pdf_pages()`, and only reachable there.
+
 * **Tagged PDF output.** The per-mark `id`/`role`/`name` channel now builds a PDF
   structure tree: a `StructTreeRoot`, a `Figure` for the plot as a whole carrying
   the `describe()` text, and one structure element per marked-up mark, in draw

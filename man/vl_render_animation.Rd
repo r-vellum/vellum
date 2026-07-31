@@ -9,7 +9,7 @@ vl_render_animation(
   seg,
   frac,
   path,
-  format = c("gif", "apng", "frames"),
+  format = c("gif", "apng", "svg", "frames"),
   fps = 25,
   gif_speed = 1,
   gif_dither = TRUE
@@ -26,11 +26,12 @@ the frame's left keyframe (it is interpolated with keyframe \code{seg + 1}).}
 fraction in \verb{[0, 1]} (0 = the left keyframe, 1 = the right one). Same length
 as \code{seg}.}
 
-\item{path}{Output path: an image file for \code{"gif"}/\code{"apng"}, or a directory
-(created if needed) for \code{"frames"}.}
+\item{path}{Output path: an image file for \code{"gif"}/\code{"apng"}/\code{"svg"}, or a
+directory (created if needed) for \code{"frames"}.}
 
-\item{format}{\code{"gif"} (looping animated GIF), \code{"apng"} (animated PNG), or
-\code{"frames"} (one \code{frameNNNNN.png} per frame into \code{path}).}
+\item{format}{\code{"gif"} (looping animated GIF), \code{"apng"} (animated PNG),
+\code{"svg"} (a single animated SVG), or \code{"frames"} (one \code{frameNNNNN.png} per
+frame into \code{path}).}
 
 \item{fps}{Frames per second (sets each frame's on-screen duration).}
 
@@ -65,6 +66,30 @@ GIF is limited to 256 colours per frame, so on a plot (smooth panels,
 antialiased marks) it is inherently lossy — \code{gif_speed}/\code{gif_dither} make it as
 clean as that palette allows. For a lossless result use \code{format = "apng"}.
 }
+\section{Choosing a format}{
+\code{"svg"} emits every frame as vector markup, shown in turn by a CSS step
+animation. It is resolution-independent, which no raster format is — the same
+file is crisp in a slide, on a retina screen and in print.
+
+Its size depends on scene complexity in a way the raster formats' does not,
+because \emph{every frame is emitted in full}. Measured on a 30-frame scatter
+animation, gzipped (which is how a browser will fetch it):\tabular{lll}{
+   marks \tab animated SVG (gzipped) \tab GIF \cr
+   20 \tab 20 KB \tab 61 KB \cr
+   200 \tab 80 KB \tab 296 KB \cr
+   2000 \tab 720 KB \tab 124 KB \cr
+}
+
+
+So it wins clearly on line art — an explanatory animation of a few moving
+marks, which is the common case — and loses on a dense scatter, where a raster
+format is the right answer. Serve it gzipped (\code{.svgz}, or any web server with
+compression on); uncompressed it is several times larger again.
+
+It also honours \code{prefers-reduced-motion}: a reader who has asked their system
+not to animate gets the first frame, held.
+}
+
 \examples{
 \dontrun{
 grow <- lapply(c(0.1, 0.3, 0.2), function(r) {

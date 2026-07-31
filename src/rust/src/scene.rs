@@ -738,17 +738,116 @@ fn cvd_mode() -> Option<crate::cvd::Cvd> {
 /// pointless for a handful of labels. Mirrors the marker-sprite `SPRITE_MIN`.
 const GLYPH_BITMAP_MIN: usize = 2_000;
 
+/// Serialize several scenes as the pages of one PDF.
+///
+/// Pages may differ in size -- krilla sets the box per page -- which is what
+/// makes this useful for a report rather than only for facet-by-page.
+///
+/// Returns `(warnings, bytes)`; `bytes` is empty when a path was given and the
+/// file was written instead.
+pub(crate) fn pdf_pages(scenes: List, path: Option<&str>) -> (Vec<String>, Vec<u8>) {
+    if scenes.len() == 0 {
+        throw_r_error("a PDF needs at least one page");
+    }
+    let mut doc = krilla::Document::new();
+    let mut warnings: Vec<String> = Vec::new();
+    let mut groups: Vec<krilla::tagging::TagGroup> = Vec::new();
+    for robj in scenes.values() {
+        let ep = <ExternalPtr<Scene>>::try_from(robj)
+            .unwrap_or_else(|_| throw_r_error("pages must be compiled vellum scenes"));
+        let (warns, group) = ep.add_pdf_page(&mut doc);
+        for w in warns {
+            // The same degradation usually recurs on every page; the user needs
+            // to hear it once.
+            if !warnings.contains(&w) {
+                warnings.push(w);
+            }
+        }
+        if let Some(g) = group {
+            groups.push(g);
+        }
+    }
+    // One tree for the whole document, with each tagged page a top-level figure.
+    if !groups.is_empty() {
+        let mut tree = krilla::tagging::TagTree::new();
+        for g in groups {
+            tree.push(g);
+        }
+        doc.set_tag_tree(tree);
+    }
+    let bytes = match doc.finish() {
+        Ok(b) => b,
+        Err(e) => throw_r_error(format!("failed to serialize PDF: {e}")),
+    };
+    match path {
+        Some(p) => {
+            if let Err(e) = std::fs::write(p, bytes) {
+                throw_r_error(format!("failed to write PDF: {e}"));
+            }
+            (warnings, Vec::new())
+        }
+        None => (warnings, bytes),
+    }
+}
+
 // Non-exported helpers on `Scene`. extendr exports every method of an
 // `#[extendr] impl` block, so anything with a non-FFI signature lives here.
 impl Scene {
     /// Serialize the scene as a PDF document, returning `(bytes, warnings)`.
     /// Shared by `render_pdf` (writes a file) and `render_pdf_raw` (returns the
     /// bytes to R), so the two can never drift.
+    /// Drop the document-level accessibility strings.
+    ///
+    /// Used when a scene becomes one *frame* of an animation: the title and
+    /// description belong to the document, and repeating them per frame would
+    /// have a screen reader announce the figure once for every frame.
+    pub(crate) fn clear_a11y(&mut self) {
+        self.a11y_title.clear();
+        self.a11y_desc.clear();
+    }
+
+    /// `render_svg_string` for internal callers (the animated-SVG builder).
+    pub(crate) fn svg_string(&self, outline_text: bool) -> String {
+        let mut b = SvgBackend::new(self.w_px, self.h_px, self.bg, outline_text);
+        b.set_a11y(&self.a11y_title, &self.a11y_desc, &self.a11y_prefix);
+        let _warnings = self.render_to(&mut b);
+        b.into_string()
+    }
+
     fn pdf_bytes(&self) -> (Vec<u8>, Vec<String>) {
+        let mut doc = krilla::Document::new();
+        let (warnings, group) = self.add_pdf_page(&mut doc);
+        if let Some(g) = group {
+            let mut tree = krilla::tagging::TagTree::new();
+            tree.push(g);
+            doc.set_tag_tree(tree);
+        }
+        match doc.finish() {
+            Ok(bytes) => (bytes, warnings),
+            Err(e) => throw_r_error(format!("failed to serialize PDF: {e}")),
+        }
+    }
+
+    /// Draw this scene as one more page of `doc`.
+    ///
+    /// Returns the page's degradation warnings and, if it has any tagged
+    /// content, the structure group to put in the document's tag tree.
+    ///
+    /// It returns the group rather than setting the tree itself because a
+    /// document has exactly ONE tag tree: a per-page `set_tag_tree` would have
+    /// each page discard the previous page's, orphaning its content
+    /// identifiers -- which krilla rejects outright when the document is
+    /// serialised. The caller assembles all the pages' groups into one tree.
+    ///
+    /// Split out of `pdf_bytes` so a multi-page document is the *same* code per
+    /// page: a second page-drawing path would drift from the first, and the
+    /// tagging in particular is easy to get subtly wrong twice.
+    fn add_pdf_page(
+        &self, doc: &mut krilla::Document,
+    ) -> (Vec<String>, Option<krilla::tagging::TagGroup>) {
         let scale = 72.0 / self.dpi as f32;
         let w_pt = self.w_px as f32 * scale;
         let h_pt = self.h_px as f32 * scale;
-        let mut doc = krilla::Document::new();
         let settings = match krilla::page::PageSettings::from_wh(w_pt, h_pt) {
             Some(s) => s,
             None => throw_r_error("invalid PDF page size"),
@@ -802,8 +901,7 @@ impl Scene {
         // A scene with neither a description nor any marked-up node gets no tree
         // at all, and its PDF is byte-for-byte what it was before tagging
         // existed.
-        if tag_id.is_some() || !marks.is_empty() {
-            let mut tree = krilla::tagging::TagTree::new();
+        let group = if tag_id.is_some() || !marks.is_empty() {
             let root_alt = if alt.is_empty() { "figure" } else { alt };
             let mut figure = krilla::tagging::TagGroup::new(
                 krilla::tagging::Tag::Figure(Some(root_alt.to_string())),
@@ -816,13 +914,11 @@ impl Scene {
                 g.push(id);
                 figure.push(g);
             }
-            tree.push(figure);
-            doc.set_tag_tree(tree);
-        }
-        match doc.finish() {
-            Ok(bytes) => (bytes, warnings),
-            Err(e) => throw_r_error(format!("failed to serialize PDF: {e}")),
-        }
+            Some(figure)
+        } else {
+            None
+        };
+        (warnings, group)
     }
 }
 
