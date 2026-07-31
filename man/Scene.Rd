@@ -286,6 +286,21 @@ Node identity for the profiler: kind, name, and element count, in node
 order -- the same order \code{rs_take_node_times()} reports.
 }
 
+\subsection{Method \code{pick_table}}{
+Exact distance from a device-px point to every keyed element, and the
+element's true geometry.
+
+\code{scene_model()} reports bounding boxes, which is the right thing for a
+rectangular brush and misleading for anything diagonal or thin: a
+segment's bbox is the whole rectangle its endpoints span. This walks the
+same elements and reports the distance to their actual geometry, plus the
+geometry itself (flat \code{gx}/\code{gy} split by \code{gn}) so a client that must
+hit-test locally can do it exactly rather than asking per event.
+
+Filled shapes contain their interior — a point inside a polygon is at
+distance zero, so clicking the middle of a choropleth region hits it.
+}
+
 \subsection{Method \code{font_table}}{
 The font files this scene's text actually resolved to.
 

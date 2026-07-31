@@ -1,5 +1,35 @@
 # vellum (development version)
 
+* **Every mark family can now carry an element `key`.** `lines_grob()`,
+  `polygon_grob()`, `path_grob()`, `roundrect_grob()` and `text_grob()` gain
+  `key`/`meta`, joining the batched marks that already had them;
+  `bezier_grob()`, `spline_grob()`, `svg_grob()` and `contour_grob()` inherit it.
+
+  A key is what makes a mark addressable — it becomes `data-key` in the SVG and a
+  row in `scene_model()`. Until now a line, an area, a choropleth region or a
+  data label could not carry one, so they could never be hovered, tooltipped,
+  brushed or cross-filtered by an interactive host. Now a whole series can be one
+  addressable thing.
+
+  Keyed text reports one element per label. Note the deliberate asymmetry with
+  the batched marks: lines, polygons, paths and text appear in `scene_model()`
+  **only when keyed**, because a plot is full of unkeyed gridlines and axis
+  labels that would otherwise bury the marks that mean something.
+
+* **`vl_nearest()` and `element_geometry()` — hit-testing that respects the
+  shape.** A bounding box is the right answer for a rectangular brush and the
+  wrong one for anything diagonal or thin: a line across a panel has a bounding
+  box covering the whole panel, so a box-based "what is nearest" matches it from
+  anywhere in the plot.
+
+  `vl_nearest()` measures to the real geometry — perpendicular to a segment, to
+  the disc for round marks, and **zero anywhere inside** a closed polygon, so
+  clicking the middle of a choropleth region hits the region.
+
+  `element_geometry()` returns that geometry instead of the answer, for hosts
+  that cannot call R on every mouse move: a browser takes the vertices once and
+  computes distances locally.
+
 * **Animated SVG.** `vl_render_animation(format = "svg")` emits the same
   keyframe schedule as vector markup, shown in turn by a CSS step animation —
   resolution-independent, and honouring `prefers-reduced-motion`.

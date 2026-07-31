@@ -448,6 +448,21 @@ rs_attractor <- function(kind, n, a, b, c, d, x0, y0) .Call(wrap__rs_attractor, 
 #'order -- the same order `rs_take_node_times()` reports.
 #'}
 #'
+#'\subsection{Method `pick_table`}{
+#'Exact distance from a device-px point to every keyed element, and the
+#'element's true geometry.
+#'
+#'`scene_model()` reports bounding boxes, which is the right thing for a
+#'rectangular brush and misleading for anything diagonal or thin: a
+#'segment's bbox is the whole rectangle its endpoints span. This walks the
+#'same elements and reports the distance to their actual geometry, plus the
+#'geometry itself (flat `gx`/`gy` split by `gn`) so a client that must
+#'hit-test locally can do it exactly rather than asking per event.
+#'
+#'Filled shapes contain their interior — a point inside a polygon is at
+#'distance zero, so clicking the middle of a choropleth region hits it.
+#'}
+#'
 #'\subsection{Method `font_table`}{
 #'The font files this scene's text actually resolved to.
 #'
@@ -493,7 +508,7 @@ Scene$set_layout <- function(wvals, wunits, hvals, hunits, respect) .Call(wrap__
 
 Scene$rect <- function(x, y, w, h, xu, xoff, yu, yoff, wu, woff, hu, hoff, fill, col, lwd, alpha, stroke) .Call(wrap__Scene__rect, self, x, y, w, h, xu, xoff, yu, yoff, wu, woff, hu, hoff, fill, col, lwd, alpha, stroke)
 
-Scene$roundrect <- function(x, y, w, h, r, xu, xoff, yu, yoff, wu, woff, hu, hoff, ru, roff, fill, col, lwd, alpha, stroke, sroughness, sbowing, sfill_style, sfill_weight, shachure_angle, shachure_gap, scurve_tightness, sdisable_multi, spreserve, sseed) .Call(wrap__Scene__roundrect, self, x, y, w, h, r, xu, xoff, yu, yoff, wu, woff, hu, hoff, ru, roff, fill, col, lwd, alpha, stroke, sroughness, sbowing, sfill_style, sfill_weight, shachure_angle, shachure_gap, scurve_tightness, sdisable_multi, spreserve, sseed)
+Scene$roundrect <- function(x, y, w, h, r, xu, xoff, yu, yoff, wu, woff, hu, hoff, ru, roff, fill, col, lwd, alpha, stroke, sroughness, sbowing, sfill_style, sfill_weight, shachure_angle, shachure_gap, scurve_tightness, sdisable_multi, spreserve, sseed, key) .Call(wrap__Scene__roundrect, self, x, y, w, h, r, xu, xoff, yu, yoff, wu, woff, hu, hoff, ru, roff, fill, col, lwd, alpha, stroke, sroughness, sbowing, sfill_style, sfill_weight, shachure_angle, shachure_gap, scurve_tightness, sdisable_multi, spreserve, sseed, key)
 
 Scene$lines <- function(x, y, xu, xoff, yu, yoff, scap, ecap, scapu, ecapu, off, offu, col, lwd, alpha, stroke, aangle, alen, aends, aclosed, sroughness, sbowing, sfill_style, sfill_weight, shachure_angle, shachure_gap, scurve_tightness, sdisable_multi, spreserve, sseed, key) .Call(wrap__Scene__lines, self, x, y, xu, xoff, yu, yoff, scap, ecap, scapu, ecapu, off, offu, col, lwd, alpha, stroke, aangle, alen, aends, aclosed, sroughness, sbowing, sfill_style, sfill_weight, shachure_angle, shachure_gap, scurve_tightness, sdisable_multi, spreserve, sseed, key)
 
@@ -519,13 +534,13 @@ Scene$path <- function(x, y, xu, xoff, yu, yoff, nper, evenodd, fill, col, lwd, 
 
 Scene$image <- function(rgba, iw, ih, x, y, w, h, xu, xoff, yu, yoff, wu, woff, hu, hoff, interpolate) .Call(wrap__Scene__image, self, rgba, iw, ih, x, y, w, h, xu, xoff, yu, yoff, wu, woff, hu, hoff, interpolate)
 
-Scene$text <- function(x, y, xu, xoff, yu, yoff, rot, hjust, vjust, w, h, gid, gx, gy, gsize, gpath, gface, label, family, face, size, col, alpha, halo_col, halo_width) .Call(wrap__Scene__text, self, x, y, xu, xoff, yu, yoff, rot, hjust, vjust, w, h, gid, gx, gy, gsize, gpath, gface, label, family, face, size, col, alpha, halo_col, halo_width)
+Scene$text <- function(x, y, xu, xoff, yu, yoff, rot, hjust, vjust, w, h, gid, gx, gy, gsize, gpath, gface, label, family, face, size, col, alpha, halo_col, halo_width, key) .Call(wrap__Scene__text, self, x, y, xu, xoff, yu, yoff, rot, hjust, vjust, w, h, gid, gx, gy, gsize, gpath, gface, label, family, face, size, col, alpha, halo_col, halo_width, key)
 
 Scene$text_path <- function(px, py, pxu, pxoff, pyu, pyoff, offset, hjust, vjust, w, h, gid, gx, gy, gsize, gpath, gface, label, family, face, size, col, alpha, halo_col, halo_width) .Call(wrap__Scene__text_path, self, px, py, pxu, pxoff, pyu, pyoff, offset, hjust, vjust, w, h, gid, gx, gy, gsize, gpath, gface, label, family, face, size, col, alpha, halo_col, halo_width)
 
-Scene$texts <- function(x, y, xu, xoff, yu, yoff, rot, hjust, vjust, w, h, nper, gid, gx, gy, gsize, gpath, gface, label, family, face, size, col, alpha, halo_col, halo_width) .Call(wrap__Scene__texts, self, x, y, xu, xoff, yu, yoff, rot, hjust, vjust, w, h, nper, gid, gx, gy, gsize, gpath, gface, label, family, face, size, col, alpha, halo_col, halo_width)
+Scene$texts <- function(x, y, xu, xoff, yu, yoff, rot, hjust, vjust, w, h, nper, gid, gx, gy, gsize, gpath, gface, label, family, face, size, col, alpha, halo_col, halo_width, keys) .Call(wrap__Scene__texts, self, x, y, xu, xoff, yu, yoff, rot, hjust, vjust, w, h, nper, gid, gx, gy, gsize, gpath, gface, label, family, face, size, col, alpha, halo_col, halo_width, keys)
 
-Scene$texts_rich <- function(x, y, xu, xoff, yu, yoff, rot, hjust, vjust, w, h, nper, gid, gx, gy, gsize, gpath, gface, gcol, label, family, face, size, col, alpha, halo_col, halo_width) .Call(wrap__Scene__texts_rich, self, x, y, xu, xoff, yu, yoff, rot, hjust, vjust, w, h, nper, gid, gx, gy, gsize, gpath, gface, gcol, label, family, face, size, col, alpha, halo_col, halo_width)
+Scene$texts_rich <- function(x, y, xu, xoff, yu, yoff, rot, hjust, vjust, w, h, nper, gid, gx, gy, gsize, gpath, gface, gcol, label, family, face, size, col, alpha, halo_col, halo_width, keys) .Call(wrap__Scene__texts_rich, self, x, y, xu, xoff, yu, yoff, rot, hjust, vjust, w, h, nper, gid, gx, gy, gsize, gpath, gface, gcol, label, family, face, size, col, alpha, halo_col, halo_width, keys)
 
 Scene$mask_begin <- function(kind) .Call(wrap__Scene__mask_begin, self, kind)
 
@@ -570,6 +585,8 @@ Scene$resolved_geometry <- function() .Call(wrap__Scene__resolved_geometry, self
 Scene$lint_table <- function() .Call(wrap__Scene__lint_table, self)
 
 Scene$node_index <- function() .Call(wrap__Scene__node_index, self)
+
+Scene$pick_table <- function(px, py) .Call(wrap__Scene__pick_table, self, px, py)
 
 Scene$font_table <- function() .Call(wrap__Scene__font_table, self)
 

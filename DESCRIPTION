@@ -58,6 +58,7 @@ Collate:
     'lint.R'
     'output.R'
     'paint.R'
+    'pick.R'
     'place.R'
     'scene-model.R'
     'serialize.R'

@@ -235,6 +235,8 @@ reference:
   - node_names
   - hit_test
   - scene_model
+  - vl_nearest
+  - element_geometry
 
 - title: Grid & ggplot2 interop
   desc: >

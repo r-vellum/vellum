@@ -245,7 +245,8 @@ rect_grob <- function(x = 0.5, y = 0.5, width = 1, height = 1,
 #'   stay circular on non-square rectangles; clamped to half the shorter side.
 #' @export
 roundrect_grob <- function(x = 0.5, y = 0.5, width = 1, height = 1, r = 0.1,
-                           sketch = NULL, gp = vl_gpar(), name = NULL, vp = NULL, id = NULL, role = NULL) {
+                           sketch = NULL, gp = vl_gpar(), name = NULL, vp = NULL, id = NULL,
+                           role = NULL, key = NULL, meta = NULL) {
   w <- as_unit(width)
   h <- as_unit(height)
   rr <- as_unit(r)
@@ -253,7 +254,8 @@ roundrect_grob <- function(x = 0.5, y = 0.5, width = 1, height = 1, r = 0.1,
   .check_extent(h, "height")
   .check_extent(rr, "r")
   grob_roundrect(x = as_unit(x), y = as_unit(y), width = w, height = h, r = rr,
-                 sketch = sketch, gp = gp, name = name, vp = vp, id = id, role = role)
+                 sketch = sketch, gp = gp, name = name, vp = vp, id = id, role = role,
+                 keys = .recycle_keys(key, 1L), meta = .recycle_meta(meta, 1L))
 }
 
 # An extent (width/height/radius/size) must be non-negative. Checks the resolved
@@ -307,7 +309,8 @@ roundrect_grob <- function(x = 0.5, y = 0.5, width = 1, height = 1, r = 0.1,
 #' @param sketch Optional [sketch()] spec for a hand-drawn look; `NULL` = crisp.
 #' @export
 lines_grob <- function(x, y, arrow = NULL, start_cap = NULL, end_cap = NULL, offset = NULL,
-                       sketch = NULL, gp = vl_gpar(), name = NULL, vp = NULL, id = NULL, role = NULL) {
+                       sketch = NULL, gp = vl_gpar(), name = NULL, vp = NULL, id = NULL, role = NULL,
+                       key = NULL, meta = NULL) {
   n <- .coord_n(x, y)
   # `id` here is the accessibility identifier, NOT a grouping variable — unlike
   # `path_grob(id=)`, which splits points into rings. Passing a grouping vector
@@ -326,7 +329,8 @@ lines_grob <- function(x, y, arrow = NULL, start_cap = NULL, end_cap = NULL, off
   grob_lines(x = vctrs::vec_recycle(as_unit(x, "native"), n),
              y = vctrs::vec_recycle(as_unit(y, "native"), n),
              arrow = arrow, start_cap = start_cap, end_cap = end_cap, offset = offset,
-             sketch = sketch, gp = gp, name = name, vp = vp, id = id, role = role)
+             sketch = sketch, gp = gp, name = name, vp = vp, id = id, role = role,
+             keys = .recycle_keys(key, 1L), meta = .recycle_meta(meta, 1L))
 }
 
 # Validate a cap/offset argument: NULL passes through; otherwise it must resolve
@@ -477,11 +481,13 @@ sketch <- function(roughness = 1, bowing = 1,
 
 #' @rdname grob
 #' @export
-polygon_grob <- function(x, y, sketch = NULL, gp = vl_gpar(), name = NULL, vp = NULL, id = NULL, role = NULL) {
+polygon_grob <- function(x, y, sketch = NULL, gp = vl_gpar(), name = NULL, vp = NULL, id = NULL,
+                         role = NULL, key = NULL, meta = NULL) {
   n <- .coord_n(x, y)
   grob_polygon(x = vctrs::vec_recycle(as_unit(x, "native"), n),
                y = vctrs::vec_recycle(as_unit(y, "native"), n),
-               sketch = sketch, gp = gp, name = name, vp = vp, id = id, role = role)
+               sketch = sketch, gp = gp, name = name, vp = vp, id = id, role = role,
+               keys = .recycle_keys(key, 1L), meta = .recycle_meta(meta, 1L))
 }
 
 # Decompose a curve coordinate into (values, single unit name). Flattening is a
@@ -770,7 +776,8 @@ segments_grob <- function(x0, y0, x1, y1, arrow = NULL, start_cap = NULL, end_ca
 #'   on the scene and is returned by [scene_model()]. `NULL` (default) = none.
 #' @export
 path_grob <- function(x, y, id = NULL, rule = c("winding", "evenodd"),
-                      sketch = NULL, gp = vl_gpar(), name = NULL, vp = NULL, role = NULL) {
+                      sketch = NULL, gp = vl_gpar(), name = NULL, vp = NULL, role = NULL,
+                      key = NULL, meta = NULL) {
   rule <- match.arg(rule)
   n <- .coord_n(x, y)
   xu <- vctrs::vec_recycle(as_unit(x, "native"), n)
@@ -786,7 +793,8 @@ path_grob <- function(x, y, id = NULL, rule = c("winding", "evenodd"),
   }
   grob_path(
     x = xu, y = yu, nper = as.integer(nper), rule = rule,
-    sketch = sketch, gp = gp, name = name, vp = vp, role = role
+    sketch = sketch, gp = gp, name = name, vp = vp, role = role,
+    keys = .recycle_keys(key, 1L), meta = .recycle_meta(meta, 1L)
   )
 }
 
@@ -917,7 +925,8 @@ raster_grob <- function(image, x = 0.5, y = 0.5, width = 1, height = 1,
 #' @export
 text_grob <- function(label, x = 0.5, y = 0.5, just = "centre", rot = 0,
                       gp = vl_gpar(), name = NULL, vp = NULL, id = NULL, role = NULL,
-                      width = NULL, height = NULL, align = "left", fit = FALSE) {
+                      width = NULL, height = NULL, align = "left", fit = FALSE,
+                      key = NULL, meta = NULL) {
   # Rich labels pass through untouched; everything else coerces to character.
   if (!S7::S7_inherits(label, vellum_label)) label <- as.character(label)
   align <- match.arg(align, c("left", "centre", "center", "right", "justify"))
@@ -929,7 +938,9 @@ text_grob <- function(label, x = 0.5, y = 0.5, just = "centre", rot = 0,
             width = .abs_mm(width, "width"), height = .abs_mm(height, "height"),
             align = align,
             fit = if (isFALSE(fit)) NA_real_ else if (isTRUE(fit)) 4 else as.numeric(fit),
-            gp = gp, name = name, vp = vp, id = id, role = role)
+            gp = gp, name = name, vp = vp, id = id, role = role,
+            keys = .recycle_keys(key, .vsize(as_unit(x))),
+            meta = .recycle_meta(meta, .vsize(as_unit(x))))
 }
 
 #' Text set along a path

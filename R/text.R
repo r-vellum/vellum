@@ -388,7 +388,7 @@ vl_strheight <- function(label, family = "", fontface = "plain",
 # contain "\n" (multi-line); each unique label is composed once.
 .draw_text_batch <- function(scene, labels, x, y, hjust, vjust, rot,
                              family, fontface, fontsize, col, alpha, halo = NULL,
-                             features = NULL, wrap = NULL) {
+                             features = NULL, wrap = NULL, keys = NULL) {
   labels <- as.character(labels)
   n <- length(labels)
   keep <- !is.na(labels) & nzchar(labels)
@@ -454,7 +454,8 @@ vl_strheight <- function(label, family = "", fontface = "plain",
     unlist(lapply(ent, `[[`, "fpath"), use.names = FALSE),
     unlist(lapply(ent, `[[`, "findex"), use.names = FALSE),
     labels[drawn], family, fontface, fontsize, .rs_col_inh(col), .rs_num_inh(alpha),
-    .rs_col_inh(halo$col), (halo$width %||% 0) * scale
+    .rs_col_inh(halo$col), (halo$width %||% 0) * scale,
+    if (is.null(keys)) character(0) else keys[drawn]
   )
   invisible()
 }
@@ -721,7 +722,7 @@ md <- function(text) {
 # `.draw_text_batch` but calls `texts_rich` with the per-glyph colour stream.
 .draw_richtext_batch <- function(scene, label, x, y, hjust, vjust, rot,
                                  family, fontface, fontsize, col, alpha, halo = NULL,
-                                 features = NULL) {
+                                 features = NULL, keys = NULL) {
   base_col <- if (is.null(col) || is.na(col)) "black" else col
   scale <- scene$dpi() / 72
   n <- vctrs::vec_size_common(x, y)
@@ -770,7 +771,8 @@ md <- function(text) {
     rot[drawn], hjust, vjust, w, h, as.integer(nper),
     gid, gx, gy, gsize, gpath, gface, gcol,
     keytxt, family, fontface, fontsize, .rs_col_inh(base_col), .rs_num_inh(alpha),
-    .rs_col_inh(halo$col), (halo$width %||% 0) * scale
+    .rs_col_inh(halo$col), (halo$width %||% 0) * scale,
+    if (is.null(keys)) character(0) else keys[drawn]
   )
   invisible()
 }
