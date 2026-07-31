@@ -13,7 +13,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">vellum</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.6.3</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.6.4</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -66,9 +66,14 @@
 <div class="row">
   <main id="main" class="col-md-9"><div class="page-header">
       <img src="../logo.png" class="logo" alt=""><h1>Changelog</h1>
-      <small>Source: <a href="https://github.com/r-vellum/vellum/blob/v0.6.3/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
+      <small>Source: <a href="https://github.com/r-vellum/vellum/blob/v0.6.4/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.6.4" id="vellum-064">vellum 0.6.4<a class="anchor" aria-label="anchor" href="#vellum-064"></a></h2>
+<ul><li>
+<strong>Fixed: <code><a href="../reference/grobwidth.html">grobwidth()</a></code>/<code><a href="../reference/grobwidth.html">grobheight()</a></code> of a width-constrained <code><a href="../reference/grob.html">text_grob()</a></code> ignored the wrapping.</strong> The renderer wraps a <code>text_grob(width=)</code> to its box and auto-fits when <code>fit=</code> is set, but the measurement path (<code>.grob_extent()</code>, what a <code>grobheight</code>/<code>grobwidth</code> unit resolves to) measured the <em>unwrapped</em> line. So a layout track sized by <code><a href="../reference/grobwidth.html">grobheight()</a></code> reserved a single line for a label that drew as several, and the wrapped text overran whatever sat above it. Extent now wraps the label to <code>width</code> (in mm), stacks the resulting lines, and applies the same auto-fit shrink as drawing — so a reserved region matches the glyphs that land in it. Plain labels only; rich <code><a href="../reference/md.html">md()</a></code> labels are unchanged (the renderer does not width-wrap them either). Found while wiring wrapped plot titles/subtitles/captions in <code>vellumplot</code>.</li>
+</ul></div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.6.3" id="vellum-063">vellum 0.6.3<a class="anchor" aria-label="anchor" href="#vellum-063"></a></h2>
 <ul><li>
