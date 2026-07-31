@@ -5,6 +5,7 @@
 //! [`RenderBackend`] trait. tiny-skia raster is one implementation; SVG (and PDF,
 //! later) are others. Geometry is carried as `tiny_skia::Path` + `Transform`.
 
+use crate::scene::NodeMeta;
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::rc::Rc;
@@ -560,12 +561,23 @@ pub trait RenderBackend {
         Vec::new()
     }
 
-    /// Bracket the next primitive's output with semantic metadata (a pre-formatted
-    /// attribute string, e.g. SVG `data-*`/`role`; empty = none). The SVG backend
-    /// wraps the node in a `<g …>`; raster/PDF ignore it. Always paired with
-    /// `end_node`.
-    fn begin_node(&mut self, _attrs: &str) {}
+    /// Bracket the next primitive's output with semantic metadata. The SVG
+    /// backend wraps the node in a `<g …>` carrying `data-*`/`role`; the PDF
+    /// backend opens a tagged content span and records a structure-tree entry;
+    /// raster ignores it. Always paired with `end_node`.
+    ///
+    /// The whole `NodeMeta` is passed rather than a pre-formatted attribute
+    /// string because the two consumers need different things from it: SVG wants
+    /// escaped XML attributes, PDF wants the role and label as separate values
+    /// to build a `Tag` from.
+    fn begin_node(&mut self, _meta: &NodeMeta) {}
     fn end_node(&mut self) {}
+
+    /// Whether this backend consumes `begin_node`/`end_node` metadata at all.
+    /// Default `false`, so the raster path does not pay to carry it.
+    fn wants_node_meta(&self) -> bool {
+        false
+    }
 
     /// Set the per-element data key for the *next* primitive emitted (a batched
     /// node calls this before each element). The SVG backend splices it in as a
@@ -2039,13 +2051,18 @@ impl RenderBackend for SvgBackend {
     // Per-node semantic metadata: route this node's elements into a fresh buffer,
     // then wrap them in a `<g …>` carrying the attributes. A node with no metadata
     // pushes `None` (no buffer) so the common case is free of an extra group.
-    fn begin_node(&mut self, attrs: &str) {
+    fn begin_node(&mut self, meta: &NodeMeta) {
+        let attrs = meta.svg_attrs();
         if attrs.is_empty() {
             self.node_open.push(None);
         } else {
             self.node_stack.push(String::new());
-            self.node_open.push(Some(attrs.to_string()));
+            self.node_open.push(Some(attrs));
         }
+    }
+
+    fn wants_node_meta(&self) -> bool {
+        true
     }
 
     fn end_node(&mut self) {
@@ -2340,11 +2357,27 @@ pub struct PdfBackend<'a, 'b> {
     /// Degradation messages: features this PDF walk could not honour (a dropped
     /// tiling pattern, a skipped mask). Surfaced to the user as one R warning.
     warnings: Vec<String>,
+    /// Structure-tree entries for tagged nodes, in draw order.
+    ///
+    /// Draw order *is* reading order for a graphic: it is the order the author
+    /// put the marks in, and it is what a screen reader will walk. Collected
+    /// flat and assembled into the tree after the page is finished, because
+    /// krilla's identifiers are only valid once the content stream exists.
+    tagged: Vec<(krilla::tagging::Identifier, NodeMeta)>,
+    /// Depth of open tagged spans, so `end_node` only closes one it opened.
+    tag_depth: usize,
 }
 
 impl<'a, 'b> PdfBackend<'a, 'b> {
     pub fn new(surface: &'a mut Surface<'b>) -> Self {
-        PdfBackend { surface, fonts: HashMap::new(), group_pushes: Vec::new(), warnings: Vec::new() }
+        PdfBackend {
+            surface,
+            fonts: HashMap::new(),
+            group_pushes: Vec::new(),
+            warnings: Vec::new(),
+            tagged: Vec::new(),
+            tag_depth: 0,
+        }
     }
 
     /// Record a degradation, de-duplicated (the same gap usually recurs across
@@ -2354,6 +2387,11 @@ impl<'a, 'b> PdfBackend<'a, 'b> {
         if !self.warnings.contains(&msg) {
             self.warnings.push(msg);
         }
+    }
+
+    /// The structure-tree entries collected during the walk, in draw order.
+    pub fn take_tagged(&mut self) -> Vec<(krilla::tagging::Identifier, NodeMeta)> {
+        std::mem::take(&mut self.tagged)
     }
 
     /// Fill the page with the background colour (device-px page rect).
@@ -2440,7 +2478,73 @@ fn krilla_paint(paint: &ResolvedPaint) -> Option<KPaint> {
     }
 }
 
+/// Map a vellum `role` onto a PDF structure element.
+///
+/// `role` is an ARIA-flavoured string on the R side, and PDF's structure types
+/// are not ARIA — so this is a deliberate, documented, small mapping rather than
+/// a general translation. Anything unrecognised becomes a `Figure`, which is the
+/// correct default for a mark in a graphic and the one PDF/UA requires alt text
+/// for.
+pub fn pdf_tag(meta: &NodeMeta) -> krilla::tagging::TagKind {
+    use krilla::tagging::Tag;
+    // PDF/UA requires a Figure to carry alt text. Prefer the human-readable
+    // name, fall back to the id, and last of all say *something* -- an empty Alt
+    // is a validation failure, and a screen reader announcing "graphic" beats it
+    // announcing nothing.
+    let alt = if !meta.name.is_empty() {
+        meta.name.clone()
+    } else if !meta.id.is_empty() {
+        meta.id.clone()
+    } else {
+        "graphic".to_string()
+    };
+    match meta.role.as_str() {
+        "paragraph" | "text" => Tag::P.into(),
+        "heading" => Tag::Hn(std::num::NonZeroU16::new(1).expect("1 is non-zero"), Some(alt)).into(),
+        "caption" => Tag::Caption.into(),
+        "listitem" => Tag::LI.into(),
+        _ => Tag::Figure(Some(alt)).into(),
+    }
+}
+
+/// Whether a node is decorative -- present for looks, carrying no meaning.
+///
+/// Such content is tagged as an *artifact* rather than given a structure entry,
+/// which is how PDF says "skip this": a screen reader announcing every gridline
+/// is worse than one announcing none.
+fn is_decorative(meta: &NodeMeta) -> bool {
+    matches!(meta.role.as_str(), "presentation" | "none" | "decorative")
+}
+
 impl RenderBackend for PdfBackend<'_, '_> {
+    fn wants_node_meta(&self) -> bool {
+        true
+    }
+
+    fn begin_node(&mut self, meta: &NodeMeta) {
+        // One tagged content span per node. Nesting tagged spans is not allowed
+        // in PDF, and the walk never nests them, but guard anyway: a stray
+        // unbalanced pair would corrupt the whole content stream.
+        if self.tag_depth > 0 {
+            return;
+        }
+        if is_decorative(meta) {
+            use krilla::tagging::{Artifact, ArtifactType, ContentTag};
+            self.surface.start_tagged(ContentTag::Artifact(Artifact::new(ArtifactType::Other, None)));
+        } else {
+            let id = self.surface.start_tagged(krilla::tagging::ContentTag::Other);
+            self.tagged.push((id, meta.clone()));
+        }
+        self.tag_depth += 1;
+    }
+
+    fn end_node(&mut self) {
+        if self.tag_depth > 0 {
+            self.surface.end_tagged();
+            self.tag_depth -= 1;
+        }
+    }
+
     fn fill_path(&mut self, path: &Path, transform: Transform, paint: &ResolvedPaint, rule: FillRule, clip: &Clip) {
         let kp = match to_kpath(path) {
             Some(p) => p,
