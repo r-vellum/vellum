@@ -2,6 +2,42 @@
 
 ## vellum (development version)
 
+- **Fixed:
+  [`vl_repel()`](https://r-vellum.github.io/vellum/reference/vl_place.md)
+  was defeated by a panel background.** The default obstacle set is
+  “everything that is not a label”, which on a real plot includes the
+  panel background rectangle — and a label inside it collides with it
+  wherever it goes, so it could never be placed. On a two-panel scene,
+  29 of 32 labels were unresolvable; now 2.
+
+  An obstacle that wholly contains a label is no longer treated as an
+  obstacle for that label. That is also right for a bar or region a
+  label deliberately annotates from the inside, where pushing the label
+  out would be exactly wrong.
+
+- **Fixed:
+  [`vl_repel()`](https://r-vellum.github.io/vellum/reference/vl_place.md)
+  could push labels off the page.** Resolving a collision by shoving a
+  label off the canvas is strictly worse than the collision — an
+  overlapping label is hard to read, an off-canvas one is gone. Solved
+  positions are now bounded by the label’s clip region intersected with
+  the page, widened to include its own anchor so a label deliberately
+  placed off-page stays put.
+
+- **Fixed: a halo ate the neighbouring glyphs on
+  [`text_path_grob()`](https://r-vellum.github.io/vellum/reference/text_path_grob.md).**
+  Placing each glyph as its own draw broke the rule that every glyph is
+  stroked before any is filled, so each halo painted over the previous
+  glyph’s fill. Haloed text on a curve is now stroked in one pass and
+  filled in another, as straight text already was.
+
+- **Fixed:
+  [`render_all()`](https://r-vellum.github.io/vellum/reference/render_all.md)
+  ignored `_R_CHECK_LIMIT_CORES_`.** `R CMD check` sets it and
+  [`parallel::mclapply()`](https://rdrr.io/r/parallel/mclapply.html)
+  errors above two processes under it, so any package depending on
+  vellum would have failed its own check.
+
 - **Every mark family can now carry an element `key`.**
   [`lines_grob()`](https://r-vellum.github.io/vellum/reference/grob.md),
   [`polygon_grob()`](https://r-vellum.github.io/vellum/reference/grob.md),

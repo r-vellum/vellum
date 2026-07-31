@@ -192,13 +192,13 @@ heavy <- vl_scene(6, 4, dpi = 96) |>
 profile_render(heavy, reps = 1)
 #> Phases (median of the timed reps):
 #> • build 0.001 s (constructing the R value)
-#> • compile 0.024 s (R -> Rust replay, incl. text shaping)
-#> • raster 0.184 s (drawing)
+#> • compile 0.018 s (R -> Rust replay, incl. text shaping)
+#> • raster 0.161 s (drawing)
 #> 
 #> Slowest marks (raster time):
-#> • circle points 20000 elem 0.1178 s 76.7%
-#> • segments edges 2000 elem 0.0331 s 21.5%
-#> • text labels 200 elem 0.0026 s 1.7%
+#> • circle points 20000 elem 0.1029 s 76.3%
+#> • segments edges 2000 elem 0.0298 s 22.1%
+#> • text labels 200 elem 0.0022 s 1.7%
 ```
 
 **Read the phase split first.** A render is three phases: *build*
