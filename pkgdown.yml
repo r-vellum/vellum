@@ -6,6 +6,7 @@ articles:
   datashading: datashading.html
   grid-interop: grid-interop.html
   inspecting-scenes: inspecting-scenes.html
+  placement: placement.html
   render-quality: render-quality.html
   retained-mode: retained-mode.html
   scene-and-paint: scene-and-paint.html
@@ -13,7 +14,7 @@ articles:
   scenes-as-values: scenes-as-values.html
   typography: typography.html
   vellum: vellum.html
-last_built: 2026-07-31T06:43Z
+last_built: 2026-07-31T07:14Z
 urls:
   reference: https://r-vellum.github.io/vellum/reference
   article: https://r-vellum.github.io/vellum/articles

@@ -143,6 +143,21 @@ and layout: text wrapped to a box or set along a curve.
 - [`text_path_grob()`](https://r-vellum.github.io/vellum/reference/text_path_grob.md)
   : Text set along a path
 
+## Placement
+
+Geometry services over a scene’s resolved boxes: move labels apart, find
+the emptiest region, outline and buffer a group.
+
+- [`vl_place()`](https://r-vellum.github.io/vellum/reference/vl_place.md)
+  [`vl_repel()`](https://r-vellum.github.io/vellum/reference/vl_place.md)
+  : Move labels so they stop overlapping
+- [`vl_empty_region()`](https://r-vellum.github.io/vellum/reference/vl_empty_region.md)
+  : Find the largest empty rectangle in a scene
+- [`vl_hull()`](https://r-vellum.github.io/vellum/reference/vl_hull.md)
+  : Hull of a point set
+- [`vl_buffer()`](https://r-vellum.github.io/vellum/reference/vl_buffer.md)
+  : Buffer a polygon outward
+
 ## Big data
 
 Aggregate-then-shade rendering for large point clouds, dense timeseries,

@@ -10,6 +10,8 @@
   effects](https://r-vellum.github.io/vellum/articles/render-quality.md):
 - [Asking a scene what it drew: read-back, picking, and
   editing](https://r-vellum.github.io/vellum/articles/retained-mode.md):
+- [Placement: repelling labels, finding room, outlining
+  groups](https://r-vellum.github.io/vellum/articles/placement.md):
 - [Datashading: millions of points,
   honestly](https://r-vellum.github.io/vellum/articles/datashading.md):
 

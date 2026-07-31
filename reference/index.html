@@ -30,6 +30,7 @@
     <li><a class="dropdown-item" href="../articles/typography.html">Typography: layout, halos and OpenType features</a></li>
     <li><a class="dropdown-item" href="../articles/render-quality.html">Render quality: accessibility, crisp edges, group effects</a></li>
     <li><a class="dropdown-item" href="../articles/retained-mode.html">Asking a scene what it drew: read-back, picking, and editing</a></li>
+    <li><a class="dropdown-item" href="../articles/placement.html">Placement: repelling labels, finding room, outlining groups</a></li>
     <li><a class="dropdown-item" href="../articles/datashading.html">Datashading: millions of points, honestly</a></li>
     <li><hr class="dropdown-divider"></li>
     <li><h6 class="dropdown-header" data-toc-skip>Inspecting</h6></li>
@@ -375,6 +376,43 @@
 
         </dt>
         <dd>Text set along a path</dd>
+      </dl></div><div class="section level2">
+      <h2 id="placement">Placement<a class="anchor" aria-label="anchor" href="#placement"></a></h2>
+
+      <div class="section-desc"><p>Geometry services over a scene’s resolved boxes: move labels apart, find the emptiest region, outline and buffer a group.</p></div>
+
+      <dl></dl></div><div class="section level2">
+
+
+
+
+      <dl><dt>
+
+          <code><a href="vl_place.html">vl_place()</a></code> <code><a href="vl_place.html">vl_repel()</a></code>
+
+        </dt>
+        <dd>Move labels so they stop overlapping</dd>
+
+        <dt>
+
+          <code><a href="vl_empty_region.html">vl_empty_region()</a></code>
+
+        </dt>
+        <dd>Find the largest empty rectangle in a scene</dd>
+
+        <dt>
+
+          <code><a href="vl_hull.html">vl_hull()</a></code>
+
+        </dt>
+        <dd>Hull of a point set</dd>
+
+        <dt>
+
+          <code><a href="vl_buffer.html">vl_buffer()</a></code>
+
+        </dt>
+        <dd>Buffer a polygon outward</dd>
       </dl></div><div class="section level2">
       <h2 id="big-data">Big data<a class="anchor" aria-label="anchor" href="#big-data"></a></h2>
 
