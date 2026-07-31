@@ -175,23 +175,163 @@ vl_strheight <- function(label, family = "", fontface = "plain",
 # Stack already-shaped lines baseline-to-baseline, centred symmetrically about
 # y = 0, into one flat glyph set (points). `sh` is a list of `.shape_cached`
 # entries, one per line, in order.
-.stack_lines <- function(sh, size) {
+#
+# `align` shifts each line horizontally within the block. The default "left"
+# adds nothing at all, so an ordinary multi-line label is byte-for-byte what it
+# was before alignment existed. `box_w`, when given, is the block width to align
+# against (the wrap width), so a short line in a fixed-width box still aligns to
+# the box edge rather than to the longest line.
+.stack_lines <- function(sh, size, align = "left", box_w = NULL) {
   nl <- length(sh)
   lead <- size * .LINEHEIGHT
   idx <- integer(0); xo <- numeric(0); yo <- numeric(0)
   fs <- numeric(0); fp <- character(0); fi <- integer(0)
   wmax <- 0; hmax <- 0
   for (i in seq_len(nl)) {
+    wmax <- max(wmax, sh[[i]]$w); hmax <- max(hmax, sh[[i]]$h)
+  }
+  block <- box_w %||% wmax
+  for (i in seq_len(nl)) {
     e <- sh[[i]]
-    off <- ((nl - 1) / 2 - (i - 1)) * lead # line i, centred about 0 (+up)
+    # Line i's baseline, measured UP from the block's LAST line -- not centred
+    # about zero.
+    #
+    # The renderer places a glyph at `ay - (gy - vjust*h)`, where `h` is the
+    # whole block's height. That term already accounts for the block's extent,
+    # so pre-centring the per-line offsets about zero double-counts it: the top
+    # line lands exactly where a single centred line would and every other line
+    # stacks below it, hanging an `nl`-line block (nl-1)*lead/2 too low. Anchored
+    # at the last line instead, all three vertical justifications come out right
+    # -- bottom puts the final baseline where a single bottom-justified line
+    # would sit, top does the same for the first, and centre puts the block's
+    # mean baseline where a single centred line's is.
+    off <- ((nl - 1) - (i - 1)) * lead
+    dx <- switch(align,
+      centre = , center = (block - e$w) / 2,
+      right = block - e$w,
+      0
+    )
     if (e$n > 0L) {
-      idx <- c(idx, e$index); xo <- c(xo, e$xoff); yo <- c(yo, e$yoff + off)
+      idx <- c(idx, e$index); xo <- c(xo, e$xoff + dx); yo <- c(yo, e$yoff + off)
       fs <- c(fs, e$fsize); fp <- c(fp, e$fpath); fi <- c(fi, e$findex)
     }
-    wmax <- max(wmax, e$w); hmax <- max(hmax, e$h)
   }
-  list(w = wmax, h = (nl - 1) * lead + hmax, n = length(idx),
+  list(w = block, h = (nl - 1) * lead + hmax, n = length(idx),
        index = idx, xoff = xo, yoff = yo, fsize = fs, fpath = fp, findex = fi)
+}
+
+# --- width-constrained text -------------------------------------------------
+
+# Break `label` into lines no wider than `width` points, honouring any hard
+# "\n" already in it.
+#
+# The break decision is made on the *shaped* width of each candidate line, not
+# on a sum of per-word advances, so kerning and any active OpenType feature are
+# accounted for and a line can never render wider than it measured. Candidates
+# for one output line are shaped in a single batched call; they are short,
+# repeat heavily across a figure, and go through the same cache as everything
+# else.
+#
+# A word that cannot fit on a line of its own is placed anyway rather than being
+# broken: hyphenation needs a dictionary, and a silently clipped label is worse
+# than one that overflows visibly.
+.wrap_label <- function(label, width, family, italic, weight, size, features = NULL) {
+  out <- character(0)
+  for (para in .label_lines(label)) {
+    words <- strsplit(para, "[ \t]+")[[1]]
+    words <- words[nzchar(words)]
+    if (!length(words)) {
+      out <- c(out, "") # a blank line is a paragraph break, and must survive
+      next
+    }
+    i <- 1L
+    while (i <= length(words)) {
+      j <- seq.int(i, length(words))
+      cand <- vapply(j, function(k) paste(words[i:k], collapse = " "), character(1))
+      w <- vapply(.shape_cached(cand, family, italic, weight, size, features),
+                  `[[`, double(1), "w")
+      # Widths grow with each added word, so the fitting candidates are a prefix.
+      ok <- which(w <= width)
+      take <- if (length(ok)) max(ok) else 1L
+      out <- c(out, cand[take])
+      i <- i + take
+    }
+  }
+  out
+}
+
+# Justify one line to exactly `width` by distributing the slack between its
+# words. Words are shaped individually and re-placed, which drops kerning across
+# the space -- there is essentially none, and the alternative is guessing which
+# glyphs are spaces in an already-shaped run.
+.justify_line <- function(line, width, family, italic, weight, size, features = NULL) {
+  words <- strsplit(line, " ", fixed = TRUE)[[1]]
+  words <- words[nzchar(words)]
+  if (length(words) < 2L) {
+    return(NULL) # nothing to stretch; caller keeps the plain line
+  }
+  e <- .shape_cached(words, family, italic, weight, size, features)
+  ww <- vapply(e, `[[`, double(1), "w")
+  gap <- (width - sum(ww)) / (length(words) - 1)
+  if (gap < 0) {
+    return(NULL) # already over-full; stretching would only make it worse
+  }
+  at <- cumsum(c(0, ww[-length(ww)] + gap))
+  keep <- vapply(e, `[[`, integer(1), "n") > 0L
+  list(
+    w = width, h = max(vapply(e, `[[`, double(1), "h")),
+    n = sum(vapply(e[keep], `[[`, integer(1), "n")),
+    index = unlist(lapply(e[keep], `[[`, "index"), use.names = FALSE),
+    xoff = unlist(Map(function(g, d) g$xoff + d, e[keep], at[keep]), use.names = FALSE),
+    yoff = unlist(lapply(e[keep], `[[`, "yoff"), use.names = FALSE),
+    fsize = unlist(lapply(e[keep], `[[`, "fsize"), use.names = FALSE),
+    fpath = unlist(lapply(e[keep], `[[`, "fpath"), use.names = FALSE),
+    findex = unlist(lapply(e[keep], `[[`, "findex"), use.names = FALSE)
+  )
+}
+
+# Compose one label wrapped to `width` points. Returns a `.shape_cached`-shaped
+# entry whose `w` is the box width, so justification against the anchor treats
+# the block as a box of the requested width rather than as ragged lines.
+.compose_wrapped <- function(label, width, align, family, italic, weight, size,
+                             features = NULL) {
+  lines <- .wrap_label(label, width, family, italic, weight, size, features)
+  sh <- .shape_cached(lines, family, italic, weight, size, features)
+  if (identical(align, "justify")) {
+    # The last line of each paragraph stays ragged, as in any typesetter: a
+    # two-word final line stretched to full width is the classic ugly artifact.
+    last <- c(which(!nzchar(lines)) - 1L, length(lines))
+    for (i in seq_along(lines)) {
+      if (i %in% last) next
+      j <- .justify_line(lines[i], width, family, italic, weight, size, features)
+      if (!is.null(j)) sh[[i]] <- j
+    }
+    align <- "left" # words are already positioned absolutely
+  }
+  # `lines` rides along so the caller can send the backend the label it actually
+  # drew (see `.draw_text_batch`).
+  c(.stack_lines(sh, size, align = align, box_w = width), list(lines = lines))
+}
+
+# Largest font size in [`min`, `size`] at which `label` wrapped to `width` still
+# fits `width` x `height` points. Bisection on a continuous size to 0.1 pt: the
+# wrap depends on the size, so each probe re-wraps.
+.fit_size <- function(label, width, height, align, family, italic, weight, size,
+                      min_size, features = NULL) {
+  fits <- function(s) {
+    e <- .compose_wrapped(label, width, align, family, italic, weight, s, features)
+    e$w <= width + 1e-6 && (is.null(height) || e$h <= height + 1e-6)
+  }
+  if (fits(size)) {
+    return(size)
+  }
+  lo <- min_size
+  hi <- size
+  while (hi - lo > 0.1) {
+    mid <- (lo + hi) / 2
+    if (fits(mid)) lo <- mid else hi <- mid
+  }
+  lo
 }
 
 # Compose one (possibly multi-line) plain label into a single flat glyph set.
@@ -248,7 +388,7 @@ vl_strheight <- function(label, family = "", fontface = "plain",
 # contain "\n" (multi-line); each unique label is composed once.
 .draw_text_batch <- function(scene, labels, x, y, hjust, vjust, rot,
                              family, fontface, fontsize, col, alpha, halo = NULL,
-                             features = NULL) {
+                             features = NULL, wrap = NULL) {
   labels <- as.character(labels)
   n <- length(labels)
   keep <- !is.na(labels) & nzchar(labels)
@@ -258,7 +398,35 @@ vl_strheight <- function(label, family = "", fontface = "plain",
   scale <- scene$dpi() / 72
   face <- .rs_face(fontface)
   uniq <- unique(labels[keep])
-  shaped <- .compose_plain_batch(uniq, family, face$italic, face$weight, fontsize, features)
+  if (is.null(wrap)) {
+    shaped <- .compose_plain_batch(uniq, family, face$italic, face$weight, fontsize, features)
+  } else {
+    # Auto-fit picks ONE size for the whole grob -- the smallest any label needs.
+    # Per-label sizes would render fine (glyph sizes are per glyph) but a row of
+    # labels at four different sizes is a defect, not a feature.
+    if (!is.null(wrap$fit)) {
+      fontsize <- min(vapply(uniq, .fit_size, double(1),
+        width = wrap$width, height = wrap$height, align = wrap$align,
+        family = family, italic = face$italic, weight = face$weight,
+        size = fontsize, min_size = wrap$fit, features = features,
+        USE.NAMES = FALSE
+      ))
+    }
+    shaped <- lapply(uniq, .compose_wrapped,
+      width = wrap$width, align = wrap$align, family = family,
+      italic = face$italic, weight = face$weight, size = fontsize,
+      features = features
+    )
+    # The label travelling to the backend is the *wrapped* one, with the chosen
+    # breaks as newlines. It is metadata -- PDF `ToUnicode`, SVG native `<text>`
+    # -- and it has to describe what was actually drawn: the SVG backend splits
+    # it per line and matches the parts against the glyph baselines, so the
+    # unwrapped string would not line up and would cost native text.
+    wrapped_lab <- vapply(shaped, function(e) paste(e$lines, collapse = "\n"),
+                          character(1))
+    labels[keep] <- wrapped_lab[match(labels[keep], uniq)]
+    uniq <- wrapped_lab
+  }
   umap <- match(labels, uniq)
   # Drawn labels: those kept that shaped to >= 1 glyph (drops e.g. control chars).
   drawn <- which(keep)
@@ -286,6 +454,39 @@ vl_strheight <- function(label, family = "", fontface = "plain",
     unlist(lapply(ent, `[[`, "fpath"), use.names = FALSE),
     unlist(lapply(ent, `[[`, "findex"), use.names = FALSE),
     labels[drawn], family, fontface, fontsize, .rs_col_inh(col), .rs_num_inh(alpha),
+    .rs_col_inh(halo$col), (halo$width %||% 0) * scale
+  )
+  invisible()
+}
+
+# Shape one label and hand it to the backend with a baseline path. The glyph
+# arrays are exactly what `.draw_text_batch()` builds for a single label; only
+# the anchor differs, so on-path text inherits halos, features and every
+# backend without any of them knowing about it.
+#
+# A newline is meaningless on a curve (there is no second baseline to stack
+# onto), so the label is flattened to one line.
+.draw_text_path <- function(scene, label, x, y, hjust, vjust, offset,
+                            family, fontface, fontsize, col, alpha, halo = NULL,
+                            features = NULL) {
+  label <- gsub("[\r\n]+", " ", as.character(label))
+  if (is.na(label) || !nzchar(label)) {
+    return(invisible())
+  }
+  scale <- scene$dpi() / 72
+  face <- .rs_face(fontface)
+  e <- .shape_cached(label, family, face$italic, face$weight, fontsize, features)[[1]]
+  if (e$n == 0L) {
+    return(invisible())
+  }
+  cx <- .coord(x, "npc", length(x))
+  cy <- .coord(y, "npc", length(y))
+  scene$text_path(
+    cx$value, cy$value, cx$code, cx$offset, cy$code, cy$offset,
+    offset, hjust, vjust,
+    e$w * scale, e$h * scale,
+    e$index, e$xoff * scale, e$yoff * scale, e$fsize * scale, e$fpath, e$findex,
+    label, family, fontface, fontsize, .rs_col_inh(col), .rs_num_inh(alpha),
     .rs_col_inh(halo$col), (halo$width %||% 0) * scale
   )
   invisible()

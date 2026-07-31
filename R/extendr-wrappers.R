@@ -224,6 +224,13 @@ rs_attractor <- function(kind, n, a, b, c, d, x0, y0) .Call(wrap__rs_attractor, 
 #'passes per-glyph ids/positions/fonts plus the block size.
 #'}
 #'
+#'\subsection{Method `text_path`}{
+#'Add one pre-shaped label set along a polyline baseline. Identical to
+#'`text()` except that the anchor is the path rather than a point: `hjust`
+#'slides the run along it (0 = start, 1 = end) and `vjust` still positions
+#'the line box against the baseline.
+#'}
+#'
 #'\subsection{Method `texts`}{
 #'Add a whole batch of pre-shaped text labels in one call (one shaping pass
 #'on the R side, one FFI here). Glyphs are flat across all labels, split by
@@ -438,6 +445,8 @@ Scene$path <- function(x, y, xu, xoff, yu, yoff, nper, evenodd, fill, col, lwd, 
 Scene$image <- function(rgba, iw, ih, x, y, w, h, xu, xoff, yu, yoff, wu, woff, hu, hoff, interpolate) .Call(wrap__Scene__image, self, rgba, iw, ih, x, y, w, h, xu, xoff, yu, yoff, wu, woff, hu, hoff, interpolate)
 
 Scene$text <- function(x, y, xu, xoff, yu, yoff, rot, hjust, vjust, w, h, gid, gx, gy, gsize, gpath, gface, label, family, face, size, col, alpha, halo_col, halo_width) .Call(wrap__Scene__text, self, x, y, xu, xoff, yu, yoff, rot, hjust, vjust, w, h, gid, gx, gy, gsize, gpath, gface, label, family, face, size, col, alpha, halo_col, halo_width)
+
+Scene$text_path <- function(px, py, pxu, pxoff, pyu, pyoff, offset, hjust, vjust, w, h, gid, gx, gy, gsize, gpath, gface, label, family, face, size, col, alpha, halo_col, halo_width) .Call(wrap__Scene__text_path, self, px, py, pxu, pxoff, pyu, pyoff, offset, hjust, vjust, w, h, gid, gx, gy, gsize, gpath, gface, label, family, face, size, col, alpha, halo_col, halo_width)
 
 Scene$texts <- function(x, y, xu, xoff, yu, yoff, rot, hjust, vjust, w, h, nper, gid, gx, gy, gsize, gpath, gface, label, family, face, size, col, alpha, halo_col, halo_width) .Call(wrap__Scene__texts, self, x, y, xu, xoff, yu, yoff, rot, hjust, vjust, w, h, nper, gid, gx, gy, gsize, gpath, gface, label, family, face, size, col, alpha, halo_col, halo_width)
 

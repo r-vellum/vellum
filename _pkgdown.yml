@@ -167,11 +167,12 @@ reference:
 
 - title: Text
   desc: >
-    Device-independent shaping and measurement, plus Markdown-style rich
-    labels.
+    Device-independent shaping and measurement, Markdown-style rich labels, and
+    layout: text wrapped to a box or set along a curve.
   contents:
   - vl_strwidth
   - md
+  - text_path_grob
 
 - title: Big data
   desc: >

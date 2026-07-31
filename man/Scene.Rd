@@ -128,6 +128,13 @@ Add pre-shaped text. The R wrapper does shaping (via \code{textshaping}) and
 passes per-glyph ids/positions/fonts plus the block size.
 }
 
+\subsection{Method \code{text_path}}{
+Add one pre-shaped label set along a polyline baseline. Identical to
+\code{text()} except that the anchor is the path rather than a point: \code{hjust}
+slides the run along it (0 = start, 1 = end) and \code{vjust} still positions
+the line box against the baseline.
+}
+
 \subsection{Method \code{texts}}{
 Add a whole batch of pre-shaped text labels in one call (one shaping pass
 on the R side, one FFI here). Glyphs are flat across all labels, split by

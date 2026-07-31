@@ -1172,8 +1172,37 @@ S7::method(compile, grob_text) <- function(node, scene) {
     .draw_text_batch(scene, lab, x, y, hv[1], hv[2], rot,
                      node@gp@fontfamily %||% "", node@gp@fontface %||% "plain",
                      .gp_fontsize(node@gp), node@gp@col, node@gp@alpha,
-                     .gp_halo(node@gp), .gp_features(node@gp))
+                     .gp_halo(node@gp), .gp_features(node@gp), .text_wrap(node))
   })
+}
+
+S7::method(compile, grob_textpath) <- function(node, scene) {
+  .with_vp(node, scene, {
+    hv <- .just_to_hv(node@just)
+    n <- vctrs::vec_size_common(node@x, node@y)
+    if (n < 2L) {
+      return(invisible()) # a baseline needs at least one segment
+    }
+    .draw_text_path(scene, node@label,
+                    vctrs::vec_recycle(node@x, n), vctrs::vec_recycle(node@y, n),
+                    hv[1], hv[2], node@offset,
+                    node@gp@fontfamily %||% "", node@gp@fontface %||% "plain",
+                    .gp_fontsize(node@gp), node@gp@col, node@gp@alpha,
+                    .gp_halo(node@gp), .gp_features(node@gp))
+  })
+}
+
+# The width-constraint spec for a text grob, or NULL when it has none (which is
+# the path every ordinary label takes). Millimetres become points, the unit
+# shaping works in.
+.text_wrap <- function(node) {
+  if (is.na(node@width)) {
+    return(NULL)
+  }
+  list(width = node@width / 25.4 * 72,
+       height = if (is.na(node@height)) NULL else node@height / 25.4 * 72,
+       align = node@align,
+       fit = if (is.na(node@fit)) NULL else node@fit)
 }
 
 S7::method(compile, gtree) <- function(node, scene) {
