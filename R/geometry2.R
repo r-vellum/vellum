@@ -121,8 +121,10 @@ vl_path_op <- function(a, b, op = c("union", "intersect", "difference", "xor"),
 #' Cells with a non-finite corner are skipped, so a contour **breaks** around
 #' missing data rather than being drawn through it.
 #'
-#' @param z A numeric matrix. Rows are y, columns are x — the `image()`
-#'   convention.
+#' @param z A numeric matrix, with **rows indexing x and columns indexing y** —
+#'   `dim(z) == c(length(x), length(y))`, the same convention as
+#'   [graphics::image()], [graphics::contour()] and [graphics::persp()], and the
+#'   shape `outer(xs, ys, f)` produces.
 #' @param levels Contour levels. Defaults to 5 levels spanning the finite range
 #'   of `z`, excluding the extremes (a contour at the minimum or maximum is
 #'   either empty or the whole boundary).
@@ -133,8 +135,9 @@ vl_path_op <- function(a, b, op = c("union", "intersect", "difference", "xor"),
 #'   `lines_grob(x, y, id = id)`.
 #' @examples
 #' # A ring contour around a Gaussian bump.
+#' # rows index x, columns index y -- exactly what `outer(xs, ys, f)` gives.
 #' g <- outer(seq(-3, 3, length.out = 60), seq(-3, 3, length.out = 60),
-#'            function(a, b) exp(-(a^2 + b^2) / 2))
+#'            function(x, y) exp(-(x^2 + y^2) / 2))
 #' head(vl_contour(g, levels = c(0.2, 0.5, 0.8)))
 #' @export
 vl_contour <- function(z, levels = NULL, xlim = c(0, 1), ylim = c(0, 1)) {
@@ -142,8 +145,9 @@ vl_contour <- function(z, levels = NULL, xlim = c(0, 1), ylim = c(0, 1)) {
   if (!is.numeric(z)) {
     cli::cli_abort("{.arg z} must be a numeric matrix.")
   }
-  ny <- nrow(z)
-  nx <- ncol(z)
+  # Rows index x, columns index y, matching base R. See `@param z`.
+  nx <- nrow(z)
+  ny <- ncol(z)
   empty <- data.frame(level = numeric(0), id = integer(0), x = numeric(0),
                       y = numeric(0), closed = logical(0))
   if (nx < 2L || ny < 2L) {
@@ -157,8 +161,13 @@ vl_contour <- function(z, levels = NULL, xlim = c(0, 1), ylim = c(0, 1)) {
     # Interior levels only: one at the extreme is empty or the whole boundary.
     levels <- seq(rng[1], rng[2], length.out = 7)[2:6]
   }
-  # Row-major for Rust, and rows are y: `t(z)` puts x fastest-varying.
-  flat <- as.numeric(t(z))
+  # The Rust kernel wants row-major with x fastest-varying, y outer. R stores a
+  # matrix column-major, so with columns indexing y that is exactly
+  # `as.numeric(z)` -- all x for the first y, then all x for the second, and so
+  # on. No transpose needed, which is also why the previous code's `t(z)` was
+  # the bug: it fed the grid in transposed and every contour came back reflected
+  # across the diagonal.
+  flat <- as.numeric(z)
   # Grid coordinates count cells from 0; map them onto xlim/ylim with cell
   # centres at the ends, which is what `image()` does.
   sx <- if (nx > 1L) diff(xlim) / (nx - 1L) else 0
@@ -197,8 +206,9 @@ vl_contour <- function(z, levels = NULL, xlim = c(0, 1), ylim = c(0, 1)) {
 #' @export
 #' @examples
 #' # Draw them: one grob per contour, because each is its own polyline.
+#' # rows index x, columns index y -- exactly what `outer(xs, ys, f)` gives.
 #' g <- outer(seq(-3, 3, length.out = 60), seq(-3, 3, length.out = 60),
-#'            function(a, b) exp(-(a^2 + b^2) / 2))
+#'            function(x, y) exp(-(x^2 + y^2) / 2))
 #' vl_scene(3, 3, dpi = 96, bg = "white") |>
 #'   push(vl_viewport(xscale = c(-3, 3), yscale = c(-3, 3))) |>
 #'   draw(contour_grob(vl_contour(g, levels = c(0.2, 0.5, 0.8)),

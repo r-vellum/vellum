@@ -76,10 +76,12 @@ render(
 set.seed(7)
 n <- 160
 gx <- seq(-3, 3, length.out = n)
-z <- outer(gx, gx, function(a, b) {
-  exp(-((a - 1)^2 + (b - 0.6)^2) / 0.8) +
-    0.8 * exp(-((a + 1.2)^2 + (b + 0.9)^2) / 1.4) +
-    0.4 * exp(-((a - 0.4)^2 + (b + 1.6)^2) / 0.4)
+# `outer(xs, ys, f)` puts rows on x and columns on y, which is what
+# `vl_contour()` wants -- the same convention as `image()` and `contour()`.
+z <- outer(gx, gx, function(x, y) {
+  exp(-((x - 1)^2 + (y - 0.6)^2) / 0.8) +
+    0.8 * exp(-((x + 1.2)^2 + (y + 0.9)^2) / 1.4) +
+    0.4 * exp(-((x - 0.4)^2 + (y + 1.6)^2) / 0.4)
 })
 
 levels <- seq(0.1, 0.9, by = 0.1)
@@ -120,9 +122,9 @@ base <- datashade(px, py, width = 480, height = 480,
 
 # Re-aggregate at the same extent to get the counts the contours need.
 dens <- outer(seq(-4, 4, length.out = 120), seq(-4, 4, length.out = 120),
-              function(a, b) {
-                0.5 * exp(-((a + 1)^2 / (2 * 0.7^2) + (b - 0.5)^2 / (2 * 0.6^2))) +
-                  0.5 * exp(-((a - 1.2)^2 / (2 * 0.5^2) + (b + 0.8)^2 / (2 * 0.9^2)))
+              function(x, y) {
+                0.5 * exp(-((x + 1)^2 / (2 * 0.7^2) + (y - 0.5)^2 / (2 * 0.6^2))) +
+                  0.5 * exp(-((x - 1.2)^2 / (2 * 0.5^2) + (y + 0.8)^2 / (2 * 0.9^2)))
               })
 iso <- vl_contour(dens, levels = c(0.1, 0.25, 0.45), xlim = c(-4, 4), ylim = c(-4, 4))
 

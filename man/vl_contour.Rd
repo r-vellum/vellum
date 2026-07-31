@@ -17,8 +17,10 @@ contour_grob(
 )
 }
 \arguments{
-\item{z}{A numeric matrix. Rows are y, columns are x — the \code{image()}
-convention.}
+\item{z}{A numeric matrix, with \strong{rows indexing x and columns indexing y} —
+\code{dim(z) == c(length(x), length(y))}, the same convention as
+\code{\link[graphics:image]{graphics::image()}}, \code{\link[graphics:contour]{graphics::contour()}} and \code{\link[graphics:persp]{graphics::persp()}}, and the
+shape \code{outer(xs, ys, f)} produces.}
 
 \item{levels}{Contour levels. Defaults to 5 levels spanning the finite range
 of \code{z}, excluding the extremes (a contour at the minimum or maximum is
@@ -56,12 +58,14 @@ missing data rather than being drawn through it.
 }
 \examples{
 # A ring contour around a Gaussian bump.
+# rows index x, columns index y -- exactly what `outer(xs, ys, f)` gives.
 g <- outer(seq(-3, 3, length.out = 60), seq(-3, 3, length.out = 60),
-           function(a, b) exp(-(a^2 + b^2) / 2))
+           function(x, y) exp(-(x^2 + y^2) / 2))
 head(vl_contour(g, levels = c(0.2, 0.5, 0.8)))
 # Draw them: one grob per contour, because each is its own polyline.
+# rows index x, columns index y -- exactly what `outer(xs, ys, f)` gives.
 g <- outer(seq(-3, 3, length.out = 60), seq(-3, 3, length.out = 60),
-           function(a, b) exp(-(a^2 + b^2) / 2))
+           function(x, y) exp(-(x^2 + y^2) / 2))
 vl_scene(3, 3, dpi = 96, bg = "white") |>
   push(vl_viewport(xscale = c(-3, 3), yscale = c(-3, 3))) |>
   draw(contour_grob(vl_contour(g, levels = c(0.2, 0.5, 0.8)),

@@ -106,6 +106,46 @@ bump <- function(n = 60, span = 3) {
   outer(s, s, function(a, b) exp(-(a^2 + b^2) / 2))
 }
 
+test_that("the matrix convention matches base R: rows are x, columns are y", {
+  # Regression. `vl_contour()` assumed rows were y, so every contour came back
+  # reflected across the diagonal -- and the docs cited `image()` as the
+  # authority for the opposite of what `image()` does.
+  #
+  # It survived because every other test here uses a grid that is SYMMETRIC in
+  # its two arguments, where a transpose changes nothing. This one is
+  # deliberately asymmetric, and is checked against base R rather than against
+  # our own expectation.
+  gs <- seq(-4, 4, length.out = 121)
+  z <- outer(gs, gs, function(x, y) exp(-((x - 2)^2 + (y + 1)^2) / 0.5))
+
+  cl <- vl_contour(z, levels = 0.5, xlim = c(-4, 4), ylim = c(-4, 4))
+  expect_equal(mean(range(cl$x)), 2, tolerance = 0.05)
+  expect_equal(mean(range(cl$y)), -1, tolerance = 0.05)
+
+  # The authority: base R takes dim(z) == c(length(x), length(y)).
+  ref <- grDevices::contourLines(gs, gs, z, levels = 0.5)[[1]]
+  expect_equal(mean(range(cl$x)), mean(range(ref$x)), tolerance = 0.05)
+  expect_equal(mean(range(cl$y)), mean(range(ref$y)), tolerance = 0.05)
+})
+
+test_that("two contours over a datashade grid land on their modes", {
+  # The case that exposed it: contours drawn over an aggregated point cloud,
+  # where a transpose is instantly visible because there is a reference layer.
+  gs <- seq(-4, 4, length.out = 120)
+  dens <- outer(gs, gs, function(x, y) {
+    exp(-((x + 1)^2 / 0.8 + (y - 0.5)^2 / 0.7)) +
+      exp(-((x - 1.2)^2 / 0.5 + (y + 0.8)^2 / 1.2))
+  })
+  cl <- vl_contour(dens, levels = 0.5, xlim = c(-4, 4), ylim = c(-4, 4))
+  ctr <- do.call(rbind, lapply(split(cl, cl$id), function(d) {
+    data.frame(x = mean(range(d$x)), y = mean(range(d$y)))
+  }))
+  ctr <- ctr[order(ctr$x), ]
+  expect_equal(nrow(ctr), 2L)
+  expect_equal(ctr$x, c(-1, 1.2), tolerance = 0.1)
+  expect_equal(ctr$y, c(0.5, -0.8), tolerance = 0.1)
+})
+
 test_that("contours of a Gaussian bump are closed rings of the right radius", {
   z <- bump()
   cl <- vl_contour(z, levels = 0.5, xlim = c(-3, 3), ylim = c(-3, 3))
