@@ -1,6 +1,16 @@
 # Changelog
 
-## vellum (development version)
+## vellum 0.6.0
+
+Six phases of engine work: a typography layer, label placement, geometry
+operations, accessible output, new output destinations, and addressable
+marks. Every mark family can now carry a data key, text can be wrapped
+or set along a curve, labels can be repelled, paths can be combined,
+PDFs are tagged, and scenes render to animated SVG, multi-page PDF or a
+parallel batch.
+
+Verified byte-identical across 11 scenes and 4 output paths throughout,
+except where a fix deliberately changed output (noted below).
 
 - **Fixed:
   [`vl_repel()`](https://r-vellum.github.io/vellum/reference/vl_place.md)

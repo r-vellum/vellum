@@ -13,7 +13,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">vellum</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.5.1.9000</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.6.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -70,7 +70,9 @@
     </div>
 
     <div class="section level2">
-<h2 class="pkg-version" data-toc-text="development version" id="vellum-development-version">vellum (development version)<a class="anchor" aria-label="anchor" href="#vellum-development-version"></a></h2>
+<h2 class="pkg-version" data-toc-text="0.6.0" id="vellum-060">vellum 0.6.0<a class="anchor" aria-label="anchor" href="#vellum-060"></a></h2>
+<p>Six phases of engine work: a typography layer, label placement, geometry operations, accessible output, new output destinations, and addressable marks. Every mark family can now carry a data key, text can be wrapped or set along a curve, labels can be repelled, paths can be combined, PDFs are tagged, and scenes render to animated SVG, multi-page PDF or a parallel batch.</p>
+<p>Verified byte-identical across 11 scenes and 4 output paths throughout, except where a fix deliberately changed output (noted below).</p>
 <ul><li>
 <p><strong>Fixed: <code><a href="../reference/vl_place.html">vl_repel()</a></code> was defeated by a panel background.</strong> The default obstacle set is “everything that is not a label”, which on a real plot includes the panel background rectangle — and a label inside it collides with it wherever it goes, so it could never be placed. On a two-panel scene, 29 of 32 labels were unresolvable; now 2.</p>
 <p>An obstacle that wholly contains a label is no longer treated as an obstacle for that label. That is also right for a bar or region a label deliberately annotates from the inside, where pushing the label out would be exactly wrong.</p>
