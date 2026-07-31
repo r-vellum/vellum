@@ -261,9 +261,13 @@ roundrect_grob <- function(x = 0.5, y = 0.5, width = 1, height = 1, r = 0.1,
   .check_extent(w, "width")
   .check_extent(h, "height")
   .check_extent(rr, "r")
+  # A roundrect grob is a *batch*: one box per (x, y, w, h, r) element, like
+  # `rect_grob()`. Recycle keys/meta to that element count (not to 1, which
+  # silently dropped every key past the first on a multi-box grob).
+  n <- .common_n(x, y, w, h, rr)
   grob_roundrect(x = as_unit(x), y = as_unit(y), width = w, height = h, r = rr,
                  sketch = sketch, gp = gp, name = name, vp = vp, id = id, role = role,
-                 keys = .recycle_keys(key, 1L), meta = .recycle_meta(meta, 1L))
+                 keys = .recycle_keys(key, n), meta = .recycle_meta(meta, n))
 }
 
 # An extent (width/height/radius/size) must be non-negative. Checks the resolved

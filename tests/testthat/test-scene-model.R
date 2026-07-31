@@ -73,6 +73,33 @@ test_that("scene_model() includes keyed single-shape marks (path) but not unkeye
   expect_true(kr$x1 > kr$x0 && kr$y1 > kr$y0) # a resolved bbox
 })
 
+test_that("scene_model() keys a multi-box roundrect grob per element", {
+  # A `roundrect_grob()` is a batch (one box per element), keyed-only like text:
+  # each keyed box is a row, and an unkeyed grob contributes nothing. This is the
+  # backend's own accounting (`Node::RoundRect` is emitted per node under a
+  # `key.is_some()` guard); the R walk must agree or `scene_model()` aborts on the
+  # count check. Regression: roundrect used to be classed as a single shape (one
+  # row per grob), which undercounted a 3-box keyed grob 1-against-3 and aborted.
+  keyed <- roundrect_grob(
+    x = c(0.2, 0.5, 0.8), y = 0.5,
+    width = vl_unit(6, "mm"), height = vl_unit(4, "mm"),
+    key = c("a", "b", "c"),
+    meta = list(list(tooltip = "A"), list(tooltip = "B"), list(tooltip = "C"))
+  )
+  sc <- vl_scene(2, 2, dpi = 100) |>
+    draw(keyed) |>
+    # an unkeyed roundrect batch must stay out of the model entirely
+    draw(roundrect_grob(x = c(0.3, 0.6), y = 0.9, width = vl_unit(6, "mm"), height = vl_unit(4, "mm")))
+  m <- scene_model(sc)
+  kr <- m$elements[!is.na(m$elements$key), ]
+  expect_equal(nrow(kr), 3L)
+  expect_equal(kr$mark, rep("roundrect", 3L))
+  expect_equal(kr$key, c("a", "b", "c"))
+  # keys and meta stay aligned per box (the truncate-to-first bug dropped b/c)
+  expect_equal(vapply(kr$meta, function(x) x$tooltip, character(1)), c("A", "B", "C"))
+  expect_true(all(kr$x1 > kr$x0 & kr$y1 > kr$y0)) # resolved bboxes
+})
+
 test_that("scene_model() of an empty scene has zero elements and panels", {
   m <- scene_model(vl_scene(2, 2, dpi = 100))
   expect_equal(nrow(m$elements), 0L)

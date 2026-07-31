@@ -10,15 +10,19 @@
 # positionally, in paint order. Two families:
 #   * batched (rect/point/circle/hexagon/sector/segment) — one row per element,
 #     always (keys may be NA), mirroring the batched arms of `element_table()`.
-#   * single-shape (path/lines/polygon/roundrect) — one row per grob, and only
+#   * single-shape (path/lines/polygon) — one row per grob, and only
 #     when keyed (mirroring `element_table()`'s `key.is_some()` guard); a single
 #     sf feature's polygon/linestring is one such element.
-#   * batched-but-keyed-only (text) — a vectorised text grob compiles to one node
-#     per label, each carrying its own key, and `element_table()` emits only the
-#     keyed ones. So it counts like a batch but, like the single shapes,
-#     contributes nothing at all when unkeyed. Labels are the case that makes this
-#     distinction worth having: a plot is full of unkeyed axis text that must not
-#     turn into thousands of phantom elements.
+#   * batched-but-keyed-only (text, roundrect) — a vectorised text/roundrect grob
+#     compiles to one node per label/box, each carrying its own key, and
+#     `element_table()` emits only the keyed ones (`Node::Text`/`Node::RoundRect`
+#     are both guarded by `key.is_some()`). So they count like a batch but, like
+#     the single shapes, contribute nothing at all when unkeyed. Labels are the
+#     case that makes this distinction worth having: a plot is full of unkeyed
+#     axis text that must not turn into thousands of phantom elements. (Roundrect
+#     was previously in the single-shape set, which undercounted a multi-box keyed
+#     grob — one row in the walk against N boxes from the backend — and aborted
+#     `scene_model()`. It is a batch, not a single shape.)
 .sm_mark_of <- function(node) {
   if (S7::S7_inherits(node, grob_rect)) "rect"
   else if (S7::S7_inherits(node, grob_points)) "point"
@@ -34,8 +38,8 @@
   else NA_character_
 }
 
-.SM_SINGLE <- c("path", "line", "polygon", "roundrect")
-.SM_KEYED_BATCH <- c("text")
+.SM_SINGLE <- c("path", "line", "polygon")
+.SM_KEYED_BATCH <- c("text", "roundrect")
 
 # Element count of a batched keyable grob (its recycled common length).
 .sm_n <- function(node) {

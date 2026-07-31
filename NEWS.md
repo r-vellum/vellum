@@ -1,3 +1,17 @@
+# vellum 0.6.3
+
+* **Fixed: a keyed multi-box `roundrect_grob()` aborted `scene_model()`, and a
+  keyed one silently dropped every key past the first.** `roundrect_grob()` is a
+  batch — one rounded box per `(x, y, width, height, r)` element — but it
+  recycled `key`/`meta` to length 1, so `roundrect_grob(key = c("a", "b"))` kept
+  only `"a"`. And `scene_model()` classed roundrect as a single shape (one row
+  per grob), so a grob drawing N keyed boxes reported one element against the
+  backend's N and aborted on the count check. Roundrect is now a keyed batch,
+  like `text_grob()`: each keyed box is one `scene_model()` row carrying its own
+  key/meta, and an unkeyed roundrect stays out of the model. Rendering is
+  unaffected (`scene_model()` is interactivity metadata only). Found while wiring
+  keyed data-label backgrounds in `vellumplot`.
+
 # vellum 0.6.2
 
 * **Fixed (breaking): `vl_contour()` transposed its input matrix.** It assumed
