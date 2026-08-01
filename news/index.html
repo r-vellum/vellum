@@ -13,7 +13,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">vellum</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.6.5.9000</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.6.6</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -70,7 +70,7 @@
     </div>
 
     <div class="section level2">
-<h2 class="pkg-version" data-toc-text="development version" id="vellum-development-version">vellum (development version)<a class="anchor" aria-label="anchor" href="#vellum-development-version"></a></h2>
+<h2 class="pkg-version" data-toc-text="0.6.6" id="vellum-066">vellum 0.6.6<a class="anchor" aria-label="anchor" href="#vellum-066"></a></h2>
 <ul><li>
 <p><strong>Fix: <code><a href="../reference/element_geometry.html">element_geometry()</a></code> and <code><a href="../reference/vl_nearest.html">vl_nearest()</a></code> reported viewport-local coordinates, not device pixels.</strong> The pick table resolved every vertex through <code>vp.x_pos()</code>/<code>y_pos()</code> — which answer in the viewport’s own frame — and never applied the viewport’s transform. So for any viewport not at the page origin, which is every panel of every real plot:</p>
 <ul><li>

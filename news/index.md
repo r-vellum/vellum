@@ -1,6 +1,6 @@
 # Changelog
 
-## vellum (development version)
+## vellum 0.6.6
 
 - **Fix:
   [`element_geometry()`](https://r-vellum.github.io/vellum/reference/element_geometry.md)
