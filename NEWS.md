@@ -1,4 +1,4 @@
-# vellum (development version)
+# vellum 0.6.6
 
 * **Fix: `element_geometry()` and `vl_nearest()` reported viewport-local
   coordinates, not device pixels.** The pick table resolved every vertex through
