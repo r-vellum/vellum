@@ -240,6 +240,49 @@ test_that("labels and obstacles can be chosen by name", {
   expect_identical(scene_png(vl_repel(s, labels = "nope")), scene_png(s))
 })
 
+test_that("a solve stays valid only for the scene it was solved on", {
+  # The documented leader-line pattern depends on this, and the vignette and
+  # example both had it backwards: they drew leaders from `vl_place(scene)` and
+  # then called `vl_repel()` on the scene *with the leaders in it*. The leaders
+  # are obstacles to that second solve, and since each one lies exactly along
+  # the path its label wanted to take, the labels were pushed back the way they
+  # came -- the median leader ended up 146 degrees from the real displacement.
+  s <- anchored(26)
+  sol <- vl_place(s, padding = 0.6)
+  moved <- which(abs(sol$dx) + abs(sol$dy) > 1)
+  skip_if(length(moved) < 5, "not enough movement on this font to be meaningful")
+
+  add_leaders <- function(sc) {
+    d <- .scene_to_backend(sc)$dim()
+    nd <- .resolved_nodes(sc)
+    L <- nd[nd$kind == "text", , drop = FALSE]
+    # Device px -> npc (npc y is up).
+    nx <- function(v) v / d[1]
+    ny <- function(v) 1 - v / d[2]
+    draw(sc, segments_grob(
+      x0 = nx(L$x0[moved]), y0 = ny(L$y0[moved]),
+      x1 = nx(L$x1[moved]), y1 = ny(L$y1[moved]),
+      gp = vl_gpar(col = "grey70", lwd = 0.6)))
+  }
+  # Annotating BEFORE the solve changes it; annotating after cannot.
+  before <- vl_place(add_leaders(s), labels = "lab", padding = 0.6)
+  expect_gt(max(sqrt((before$dx - sol$dx)^2 + (before$dy - sol$dy)^2)), 1)
+
+  # And the property the docs rely on: `vl_repel()` applies exactly the solve
+  # `vl_place()` reports, so leaders drawn from `sol` onto the repelled scene
+  # land on the labels.
+  placed <- vl_repel(s, padding = 0.6)
+  a <- .resolved_nodes(s)
+  a <- a[a$kind == "text", , drop = FALSE]
+  f <- .resolved_nodes(placed)
+  f <- f[f$kind == "text", , drop = FALSE]
+  dpi <- 96
+  end_x <- (a$x0 + a$x1) / 2 + sol$dx / 25.4 * dpi
+  end_y <- (a$y0 + a$y1) / 2 - sol$dy / 25.4 * dpi
+  expect_equal(end_x, (f$x0 + f$x1) / 2, tolerance = 1e-6)
+  expect_equal(end_y, (f$y0 + f$y1) / 2, tolerance = 1e-6)
+})
+
 test_that("a scene with nothing to place is returned untouched", {
   s <- vl_scene(3, 2, dpi = 96, bg = "white") |>
     draw(points_grob(c(0.3, 0.7), c(0.5, 0.5)))

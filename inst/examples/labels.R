@@ -34,16 +34,29 @@ cat(sum(!sol$resolved), "of", nrow(sol), "labels could not be placed cleanly\n")
 
 # Leader lines are then a few lines of arithmetic, because the shift is a plain
 # millimetre offset on top of the original anchor.
-leaders <- scatter()
+#
+# ORDER MATTERS. Place the labels first, then draw the leaders onto the result.
+# Drawing them beforehand puts them in the scene the solver then looks at -- and
+# a solver avoids whatever is in the scene. Each leader lies exactly along the
+# path its label wanted to take, and `vl_place()` works on bounding boxes, so a
+# diagonal segment blocks the whole rectangle spanning it: the labels get pushed
+# back the way they came, and the leaders end up pointing away from them. On
+# this figure that put the median leader 146 degrees off.
+#
+# Placed first, `vl_repel()` and the `sol` above are the same solve, so the
+# leaders land exactly on the labels.
 moved <- which(abs(sol$dx) + abs(sol$dy) > 1)
-leaders <- leaders |>
-  draw(segments_grob(
-    x0 = vl_unit(x[moved], "npc"), y0 = vl_unit(y[moved], "npc"),
-    x1 = vl_unit(x[moved], "npc") + vl_unit(sol$dx[moved], "mm"),
-    y1 = vl_unit(y[moved], "npc") + vl_unit(sol$dy[moved], "mm"),
-    gp = vl_gpar(col = "grey70", lwd = 0.6)
-  ))
-render(vl_repel(leaders, labels = "lab", padding = 0.6), "labels-leaders.png")
+placed <- vl_repel(scatter(), padding = 0.6)
+render(
+  placed |>
+    draw(segments_grob(
+      x0 = vl_unit(x[moved], "npc"), y0 = vl_unit(y[moved], "npc"),
+      x1 = vl_unit(x[moved], "npc") + vl_unit(sol$dx[moved], "mm"),
+      y1 = vl_unit(y[moved], "npc") + vl_unit(sol$dy[moved], "mm"),
+      gp = vl_gpar(col = "grey70", lwd = 0.6)
+    )),
+  "labels-leaders.png"
+)
 
 # It is viewport-agnostic. The solve happens in device pixels and the answer is
 # applied as an absolute offset on top of whatever coordinate the label already
