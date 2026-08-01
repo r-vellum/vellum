@@ -2,6 +2,41 @@
 
 ## vellum (development version)
 
+- **Fix:
+  [`element_geometry()`](https://r-vellum.github.io/vellum/reference/element_geometry.md)
+  and
+  [`vl_nearest()`](https://r-vellum.github.io/vellum/reference/vl_nearest.md)
+  reported viewport-local coordinates, not device pixels.** The pick
+  table resolved every vertex through `vp.x_pos()`/`y_pos()` — which
+  answer in the viewport’s own frame — and never applied the viewport’s
+  transform. So for any viewport not at the page origin, which is every
+  panel of every real plot:
+
+  - [`element_geometry()`](https://r-vellum.github.io/vellum/reference/element_geometry.md)
+    was off by the viewport’s offset, and *internally inconsistent*:
+    `text` and `roundrect` rows went through `node_bbox()` and came back
+    in device px, while `segment` / `line` / `polygon` / `path` /
+    `point` / `rect` rows stayed local. One table, two coordinate
+    systems.
+  - [`vl_nearest()`](https://r-vellum.github.io/vellum/reference/vl_nearest.md)
+    compared a **device-px** probe point against those local
+    coordinates, so its answers in an offset panel were not merely
+    imprecise but wrong — it would report a mark at distance 0 with the
+    cursor nowhere near it, and rank the mark actually under the cursor
+    far down the list.
+
+  Both now report device pixels with y down, matching
+  [`scene_model()`](https://r-vellum.github.io/vellum/reference/scene_model.md)’s
+  boxes and the rendered SVG, as documented. A round mark’s radius takes
+  the transform’s scale as well as its translation.
+
+  This is the same bug `lint_table()` had before 0.6.1, and it survived
+  for the same reason: every test in `test-pick.R` drew into the default
+  full-page viewport, where the transform is the identity and local *is*
+  device. The regression tests added here use an off-origin viewport.
+
+  Nothing rendered changes — the pick table feeds no drawing path.
+
 - **Docs fix: the leader-line example placed labels and drew leaders
   from two different solves.**
   [`vignette("placement")`](https://r-vellum.github.io/vellum/articles/placement.md)
