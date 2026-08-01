@@ -301,7 +301,11 @@ fn halo_of(col: &Robj, width_px: f64) -> Option<(Rgba, f64)> {
     opt_color(col).map(|c| (c, width_px))
 }
 
-/// Resolve a node's coordinate arrays to device px.
+/// Resolve a node's coordinate arrays to viewport-LOCAL px.
+///
+/// Local, not device: the renderer draws with the viewport's transform already
+/// on the canvas, so local is what it wants. Anything that *reports* coordinates
+/// to R must push them through `dev_pt()` (or `dev_bbox()`) first.
 fn resolve_pts(vp: &Vp, x: &[f64], y: &[f64], xu: &[Unit], yu: &[Unit]) -> Vec<(f64, f64)> {
     let n = x.len().min(y.len());
     (0..n)
@@ -2151,6 +2155,15 @@ impl Scene {
 
         for (vp_id, node) in self.nodes.iter() {
             let vp = &resolved[*vp_id].vp;
+            // `vp.x_pos()`/`y_pos()` answer in the viewport's own frame. Both the
+            // geometry reported to R and the distance to the probe point (which
+            // arrives in device px) must be in DEVICE px, so every resolved point
+            // goes through the viewport transform first. Getting this wrong is
+            // invisible in a test drawn at the page origin, where the transform
+            // is the identity -- the same trap that hid the `lint_table()` bug.
+            let dev = |pts: Vec<(f64, f64)>| -> Vec<(f64, f64)> {
+                pts.into_iter().map(|(x, y)| dev_pt(vp, x, y)).collect()
+            };
             let mut emit = |k: &str, knd: &str, d: f64, pts: &[(f64, f64)]| {
                 key.push(k.to_string());
                 kind.push(knd.to_string());
@@ -2167,27 +2180,30 @@ impl Scene {
                     let n = [x0.len(), y0.len(), x1.len(), y1.len()].into_iter().min().unwrap_or(0);
                     for i in 0..n {
                         let Some(k) = key_at(keys, i) else { continue };
-                        let a = (vp.x_pos(x0[i], x0u[i]), vp.y_pos(y0[i], y0u[i]));
-                        let b = (vp.x_pos(x1[i], x1u[i]), vp.y_pos(y1[i], y1u[i]));
+                        let ab = dev(vec![
+                            (vp.x_pos(x0[i], x0u[i]), vp.y_pos(y0[i], y0u[i])),
+                            (vp.x_pos(x1[i], x1u[i]), vp.y_pos(y1[i], y1u[i])),
+                        ]);
+                        let (a, b) = (ab[0], ab[1]);
                         let d = poly_dist(px, py, &[a.0, b.0], &[a.1, b.1], false);
                         emit(k, "segment", d, &[a, b]);
                     }
                 }
                 Node::Lines { x, y, xu, yu, key: k, .. } => {
                     let Some(k) = k.as_deref() else { continue };
-                    let pts = resolve_pts(vp, x, y, xu, yu);
+                    let pts = dev(resolve_pts(vp, x, y, xu, yu));
                     let (xs, ys): (Vec<f64>, Vec<f64>) = pts.iter().copied().unzip();
                     emit(k, "line", poly_dist(px, py, &xs, &ys, false), &pts);
                 }
                 Node::Polygon { x, y, xu, yu, key: k, .. } => {
                     let Some(k) = k.as_deref() else { continue };
-                    let pts = resolve_pts(vp, x, y, xu, yu);
+                    let pts = dev(resolve_pts(vp, x, y, xu, yu));
                     let (xs, ys): (Vec<f64>, Vec<f64>) = pts.iter().copied().unzip();
                     emit(k, "polygon", poly_dist(px, py, &xs, &ys, true), &pts);
                 }
                 Node::Path { x, y, xu, yu, nper, key: k, .. } => {
                     let Some(k) = k.as_deref() else { continue };
-                    let pts = resolve_pts(vp, x, y, xu, yu);
+                    let pts = dev(resolve_pts(vp, x, y, xu, yu));
                     // A path is rings: nearest over all of them, and inside any
                     // ring counts as a hit.
                     let mut best = f64::INFINITY;
@@ -2209,8 +2225,10 @@ impl Scene {
                     let n = [x.len(), y.len(), r.len()].into_iter().min().unwrap_or(0);
                     for i in 0..n {
                         let Some(k) = key_at(keys, i) else { continue };
-                        let (cx, cy) = (vp.x_pos(x[i], xu[i]), vp.y_pos(y[i], yu[i]));
-                        let rr = vp.r_len(r[i], ru[i]);
+                        let (cx, cy) = dev_pt(vp, vp.x_pos(x[i], xu[i]), vp.y_pos(y[i], yu[i]));
+                        // The radius is a length, so it takes the transform's
+                        // scale rather than its translation.
+                        let rr = vp.r_len(r[i], ru[i]) * dev_scale(vp);
                         emit(k, "point", circle_dist(px, py, cx, cy, rr), &[(cx, cy)]);
                     }
                 }
@@ -2220,7 +2238,15 @@ impl Scene {
                         let Some(k) = key_at(keys, i) else { continue };
                         let (cx, cy) = (vp.x_pos(x[i], xu[i]), vp.y_pos(y[i], yu[i]));
                         let (pw, ph) = (vp.x_len(w[i], wu[i]), vp.y_len(h[i], hu[i]));
-                        let (a, b) = ((cx - pw / 2.0, cy - ph / 2.0), (cx + pw / 2.0, cy + ph / 2.0));
+                        // Through `dev_bbox` rather than `dev_pt` on each corner:
+                        // `rect` reports two opposite corners of an axis-aligned
+                        // box, so a rotated viewport's rect is reported as the
+                        // device box that contains it (what `scene_model()` says
+                        // for the same node).
+                        let (dx0, dy0, dx1, dy1) = dev_bbox(
+                            vp, cx - pw / 2.0, cy - ph / 2.0, cx + pw / 2.0, cy + ph / 2.0,
+                        );
+                        let (a, b) = ((dx0, dy0), (dx1, dy1));
                         emit(k, "rect", rect_dist(px, py, a.0, a.1, b.0, b.1), &[a, b]);
                     }
                 }
@@ -4967,6 +4993,31 @@ fn clip_bbox(c: &ClipShape) -> Option<(f64, f64, f64, f64)> {
             Some(dev_bbox(&vpx, b.left() as f64, b.top() as f64, b.right() as f64, b.bottom() as f64))
         }
     }
+}
+
+/// One viewport-local point through the viewport's placement, to device px.
+///
+/// The point counterpart of `dev_bbox()`. `vp.x_pos()`/`y_pos()` answer in the
+/// viewport's own frame; the viewport's position on the page (and its rotation)
+/// live in `vp.transform`, so a coordinate reported to R has to go through it.
+fn dev_pt(vp: &Vp, lx: f64, ly: f64) -> (f64, f64) {
+    let t = vp.transform;
+    let (sx, ky, kx, sy, tx, ty) =
+        (t.sx as f64, t.ky as f64, t.kx as f64, t.sy as f64, t.tx as f64, t.ty as f64);
+    (sx * lx + kx * ly + tx, ky * lx + sy * ly + ty)
+}
+
+/// The device-px scale factor a viewport's transform applies to a radius.
+///
+/// `sqrt(|det|)` — the uniform-scale equivalent. A viewport with a non-uniform
+/// scale would turn a disc into an ellipse, which the pick table has no way to
+/// describe; the geometric mean is the honest single number for that case, and
+/// it is exact for the translation / rotation / uniform-scale transforms a
+/// viewport actually gets.
+fn dev_scale(vp: &Vp) -> f64 {
+    let t = vp.transform;
+    let det = (t.sx as f64) * (t.sy as f64) - (t.kx as f64) * (t.ky as f64);
+    det.abs().sqrt()
 }
 
 fn dev_bbox(vp: &Vp, lx0: f64, ly0: f64, lx1: f64, ly1: f64) -> (f64, f64, f64, f64) {
