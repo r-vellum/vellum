@@ -188,6 +188,87 @@ test_that("element_geometry agrees with vl_nearest", {
   expect_equal(engine$dist[engine$key == "diagonal"], manual, tolerance = 1e-6)
 })
 
+# --- device px, not viewport-local -------------------------------------------
+#
+# Every other test in this file draws into the default full-page viewport, where
+# the viewport transform is the identity and local == device. That is precisely
+# the fixture that hid the same bug in `lint_table()` before 0.6.1, so these use
+# an OFF-ORIGIN viewport, where the two differ by the viewport's offset.
+
+# A 4x3in scene at 100 dpi (400 x 300 device px) with one 160 x 120 px viewport
+# whose top-left corner is at device (200, 30) -- nothing at the page origin.
+offset_scene <- function() {
+  vl_scene(4, 3, dpi = 100, bg = "white") |>
+    push(vl_viewport(x = 0.7, y = 0.7, width = 0.4, height = 0.4)) |>
+    draw(segments_grob(0.1, 0.1, 0.9, 0.9, key = "diag")) |>
+    draw(lines_grob(c(.1, .5, .9), c(.2, .8, .2), key = "ln")) |>
+    draw(polygon_grob(c(.2, .8, .5), c(.2, .2, .8), key = "pg")) |>
+    draw(rect_grob(x = .5, y = .5, width = .2, height = .2, key = "rc")) |>
+    draw(points_grob(0.5, 0.9, size = vl_unit(3, "mm"), key = "dot")) |>
+    draw(text_grob("hi", x = .5, y = .5, key = "tx"))
+}
+
+test_that("element_geometry reports device px in an off-origin viewport", {
+  s <- offset_scene()
+  g <- element_geometry(s)
+  el <- scene_model(s)$elements
+  el <- el[!is.na(el$key), ]
+  # The geometry's extent must land inside the box `scene_model()` reports for
+  # the same element -- either the two are in one coordinate system or they are
+  # not comparable at all. Local coordinates would sit ~200 px to the left.
+  for (k in unique(g$key)) {
+    gk <- g[g$key == k, ]
+    bk <- el[el$key == k, ]
+    expect_gte(min(gk$x), bk$x0 - 1e-6)
+    expect_lte(max(gk$x), bk$x1 + 1e-6)
+    expect_gte(min(gk$y), bk$y0 - 1e-6)
+    expect_lte(max(gk$y), bk$y1 + 1e-6)
+  }
+  # The viewport starts at device x = 200, so no vertex may be left of it.
+  expect_gte(min(g$x), 200 - 1e-6)
+})
+
+test_that("a segment's endpoints are its bbox corners, offset viewport", {
+  g <- element_geometry(offset_scene())
+  d <- g[g$key == "diag", ]
+  # (0.1, 0.1) -> (0.9, 0.9) npc in a 160 x 120 viewport at device (200, 30).
+  # npc y is up and device y is down, so the first endpoint is the LOW one.
+  expect_equal(d$x, c(216, 344), tolerance = 1e-6)
+  expect_equal(d$y, c(138, 42), tolerance = 1e-6)
+})
+
+test_that("a round mark's centre and radius are both in device px", {
+  s <- offset_scene()
+  g <- element_geometry(s)
+  el <- scene_model(s)$elements
+  b <- el[!is.na(el$key) & el$key == "dot", ]
+  centre <- g[g$key == "dot", ]
+  expect_equal(centre$x, (b$x0 + b$x1) / 2, tolerance = 1e-6)
+  expect_equal(centre$y, (b$y0 + b$y1) / 2, tolerance = 1e-6)
+  # The radius rides the transform's scale, so a probe just inside the disc's
+  # device edge is a hit.
+  r <- (b$x1 - b$x0) / 2
+  expect_lt(
+    vl_nearest(s, centre$x + r * 0.9, centre$y, units = "px", n = 1)$dist,
+    1e-6
+  )
+})
+
+test_that("vl_nearest measures against device coordinates, offset viewport", {
+  s <- offset_scene()
+  # The exact midpoint of the diagonal, in device px. Before the fix this
+  # compared a device probe against local geometry, and returned a different
+  # mark at distance 0.
+  hit <- vl_nearest(s, 280, 90, units = "px", n = 1)
+  expect_equal(hit$key, "diag")
+  expect_lt(hit$dist, 1e-6)
+  # A point inside the polygon is at distance zero (a fill, not an outline).
+  pgk <- element_geometry(s)
+  pgk <- pgk[pgk$key == "pg", ]
+  near <- vl_nearest(s, mean(pgk$x), mean(pgk$y), units = "px", n = 6)
+  expect_lt(near$dist[near$key == "pg"], 1e-6)
+})
+
 test_that("geometry covers every keyed mark family", {
   s <- vl_scene(5, 3, dpi = 96, bg = "white") |>
     draw(lines_grob(c(.1, .5, .9), c(.2, .4, .2), key = "ln")) |>
