@@ -1,25 +1,123 @@
 # vellum
 
-**vellum** is a low-level graphics framework for R, in the spirit of
-**grid**. You describe a scene with a small declarative API, and because
-vellum measures text and solves layout itself rather than asking a
-device, the finished scene can **tell you where it put everything**: one
-row per drawn element, with its data key and its resolved device-pixel
-box
-([`scene_model()`](https://r-vellum.github.io/vellum/reference/scene_model.md)),
-plus picking by point
-([`hit_test()`](https://r-vellum.github.io/vellum/reference/hit_test.md)).
-Layout is solved once, so the same scene renders to **PNG, SVG, or PDF**
-with the same geometry rather than three devices each re-solving it.
+**vellum draws nothing until it knows exactly what it is drawing.**
 
-Owning the measurement and rendering stack is what that requires, which
-is why the engine is written in **Rust** (and why installing from source
-needs `cargo`).
+Text is measured, layout is solved and every mark’s position is resolved
+*before* anything reaches a canvas — in process, with no device open.
+That one property is where everything below comes from: a scene you can
+interrogate, wrap text inside, move labels around in, lint, hash, diff
+and render three ways from a single solve.
 
-It is the *foundation layer* a grammar of graphics builds on, the way
-grid underlies ggplot2. It is not a plotting package itself; the
-[vellumplot](https://github.com/r-vellum/vellumplot) grammar of graphics
-is built on top of it.
+It is a low-level graphics framework in the spirit of **grid** — units,
+viewports, grobs, layout — and it is the foundation layer a grammar of
+graphics builds on, not a plotting package itself. That grammar is
+[vellumplot](https://github.com/r-vellum/vellumplot).
+
+![](reference/figures/README-hello.png)
+
+## Things a graphics engine usually cannot do
+
+Each of these needs the geometry to exist *before* the draw. In a
+device-driven stack it does not, which is why these are hard or
+impossible on top of grid.
+
+**Ask the scene where everything landed.** One row per element — data
+key, mark, panel, device-pixel box — with no device open and nothing
+drawn.
+
+``` r
+
+plot <- vl_scene(4, 2, bg = "white") |>
+  push(vl_viewport(name = "panel", xscale = c(0, 10), yscale = c(0, 10))) |>
+  draw(points_grob(vl_unit(c(2, 5, 8), "native"), vl_unit(c(3, 7, 4), "native"),
+                   key = paste0("site-", 1:3), name = "sites")) |>
+  pop()
+
+scene_model(plot)$elements[, c("key", "mark", "panel", "x0", "y0", "x1", "y1")]
+#>      key  mark panel        x0        y0        x1        y1
+#> 1 site-1 point panel  69.24094 126.84094  84.35906 141.95906
+#> 2 site-2 point panel 184.44094  50.04094 199.55906  65.15906
+#> 3 site-3 point panel 299.64094 107.64094 314.75906 122.75906
+```
+
+**Fit text to a box.** Wrap to a measure, justify it, and shrink the
+font until the block fits — each probe re-wraps, because the line breaks
+depend on the size.
+
+``` r
+
+text_grob(caption, width = vl_unit(60, "mm"), height = vl_unit(20, "mm"),
+          align = "justify", fit = TRUE)
+```
+
+**Move colliding labels apart, in the engine.** Solved in device pixels
+and applied as an absolute offset, so faceted, polar and warped panels
+are all solved *together*, in one pass, with no second compile.
+
+``` r
+
+vl_repel(plot)                      # or vl_place(plot) for the answer alone
+```
+
+**Lint a figure before anyone sees it.** Static analysis for graphics:
+the label too small to read at this size, the mark that will never be
+painted, the text that will not contrast with what lands behind it.
+
+``` r
+
+vl_scene(4, 2, dpi = 96, bg = "white") |>
+  draw(text_grob("n = 120", x = 0.1, y = 0.9, gp = vl_gpar(fontsize = 2.5),
+                 name = "n_label")) |>
+  draw(points_grob(2.4, 0.5, name = "stray_point")) |>
+  draw(text_grob("watermark", gp = vl_gpar(fontsize = 22, col = "#F2F2F2"),
+                 name = "watermark")) |>
+  vl_lint()
+#> 3 lint findings (3 warnings):
+#> ✖ [low_contrast] watermark: contrast 1.4:1 against its backdrop - below 3:1
+#> ✖ [offscreen] stray_point: drawn entirely outside the page - check the
+#>   coordinates or the scale
+#> ✖ [tiny_text] n_label: 3.3 px tall - below the 7 px legibility floor
+```
+
+**Treat a scene as a value.** Hash it, diff it, nest one inside another.
+A structural diff is a far better regression test than an image diff,
+because it is immune to the font stack:
+
+``` r
+
+scene_hash(a) == scene_hash(b)
+scene_diff(a, b)                    # what changed, not which pixels
+```
+
+**Ship output that is actually accessible.** Simulate colour-vision
+deficiency in the render, encode redundantly with real hatch *geometry*,
+and emit a **tagged PDF** whose structure tree a screen reader can
+navigate — from the same `role`/`name` metadata that drives the SVG.
+
+``` r
+
+render(plot, "check.png", cvd = "deuteranopia")
+render(plot, "report.pdf")          # tagged, if the marks carry role/name
+```
+
+And more that has no device-driven equivalent: **text set along a
+curve**, **boolean path operations** on real geometry, **contours**
+chained into polylines, **SVG icon paths** as crisp vector markers,
+**stroke-to-outline** expansion, **animated SVG**, **multi-page PDF**,
+and **font pinning** that makes “identical pixels everywhere” checkable
+rather than merely claimed.
+
+## How a scene is built
+
+Functionally:
+[`vl_scene()`](https://r-vellum.github.io/vellum/reference/vl_scene.md)
+then a pipeline of
+[`push()`](https://r-vellum.github.io/vellum/reference/vl_scene.md),
+[`draw()`](https://r-vellum.github.io/vellum/reference/vl_scene.md) and
+[`pop()`](https://r-vellum.github.io/vellum/reference/vl_scene.md) over
+an immutable tree, rendered with
+[`render()`](https://r-vellum.github.io/vellum/reference/vl_scene.md),
+which picks the backend from the file extension.
 
 ``` r
 
@@ -32,41 +130,32 @@ vl_scene(width = 5, height = 2.4, bg = "white") |>
                    gp = vl_gpar(fill = "#f7c948", col = NA))) |>
   draw(text_grob("vellum", x = 0.62, y = 0.5,
                  gp = vl_gpar(fontsize = 64, col = "white", fontface = "bold"))) |>
-  render("man/figures/README-hello.png")
+  render("hello.png")
 ```
 
-![](reference/figures/README-hello.png)
+## The rest of the engine
 
-A scene is built functionally:
-[`vl_scene()`](https://r-vellum.github.io/vellum/reference/vl_scene.md)
-followed by a pipeline of
-[`push()`](https://r-vellum.github.io/vellum/reference/vl_scene.md),
-[`draw()`](https://r-vellum.github.io/vellum/reference/vl_scene.md), and
-[`pop()`](https://r-vellum.github.io/vellum/reference/vl_scene.md) over
-an immutable tree. It is rendered with
-[`render()`](https://r-vellum.github.io/vellum/reference/vl_scene.md),
-which picks the backend from the file extension.
+These are the parts that make the above possible, or that you would
+expect of a graphics engine and would miss if they were absent.
 
-## What sets it apart
-
-- **The scene reports its own geometry.**
-  [`scene_model()`](https://r-vellum.github.io/vellum/reference/scene_model.md)
-  returns one row per drawn element — its data key, mark kind, enclosing
-  panel, and resolved device-pixel box — plus each panel’s pixel
-  rectangle and native ranges.
-  [`hit_test()`](https://r-vellum.github.io/vellum/reference/hit_test.md)
-  answers the inverse question, picking the topmost node under a point
-  through a pick-buffer compiled by the same code that drew the scene,
-  so it cannot disagree with the picture. This is the part with no
-  counterpart in grid, and the seam that tooltips, brushing,
-  accessibility, and layout debugging are all built on.
-- **Layout is solved once, not once per device.** Because text is
-  measured in process, layout does not need an open device, and the
-  *same* solved scene is walked for each backend:
+- **Layout is solved once, not once per device.** The *same* solved
+  scene is walked for each backend, so
   `render(scene, "plot.png" | "plot.svg" | "plot.pdf")` agree on
   geometry rather than each re-solving it against their own font
-  metrics. Raster and PDF output are byte-stable, so figures are
-  reproducible and snapshot-testable.
+  metrics. Output is byte-stable, so figures are snapshot-testable.
+  Where a backend cannot honour something it **says so** rather than
+  silently dropping it.
+- **Text that matches the rest of R.** Shaping runs through
+  [textshaping](https://github.com/r-lib/textshaping) on
+  [systemfonts](https://github.com/r-lib/systemfonts) — the stack ragg
+  and svglite use — with per-glyph fallback, OpenType features (`tnum`,
+  `smcp`, `onum`), haloed text, and Markdown-style rich labels
+  ([`md()`](https://r-vellum.github.io/vellum/reference/md.md)).
+  [`vl_strwidth()`](https://r-vellum.github.io/vellum/reference/vl_strwidth.md)
+  measures without opening a device.
+- **A modern paint model, everywhere.** Linear and radial **gradients**
+  (on strokes too), tiling **patterns**, real hatch **geometry**, alpha
+  and luminance **masks**, group opacity, blur, drop shadow and glow.
 - **Named, editable nodes.**
   [`node_names()`](https://r-vellum.github.io/vellum/reference/node_names.md)
   /
@@ -77,27 +166,20 @@ which picks the backend from the file extension.
   difference is that the tree is a value you hold rather than device
   state you recover, so an edit returns a new scene and nothing has to
   be undrawn.
-- **Built-in big-data aggregation.**
+- **Big data without the blob.**
   [`datashade()`](https://r-vellum.github.io/vellum/reference/datashade.md)
-  bins millions of points into a density raster in one pass, so cost
-  scales with output pixels rather than row count, with no overplotting
-  and no giant vector files.
-- **Text that matches the rest of R.** Shaping runs through
-  [textshaping](https://github.com/r-lib/textshaping) on
-  [systemfonts](https://github.com/r-lib/systemfonts) — the stack ragg
-  and svglite use — with per-glyph fallback, justification, rotation,
-  and Markdown-style rich labels
-  ([`md()`](https://r-vellum.github.io/vellum/reference/md.md):
-  bold/italic, super/subscript, coloured spans).
-  [`vl_strwidth()`](https://r-vellum.github.io/vellum/reference/vl_strwidth.md)
-  measures without opening a device.
-- **A modern paint model across all backends.** Linear & radial
-  **gradients**, tiling **patterns**, alpha/luminance **masks**, and
-  group opacity (`vl_viewport(alpha=)`).
+  bins millions of points into a density raster in one pass — cost
+  scales with output pixels, not row count — and rasterises line
+  segments with Wu antialiasing rather than binning endpoints.
+- **Geometry services.** Boolean path ops, convex and concave hulls,
+  buffering, contours, path simplification, stroke-to-outline, and
+  true-geometry hit-testing
+  ([`vl_nearest()`](https://r-vellum.github.io/vellum/reference/vl_nearest.md)),
+  because a diagonal’s bounding box is a poor description of it.
 - **Vectorised primitives and a flex layout engine.** Batched
   rects/circles/points/segments/text, nested viewports with rotation and
   arbitrary-path clipping, and a row/column layout solver with `"null"`
-  (flexible) tracks.
+  tracks.
 - **Grid interop.**
   [`as_vellum()`](https://r-vellum.github.io/vellum/reference/as_vellum.md)
   /
@@ -107,8 +189,9 @@ which picks the backend from the file extension.
 
 The engine ([tiny-skia](https://github.com/linebender/tiny-skia) for
 raster, an SVG writer, [krilla](https://github.com/LaurenzV/krilla) for
-PDF) is written in Rust because owning the measuring and rasterising
-stack is what the first two points require — not as a performance claim.
+PDF) is written in **Rust** because owning the measuring and rasterising
+stack is what all of the above requires — not as a performance claim.
+That is also why installing from source needs `cargo`.
 
 ## Installation
 
@@ -122,6 +205,35 @@ pak::pak("r-vellum/vellum")
 ```
 
 ## Examples
+
+### Typography with actual metrics
+
+The same caption wrapped to a fixed measure and auto-fitted to three box
+heights, and a label set along a curve. None of this is expressible
+without measuring text up front.
+
+![](reference/figures/README-typography.png)
+
+![](reference/figures/README-textpath.png)
+
+### Labels that move themselves out of the way
+
+[`vl_repel()`](https://r-vellum.github.io/vellum/reference/vl_place.md)
+solves collisions over the *resolved* geometry — every panel at once, in
+one pass. Left: as authored. Right: repelled.
+
+![](reference/figures/README-repel-before.png)![](reference/figures/README-repel-after.png)
+
+### Accessible by construction
+
+A palette checked against colour-vision deficiency in the render, and
+the same categories re-encoded with hatch *geometry* — crisp at any
+zoom, correct in print, and readable in greyscale.
+
+![](reference/figures/README-a11y-colour.png)![](reference/figures/README-a11y-cvd.png)![](reference/figures/README-a11y-hatch.png)
+
+*As authored · as a deuteranopic reader sees it · re-encoded with
+hatching.*
 
 ### The paint model
 
@@ -231,19 +343,25 @@ ggplot2 / lattice output through the vellum backend, use
 
 ## The vellum ecosystem
 
-vellum is the backend of a small ecosystem of packages that share its
-scene model:
+Four packages sharing one scene model. The seam between them is the
+scene itself: a value each layer can pass on, query, or annotate.
 
-- **[vellum](https://github.com/r-vellum/vellum)** — the parchment: the
-  low-level graphics backend (this package).
-- **[vellumplot](https://github.com/r-vellum/vellumplot)** — the pen: a
-  pipe-first grammar of graphics that compiles a plot spec into a vellum
-  scene.
-- **[vellumwidget](https://github.com/r-vellum/vellumwidget)** — the
-  annotation: client-side interactive HTML widgets for vellum scenes and
-  vellumplot plots.
+- **[vellum](https://github.com/r-vellum/vellum)** — *the parchment.*
+  The low-level graphics engine (this package).
+- **[vellumplot](https://github.com/r-vellum/vellumplot)** — *the pen.*
+  A pipe-first grammar of graphics that compiles a plot spec into a
+  vellum scene.
+- **[vellumwidget](https://github.com/r-vellum/vellumwidget)** — *the
+  annotation.* Interactive HTML widgets, built entirely client-side on
+  [`scene_model()`](https://r-vellum.github.io/vellum/reference/scene_model.md)’s
+  geometry — hover, brush, lasso, linked zoom, and crosstalk, with no
+  server round trip.
 - **[vellumverse](https://github.com/r-vellum/vellumverse)** — installs
   and loads the whole ecosystem in one step.
+
+`vellumwidget` is a good illustration of what the read-back buys: it
+adds no drawing code at all. It renders the scene’s SVG, reads the
+element table, and attaches behaviour.
 
 ## Development
 
