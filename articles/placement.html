@@ -102,7 +102,7 @@
       <img src="../logo.png" class="logo" alt=""><h1>Placement: repelling labels, finding room, outlining groups</h1>
             
       
-      <small class="dont-index">Source: <a href="https://github.com/r-vellum/vellum/blob/v0.6.5/vignettes/placement.Rmd" class="external-link"><code>vignettes/placement.Rmd</code></a></small>
+      <small class="dont-index">Source: <a href="https://github.com/r-vellum/vellum/blob/main/vignettes/placement.Rmd" class="external-link"><code>vignettes/placement.Rmd</code></a></small>
       <div class="d-none name"><code>placement.Rmd</code></div>
     </div>
 
@@ -195,15 +195,34 @@ leader lines — the shift is a plain offset, so drawing one is
 arithmetic:</p>
 <div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">moved</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/which.html" class="external-link">which</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/MathFun.html" class="external-link">abs</a></span><span class="op">(</span><span class="va">sol</span><span class="op">$</span><span class="va">dx</span><span class="op">)</span> <span class="op">+</span> <span class="fu"><a href="https://rdrr.io/r/base/MathFun.html" class="external-link">abs</a></span><span class="op">(</span><span class="va">sol</span><span class="op">$</span><span class="va">dy</span><span class="op">)</span> <span class="op">&gt;</span> <span class="fl">1</span><span class="op">)</span></span>
-<span><span class="va">with_leaders</span> <span class="op">&lt;-</span> <span class="fu">scatter</span><span class="op">(</span><span class="op">)</span> <span class="op">|&gt;</span></span>
-<span>  <span class="fu"><a href="../reference/vl_scene.html">draw</a></span><span class="op">(</span><span class="fu"><a href="../reference/grob.html">segments_grob</a></span><span class="op">(</span></span>
-<span>    x0 <span class="op">=</span> <span class="fu"><a href="../reference/vl_unit.html">vl_unit</a></span><span class="op">(</span><span class="va">x</span><span class="op">[</span><span class="va">moved</span><span class="op">]</span>, <span class="st">"npc"</span><span class="op">)</span>, y0 <span class="op">=</span> <span class="fu"><a href="../reference/vl_unit.html">vl_unit</a></span><span class="op">(</span><span class="va">y</span><span class="op">[</span><span class="va">moved</span><span class="op">]</span>, <span class="st">"npc"</span><span class="op">)</span>,</span>
-<span>    x1 <span class="op">=</span> <span class="fu"><a href="../reference/vl_unit.html">vl_unit</a></span><span class="op">(</span><span class="va">x</span><span class="op">[</span><span class="va">moved</span><span class="op">]</span>, <span class="st">"npc"</span><span class="op">)</span> <span class="op">+</span> <span class="fu"><a href="../reference/vl_unit.html">vl_unit</a></span><span class="op">(</span><span class="va">sol</span><span class="op">$</span><span class="va">dx</span><span class="op">[</span><span class="va">moved</span><span class="op">]</span>, <span class="st">"mm"</span><span class="op">)</span>,</span>
-<span>    y1 <span class="op">=</span> <span class="fu"><a href="../reference/vl_unit.html">vl_unit</a></span><span class="op">(</span><span class="va">y</span><span class="op">[</span><span class="va">moved</span><span class="op">]</span>, <span class="st">"npc"</span><span class="op">)</span> <span class="op">+</span> <span class="fu"><a href="../reference/vl_unit.html">vl_unit</a></span><span class="op">(</span><span class="va">sol</span><span class="op">$</span><span class="va">dy</span><span class="op">[</span><span class="va">moved</span><span class="op">]</span>, <span class="st">"mm"</span><span class="op">)</span>,</span>
-<span>    gp <span class="op">=</span> <span class="fu"><a href="../reference/vl_gpar.html">vl_gpar</a></span><span class="op">(</span>col <span class="op">=</span> <span class="st">"grey70"</span>, lwd <span class="op">=</span> <span class="fl">0.6</span><span class="op">)</span></span>
-<span>  <span class="op">)</span><span class="op">)</span></span>
-<span><span class="fu"><a href="../reference/display.html">display</a></span><span class="op">(</span><span class="fu"><a href="../reference/vl_place.html">vl_repel</a></span><span class="op">(</span><span class="va">with_leaders</span>, labels <span class="op">=</span> <span class="st">"lab"</span>, padding <span class="op">=</span> <span class="fl">0.6</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
+<span></span>
+<span><span class="co"># Place the labels FIRST, then draw the leaders onto the result.</span></span>
+<span><span class="va">placed</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/vl_place.html">vl_repel</a></span><span class="op">(</span><span class="fu">scatter</span><span class="op">(</span><span class="op">)</span>, padding <span class="op">=</span> <span class="fl">0.6</span><span class="op">)</span></span>
+<span></span>
+<span><span class="fu"><a href="../reference/display.html">display</a></span><span class="op">(</span></span>
+<span>  <span class="va">placed</span> <span class="op">|&gt;</span></span>
+<span>    <span class="fu"><a href="../reference/vl_scene.html">draw</a></span><span class="op">(</span><span class="fu"><a href="../reference/grob.html">segments_grob</a></span><span class="op">(</span></span>
+<span>      x0 <span class="op">=</span> <span class="fu"><a href="../reference/vl_unit.html">vl_unit</a></span><span class="op">(</span><span class="va">x</span><span class="op">[</span><span class="va">moved</span><span class="op">]</span>, <span class="st">"npc"</span><span class="op">)</span>, y0 <span class="op">=</span> <span class="fu"><a href="../reference/vl_unit.html">vl_unit</a></span><span class="op">(</span><span class="va">y</span><span class="op">[</span><span class="va">moved</span><span class="op">]</span>, <span class="st">"npc"</span><span class="op">)</span>,</span>
+<span>      x1 <span class="op">=</span> <span class="fu"><a href="../reference/vl_unit.html">vl_unit</a></span><span class="op">(</span><span class="va">x</span><span class="op">[</span><span class="va">moved</span><span class="op">]</span>, <span class="st">"npc"</span><span class="op">)</span> <span class="op">+</span> <span class="fu"><a href="../reference/vl_unit.html">vl_unit</a></span><span class="op">(</span><span class="va">sol</span><span class="op">$</span><span class="va">dx</span><span class="op">[</span><span class="va">moved</span><span class="op">]</span>, <span class="st">"mm"</span><span class="op">)</span>,</span>
+<span>      y1 <span class="op">=</span> <span class="fu"><a href="../reference/vl_unit.html">vl_unit</a></span><span class="op">(</span><span class="va">y</span><span class="op">[</span><span class="va">moved</span><span class="op">]</span>, <span class="st">"npc"</span><span class="op">)</span> <span class="op">+</span> <span class="fu"><a href="../reference/vl_unit.html">vl_unit</a></span><span class="op">(</span><span class="va">sol</span><span class="op">$</span><span class="va">dy</span><span class="op">[</span><span class="va">moved</span><span class="op">]</span>, <span class="st">"mm"</span><span class="op">)</span>,</span>
+<span>      gp <span class="op">=</span> <span class="fu"><a href="../reference/vl_gpar.html">vl_gpar</a></span><span class="op">(</span>col <span class="op">=</span> <span class="st">"grey70"</span>, lwd <span class="op">=</span> <span class="fl">0.6</span><span class="op">)</span></span>
+<span>    <span class="op">)</span><span class="op">)</span></span>
+<span><span class="op">)</span></span></code></pre></div>
 <p><img src="placement_files/figure-html/unnamed-chunk-6-1.png" class="r-plt" alt="" width="576"></p>
+<p><strong>The order matters, and getting it wrong is
+instructive.</strong> Drawing the leaders <em>before</em> repelling puts
+them in the scene that the solver then looks at — and a solver avoids
+whatever is in the scene. Worse, each leader lies exactly along the path
+its label wanted to take, and <code><a href="../reference/vl_place.html">vl_place()</a></code> works on bounding
+boxes, so a diagonal segment blocks the whole rectangle spanning it. The
+labels get pushed back the way they came: measured on this figure, the
+median leader ended up <strong>146°</strong> from the label’s actual
+displacement, with half of them pointing essentially backwards.</p>
+<p>Placing first and annotating afterwards avoids the whole problem,
+because <code><a href="../reference/vl_place.html">vl_repel()</a></code> and the <code>sol</code> above are the
+same solve — so the leaders land exactly on the labels. The general
+rule: <strong>anything you add to a scene becomes an obstacle to a later
+solve.</strong></p>
 <p>The second is that <code>resolved = FALSE</code> is a decision point.
 On a genuinely crowded page some labels cannot be placed, and the useful
 responses — drop this one, abbreviate it, shrink the font, show it on

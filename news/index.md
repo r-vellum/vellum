@@ -1,5 +1,29 @@
 # Changelog
 
+## vellum (development version)
+
+- **Docs fix: the leader-line example placed labels and drew leaders
+  from two different solves.**
+  [`vignette("placement")`](https://r-vellum.github.io/vellum/articles/placement.md)
+  and `inst/examples/labels.R` both computed `vl_place(scene)`, drew
+  leaders from that answer, and *then* called
+  [`vl_repel()`](https://r-vellum.github.io/vellum/reference/vl_place.md)
+  on the scene with the leaders already in it. The leaders are obstacles
+  to that second solve — and since each one lies exactly along the path
+  its label wanted to take, and
+  [`vl_place()`](https://r-vellum.github.io/vellum/reference/vl_place.md)
+  works on bounding boxes (so a diagonal segment blocks the whole
+  rectangle spanning it), the labels were pushed back the way they came.
+  The median leader ended up **146°** from the label’s real
+  displacement, with half of them pointing essentially backwards.
+
+  Both now place first and annotate afterwards, which makes the leaders
+  exact, and both say why. No engine change —
+  [`vl_repel()`](https://r-vellum.github.io/vellum/reference/vl_place.md)
+  was applying the solve it reported all along. The general rule, now
+  stated in the article: **anything you add to a scene becomes an
+  obstacle to a later solve.**
+
 ## vellum 0.6.5
 
 - **[`vl_lint()`](https://r-vellum.github.io/vellum/reference/vl_lint.md)’s

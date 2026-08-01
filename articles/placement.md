@@ -111,17 +111,40 @@ arithmetic:
 ``` r
 
 moved <- which(abs(sol$dx) + abs(sol$dy) > 1)
-with_leaders <- scatter() |>
-  draw(segments_grob(
-    x0 = vl_unit(x[moved], "npc"), y0 = vl_unit(y[moved], "npc"),
-    x1 = vl_unit(x[moved], "npc") + vl_unit(sol$dx[moved], "mm"),
-    y1 = vl_unit(y[moved], "npc") + vl_unit(sol$dy[moved], "mm"),
-    gp = vl_gpar(col = "grey70", lwd = 0.6)
-  ))
-display(vl_repel(with_leaders, labels = "lab", padding = 0.6))
+
+# Place the labels FIRST, then draw the leaders onto the result.
+placed <- vl_repel(scatter(), padding = 0.6)
+
+display(
+  placed |>
+    draw(segments_grob(
+      x0 = vl_unit(x[moved], "npc"), y0 = vl_unit(y[moved], "npc"),
+      x1 = vl_unit(x[moved], "npc") + vl_unit(sol$dx[moved], "mm"),
+      y1 = vl_unit(y[moved], "npc") + vl_unit(sol$dy[moved], "mm"),
+      gp = vl_gpar(col = "grey70", lwd = 0.6)
+    ))
+)
 ```
 
 ![](placement_files/figure-html/unnamed-chunk-6-1.png)
+
+**The order matters, and getting it wrong is instructive.** Drawing the
+leaders *before* repelling puts them in the scene that the solver then
+looks at — and a solver avoids whatever is in the scene. Worse, each
+leader lies exactly along the path its label wanted to take, and
+[`vl_place()`](https://r-vellum.github.io/vellum/reference/vl_place.md)
+works on bounding boxes, so a diagonal segment blocks the whole
+rectangle spanning it. The labels get pushed back the way they came:
+measured on this figure, the median leader ended up **146°** from the
+label’s actual displacement, with half of them pointing essentially
+backwards.
+
+Placing first and annotating afterwards avoids the whole problem,
+because
+[`vl_repel()`](https://r-vellum.github.io/vellum/reference/vl_place.md)
+and the `sol` above are the same solve — so the leaders land exactly on
+the labels. The general rule: **anything you add to a scene becomes an
+obstacle to a later solve.**
 
 The second is that `resolved = FALSE` is a decision point. On a
 genuinely crowded page some labels cannot be placed, and the useful

@@ -66,9 +66,16 @@
 <div class="row">
   <main id="main" class="col-md-9"><div class="page-header">
       <img src="../logo.png" class="logo" alt=""><h1>Changelog</h1>
-      <small>Source: <a href="https://github.com/r-vellum/vellum/blob/v0.6.5/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
+      <small>Source: <a href="https://github.com/r-vellum/vellum/blob/main/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="development version" id="vellum-development-version">vellum (development version)<a class="anchor" aria-label="anchor" href="#vellum-development-version"></a></h2>
+<ul><li>
+<p><strong>Docs fix: the leader-line example placed labels and drew leaders from two different solves.</strong> <code><a href="../articles/placement.html">vignette("placement")</a></code> and <code>inst/examples/labels.R</code> both computed <code>vl_place(scene)</code>, drew leaders from that answer, and <em>then</em> called <code><a href="../reference/vl_place.html">vl_repel()</a></code> on the scene with the leaders already in it. The leaders are obstacles to that second solve — and since each one lies exactly along the path its label wanted to take, and <code><a href="../reference/vl_place.html">vl_place()</a></code> works on bounding boxes (so a diagonal segment blocks the whole rectangle spanning it), the labels were pushed back the way they came. The median leader ended up <strong>146°</strong> from the label’s real displacement, with half of them pointing essentially backwards.</p>
+<p>Both now place first and annotate afterwards, which makes the leaders exact, and both say why. No engine change — <code><a href="../reference/vl_place.html">vl_repel()</a></code> was applying the solve it reported all along. The general rule, now stated in the article: <strong>anything you add to a scene becomes an obstacle to a later solve.</strong></p>
+</li>
+</ul></div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.6.5" id="vellum-065">vellum 0.6.5<a class="anchor" aria-label="anchor" href="#vellum-065"></a></h2>
 <ul><li><p><strong><code><a href="../reference/vl_lint.html">vl_lint()</a></code>’s contrast rule no longer cries wolf on ordinary axis text.</strong> It sampled the backdrop at four points just outside a label’s box and took the <em>worst</em>, so any label a single 2 px probe happened to graze against a nearby tick, gridline or axis rule read as ~1:1 — flagging dark axis text on white on essentially every plot. It now takes the <strong>second-worst</strong> of the four sides: incidental adjacent ink on one side is ignored, while a label genuinely on a low-contrast field (all sides) or straddling a dark region (two sides) is still flagged.</p></li>
