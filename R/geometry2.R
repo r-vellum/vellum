@@ -301,28 +301,50 @@ contour_grob <- function(
 #' @section Coordinate system:
 #' SVG's y axis points **down** and vellum's points up, so `svg_grob()` flips it
 #' by default (`flip_y = TRUE`) — otherwise every icon arrives upside-down. The
-#' geometry is then scaled to fit `size`, preserving aspect, and centred on
-#' `x`/`y`. `vl_svg_path()` returns the raw parsed coordinates without any of
-#' that, for callers doing their own placement.
+#' geometry is then scaled so the longer side of its reference box maps to
+#' `size`, preserving aspect, and centred on `x`/`y`. `vl_svg_path()` returns the
+#' raw parsed coordinates without any of that, for callers doing their own
+#' placement.
+#'
+#' @section Sizing across an icon set — the viewBox:
+#' Icon sets draw every glyph inside one shared `viewBox` (commonly
+#' `"0 0 24 24"`) and pad each glyph within it, so a glyph's own ink fills only
+#' part of the box. Sizing to the *ink* would blow each glyph up to `size`
+#' individually — a sparse glyph would render far larger than a dense one from
+#' the same set, and a lone icon larger than its nominal box. Pass the set's
+#' `viewbox` (the four numbers `c(xmin, ymin, width, height)`, or the raw
+#' attribute string `"0 0 24 24"`) and `size` maps the *box* instead, so every
+#' glyph keeps its intended relative and absolute size. If you hand `svg_grob()`
+#' a whole `<svg>…</svg>` element (see below) its `viewBox` is used automatically.
+#' With no viewBox at all, sizing falls back to the path's own ink bounds.
 #'
 #' @section What is supported:
 #' The whole `d` grammar: `M`/`L`/`H`/`V`/`C`/`S`/`Q`/`T`/`A`/`Z` in absolute and
 #' relative forms, implicit repeated commands, the smooth-curve reflection rules,
 #' and elliptical arcs. Curves are flattened to polylines.
 #'
-#' What is **not** here is the rest of SVG: no stylesheets, gradients,
-#' `<use>`, clip paths, or element transforms — this reads path data, not
-#' documents. To pull `d` strings out of an SVG file, use an XML parser
-#' (`xml2::xml_find_all(doc, "//svg:path")`) and pass each one here.
+#' `svg_grob()` also accepts a whole `<svg>` element as `d`: it reads the
+#' `<path>` geometry and the document `viewBox` (needs the \pkg{xml2} package).
+#' Only `<path>` elements are read — other drawable shapes (`<circle>`, `<rect>`,
+#' `<line>`, …) are not path data and are reported with a warning, not silently
+#' dropped. The rest of SVG is still out of scope: no stylesheets, gradients,
+#' `<use>`, clip paths, or element transforms — this reads geometry, not
+#' documents.
 #'
 #' Malformed data yields whatever parsed before the problem rather than an
 #' error: a truncated icon is easier to diagnose than a stack trace.
 #'
-#' @param d A character string of SVG path data.
+#' @param d A character string of SVG path data, or (for `svg_grob()`) a whole
+#'   `<svg>` element to read `<path>` geometry and the `viewBox` from.
 #' @param x,y Centre of the drawn icon.
-#' @param size Size of the icon's longer side, as a [vl_unit()].
+#' @param size Size of the reference box's longer side, as a [vl_unit()] — the
+#'   viewBox when one is given, otherwise the path's own bounding box.
 #' @param flip_y Flip the y axis to convert from SVG's convention. Leave `TRUE`
 #'   unless your `d` is already in a y-up space.
+#' @param viewbox The icon's SVG `viewBox` as `c(xmin, ymin, width, height)` or
+#'   the attribute string `"xmin ymin width height"`, so `size` scales the box
+#'   rather than the glyph's ink. `NULL` (default) uses a whole-`<svg>`
+#'   document's own viewBox if present, else the path's ink bounds.
 #' @param gp,name,vp,id,role Passed to the returned [path_grob()].
 #' @return `vl_svg_path()`: a data frame of `x`, `y`, `id`, `closed`.
 #'   `svg_grob()`: a [path_grob()].
@@ -373,40 +395,39 @@ svg_grob <- function(
   y = 0.5,
   size = vl_unit(10, "mm"),
   flip_y = TRUE,
+  viewbox = NULL,
   gp = vl_gpar(),
   name = NULL,
   vp = NULL,
   id = NULL,
   role = NULL
 ) {
-  p <- vl_svg_path(d)
-  if (!nrow(p)) {
-    return(path_grob(
+  empty <- function() {
+    path_grob(
       numeric(0),
       numeric(0),
       gp = gp,
       name = name,
       vp = vp,
       role = role
-    ))
+    )
+  }
+  parsed <- .svg_grob_input(d, viewbox)
+  p <- vl_svg_path(parsed$d)
+  if (!nrow(p)) {
+    return(empty())
   }
   if (isTRUE(flip_y)) {
     p$y <- -p$y
   }
-  # Scale the longer side to `size` and centre on (x, y), so icons from
-  # different sources with different viewBoxes come out the same size.
-  rx <- range(p$x)
-  ry <- range(p$y)
-  span <- max(diff(rx), diff(ry))
-  if (!(span > 0)) {
-    return(path_grob(
-      numeric(0),
-      numeric(0),
-      gp = gp,
-      name = name,
-      vp = vp,
-      role = role
-    ))
+  # Map the longer side of the reference box to `size` and centre it on (x, y).
+  # With a viewBox the box is the viewBox, so every glyph in a set (which shares
+  # one viewBox but inks a different fraction of it) keeps its intended relative
+  # size; without one, the box is the path's own ink bounds -- a lone glyph then
+  # simply fills `size`.
+  frame <- .svg_norm_frame(p, parsed$viewbox, flip_y)
+  if (is.null(frame)) {
+    return(empty())
   }
   # `unit * numeric` is elementwise, not recycling, so widen the scalars to the
   # point count before combining them.
@@ -415,8 +436,8 @@ svg_grob <- function(
   cx <- vctrs::vec_recycle(as_unit(x), n)
   cy <- vctrs::vec_recycle(as_unit(y), n)
   path_grob(
-    x = cx + su * ((p$x - mean(rx)) / span),
-    y = cy + su * ((p$y - mean(ry)) / span),
+    x = cx + su * ((p$x - frame$cx) / frame$span),
+    y = cy + su * ((p$y - frame$cy) / frame$span),
     id = p$id,
     rule = "evenodd",
     gp = gp,
@@ -424,4 +445,105 @@ svg_grob <- function(
     vp = vp,
     role = role
   )
+}
+
+# Resolve `svg_grob()`'s `d`/`viewbox` inputs: normalise a user-supplied
+# `viewbox`, and when `d` is a whole `<svg>` element (not bare path data) pull
+# the `<path>` geometry and the document's own `viewBox` out of it. An explicit
+# `viewbox` argument always wins over the document's.
+.svg_grob_input <- function(d, viewbox) {
+  vb <- .parse_viewbox(viewbox)
+  d <- as.character(d)
+  if (length(d) == 1L && !is.na(d) && grepl("<svg", d, ignore.case = TRUE)) {
+    ex <- .svg_extract(d)
+    d <- ex$d
+    vb <- vb %||% ex$viewbox
+  }
+  list(d = d, viewbox = vb)
+}
+
+# The (centre, span) that maps a reference box's longer side to `size`. Uses the
+# viewBox when given (its centre flipped to match the flipped path), else the
+# path's ink bounds. NULL for a degenerate (zero-span) box.
+.svg_norm_frame <- function(p, viewbox, flip_y) {
+  if (!is.null(viewbox)) {
+    span <- max(viewbox[3L], viewbox[4L])
+    cx <- viewbox[1L] + viewbox[3L] / 2
+    cy <- viewbox[2L] + viewbox[4L] / 2
+    if (isTRUE(flip_y)) {
+      cy <- -cy
+    }
+  } else {
+    rx <- range(p$x)
+    ry <- range(p$y)
+    span <- max(diff(rx), diff(ry))
+    cx <- mean(rx)
+    cy <- mean(ry)
+  }
+  if (!(span > 0)) {
+    return(NULL)
+  }
+  list(cx = cx, cy = cy, span = span)
+}
+
+# Normalise a `viewbox` argument to numeric `c(xmin, ymin, width, height)`, or
+# NULL. Accepts that vector or the raw SVG `viewBox` attribute string
+# ("xmin ymin width height", space- or comma-separated).
+.parse_viewbox <- function(vb) {
+  if (is.null(vb)) {
+    return(NULL)
+  }
+  if (is.character(vb)) {
+    if (length(vb) != 1L || is.na(vb)) {
+      cli::cli_abort(
+        "A {.arg viewbox} string must be a single {.val xmin ymin width height}."
+      )
+    }
+    vb <- as.numeric(strsplit(trimws(vb), "[[:space:],]+")[[1L]])
+  }
+  vb <- suppressWarnings(as.numeric(vb))
+  if (length(vb) != 4L || anyNA(vb)) {
+    cli::cli_abort(
+      "{.arg viewbox} must be four numbers {.code c(xmin, ymin, width, height)}, or that as a string."
+    )
+  }
+  if (!(vb[3L] > 0 && vb[4L] > 0)) {
+    cli::cli_abort("{.arg viewbox} width and height must be positive.")
+  }
+  vb
+}
+
+# Pull path geometry and the viewBox out of a whole `<svg>` string. Needs xml2
+# (a Suggests). Only `<path>` elements are read -- other drawable shapes
+# (`<circle>`, `<rect>`, ...) are not path data and are reported, not silently
+# dropped.
+.svg_extract <- function(svg) {
+  if (!requireNamespace("xml2", quietly = TRUE)) {
+    cli::cli_abort(c(
+      "Reading a whole {.code <svg>} element in {.fn svg_grob} needs the {.pkg xml2} package.",
+      i = "Install it, or pass just the {.code d} path string (with a {.arg viewbox})."
+    ))
+  }
+  doc <- tryCatch(
+    xml2::read_xml(svg),
+    error = function(e) {
+      cli::cli_abort("Could not parse the {.code <svg>} string.", parent = e)
+    }
+  )
+  vb_attr <- xml2::xml_attr(doc, "viewBox")
+  vb <- if (!is.na(vb_attr)) .parse_viewbox(vb_attr) else NULL
+  # local-name() so it matches whether or not the SVG carries a namespace.
+  paths <- xml2::xml_find_all(doc, ".//*[local-name()='path']")
+  ds <- xml2::xml_attr(paths, "d")
+  ds <- ds[!is.na(ds)]
+  others <- xml2::xml_find_all(
+    doc,
+    ".//*[local-name()='circle' or local-name()='rect' or local-name()='ellipse' or local-name()='line' or local-name()='polyline' or local-name()='polygon']"
+  )
+  if (length(others)) {
+    cli::cli_warn(
+      "{.fn svg_grob} reads {.code <path>} elements only; ignored {length(others)} other shape{?s} in the SVG."
+    )
+  }
+  list(d = paste(ds, collapse = " "), viewbox = vb)
 }

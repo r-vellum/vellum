@@ -13,6 +13,7 @@ svg_grob(
   y = 0.5,
   size = vl_unit(10, "mm"),
   flip_y = TRUE,
+  viewbox = NULL,
   gp = vl_gpar(),
   name = NULL,
   vp = NULL,
@@ -21,14 +22,21 @@ svg_grob(
 )
 }
 \arguments{
-\item{d}{A character string of SVG path data.}
+\item{d}{A character string of SVG path data, or (for \code{svg_grob()}) a whole
+\verb{<svg>} element to read \verb{<path>} geometry and the \code{viewBox} from.}
 
 \item{x, y}{Centre of the drawn icon.}
 
-\item{size}{Size of the icon's longer side, as a \code{\link[=vl_unit]{vl_unit()}}.}
+\item{size}{Size of the reference box's longer side, as a \code{\link[=vl_unit]{vl_unit()}} — the
+viewBox when one is given, otherwise the path's own bounding box.}
 
 \item{flip_y}{Flip the y axis to convert from SVG's convention. Leave \code{TRUE}
 unless your \code{d} is already in a y-up space.}
+
+\item{viewbox}{The icon's SVG \code{viewBox} as \code{c(xmin, ymin, width, height)} or
+the attribute string \code{"xmin ymin width height"}, so \code{size} scales the box
+rather than the glyph's ink. \code{NULL} (default) uses a whole-\verb{<svg>}
+document's own viewBox if present, else the path's ink bounds.}
 
 \item{gp, name, vp, id, role}{Passed to the returned \code{\link[=path_grob]{path_grob()}}.}
 }
@@ -51,9 +59,24 @@ rather than an embedded bitmap.
 
 SVG's y axis points \strong{down} and vellum's points up, so \code{svg_grob()} flips it
 by default (\code{flip_y = TRUE}) — otherwise every icon arrives upside-down. The
-geometry is then scaled to fit \code{size}, preserving aspect, and centred on
-\code{x}/\code{y}. \code{vl_svg_path()} returns the raw parsed coordinates without any of
-that, for callers doing their own placement.
+geometry is then scaled so the longer side of its reference box maps to
+\code{size}, preserving aspect, and centred on \code{x}/\code{y}. \code{vl_svg_path()} returns the
+raw parsed coordinates without any of that, for callers doing their own
+placement.
+}
+
+\section{Sizing across an icon set — the viewBox}{
+
+Icon sets draw every glyph inside one shared \code{viewBox} (commonly
+\code{"0 0 24 24"}) and pad each glyph within it, so a glyph's own ink fills only
+part of the box. Sizing to the \emph{ink} would blow each glyph up to \code{size}
+individually — a sparse glyph would render far larger than a dense one from
+the same set, and a lone icon larger than its nominal box. Pass the set's
+\code{viewbox} (the four numbers \code{c(xmin, ymin, width, height)}, or the raw
+attribute string \code{"0 0 24 24"}) and \code{size} maps the \emph{box} instead, so every
+glyph keeps its intended relative and absolute size. If you hand \code{svg_grob()}
+a whole \verb{<svg>…</svg>} element (see below) its \code{viewBox} is used automatically.
+With no viewBox at all, sizing falls back to the path's own ink bounds.
 }
 
 \section{What is supported}{
@@ -62,10 +85,13 @@ The whole \code{d} grammar: \code{M}/\code{L}/\code{H}/\code{V}/\code{C}/\code{S
 relative forms, implicit repeated commands, the smooth-curve reflection rules,
 and elliptical arcs. Curves are flattened to polylines.
 
-What is \strong{not} here is the rest of SVG: no stylesheets, gradients,
-\verb{<use>}, clip paths, or element transforms — this reads path data, not
-documents. To pull \code{d} strings out of an SVG file, use an XML parser
-(\code{xml2::xml_find_all(doc, "//svg:path")}) and pass each one here.
+\code{svg_grob()} also accepts a whole \verb{<svg>} element as \code{d}: it reads the
+\verb{<path>} geometry and the document \code{viewBox} (needs the \pkg{xml2} package).
+Only \verb{<path>} elements are read — other drawable shapes (\verb{<circle>}, \verb{<rect>},
+\verb{<line>}, …) are not path data and are reported with a warning, not silently
+dropped. The rest of SVG is still out of scope: no stylesheets, gradients,
+\verb{<use>}, clip paths, or element transforms — this reads geometry, not
+documents.
 
 Malformed data yields whatever parsed before the problem rather than an
 error: a truncated icon is easier to diagnose than a stack trace.
