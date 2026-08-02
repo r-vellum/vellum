@@ -3229,8 +3229,14 @@ impl Scene {
                     // elements — so when the batch carries data keys *and the backend
                     // emits them* (SVG) we fall back to a per-element build (moderate
                     // `n`). Raster/PDF ignore keys, so they keep the fast path and stay
-                    // pixel-identical whether or not the scene is keyed.
+                    // pixel-identical whether or not the scene is keyed. A gradient/
+                    // pattern *stroke* also drops to the per-element build: the fast
+                    // path draws a unit circle placed by an affine transform, but the
+                    // stroke paint is resolved in viewport px, so on the unit circle it
+                    // would sample a single point of the ramp (collapsing to one stop).
+                    // Real-coordinate circles keep the ramp aligned, exactly as Rects do.
                     if matches!(gp.fill, Some(Paint::Solid(_)) | None)
+                        && gp.col_paint.is_none()
                         && (keys.is_empty() || !b.wants_element_keys())
                     {
                         let mut cx = Vec::with_capacity(n);

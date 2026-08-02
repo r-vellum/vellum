@@ -67,6 +67,47 @@ test_that("text falls back to the gradient's first stop", {
   expect_true(any(reds > 200 & greens > 80 & greens < 160))
 })
 
+test_that("a gradient stroke ramps across a circle outline (not one flat stop)", {
+  # The batched-circle fast path draws a unit circle placed by an affine
+  # transform; a gradient stroke resolved in viewport px would collapse to a
+  # single stop on it. A gradient col must instead ramp along the outline like
+  # it does on rects and polylines.
+  g <- linear_gradient(c("#F97316", "#22C55E"), x1 = 0, x2 = 1) # orange -> green
+  s <- vl_scene(4, 4, dpi = 150, bg = "white") |>
+    draw(circle_grob(r = 0.4, gp = vl_gpar(fill = NA, col = g, lwd = 20)))
+  r <- scene_raster(s)
+  # first inked pixel scanning outward from each side crossing, at mid-height
+  ink_x <- function(from, to, y) {
+    step <- if (to >= from) 1L else -1L
+    for (x in seq(from, to, by = step)) {
+      if (r[1, x, y] < 240 || r[2, x, y] < 240) {
+        return(x)
+      }
+    }
+    NA_integer_
+  }
+  west <- ink_x(35, 90, 300)
+  east <- ink_x(565, 510, 300)
+  # west of the ramp is orange (red high, green mid); east is green (red low).
+  expect_gt(r[1, west, 300], r[1, east, 300]) # red falls west -> east
+  expect_lt(r[2, west, 300], r[2, east, 300]) # green rises west -> east
+})
+
+test_that("a gradient-stroked circle reaches SVG as real paint, not a unit stamp", {
+  g <- linear_gradient(c("#F97316", "#22C55E"), x1 = 0, x2 = 1)
+  svg <- scene_svg(
+    vl_scene(3, 3, dpi = 100) |>
+      draw(circle_grob(r = 0.3, gp = vl_gpar(fill = NA, col = g, lwd = 8)))
+  )
+  # the outline references the gradient...
+  expect_match(svg, "stroke=\"url(#", fixed = TRUE)
+  # ...as a real-coordinate circle (r = 0.3 of 300px = 90px radius about the
+  # centre 150, so its east point is at x = 240), not the unit-circle fast path
+  # (which stamped a [-1, 1] path under a matrix() transform).
+  expect_match(svg, "d=\"M240 150", fixed = TRUE)
+  expect_no_match(svg, "matrix(", fixed = TRUE)
+})
+
 test_that("the per-segment stroke fast path is bypassed for a gradient", {
   # Each segment would restart the ramp; the shader must see the whole path.
   # A many-segment polyline with a gradient must still ramp end to end.

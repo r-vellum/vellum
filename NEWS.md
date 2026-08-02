@@ -1,3 +1,14 @@
+# vellum 0.6.6.9000 (development version)
+
+* **Fix: a gradient (or pattern) `col` collapsed to its first stop on circle
+  outlines.** Circles take a batched fast path that draws a unit circle placed
+  by an affine transform; a gradient stroke is resolved in viewport pixels, so
+  on the unit circle it sampled a single point of the ramp and rendered one flat
+  colour. The same gradient stroked rects and polylines correctly. A gradient/
+  pattern stroke now drops circles to the per-element, real-coordinate build (as
+  rects already did), so the ramp runs along the outline. Solid strokes keep the
+  fast path and render byte-identically.
+
 # vellum 0.6.6
 
 * **Fix: `element_geometry()` and `vl_nearest()` reported viewport-local
