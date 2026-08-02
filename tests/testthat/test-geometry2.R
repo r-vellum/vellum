@@ -409,3 +409,81 @@ test_that("SVG geometry composes with the rest of the engine", {
   )
   expect_gt(length(cut@x), 0L)
 })
+
+# --- viewBox-aware sizing ----------------------------------------------------
+
+# The drawn span (mm) of the longer side of an svg_grob's geometry.
+svg_span <- function(g) {
+  ox <- as.numeric(vctrs::field(g@x, "offset"))
+  oy <- as.numeric(vctrs::field(g@y, "offset"))
+  max(max(ox) - min(ox), max(oy) - min(oy))
+}
+
+# A padded glyph: ink spans 8..16 inside a 0..24 viewBox (a third of the box).
+PAD <- "M8 8 L16 8 L16 16 L8 16 Z"
+
+test_that("svg_grob sizes to the viewBox, not the ink, when one is given", {
+  # Without a viewBox the ink fills `size` (unchanged behaviour)...
+  expect_equal(svg_span(svg_grob(PAD, size = vl_unit(12, "mm"))), 12)
+  # ...with one, `size` maps the box, so a glyph filling 8/24 of it is 8/24 of
+  # `size`: 12 * 8/24 = 4.
+  expect_equal(
+    svg_span(svg_grob(
+      PAD,
+      size = vl_unit(12, "mm"),
+      viewbox = c(0, 0, 24, 24)
+    )),
+    4
+  )
+  # the raw attribute string is accepted too
+  expect_equal(
+    svg_span(svg_grob(PAD, size = vl_unit(12, "mm"), viewbox = "0 0 24 24")),
+    4
+  )
+})
+
+test_that("a shared viewBox keeps two glyphs' relative sizes", {
+  dense <- "M2 2 L22 2 L22 22 L2 22 Z" # ink 20/24 of the box
+  vb <- c(0, 0, 24, 24)
+  gd <- svg_grob(dense, size = vl_unit(12, "mm"), viewbox = vb)
+  gs <- svg_grob(PAD, size = vl_unit(12, "mm"), viewbox = vb)
+  # 20 vs 8 units of ink -> spans in 20:8 ratio, not both forced to `size`.
+  expect_equal(svg_span(gd) / svg_span(gs), 20 / 8, tolerance = 1e-9)
+})
+
+test_that("svg_grob reads a whole <svg>: geometry + viewBox, paths only", {
+  skip_if_not_installed("xml2")
+  svg <- sprintf(
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="%s"/></svg>',
+    PAD
+  )
+  # the document's own viewBox is picked up automatically
+  expect_equal(svg_span(svg_grob(svg, size = vl_unit(12, "mm"))), 4)
+  # an explicit viewbox still overrides the document's
+  expect_equal(
+    svg_span(svg_grob(
+      svg,
+      size = vl_unit(12, "mm"),
+      viewbox = c(0, 0, 12, 12)
+    )),
+    8
+  )
+  # non-path shapes are reported, not silently dropped
+  mixed <- '<svg viewBox="0 0 24 24"><path d="M2 2 L22 2 L22 22 Z"/><circle cx="12" cy="12" r="4"/></svg>'
+  expect_warning(g <- svg_grob(mixed), "path.*only|ignored")
+  expect_gt(length(g@x), 0L) # the path still drew
+})
+
+test_that("flip_y is honoured with a viewBox", {
+  raw <- vl_svg_path(STAR)
+  tip <- which.min(raw$y) # smallest SVG y = the star's point
+  g <- svg_grob(STAR, viewbox = c(0, 0, 24, 24))
+  oy <- as.numeric(vctrs::field(g@y, "offset"))
+  expect_equal(oy[tip], max(oy), tolerance = 1e-9) # flipped to the top
+})
+
+test_that("a malformed viewbox is rejected", {
+  expect_error(svg_grob(STAR, viewbox = c(1, 2, 3)), "four numbers")
+  expect_error(svg_grob(STAR, viewbox = c(0, 0, -1, 5)), "positive")
+  expect_error(svg_grob(STAR, viewbox = "1 2 3"), "four numbers")
+})
