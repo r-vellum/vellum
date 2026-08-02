@@ -1,6 +1,22 @@
 # Changelog
 
-## vellum 0.6.6.9000 (development version)
+## vellum 0.6.7
+
+- **Fix: an animated SVG showed one frame and then near-nothing.** Every
+  frame is rendered separately, so each restarted its `<defs>` id
+  counters and the whole document ended up with N copies of `id="c0"`.
+  All N `clip-path="url(#c0)"` references therefore resolved to the
+  *first* frame’s clip — which lives inside a `visibility:hidden` group,
+  and a hidden `<clipPath>` child contributes no geometry, so the clip
+  was empty for the 47/48 of the cycle when frame 0 was hidden.
+  Everything inside the panel was clipped away, leaving only the axis
+  labels and legend drawn outside it, and the plot appeared to blink
+  once and then vanish. Generated `<defs>` ids now carry a per-frame
+  prefix.
+
+- **Fix: animated SVG frames played in reverse.** The per-frame negative
+  `animation-delay` was offset by `i` rather than `n - i`, so after
+  frame 0 the cycle ran backwards (0, n-1, n-2, …).
 
 - **Fix: a gradient (or pattern) `col` collapsed to its first stop on
   circle outlines.** Circles take a batched fast path that draws a unit
