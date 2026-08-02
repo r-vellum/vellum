@@ -12,6 +12,22 @@
   the ramp runs along the outline. Solid strokes keep the fast path and
   render byte-identically.
 
+- **[`svg_grob()`](https://r-vellum.github.io/vellum/reference/vl_svg_path.md)
+  can size an icon to its `viewBox`, and read a whole `<svg>`.** Icon
+  sets share one `viewBox` per family and pad each glyph inside it, so
+  sizing to the glyph’s own *ink* blew every icon up to `size`
+  individually — a sparse glyph rendered far larger than a dense one
+  from the same set, and a lone icon larger than its nominal box (the
+  reported ~2.5× oversize).
+  [`svg_grob()`](https://r-vellum.github.io/vellum/reference/vl_svg_path.md)
+  now takes a `viewbox` argument (`c(xmin, ymin, width, height)`, or the
+  raw `"0 0 24 24"` attribute string) and maps the *box* to `size`, so
+  glyphs keep their intended relative and absolute size. Passing a whole
+  `<svg>…</svg>` element as `d` reads its `<path>` geometry and
+  `viewBox` automatically (needs ; non-`<path>` shapes are reported, not
+  silently dropped). With no viewBox the previous ink-bounds sizing is
+  unchanged.
+
 ## vellum 0.6.6
 
 - **Fix:

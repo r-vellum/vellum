@@ -87,6 +87,7 @@ svg_grob() wraps that up as a drawable path_grob()."><meta property="og:image" c
 <span>  y <span class="op">=</span> <span class="fl">0.5</span>,</span>
 <span>  size <span class="op">=</span> <span class="fu"><a href="vl_unit.html">vl_unit</a></span><span class="op">(</span><span class="fl">10</span>, <span class="st">"mm"</span><span class="op">)</span>,</span>
 <span>  flip_y <span class="op">=</span> <span class="cn">TRUE</span>,</span>
+<span>  viewbox <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  gp <span class="op">=</span> <span class="fu"><a href="vl_gpar.html">vl_gpar</a></span><span class="op">(</span><span class="op">)</span>,</span>
 <span>  name <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  vp <span class="op">=</span> <span class="cn">NULL</span>,</span>
@@ -100,7 +101,8 @@ svg_grob() wraps that up as a drawable path_grob()."><meta property="og:image" c
 
 
 <dl><dt id="arg-d">d<a class="anchor" aria-label="anchor" href="#arg-d"></a></dt>
-<dd><p>A character string of SVG path data.</p></dd>
+<dd><p>A character string of SVG path data, or (for <code>svg_grob()</code>) a whole
+<code>&lt;svg&gt;</code> element to read <code>&lt;path&gt;</code> geometry and the <code>viewBox</code> from.</p></dd>
 
 
 <dt id="arg-x-y">x, y<a class="anchor" aria-label="anchor" href="#arg-x-y"></a></dt>
@@ -108,12 +110,20 @@ svg_grob() wraps that up as a drawable path_grob()."><meta property="og:image" c
 
 
 <dt id="arg-size">size<a class="anchor" aria-label="anchor" href="#arg-size"></a></dt>
-<dd><p>Size of the icon's longer side, as a <code><a href="vl_unit.html">vl_unit()</a></code>.</p></dd>
+<dd><p>Size of the reference box's longer side, as a <code><a href="vl_unit.html">vl_unit()</a></code> — the
+viewBox when one is given, otherwise the path's own bounding box.</p></dd>
 
 
 <dt id="arg-flip-y">flip_y<a class="anchor" aria-label="anchor" href="#arg-flip-y"></a></dt>
 <dd><p>Flip the y axis to convert from SVG's convention. Leave <code>TRUE</code>
 unless your <code>d</code> is already in a y-up space.</p></dd>
+
+
+<dt id="arg-viewbox">viewbox<a class="anchor" aria-label="anchor" href="#arg-viewbox"></a></dt>
+<dd><p>The icon's SVG <code>viewBox</code> as <code>c(xmin, ymin, width, height)</code> or
+the attribute string <code>"xmin ymin width height"</code>, so <code>size</code> scales the box
+rather than the glyph's ink. <code>NULL</code> (default) uses a whole-<code>&lt;svg&gt;</code>
+document's own viewBox if present, else the path's ink bounds.</p></dd>
 
 
 <dt id="arg-gp-name-vp-id-role">gp, name, vp, id, role<a class="anchor" aria-label="anchor" href="#arg-gp-name-vp-id-role"></a></dt>
@@ -139,9 +149,25 @@ rather than an embedded bitmap.</p>
 
 <p>SVG's y axis points <strong>down</strong> and vellum's points up, so <code>svg_grob()</code> flips it
 by default (<code>flip_y = TRUE</code>) — otherwise every icon arrives upside-down. The
-geometry is then scaled to fit <code>size</code>, preserving aspect, and centred on
-<code>x</code>/<code>y</code>. <code>vl_svg_path()</code> returns the raw parsed coordinates without any of
-that, for callers doing their own placement.</p>
+geometry is then scaled so the longer side of its reference box maps to
+<code>size</code>, preserving aspect, and centred on <code>x</code>/<code>y</code>. <code>vl_svg_path()</code> returns the
+raw parsed coordinates without any of that, for callers doing their own
+placement.</p>
+    </div>
+    <div class="section level2">
+    <h2 id="sizing-across-an-icon-set-the-viewbox">Sizing across an icon set — the viewBox<a class="anchor" aria-label="anchor" href="#sizing-across-an-icon-set-the-viewbox"></a></h2>
+
+
+<p>Icon sets draw every glyph inside one shared <code>viewBox</code> (commonly
+<code>"0 0 24 24"</code>) and pad each glyph within it, so a glyph's own ink fills only
+part of the box. Sizing to the <em>ink</em> would blow each glyph up to <code>size</code>
+individually — a sparse glyph would render far larger than a dense one from
+the same set, and a lone icon larger than its nominal box. Pass the set's
+<code>viewbox</code> (the four numbers <code>c(xmin, ymin, width, height)</code>, or the raw
+attribute string <code>"0 0 24 24"</code>) and <code>size</code> maps the <em>box</em> instead, so every
+glyph keeps its intended relative and absolute size. If you hand <code>svg_grob()</code>
+a whole <code>&lt;svg&gt;…&lt;/svg&gt;</code> element (see below) its <code>viewBox</code> is used automatically.
+With no viewBox at all, sizing falls back to the path's own ink bounds.</p>
     </div>
     <div class="section level2">
     <h2 id="what-is-supported">What is supported<a class="anchor" aria-label="anchor" href="#what-is-supported"></a></h2>
@@ -150,10 +176,13 @@ that, for callers doing their own placement.</p>
 <p>The whole <code>d</code> grammar: <code>M</code>/<code>L</code>/<code>H</code>/<code>V</code>/<code>C</code>/<code>S</code>/<code>Q</code>/<code>T</code>/<code>A</code>/<code>Z</code> in absolute and
 relative forms, implicit repeated commands, the smooth-curve reflection rules,
 and elliptical arcs. Curves are flattened to polylines.</p>
-<p>What is <strong>not</strong> here is the rest of SVG: no stylesheets, gradients,
-<code>&lt;use&gt;</code>, clip paths, or element transforms — this reads path data, not
-documents. To pull <code>d</code> strings out of an SVG file, use an XML parser
-(<code>xml2::xml_find_all(doc, "//svg:path")</code>) and pass each one here.</p>
+<p><code>svg_grob()</code> also accepts a whole <code>&lt;svg&gt;</code> element as <code>d</code>: it reads the
+<code>&lt;path&gt;</code> geometry and the document <code>viewBox</code> (needs the <span class="pkg">xml2</span> package).
+Only <code>&lt;path&gt;</code> elements are read — other drawable shapes (<code>&lt;circle&gt;</code>, <code>&lt;rect&gt;</code>,
+<code>&lt;line&gt;</code>, …) are not path data and are reported with a warning, not silently
+dropped. The rest of SVG is still out of scope: no stylesheets, gradients,
+<code>&lt;use&gt;</code>, clip paths, or element transforms — this reads geometry, not
+documents.</p>
 <p>Malformed data yields whatever parsed before the problem rather than an
 error: a truncated icon is easier to diagnose than a stack trace.</p>
     </div>
