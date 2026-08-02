@@ -755,7 +755,9 @@ fn animated_svg(kf: &[Scene], seg: &[i32], frac: &[f64], delay_num: i32, delay_d
             // repeating them would have a screen reader announce the figure once
             // per frame.
             sc.clear_a11y();
-            svg_body(&sc.svg_string(false))
+            // Every frame is a separate render with its own id counters, but they
+            // all end up in ONE document, so the ids need a per-frame namespace.
+            svg_body(&sc.svg_string(false, &format!("f{frame}-")))
         })
         .collect();
 
@@ -782,8 +784,11 @@ fn animated_svg(kf: &[Scene], seg: &[i32], frac: &[f64], delay_num: i32, delay_d
          </style>"
     ));
     for (i, body) in bodies.iter().enumerate() {
-        // A negative delay starts each frame that far into the cycle.
-        let delay = -(i as f64) * dur / n as f64;
+        // A negative delay starts each frame that far into the cycle, so frame `i`
+        // is in its visible window once the cycle has `dur - i*dur/n` still to run
+        // -- i.e. at wall time `i*dur/n`. Offsetting by `i` rather than `n - i`
+        // would run the frames backwards (0, n-1, n-2, ...).
+        let delay = -(((n - i) % n) as f64) * dur / n as f64;
         out.push_str(&format!("<g class=\"vf\" style=\"animation-delay:{delay:.4}s\">{body}</g>"));
     }
     out.push_str("</svg>");

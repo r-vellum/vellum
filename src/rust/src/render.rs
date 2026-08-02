@@ -1437,6 +1437,14 @@ pub struct SvgBackend {
     def_ids: HashMap<String, String>,
     next_clip: u32,
     next_grad: u32,
+    /// Prepended to every generated `<defs>` id (`c0`, `g0`, `fx0`). Empty for a
+    /// standalone document, where the counters are already unique. The animated-SVG
+    /// builder sets a per-frame prefix: all its frames live in ONE document, so
+    /// without it every frame would define `id="c0"` and all 48 `url(#c0)`
+    /// references would resolve to the first — which sits inside a
+    /// `visibility:hidden` group, and a hidden `<clipPath>` child contributes no
+    /// geometry, so the clip empties and the panel disappears.
+    id_prefix: String,
     /// When true, text is emitted as filled glyph `<path>` outlines (pixel-faithful,
     /// matching raster/PDF) instead of selectable `<text>` (renderer-shaped).
     outline_text: bool,
@@ -1497,6 +1505,7 @@ impl SvgBackend {
             def_ids: HashMap::new(),
             next_clip: 0,
             next_grad: 0,
+            id_prefix: String::new(),
             outline_text,
             node_stack: Vec::new(),
             node_open: Vec::new(),
@@ -1521,6 +1530,12 @@ impl SvgBackend {
         self.a11y_prefix = prefix.to_string();
     }
 
+    /// Namespace this backend's generated `<defs>` ids, for when its output is
+    /// spliced into a document alongside other renders (animation frames).
+    pub fn set_id_prefix(&mut self, prefix: &str) {
+        self.id_prefix = prefix.to_string();
+    }
+
     /// Return the id of a `<defs>` entry with signature `key`, emitting it via
     /// `make(id)` the first time and reusing it afterwards.
     ///
@@ -1532,7 +1547,7 @@ impl SvgBackend {
         if let Some(id) = self.def_ids.get(&key) {
             return id.clone();
         }
-        let id = format!("g{}", self.next_grad);
+        let id = format!("{}g{}", self.id_prefix, self.next_grad);
         self.next_grad += 1;
         let def = make(&id);
         self.defs.push_str(&def);
@@ -1616,7 +1631,7 @@ impl SvgBackend {
                             Some(bytes) => format!("data:image/png;base64,{}", b64(&bytes)),
                             None => return String::from("fill=\"none\""),
                         };
-                        let id = format!("g{}", self.next_grad);
+                        let id = format!("{}g{}", self.id_prefix, self.next_grad);
                         self.next_grad += 1;
                         self.defs.push_str(&format!(
                             "<pattern id=\"{id}\" patternUnits=\"userSpaceOnUse\" \
@@ -1730,7 +1745,7 @@ impl SvgBackend {
         let mut parent_ref = String::new();
         let mut last = String::new();
         for shape in clip.shapes {
-            let id = format!("c{}", self.next_clip);
+            let id = format!("{}c{}", self.id_prefix, self.next_clip);
             self.next_clip += 1;
             // Clip geometry is baked to device coords (userSpaceOnUse) so the
             // wrapping `<g>` carries no transform.
@@ -1981,7 +1996,7 @@ impl RenderBackend for SvgBackend {
         let filter_attr = if effect.is_none() {
             String::new()
         } else {
-            let id = format!("fx{}", self.next_grad);
+            let id = format!("{}fx{}", self.id_prefix, self.next_grad);
             self.next_grad += 1;
             let mut prims = String::new();
             if let Some(sh) = effect.shadow {
@@ -2004,7 +2019,7 @@ impl RenderBackend for SvgBackend {
         // Group opacity is a `<g opacity>` (applies to the composited layer).
         let mask_attr = match mask.and_then(|ml| mask_png(&ml.pixmap, ml.kind)) {
             Some(png) => {
-                let id = format!("g{}", self.next_grad);
+                let id = format!("{}g{}", self.id_prefix, self.next_grad);
                 self.next_grad += 1;
                 self.defs.push_str(&format!(
                     "<mask id=\"{id}\" maskUnits=\"userSpaceOnUse\" x=\"0\" y=\"0\" \

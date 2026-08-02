@@ -826,9 +826,13 @@ impl Scene {
     }
 
     /// `render_svg_string` for internal callers (the animated-SVG builder).
-    pub(crate) fn svg_string(&self, outline_text: bool) -> String {
+    ///
+    /// `id_prefix` namespaces the generated `<defs>` ids; the animated-SVG builder
+    /// passes a per-frame value because all frames share one document.
+    pub(crate) fn svg_string(&self, outline_text: bool, id_prefix: &str) -> String {
         let mut b = SvgBackend::new(self.w_px, self.h_px, self.bg, outline_text);
         b.set_a11y(&self.a11y_title, &self.a11y_desc, &self.a11y_prefix);
+        b.set_id_prefix(id_prefix);
         let _warnings = self.render_to(&mut b);
         b.into_string()
     }

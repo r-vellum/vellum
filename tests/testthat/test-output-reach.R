@@ -6,6 +6,15 @@ keyframes <- function(n = 3) {
       draw(circle_grob(r = r, gp = vl_gpar(fill = "tomato", col = "grey20")))
   })
 }
+# Keyframes whose content sits inside a clip, so each frame emits a <clipPath>
+# into <defs> -- the ids that have to stay distinct across frames.
+clipped_keyframes <- function(n = 3) {
+  lapply(seq(0.12, 0.34, length.out = n), function(r) {
+    vl_scene(3, 2, dpi = 96, bg = "white") |>
+      push(vl_viewport(width = 0.8, height = 0.8, clip = TRUE)) |>
+      draw(circle_grob(r = r, gp = vl_gpar(fill = "tomato", col = "grey20")))
+  })
+}
 schedule <- function(k = 3, per = 8) {
   list(
     seg = rep(seq_len(k - 1), each = per),
@@ -48,8 +57,44 @@ test_that("frames are staggered so exactly one is visible at a time", {
   n <- length(delays)
   # One cycle is n/fps seconds and the delays step evenly through it, negatively.
   expect_equal(delays[1], 0)
-  expect_true(all(diff(delays) < 0))
   expect_equal(min(delays), -(n - 1) / 10, tolerance = 1e-6)
+  # A negative delay of -d starts the frame d seconds into the cycle, so the
+  # frame reaches its visible window (the start of a cycle) at dur - d. Frames
+  # must come up in source order: an offset of -i*dur/n rather than -(n-i)*dur/n
+  # plays the animation backwards.
+  dur <- n / 10
+  onset <- ifelse(delays == 0, 0, dur + delays)
+  expect_equal(onset, (seq_len(n) - 1) / 10, tolerance = 1e-6)
+})
+
+test_that("per-frame defs ids are unique across the document", {
+  skip_if_not_installed("xml2")
+  # Each frame is rendered independently, so its id counters restart at zero.
+  # Sharing one id across frames makes every url(#...) resolve to the first
+  # frame's def -- and that one lives inside a visibility:hidden group, where a
+  # <clipPath> child contributes no geometry, so the clip empties and the
+  # clipped content vanishes for all but one frame of the cycle.
+  sc <- schedule(per = 4)
+  f <- withr::local_tempfile(fileext = ".svg")
+  vl_render_animation(clipped_keyframes(), sc$seg, sc$frac, f, format = "svg", fps = 12)
+  x <- xml2::read_xml(f)
+  ids <- xml2::xml_attr(xml2::xml_find_all(x, "//*[@id]"), "id")
+  expect_gt(length(ids), 0)
+  expect_equal(anyDuplicated(ids), 0L)
+})
+
+test_that("each frame's clip references resolve inside that frame", {
+  skip_if_not_installed("xml2")
+  sc <- schedule(per = 4)
+  f <- withr::local_tempfile(fileext = ".svg")
+  vl_render_animation(clipped_keyframes(), sc$seg, sc$frac, f, format = "svg", fps = 12)
+  x <- xml2::read_xml(f)
+  for (fr in xml2::xml_find_all(x, '//*[@class="vf"]')) {
+    refs <- xml2::xml_attr(xml2::xml_find_all(fr, ".//*[@clip-path]"), "clip-path")
+    refs <- unique(sub("^url\\(#(.*)\\)$", "\\1", refs))
+    defined <- xml2::xml_attr(xml2::xml_find_all(fr, ".//*[@id]"), "id")
+    expect_true(all(refs %in% defined))
+  }
 })
 
 test_that("the animation carries accessibility text once, not per frame", {
