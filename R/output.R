@@ -85,18 +85,24 @@ render_all <- function(scenes, paths, workers = NULL, ...) {
     paths <- file.path(paths, paste0(nm, ".png"))
   }
   if (length(paths) != length(scenes)) {
-    cli::cli_abort("{.arg paths} must have one entry per scene ({length(scenes)}).")
+    cli::cli_abort(
+      "{.arg paths} must have one entry per scene ({length(scenes)})."
+    )
   }
   n <- length(scenes)
   workers <- as.integer(workers %||% min(n, .cores()))
   # Below two workers there is nothing to parallelise, and the setup cost is
   # pure loss -- so do not pay it.
   if (workers < 2L || n < 2L) {
-    for (i in seq_len(n)) render(as_vellum_scene(scenes[[i]]), paths[[i]], ...)
+    for (i in seq_len(n)) {
+      render(as_vellum_scene(scenes[[i]]), paths[[i]], ...)
+    }
     return(invisible(paths))
   }
   if (!requireNamespace("parallel", quietly = TRUE)) {
-    for (i in seq_len(n)) render(as_vellum_scene(scenes[[i]]), paths[[i]], ...)
+    for (i in seq_len(n)) {
+      render(as_vellum_scene(scenes[[i]]), paths[[i]], ...)
+    }
     return(invisible(paths))
   }
   # Fork where it is available (cheap: no re-loading the package, no copying the
@@ -104,11 +110,17 @@ render_all <- function(scenes, paths, workers = NULL, ...) {
   # serialise every scene to the workers, which for the big scenes that make
   # this worth doing costs more than it saves.
   if (.Platform$OS.type == "unix") {
-    parallel::mclapply(seq_len(n), function(i) {
-      render(as_vellum_scene(scenes[[i]]), paths[[i]], ...)
-    }, mc.cores = workers)
+    parallel::mclapply(
+      seq_len(n),
+      function(i) {
+        render(as_vellum_scene(scenes[[i]]), paths[[i]], ...)
+      },
+      mc.cores = workers
+    )
   } else {
-    for (i in seq_len(n)) render(as_vellum_scene(scenes[[i]]), paths[[i]], ...)
+    for (i in seq_len(n)) {
+      render(as_vellum_scene(scenes[[i]]), paths[[i]], ...)
+    }
   }
   invisible(paths)
 }

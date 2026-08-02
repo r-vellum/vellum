@@ -32,9 +32,15 @@ set.seed(1)
 arr <- array(runif(px * px * 3L), dim = c(px, px, 3L))
 ras <- grDevices::as.raster(arr) # character matrix of "#rrggbb"
 
-cat(sprintf("Image: %dx%d px (%s pixels) into a %dx%d in @ %d dpi page\n\n",
-            px, px, format(px * px, big.mark = ",", scientific = FALSE),
-            width, height, dpi))
+cat(sprintf(
+  "Image: %dx%d px (%s pixels) into a %dx%d in @ %d dpi page\n\n",
+  px,
+  px,
+  format(px * px, big.mark = ",", scientific = FALSE),
+  width,
+  height,
+  dpi
+))
 
 # --- 1. the conversion alone ------------------------------------------------
 # `.image_to_rgba()` is internal; reach it through the namespace so the cost of
@@ -75,8 +81,13 @@ t_grid <- bench("grid", {
   grDevices::dev.off()
 })
 
-cat(sprintf("\n  conversion share of vellum end-to-end (array in): %.0f%%\n",
-            100 * t_arr / max(t_vellum, 1e-9)))
-cat(sprintf("  vs grid: array in %.2fx, raster in %.2fx  (>1 = vellum faster)\n",
-            t_grid / max(t_vellum, 1e-9), t_grid / max(t_vellum_ras, 1e-9)))
+cat(sprintf(
+  "\n  conversion share of vellum end-to-end (array in): %.0f%%\n",
+  100 * t_arr / max(t_vellum, 1e-9)
+))
+cat(sprintf(
+  "  vs grid: array in %.2fx, raster in %.2fx  (>1 = vellum faster)\n",
+  t_grid / max(t_vellum, 1e-9),
+  t_grid / max(t_vellum_ras, 1e-9)
+))
 cat(sprintf("  wrote %s\n        %s\n", f_v, f_g))

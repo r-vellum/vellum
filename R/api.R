@@ -10,7 +10,9 @@ NULL
 # its `nid` across an edit (structural sharing) while a changed one gets a fresh
 # one. `NULL` -> the subtree is not sub-raster-cacheable.
 gtree <- S7::new_class(
-  "gtree", parent = grob, package = "vellum",
+  "gtree",
+  parent = grob,
+  package = "vellum",
   properties = list(
     vp = S7::new_property(S7::class_any, default = NULL),
     children = S7::new_property(S7::class_list, default = list()),
@@ -39,10 +41,17 @@ gtree <- S7::new_class(
 # scene's view is the recorded prefix of each open node. Exactly one of
 # `bstate`/`root` is non-NULL.
 vellum_scene <- S7::new_class(
-  "vellum_scene", package = "vellum",
+  "vellum_scene",
+  package = "vellum",
   properties = list(
-    width  = S7::new_property(S7::new_S3_class("vellum_unit"), default = quote(vl_unit(6, "in"))),
-    height = S7::new_property(S7::new_S3_class("vellum_unit"), default = quote(vl_unit(4, "in"))),
+    width = S7::new_property(
+      S7::new_S3_class("vellum_unit"),
+      default = quote(vl_unit(6, "in"))
+    ),
+    height = S7::new_property(
+      S7::new_S3_class("vellum_unit"),
+      default = quote(vl_unit(4, "in"))
+    ),
     dpi = S7::new_property(S7::class_double, default = 96),
     bg = S7::new_property(S7::class_any, default = "white"),
     root = S7::new_property(S7::class_any, default = NULL),
@@ -104,7 +113,9 @@ vellum_scene <- S7::new_class(
 }
 # Index (1-based) of `child` among `parent`'s first `lim` children, by identity.
 .bnode_index_of <- function(parent, child, lim) {
-  for (j in seq_len(lim)) if (identical(.bnode_kid(parent, j), child)) return(j)
+  for (j in seq_len(lim)) {
+    if (identical(.bnode_kid(parent, j), child)) return(j)
+  }
   NA_integer_
 }
 
@@ -117,18 +128,31 @@ vellum_scene <- S7::new_class(
   cap <- if (on_path) ocount[[depth]] else node$n
   nextnode <- if (on_path && depth < length(open)) open[[depth + 1L]] else NULL
   # One `mget()` beats `cap` R-level `get()`s (~35ms vs ~8ms at 20k children).
-  children <- if (cap) mget(as.character(seq_len(cap)), envir = node$kids) else list()
+  children <- if (cap) {
+    mget(as.character(seq_len(cap)), envir = node$kids)
+  } else {
+    list()
+  }
   names(children) <- NULL
   for (i in seq_len(cap)) {
     ch <- children[[i]]
     if (.is_bnode(ch)) {
-      nd <- if (!is.null(nextnode) && identical(ch, nextnode)) depth + 1L else NA_integer_
+      nd <- if (!is.null(nextnode) && identical(ch, nextnode)) {
+        depth + 1L
+      } else {
+        NA_integer_
+      }
       children[[i]] <- .bnode_to_gtree(ch, open, ocount, nd)
     }
   }
   # Stamp a per-subtree identity token (FW4c). Memoised with the tree by
   # `.materialize_cached`, so it is stable across renders at a fixed scene cid.
-  gtree(name = node$vp@name, vp = node$vp, children = children, nid = .new_scene_id())
+  gtree(
+    name = node$vp@name,
+    vp = node$vp,
+    children = children,
+    nid = .new_scene_id()
+  )
 }
 # Reopen an immutable gtree into a build tree (for drawing after edit/render).
 # One `list2env()` beats a `.bnode_add()` per child, and the recursion test is an
@@ -140,10 +164,15 @@ vellum_scene <- S7::new_class(
   n <- length(ch)
   if (n) {
     for (i in seq_len(n)) {
-      if (!is.null(attr(ch[[i]], "children", exact = TRUE))) ch[[i]] <- .gtree_to_bnode(ch[[i]])
+      if (!is.null(attr(ch[[i]], "children", exact = TRUE))) {
+        ch[[i]] <- .gtree_to_bnode(ch[[i]])
+      }
     }
     names(ch) <- as.character(seq_len(n))
-    node$kids <- list2env(ch, envir = new.env(parent = emptyenv(), hash = TRUE, size = n))
+    node$kids <- list2env(
+      ch,
+      envir = new.env(parent = emptyenv(), hash = TRUE, size = n)
+    )
     node$n <- n
   }
   node
@@ -153,7 +182,13 @@ vellum_scene <- S7::new_class(
 # counts, and the ownership generation. `owner_gen` is stamped on the build node.
 .bstate_new <- function(build, open, ocount, gen) {
   build$owner_gen <- gen
-  list(build = build, open = open, ocount = ocount, gen = gen, cid = .new_scene_id())
+  list(
+    build = build,
+    open = open,
+    ocount = ocount,
+    gen = gen,
+    cid = .new_scene_id()
+  )
 }
 
 # The immutable root gtree for a scene's view (materialising the build tree if
@@ -165,7 +200,11 @@ vellum_scene <- S7::new_class(
   }
   bs <- scene@bstate
   if (is.null(bs)) {
-    return(gtree(name = "root", vp = vl_viewport(name = "root"), children = list()))
+    return(gtree(
+      name = "root",
+      vp = vl_viewport(name = "root"),
+      children = list()
+    ))
   }
   .bnode_to_gtree(bs$build, bs$open, bs$ocount, 1L)
 }
@@ -177,15 +216,24 @@ vellum_scene <- S7::new_class(
   bs <- scene@bstate
   idx <- vapply(
     seq_len(length(bs$open) - 1L),
-    function(i) .bnode_index_of(bs$open[[i]], bs$open[[i + 1L]], bs$ocount[[i]]),
+    function(i) {
+      .bnode_index_of(bs$open[[i]], bs$open[[i + 1L]], bs$ocount[[i]])
+    },
     integer(1)
   )
   root <- .gtree_to_bnode(.materialize(scene)) # deep copy of this scene's view
   open <- vector("list", length(idx) + 1L)
   open[[1L]] <- root
-  for (j in seq_along(idx)) open[[j + 1L]] <- .bnode_kid(open[[j]], idx[[j]])
+  for (j in seq_along(idx)) {
+    open[[j + 1L]] <- .bnode_kid(open[[j]], idx[[j]])
+  }
   scene@root <- NULL
-  scene@bstate <- .bstate_new(root, open, vapply(open, function(b) b$n, integer(1)), 0)
+  scene@bstate <- .bstate_new(
+    root,
+    open,
+    vapply(open, function(b) b$n, integer(1)),
+    0
+  )
   scene
 }
 
@@ -194,7 +242,8 @@ vellum_scene <- S7::new_class(
 # returns a scene whose `@bstate` is present and owned.
 .ensure_building <- function(scene) {
   bs <- scene@bstate
-  if (is.null(bs)) { # materialised -> reopen a fresh, owned build tree
+  if (is.null(bs)) {
+    # materialised -> reopen a fresh, owned build tree
     br <- .gtree_to_bnode(.materialize(scene))
     scene@root <- NULL
     scene@bstate <- .bstate_new(br, list(br), br$n, 0)
@@ -234,14 +283,37 @@ vellum_scene <- S7::new_class(
 #'   draw(lines_grob(x = vl_unit(0:10, "native"), y = vl_unit(0:10, "native"),
 #'                   gp = vl_gpar(col = "steelblue", lwd = 2)))
 #' @export
-vl_scene <- function(width = 6, height = 4, dpi = 96, bg = "white",
-                     gp = vl_gpar(), xscale = c(0, 1), yscale = c(0, 1), clip = FALSE,
-                     title = NULL, desc = NULL) {
-  root <- .bnode(vp = vl_viewport(name = "root", gp = gp, xscale = xscale, yscale = yscale, clip = clip))
+vl_scene <- function(
+  width = 6,
+  height = 4,
+  dpi = 96,
+  bg = "white",
+  gp = vl_gpar(),
+  xscale = c(0, 1),
+  yscale = c(0, 1),
+  clip = FALSE,
+  title = NULL,
+  desc = NULL
+) {
+  root <- .bnode(
+    vp = vl_viewport(
+      name = "root",
+      gp = gp,
+      xscale = xscale,
+      yscale = yscale,
+      clip = clip
+    )
+  )
   vellum_scene(
-    width = .as_size(width), height = .as_size(height), dpi = dpi, bg = bg,
-    root = NULL, bstate = .bstate_new(root, list(root), 0L, 0),
-    title = title, desc = desc, a11y_prefix = .new_a11y_prefix()
+    width = .as_size(width),
+    height = .as_size(height),
+    dpi = dpi,
+    bg = bg,
+    root = NULL,
+    bstate = .bstate_new(root, list(root), 0L, 0),
+    title = title,
+    desc = desc,
+    a11y_prefix = .new_a11y_prefix()
   )
 }
 
@@ -265,9 +337,13 @@ vl_scene <- function(width = 6, height = 4, dpi = 96, bg = "white",
 describe <- function(scene, title = NULL, desc = NULL) {
   scene <- as_vellum_scene(scene)
   # A new content-identity so the render cache recompiles with the new metadata.
-  S7::set_props(scene, title = title, desc = desc,
-                a11y_prefix = scene@a11y_prefix %||% .new_a11y_prefix(),
-                cid = .new_scene_id())
+  S7::set_props(
+    scene,
+    title = title,
+    desc = desc,
+    a11y_prefix = scene@a11y_prefix %||% .new_a11y_prefix(),
+    cid = .new_scene_id()
+  )
 }
 
 # Bump the ownership generation on `bs` (in place on the shared build node) and
@@ -313,7 +389,9 @@ draw <- function(scene, grob) {
   # (`S7_inherits(x)` with no class asks "is this any S7 object" — naming the
   # `grob` class here would resolve to this function's argument.)
   if (is.list(grob) && !S7::S7_inherits(grob)) {
-    for (g in grob) .bnode_add(cur, g)
+    for (g in grob) {
+      .bnode_add(cur, g)
+    }
   } else {
     .bnode_add(cur, grob) # O(1) env append
   }
@@ -400,19 +478,28 @@ S7::method(as_vellum_scene, vellum_scene) <- function(x, ...) x
 #'   warns if you ask for one.
 #' @return `render()`: `path`, invisibly.
 #' @export
-render <- function(scene, path, text = c("native", "outline"), debug = FALSE,
-                   scale = 1, cvd = "none") {
+render <- function(
+  scene,
+  path,
+  text = c("native", "outline"),
+  debug = FALSE,
+  scale = 1,
+  cvd = "none"
+) {
   text <- match.arg(text)
   scene <- .apply_scale(as_vellum_scene(scene), scale)
   ext <- tolower(tools::file_ext(path))
   on.exit(.set_cvd("none"), add = TRUE)
   .set_cvd(cvd, format = ext)
   s <- .scene_to_backend(scene, debug = debug)
-  warns <- switch(ext,
+  warns <- switch(
+    ext,
     png = s$render_png(path),
     svg = s$render_svg(path, identical(text, "outline")),
     pdf = s$render_pdf(path),
-    cli::cli_abort("Unsupported output format {.val {ext}}; use .png, .svg, or .pdf.")
+    cli::cli_abort(
+      "Unsupported output format {.val {ext}}; use .png, .svg, or .pdf."
+    )
   )
   .emit_degrade_warnings(warns)
   invisible(path)
@@ -489,7 +576,13 @@ scene_pdf <- function(scene) {
 # grid. `dpi` is part of the render-cache key, so each scale caches separately.
 # Valid `cvd` values; "none" disables. Kept here so `render()`, `scene_png()` and
 # the error message can't drift apart.
-.CVD_KINDS <- c("none", "protanopia", "deuteranopia", "tritanopia", "achromatopsia")
+.CVD_KINDS <- c(
+  "none",
+  "protanopia",
+  "deuteranopia",
+  "tritanopia",
+  "achromatopsia"
+)
 
 # Push the CVD mode for the coming render (a thread-local on the Rust side, like
 # the glyph-bitmap mode). Warns rather than errors for a vector target: asking for
@@ -642,8 +735,12 @@ display <- function(scene, ...) {
 makeContent.vellum_scene_grob <- function(x) {
   w_in <- grid::convertWidth(grid::unit(1, "npc"), "inches", valueOnly = TRUE)
   h_in <- grid::convertHeight(grid::unit(1, "npc"), "inches", valueOnly = TRUE)
-  if (!is.finite(w_in) || w_in <= 0) w_in <- .to_inches(x$scene@width)
-  if (!is.finite(h_in) || h_in <= 0) h_in <- .to_inches(x$scene@height)
+  if (!is.finite(w_in) || w_in <= 0) {
+    w_in <- .to_inches(x$scene@width)
+  }
+  if (!is.finite(h_in) || h_in <= 0) {
+    h_in <- .to_inches(x$scene@height)
+  }
   # Pick the dpi to re-render at. Priority: (1) the knitr/Quarto chunk dpi the
   # user set and expects to win; (2) the live device's pixel density, but only
   # when it's trustworthy; (3) the scene's authored dpi. grDevices::png (knitr's
@@ -651,20 +748,38 @@ makeContent.vellum_scene_grob <- function(x) {
   # res=, so the ratio pins at 72 there regardless of the real resolution — treat
   # a ratio of 72 as "device misreports" and fall through to the authored dpi
   # rather than clamping the render to 72 and upscaling a soft bitmap.
-  knit_dpi <- if (isTRUE(getOption("knitr.in.progress")))
-    knitr::opts_current$get("dpi") else NULL
-  dev_dpi <- tryCatch({
-    d <- grDevices::dev.size("in")
-    p <- grDevices::dev.size("px")
-    r <- round(p[1] / d[1])
-    if (r <= 72) NA_real_ else min(r, 300)
-  }, error = function(e) NA_real_)
+  knit_dpi <- if (isTRUE(getOption("knitr.in.progress"))) {
+    knitr::opts_current$get("dpi")
+  } else {
+    NULL
+  }
+  dev_dpi <- tryCatch(
+    {
+      d <- grDevices::dev.size("in")
+      p <- grDevices::dev.size("px")
+      r <- round(p[1] / d[1])
+      if (r <= 72) NA_real_ else min(r, 300)
+    },
+    error = function(e) NA_real_
+  )
   dpi <- knit_dpi %||% (if (is.na(dev_dpi)) x$scene@dpi else max(72, dev_dpi))
-  s2 <- S7::set_props(x$scene, width = vl_unit(w_in, "in"), height = vl_unit(h_in, "in"), dpi = dpi)
-  grid::setChildren(x, grid::gList(
-    grid::rasterGrob(as.raster(s2), width = grid::unit(1, "npc"),
-                     height = grid::unit(1, "npc"), interpolate = TRUE)
-  ))
+  s2 <- S7::set_props(
+    x$scene,
+    width = vl_unit(w_in, "in"),
+    height = vl_unit(h_in, "in"),
+    dpi = dpi
+  )
+  grid::setChildren(
+    x,
+    grid::gList(
+      grid::rasterGrob(
+        as.raster(s2),
+        width = grid::unit(1, "npc"),
+        height = grid::unit(1, "npc"),
+        interpolate = TRUE
+      )
+    )
+  )
 }
 
 # Auto-print (type a scene at the console) and plot() both display it, like
@@ -715,8 +830,21 @@ rm(print, plot)
 }
 
 .render_key <- function(cid, w_in, h_in, dpi, bg, title = NULL, desc = NULL) {
-  paste0(cid, "|", w_in, "x", h_in, "@", dpi, "|", paste(bg, collapse = ","),
-         "|a11y:", title %||% "", "|", desc %||% "")
+  paste0(
+    cid,
+    "|",
+    w_in,
+    "x",
+    h_in,
+    "@",
+    dpi,
+    "|",
+    paste(bg, collapse = ","),
+    "|a11y:",
+    title %||% "",
+    "|",
+    desc %||% ""
+  )
 }
 
 # LRU lookup: on a hit, promote the key to most-recent and count it.
@@ -736,7 +864,9 @@ rm(print, plot)
   while (length(ord) >= cap) {
     old <- ord[[1L]]
     ord <- ord[-1L]
-    if (exists(old, envir = .render_cache, inherits = FALSE)) rm(list = old, envir = .render_cache)
+    if (exists(old, envir = .render_cache, inherits = FALSE)) {
+      rm(list = old, envir = .render_cache)
+    }
   }
   assign(key, value, envir = .render_cache)
   .render_cache$.order <- c(ord, key)
@@ -755,7 +885,8 @@ rm(print, plot)
     return(hit)
   }
   root <- .materialize(scene)
-  if (length(ls(.mtl_cache)) > .render_cache_cap() * 2L) { # crude bound; refs are cheap
+  if (length(ls(.mtl_cache)) > .render_cache_cap() * 2L) {
+    # crude bound; refs are cheap
     rm(list = ls(.mtl_cache, all.names = TRUE), envir = .mtl_cache)
   }
   assign(k, root, envir = .mtl_cache)
@@ -824,8 +955,13 @@ vl_clear_render_cache <- function() {
 }
 
 .glyph_bitmap_code <- function() {
-  switch(as.character(getOption("vellum.glyph_bitmap", "auto")),
-    off = 0L, on = 2L, auto = 1L, 1L)
+  switch(
+    as.character(getOption("vellum.glyph_bitmap", "auto")),
+    off = 0L,
+    on = 2L,
+    auto = 1L,
+    1L
+  )
 }
 
 .scene_to_backend <- function(scene, debug = FALSE) {
@@ -844,9 +980,15 @@ vl_clear_render_cache <- function() {
   if (debug || is.null(cid) || !isTRUE(getOption("vellum.cache", TRUE))) {
     return(.compile_backend(scene, debug = debug, cid = NULL))
   }
-  key <- .render_key(cid, .to_inches(scene@width), .to_inches(scene@height),
-                     scene@dpi, .rs_col(scene@bg) %||% c(255L, 255L, 255L, 0L),
-                     scene@title, scene@desc)
+  key <- .render_key(
+    cid,
+    .to_inches(scene@width),
+    .to_inches(scene@height),
+    scene@dpi,
+    .rs_col(scene@bg) %||% c(255L, 255L, 255L, 0L),
+    scene@title,
+    scene@desc
+  )
   hit <- .render_cache_get(key)
   if (!is.null(hit)) {
     return(hit)
@@ -857,11 +999,19 @@ vl_clear_render_cache <- function() {
 }
 
 .compile_backend <- function(scene, debug = FALSE, cid = NULL) {
-  s <- Scene$new(.to_inches(scene@width), .to_inches(scene@height), scene@dpi,
-                 .rs_col(scene@bg) %||% c(255L, 255L, 255L, 0L))
+  s <- Scene$new(
+    .to_inches(scene@width),
+    .to_inches(scene@height),
+    scene@dpi,
+    .rs_col(scene@bg) %||% c(255L, 255L, 255L, 0L)
+  )
   # Scene-level accessibility (name/description), emitted by the SVG/PDF backends.
   if (!is.null(scene@title) || !is.null(scene@desc)) {
-    s$set_a11y(scene@title %||% "", scene@desc %||% "", scene@a11y_prefix %||% "vl")
+    s$set_a11y(
+      scene@title %||% "",
+      scene@desc %||% "",
+      scene@a11y_prefix %||% "vl"
+    )
   }
   # Compile the root as a gtree so the root viewport's gp / scales / clip / layout
   # / mask all apply (it is pushed like any viewport), not just its layout.
@@ -892,70 +1042,177 @@ compile <- S7::new_generic("compile", "node", function(node, scene) {
 S7::method(compile, grob_rect) <- function(node, scene) {
   .with_vp(node, scene, {
     n <- vctrs::vec_size_common(node@x, node@y, node@width, node@height)
-    ex <- .coord(node@x, "npc", n); ey <- .coord(node@y, "npc", n)
-    ew <- .coord(node@width, "npc", n); eh <- .coord(node@height, "npc", n)
+    ex <- .coord(node@x, "npc", n)
+    ey <- .coord(node@y, "npc", n)
+    ew <- .coord(node@width, "npc", n)
+    eh <- .coord(node@height, "npc", n)
     g <- .gp4(node@gp, scene)
     sk <- .encode_sketch(node@sketch)
     # One batched call (one shared gpar) instead of a per-element FFI loop.
-    scene$rects(ex$value, ey$value, ew$value, eh$value,
-                ex$code, ex$offset, ey$code, ey$offset, ew$code, ew$offset, eh$code, eh$offset,
-                g$fill, g$col, g$lwd, g$alpha, g$stroke,
-                sk$roughness, sk$bowing, sk$fill_style, sk$fill_weight, sk$hachure_angle,
-                sk$hachure_gap, sk$curve_tightness, sk$disable_multi, sk$preserve, sk$seed,
-                .keys_vec(node, n))
+    scene$rects(
+      ex$value,
+      ey$value,
+      ew$value,
+      eh$value,
+      ex$code,
+      ex$offset,
+      ey$code,
+      ey$offset,
+      ew$code,
+      ew$offset,
+      eh$code,
+      eh$offset,
+      g$fill,
+      g$col,
+      g$lwd,
+      g$alpha,
+      g$stroke,
+      sk$roughness,
+      sk$bowing,
+      sk$fill_style,
+      sk$fill_weight,
+      sk$hachure_angle,
+      sk$hachure_gap,
+      sk$curve_tightness,
+      sk$disable_multi,
+      sk$preserve,
+      sk$seed,
+      .keys_vec(node, n)
+    )
   })
 }
 
 S7::method(compile, grob_roundrect) <- function(node, scene) {
   .with_vp(node, scene, {
     n <- vctrs::vec_size_common(node@x, node@y, node@width, node@height, node@r)
-    ex <- .coord(node@x, "npc", n); ey <- .coord(node@y, "npc", n)
-    ew <- .coord(node@width, "npc", n); eh <- .coord(node@height, "npc", n)
+    ex <- .coord(node@x, "npc", n)
+    ey <- .coord(node@y, "npc", n)
+    ew <- .coord(node@width, "npc", n)
+    eh <- .coord(node@height, "npc", n)
     er <- .coord(node@r, "npc", n)
     g <- .gp4(node@gp, scene)
     sk <- .encode_sketch(node@sketch)
     # `.keys_vec()` is empty when the grob has no key at all; the loop below
     # indexes it per element, so widen it to n empty strings.
     kv <- .keys_vec(node, n)
-    if (!length(kv)) kv <- rep("", n)
+    if (!length(kv)) {
+      kv <- rep("", n)
+    }
     # Rounded rects are typically few (keys/labels); one FFI call each, shared gpar.
     for (i in seq_len(n)) {
-      scene$roundrect(ex$value[i], ey$value[i], ew$value[i], eh$value[i], er$value[i],
-                      ex$code[i], ex$offset[i], ey$code[i], ey$offset[i], ew$code[i], ew$offset[i],
-                      eh$code[i], eh$offset[i], er$code[i], er$offset[i],
-                      g$fill, g$col, g$lwd, g$alpha, g$stroke,
-                      sk$roughness, sk$bowing, sk$fill_style, sk$fill_weight, sk$hachure_angle,
-                      sk$hachure_gap, sk$curve_tightness, sk$disable_multi, sk$preserve, sk$seed,
-                      kv[i])
+      scene$roundrect(
+        ex$value[i],
+        ey$value[i],
+        ew$value[i],
+        eh$value[i],
+        er$value[i],
+        ex$code[i],
+        ex$offset[i],
+        ey$code[i],
+        ey$offset[i],
+        ew$code[i],
+        ew$offset[i],
+        eh$code[i],
+        eh$offset[i],
+        er$code[i],
+        er$offset[i],
+        g$fill,
+        g$col,
+        g$lwd,
+        g$alpha,
+        g$stroke,
+        sk$roughness,
+        sk$bowing,
+        sk$fill_style,
+        sk$fill_weight,
+        sk$hachure_angle,
+        sk$hachure_gap,
+        sk$curve_tightness,
+        sk$disable_multi,
+        sk$preserve,
+        sk$seed,
+        kv[i]
+      )
     }
   })
 }
 
 S7::method(compile, grob_lines) <- function(node, scene) {
   .with_vp(node, scene, {
-    ex <- .coord(node@x); ey <- .coord(node@y); g <- .gp4(node@gp, scene)
+    ex <- .coord(node@x)
+    ey <- .coord(node@y)
+    g <- .gp4(node@gp, scene)
     a <- .encode_arrow(node@arrow)
-    sc <- .encode_cap(node@start_cap); ec <- .encode_cap(node@end_cap)
+    sc <- .encode_cap(node@start_cap)
+    ec <- .encode_cap(node@end_cap)
     of <- .encode_cap(node@offset)
     sk <- .encode_sketch(node@sketch)
-    scene$lines(ex$value, ey$value, ex$code, ex$offset, ey$code, ey$offset,
-                sc$value, ec$value, sc$code, ec$code, of$value, of$code,
-                g$col, g$lwd, g$alpha, g$stroke,
-                a$angle, a$len, a$ends, a$closed,
-                sk$roughness, sk$bowing, sk$fill_style, sk$fill_weight, sk$hachure_angle,
-                sk$hachure_gap, sk$curve_tightness, sk$disable_multi, sk$preserve, sk$seed,
-                .key1(node))
+    scene$lines(
+      ex$value,
+      ey$value,
+      ex$code,
+      ex$offset,
+      ey$code,
+      ey$offset,
+      sc$value,
+      ec$value,
+      sc$code,
+      ec$code,
+      of$value,
+      of$code,
+      g$col,
+      g$lwd,
+      g$alpha,
+      g$stroke,
+      a$angle,
+      a$len,
+      a$ends,
+      a$closed,
+      sk$roughness,
+      sk$bowing,
+      sk$fill_style,
+      sk$fill_weight,
+      sk$hachure_angle,
+      sk$hachure_gap,
+      sk$curve_tightness,
+      sk$disable_multi,
+      sk$preserve,
+      sk$seed,
+      .key1(node)
+    )
   })
 }
 
 S7::method(compile, grob_polygon) <- function(node, scene) {
   .with_vp(node, scene, {
-    ex <- .coord(node@x); ey <- .coord(node@y); g <- .gp4(node@gp, scene)
+    ex <- .coord(node@x)
+    ey <- .coord(node@y)
+    g <- .gp4(node@gp, scene)
     sk <- .encode_sketch(node@sketch)
-    scene$polygon(ex$value, ey$value, ex$code, ex$offset, ey$code, ey$offset, g$fill, g$col, g$lwd, g$alpha, g$stroke,
-                  sk$roughness, sk$bowing, sk$fill_style, sk$fill_weight, sk$hachure_angle,
-                  sk$hachure_gap, sk$curve_tightness, sk$disable_multi, sk$preserve, sk$seed,
-                  .key1(node))
+    scene$polygon(
+      ex$value,
+      ey$value,
+      ex$code,
+      ex$offset,
+      ey$code,
+      ey$offset,
+      g$fill,
+      g$col,
+      g$lwd,
+      g$alpha,
+      g$stroke,
+      sk$roughness,
+      sk$bowing,
+      sk$fill_style,
+      sk$fill_weight,
+      sk$hachure_angle,
+      sk$hachure_gap,
+      sk$curve_tightness,
+      sk$disable_multi,
+      sk$preserve,
+      sk$seed,
+      .key1(node)
+    )
   })
 }
 
@@ -964,15 +1221,38 @@ S7::method(compile, grob_polygon) <- function(node, scene) {
 .compile_circles <- function(node, scene, radius, rdefault, sketch = NULL) {
   .with_vp(node, scene, {
     n <- vctrs::vec_size_common(node@x, node@y, radius)
-    ex <- .coord(node@x, "npc", n); ey <- .coord(node@y, "npc", n)
+    ex <- .coord(node@x, "npc", n)
+    ey <- .coord(node@y, "npc", n)
     er <- .coord(radius, rdefault, n)
     g <- .gp4(node@gp, scene)
     sk <- .encode_sketch(sketch)
-    scene$circles(ex$value, ey$value, er$value, ex$code, ex$offset, ey$code, ey$offset, er$code, er$offset,
-                  g$fill, g$col, g$lwd, g$alpha, g$stroke,
-                  sk$roughness, sk$bowing, sk$fill_style, sk$fill_weight, sk$hachure_angle,
-                  sk$hachure_gap, sk$curve_tightness, sk$disable_multi, sk$preserve, sk$seed,
-                  .keys_vec(node, n))
+    scene$circles(
+      ex$value,
+      ey$value,
+      er$value,
+      ex$code,
+      ex$offset,
+      ey$code,
+      ey$offset,
+      er$code,
+      er$offset,
+      g$fill,
+      g$col,
+      g$lwd,
+      g$alpha,
+      g$stroke,
+      sk$roughness,
+      sk$bowing,
+      sk$fill_style,
+      sk$fill_weight,
+      sk$hachure_angle,
+      sk$hachure_gap,
+      sk$curve_tightness,
+      sk$disable_multi,
+      sk$preserve,
+      sk$seed,
+      .keys_vec(node, n)
+    )
   })
 }
 
@@ -989,15 +1269,39 @@ S7::method(compile, grob_points) <- function(node, scene) {
   } else {
     .with_vp(node, scene, {
       n <- vctrs::vec_size_common(node@x, node@y, node@size)
-      ex <- .coord(node@x, "npc", n); ey <- .coord(node@y, "npc", n); es <- .coord(node@size, "mm", n)
+      ex <- .coord(node@x, "npc", n)
+      ey <- .coord(node@y, "npc", n)
+      es <- .coord(node@size, "mm", n)
       g <- .gp4(node@gp, scene)
       sk <- .encode_sketch(node@sketch)
-      scene$markers(ex$value, ey$value, es$value, ex$code, ex$offset, ey$code, ey$offset, es$code, es$offset,
-                    vctrs::vec_recycle(as.integer(codes), n),
-                    g$fill, g$col, g$lwd, g$alpha, g$stroke,
-                    sk$roughness, sk$bowing, sk$fill_style, sk$fill_weight, sk$hachure_angle,
-                    sk$hachure_gap, sk$curve_tightness, sk$disable_multi, sk$preserve, sk$seed,
-                    .keys_vec(node, n))
+      scene$markers(
+        ex$value,
+        ey$value,
+        es$value,
+        ex$code,
+        ex$offset,
+        ey$code,
+        ey$offset,
+        es$code,
+        es$offset,
+        vctrs::vec_recycle(as.integer(codes), n),
+        g$fill,
+        g$col,
+        g$lwd,
+        g$alpha,
+        g$stroke,
+        sk$roughness,
+        sk$bowing,
+        sk$fill_style,
+        sk$fill_weight,
+        sk$hachure_angle,
+        sk$hachure_gap,
+        sk$curve_tightness,
+        sk$disable_multi,
+        sk$preserve,
+        sk$seed,
+        .keys_vec(node, n)
+      )
     })
   }
 }
@@ -1005,12 +1309,14 @@ S7::method(compile, grob_points) <- function(node, scene) {
 S7::method(compile, grob_hexagon) <- function(node, scene) {
   .with_vp(node, scene, {
     n <- vctrs::vec_size_common(node@x, node@y, node@size)
-    ex <- .coord(node@x, "npc", n); ey <- .coord(node@y, "npc", n)
+    ex <- .coord(node@x, "npc", n)
+    ey <- .coord(node@y, "npc", n)
     es <- .coord(node@size, "mm", n)
     # Non-regular geometry: per-axis full width/height (override `size`). Empty
     # streams signal the regular size-driven path to the Rust side.
     if (!is.null(node@width)) {
-      ew <- .coord(node@width, "native", n); eh <- .coord(node@height, "native", n)
+      ew <- .coord(node@width, "native", n)
+      eh <- .coord(node@height, "native", n)
     } else {
       ew <- list(value = numeric(0), code = integer(0), offset = numeric(0))
       eh <- list(value = numeric(0), code = integer(0), offset = numeric(0))
@@ -1020,7 +1326,9 @@ S7::method(compile, grob_hexagon) <- function(node, scene) {
     # contiguous (chunks of 4 on the Rust side). Fold the uniform gp$alpha into
     # the per-hex fill alpha (the fill bypasses the shared-gpar resolve).
     cols <- node@fill
-    if (is.null(cols)) cols <- node@gp@fill
+    if (is.null(cols)) {
+      cols <- node@gp@fill
+    }
     # A gradient/pattern/hatch is not a per-element colour. Send an *empty* fill
     # vector so the backend falls back to the shared `gp` paint for every element
     # -- which is what lets a batched mark take the full paint model at all. (An
@@ -1029,36 +1337,62 @@ S7::method(compile, grob_hexagon) <- function(node, scene) {
     if (paint_fill) {
       frgba <- integer(0)
     } else {
-      if (is.null(cols)) cols <- NA
+      if (is.null(cols)) {
+        cols <- NA
+      }
       cols <- rep_len(cols, n)
       cols[is.na(cols)] <- "transparent"
       m <- grDevices::col2rgb(cols, alpha = TRUE)
       a <- node@gp@alpha
-      if (!is.null(a) && !is.na(a)) m[4L, ] <- round(m[4L, ] * a)
+      if (!is.null(a) && !is.na(a)) {
+        m[4L, ] <- round(m[4L, ] * a)
+      }
       frgba <- as.integer(m)
     }
     g <- .gp4(node@gp, scene)
-    scene$hexagons(ex$value, ey$value, es$value, ew$value, eh$value,
-                   ex$code, ex$offset, ey$code, ey$offset, es$code, es$offset,
-                   ew$code, ew$offset, eh$code, eh$offset,
-                   frgba, identical(node@orientation, "flat"),
-                   g$col, g$lwd, g$alpha, g$stroke,
-                   if (paint_fill) g$fill else NULL,
-                   .keys_vec(node, n))
+    scene$hexagons(
+      ex$value,
+      ey$value,
+      es$value,
+      ew$value,
+      eh$value,
+      ex$code,
+      ex$offset,
+      ey$code,
+      ey$offset,
+      es$code,
+      es$offset,
+      ew$code,
+      ew$offset,
+      eh$code,
+      eh$offset,
+      frgba,
+      identical(node@orientation, "flat"),
+      g$col,
+      g$lwd,
+      g$alpha,
+      g$stroke,
+      if (paint_fill) g$fill else NULL,
+      .keys_vec(node, n)
+    )
   })
 }
 
 S7::method(compile, grob_sector) <- function(node, scene) {
   .with_vp(node, scene, {
     n <- vctrs::vec_size_common(node@x, node@y, node@r0, node@r1)
-    ex <- .coord(node@x, "npc", n); ey <- .coord(node@y, "npc", n)
-    er0 <- .coord(node@r0, "native", n); er1 <- .coord(node@r1, "native", n)
+    ex <- .coord(node@x, "npc", n)
+    ey <- .coord(node@y, "npc", n)
+    er0 <- .coord(node@r0, "native", n)
+    er1 <- .coord(node@r1, "native", n)
     th0 <- vctrs::vec_recycle(as.numeric(node@theta0), n)
     th1 <- vctrs::vec_recycle(as.numeric(node@theta1), n)
     # Per-sector fill (like hexagons): explicit `fill`, else gp$fill, else none.
     # col2rgb(alpha=TRUE) -> contiguous RGBA quads; fold the uniform gp$alpha in.
     cols <- node@fill
-    if (is.null(cols)) cols <- node@gp@fill
+    if (is.null(cols)) {
+      cols <- node@gp@fill
+    }
     # A gradient/pattern/hatch is not a per-element colour. Send an *empty* fill
     # vector so the backend falls back to the shared `gp` paint for every element
     # -- which is what lets a batched mark take the full paint model at all. (An
@@ -1067,88 +1401,216 @@ S7::method(compile, grob_sector) <- function(node, scene) {
     if (paint_fill) {
       frgba <- integer(0)
     } else {
-      if (is.null(cols)) cols <- NA
+      if (is.null(cols)) {
+        cols <- NA
+      }
       cols <- rep_len(cols, n)
       cols[is.na(cols)] <- "transparent"
       m <- grDevices::col2rgb(cols, alpha = TRUE)
       a <- node@gp@alpha
-      if (!is.null(a) && !is.na(a)) m[4L, ] <- round(m[4L, ] * a)
+      if (!is.null(a) && !is.na(a)) {
+        m[4L, ] <- round(m[4L, ] * a)
+      }
       frgba <- as.integer(m)
     }
     g <- .gp4(node@gp, scene)
     a <- .encode_arrow(node@arrow)
     sk <- .encode_sketch(node@sketch)
-    scene$sectors(ex$value, ey$value, er0$value, er1$value, th0, th1,
-                  ex$code, ex$offset, ey$code, ey$offset, er0$code, er0$offset, er1$code, er1$offset, frgba,
-                  g$col, g$lwd, g$alpha, g$stroke,
-                  a$angle, a$len, a$ends, a$closed,
-                  sk$roughness, sk$bowing, sk$fill_style, sk$fill_weight, sk$hachure_angle,
-                  sk$hachure_gap, sk$curve_tightness, sk$disable_multi, sk$preserve, sk$seed,
-                  if (paint_fill) g$fill else NULL,
-                  .keys_vec(node, n))
+    scene$sectors(
+      ex$value,
+      ey$value,
+      er0$value,
+      er1$value,
+      th0,
+      th1,
+      ex$code,
+      ex$offset,
+      ey$code,
+      ey$offset,
+      er0$code,
+      er0$offset,
+      er1$code,
+      er1$offset,
+      frgba,
+      g$col,
+      g$lwd,
+      g$alpha,
+      g$stroke,
+      a$angle,
+      a$len,
+      a$ends,
+      a$closed,
+      sk$roughness,
+      sk$bowing,
+      sk$fill_style,
+      sk$fill_weight,
+      sk$hachure_angle,
+      sk$hachure_gap,
+      sk$curve_tightness,
+      sk$disable_multi,
+      sk$preserve,
+      sk$seed,
+      if (paint_fill) g$fill else NULL,
+      .keys_vec(node, n)
+    )
   })
 }
 
 S7::method(compile, grob_loop) <- function(node, scene) {
   .with_vp(node, scene, {
     n <- vctrs::vec_size_common(node@x, node@y, node@size, node@foot)
-    ex <- .coord(node@x, "npc", n); ey <- .coord(node@y, "npc", n)
-    es <- .coord(node@size, "mm", n); ef <- .coord(node@foot, "mm", n)
+    ex <- .coord(node@x, "npc", n)
+    ey <- .coord(node@y, "npc", n)
+    es <- .coord(node@size, "mm", n)
+    ef <- .coord(node@foot, "mm", n)
     ang <- vctrs::vec_recycle(as.numeric(node@angle), n)
     wid <- vctrs::vec_recycle(as.numeric(node@width), n)
     g <- .gp4(node@gp, scene)
     a <- .encode_arrow(node@arrow)
-    scene$add_loop(ex$value, ey$value, es$value, ef$value, ang, wid,
-                   ex$code, ex$offset, ey$code, ey$offset, es$code, es$offset, ef$code, ef$offset,
-                   g$col, g$lwd, g$alpha, g$stroke,
-                   a$angle, a$len, a$ends, a$closed)
+    scene$add_loop(
+      ex$value,
+      ey$value,
+      es$value,
+      ef$value,
+      ang,
+      wid,
+      ex$code,
+      ex$offset,
+      ey$code,
+      ey$offset,
+      es$code,
+      es$offset,
+      ef$code,
+      ef$offset,
+      g$col,
+      g$lwd,
+      g$alpha,
+      g$stroke,
+      a$angle,
+      a$len,
+      a$ends,
+      a$closed
+    )
   })
 }
 
 S7::method(compile, grob_segments) <- function(node, scene) {
   .with_vp(node, scene, {
     n <- vctrs::vec_size_common(node@x0, node@y0, node@x1, node@y1)
-    e0x <- .coord(node@x0, "native", n); e0y <- .coord(node@y0, "native", n)
-    e1x <- .coord(node@x1, "native", n); e1y <- .coord(node@y1, "native", n)
+    e0x <- .coord(node@x0, "native", n)
+    e0y <- .coord(node@y0, "native", n)
+    e1x <- .coord(node@x1, "native", n)
+    e1y <- .coord(node@y1, "native", n)
     g <- .gp4(node@gp, scene)
     a <- .encode_arrow(node@arrow)
-    sc <- .encode_cap(node@start_cap); ec <- .encode_cap(node@end_cap)
+    sc <- .encode_cap(node@start_cap)
+    ec <- .encode_cap(node@end_cap)
     of <- .encode_cap(node@offset)
     sk <- .encode_sketch(node@sketch)
-    scene$segments(e0x$value, e0y$value, e1x$value, e1y$value,
-                   e0x$code, e0x$offset, e0y$code, e0y$offset, e1x$code, e1x$offset, e1y$code, e1y$offset,
-                   sc$value, ec$value, sc$code, ec$code, of$value, of$code,
-                   g$col, g$lwd, g$alpha, g$stroke,
-                   a$angle, a$len, a$ends, a$closed,
-                   sk$roughness, sk$bowing, sk$fill_style, sk$fill_weight, sk$hachure_angle,
-                   sk$hachure_gap, sk$curve_tightness, sk$disable_multi, sk$preserve, sk$seed,
-                   .seg_cols(node, n), .seg_lwds(node, n),
-                   .keys_vec(node, n))
+    scene$segments(
+      e0x$value,
+      e0y$value,
+      e1x$value,
+      e1y$value,
+      e0x$code,
+      e0x$offset,
+      e0y$code,
+      e0y$offset,
+      e1x$code,
+      e1x$offset,
+      e1y$code,
+      e1y$offset,
+      sc$value,
+      ec$value,
+      sc$code,
+      ec$code,
+      of$value,
+      of$code,
+      g$col,
+      g$lwd,
+      g$alpha,
+      g$stroke,
+      a$angle,
+      a$len,
+      a$ends,
+      a$closed,
+      sk$roughness,
+      sk$bowing,
+      sk$fill_style,
+      sk$fill_weight,
+      sk$hachure_angle,
+      sk$hachure_gap,
+      sk$curve_tightness,
+      sk$disable_multi,
+      sk$preserve,
+      sk$seed,
+      .seg_cols(node, n),
+      .seg_lwds(node, n),
+      .keys_vec(node, n)
+    )
   })
 }
 
 S7::method(compile, grob_path) <- function(node, scene) {
   .with_vp(node, scene, {
     n <- vctrs::vec_size_common(node@x, node@y)
-    ex <- .coord(node@x, "native", n); ey <- .coord(node@y, "native", n)
+    ex <- .coord(node@x, "native", n)
+    ey <- .coord(node@y, "native", n)
     g <- .gp4(node@gp, scene)
     sk <- .encode_sketch(node@sketch)
-    scene$path(ex$value, ey$value, ex$code, ex$offset, ey$code, ey$offset, as.integer(node@nper),
-               identical(node@rule, "evenodd"), g$fill, g$col, g$lwd, g$alpha, g$stroke,
-               sk$roughness, sk$bowing, sk$fill_style, sk$fill_weight, sk$hachure_angle,
-               sk$hachure_gap, sk$curve_tightness, sk$disable_multi, sk$preserve, sk$seed,
-               .key1(node))
+    scene$path(
+      ex$value,
+      ey$value,
+      ex$code,
+      ex$offset,
+      ey$code,
+      ey$offset,
+      as.integer(node@nper),
+      identical(node@rule, "evenodd"),
+      g$fill,
+      g$col,
+      g$lwd,
+      g$alpha,
+      g$stroke,
+      sk$roughness,
+      sk$bowing,
+      sk$fill_style,
+      sk$fill_weight,
+      sk$hachure_angle,
+      sk$hachure_gap,
+      sk$curve_tightness,
+      sk$disable_multi,
+      sk$preserve,
+      sk$seed,
+      .key1(node)
+    )
   })
 }
 
 S7::method(compile, grob_raster) <- function(node, scene) {
   .with_vp(node, scene, {
-    ex <- .coord(node@x, "npc", 1); ey <- .coord(node@y, "npc", 1)
-    ew <- .coord(node@width, "npc", 1); eh <- .coord(node@height, "npc", 1)
-    scene$image(node@rgba, node@iw, node@ih,
-                ex$value, ey$value, ew$value, eh$value,
-                ex$code, ex$offset, ey$code, ey$offset, ew$code, ew$offset, eh$code, eh$offset,
-                isTRUE(node@interpolate))
+    ex <- .coord(node@x, "npc", 1)
+    ey <- .coord(node@y, "npc", 1)
+    ew <- .coord(node@width, "npc", 1)
+    eh <- .coord(node@height, "npc", 1)
+    scene$image(
+      node@rgba,
+      node@iw,
+      node@ih,
+      ex$value,
+      ey$value,
+      ew$value,
+      eh$value,
+      ex$code,
+      ex$offset,
+      ey$code,
+      ey$offset,
+      ew$code,
+      ew$offset,
+      eh$code,
+      eh$offset,
+      isTRUE(node@interpolate)
+    )
   })
 }
 
@@ -1162,34 +1624,70 @@ S7::method(compile, grob_text) <- function(node, scene) {
     # drawn at every position) or a list of them (one per datum). Plain character
     # labels keep the fast single-style batch path.
     rich <- S7::S7_inherits(node@label, vellum_label) ||
-      (is.list(node@label) && length(node@label) > 0L &&
-         all(vapply(node@label, function(l) S7::S7_inherits(l, vellum_label), logical(1))))
+      (is.list(node@label) &&
+        length(node@label) > 0L &&
+        all(vapply(
+          node@label,
+          function(l) S7::S7_inherits(l, vellum_label),
+          logical(1)
+        )))
     if (rich) {
       n <- vctrs::vec_size_common(node@x, node@y)
-      if (n == 0L) return(invisible())
-      x <- vctrs::vec_recycle(node@x, n); y <- vctrs::vec_recycle(node@y, n)
+      if (n == 0L) {
+        return(invisible())
+      }
+      x <- vctrs::vec_recycle(node@x, n)
+      y <- vctrs::vec_recycle(node@y, n)
       rot <- vctrs::vec_recycle(node@rot, n)
-      .draw_richtext_batch(scene, node@label, x, y, hv[1], hv[2], rot,
-                           node@gp@fontfamily %||% "", node@gp@fontface %||% "plain",
-                           .gp_fontsize(node@gp), node@gp@col, node@gp@alpha,
-                           .gp_halo(node@gp), .gp_features(node@gp),
-                           keys = .keys_or_null(node, n))
+      .draw_richtext_batch(
+        scene,
+        node@label,
+        x,
+        y,
+        hv[1],
+        hv[2],
+        rot,
+        node@gp@fontfamily %||% "",
+        node@gp@fontface %||% "plain",
+        .gp_fontsize(node@gp),
+        node@gp@col,
+        node@gp@alpha,
+        .gp_halo(node@gp),
+        .gp_features(node@gp),
+        keys = .keys_or_null(node, n)
+      )
       return(invisible())
     }
     labels <- .text_labels(node@label) # seam: rich labels -> strings (plain = identity)
     n <- vctrs::vec_size_common(labels, node@x, node@y)
-    if (n == 0L) return(invisible())
+    if (n == 0L) {
+      return(invisible())
+    }
     lab <- vctrs::vec_recycle(labels, n)
-    x <- vctrs::vec_recycle(node@x, n); y <- vctrs::vec_recycle(node@y, n)
+    x <- vctrs::vec_recycle(node@x, n)
+    y <- vctrs::vec_recycle(node@y, n)
     rot <- vctrs::vec_recycle(node@rot, n)
     # One shaping pass for all labels (repeats shaped once); see .draw_text_batch.
     # `col` is passed through as-is (NULL = inherit the viewport's gp$col, like
     # every other primitive; the root default is black, so plain text stays black).
-    .draw_text_batch(scene, lab, x, y, hv[1], hv[2], rot,
-                     node@gp@fontfamily %||% "", node@gp@fontface %||% "plain",
-                     .gp_fontsize(node@gp), node@gp@col, node@gp@alpha,
-                     .gp_halo(node@gp), .gp_features(node@gp), .text_wrap(node),
-                     keys = .keys_or_null(node, n))
+    .draw_text_batch(
+      scene,
+      lab,
+      x,
+      y,
+      hv[1],
+      hv[2],
+      rot,
+      node@gp@fontfamily %||% "",
+      node@gp@fontface %||% "plain",
+      .gp_fontsize(node@gp),
+      node@gp@col,
+      node@gp@alpha,
+      .gp_halo(node@gp),
+      .gp_features(node@gp),
+      .text_wrap(node),
+      keys = .keys_or_null(node, n)
+    )
   })
 }
 
@@ -1200,12 +1698,22 @@ S7::method(compile, grob_textpath) <- function(node, scene) {
     if (n < 2L) {
       return(invisible()) # a baseline needs at least one segment
     }
-    .draw_text_path(scene, node@label,
-                    vctrs::vec_recycle(node@x, n), vctrs::vec_recycle(node@y, n),
-                    hv[1], hv[2], node@offset,
-                    node@gp@fontfamily %||% "", node@gp@fontface %||% "plain",
-                    .gp_fontsize(node@gp), node@gp@col, node@gp@alpha,
-                    .gp_halo(node@gp), .gp_features(node@gp))
+    .draw_text_path(
+      scene,
+      node@label,
+      vctrs::vec_recycle(node@x, n),
+      vctrs::vec_recycle(node@y, n),
+      hv[1],
+      hv[2],
+      node@offset,
+      node@gp@fontfamily %||% "",
+      node@gp@fontface %||% "plain",
+      .gp_fontsize(node@gp),
+      node@gp@col,
+      node@gp@alpha,
+      .gp_halo(node@gp),
+      .gp_features(node@gp)
+    )
   })
 }
 
@@ -1216,10 +1724,12 @@ S7::method(compile, grob_textpath) <- function(node, scene) {
   if (is.na(node@width)) {
     return(NULL)
   }
-  list(width = node@width / 25.4 * 72,
-       height = if (is.na(node@height)) NULL else node@height / 25.4 * 72,
-       align = node@align,
-       fit = if (is.na(node@fit)) NULL else node@fit)
+  list(
+    width = node@width / 25.4 * 72,
+    height = if (is.na(node@height)) NULL else node@height / 25.4 * 72,
+    align = node@align,
+    fit = if (is.na(node@fit)) NULL else node@fit
+  )
 }
 
 S7::method(compile, gtree) <- function(node, scene) {
@@ -1228,7 +1738,9 @@ S7::method(compile, gtree) <- function(node, scene) {
   # (a host targets it for pan/zoom); costs nothing on other backends or when
   # unnamed. Bracket the whole subtree, outside any mask/opacity group.
   panel <- .panel_name(node@vp)
-  if (!is.null(panel)) scene$begin_panel(panel, isTRUE(node@vp@pannable))
+  if (!is.null(panel)) {
+    scene$begin_panel(panel, isTRUE(node@vp@pannable))
+  }
   mask <- if (!is.null(node@vp)) node@vp@mask else NULL
   alpha <- if (!is.null(node@vp)) node@vp@alpha else NULL
   blend <- if (!is.null(node@vp)) node@vp@blend else NULL
@@ -1239,8 +1751,13 @@ S7::method(compile, gtree) <- function(node, scene) {
   # lacks) and a known nid (a cacheable scene). Ignored by SVG/PDF (they render
   # the subtree as vector). The bracket is outermost, so it captures whatever the
   # subtree draws, including its own mask/opacity group compositing below.
-  cached <- !is.null(node@vp) && isTRUE(node@vp@cache) && blend_code == 0L && !is.null(node@nid)
-  if (cached) scene$subraster_start(node@nid)
+  cached <- !is.null(node@vp) &&
+    isTRUE(node@vp@cache) &&
+    blend_code == 0L &&
+    !is.null(node@nid)
+  if (cached) {
+    scene$subraster_start(node@nid)
+  }
   # A group (isolated layer) is needed for a mask, a sub-1 group opacity, and/or a
   # non-normal blend mode.
   # Blur / drop shadow are group effects: they act on the composited layer, so
@@ -1248,25 +1765,44 @@ S7::method(compile, gtree) <- function(node, scene) {
   # Points -> device px, like every other absolute length.
   fx_scale <- scene$dpi() / 72
   blur_px <- if (is.null(node@vp)) 0 else (node@vp@blur %||% 0) * fx_scale
-  shadow_v <- if (is.null(node@vp)) numeric(0) else .encode_shadow(node@vp@shadow, fx_scale)
+  shadow_v <- if (is.null(node@vp)) {
+    numeric(0)
+  } else {
+    .encode_shadow(node@vp@shadow, fx_scale)
+  }
   has_fx <- blur_px > 0 || length(shadow_v) > 0
-  if (!is.null(mask) || (!is.null(alpha) && alpha < 1) || blend_code != 0L || has_fx) {
+  if (
+    !is.null(mask) ||
+      (!is.null(alpha) && alpha < 1) ||
+      blend_code != 0L ||
+      has_fx
+  ) {
     idx <- -1L
     if (!is.null(mask)) {
       m <- .normalize_mask(mask)
-      idx <- scene$mask_begin(m$code)      # route mask grobs into the mask
-      for (g in m$grobs) compile(g, scene)
+      idx <- scene$mask_begin(m$code) # route mask grobs into the mask
+      for (g in m$grobs) {
+        compile(g, scene)
+      }
       scene$mask_end()
     }
     # mask + opacity + blend installed up front; content drawn into an isolated layer
     scene$group_start(idx, alpha %||% 1, blend_code, blur_px, shadow_v)
-    for (child in node@children) compile(child, scene)
+    for (child in node@children) {
+      compile(child, scene)
+    }
     scene$group_end()
   } else {
-    for (child in node@children) compile(child, scene)
+    for (child in node@children) {
+      compile(child, scene)
+    }
   }
-  if (cached) scene$subraster_end()
-  if (!is.null(panel)) scene$end_panel()
+  if (cached) {
+    scene$subraster_end()
+  }
+  if (!is.null(panel)) {
+    scene$end_panel()
+  }
   scene$pop_viewport(1L)
 }
 
@@ -1276,11 +1812,17 @@ S7::method(compile, gtree) <- function(node, scene) {
 # plain scene emits no panel group and stays byte-for-byte unchanged; only
 # explicitly named viewports (e.g. a grammar's "panel-1-1") become panels.
 .panel_name <- function(vp) {
-  if (is.null(vp)) return(NULL)
+  if (is.null(vp)) {
+    return(NULL)
+  }
   nm <- vp@name
-  if (is.null(nm) || length(nm) == 0L || is.na(nm[[1]]) || !nzchar(nm[[1]])) return(NULL)
+  if (is.null(nm) || length(nm) == 0L || is.na(nm[[1]]) || !nzchar(nm[[1]])) {
+    return(NULL)
+  }
   nm <- as.character(nm[[1]])
-  if (identical(nm, "root")) return(NULL)
+  if (identical(nm, "root")) {
+    return(NULL)
+  }
   nm
 }
 
@@ -1305,8 +1847,12 @@ S7::method(compile, gtree) <- function(node, scene) {
 #' @export
 hit_test <- function(scene, x, y, units = c("npc", "px")) {
   units <- match.arg(units)
-  s <- Scene$new(.to_inches(scene@width), .to_inches(scene@height), scene@dpi,
-                 .rs_col(scene@bg) %||% c(255L, 255L, 255L, 0L))
+  s <- Scene$new(
+    .to_inches(scene@width),
+    .to_inches(scene@height),
+    scene@dpi,
+    .rs_col(scene@bg) %||% c(255L, 255L, 255L, 0L)
+  )
   reg <- new.env(parent = emptyenv())
   reg$n <- 0L
   reg$names <- list()
@@ -1332,7 +1878,9 @@ hit_test <- function(scene, x, y, units = c("npc", "px")) {
 .compile_pick <- function(scene, node, reg) {
   if (S7::S7_inherits(node, gtree)) {
     .push_vp(scene, node@vp)
-    for (ch in node@children) .compile_pick(scene, ch, reg)
+    for (ch in node@children) {
+      .compile_pick(scene, ch, reg)
+    }
     scene$pop_viewport(1L)
   } else {
     id <- reg$n
@@ -1363,7 +1911,10 @@ node_names <- function(scene) {
   # vector one element at a time via `<<-` (that is O(n^2) over the tree).
   walk <- function(node) {
     nm <- .node_name(node)
-    c(if (!is.null(nm)) nm else character(0), unlist(lapply(.node_children(node), walk), use.names = FALSE))
+    c(
+      if (!is.null(nm)) nm else character(0),
+      unlist(lapply(.node_children(node), walk), use.names = FALSE)
+    )
   }
   unlist(lapply(root@children, walk), use.names = FALSE) %||% character(0)
 }
@@ -1373,7 +1924,9 @@ node_names <- function(scene) {
 get_node <- function(scene, name) {
   root <- .materialize(scene)
   p <- .find_path(root, name)
-  if (is.null(p)) cli::cli_abort("No node named {.val {name}}.")
+  if (is.null(p)) {
+    cli::cli_abort("No node named {.val {name}}.")
+  }
   .get_at(root, p)
 }
 
@@ -1384,9 +1937,14 @@ edit_node <- function(scene, name, ...) {
   # subtrees keep their `nid` across the edit -> repaint-boundary cache hits).
   root <- .materialize_cached(scene, .scene_cid(scene))
   p <- .find_path(root, name)
-  if (is.null(p)) cli::cli_abort("No node named {.val {name}}.")
+  if (is.null(p)) {
+    cli::cli_abort("No node named {.val {name}}.")
+  }
   # Return an immutable (materialised) scene; the builder env is untouched.
-  .scene_with_root(scene, .modify_at(root, p, function(nd) S7::set_props(nd, ...)))
+  .scene_with_root(
+    scene,
+    .modify_at(root, p, function(nd) S7::set_props(nd, ...))
+  )
 }
 
 # Derive a scene value carrying a new tree, by *rebuilding* it rather than
@@ -1401,7 +1959,9 @@ edit_node <- function(scene, name, ...) {
     height = attr(scene, "height", exact = TRUE),
     dpi = attr(scene, "dpi", exact = TRUE),
     bg = attr(scene, "bg", exact = TRUE),
-    root = root, bstate = NULL, cid = .new_scene_id(),
+    root = root,
+    bstate = NULL,
+    cid = .new_scene_id(),
     title = attr(scene, "title", exact = TRUE),
     desc = attr(scene, "desc", exact = TRUE),
     a11y_prefix = attr(scene, "a11y_prefix", exact = TRUE)
@@ -1454,7 +2014,9 @@ edit_node <- function(scene, name, ...) {
     return(.col2rgba(.paint_first_colour(x)))
   }
   if (length(x) != 1L) {
-    cli::cli_abort("A colour must be a single value, {.code NA} (none), or {.code NULL} (inherit).")
+    cli::cli_abort(
+      "A colour must be a single value, {.code NA} (none), or {.code NULL} (inherit)."
+    )
   }
   if (is.na(x)) {
     return(integer(0))
@@ -1468,7 +2030,9 @@ edit_node <- function(scene, name, ...) {
     return(NA_real_)
   }
   if (length(x) != 1L) {
-    cli::cli_abort("{.arg lwd}/{.arg alpha} must be a single number or {.code NULL} (inherit).")
+    cli::cli_abort(
+      "{.arg lwd}/{.arg alpha} must be a single number or {.code NULL} (inherit)."
+    )
   }
   if (is.na(x)) {
     return(NA_real_)
@@ -1483,11 +2047,19 @@ edit_node <- function(scene, name, ...) {
   .set_meta(scene, node)
   has_vp <- !is.null(node@vp)
   panel <- if (has_vp) .panel_name(node@vp) else NULL
-  if (has_vp) .push_vp(scene, node@vp)
-  if (!is.null(panel)) scene$begin_panel(panel)
+  if (has_vp) {
+    .push_vp(scene, node@vp)
+  }
+  if (!is.null(panel)) {
+    scene$begin_panel(panel)
+  }
   force(expr)
-  if (!is.null(panel)) scene$end_panel()
-  if (has_vp) scene$pop_viewport(1L)
+  if (!is.null(panel)) {
+    scene$end_panel()
+  }
+  if (has_vp) {
+    scene$pop_viewport(1L)
+  }
   scene$set_meta("", "", "")
   invisible()
 }
@@ -1502,7 +2074,9 @@ edit_node <- function(scene, name, ...) {
 # A single metadata string for the backend: "" when absent/NA (= no attribute);
 # a length->1 value takes its first element (grob-level identity for now).
 .meta_str <- function(x) {
-  if (is.null(x) || length(x) == 0L) return("")
+  if (is.null(x) || length(x) == 0L) {
+    return("")
+  }
   x <- x[[1L]]
   if (is.na(x)) "" else as.character(x)
 }
@@ -1523,7 +2097,9 @@ edit_node <- function(scene, name, ...) {
   cols[is.na(cols)] <- "transparent"
   m <- grDevices::col2rgb(cols, alpha = TRUE)
   a <- node@gp@alpha
-  if (!is.null(a) && !is.na(a)) m[4L, ] <- round(m[4L, ] * a)
+  if (!is.null(a) && !is.na(a)) {
+    m[4L, ] <- round(m[4L, ] * a)
+  }
   as.integer(m)
 }
 
@@ -1540,7 +2116,9 @@ edit_node <- function(scene, name, ...) {
 
 .keys_vec <- function(node, n) {
   k <- if ("keys" %in% S7::prop_names(node)) node@keys else NULL
-  if (is.null(k)) return(character(0))
+  if (is.null(k)) {
+    return(character(0))
+  }
   k <- as.character(k)
   k[is.na(k)] <- ""
   rep_len(k, n)
@@ -1557,7 +2135,9 @@ edit_node <- function(scene, name, ...) {
 # "" when absent (the backend then emits no `data-key`). Takes the first key.
 .key1 <- function(node) {
   k <- if ("keys" %in% S7::prop_names(node)) node@keys else NULL
-  if (is.null(k) || length(k) == 0L) return("")
+  if (is.null(k) || length(k) == 0L) {
+    return("")
+  }
   k <- as.character(k[[1L]])
   if (is.na(k)) "" else k
 }
@@ -1566,36 +2146,74 @@ edit_node <- function(scene, name, ...) {
 # gradient, or a pattern (see .encode_paint; patterns need `scene`); `stroke`
 # bundles lty/lineend/linejoin/linemitre (or NULL = inherit all).
 .gp4 <- function(gp, scene = NULL) {
-  list(fill = .encode_paint(gp@fill, scene), col = .rs_col_inh(gp@col),
-       lwd = .rs_num_inh(gp@lwd), alpha = .rs_num_inh(gp@alpha),
-       stroke = .encode_stroke(gp, scene))
+  list(
+    fill = .encode_paint(gp@fill, scene),
+    col = .rs_col_inh(gp@col),
+    lwd = .rs_num_inh(gp@lwd),
+    alpha = .rs_num_inh(gp@alpha),
+    stroke = .encode_stroke(gp, scene)
+  )
 }
 
 .push_vp <- function(scene, vp) {
-  cx <- .coord(vp@x, "npc", 1); cy <- .coord(vp@y, "npc", 1)
-  cw <- .coord(vp@width, "npc", 1); ch <- .coord(vp@height, "npc", 1)
+  cx <- .coord(vp@x, "npc", 1)
+  cy <- .coord(vp@y, "npc", 1)
+  cw <- .coord(vp@width, "npc", 1)
+  ch <- .coord(vp@height, "npc", 1)
   lrow <- if (is.null(vp@row)) -1L else as.integer(vp@row) - 1L
   lcol <- if (is.null(vp@col)) -1L else as.integer(vp@col) - 1L
   # clip may be TRUE/FALSE (rect) or a path-like grob (arbitrary clip path).
   clip_grob <- if (S7::S7_inherits(vp@clip, grob)) vp@clip else NULL
   clip_flag <- if (is.null(clip_grob)) isTRUE(vp@clip) else TRUE
   vid <- scene$push_viewport(
-    cx$value, cy$value, cw$value, ch$value,
-    cx$code, cx$offset, cy$code, cy$offset, cw$code, cw$offset, ch$code, ch$offset,
-    as.numeric(vp@xscale), as.numeric(vp@yscale), vp@angle, clip_flag,
-    lrow, lcol, vp@rowspan, vp@colspan,
-    .encode_paint(vp@gp@fill, scene), .rs_col_inh(vp@gp@col), .rs_num_inh(vp@gp@lwd), .rs_num_inh(vp@gp@alpha),
+    cx$value,
+    cy$value,
+    cw$value,
+    ch$value,
+    cx$code,
+    cx$offset,
+    cy$code,
+    cy$offset,
+    cw$code,
+    cw$offset,
+    ch$code,
+    ch$offset,
+    as.numeric(vp@xscale),
+    as.numeric(vp@yscale),
+    vp@angle,
+    clip_flag,
+    lrow,
+    lcol,
+    vp@rowspan,
+    vp@colspan,
+    .encode_paint(vp@gp@fill, scene),
+    .rs_col_inh(vp@gp@col),
+    .rs_num_inh(vp@gp@lwd),
+    .rs_num_inh(vp@gp@alpha),
     .encode_stroke(vp@gp, scene)
   )
   # Debug capture: record this viewport's backend id, name, and node for the
   # layout-debug overlay / why_size() (only active during a debug render).
   if (!is.null(.debug_state$reg)) {
     reg <- .debug_state$reg
-    reg$items[[length(reg$items) + 1L]] <- list(id = vid, name = vp@name, vp = vp)
+    reg$items[[length(reg$items) + 1L]] <- list(
+      id = vid,
+      name = vp@name,
+      vp = vp
+    )
   }
   if (!is.null(clip_grob)) {
     cp <- .clip_path_of(clip_grob)
-    scene$set_clip_path(cp$x, cp$y, cp$xcode, cp$xoff, cp$ycode, cp$yoff, cp$nper, cp$evenodd)
+    scene$set_clip_path(
+      cp$x,
+      cp$y,
+      cp$xcode,
+      cp$xoff,
+      cp$ycode,
+      cp$yoff,
+      cp$nper,
+      cp$evenodd
+    )
   }
   if (!is.null(vp@layout)) .set_layout(scene, vp@layout)
 }
@@ -1604,25 +2222,45 @@ edit_node <- function(scene, name, ...) {
 # polygon or path grob.
 .clip_path_of <- function(g) {
   if (S7::S7_inherits(g, grob_path)) {
-    ex <- .coord(g@x, "native"); ey <- .coord(g@y, "native")
-    list(x = ex$value, y = ey$value, xcode = ex$code, xoff = ex$offset,
-         ycode = ey$code, yoff = ey$offset,
-         nper = as.integer(g@nper), evenodd = identical(g@rule, "evenodd"))
+    ex <- .coord(g@x, "native")
+    ey <- .coord(g@y, "native")
+    list(
+      x = ex$value,
+      y = ey$value,
+      xcode = ex$code,
+      xoff = ex$offset,
+      ycode = ey$code,
+      yoff = ey$offset,
+      nper = as.integer(g@nper),
+      evenodd = identical(g@rule, "evenodd")
+    )
   } else if (S7::S7_inherits(g, grob_polygon)) {
     n <- vctrs::vec_size_common(g@x, g@y)
-    ex <- .coord(g@x, "native", n); ey <- .coord(g@y, "native", n)
-    list(x = ex$value, y = ey$value, xcode = ex$code, xoff = ex$offset,
-         ycode = ey$code, yoff = ey$offset,
-         nper = as.integer(n), evenodd = FALSE)
+    ex <- .coord(g@x, "native", n)
+    ey <- .coord(g@y, "native", n)
+    list(
+      x = ex$value,
+      y = ey$value,
+      xcode = ex$code,
+      xoff = ex$offset,
+      ycode = ey$code,
+      yoff = ey$offset,
+      nper = as.integer(n),
+      evenodd = FALSE
+    )
   } else {
-    cli::cli_abort("A viewport {.arg clip} grob must be a {.fn polygon_grob} or {.fn path_grob}.")
+    cli::cli_abort(
+      "A viewport {.arg clip} grob must be a {.fn polygon_grob} or {.fn path_grob}."
+    )
   }
 }
 
 .set_layout <- function(scene, layout) {
   scene$set_layout(
-    vctrs::field(layout@widths, "value"), .code_names(layout@widths),
-    vctrs::field(layout@heights, "value"), .code_names(layout@heights),
+    vctrs::field(layout@widths, "value"),
+    .code_names(layout@widths),
+    vctrs::field(layout@heights, "value"),
+    .code_names(layout@heights),
     isTRUE(layout@respect)
   )
 }
@@ -1635,10 +2273,11 @@ edit_node <- function(scene, name, ...) {
 
 .to_inches <- function(u) {
   v <- vctrs::field(u, "value")[1]
-  switch(as.character(vctrs::field(u, "unit")[1]),
+  switch(
+    as.character(vctrs::field(u, "unit")[1]),
     "2" = v / 25.4, # mm
-    "3" = v,        # in
-    "4" = v / 72,   # pt
+    "3" = v, # in
+    "4" = v / 72, # pt
     cli::cli_abort("Page size must be an absolute unit (in/mm/pt).")
   )
 }
@@ -1666,7 +2305,9 @@ edit_node <- function(scene, name, ...) {
   }
   v <- suppressWarnings(as.numeric(j))
   if (is.na(v)) {
-    cli::cli_abort("Invalid {.arg just} value {.val {j}}; use {.or {names(map)}} or a number in [0, 1].")
+    cli::cli_abort(
+      "Invalid {.arg just} value {.val {j}}; use {.or {names(map)}} or a number in [0, 1]."
+    )
   }
   v
 }
@@ -1676,11 +2317,15 @@ edit_node <- function(scene, name, ...) {
 # per node, which is the whole cost of a `.find_path()` walk over a large tree
 # (~120ms at 20k nodes vs ~12ms here). Only a gtree carries `children`, and only
 # a grob carries `name`, so the attribute read is the type test.
-.node_children <- function(node) attr(node, "children", exact = TRUE) %||% list()
+.node_children <- function(node) {
+  attr(node, "children", exact = TRUE) %||% list()
+}
 .node_name <- function(node) attr(node, "name", exact = TRUE)
 
 .get_at <- function(node, path) {
-  if (length(path) == 0L) return(node)
+  if (length(path) == 0L) {
+    return(node)
+  }
   .get_at(node@children[[path[[1]]]], path[-1])
 }
 # Rebuild the gtrees on `path` around an edited node. Each is built *fresh* from
@@ -1694,24 +2339,34 @@ edit_node <- function(scene, name, ...) {
 # boundary on/above the edit invalidates while unchanged off-path siblings keep
 # their `nid` (structural sharing) and stay cached.
 .modify_at <- function(node, path, f) {
-  if (length(path) == 0L) return(.restamp_nid(f(node)))
+  if (length(path) == 0L) {
+    return(.restamp_nid(f(node)))
+  }
   i <- path[[1]]
   kids <- attr(node, "children", exact = TRUE)
   kids[[i]] <- .modify_at(kids[[i]], path[-1], f)
   gtree(
-    name = attr(node, "name", exact = TRUE), gp = attr(node, "gp", exact = TRUE),
-    vp = attr(node, "vp", exact = TRUE), id = attr(node, "id", exact = TRUE),
-    role = attr(node, "role", exact = TRUE), keys = attr(node, "keys", exact = TRUE),
-    meta = attr(node, "meta", exact = TRUE), children = kids,
+    name = attr(node, "name", exact = TRUE),
+    gp = attr(node, "gp", exact = TRUE),
+    vp = attr(node, "vp", exact = TRUE),
+    id = attr(node, "id", exact = TRUE),
+    role = attr(node, "role", exact = TRUE),
+    keys = attr(node, "keys", exact = TRUE),
+    meta = attr(node, "meta", exact = TRUE),
+    children = kids,
     nid = .new_scene_id()
   )
 }
 .restamp_nid <- function(node) {
-  if (S7::S7_inherits(node, gtree)) node@nid <- .new_scene_id()
+  if (S7::S7_inherits(node, gtree)) {
+    node@nid <- .new_scene_id()
+  }
   node
 }
 .find_path <- function(node, name) {
-  if (identical(.node_name(node), name)) return(integer(0))
+  if (identical(.node_name(node), name)) {
+    return(integer(0))
+  }
   ch <- .node_children(node)
   for (i in seq_along(ch)) {
     p <- .find_path(ch[[i]], name)

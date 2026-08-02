@@ -42,15 +42,30 @@ test_that("a position base + an absolute unit makes a compound (native/npc + mm)
   expect_equal(format(u), "1native+2mm")
 
   # npc base, subtraction, and inch folded to mm
-  expect_equal(vctrs::field(vl_unit(0.5, "npc") - vl_unit(3, "mm"), "offset"), -3)
-  expect_equal(vctrs::field(vl_unit(0, "native") + vl_unit(1, "in"), "offset"), 25.4)
+  expect_equal(
+    vctrs::field(vl_unit(0.5, "npc") - vl_unit(3, "mm"), "offset"),
+    -3
+  )
+  expect_equal(
+    vctrs::field(vl_unit(0, "native") + vl_unit(1, "in"), "offset"),
+    25.4
+  )
 
   # offsets accumulate; adding another native adds the base, keeps the offset
-  expect_equal(format(vl_unit(1, "native") + vl_unit(2, "mm") + vl_unit(3, "mm")), "1native+5mm")
-  expect_equal(format(vl_unit(1, "native") + vl_unit(2, "mm") + vl_unit(4, "native")), "5native+2mm")
+  expect_equal(
+    format(vl_unit(1, "native") + vl_unit(2, "mm") + vl_unit(3, "mm")),
+    "1native+5mm"
+  )
+  expect_equal(
+    format(vl_unit(1, "native") + vl_unit(2, "mm") + vl_unit(4, "native")),
+    "5native+2mm"
+  )
 
   # scaling scales the base and the offset together
-  expect_equal(format(2 * (vl_unit(1, "native") + vl_unit(3, "mm"))), "2native+6mm")
+  expect_equal(
+    format(2 * (vl_unit(1, "native") + vl_unit(3, "mm"))),
+    "2native+6mm"
+  )
 
   # two *different* position bases still can't be reduced
   expect_error(vl_unit(1, "npc") + vl_unit(1, "native"), "position base")
@@ -73,11 +88,20 @@ test_that("derived units resolve to absolute millimetres at construction", {
   expect_equal(vctrs::field(vl_unit(2, "cm"), "unit"), 2L) # mm code
   expect_equal(vctrs::field(vl_unit(2, "cm"), "value"), 20)
   # 1 char at 36pt = 36/72 in = 0.5in = 12.7mm
-  expect_equal(vctrs::field(vl_unit(1, "char", data = list(fontsize = 36)), "value"), 12.7,
-               tolerance = 1e-9)
+  expect_equal(
+    vctrs::field(vl_unit(1, "char", data = list(fontsize = 36)), "value"),
+    12.7,
+    tolerance = 1e-9
+  )
   # strwidth resolves via the shaper (positive, and scales with the value)
-  w1 <- vctrs::field(vl_unit(1, "strwidth", data = list(label = "Hi", fontsize = 20)), "value")
-  w2 <- vctrs::field(vl_unit(2, "strwidth", data = list(label = "Hi", fontsize = 20)), "value")
+  w1 <- vctrs::field(
+    vl_unit(1, "strwidth", data = list(label = "Hi", fontsize = 20)),
+    "value"
+  )
+  w2 <- vctrs::field(
+    vl_unit(2, "strwidth", data = list(label = "Hi", fontsize = 20)),
+    "value"
+  )
   expect_gt(w1, 0)
   expect_equal(w2, 2 * w1, tolerance = 1e-9)
   expect_error(vl_unit(1, "strwidth"), "label")
@@ -96,7 +120,10 @@ test_that("vl_convert() handles absolute units with no scene", {
 test_that("vl_convert() resolves npc against the page, per axis", {
   s <- vl_scene(4, 3, dpi = 100)
   expect_equal(vl_convert(vl_unit(0.5, "npc"), "mm", s), 4 * 25.4 / 2)
-  expect_equal(vl_convert(vl_unit(0.5, "npc"), "mm", s, axis = "y"), 3 * 25.4 / 2)
+  expect_equal(
+    vl_convert(vl_unit(0.5, "npc"), "mm", s, axis = "y"),
+    3 * 25.4 / 2
+  )
   expect_equal(vl_convert(vl_unit(1, "in"), "px", s), 100)
   expect_equal(vl_convert(vl_unit(0.3, "npc"), "npc", s), 0.3)
 })
@@ -112,26 +139,47 @@ test_that("vl_convert() distinguishes a native length from a native position", {
   s <- vl_scene(4, 3, dpi = 100) |>
     push(vl_viewport(width = 0.5, xscale = c(10, 20), name = "panel"))
   # Panel is 50.8mm across a scale spanning 10 units.
-  expect_equal(vl_convert(vl_unit(12, "native"), "mm", s, name = "panel"), 12 / 10 * 50.8)
   expect_equal(
-    vl_convert(vl_unit(12, "native"), "mm", s, name = "panel", what = "position"),
+    vl_convert(vl_unit(12, "native"), "mm", s, name = "panel"),
+    12 / 10 * 50.8
+  )
+  expect_equal(
+    vl_convert(
+      vl_unit(12, "native"),
+      "mm",
+      s,
+      name = "panel",
+      what = "position"
+    ),
     (12 - 10) / 10 * 50.8
   )
   # Round-trips both ways.
   expect_equal(
-    vl_convert(vl_unit(50.8, "mm"), "native", s, name = "panel", what = "position"),
+    vl_convert(
+      vl_unit(50.8, "mm"),
+      "native",
+      s,
+      name = "panel",
+      what = "position"
+    ),
     20
   )
 })
 
 test_that("vl_convert() carries the absolute offset of a compound unit", {
   s <- vl_scene(4, 3, dpi = 100)
-  expect_equal(vl_convert(vl_unit(1, "npc") + vl_unit(2, "mm"), "mm", s), 4 * 25.4 + 2)
+  expect_equal(
+    vl_convert(vl_unit(1, "npc") + vl_unit(2, "mm"), "mm", s),
+    4 * 25.4 + 2
+  )
 })
 
 test_that("vl_convert() errors informatively without the context it needs", {
   s <- vl_scene(4, 3)
   expect_error(vl_convert(vl_unit(1, "npc"), "mm"), "scene")
   expect_error(vl_convert(vl_unit(1, "null"), "mm", s), "null")
-  expect_error(vl_convert(vl_unit(1, "npc"), "mm", s, name = "nope"), "No viewport named")
+  expect_error(
+    vl_convert(vl_unit(1, "npc"), "mm", s, name = "nope"),
+    "No viewport named"
+  )
 })

@@ -21,7 +21,10 @@ cap <- function(txt, x, y = 0.06) {
 card <- function(scene, x, ...) {
   scene |>
     push(vl_viewport(x = x, y = 0.62, width = 0.2, height = 0.5, ...)) |>
-    draw(roundrect_grob(r = 0.12, gp = vl_gpar(fill = "steelblue", col = NA))) |>
+    draw(roundrect_grob(
+      r = 0.12,
+      gp = vl_gpar(fill = "steelblue", col = NA)
+    )) |>
     draw(text_grob("Aa", gp = vl_gpar(fontsize = 26, col = "white"))) |>
     pop()
 }
@@ -30,7 +33,11 @@ scene <- vl_scene(7, 3.4, dpi = 150, bg = "grey97")
 scene <- card(scene, 0.14)
 scene <- card(scene, 0.38, shadow = vl_shadow(dx = 3, dy = 4, blur = 5))
 scene <- card(scene, 0.62, blur = 3)
-scene <- card(scene, 0.86, shadow = vl_shadow(dx = 0, dy = 0, blur = 9, col = "#1F77B4"))
+scene <- card(
+  scene,
+  0.86,
+  shadow = vl_shadow(dx = 0, dy = 0, blur = 9, col = "#1F77B4")
+)
 
 scene <- scene |>
   draw(cap("plain", 0.14, 0.30)) |>
@@ -44,10 +51,20 @@ scene <- scene |>
 ys <- seq(0.12, 0.88, length.out = 5) + 0.0013 # deliberately off-grid
 rules <- function(scene, x0, x1, ...) {
   scene |>
-    push(vl_viewport(x = (x0 + x1) / 2, y = 0.16, width = x1 - x0, height = 0.18)) |>
+    push(vl_viewport(
+      x = (x0 + x1) / 2,
+      y = 0.16,
+      width = x1 - x0,
+      height = 0.18
+    )) |>
     draw(rect_grob(gp = vl_gpar(fill = "white", col = "grey80"))) |>
-    draw(segments_grob(0.02, ys, 0.98, ys,
-                       gp = vl_gpar(col = "grey15", lwd = 1, ...))) |>
+    draw(segments_grob(
+      0.02,
+      ys,
+      0.98,
+      ys,
+      gp = vl_gpar(col = "grey15", lwd = 1, ...)
+    )) |>
     pop()
 }
 scene <- rules(scene, 0.06, 0.46)
@@ -63,9 +80,21 @@ cat(sprintf("wrote %s\n", out))
 # cast a single shadow rather than each shadowing the others.
 if (identical(tolower(tools::file_ext(out)), "png")) {
   grp <- vl_scene(3, 1.6, dpi = 150, bg = "grey97") |>
-    push(vl_viewport(width = 0.7, height = 0.7, shadow = vl_shadow(dx = 3, dy = 3, blur = 4))) |>
-    draw(circle_grob(x = 0.35, r = 0.28, gp = vl_gpar(fill = "tomato", col = NA))) |>
-    draw(circle_grob(x = 0.65, r = 0.28, gp = vl_gpar(fill = "seagreen", col = NA))) |>
+    push(vl_viewport(
+      width = 0.7,
+      height = 0.7,
+      shadow = vl_shadow(dx = 3, dy = 3, blur = 4)
+    )) |>
+    draw(circle_grob(
+      x = 0.35,
+      r = 0.28,
+      gp = vl_gpar(fill = "tomato", col = NA)
+    )) |>
+    draw(circle_grob(
+      x = 0.65,
+      r = 0.28,
+      gp = vl_gpar(fill = "seagreen", col = NA)
+    )) |>
     pop()
   f2 <- sub("\\.png$", "-group.png", out)
   render(grp, f2)

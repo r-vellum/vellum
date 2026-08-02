@@ -1,8 +1,19 @@
 test_that("vl_strwidth matches textshaping (fidelity) and scales", {
   ref <- textshaping::shape_text("Hello", size = 20)$metrics$width
-  expect_equal(vl_strwidth("Hello", fontsize = 20, unit = "pt"), ref, tolerance = 1e-6)
-  expect_equal(vl_strwidth("Hello", fontsize = 20, unit = "in"), ref / 72, tolerance = 1e-6)
-  expect_gt(vl_strwidth("Hello", fontsize = 40), vl_strwidth("Hello", fontsize = 20))
+  expect_equal(
+    vl_strwidth("Hello", fontsize = 20, unit = "pt"),
+    ref,
+    tolerance = 1e-6
+  )
+  expect_equal(
+    vl_strwidth("Hello", fontsize = 20, unit = "in"),
+    ref / 72,
+    tolerance = 1e-6
+  )
+  expect_gt(
+    vl_strwidth("Hello", fontsize = 40),
+    vl_strwidth("Hello", fontsize = 20)
+  )
   expect_gt(vl_strwidth("Hello", fontface = "bold"), 0)
 })
 
@@ -18,7 +29,12 @@ test_that("empty or NA labels are a no-op", {
 
 test_that("a text grob adds a node and paints ink, leaving the background intact", {
   s <- vl_scene(width = 2, height = 1, dpi = 100, bg = "white") |>
-    draw(text_grob("ABC", x = 0.5, y = 0.5, gp = vl_gpar(fontsize = 40, col = "black")))
+    draw(text_grob(
+      "ABC",
+      x = 0.5,
+      y = 0.5,
+      gp = vl_gpar(fontsize = 40, col = "black")
+    ))
   expect_equal(scene_len(s), 1L)
   r <- scene_raster(s) # dim c(4, w, h)
   expect_equal(dim(r), c(4L, 200L, 100L))
@@ -38,12 +54,20 @@ test_that("text colour reaches the raster", {
 })
 
 test_that("the shape cache is transparent: cold and warm renders are identical", {
-  clear <- function() rm(
-    list = setdiff(ls(.shape_cache, all.names = TRUE), ".n"), envir = .shape_cache
-  )
+  clear <- function() {
+    rm(
+      list = setdiff(ls(.shape_cache, all.names = TRUE), ".n"),
+      envir = .shape_cache
+    )
+  }
   scene <- function() {
     vl_scene(2, 1, dpi = 100, bg = "white") |>
-      draw(text_grob(c("Ab", "Ab", "cD"), x = c(0.2, 0.5, 0.8), y = 0.5, gp = vl_gpar(fontsize = 24)))
+      draw(text_grob(
+        c("Ab", "Ab", "cD"),
+        x = c(0.2, 0.5, 0.8),
+        y = 0.5,
+        gp = vl_gpar(fontsize = 24)
+      ))
   }
   clear()
   cold <- scene_raster(scene()) # populates the cache (one shape per distinct label)
@@ -57,7 +81,12 @@ test_that("the shape cache keys on size (no cross-size collision)", {
   ink_w <- function(sz) {
     red <- scene_raster(
       vl_scene(3, 1, dpi = 100, bg = "white") |>
-        draw(text_grob("WW", x = 0.5, y = 0.5, gp = vl_gpar(fontsize = sz, col = "black")))
+        draw(text_grob(
+          "WW",
+          x = 0.5,
+          y = 0.5,
+          gp = vl_gpar(fontsize = sz, col = "black")
+        ))
     )[1, , ]
     cols <- which(apply(red, 1, min) < 100)
     if (length(cols)) diff(range(cols)) else 0
@@ -67,7 +96,12 @@ test_that("the shape cache keys on size (no cross-size collision)", {
 
 test_that("the persistent glyph cache is transparent (cold == warm render)", {
   s <- vl_scene(2, 1, dpi = 100, bg = "white") |>
-    draw(text_grob("Ahoy Ahoy", x = 0.5, y = 0.5, gp = vl_gpar(fontsize = 28, col = "black")))
+    draw(text_grob(
+      "Ahoy Ahoy",
+      x = 0.5,
+      y = 0.5,
+      gp = vl_gpar(fontsize = 28, col = "black")
+    ))
   rs_clear_glyph_cache()
   cold <- scene_raster(s) # populates the persistent glyph cache
   warm <- scene_raster(s) # reuses it
@@ -77,7 +111,12 @@ test_that("the persistent glyph cache is transparent (cold == warm render)", {
 test_that("a newline produces two stacked lines of text", {
   # "X" over "X": two separated dark bands in the central column.
   s <- vl_scene(1, 1.5, dpi = 100, bg = "white") |>
-    draw(text_grob("X\nX", x = 0.5, y = 0.5, gp = vl_gpar(fontsize = 40, col = "black")))
+    draw(text_grob(
+      "X\nX",
+      x = 0.5,
+      y = 0.5,
+      gp = vl_gpar(fontsize = 40, col = "black")
+    ))
   col <- scene_raster(s)[1, 50, ] # central column, top->bottom
   dark <- which(col < 128L)
   expect_gt(length(dark), 0L)
@@ -89,8 +128,13 @@ test_that("a newline produces two stacked lines of text", {
 test_that("justification places text on the correct side of the anchor", {
   inked_x <- function(hjust) {
     s <- vl_scene(width = 3, height = 1, dpi = 100, bg = "white") |>
-      draw(text_grob("WORD", x = 0.5, y = 0.5, just = as.character(hjust),
-                     gp = vl_gpar(fontsize = 30, col = "black")))
+      draw(text_grob(
+        "WORD",
+        x = 0.5,
+        y = 0.5,
+        just = as.character(hjust),
+        gp = vl_gpar(fontsize = 30, col = "black")
+      ))
     red <- scene_raster(s)[1, , ]
     which(apply(red, 1, min) < 100) # x columns containing ink
   }

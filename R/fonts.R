@@ -26,10 +26,18 @@
 #' @export
 scene_fonts <- function(scene) {
   scene <- as_vellum_scene(scene)
-  ft <- as.data.frame(.scene_to_backend(scene)$font_table(), stringsAsFactors = FALSE)
+  ft <- as.data.frame(
+    .scene_to_backend(scene)$font_table(),
+    stringsAsFactors = FALSE
+  )
   if (!nrow(ft)) {
-    return(data.frame(path = character(0), index = integer(0), glyphs = integer(0),
-                      file = character(0), exists = logical(0)))
+    return(data.frame(
+      path = character(0),
+      index = integer(0),
+      glyphs = integer(0),
+      file = character(0),
+      exists = logical(0)
+    ))
   }
   ft$file <- basename(ft$path)
   ft$exists <- file.exists(ft$path)
@@ -102,16 +110,28 @@ font_check <- function(scene, pin, on_mismatch = c("warn", "error", "ignore")) {
   new <- now[!(key(now) %in% key(was)), , drop = FALSE]
   out <- rbind(
     if (nrow(gone)) {
-      data.frame(status = ifelse(file.exists(gone$path), "changed", "missing"),
-                 path = gone$path, index = gone$index, stringsAsFactors = FALSE)
+      data.frame(
+        status = ifelse(file.exists(gone$path), "changed", "missing"),
+        path = gone$path,
+        index = gone$index,
+        stringsAsFactors = FALSE
+      )
     },
     if (nrow(new)) {
-      data.frame(status = "new", path = new$path, index = new$index,
-                 stringsAsFactors = FALSE)
+      data.frame(
+        status = "new",
+        path = new$path,
+        index = new$index,
+        stringsAsFactors = FALSE
+      )
     }
   )
   if (is.null(out)) {
-    out <- data.frame(status = character(0), path = character(0), index = integer(0))
+    out <- data.frame(
+      status = character(0),
+      path = character(0),
+      index = integer(0)
+    )
   }
   if (nrow(out) && !identical(on_mismatch, "ignore")) {
     bullets <- stats::setNames(
@@ -123,7 +143,11 @@ font_check <- function(scene, pin, on_mismatch = c("warn", "error", "ignore")) {
       bullets,
       i = "Rendered pixels will differ from the machine the pin was made on."
     )
-    if (identical(on_mismatch, "error")) cli::cli_abort(msg) else cli::cli_warn(msg)
+    if (identical(on_mismatch, "error")) {
+      cli::cli_abort(msg)
+    } else {
+      cli::cli_warn(msg)
+    }
   }
   invisible(out)
 }
@@ -134,7 +158,9 @@ print.vellum_font_pin <- function(x, ...) {
   cli::cli_text("{.cls vellum_font_pin}: {n} font face{?s}")
   if (n) {
     for (i in seq_len(n)) {
-      cli::cli_bullets(c("*" = "{basename(x$fonts$path[i])} (face {x$fonts$index[i]}, {x$fonts$glyphs[i]} glyph{?s})"))
+      cli::cli_bullets(c(
+        "*" = "{basename(x$fonts$path[i])} (face {x$fonts$index[i]}, {x$fonts$glyphs[i]} glyph{?s})"
+      ))
     }
   }
   invisible(x)

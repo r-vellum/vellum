@@ -13,16 +13,30 @@ test_that("no base generic is shadowed by a stray namespace binding", {
 
 test_that("the S3 print methods are registered where dispatch looks", {
   skip_if_not_installed("vellum")
-  for (cls in c("vellum_why_size", "vellum_gradient", "vellum_pattern", "vellum_mask")) {
-    expect_true(!is.null(getS3method("print", cls, optional = TRUE)), label = cls)
+  for (cls in c(
+    "vellum_why_size",
+    "vellum_gradient",
+    "vellum_pattern",
+    "vellum_mask"
+  )) {
+    expect_true(
+      !is.null(getS3method("print", cls, optional = TRUE)),
+      label = cls
+    )
   }
 })
 
 test_that("the S3 print methods actually dispatch", {
   s <- vl_scene(4, 3) |>
-    push(vl_viewport(name = "panel", width = vl_unit(2, "in"), height = vl_unit(1, "in")))
+    push(vl_viewport(
+      name = "panel",
+      width = vl_unit(2, "in"),
+      height = vl_unit(1, "in")
+    ))
   # These methods format with cli, which writes to stderr, so capture that.
-  shown <- function(x) paste(capture.output(print(x), type = "message"), collapse = "\n")
+  shown <- function(x) {
+    paste(capture.output(print(x), type = "message"), collapse = "\n")
+  }
 
   expect_match(shown(why_size(s, "panel")), "why_size")
   expect_match(shown(linear_gradient(c("red", "blue"))), "vellum_gradient")

@@ -64,24 +64,24 @@ vl_gpar <- S7::new_class(
   "vl_gpar",
   package = "vellum",
   properties = list(
-    col        = S7::new_property(S7::class_any, default = NULL),
-    fill       = S7::new_property(S7::class_any, default = NULL),
-    lwd        = S7::new_property(S7::class_any, default = NULL),
-    alpha      = S7::new_property(S7::class_any, default = NULL),
-    lty        = S7::new_property(S7::class_any, default = NULL),
-    lineend    = S7::new_property(S7::class_any, default = NULL),
-    linejoin   = S7::new_property(S7::class_any, default = NULL),
-    linemitre  = S7::new_property(S7::class_any, default = NULL),
+    col = S7::new_property(S7::class_any, default = NULL),
+    fill = S7::new_property(S7::class_any, default = NULL),
+    lwd = S7::new_property(S7::class_any, default = NULL),
+    alpha = S7::new_property(S7::class_any, default = NULL),
+    lty = S7::new_property(S7::class_any, default = NULL),
+    lineend = S7::new_property(S7::class_any, default = NULL),
+    linejoin = S7::new_property(S7::class_any, default = NULL),
+    linemitre = S7::new_property(S7::class_any, default = NULL),
     fontfamily = S7::new_property(S7::class_any, default = NULL),
-    fontface   = S7::new_property(S7::class_any, default = NULL),
-    fontsize   = S7::new_property(S7::class_any, default = NULL),
-    cex        = S7::new_property(S7::class_any, default = NULL),
+    fontface = S7::new_property(S7::class_any, default = NULL),
+    fontsize = S7::new_property(S7::class_any, default = NULL),
+    cex = S7::new_property(S7::class_any, default = NULL),
     lineheight = S7::new_property(S7::class_any, default = NULL),
-    halo_col   = S7::new_property(S7::class_any, default = NULL),
+    halo_col = S7::new_property(S7::class_any, default = NULL),
     halo_width = S7::new_property(S7::class_any, default = NULL),
-    features   = S7::new_property(S7::class_any, default = NULL),
-    antialias  = S7::new_property(S7::class_any, default = NULL),
-    crisp      = S7::new_property(S7::class_any, default = NULL),
+    features = S7::new_property(S7::class_any, default = NULL),
+    antialias = S7::new_property(S7::class_any, default = NULL),
+    crisp = S7::new_property(S7::class_any, default = NULL),
     dash_phase = S7::new_property(S7::class_any, default = NULL)
   ),
   validator = function(self) {
@@ -149,7 +149,9 @@ vl_gpar <- S7::new_class(
 .gp_halo <- function(gp) {
   col <- gp@halo_col
   w <- gp@halo_width %||% 0
-  if (is.null(col) || length(col) == 0L || all(is.na(col)) || !isTRUE(w[1] > 0)) {
+  if (
+    is.null(col) || length(col) == 0L || all(is.na(col)) || !isTRUE(w[1] > 0)
+  ) {
     return(NULL)
   }
   list(col = col[1], width = as.numeric(w[1]))

@@ -6,9 +6,21 @@
 
 swatches <- function() {
   vl_scene(3, 1, dpi = 100, bg = "white") |>
-    draw(rect_grob(x = 0.17, width = 0.3, gp = vl_gpar(fill = "#D62728", col = NA))) |>
-    draw(rect_grob(x = 0.50, width = 0.3, gp = vl_gpar(fill = "#2CA02C", col = NA))) |>
-    draw(rect_grob(x = 0.83, width = 0.3, gp = vl_gpar(fill = "#1F77B4", col = NA)))
+    draw(rect_grob(
+      x = 0.17,
+      width = 0.3,
+      gp = vl_gpar(fill = "#D62728", col = NA)
+    )) |>
+    draw(rect_grob(
+      x = 0.50,
+      width = 0.3,
+      gp = vl_gpar(fill = "#2CA02C", col = NA)
+    )) |>
+    draw(rect_grob(
+      x = 0.83,
+      width = 0.3,
+      gp = vl_gpar(fill = "#1F77B4", col = NA)
+    ))
 }
 mid_cols <- function(cvd = "none") {
   r <- scene_raster(swatches(), cvd = cvd)
@@ -32,8 +44,12 @@ test_that("deuteranopia collapses red and green toward each other", {
 
 test_that("achromatopsia produces pure greys", {
   sim <- mid_cols("achromatopsia")
-  for (ch in sim) expect_equal(ch[1], ch[2], tolerance = 1)
-  for (ch in sim) expect_equal(ch[2], ch[3], tolerance = 1)
+  for (ch in sim) {
+    expect_equal(ch[1], ch[2], tolerance = 1)
+  }
+  for (ch in sim) {
+    expect_equal(ch[2], ch[3], tolerance = 1)
+  }
 })
 
 test_that("a simulation is never written into the render cache", {
@@ -50,7 +66,8 @@ test_that("cvd on a vector target warns and leaves the file unsimulated", {
   vl_clear_render_cache()
   expect_warning(render(s, f, cvd = "deuteranopia"), "raster")
   plain <- withr::local_tempfile(fileext = ".svg")
-  vl_clear_render_cache(); render(plain_s <- s, plain)
+  vl_clear_render_cache()
+  render(plain_s <- s, plain)
   expect_identical(tools::md5sum(f)[[1]], tools::md5sum(plain)[[1]])
 })
 
@@ -63,8 +80,13 @@ test_that("an unknown cvd kind is rejected", {
 test_that("crisp snaps a fractional axis-parallel rule onto one pixel row", {
   rule <- function(...) {
     vl_scene(2, 0.6, dpi = 100, bg = "white") |>
-      draw(segments_grob(0.05, 0.5013, 0.95, 0.5013,
-                         gp = vl_gpar(col = "black", lwd = 1, ...)))
+      draw(segments_grob(
+        0.05,
+        0.5013,
+        0.95,
+        0.5013,
+        gp = vl_gpar(col = "black", lwd = 1, ...)
+      ))
   }
   col <- function(s) scene_raster(s)[1, 100, ]
   muddy <- col(rule())
@@ -84,16 +106,21 @@ test_that("crisp leaves diagonals alone", {
   }
   a <- withr::local_tempfile(fileext = ".png")
   b <- withr::local_tempfile(fileext = ".png")
-  vl_clear_render_cache(); render(diag(), a)
-  vl_clear_render_cache(); render(diag(crisp = TRUE), b)
+  vl_clear_render_cache()
+  render(diag(), a)
+  vl_clear_render_cache()
+  render(diag(crisp = TRUE), b)
   expect_identical(tools::md5sum(a)[[1]], tools::md5sum(b)[[1]])
 })
 
 test_that("antialias = FALSE gives hard edges", {
   tri <- function(aa) {
     vl_scene(1, 1, dpi = 100, bg = "white") |>
-      draw(polygon_grob(c(.1, .9, .5), c(.1, .1, .9),
-                        gp = vl_gpar(fill = "black", col = NA, antialias = aa)))
+      draw(polygon_grob(
+        c(.1, .9, .5),
+        c(.1, .1, .9),
+        gp = vl_gpar(fill = "black", col = NA, antialias = aa)
+      ))
   }
   greys <- function(s) length(unique(as.vector(scene_raster(s)[1, , ])))
   expect_gt(greys(tri(TRUE)), 2)
@@ -103,13 +130,19 @@ test_that("antialias = FALSE gives hard edges", {
 test_that("antialias inherits from a viewport", {
   s <- vl_scene(1, 1, dpi = 100, bg = "white") |>
     push(vl_viewport(gp = vl_gpar(antialias = FALSE))) |>
-    draw(polygon_grob(c(.1, .9, .5), c(.1, .1, .9), gp = vl_gpar(fill = "black", col = NA))) |>
+    draw(polygon_grob(
+      c(.1, .9, .5),
+      c(.1, .1, .9),
+      gp = vl_gpar(fill = "black", col = NA)
+    )) |>
     pop()
   expect_equal(length(unique(as.vector(scene_raster(s)[1, , ]))), 2)
 })
 
 test_that("a non-logical antialias/crisp is rejected", {
-  s <- function(v) vl_scene(1, 1) |> draw(rect_grob(gp = vl_gpar(antialias = v)))
+  s <- function(v) {
+    vl_scene(1, 1) |> draw(rect_grob(gp = vl_gpar(antialias = v)))
+  }
   expect_error(scene_raster(s("yes")), "antialias")
   expect_error(scene_raster(s(NA)), "antialias")
 })
@@ -147,8 +180,10 @@ test_that("a shadow darkens pixels outside the shape, offset from it", {
 test_that("effects are opt-in: no blur and no shadow renders unchanged", {
   a <- withr::local_tempfile(fileext = ".png")
   b <- withr::local_tempfile(fileext = ".png")
-  vl_clear_render_cache(); render(boxed(), a)
-  vl_clear_render_cache(); render(boxed(blur = 0, shadow = NULL), b)
+  vl_clear_render_cache()
+  render(boxed(), a)
+  vl_clear_render_cache()
+  render(boxed(blur = 0, shadow = NULL), b)
   expect_identical(tools::md5sum(a)[[1]], tools::md5sum(b)[[1]])
 })
 
@@ -169,7 +204,9 @@ test_that("vl_shadow validates its arguments", {
   expect_error(vl_shadow(blur = -1), "non-negative")
   expect_error(vl_shadow(dx = c(1, 2)), "single number")
   expect_error(
-    scene_raster(vl_scene(1, 1) |> push(vl_viewport(shadow = "black")) |> pop()),
+    scene_raster(
+      vl_scene(1, 1) |> push(vl_viewport(shadow = "black")) |> pop()
+    ),
     "vl_shadow"
   )
 })

@@ -5,7 +5,13 @@ grad <- function() linear_gradient(c("#F97316", "#22C55E"))
 
 test_that("a gradient in col strokes with that gradient", {
   s <- vl_scene(4, 1, dpi = 150, bg = "white") |>
-    draw(segments_grob(0.05, 0.5, 0.95, 0.5, gp = vl_gpar(col = grad(), lwd = 20)))
+    draw(segments_grob(
+      0.05,
+      0.5,
+      0.95,
+      0.5,
+      gp = vl_gpar(col = grad(), lwd = 20)
+    ))
   r <- scene_raster(s)
   early <- r[1:3, 120, 75]
   late <- r[1:3, 480, 75]
@@ -15,17 +21,24 @@ test_that("a gradient in col strokes with that gradient", {
 })
 
 test_that("a plain colour still strokes exactly as before", {
-  mk <- function(col) vl_scene(2, 1, dpi = 100, bg = "white") |>
-    draw(segments_grob(0.1, 0.5, 0.9, 0.5, gp = vl_gpar(col = col, lwd = 6)))
+  mk <- function(col) {
+    vl_scene(2, 1, dpi = 100, bg = "white") |>
+      draw(segments_grob(0.1, 0.5, 0.9, 0.5, gp = vl_gpar(col = col, lwd = 6)))
+  }
   a <- withr::local_tempfile(fileext = ".png")
-  vl_clear_render_cache(); render(mk("#F97316"), a)
+  vl_clear_render_cache()
+  render(mk("#F97316"), a)
   r <- scene_raster(mk("#F97316"))
   expect_equal(as.integer(r[1:3, 100, 50]), c(249L, 115L, 22L))
 })
 
 test_that("gradient strokes reach SVG and PDF as real paint", {
   s <- vl_scene(3, 1, dpi = 100) |>
-    draw(lines_grob(c(0.1, 0.9), c(0.5, 0.5), gp = vl_gpar(col = grad(), lwd = 8)))
+    draw(lines_grob(
+      c(0.1, 0.9),
+      c(0.5, 0.5),
+      gp = vl_gpar(col = grad(), lwd = 8)
+    ))
   expect_match(scene_svg(s), "stroke=\"url(#", fixed = TRUE)
   f <- withr::local_tempfile(fileext = ".pdf")
   vl_clear_render_cache()
@@ -69,8 +82,13 @@ test_that("the per-segment stroke fast path is bypassed for a gradient", {
 
 dashed <- function(...) {
   vl_scene(4, 0.6, dpi = 100, bg = "white") |>
-    draw(segments_grob(0.05, 0.5, 0.95, 0.5,
-                       gp = vl_gpar(col = "black", lwd = 4, lty = "dashed", ...)))
+    draw(segments_grob(
+      0.05,
+      0.5,
+      0.95,
+      0.5,
+      gp = vl_gpar(col = "black", lwd = 4, lty = "dashed", ...)
+    ))
 }
 
 test_that("dash_phase shifts where the pattern starts", {
@@ -82,35 +100,65 @@ test_that("dash_phase shifts where the pattern starts", {
 test_that("dash_phase defaults to no shift", {
   f1 <- withr::local_tempfile(fileext = ".png")
   f2 <- withr::local_tempfile(fileext = ".png")
-  vl_clear_render_cache(); render(dashed(), f1)
-  vl_clear_render_cache(); render(dashed(dash_phase = 0), f2)
+  vl_clear_render_cache()
+  render(dashed(), f1)
+  vl_clear_render_cache()
+  render(dashed(dash_phase = 0), f2)
   expect_identical(tools::md5sum(f1)[[1]], tools::md5sum(f2)[[1]])
 })
 
 test_that("dash_phase reaches SVG as stroke-dashoffset", {
-  expect_match(scene_svg(dashed(dash_phase = 2)), "stroke-dashoffset", fixed = TRUE)
+  expect_match(
+    scene_svg(dashed(dash_phase = 2)),
+    "stroke-dashoffset",
+    fixed = TRUE
+  )
   expect_false(grepl("stroke-dashoffset", scene_svg(dashed()), fixed = TRUE))
 })
 
 test_that("dash_phase is ignored on a solid line", {
-  solid <- function(...) vl_scene(2, 0.5, dpi = 100) |>
-    draw(segments_grob(0.1, 0.5, 0.9, 0.5, gp = vl_gpar(col = "black", lwd = 3, ...)))
+  solid <- function(...) {
+    vl_scene(2, 0.5, dpi = 100) |>
+      draw(segments_grob(
+        0.1,
+        0.5,
+        0.9,
+        0.5,
+        gp = vl_gpar(col = "black", lwd = 3, ...)
+      ))
+  }
   f1 <- withr::local_tempfile(fileext = ".png")
   f2 <- withr::local_tempfile(fileext = ".png")
-  vl_clear_render_cache(); render(solid(), f1)
-  vl_clear_render_cache(); render(solid(dash_phase = 3), f2)
+  vl_clear_render_cache()
+  render(solid(), f1)
+  vl_clear_render_cache()
+  render(solid(dash_phase = 3), f2)
   expect_identical(tools::md5sum(f1)[[1]], tools::md5sum(f2)[[1]])
 })
 
 test_that("dash_phase scales with lwd, like the nibbles do", {
   # Same phase in lwd-multiples on two widths gives proportionally shifted
   # patterns rather than the same absolute offset.
-  wide <- scene_raster(vl_scene(4, 0.6, dpi = 100, bg = "white") |>
-    draw(segments_grob(0.05, 0.5, 0.95, 0.5,
-      gp = vl_gpar(col = "black", lwd = 8, lty = "dashed", dash_phase = 1))))
-  narrow <- scene_raster(vl_scene(4, 0.6, dpi = 100, bg = "white") |>
-    draw(segments_grob(0.05, 0.5, 0.95, 0.5,
-      gp = vl_gpar(col = "black", lwd = 2, lty = "dashed", dash_phase = 1))))
+  wide <- scene_raster(
+    vl_scene(4, 0.6, dpi = 100, bg = "white") |>
+      draw(segments_grob(
+        0.05,
+        0.5,
+        0.95,
+        0.5,
+        gp = vl_gpar(col = "black", lwd = 8, lty = "dashed", dash_phase = 1)
+      ))
+  )
+  narrow <- scene_raster(
+    vl_scene(4, 0.6, dpi = 100, bg = "white") |>
+      draw(segments_grob(
+        0.05,
+        0.5,
+        0.95,
+        0.5,
+        gp = vl_gpar(col = "black", lwd = 2, lty = "dashed", dash_phase = 1)
+      ))
+  )
   expect_false(identical(as.numeric(wide), as.numeric(narrow)))
 })
 
@@ -122,7 +170,14 @@ seg_scene <- function(...) {
   n <- 6
   x <- seq(0.1, 0.9, length.out = n)
   vl_scene(4, 1, dpi = 100, bg = "white") |>
-    draw(segments_grob(x, 0.2, x, 0.8, gp = vl_gpar(col = "grey20", lwd = 4), ...))
+    draw(segments_grob(
+      x,
+      0.2,
+      x,
+      0.8,
+      gp = vl_gpar(col = "grey20", lwd = 4),
+      ...
+    ))
 }
 
 test_that("per-segment lwd varies the drawn width", {
@@ -150,8 +205,10 @@ test_that("per-segment col varies the drawn colour", {
 test_that("absent per-element style is byte-identical to before", {
   a <- withr::local_tempfile(fileext = ".png")
   b <- withr::local_tempfile(fileext = ".png")
-  vl_clear_render_cache(); render(seg_scene(), a)
-  vl_clear_render_cache(); render(seg_scene(col = NULL, lwd = NULL), b)
+  vl_clear_render_cache()
+  render(seg_scene(), a)
+  vl_clear_render_cache()
+  render(seg_scene(col = NULL, lwd = NULL), b)
   expect_identical(tools::md5sum(a)[[1]], tools::md5sum(b)[[1]])
 })
 
@@ -170,13 +227,23 @@ test_that("one grob with per-element style matches many grobs without", {
     draw(segments_grob(x, 0.2, x, 0.8, lwd = w, gp = vl_gpar(col = "black")))
   many <- vl_scene(4, 1, dpi = 100, bg = "white")
   for (i in seq_len(n)) {
-    many <- draw(many, segments_grob(x[i], 0.2, x[i], 0.8,
-                                     gp = vl_gpar(col = "black", lwd = w[i])))
+    many <- draw(
+      many,
+      segments_grob(
+        x[i],
+        0.2,
+        x[i],
+        0.8,
+        gp = vl_gpar(col = "black", lwd = w[i])
+      )
+    )
   }
   a <- withr::local_tempfile(fileext = ".png")
   b <- withr::local_tempfile(fileext = ".png")
-  vl_clear_render_cache(); render(one, a)
-  vl_clear_render_cache(); render(many, b)
+  vl_clear_render_cache()
+  render(one, a)
+  vl_clear_render_cache()
+  render(many, b)
   expect_identical(tools::md5sum(a)[[1]], tools::md5sum(b)[[1]])
 })
 
@@ -193,9 +260,13 @@ test_that("a per-segment NA colour draws nothing for that segment", {
 
 test_that("per-element style composes with keys and caps", {
   expect_no_error(scene_raster(seg_scene(
-    col = c("red", "blue"), lwd = c(2, 6), key = paste0("k", 1:6)
+    col = c("red", "blue"),
+    lwd = c(2, 6),
+    key = paste0("k", 1:6)
   )))
   expect_no_error(scene_raster(seg_scene(
-    lwd = 1:6, start_cap = vl_unit(1, "mm"), end_cap = vl_unit(1, "mm")
+    lwd = 1:6,
+    start_cap = vl_unit(1, "mm"),
+    end_cap = vl_unit(1, "mm")
   )))
 })

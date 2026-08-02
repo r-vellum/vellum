@@ -32,12 +32,20 @@ bench <- function(label, expr) {
 
 cat(sprintf(
   "Self-intersecting polyline: %s vertices  (%dx%d in @ %d dpi)\n",
-  format(n, big.mark = ",", scientific = FALSE), width, height, dpi
+  format(n, big.mark = ",", scientific = FALSE),
+  width,
+  height,
+  dpi
 ))
 
 grid_png <- file.path(out_dir, "lines-grid.png")
 t_grid <- bench("grid", {
-  grDevices::png(grid_png, width = width * dpi, height = height * dpi, res = dpi)
+  grDevices::png(
+    grid_png,
+    width = width * dpi,
+    height = height * dpi,
+    res = dpi
+  )
   grid::grid.lines(x, y, gp = grid::gpar(col = "darkred"))
   grDevices::dev.off()
 })
@@ -46,7 +54,8 @@ vellum_png <- file.path(out_dir, "lines-vellum.png")
 t_vellum <- bench("vellum", {
   s <- vellum::vl_scene(width, height, dpi = dpi, bg = "white") |>
     vellum::draw(vellum::lines_grob(
-      vellum::vl_unit(x, "npc"), vellum::vl_unit(y, "npc"),
+      vellum::vl_unit(x, "npc"),
+      vellum::vl_unit(y, "npc"),
       gp = vellum::vl_gpar(col = "darkred")
     ))
   vellum::render(s, vellum_png)

@@ -22,12 +22,27 @@ CAPTION <- paste(
 
 box <- function(scene, x, align) {
   scene |>
-    draw(rect_grob(x = x, y = 0.5, width = vl_unit(46, "mm"), height = vl_unit(52, "mm"),
-                   gp = vl_gpar(fill = "grey97", col = "grey85"))) |>
-    draw(text_grob(sprintf('align = "%s"', align), x = x, y = 0.9,
-                   gp = vl_gpar(fontsize = 9, col = "grey40"))) |>
-    draw(text_grob(CAPTION, x = x, y = 0.5, width = vl_unit(42, "mm"), align = align,
-                   gp = vl_gpar(fontsize = 7.5)))
+    draw(rect_grob(
+      x = x,
+      y = 0.5,
+      width = vl_unit(46, "mm"),
+      height = vl_unit(52, "mm"),
+      gp = vl_gpar(fill = "grey97", col = "grey85")
+    )) |>
+    draw(text_grob(
+      sprintf('align = "%s"', align),
+      x = x,
+      y = 0.9,
+      gp = vl_gpar(fontsize = 9, col = "grey40")
+    )) |>
+    draw(text_grob(
+      CAPTION,
+      x = x,
+      y = 0.5,
+      width = vl_unit(42, "mm"),
+      align = align,
+      gp = vl_gpar(fontsize = 7.5)
+    ))
 }
 
 alignment <- vl_scene(7.6, 2.6, dpi = 150, bg = "white") |>
@@ -53,14 +68,29 @@ fitted <- vl_scene(6, 2.4, dpi = 150, bg = "white")
 for (i in seq_along(hs <- c(34, 22, 14))) {
   x <- c(0.18, 0.5, 0.82)[i]
   fitted <- fitted |>
-    draw(rect_grob(x = x, y = 0.45, width = vl_unit(40, "mm"),
-                   height = vl_unit(hs[i], "mm"),
-                   gp = vl_gpar(fill = NA, col = "grey80", lty = "dashed"))) |>
-    draw(text_grob(CAPTION, x = x, y = 0.45,
-                   width = vl_unit(38, "mm"), height = vl_unit(hs[i] - 2, "mm"),
-                   fit = TRUE, align = "justify", gp = vl_gpar(fontsize = 11))) |>
-    draw(text_grob(paste0("height = ", hs[i], "mm"), x = x, y = 0.9,
-                   gp = vl_gpar(fontsize = 9, col = "grey40")))
+    draw(rect_grob(
+      x = x,
+      y = 0.45,
+      width = vl_unit(40, "mm"),
+      height = vl_unit(hs[i], "mm"),
+      gp = vl_gpar(fill = NA, col = "grey80", lty = "dashed")
+    )) |>
+    draw(text_grob(
+      CAPTION,
+      x = x,
+      y = 0.45,
+      width = vl_unit(38, "mm"),
+      height = vl_unit(hs[i] - 2, "mm"),
+      fit = TRUE,
+      align = "justify",
+      gp = vl_gpar(fontsize = 11)
+    )) |>
+    draw(text_grob(
+      paste0("height = ", hs[i], "mm"),
+      x = x,
+      y = 0.9,
+      gp = vl_gpar(fontsize = 9, col = "grey40")
+    ))
 }
 render(fitted, "typography-autofit.png")
 
@@ -79,12 +109,25 @@ upper <- arc(pi, 0, 0.34)
 lower <- arc(pi, 2 * pi, 0.34) # reversed, so the lower label reads the right way up
 
 seal <- vl_scene(3.2, 3.2, dpi = 150, bg = "white") |>
-  draw(circle_grob(r = 0.4, gp = vl_gpar(fill = NA, col = "grey75", lwd = 1.5))) |>
+  draw(circle_grob(
+    r = 0.4,
+    gp = vl_gpar(fill = NA, col = "grey75", lwd = 1.5)
+  )) |>
   draw(circle_grob(r = 0.26, gp = vl_gpar(fill = "grey96", col = NA))) |>
-  draw(text_path_grob("MEASURED AT CONSTRUCTION", x = upper$x, y = upper$y,
-                      offset = 5, gp = vl_gpar(fontsize = 10.5))) |>
-  draw(text_path_grob("NOT AT DRAW TIME", x = lower$x, y = lower$y,
-                      offset = -13, gp = vl_gpar(fontsize = 10.5))) |>
+  draw(text_path_grob(
+    "MEASURED AT CONSTRUCTION",
+    x = upper$x,
+    y = upper$y,
+    offset = 5,
+    gp = vl_gpar(fontsize = 10.5)
+  )) |>
+  draw(text_path_grob(
+    "NOT AT DRAW TIME",
+    x = lower$x,
+    y = lower$y,
+    offset = -13,
+    gp = vl_gpar(fontsize = 10.5)
+  )) |>
   draw(text_grob("vellum", gp = vl_gpar(fontsize = 15, col = "grey35")))
 
 render(seal, "typography-textpath.png")
@@ -102,10 +145,16 @@ wave <- local({
   vl_scene(6, 1.8, dpi = 150, bg = "#20304A") |>
     draw(text_path_grob(
       "a halo keeps a label legible wherever the curve takes it",
-      x = x, y = 0.5 + 0.22 * sin(x * 3 * pi),
-      just = "left", offset = 3,
-      gp = vl_gpar(fontsize = 13, col = "white",
-                   halo_col = "#20304A", halo_width = 2.5)
+      x = x,
+      y = 0.5 + 0.22 * sin(x * 3 * pi),
+      just = "left",
+      offset = 3,
+      gp = vl_gpar(
+        fontsize = 13,
+        col = "white",
+        halo_col = "#20304A",
+        halo_width = 2.5
+      )
     ))
 })
 render(wave, "typography-onpath-halo.png")

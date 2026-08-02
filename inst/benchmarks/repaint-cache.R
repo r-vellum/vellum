@@ -42,16 +42,26 @@ build <- function(n, cache) {
   bx <- runif(n)
   by <- runif(n)
   vellum::vl_scene(width, height, dpi = dpi, bg = "white") |>
-    vellum::push(vellum::vl_viewport(cache = cache, name = "bg", xscale = c(0, 1), yscale = c(0, 1))) |>
+    vellum::push(vellum::vl_viewport(
+      cache = cache,
+      name = "bg",
+      xscale = c(0, 1),
+      yscale = c(0, 1)
+    )) |>
     vellum::draw(vellum::points_grob(
-      vellum::vl_unit(bx, "native"), vellum::vl_unit(by, "native"),
-      size = vellum::vl_unit(1.5, "mm"), gp = vellum::vl_gpar(fill = "#3a86ff30", col = NA)
+      vellum::vl_unit(bx, "native"),
+      vellum::vl_unit(by, "native"),
+      size = vellum::vl_unit(1.5, "mm"),
+      gp = vellum::vl_gpar(fill = "#3a86ff30", col = NA)
     )) |>
     vellum::pop() |>
     vellum::push(vellum::vl_viewport(cache = TRUE, name = "fg")) |>
     vellum::draw(vellum::circle_grob(
-      x = 0.5, y = 0.5, r = 0.03,
-      gp = vellum::vl_gpar(fill = "black", col = NA), name = "dot"
+      x = 0.5,
+      y = 0.5,
+      r = 0.03,
+      gp = vellum::vl_gpar(fill = "black", col = NA),
+      name = "dot"
     )) |>
     vellum::pop()
 }
@@ -60,13 +70,23 @@ build <- function(n, cache) {
 highlight_loop <- function(s, m, out) {
   cols <- grDevices::hcl.colors(m, "Reds")
   for (k in seq_len(m)) {
-    s <- vellum::edit_node(s, "dot", gp = vellum::vl_gpar(fill = cols[k], col = NA))
+    s <- vellum::edit_node(
+      s,
+      "dot",
+      gp = vellum::vl_gpar(fill = cols[k], col = NA)
+    )
     vellum::render(s, out)
   }
 }
 
-cat(sprintf("Repaint boundaries: %s-point static background, %d highlight edits (%dx%d @ %d dpi)\n\n",
-            format(n, big.mark = ",", scientific = FALSE), m, width, height, dpi))
+cat(sprintf(
+  "Repaint boundaries: %s-point static background, %d highlight edits (%dx%d @ %d dpi)\n\n",
+  format(n, big.mark = ",", scientific = FALSE),
+  m,
+  width,
+  height,
+  dpi
+))
 
 out <- file.path(tempdir(), "repaint.png")
 
@@ -81,5 +101,8 @@ vellum::render(s_on, out) # warm: populate the background sub-raster
 t_on <- bench("background cached (FW4c)", highlight_loop(s_on, m, out))
 
 cat(sprintf("\n  speedup over %d edits: %.1fx\n", m, t_off / max(t_on, 1e-6)))
-cat(sprintf("  per-edit: %.1f ms (cached) vs %.1f ms (uncached)\n",
-            1000 * t_on / m, 1000 * t_off / m))
+cat(sprintf(
+  "  per-edit: %.1f ms (cached) vs %.1f ms (uncached)\n",
+  1000 * t_on / m,
+  1000 * t_off / m
+))

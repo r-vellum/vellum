@@ -24,18 +24,31 @@
 #     grob — one row in the walk against N boxes from the backend — and aborted
 #     `scene_model()`. It is a batch, not a single shape.)
 .sm_mark_of <- function(node) {
-  if (S7::S7_inherits(node, grob_rect)) "rect"
-  else if (S7::S7_inherits(node, grob_points)) "point"
-  else if (S7::S7_inherits(node, grob_circle)) "circle"
-  else if (S7::S7_inherits(node, grob_hexagon)) "hexagon"
-  else if (S7::S7_inherits(node, grob_sector)) "sector"
-  else if (S7::S7_inherits(node, grob_segments)) "segment"
-  else if (S7::S7_inherits(node, grob_path)) "path"
-  else if (S7::S7_inherits(node, grob_lines)) "line"
-  else if (S7::S7_inherits(node, grob_polygon)) "polygon"
-  else if (S7::S7_inherits(node, grob_roundrect)) "roundrect"
-  else if (S7::S7_inherits(node, grob_text)) "text"
-  else NA_character_
+  if (S7::S7_inherits(node, grob_rect)) {
+    "rect"
+  } else if (S7::S7_inherits(node, grob_points)) {
+    "point"
+  } else if (S7::S7_inherits(node, grob_circle)) {
+    "circle"
+  } else if (S7::S7_inherits(node, grob_hexagon)) {
+    "hexagon"
+  } else if (S7::S7_inherits(node, grob_sector)) {
+    "sector"
+  } else if (S7::S7_inherits(node, grob_segments)) {
+    "segment"
+  } else if (S7::S7_inherits(node, grob_path)) {
+    "path"
+  } else if (S7::S7_inherits(node, grob_lines)) {
+    "line"
+  } else if (S7::S7_inherits(node, grob_polygon)) {
+    "polygon"
+  } else if (S7::S7_inherits(node, grob_roundrect)) {
+    "roundrect"
+  } else if (S7::S7_inherits(node, grob_text)) {
+    "text"
+  } else {
+    NA_character_
+  }
 }
 
 .SM_SINGLE <- c("path", "line", "polygon")
@@ -49,7 +62,9 @@
 # The single data key of a single-shape grob (first key), or NA when unkeyed.
 .sm_key1 <- function(node) {
   k <- node@keys
-  if (is.null(k) || length(k) == 0L) return(NA_character_)
+  if (is.null(k) || length(k) == 0L) {
+    return(NA_character_)
+  }
   k <- as.character(k[[1L]])
   if (is.na(k) || !nzchar(k)) NA_character_ else k
 }
@@ -85,34 +100,50 @@ scene_model <- function(scene) {
   walk <- function(node, panel) {
     if (S7::S7_inherits(node, gtree)) {
       p <- .panel_name(node@vp) %||% panel
-      for (ch in node@children) walk(ch, p)
+      for (ch in node@children) {
+        walk(ch, p)
+      }
       return(invisible())
     }
     mark <- .sm_mark_of(node)
-    if (is.na(mark)) return(invisible())
+    if (is.na(mark)) {
+      return(invisible())
+    }
     if (mark %in% .SM_KEYED_BATCH) {
       # Keyed-only batch: one row per label, but only if the grob has keys at
       # all. Individual NA keys within a keyed grob still count, because the
       # backend emitted a node for each.
       n <- .sm_n(node)
-      if (n == 0L || is.null(node@keys)) return(invisible())
+      if (n == 0L || is.null(node@keys)) {
+        return(invisible())
+      }
       k <- rep_len(as.character(node@keys), n)
       keep <- !is.na(k) & nzchar(k)
-      if (!any(keep)) return(invisible())
+      if (!any(keep)) {
+        return(invisible())
+      }
       keys <- k[keep]
-      meta <- if (is.null(node@meta)) vector("list", length(keys)) else rep_len(node@meta, n)[keep]
+      meta <- if (is.null(node@meta)) {
+        vector("list", length(keys))
+      } else {
+        rep_len(node@meta, n)[keep]
+      }
       n <- length(keys)
     } else if (mark %in% .SM_SINGLE) {
       # A single-shape mark: one element, and only in scene_model when keyed
       # (element_table() skips unkeyed paths/lines/polygons).
       key1 <- .sm_key1(node)
-      if (is.na(key1)) return(invisible())
+      if (is.na(key1)) {
+        return(invisible())
+      }
       n <- 1L
       keys <- key1
       meta <- if (is.null(node@meta)) vector("list", 1L) else node@meta[1L]
     } else {
       n <- .sm_n(node)
-      if (n == 0L) return(invisible())
+      if (n == 0L) {
+        return(invisible())
+      }
       keys <- if (is.null(node@keys)) {
         rep(NA_character_, n)
       } else {
@@ -120,19 +151,28 @@ scene_model <- function(scene) {
         k[!nzchar(k)] <- NA_character_
         rep_len(k, n)
       }
-      meta <- if (is.null(node@meta)) vector("list", n) else rep_len(node@meta, n)
+      meta <- if (is.null(node@meta)) {
+        vector("list", n)
+      } else {
+        rep_len(node@meta, n)
+      }
     }
     id <- .meta_str(node@id)
     id <- if (nzchar(id)) id else NA_character_
     nm <- .node_name(node) %||% NA_character_
     chunks[[length(chunks) + 1L]] <<- list(
-      mark = rep(mark, n), key = keys, id = rep(id, n),
+      mark = rep(mark, n),
+      key = keys,
+      id = rep(id, n),
       name = rep(as.character(nm), n),
-      panel = rep(panel %||% NA_character_, n), meta = meta
+      panel = rep(panel %||% NA_character_, n),
+      meta = meta
     )
     invisible()
   }
-  for (ch in root@children) walk(ch, .panel_name(root@vp))
+  for (ch in root@children) {
+    walk(ch, .panel_name(root@vp))
+  }
 
   # One compile that also captures the viewport id<->name map (via `.push_vp`), so
   # `panels` can carry each panel viewport's resolved pixel rect, native scale, and
@@ -142,9 +182,19 @@ scene_model <- function(scene) {
 
   if (!length(chunks)) {
     empty <- data.frame(
-      key = character(), mark = character(), id = character(), name = character(),
-      panel = character(), x0 = numeric(), y0 = numeric(), x1 = numeric(),
-      y1 = numeric(), x = numeric(), y = numeric(), w = numeric(), h = numeric(),
+      key = character(),
+      mark = character(),
+      id = character(),
+      name = character(),
+      panel = character(),
+      x0 = numeric(),
+      y0 = numeric(),
+      x1 = numeric(),
+      y1 = numeric(),
+      x = numeric(),
+      y = numeric(),
+      w = numeric(),
+      h = numeric(),
       stringsAsFactors = FALSE
     )
     empty$meta <- list()
@@ -152,11 +202,17 @@ scene_model <- function(scene) {
   }
 
   pull <- function(field) unlist(lapply(chunks, `[[`, field), use.names = FALSE)
-  mark <- pull("mark"); key <- pull("key"); id <- pull("id")
-  name <- pull("name"); panel <- pull("panel")
+  mark <- pull("mark")
+  key <- pull("key")
+  id <- pull("id")
+  name <- pull("name")
+  panel <- pull("panel")
   meta <- unlist(lapply(chunks, `[[`, "meta"), recursive = FALSE)
 
-  gx0 <- et$x0; gy0 <- et$y0; gx1 <- et$x1; gy1 <- et$y1
+  gx0 <- et$x0
+  gy0 <- et$y0
+  gx1 <- et$x1
+  gy1 <- et$y1
 
   # The R (semantic) and Rust (geometry) tables must enumerate the same elements
   # in the same order. Guard the positional zip: counts must match, and the key
@@ -170,30 +226,58 @@ scene_model <- function(scene) {
   et_key <- et$key
   et_key[!nzchar(et_key)] <- NA_character_
   if (!identical(et_key, key)) {
-    cli::cli_abort("scene_model(): element order/key mismatch between grammar and backend.")
+    cli::cli_abort(
+      "scene_model(): element order/key mismatch between grammar and backend."
+    )
   }
 
   elements <- data.frame(
-    key = key, mark = mark, id = id, name = name, panel = panel,
-    x0 = gx0, y0 = gy0, x1 = gx1, y1 = gy1,
-    x = (gx0 + gx1) / 2, y = (gy0 + gy1) / 2, w = gx1 - gx0, h = gy1 - gy0,
+    key = key,
+    mark = mark,
+    id = id,
+    name = name,
+    panel = panel,
+    x0 = gx0,
+    y0 = gy0,
+    x1 = gx1,
+    y1 = gy1,
+    x = (gx0 + gx1) / 2,
+    y = (gy0 + gy1) / 2,
+    w = gx1 - gx0,
+    h = gy1 - gy0,
     stringsAsFactors = FALSE
   )
   elements$meta <- meta
 
   list(
     elements = elements,
-    panels = .sm_panels(panel, gx0, gy0, gx1, gy1, cap$items, cap$backend$resolved_geometry())
+    panels = .sm_panels(
+      panel,
+      gx0,
+      gy0,
+      gx1,
+      gy1,
+      cap$items,
+      cap$backend$resolved_geometry()
+    )
   )
 }
 
 .sm_empty_panels <- function() {
   d <- data.frame(
     name = character(),
-    x0 = numeric(), y0 = numeric(), x1 = numeric(), y1 = numeric(),
-    px0 = numeric(), py0 = numeric(), px1 = numeric(), py1 = numeric(),
-    xscale_lo = numeric(), xscale_hi = numeric(),
-    yscale_lo = numeric(), yscale_hi = numeric(),
+    x0 = numeric(),
+    y0 = numeric(),
+    x1 = numeric(),
+    y1 = numeric(),
+    px0 = numeric(),
+    py0 = numeric(),
+    px1 = numeric(),
+    py1 = numeric(),
+    xscale_lo = numeric(),
+    xscale_hi = numeric(),
+    yscale_lo = numeric(),
+    yscale_hi = numeric(),
     stringsAsFactors = FALSE
   )
   d$meta <- list()
@@ -205,7 +289,9 @@ scene_model <- function(scene) {
 # Returns `c(px0, py0, px1, py1)` or NULL when the id is absent.
 .sm_vp_rect <- function(geom, id) {
   i <- match(id, geom$id)
-  if (is.na(i)) return(NULL)
+  if (is.na(i)) {
+    return(NULL)
+  }
   tf <- geom$transform[[i]]
   w <- geom$w_px[i]
   h <- geom$h_px[i]
@@ -225,7 +311,9 @@ scene_model <- function(scene) {
 .sm_panels <- function(panel, x0, y0, x1, y1, items, geom) {
   pn <- unique(panel[!is.na(panel)])
   n <- length(pn)
-  if (!n) return(.sm_empty_panels())
+  if (!n) {
+    return(.sm_empty_panels())
+  }
   ex0 <- ey0 <- ex1 <- ey1 <- numeric(n)
   px0 <- py0 <- px1 <- py1 <- rep(NA_real_, n)
   xsl <- xsh <- ysl <- ysh <- rep(NA_real_, n)
@@ -233,23 +321,48 @@ scene_model <- function(scene) {
   for (j in seq_len(n)) {
     p <- pn[j]
     i <- which(!is.na(panel) & panel == p)
-    ex0[j] <- min(x0[i]); ey0[j] <- min(y0[i]); ex1[j] <- max(x1[i]); ey1[j] <- max(y1[i])
+    ex0[j] <- min(x0[i])
+    ey0[j] <- min(y0[i])
+    ex1[j] <- max(x1[i])
+    ey1[j] <- max(y1[i])
     it <- Find(function(t) identical(as.character(t$name), p), items)
     if (!is.null(it)) {
       r <- .sm_vp_rect(geom, it$id)
-      if (!is.null(r)) { px0[j] <- r[["px0"]]; py0[j] <- r[["py0"]]; px1[j] <- r[["px1"]]; py1[j] <- r[["py1"]] }
-      xs <- it$vp@xscale; ys <- it$vp@yscale
-      if (length(xs) == 2L) { xsl[j] <- xs[1L]; xsh[j] <- xs[2L] }
-      if (length(ys) == 2L) { ysl[j] <- ys[1L]; ysh[j] <- ys[2L] }
+      if (!is.null(r)) {
+        px0[j] <- r[["px0"]]
+        py0[j] <- r[["py0"]]
+        px1[j] <- r[["px1"]]
+        py1[j] <- r[["py1"]]
+      }
+      xs <- it$vp@xscale
+      ys <- it$vp@yscale
+      if (length(xs) == 2L) {
+        xsl[j] <- xs[1L]
+        xsh[j] <- xs[2L]
+      }
+      if (length(ys) == 2L) {
+        ysl[j] <- ys[1L]
+        ysh[j] <- ys[2L]
+      }
       # `meta[[j]] <- NULL` would DELETE the slot (R gotcha); the list is
       # pre-filled with NULLs, so only assign when the viewport carries meta.
       if (!is.null(it$vp@meta)) meta[[j]] <- it$vp@meta
     }
   }
   out <- data.frame(
-    name = pn, x0 = ex0, y0 = ey0, x1 = ex1, y1 = ey1,
-    px0 = px0, py0 = py0, px1 = px1, py1 = py1,
-    xscale_lo = xsl, xscale_hi = xsh, yscale_lo = ysl, yscale_hi = ysh,
+    name = pn,
+    x0 = ex0,
+    y0 = ey0,
+    x1 = ex1,
+    y1 = ey1,
+    px0 = px0,
+    py0 = py0,
+    px1 = px1,
+    py1 = py1,
+    xscale_lo = xsl,
+    xscale_hi = xsh,
+    yscale_lo = ysl,
+    yscale_hi = ysh,
     stringsAsFactors = FALSE
   )
   out$meta <- meta
@@ -277,9 +390,13 @@ scene_model <- function(scene) {
   # (only with a scene id, and only when caching is enabled).
   if (!is.null(cid) && isTRUE(getOption("vellum.cache", TRUE))) {
     key <- .render_key(
-      cid, .to_inches(scene@width), .to_inches(scene@height),
-      scene@dpi, .rs_col(scene@bg) %||% c(255L, 255L, 255L, 0L),
-      scene@title, scene@desc
+      cid,
+      .to_inches(scene@width),
+      .to_inches(scene@height),
+      scene@dpi,
+      .rs_col(scene@bg) %||% c(255L, 255L, 255L, 0L),
+      scene@title,
+      scene@desc
     )
     .render_cache_put(key, backend)
   }

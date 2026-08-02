@@ -12,9 +12,19 @@ test_that("render() writes a valid PDF", {
 test_that("PDF clipping and nested viewports render without error", {
   f <- withr::local_tempfile(fileext = ".pdf")
   s <- vl_scene(2, 2, dpi = 100) |>
-    push(vl_viewport(width = 0.5, height = 0.5, clip = TRUE, xscale = c(0, 10), yscale = c(0, 10))) |>
-    draw(circle_grob(vl_unit(5, "native"), vl_unit(5, "native"), r = 0.9,
-                     gp = vl_gpar(fill = "blue", col = NA)))
+    push(vl_viewport(
+      width = 0.5,
+      height = 0.5,
+      clip = TRUE,
+      xscale = c(0, 10),
+      yscale = c(0, 10)
+    )) |>
+    draw(circle_grob(
+      vl_unit(5, "native"),
+      vl_unit(5, "native"),
+      r = 0.9,
+      gp = vl_gpar(fill = "blue", col = NA)
+    ))
   expect_no_error(render(s, f))
   expect_equal(rawToChar(readBin(f, "raw", 5)), "%PDF-")
 })
@@ -25,7 +35,12 @@ test_that("PDF soft masks clip content (rasterized check)", {
   f <- withr::local_tempfile(fileext = ".pdf")
   # Orange page rect masked to a centred r=0.4npc circle over a black background.
   s <- vl_scene(2, 2, dpi = 90, bg = "black") |>
-    push(vl_viewport(mask = as_mask(circle_grob(r = 0.4, gp = vl_gpar(fill = "white", col = NA))))) |>
+    push(vl_viewport(
+      mask = as_mask(circle_grob(
+        r = 0.4,
+        gp = vl_gpar(fill = "white", col = NA)
+      ))
+    )) |>
     draw(rect_grob(gp = vl_gpar(fill = "orange", col = NA))) |>
     pop()
   render(s, f)
@@ -43,7 +58,7 @@ test_that("PDF soft masks clip content (rasterized check)", {
   expect_gt(centre[1], 0.8) # centre is orange: high red...
   expect_lt(centre[3], 0.2) # ...low blue
   # the lit area approximates the mask circle: pi * 0.4^2 ~= 0.50 of the page
-  lit <- mean(img[, , 1] > 0.5)
+  lit <- mean(img[,, 1] > 0.5)
   expect_gt(lit, 0.4)
   expect_lt(lit, 0.6)
 })
@@ -54,6 +69,9 @@ test_that("PDF text is embedded and selectable", {
   s <- vl_scene(3, 1, dpi = 100) |>
     draw(text_grob("VellumPDF", x = 0.5, y = 0.5, gp = vl_gpar(fontsize = 24)))
   render(s, f)
-  txt <- paste(system2("pdftotext", c(shQuote(f), "-"), stdout = TRUE), collapse = " ")
+  txt <- paste(
+    system2("pdftotext", c(shQuote(f), "-"), stdout = TRUE),
+    collapse = " "
+  )
   expect_match(txt, "VellumPDF")
 })

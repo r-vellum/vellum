@@ -19,8 +19,12 @@ overlap_pairs <- function(scene, pad = 0, tol = 1e-6) {
   k <- 0L
   for (i in seq_len(n - 1L)) {
     for (j in seq.int(i + 1L, n)) {
-      if (b$x0[i] < b$x1[j] - tol && b$x1[i] > b$x0[j] + tol &&
-          b$y0[i] < b$y1[j] - tol && b$y1[i] > b$y0[j] + tol) {
+      if (
+        b$x0[i] < b$x1[j] - tol &&
+          b$x1[i] > b$x0[j] + tol &&
+          b$y0[i] < b$y1[j] - tol &&
+          b$y1[i] > b$y0[j] + tol
+      ) {
         k <- k + 1L
       }
     }
@@ -33,9 +37,19 @@ anchored <- function(n, seed = 1) {
   x <- runif(n)
   y <- runif(n)
   vl_scene(5, 3, dpi = 96, bg = "white") |>
-    draw(points_grob(x, y, gp = vl_gpar(fill = "steelblue", col = NA), name = "pts")) |>
-    draw(text_grob(paste0("item ", seq_len(n)), x = x, y = y,
-                   gp = vl_gpar(fontsize = 9), name = "lab"))
+    draw(points_grob(
+      x,
+      y,
+      gp = vl_gpar(fill = "steelblue", col = NA),
+      name = "pts"
+    )) |>
+    draw(text_grob(
+      paste0("item ", seq_len(n)),
+      x = x,
+      y = y,
+      gp = vl_gpar(fontsize = 9),
+      name = "lab"
+    ))
 }
 
 test_that("repel separates overlapping labels", {
@@ -55,8 +69,11 @@ test_that("repel keeps improving as the page gets crowded", {
     s <- anchored(n)
     before <- overlap_pairs(s)
     after <- overlap_pairs(vl_repel(s))
-    expect_lte(after, before / 2,
-               label = sprintf("n = %d: %d overlaps -> %d", n, before, after))
+    expect_lte(
+      after,
+      before / 2,
+      label = sprintf("n = %d: %d overlaps -> %d", n, before, after)
+    )
   }
 })
 
@@ -64,8 +81,13 @@ test_that("two labels stacked exactly on each other come apart", {
   # The degenerate case: identical anchors, so there is no separating direction
   # to read off the geometry and the solver has to pick one.
   s <- vl_scene(4, 2, dpi = 96, bg = "white") |>
-    draw(text_grob(c("alpha", "beta"), x = c(0.5, 0.5), y = c(0.5, 0.5),
-                   gp = vl_gpar(fontsize = 12), name = "lab"))
+    draw(text_grob(
+      c("alpha", "beta"),
+      x = c(0.5, 0.5),
+      y = c(0.5, 0.5),
+      gp = vl_gpar(fontsize = 12),
+      name = "lab"
+    ))
   expect_equal(overlap_pairs(s), 1L)
   r <- vl_repel(s)
   expect_equal(overlap_pairs(r), 0L)
@@ -96,12 +118,29 @@ test_that("node boxes are device coordinates, not viewport-local ones", {
   # because tests draw into the default full-page viewport, where the transform
   # is the identity and local == device.
   s <- vl_scene(7.5, 5, dpi = 150, bg = "white") |>
-    push(vl_viewport(name = "panel", x = 0.53, y = 0.42, width = 0.86, height = 0.62,
-                     xscale = c(0, 10), yscale = c(0, 100))) |>
-    draw(points_grob(vl_unit(5, "native"), vl_unit(50, "native"),
-                     size = vl_unit(4, "mm"), gp = vl_gpar(fill = "red"), name = "pt")) |>
-    draw(text_grob("X", x = vl_unit(5, "native"), y = vl_unit(50, "native"),
-                   gp = vl_gpar(fontsize = 20), name = "tx")) |>
+    push(vl_viewport(
+      name = "panel",
+      x = 0.53,
+      y = 0.42,
+      width = 0.86,
+      height = 0.62,
+      xscale = c(0, 10),
+      yscale = c(0, 100)
+    )) |>
+    draw(points_grob(
+      vl_unit(5, "native"),
+      vl_unit(50, "native"),
+      size = vl_unit(4, "mm"),
+      gp = vl_gpar(fill = "red"),
+      name = "pt"
+    )) |>
+    draw(text_grob(
+      "X",
+      x = vl_unit(5, "native"),
+      y = vl_unit(50, "native"),
+      gp = vl_gpar(fontsize = 20),
+      name = "tx"
+    )) |>
     pop()
   b <- .scene_to_backend(s)
   lt <- as.data.frame(b$lint_table(), stringsAsFactors = FALSE)
@@ -112,10 +151,16 @@ test_that("node boxes are device coordinates, not viewport-local ones", {
   # which in device space (y down) is 0.58 x 750 = 435.
   expect_equal(mid(lt[lt$kind == "circle", ]), c(596.25, 435), tolerance = 1e-6)
   # Both marks sit on the same anchor, so both tables must agree on it.
-  expect_equal(mid(lt[lt$kind == "text", ]), mid(lt[lt$kind == "circle", ]),
-               tolerance = 0.5)
-  expect_equal(mid(et[et$kind == "circle", ]), mid(lt[lt$kind == "circle", ]),
-               tolerance = 1e-6)
+  expect_equal(
+    mid(lt[lt$kind == "text", ]),
+    mid(lt[lt$kind == "circle", ]),
+    tolerance = 0.5
+  )
+  expect_equal(
+    mid(et[et$kind == "circle", ]),
+    mid(lt[lt$kind == "circle", ]),
+    tolerance = 1e-6
+  )
 })
 
 test_that("repel clears markers inside an offset panel", {
@@ -128,23 +173,42 @@ test_that("repel clears markers inside an offset panel", {
   px <- runif(k) * 10
   py <- 30 + cumsum(rnorm(k, 1.5, 6))
   s <- vl_scene(7.5, 5, dpi = 150, bg = "white") |>
-    push(vl_viewport(name = "panel", x = 0.53, y = 0.42, width = 0.86, height = 0.62,
-                     xscale = c(0, 10), yscale = range(py) + c(-12, 12))) |>
-    draw(points_grob(vl_unit(px, "native"), vl_unit(py, "native"),
-                     size = vl_unit(2.4, "mm"), gp = vl_gpar(fill = "steelblue"),
-                     name = "sites")) |>
-    draw(text_grob(paste0("site ", seq_len(k)), x = vl_unit(px, "native"),
-                   y = vl_unit(py, "native"), gp = vl_gpar(fontsize = 7.5),
-                   name = "labels")) |>
+    push(vl_viewport(
+      name = "panel",
+      x = 0.53,
+      y = 0.42,
+      width = 0.86,
+      height = 0.62,
+      xscale = c(0, 10),
+      yscale = range(py) + c(-12, 12)
+    )) |>
+    draw(points_grob(
+      vl_unit(px, "native"),
+      vl_unit(py, "native"),
+      size = vl_unit(2.4, "mm"),
+      gp = vl_gpar(fill = "steelblue"),
+      name = "sites"
+    )) |>
+    draw(text_grob(
+      paste0("site ", seq_len(k)),
+      x = vl_unit(px, "native"),
+      y = vl_unit(py, "native"),
+      gp = vl_gpar(fontsize = 7.5),
+      name = "labels"
+    )) |>
     pop()
   touching <- function(sc) {
     nd <- .resolved_nodes(sc)
     L <- nd[nd$kind == "text", , drop = FALSE]
     M <- .obstacle_boxes(sc)
     M <- M[M$name == "sites", , drop = FALSE]
-    sum(vapply(seq_len(nrow(L)), function(i) {
-      any(L$x0[i] < M$x1 & L$x1[i] > M$x0 & L$y0[i] < M$y1 & L$y1[i] > M$y0)
-    }, logical(1)))
+    sum(vapply(
+      seq_len(nrow(L)),
+      function(i) {
+        any(L$x0[i] < M$x1 & L$x1[i] > M$x0 & L$y0[i] < M$y1 & L$y1[i] > M$y0)
+      },
+      logical(1)
+    ))
   }
   expect_equal(touching(s), k) # every label starts on its own marker
   expect_equal(touching(vl_repel(s, labels = "labels", padding = 0.4)), 0L)
@@ -158,17 +222,35 @@ test_that("repel works in a scaled viewport, and in more than one at once", {
     x <- runif(14) * 100
     y <- runif(14) * 0.01
     vl_scene(6, 3, dpi = 96, bg = "white") |>
-      push(vl_viewport(name = "left", x = 0.25, width = 0.45,
-                       xscale = c(0, 100), yscale = c(0, 0.01))) |>
-      draw(text_grob(paste0("n", seq_len(14)), x = vl_unit(x, "native"),
-                     y = vl_unit(y, "native"), gp = vl_gpar(fontsize = 8),
-                     name = "L")) |>
+      push(vl_viewport(
+        name = "left",
+        x = 0.25,
+        width = 0.45,
+        xscale = c(0, 100),
+        yscale = c(0, 0.01)
+      )) |>
+      draw(text_grob(
+        paste0("n", seq_len(14)),
+        x = vl_unit(x, "native"),
+        y = vl_unit(y, "native"),
+        gp = vl_gpar(fontsize = 8),
+        name = "L"
+      )) |>
       pop() |>
-      push(vl_viewport(name = "right", x = 0.75, width = 0.45,
-                       xscale = c(0, 100), yscale = c(0, 0.01))) |>
-      draw(text_grob(paste0("m", seq_len(14)), x = vl_unit(rev(x), "native"),
-                     y = vl_unit(y, "native"), gp = vl_gpar(fontsize = 8),
-                     name = "R")) |>
+      push(vl_viewport(
+        name = "right",
+        x = 0.75,
+        width = 0.45,
+        xscale = c(0, 100),
+        yscale = c(0, 0.01)
+      )) |>
+      draw(text_grob(
+        paste0("m", seq_len(14)),
+        x = vl_unit(rev(x), "native"),
+        y = vl_unit(y, "native"),
+        gp = vl_gpar(fontsize = 8),
+        name = "R"
+      )) |>
       pop()
   }
   s <- mk()
@@ -201,10 +283,23 @@ test_that("a panel background does not defeat the solver", {
   y <- runif(24)
   withbg <- vl_scene(5, 3, dpi = 96, bg = "white") |>
     push(vl_viewport(name = "panel", width = 0.9, height = 0.9)) |>
-    draw(rect_grob(gp = vl_gpar(fill = "grey96", col = "grey80"), name = "panelbg")) |>
-    draw(points_grob(x, y, gp = vl_gpar(fill = "steelblue", col = NA), name = "pts")) |>
-    draw(text_grob(paste0("item ", seq_along(x)), x = x, y = y,
-                   gp = vl_gpar(fontsize = 9), name = "lab")) |>
+    draw(rect_grob(
+      gp = vl_gpar(fill = "grey96", col = "grey80"),
+      name = "panelbg"
+    )) |>
+    draw(points_grob(
+      x,
+      y,
+      gp = vl_gpar(fill = "steelblue", col = NA),
+      name = "pts"
+    )) |>
+    draw(text_grob(
+      paste0("item ", seq_along(x)),
+      x = x,
+      y = y,
+      gp = vl_gpar(fontsize = 9),
+      name = "lab"
+    )) |>
     pop()
   expect_gt(overlap_pairs(withbg), 0L)
   expect_equal(overlap_pairs(vl_repel(withbg)), 0L)
@@ -217,9 +312,21 @@ test_that("an obstacle containing a label is not treated as an obstacle", {
   # A label deliberately annotating the inside of a bar must not be pushed out
   # of it -- the same rule that ignores the panel background.
   s <- vl_scene(4, 3, dpi = 96, bg = "white") |>
-    draw(rect_grob(x = 0.5, y = 0.5, width = 0.6, height = 0.6,
-                   gp = vl_gpar(fill = "steelblue"), name = "bar")) |>
-    draw(text_grob("42", x = 0.5, y = 0.5, gp = vl_gpar(fontsize = 10), name = "lab"))
+    draw(rect_grob(
+      x = 0.5,
+      y = 0.5,
+      width = 0.6,
+      height = 0.6,
+      gp = vl_gpar(fill = "steelblue"),
+      name = "bar"
+    )) |>
+    draw(text_grob(
+      "42",
+      x = 0.5,
+      y = 0.5,
+      gp = vl_gpar(fontsize = 10),
+      name = "lab"
+    ))
   sol <- vl_place(s)
   expect_equal(sol$dx, 0)
   expect_equal(sol$dy, 0)
@@ -250,7 +357,10 @@ test_that("a solve stays valid only for the scene it was solved on", {
   s <- anchored(26)
   sol <- vl_place(s, padding = 0.6)
   moved <- which(abs(sol$dx) + abs(sol$dy) > 1)
-  skip_if(length(moved) < 5, "not enough movement on this font to be meaningful")
+  skip_if(
+    length(moved) < 5,
+    "not enough movement on this font to be meaningful"
+  )
 
   add_leaders <- function(sc) {
     d <- .scene_to_backend(sc)$dim()
@@ -259,10 +369,16 @@ test_that("a solve stays valid only for the scene it was solved on", {
     # Device px -> npc (npc y is up).
     nx <- function(v) v / d[1]
     ny <- function(v) 1 - v / d[2]
-    draw(sc, segments_grob(
-      x0 = nx(L$x0[moved]), y0 = ny(L$y0[moved]),
-      x1 = nx(L$x1[moved]), y1 = ny(L$y1[moved]),
-      gp = vl_gpar(col = "grey70", lwd = 0.6)))
+    draw(
+      sc,
+      segments_grob(
+        x0 = nx(L$x0[moved]),
+        y0 = ny(L$y0[moved]),
+        x1 = nx(L$x1[moved]),
+        y1 = ny(L$y1[moved]),
+        gp = vl_gpar(col = "grey70", lwd = 0.6)
+      )
+    )
   }
   # Annotating BEFORE the solve changes it; annotating after cannot.
   before <- vl_place(add_leaders(s), labels = "lab", padding = 0.6)
@@ -306,8 +422,12 @@ test_that("obstacles are per element, not per batch", {
   # label could ever be placed.
   set.seed(4)
   s <- vl_scene(4, 3, dpi = 96, bg = "white") |>
-    draw(points_grob(runif(50), runif(50), gp = vl_gpar(fill = "grey40", col = NA),
-                     name = "pts")) |>
+    draw(points_grob(
+      runif(50),
+      runif(50),
+      gp = vl_gpar(fill = "grey40", col = NA),
+      name = "pts"
+    )) |>
     draw(text_grob("here", x = 0.5, y = 0.5, name = "lab"))
   obs <- .obstacle_boxes(s)
   pts <- obs[obs$name == "pts", , drop = FALSE]
@@ -320,8 +440,11 @@ test_that("obstacles are per element, not per batch", {
 test_that("the empty region finds the free half of a page", {
   set.seed(1)
   s <- vl_scene(4, 3, dpi = 96, bg = "white") |>
-    draw(points_grob(runif(60) * 0.45, runif(60),
-                     gp = vl_gpar(fill = "steelblue", col = NA)))
+    draw(points_grob(
+      runif(60) * 0.45,
+      runif(60),
+      gp = vl_gpar(fill = "steelblue", col = NA)
+    ))
   r <- vl_empty_region(s)
   expect_gt(r[["x0"]], 0.4) # it is on the empty side
   expect_gt(r[["x1"]] - r[["x0"]], 0.4) # and it is most of that side
@@ -332,13 +455,22 @@ test_that("the empty region never claims occupied space", {
   # Boxes are rounded outward, so the answer is conservative by construction.
   set.seed(5)
   s <- vl_scene(4, 3, dpi = 96, bg = "white") |>
-    draw(points_grob(runif(30), runif(30), size = vl_unit(3, "mm"),
-                     gp = vl_gpar(fill = "grey30", col = NA)))
+    draw(points_grob(
+      runif(30),
+      runif(30),
+      size = vl_unit(3, "mm"),
+      gp = vl_gpar(fill = "grey30", col = NA)
+    ))
   r <- vl_empty_region(s, grid = 300)
   b <- .obstacle_boxes(s)
   d <- .scene_to_backend(s)$dim()
   # Back to device px to compare with the element boxes.
-  px <- c(r[["x0"]] * d[1], (1 - r[["y1"]]) * d[2], r[["x1"]] * d[1], (1 - r[["y0"]]) * d[2])
+  px <- c(
+    r[["x0"]] * d[1],
+    (1 - r[["y1"]]) * d[2],
+    r[["x1"]] * d[1],
+    (1 - r[["y0"]]) * d[2]
+  )
   hit <- b$x0 < px[3] & b$x1 > px[1] & b$y0 < px[4] & b$y1 > px[2]
   expect_false(any(hit))
 })
@@ -356,14 +488,21 @@ test_that("an empty page gives the whole page, a full one gives nothing", {
 test_that("the empty region honours `within` and `avoid`", {
   set.seed(1)
   s <- vl_scene(4, 3, dpi = 96, bg = "white") |>
-    draw(points_grob(runif(40), runif(40), gp = vl_gpar(fill = "grey40", col = NA),
-                     name = "pts"))
+    draw(points_grob(
+      runif(40),
+      runif(40),
+      gp = vl_gpar(fill = "grey40", col = NA),
+      name = "pts"
+    ))
   inside <- vl_empty_region(s, within = c(0, 0, 0.5, 0.5))
   expect_lte(inside[["x1"]], 0.5 + 0.02)
   expect_lte(inside[["y1"]], 0.5 + 0.02)
   # Ignoring the only marks in the scene frees the whole page.
-  expect_equal(unname(vl_empty_region(s, avoid = character(0))), c(0, 0, 1, 1),
-               tolerance = 0.02)
+  expect_equal(
+    unname(vl_empty_region(s, avoid = character(0))),
+    c(0, 0, 1, 1),
+    tolerance = 0.02
+  )
 })
 
 test_that("empty region can report millimetres", {
@@ -389,12 +528,16 @@ test_that("every point lies inside its convex hull", {
   # Signed area of the hull ring, and of each point against every edge: for a
   # counter-clockwise ring every point must be on the same side of all edges.
   n <- nrow(h)
-  side <- vapply(seq_len(n), function(k) {
-    a <- k
-    b <- if (k == n) 1L else k + 1L
-    cr <- (h$x[b] - h$x[a]) * (y - h$y[a]) - (h$y[b] - h$y[a]) * (x - h$x[a])
-    min(cr)
-  }, numeric(1))
+  side <- vapply(
+    seq_len(n),
+    function(k) {
+      a <- k
+      b <- if (k == n) 1L else k + 1L
+      cr <- (h$x[b] - h$x[a]) * (y - h$y[a]) - (h$y[b] - h$y[a]) * (x - h$x[a])
+      min(cr)
+    },
+    numeric(1)
+  )
   expect_true(all(side >= -1e-9) || all(side <= 1e-9))
 })
 
@@ -411,7 +554,9 @@ test_that("a concave hull follows the points more closely than a convex one", {
   cc <- vl_hull(x, y, concavity = 1.2)
   expect_gte(nrow(cc), nrow(cv))
   # Following the bite means a smaller enclosed area.
-  area <- function(h) abs(sum(h$x * c(h$y[-1], h$y[1]) - c(h$x[-1], h$x[1]) * h$y)) / 2
+  area <- function(h) {
+    abs(sum(h$x * c(h$y[-1], h$y[1]) - c(h$x[-1], h$x[1]) * h$y)) / 2
+  }
   expect_lt(area(cc), area(cv))
 })
 
@@ -440,7 +585,10 @@ test_that("a buffer grows a ring by the requested distance", {
   expect_equal(max(b$y), 1 + w, tolerance = 1e-9)
   # Every buffered point is exactly w from the ring it came from.
   d <- pmin(
-    abs(b$x - 0), abs(b$x - 1), abs(b$y - 0), abs(b$y - 1)
+    abs(b$x - 0),
+    abs(b$x - 1),
+    abs(b$y - 0),
+    abs(b$y - 1)
   )
   expect_true(all(d <= w + 1e-9))
 })
@@ -449,7 +597,9 @@ test_that("a buffer grows outward whichever way the ring is wound", {
   sq <- list(x = c(0, 1, 1, 0), y = c(0, 0, 1, 1))
   ccw <- vl_buffer(sq$x, sq$y, 0.1)
   cw <- vl_buffer(rev(sq$x), rev(sq$y), 0.1)
-  area <- function(b) abs(sum(b$x * c(b$y[-1], b$y[1]) - c(b$x[-1], b$x[1]) * b$y)) / 2
+  area <- function(b) {
+    abs(sum(b$x * c(b$y[-1], b$y[1]) - c(b$x[-1], b$x[1]) * b$y)) / 2
+  }
   # Both are bigger than the unit square, i.e. neither was shrunk.
   expect_gt(area(ccw), 1)
   expect_gt(area(cw), 1)

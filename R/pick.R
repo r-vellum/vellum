@@ -71,16 +71,30 @@
 #' # but its geometry is far away.
 #' vl_nearest(s, 0.8, 0.2)
 #' @export
-vl_nearest <- function(scene, x, y, units = c("npc", "px"), n = 1L,
-                       max_dist = Inf) {
+vl_nearest <- function(
+  scene,
+  x,
+  y,
+  units = c("npc", "px"),
+  n = 1L,
+  max_dist = Inf
+) {
   units <- match.arg(units)
   p <- .probe_px(scene, x, y, units)
   t <- .pick_table(scene, p[1], p[2])
   if (!length(t$key)) {
-    return(data.frame(key = character(0), kind = character(0), dist = numeric(0)))
+    return(data.frame(
+      key = character(0),
+      kind = character(0),
+      dist = numeric(0)
+    ))
   }
-  out <- data.frame(key = t$key, kind = t$kind, dist = t$dist,
-                    stringsAsFactors = FALSE)
+  out <- data.frame(
+    key = t$key,
+    kind = t$kind,
+    dist = t$dist,
+    stringsAsFactors = FALSE
+  )
   out <- out[out$dist <= max_dist, , drop = FALSE]
   out <- out[order(out$dist), , drop = FALSE]
   utils::head(out, max(0L, as.integer(n)))
@@ -128,9 +142,14 @@ element_geometry <- function(scene) {
   # pass, and (0, 0) keeps the distances it also returns cheap and meaningless
   # rather than subtly wrong-looking.
   t <- .pick_table(scene, 0, 0)
-  empty <- data.frame(key = character(0), kind = character(0),
-                      vertex = integer(0), x = numeric(0), y = numeric(0),
-                      stringsAsFactors = FALSE)
+  empty <- data.frame(
+    key = character(0),
+    kind = character(0),
+    vertex = integer(0),
+    x = numeric(0),
+    y = numeric(0),
+    stringsAsFactors = FALSE
+  )
   if (!length(t$key) || !length(t$x)) {
     return(empty)
   }
@@ -139,7 +158,8 @@ element_geometry <- function(scene) {
     key = rep(t$key, n),
     kind = rep(t$kind, n),
     vertex = unlist(lapply(n, seq_len), use.names = FALSE),
-    x = t$x, y = t$y,
+    x = t$x,
+    y = t$y,
     stringsAsFactors = FALSE
   )
 }

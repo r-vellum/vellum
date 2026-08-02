@@ -35,16 +35,27 @@ build_scene <- function(n) {
   for (i in seq_len(n)) {
     cx <- ((i - 1) %% m + 0.5) / m
     cy <- ((i - 1) %/% m + 0.5) / m
-    s <- vellum::draw(s, vellum::rect_grob(
-      x = cx, y = cy, width = 0.8 / m, height = 0.8 / m,
-      gp = vellum::vl_gpar(fill = cols[i], col = NA)
-    ))
+    s <- vellum::draw(
+      s,
+      vellum::rect_grob(
+        x = cx,
+        y = cy,
+        width = 0.8 / m,
+        height = 0.8 / m,
+        gp = vellum::vl_gpar(fill = cols[i], col = NA)
+      )
+    )
   }
   vellum::pop(s)
 }
 
-cat(sprintf("Render cache: compile-bound scene of %s grobs (%dx%d in @ %d dpi)\n\n",
-            format(n, big.mark = ",", scientific = FALSE), width, height, dpi))
+cat(sprintf(
+  "Render cache: compile-bound scene of %s grobs (%dx%d in @ %d dpi)\n\n",
+  format(n, big.mark = ",", scientific = FALSE),
+  width,
+  height,
+  dpi
+))
 
 s <- build_scene(n)
 f_png <- file.path(out_dir, "cache.png")
@@ -60,8 +71,14 @@ cat(sprintf("   speedup warm vs cold: %.0fx\n\n", t_cold / max(t_warm, 1e-6)))
 cat("2. Multi-format export of one scene (compile paid once):\n")
 vellum::vl_clear_render_cache()
 bench("png (miss, compile)", vellum::render(s, f_png))
-bench("svg (hit, reuse compile)", vellum::render(s, file.path(out_dir, "cache.svg")))
-bench("pdf (hit, reuse compile)", vellum::render(s, file.path(out_dir, "cache.pdf")))
+bench(
+  "svg (hit, reuse compile)",
+  vellum::render(s, file.path(out_dir, "cache.svg"))
+)
+bench(
+  "pdf (hit, reuse compile)",
+  vellum::render(s, file.path(out_dir, "cache.pdf"))
+)
 cat("\n")
 
 # --- 3. single-render tax control -------------------------------------------
@@ -75,12 +92,17 @@ on <- replicate(reps, {
   system.time(vellum::render(s, f_png))[["elapsed"]]
 })
 off <- replicate(reps, {
-  withr::with_options(list(vellum.cache = FALSE),
-                      system.time(vellum::render(s, f_png))[["elapsed"]])
+  withr::with_options(
+    list(vellum.cache = FALSE),
+    system.time(vellum::render(s, f_png))[["elapsed"]]
+  )
 })
 cat(sprintf("   cache on  (median): %8.3f s\n", stats::median(on)))
 cat(sprintf("   cache off (median): %8.3f s\n", stats::median(off)))
-cat(sprintf("   overhead: %+.1f%%\n\n", 100 * (stats::median(on) / stats::median(off) - 1)))
+cat(sprintf(
+  "   overhead: %+.1f%%\n\n",
+  100 * (stats::median(on) / stats::median(off) - 1)
+))
 
 # --- 4. display() resize simulation -----------------------------------------
 # display()'s makeContent does a device-only set_props(width,height,dpi) each
@@ -88,8 +110,16 @@ cat(sprintf("   overhead: %+.1f%%\n\n", 100 * (stats::median(on) / stats::median
 # (Rust pixmap memo). Uses scene_raster (the display path) to avoid file I/O.
 cat("4. Resize simulation (device-only set_props, cycling two sizes):\n")
 vellum::vl_clear_render_cache()
-a <- S7::set_props(s, width = vellum::vl_unit(8, "in"), height = vellum::vl_unit(6, "in"))
-b <- S7::set_props(s, width = vellum::vl_unit(6, "in"), height = vellum::vl_unit(4, "in"))
+a <- S7::set_props(
+  s,
+  width = vellum::vl_unit(8, "in"),
+  height = vellum::vl_unit(6, "in")
+)
+b <- S7::set_props(
+  s,
+  width = vellum::vl_unit(6, "in"),
+  height = vellum::vl_unit(4, "in")
+)
 bench("size A (miss)", vellum::scene_raster(a))
 bench("size B (miss)", vellum::scene_raster(b))
 bench("size A again (hit)", vellum::scene_raster(a))

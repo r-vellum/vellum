@@ -12,18 +12,36 @@ has_bytes <- function(pdf, what) {
 pdf_labels <- function(pdf) {
   hits <- grepRaw("/Alt(", pdf, fixed = TRUE, all = TRUE)
   hits <- c(hits, grepRaw("/T(", pdf, fixed = TRUE, all = TRUE))
-  vapply(hits, function(at) {
-    tail <- pdf[at:min(length(pdf), at + 200L)]
-    close <- grepRaw(")", tail, fixed = TRUE, all = FALSE)
-    rawToChar(tail[seq_len(close)])
-  }, character(1))
+  vapply(
+    hits,
+    function(at) {
+      tail <- pdf[at:min(length(pdf), at + 200L)]
+      close <- grepRaw(")", tail, fixed = TRUE, all = FALSE)
+      rawToChar(tail[seq_len(close)])
+    },
+    character(1)
+  )
 }
 
 marked_scene <- function() {
   vl_scene(4, 3, dpi = 96, bg = "white") |>
-    draw(rect_grob(gp = vl_gpar(fill = "grey95"), role = "presentation", name = "panel")) |>
-    draw(points_grob(c(0.3, 0.7), c(0.4, 0.6), name = "observations", role = "img")) |>
-    draw(text_grob("Sales by region", y = 0.9, name = "Sales by region", role = "heading"))
+    draw(rect_grob(
+      gp = vl_gpar(fill = "grey95"),
+      role = "presentation",
+      name = "panel"
+    )) |>
+    draw(points_grob(
+      c(0.3, 0.7),
+      c(0.4, 0.6),
+      name = "observations",
+      role = "img"
+    )) |>
+    draw(text_grob(
+      "Sales by region",
+      y = 0.9,
+      name = "Sales by region",
+      role = "heading"
+    ))
 }
 
 test_that("per-mark metadata produces a PDF structure tree", {
@@ -36,12 +54,19 @@ test_that("per-mark metadata produces a PDF structure tree", {
 })
 
 test_that("alt text comes from the mark's name", {
-  expect_true(any(grepl("observations", pdf_labels(scene_pdf(marked_scene())), fixed = TRUE)))
+  expect_true(any(grepl(
+    "observations",
+    pdf_labels(scene_pdf(marked_scene())),
+    fixed = TRUE
+  )))
 })
 
 test_that("describe() supplies the figure's alt text", {
-  s <- describe(marked_scene(), title = "Regional sales",
-                desc = "A scatter of sales by region.")
+  s <- describe(
+    marked_scene(),
+    title = "Regional sales",
+    desc = "A scatter of sales by region."
+  )
   expect_true(has_bytes(scene_pdf(s), "A scatter of sales by region."))
 })
 
@@ -61,8 +86,11 @@ test_that("a scene with no metadata is untagged and unchanged", {
 test_that("a described but unmarked scene keeps the single-figure tagging", {
   # Per-mark tagging and the whole-content span are mutually exclusive (PDF
   # forbids nesting tagged spans), so this path must still work on its own.
-  s <- describe(vl_scene(3, 2, dpi = 96, bg = "white") |> draw(points_grob(0.5, 0.5)),
-                title = "One point", desc = "A single point.")
+  s <- describe(
+    vl_scene(3, 2, dpi = 96, bg = "white") |> draw(points_grob(0.5, 0.5)),
+    title = "One point",
+    desc = "A single point."
+  )
   pdf <- scene_pdf(s)
   expect_true(has_bytes(pdf, "StructTreeRoot"))
   expect_true(has_bytes(pdf, "A single point."))
@@ -72,8 +100,11 @@ test_that("decorative marks are artifacts, not structure entries", {
   # A gridline announced by a screen reader is noise. `role = "presentation"`
   # must not contribute an /Alt.
   deco <- vl_scene(3, 2, dpi = 96, bg = "white") |>
-    draw(rect_grob(gp = vl_gpar(fill = "grey95"), role = "presentation",
-                   name = "background panel")) |>
+    draw(rect_grob(
+      gp = vl_gpar(fill = "grey95"),
+      role = "presentation",
+      name = "background panel"
+    )) |>
     draw(points_grob(0.5, 0.5, name = "the point", role = "img"))
   alts <- paste(pdf_labels(scene_pdf(deco)), collapse = " ")
   expect_true(grepl("the point", alts, fixed = TRUE))
@@ -94,10 +125,15 @@ test_that("tagging does not disturb the rendered pixels", {
 test_that("many marks all reach the tree", {
   s <- vl_scene(4, 3, dpi = 96, bg = "white")
   for (i in 1:8) {
-    s <- draw(s, points_grob(i / 9, 0.5, name = paste0("mark_", i), role = "img"))
+    s <- draw(
+      s,
+      points_grob(i / 9, 0.5, name = paste0("mark_", i), role = "img")
+    )
   }
   alts <- paste(pdf_labels(scene_pdf(s)), collapse = " ")
-  for (i in 1:8) expect_true(grepl(paste0("mark_", i), alts, fixed = TRUE))
+  for (i in 1:8) {
+    expect_true(grepl(paste0("mark_", i), alts, fixed = TRUE))
+  }
 })
 
 test_that("SVG metadata is unchanged by the PDF work", {
@@ -124,7 +160,10 @@ test_that("scene_fonts reports the faces text actually resolved to", {
 })
 
 test_that("a scene with no text has no fonts", {
-  expect_equal(nrow(scene_fonts(vl_scene(2, 1) |> draw(points_grob(0.5, 0.5)))), 0L)
+  expect_equal(
+    nrow(scene_fonts(vl_scene(2, 1) |> draw(points_grob(0.5, 0.5)))),
+    0L
+  )
 })
 
 test_that("two families resolve to two faces", {

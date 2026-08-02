@@ -8,8 +8,11 @@
 # plain list/data frame of x and y.
 .as_rings <- function(g, arg) {
   if (S7::S7_inherits(g, grob_path)) {
-    return(list(x = .ring_px(g@x), y = .ring_px(g@y),
-                nper = as.integer(g@nper %||% length(g@x))))
+    return(list(
+      x = .ring_px(g@x),
+      y = .ring_px(g@y),
+      nper = as.integer(g@nper %||% length(g@x))
+    ))
   }
   if (S7::S7_inherits(g, grob_polygon)) {
     return(list(x = .ring_px(g@x), y = .ring_px(g@y), nper = length(g@x)))
@@ -20,8 +23,11 @@
     x <- .ring_px(g$x)
     y <- .ring_px(g$y)
     n <- min(length(x), length(y))
-    return(list(x = x[seq_len(n)], y = y[seq_len(n)],
-                nper = as.integer(g$nper %||% n)))
+    return(list(
+      x = x[seq_len(n)],
+      y = y[seq_len(n)],
+      nper = as.integer(g$nper %||% n)
+    ))
   }
   cli::cli_abort(c(
     "{.arg {arg}} must be a {.fn path_grob}, a {.fn polygon_grob}, or a list with {.field x} and {.field y}.",
@@ -91,20 +97,50 @@
 #' vl_scene(3, 2, dpi = 96, bg = "white") |>
 #'   draw(vl_path_op(a, b, "union", gp = vl_gpar(fill = "#DCE7F5", col = "steelblue")))
 #' @export
-vl_path_op <- function(a, b, op = c("union", "intersect", "difference", "xor"),
-                       rule = c("nonzero", "evenodd"),
-                       gp = vl_gpar(), name = NULL, vp = NULL, role = NULL) {
+vl_path_op <- function(
+  a,
+  b,
+  op = c("union", "intersect", "difference", "xor"),
+  rule = c("nonzero", "evenodd"),
+  gp = vl_gpar(),
+  name = NULL,
+  vp = NULL,
+  role = NULL
+) {
   op <- match.arg(op)
   rule <- match.arg(rule)
   ra <- .as_rings(a, "a")
   rb <- .as_rings(b, "b")
-  res <- rs_path_op(ra$x, ra$y, ra$nper, rb$x, rb$y, rb$nper,
-                    .PATH_OPS[[op]], identical(rule, "evenodd"))
+  res <- rs_path_op(
+    ra$x,
+    ra$y,
+    ra$nper,
+    rb$x,
+    rb$y,
+    rb$nper,
+    .PATH_OPS[[op]],
+    identical(rule, "evenodd")
+  )
   if (!length(res$nper)) {
-    return(path_grob(numeric(0), numeric(0), gp = gp, name = name, vp = vp, role = role))
+    return(path_grob(
+      numeric(0),
+      numeric(0),
+      gp = gp,
+      name = name,
+      vp = vp,
+      role = role
+    ))
   }
-  path_grob(res$x, res$y, id = rep(seq_along(res$nper), res$nper),
-            rule = "winding", gp = gp, name = name, vp = vp, role = role)
+  path_grob(
+    res$x,
+    res$y,
+    id = rep(seq_along(res$nper), res$nper),
+    rule = "winding",
+    gp = gp,
+    name = name,
+    vp = vp,
+    role = role
+  )
 }
 
 #' Contour lines from a grid
@@ -148,8 +184,13 @@ vl_contour <- function(z, levels = NULL, xlim = c(0, 1), ylim = c(0, 1)) {
   # Rows index x, columns index y, matching base R. See `@param z`.
   nx <- nrow(z)
   ny <- ncol(z)
-  empty <- data.frame(level = numeric(0), id = integer(0), x = numeric(0),
-                      y = numeric(0), closed = logical(0))
+  empty <- data.frame(
+    level = numeric(0),
+    id = integer(0),
+    x = numeric(0),
+    y = numeric(0),
+    closed = logical(0)
+  )
   if (nx < 2L || ny < 2L) {
     return(empty)
   }
@@ -215,8 +256,14 @@ vl_contour <- function(z, levels = NULL, xlim = c(0, 1), ylim = c(0, 1)) {
 #'                     gp = vl_gpar(col = "steelblue"))) |>
 #'   pop() |>
 #'   (\(s) s)()
-contour_grob <- function(contours, close = TRUE, gp = vl_gpar(), name = NULL,
-                         vp = NULL, role = NULL) {
+contour_grob <- function(
+  contours,
+  close = TRUE,
+  gp = vl_gpar(),
+  name = NULL,
+  vp = NULL,
+  role = NULL
+) {
   if (!nrow(contours)) {
     return(list())
   }
@@ -303,22 +350,45 @@ vl_svg_path <- function(d) {
   }
   r <- rs_svg_path(d)
   if (!length(r$nper)) {
-    return(data.frame(x = numeric(0), y = numeric(0), id = integer(0),
-                      closed = logical(0)))
+    return(data.frame(
+      x = numeric(0),
+      y = numeric(0),
+      id = integer(0),
+      closed = logical(0)
+    ))
   }
-  data.frame(x = r$x, y = r$y,
-             id = rep(seq_along(r$nper), r$nper),
-             closed = rep(r$closed, r$nper))
+  data.frame(
+    x = r$x,
+    y = r$y,
+    id = rep(seq_along(r$nper), r$nper),
+    closed = rep(r$closed, r$nper)
+  )
 }
 
 #' @rdname vl_svg_path
 #' @export
-svg_grob <- function(d, x = 0.5, y = 0.5, size = vl_unit(10, "mm"),
-                     flip_y = TRUE, gp = vl_gpar(), name = NULL, vp = NULL,
-                     id = NULL, role = NULL) {
+svg_grob <- function(
+  d,
+  x = 0.5,
+  y = 0.5,
+  size = vl_unit(10, "mm"),
+  flip_y = TRUE,
+  gp = vl_gpar(),
+  name = NULL,
+  vp = NULL,
+  id = NULL,
+  role = NULL
+) {
   p <- vl_svg_path(d)
   if (!nrow(p)) {
-    return(path_grob(numeric(0), numeric(0), gp = gp, name = name, vp = vp, role = role))
+    return(path_grob(
+      numeric(0),
+      numeric(0),
+      gp = gp,
+      name = name,
+      vp = vp,
+      role = role
+    ))
   }
   if (isTRUE(flip_y)) {
     p$y <- -p$y
@@ -329,7 +399,14 @@ svg_grob <- function(d, x = 0.5, y = 0.5, size = vl_unit(10, "mm"),
   ry <- range(p$y)
   span <- max(diff(rx), diff(ry))
   if (!(span > 0)) {
-    return(path_grob(numeric(0), numeric(0), gp = gp, name = name, vp = vp, role = role))
+    return(path_grob(
+      numeric(0),
+      numeric(0),
+      gp = gp,
+      name = name,
+      vp = vp,
+      role = role
+    ))
   }
   # `unit * numeric` is elementwise, not recycling, so widen the scalars to the
   # point count before combining them.
@@ -340,7 +417,11 @@ svg_grob <- function(d, x = 0.5, y = 0.5, size = vl_unit(10, "mm"),
   path_grob(
     x = cx + su * ((p$x - mean(rx)) / span),
     y = cy + su * ((p$y - mean(ry)) / span),
-    id = p$id, rule = "evenodd",
-    gp = gp, name = name, vp = vp, role = role
+    id = p$id,
+    rule = "evenodd",
+    gp = gp,
+    name = name,
+    vp = vp,
+    role = role
   )
 }

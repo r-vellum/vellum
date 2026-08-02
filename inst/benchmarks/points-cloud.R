@@ -35,13 +35,27 @@ bench <- function(label, expr) {
 
 cat(sprintf(
   "Dense point cloud: %s points  (%dx%d in @ %d dpi)\n",
-  format(n, big.mark = ",", scientific = FALSE), width, height, dpi
+  format(n, big.mark = ",", scientific = FALSE),
+  width,
+  height,
+  dpi
 ))
 
 grid_png <- file.path(out_dir, "points-cloud-grid.png")
 t_grid <- bench("grid", {
-  grDevices::png(grid_png, width = width * dpi, height = height * dpi, res = dpi)
-  grid::grid.points(x, y, pch = 16, size = grid::unit(1, "mm"), gp = grid::gpar(col = col))
+  grDevices::png(
+    grid_png,
+    width = width * dpi,
+    height = height * dpi,
+    res = dpi
+  )
+  grid::grid.points(
+    x,
+    y,
+    pch = 16,
+    size = grid::unit(1, "mm"),
+    gp = grid::gpar(col = col)
+  )
   grDevices::dev.off()
 })
 
@@ -49,8 +63,10 @@ vellum_png <- file.path(out_dir, "points-cloud-vellum.png")
 t_vellum <- bench("vellum", {
   s <- vellum::vl_scene(width, height, dpi = dpi, bg = "white") |>
     vellum::draw(vellum::points_grob(
-      vellum::vl_unit(x, "npc"), vellum::vl_unit(y, "npc"),
-      size = vellum::vl_unit(0.5, "mm"), gp = vellum::vl_gpar(fill = col, col = NA)
+      vellum::vl_unit(x, "npc"),
+      vellum::vl_unit(y, "npc"),
+      size = vellum::vl_unit(0.5, "mm"),
+      gp = vellum::vl_gpar(fill = col, col = NA)
     ))
   vellum::render(s, vellum_png)
 })

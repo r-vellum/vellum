@@ -15,7 +15,9 @@ test_that("a pattern tiles its grob across the fill (raster)", {
     circle_grob(r = 0.3, gp = vl_gpar(fill = "white", col = NA))
   )
   s <- vl_scene(width = 1, height = 1, dpi = 100, bg = "white") |>
-    draw(rect_grob(gp = vl_gpar(col = NA, fill = vl_pattern(tile, width = 0.2, height = 0.2))))
+    draw(rect_grob(
+      gp = vl_gpar(col = NA, fill = vl_pattern(tile, width = 0.2, height = 0.2))
+    ))
   # Cell is 0.2 npc = 20 px, centred on the page -> a tile centre sits at the
   # page centre (white dot); a tile corner is the red background.
   centre <- px(s, 50, 50)
@@ -26,10 +28,17 @@ test_that("a pattern tiles its grob across the fill (raster)", {
 
 test_that("pattern alpha fades the tile (raster)", {
   s <- vl_scene(width = 1, height = 1, dpi = 100, bg = "white") |>
-    draw(rect_grob(gp = vl_gpar(
-      col = NA, alpha = 0.5,
-      fill = vl_pattern(rect_grob(gp = vl_gpar(fill = "red", col = NA)), width = 0.5, height = 0.5)
-    )))
+    draw(rect_grob(
+      gp = vl_gpar(
+        col = NA,
+        alpha = 0.5,
+        fill = vl_pattern(
+          rect_grob(gp = vl_gpar(fill = "red", col = NA)),
+          width = 0.5,
+          height = 0.5
+        )
+      )
+    ))
   p <- px(s, 50, 50)
   expect_equal(p[4], 255L) # opaque page
   # 50% red over white -> pink
@@ -39,10 +48,16 @@ test_that("pattern alpha fades the tile (raster)", {
 test_that("SVG emits a <pattern> with an embedded image", {
   f <- withr::local_tempfile(fileext = ".svg")
   s <- vl_scene(1, 1, dpi = 100, bg = "white") |>
-    draw(rect_grob(gp = vl_gpar(col = NA, fill = vl_pattern(
-      circle_grob(r = 0.3, gp = vl_gpar(fill = "red", col = NA)),
-      width = 0.25, height = 0.25
-    ))))
+    draw(rect_grob(
+      gp = vl_gpar(
+        col = NA,
+        fill = vl_pattern(
+          circle_grob(r = 0.3, gp = vl_gpar(fill = "red", col = NA)),
+          width = 0.25,
+          height = 0.25
+        )
+      )
+    ))
   render(s, f)
   svg <- paste(readLines(f, warn = FALSE), collapse = "\n")
   expect_match(svg, "<pattern ")
@@ -55,10 +70,16 @@ test_that("SVG emits a <pattern> with an embedded image", {
 test_that("PDF renders a pattern fill (average-colour fallback)", {
   f <- withr::local_tempfile(fileext = ".pdf")
   s <- vl_scene(2, 1, dpi = 100) |>
-    draw(rect_grob(gp = vl_gpar(col = NA, fill = vl_pattern(
-      circle_grob(r = 0.3, gp = vl_gpar(fill = "red", col = NA)),
-      width = 0.25, height = 0.25
-    ))))
+    draw(rect_grob(
+      gp = vl_gpar(
+        col = NA,
+        fill = vl_pattern(
+          circle_grob(r = 0.3, gp = vl_gpar(fill = "red", col = NA)),
+          width = 0.25,
+          height = 0.25
+        )
+      )
+    ))
   expect_no_error(render(s, f))
   expect_equal(rawToChar(readBin(f, "raw", 5)), "%PDF-")
 })

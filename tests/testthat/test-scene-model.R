@@ -1,8 +1,14 @@
 test_that("scene_model() returns one row per element with key, mark, meta", {
   sc <- vl_scene(2, 2, dpi = 100) |>
-    draw(points_grob(c(0.25, 0.75), c(0.5, 0.5), size = vl_unit(4, "mm"),
-                     gp = vl_gpar(fill = "red"), key = c("a", "b"),
-                     meta = list(list(lab = "A"), list(lab = "B")), id = "pts"))
+    draw(points_grob(
+      c(0.25, 0.75),
+      c(0.5, 0.5),
+      size = vl_unit(4, "mm"),
+      gp = vl_gpar(fill = "red"),
+      key = c("a", "b"),
+      meta = list(list(lab = "A"), list(lab = "B")),
+      id = "pts"
+    ))
   m <- scene_model(sc)
   expect_named(m, c("elements", "panels"))
   expect_equal(nrow(m$elements), 2L)
@@ -16,8 +22,13 @@ test_that("scene_model() returns one row per element with key, mark, meta", {
 test_that("scene_model() resolves device-px geometry (centre and size)", {
   # 2in x 100dpi = 200px; points at 0.25/0.75 npc -> x = 50/150, y = 100.
   sc <- vl_scene(2, 2, dpi = 100) |>
-    draw(points_grob(c(0.25, 0.75), c(0.5, 0.5), size = vl_unit(4, "mm"),
-                     gp = vl_gpar(fill = "red"), key = c("a", "b")))
+    draw(points_grob(
+      c(0.25, 0.75),
+      c(0.5, 0.5),
+      size = vl_unit(4, "mm"),
+      gp = vl_gpar(fill = "red"),
+      key = c("a", "b")
+    ))
   m <- scene_model(sc)
   expect_equal(m$elements$x, c(50, 150))
   expect_equal(m$elements$y, c(100, 100))
@@ -29,10 +40,21 @@ test_that("scene_model() resolves device-px geometry (centre and size)", {
 test_that("scene_model() attributes elements to their enclosing named panel", {
   sc <- vl_scene(2, 2, dpi = 100) |>
     push(vl_viewport(name = "panel-1-1")) |>
-    draw(points_grob(c(0.25, 0.75), 0.5, gp = vl_gpar(fill = "red"), key = c("a", "b"))) |>
+    draw(points_grob(
+      c(0.25, 0.75),
+      0.5,
+      gp = vl_gpar(fill = "red"),
+      key = c("a", "b")
+    )) |>
     pop() |>
-    draw(rect_grob(x = 0.5, y = 0.5, width = 0.3, height = 0.3,
-                   gp = vl_gpar(fill = "blue"), key = "R"))
+    draw(rect_grob(
+      x = 0.5,
+      y = 0.5,
+      width = 0.3,
+      height = 0.3,
+      gp = vl_gpar(fill = "blue"),
+      key = "R"
+    ))
   m <- scene_model(sc)
   expect_equal(m$elements$panel, c("panel-1-1", "panel-1-1", NA))
   expect_equal(m$panels$name, "panel-1-1")
@@ -40,8 +62,21 @@ test_that("scene_model() attributes elements to their enclosing named panel", {
 
 test_that("scene_model() covers all keyable marks in paint order", {
   sc <- vl_scene(2, 2, dpi = 100) |>
-    draw(rect_grob(x = 0.2, y = 0.5, width = 0.1, height = 0.1, key = "rect1")) |>
-    draw(segments_grob(0.1, 0.1, 0.9, 0.9, gp = vl_gpar(col = "black", lwd = 1), key = "seg1")) |>
+    draw(rect_grob(
+      x = 0.2,
+      y = 0.5,
+      width = 0.1,
+      height = 0.1,
+      key = "rect1"
+    )) |>
+    draw(segments_grob(
+      0.1,
+      0.1,
+      0.9,
+      0.9,
+      gp = vl_gpar(col = "black", lwd = 1),
+      key = "seg1"
+    )) |>
     draw(points_grob(0.5, 0.5, gp = vl_gpar(fill = "red"), key = "pt1"))
   m <- scene_model(sc)
   expect_equal(m$elements$mark, c("rect", "segment", "point"))
@@ -81,22 +116,32 @@ test_that("scene_model() keys a multi-box roundrect grob per element", {
   # count check. Regression: roundrect used to be classed as a single shape (one
   # row per grob), which undercounted a 3-box keyed grob 1-against-3 and aborted.
   keyed <- roundrect_grob(
-    x = c(0.2, 0.5, 0.8), y = 0.5,
-    width = vl_unit(6, "mm"), height = vl_unit(4, "mm"),
+    x = c(0.2, 0.5, 0.8),
+    y = 0.5,
+    width = vl_unit(6, "mm"),
+    height = vl_unit(4, "mm"),
     key = c("a", "b", "c"),
     meta = list(list(tooltip = "A"), list(tooltip = "B"), list(tooltip = "C"))
   )
   sc <- vl_scene(2, 2, dpi = 100) |>
     draw(keyed) |>
     # an unkeyed roundrect batch must stay out of the model entirely
-    draw(roundrect_grob(x = c(0.3, 0.6), y = 0.9, width = vl_unit(6, "mm"), height = vl_unit(4, "mm")))
+    draw(roundrect_grob(
+      x = c(0.3, 0.6),
+      y = 0.9,
+      width = vl_unit(6, "mm"),
+      height = vl_unit(4, "mm")
+    ))
   m <- scene_model(sc)
   kr <- m$elements[!is.na(m$elements$key), ]
   expect_equal(nrow(kr), 3L)
   expect_equal(kr$mark, rep("roundrect", 3L))
   expect_equal(kr$key, c("a", "b", "c"))
   # keys and meta stay aligned per box (the truncate-to-first bug dropped b/c)
-  expect_equal(vapply(kr$meta, function(x) x$tooltip, character(1)), c("A", "B", "C"))
+  expect_equal(
+    vapply(kr$meta, function(x) x$tooltip, character(1)),
+    c("A", "B", "C")
+  )
   expect_true(all(kr$x1 > kr$x0 & kr$y1 > kr$y0)) # resolved bboxes
 })
 

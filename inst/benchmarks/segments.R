@@ -36,12 +36,20 @@ bench <- function(label, expr) {
 
 cat(sprintf(
   "Segments: %s segments  (%dx%d in @ %d dpi)\n",
-  format(n, big.mark = ",", scientific = FALSE), width, height, dpi
+  format(n, big.mark = ",", scientific = FALSE),
+  width,
+  height,
+  dpi
 ))
 
 grid_png <- file.path(out_dir, "segments-grid.png")
 t_grid <- bench("grid", {
-  grDevices::png(grid_png, width = width * dpi, height = height * dpi, res = dpi)
+  grDevices::png(
+    grid_png,
+    width = width * dpi,
+    height = height * dpi,
+    res = dpi
+  )
   grid::grid.segments(x0, y0, x1, y1, gp = grid::gpar(col = "darkred"))
   grDevices::dev.off()
 })
@@ -50,8 +58,10 @@ vellum_png <- file.path(out_dir, "segments-vellum.png")
 t_vellum <- bench("vellum", {
   s <- vellum::vl_scene(width, height, dpi = dpi, bg = "white") |>
     vellum::draw(vellum::segments_grob(
-      vellum::vl_unit(x0, "npc"), vellum::vl_unit(y0, "npc"),
-      vellum::vl_unit(x1, "npc"), vellum::vl_unit(y1, "npc"),
+      vellum::vl_unit(x0, "npc"),
+      vellum::vl_unit(y0, "npc"),
+      vellum::vl_unit(x1, "npc"),
+      vellum::vl_unit(y1, "npc"),
       gp = vellum::vl_gpar(col = "darkred")
     ))
   vellum::render(s, vellum_png)

@@ -37,7 +37,9 @@ vl_lint_rule <- function(name, fn, description = "") {
   if (!is.character(name) || length(name) != 1L) {
     cli::cli_abort("{.arg name} must be a single string.")
   }
-  if (!is.function(fn)) cli::cli_abort("{.arg fn} must be a function.")
+  if (!is.function(fn)) {
+    cli::cli_abort("{.arg fn} must be a function.")
+  }
   assign(name, list(fn = fn, description = description), envir = .lint_rules)
   invisible(name)
 }
@@ -49,8 +51,13 @@ vl_lint_rules <- function() {
   nm <- sort(ls(.lint_rules))
   data.frame(
     rule = nm,
-    description = vapply(nm, function(n) get(n, envir = .lint_rules)$description, ""),
-    row.names = NULL, stringsAsFactors = FALSE
+    description = vapply(
+      nm,
+      function(n) get(n, envir = .lint_rules)$description,
+      ""
+    ),
+    row.names = NULL,
+    stringsAsFactors = FALSE
   )
 }
 
@@ -65,16 +72,23 @@ vl_lint_rules <- function() {
 #' @param message One message, or one per row.
 #' @return A data frame of findings.
 #' @export
-vl_lint_finding <- function(rule, severity = c("warning", "note"), nodes, message) {
+vl_lint_finding <- function(
+  rule,
+  severity = c("warning", "note"),
+  nodes,
+  message
+) {
   severity <- match.arg(severity)
   if (is.null(nodes) || !nrow(nodes)) {
     return(NULL)
   }
   data.frame(
-    rule = rule, severity = severity,
+    rule = rule,
+    severity = severity,
     node = ifelse(nzchar(nodes$name), nodes$name, nodes$kind),
     message = rep_len(message, nrow(nodes)),
-    row.names = NULL, stringsAsFactors = FALSE
+    row.names = NULL,
+    stringsAsFactors = FALSE
   )
 }
 
@@ -116,12 +130,17 @@ vl_lint <- function(scene, rules = NULL, min_text_px = 7, min_contrast = 3) {
   d <- s$dim()
   raster <- NULL
   ctx <- list(
-    w = d[1], h = d[2], dpi = scene@dpi,
-    min_text_px = min_text_px, min_contrast = min_contrast,
+    w = d[1],
+    h = d[2],
+    dpi = scene@dpi,
+    min_text_px = min_text_px,
+    min_contrast = min_contrast,
     # Sampled lazily: most rules never need pixels, and rendering to look at
     # them is the expensive part of linting.
     pixel = function(x, y) {
-      if (is.null(raster)) raster <<- s$rgba()
+      if (is.null(raster)) {
+        raster <<- s$rgba()
+      }
       x <- max(1L, min(d[1], as.integer(round(x))))
       y <- max(1L, min(d[2], as.integer(round(y))))
       i <- ((y - 1L) * d[1] + (x - 1L)) * 4L
@@ -138,9 +157,13 @@ vl_lint <- function(scene, rules = NULL, min_text_px = 7, min_contrast = 3) {
   })
   out <- do.call(rbind, out[!vapply(out, is.null, logical(1))])
   if (is.null(out)) {
-    out <- data.frame(rule = character(), severity = character(),
-                      node = character(), message = character(),
-                      stringsAsFactors = FALSE)
+    out <- data.frame(
+      rule = character(),
+      severity = character(),
+      node = character(),
+      message = character(),
+      stringsAsFactors = FALSE
+    )
   } else {
     # Warnings first, then by rule, so the important things are at the top.
     out <- out[order(out$severity != "warning", out$rule), , drop = FALSE]
@@ -172,94 +195,186 @@ print.vellum_lint <- function(x, ...) {
 # Registered in `.onLoad` (see zzz.R) so the registry survives a reload.
 
 .register_builtin_lint_rules <- function() {
-  vl_lint_rule("offscreen", function(scene, nodes, ctx) {
-    off <- nodes$x1 < 0 | nodes$y1 < 0 | nodes$x0 > ctx$w | nodes$y0 > ctx$h
-    vl_lint_finding("offscreen", "warning", nodes[off, , drop = FALSE],
-                    "drawn entirely outside the page - check the coordinates or the scale")
-  }, "A mark lies completely off the canvas.")
+  vl_lint_rule(
+    "offscreen",
+    function(scene, nodes, ctx) {
+      off <- nodes$x1 < 0 | nodes$y1 < 0 | nodes$x0 > ctx$w | nodes$y0 > ctx$h
+      vl_lint_finding(
+        "offscreen",
+        "warning",
+        nodes[off, , drop = FALSE],
+        "drawn entirely outside the page - check the coordinates or the scale"
+      )
+    },
+    "A mark lies completely off the canvas."
+  )
 
-  vl_lint_rule("clipped_away", function(scene, nodes, ctx) {
-    # Off-page is reported by `offscreen`; this is the subtler case of a mark
-    # inside the page but outside its own viewport's clip.
-    onpage <- !(nodes$x1 < 0 | nodes$y1 < 0 | nodes$x0 > ctx$w | nodes$y0 > ctx$h)
-    gone <- onpage & (nodes$x1 < nodes$clip_x0 | nodes$y1 < nodes$clip_y0 |
-                        nodes$x0 > nodes$clip_x1 | nodes$y0 > nodes$clip_y1)
-    vl_lint_finding("clipped_away", "warning", nodes[gone, , drop = FALSE],
-                    "entirely outside its viewport's clip region, so nothing is drawn")
-  }, "A mark is clipped out of existence by its viewport.")
+  vl_lint_rule(
+    "clipped_away",
+    function(scene, nodes, ctx) {
+      # Off-page is reported by `offscreen`; this is the subtler case of a mark
+      # inside the page but outside its own viewport's clip.
+      onpage <- !(nodes$x1 < 0 |
+        nodes$y1 < 0 |
+        nodes$x0 > ctx$w |
+        nodes$y0 > ctx$h)
+      gone <- onpage &
+        (nodes$x1 < nodes$clip_x0 |
+          nodes$y1 < nodes$clip_y0 |
+          nodes$x0 > nodes$clip_x1 |
+          nodes$y0 > nodes$clip_y1)
+      vl_lint_finding(
+        "clipped_away",
+        "warning",
+        nodes[gone, , drop = FALSE],
+        "entirely outside its viewport's clip region, so nothing is drawn"
+      )
+    },
+    "A mark is clipped out of existence by its viewport."
+  )
 
-  vl_lint_rule("invisible", function(scene, nodes, ctx) {
-    # Nothing will paint it: fully transparent, or neither a fill nor a stroke.
-    blank <- nodes$alpha <= 0 | (nodes$has_fill == 0L & nodes$has_col == 0L)
-    vl_lint_finding("invisible", "warning", nodes[blank, , drop = FALSE],
-                    "nothing will paint this - alpha is 0, or both fill and col are absent")
-  }, "An element has no fill, no stroke, or zero alpha.")
+  vl_lint_rule(
+    "invisible",
+    function(scene, nodes, ctx) {
+      # Nothing will paint it: fully transparent, or neither a fill nor a stroke.
+      blank <- nodes$alpha <= 0 | (nodes$has_fill == 0L & nodes$has_col == 0L)
+      vl_lint_finding(
+        "invisible",
+        "warning",
+        nodes[blank, , drop = FALSE],
+        "nothing will paint this - alpha is 0, or both fill and col are absent"
+      )
+    },
+    "An element has no fill, no stroke, or zero alpha."
+  )
 
-  vl_lint_rule("degenerate", function(scene, nodes, ctx) {
-    flat <- (nodes$x1 - nodes$x0) <= 0 & (nodes$y1 - nodes$y0) <= 0 & nodes$kind != "text"
-    vl_lint_finding("degenerate", "note", nodes[flat, , drop = FALSE],
-                    "zero width and height - it will not be visible")
-  }, "An element resolves to zero size.")
+  vl_lint_rule(
+    "degenerate",
+    function(scene, nodes, ctx) {
+      flat <- (nodes$x1 - nodes$x0) <= 0 &
+        (nodes$y1 - nodes$y0) <= 0 &
+        nodes$kind != "text"
+      vl_lint_finding(
+        "degenerate",
+        "note",
+        nodes[flat, , drop = FALSE],
+        "zero width and height - it will not be visible"
+      )
+    },
+    "An element resolves to zero size."
+  )
 
-  vl_lint_rule("tiny_text", function(scene, nodes, ctx) {
-    txt <- nodes$kind == "text" & nodes$font_px > 0 & nodes$font_px < ctx$min_text_px
-    hits <- nodes[txt, , drop = FALSE]
-    if (!nrow(hits)) return(NULL)
-    vl_lint_finding("tiny_text", "warning", hits,
-                    sprintf("%.1f px tall - below the %g px legibility floor",
-                            hits$font_px, ctx$min_text_px))
-  }, "Text is too small to read at the rendered size.")
+  vl_lint_rule(
+    "tiny_text",
+    function(scene, nodes, ctx) {
+      txt <- nodes$kind == "text" &
+        nodes$font_px > 0 &
+        nodes$font_px < ctx$min_text_px
+      hits <- nodes[txt, , drop = FALSE]
+      if (!nrow(hits)) {
+        return(NULL)
+      }
+      vl_lint_finding(
+        "tiny_text",
+        "warning",
+        hits,
+        sprintf(
+          "%.1f px tall - below the %g px legibility floor",
+          hits$font_px,
+          ctx$min_text_px
+        )
+      )
+    },
+    "Text is too small to read at the rendered size."
+  )
 
-  vl_lint_rule("label_overlap", function(scene, nodes, ctx) {
-    txt <- nodes[nodes$kind == "text", , drop = FALSE]
-    if (nrow(txt) < 2L) return(NULL)
-    hit <- rep(FALSE, nrow(txt))
-    for (i in seq_len(nrow(txt) - 1L)) {
-      for (j in seq(i + 1L, nrow(txt))) {
-        if (txt$x0[i] < txt$x1[j] && txt$x1[i] > txt$x0[j] &&
-            txt$y0[i] < txt$y1[j] && txt$y1[i] > txt$y0[j]) {
-          hit[i] <- TRUE
-          hit[j] <- TRUE
+  vl_lint_rule(
+    "label_overlap",
+    function(scene, nodes, ctx) {
+      txt <- nodes[nodes$kind == "text", , drop = FALSE]
+      if (nrow(txt) < 2L) {
+        return(NULL)
+      }
+      hit <- rep(FALSE, nrow(txt))
+      for (i in seq_len(nrow(txt) - 1L)) {
+        for (j in seq(i + 1L, nrow(txt))) {
+          if (
+            txt$x0[i] < txt$x1[j] &&
+              txt$x1[i] > txt$x0[j] &&
+              txt$y0[i] < txt$y1[j] &&
+              txt$y1[i] > txt$y0[j]
+          ) {
+            hit[i] <- TRUE
+            hit[j] <- TRUE
+          }
         }
       }
-    }
-    vl_lint_finding("label_overlap", "note", txt[hit, , drop = FALSE],
-                    "its box overlaps another label")
-  }, "Two text labels overlap.")
-
-  vl_lint_rule("low_contrast", function(scene, nodes, ctx) {
-    txt <- nodes[nodes$kind == "text" & nodes$has_col == 1L, , drop = FALSE]
-    if (!nrow(txt)) return(NULL)
-    ratios <- vapply(seq_len(nrow(txt)), function(i) {
-      fg <- .lint_unpack_col(txt$col[i])
-      # Sample the composited image just outside the label's box on all four
-      # sides. That is the backdrop the label sits against; sampling under the
-      # glyphs would read the glyphs themselves.
-      pad <- 2
-      pts <- list(
-        c(txt$x0[i] - pad, (txt$y0[i] + txt$y1[i]) / 2),
-        c(txt$x1[i] + pad, (txt$y0[i] + txt$y1[i]) / 2),
-        c((txt$x0[i] + txt$x1[i]) / 2, txt$y0[i] - pad),
-        c((txt$x0[i] + txt$x1[i]) / 2, txt$y1[i] + pad)
+      vl_lint_finding(
+        "label_overlap",
+        "note",
+        txt[hit, , drop = FALSE],
+        "its box overlaps another label"
       )
-      lums <- vapply(pts, function(p) .lint_luminance(ctx$pixel(p[1], p[2])[1:3]), 0)
-      # The SECOND-worst of the four sides. Taking the outright worst (`min`)
-      # flagged any label a single 2 px probe happened to graze against a nearby
-      # tick, gridline or axis rule -- so ordinary dark axis text on white read
-      # as ~1:1 because one probe landed on the black axis line. Requiring at
-      # least two low-contrast sides ignores that incidental adjacent ink while
-      # still catching a label genuinely sitting on a low-contrast field (all
-      # sides bad) or straddling a dark region (two sides bad).
-      fgl <- .lint_luminance(fg[1:3])
-      sort(vapply(lums, function(bl) .lint_contrast(fgl, bl), 0))[2L]
-    }, 0)
-    bad <- ratios < ctx$min_contrast
-    hits <- txt[bad, , drop = FALSE]
-    if (!nrow(hits)) return(NULL)
-    vl_lint_finding("low_contrast", "warning", hits,
-                    sprintf("contrast %.1f:1 against its backdrop - below %g:1",
-                            ratios[bad], ctx$min_contrast))
-  }, "Text contrast against its backdrop is below the WCAG threshold.")
+    },
+    "Two text labels overlap."
+  )
+
+  vl_lint_rule(
+    "low_contrast",
+    function(scene, nodes, ctx) {
+      txt <- nodes[nodes$kind == "text" & nodes$has_col == 1L, , drop = FALSE]
+      if (!nrow(txt)) {
+        return(NULL)
+      }
+      ratios <- vapply(
+        seq_len(nrow(txt)),
+        function(i) {
+          fg <- .lint_unpack_col(txt$col[i])
+          # Sample the composited image just outside the label's box on all four
+          # sides. That is the backdrop the label sits against; sampling under the
+          # glyphs would read the glyphs themselves.
+          pad <- 2
+          pts <- list(
+            c(txt$x0[i] - pad, (txt$y0[i] + txt$y1[i]) / 2),
+            c(txt$x1[i] + pad, (txt$y0[i] + txt$y1[i]) / 2),
+            c((txt$x0[i] + txt$x1[i]) / 2, txt$y0[i] - pad),
+            c((txt$x0[i] + txt$x1[i]) / 2, txt$y1[i] + pad)
+          )
+          lums <- vapply(
+            pts,
+            function(p) .lint_luminance(ctx$pixel(p[1], p[2])[1:3]),
+            0
+          )
+          # The SECOND-worst of the four sides. Taking the outright worst (`min`)
+          # flagged any label a single 2 px probe happened to graze against a nearby
+          # tick, gridline or axis rule -- so ordinary dark axis text on white read
+          # as ~1:1 because one probe landed on the black axis line. Requiring at
+          # least two low-contrast sides ignores that incidental adjacent ink while
+          # still catching a label genuinely sitting on a low-contrast field (all
+          # sides bad) or straddling a dark region (two sides bad).
+          fgl <- .lint_luminance(fg[1:3])
+          sort(vapply(lums, function(bl) .lint_contrast(fgl, bl), 0))[2L]
+        },
+        0
+      )
+      bad <- ratios < ctx$min_contrast
+      hits <- txt[bad, , drop = FALSE]
+      if (!nrow(hits)) {
+        return(NULL)
+      }
+      vl_lint_finding(
+        "low_contrast",
+        "warning",
+        hits,
+        sprintf(
+          "contrast %.1f:1 against its backdrop - below %g:1",
+          ratios[bad],
+          ctx$min_contrast
+        )
+      )
+    },
+    "Text contrast against its backdrop is below the WCAG threshold."
+  )
 }
 
 # 0xRRGGBBAA packed int -> c(r, g, b, a).

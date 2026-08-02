@@ -32,9 +32,9 @@ modes <- c("srgb", "oklab", "oklch")
 pairs <- list(
   list(name = "black -> white", cols = c("black", "white")),
   list(name = "blue -> yellow", cols = c("blue", "yellow")),
-  list(name = "red -> green",   cols = c("red", "green")),
+  list(name = "red -> green", cols = c("red", "green")),
   list(name = "magenta -> lime", cols = c("magenta", "#7CFC00")),
-  list(name = "white -> navy",  cols = c("white", "navy"))
+  list(name = "white -> navy", cols = c("white", "navy"))
 )
 
 nrow <- length(pairs)
@@ -55,12 +55,23 @@ s <- vl_scene(width = 8, height = 6, dpi = 150, bg = "white")
 
 # Title + column headers.
 s <- s |>
-  draw(text_grob("Gradient interpolation spaces", x = 0.5, y = 0.965,
-                 gp = vl_gpar(col = "black", fontface = "bold", fontsize = 20)))
+  draw(text_grob(
+    "Gradient interpolation spaces",
+    x = 0.5,
+    y = 0.965,
+    gp = vl_gpar(col = "black", fontface = "bold", fontsize = 20)
+  ))
 for (j in seq_len(ncol)) {
   cx <- x0 + (j - 0.5) * colw
-  s <- draw(s, text_grob(modes[[j]], x = cx, y = 0.915,
-                         gp = vl_gpar(col = "grey20", fontface = "bold", fontsize = 15)))
+  s <- draw(
+    s,
+    text_grob(
+      modes[[j]],
+      x = cx,
+      y = 0.915,
+      gp = vl_gpar(col = "grey20", fontface = "bold", fontsize = 15)
+    )
+  )
 }
 
 # One swatch per (pair, mode): a rect filled with a left-to-right linear gradient
@@ -70,14 +81,33 @@ for (i in seq_len(nrow)) {
   yc <- top - (i - 0.5) * rowh
 
   # Row label (the colour pair), left-aligned in the label column.
-  s <- draw(s, text_grob(p$name, x = 0.01, y = yc, just = c("left", "centre"),
-                         gp = vl_gpar(col = "grey20", fontsize = 12)))
+  s <- draw(
+    s,
+    text_grob(
+      p$name,
+      x = 0.01,
+      y = yc,
+      just = c("left", "centre"),
+      gp = vl_gpar(col = "grey20", fontsize = 12)
+    )
+  )
 
   for (j in seq_len(ncol)) {
     cx <- x0 + (j - 0.5) * colw
-    vp <- vl_viewport(x = cx, y = yc, width = colw - 2 * pad, height = rowh - 2 * pad)
-    grad <- linear_gradient(p$cols, x1 = 0, y1 = 0.5, x2 = 1, y2 = 0.5,
-                            interpolation = modes[[j]])
+    vp <- vl_viewport(
+      x = cx,
+      y = yc,
+      width = colw - 2 * pad,
+      height = rowh - 2 * pad
+    )
+    grad <- linear_gradient(
+      p$cols,
+      x1 = 0,
+      y1 = 0.5,
+      x2 = 1,
+      y2 = 0.5,
+      interpolation = modes[[j]]
+    )
     s <- s |>
       push(vp) |>
       draw(rect_grob(gp = vl_gpar(col = "grey60", lwd = 0.5, fill = grad))) |>
@@ -86,6 +116,10 @@ for (i in seq_len(nrow)) {
 }
 
 args <- commandArgs(trailingOnly = TRUE)
-out <- if (length(args) >= 1) args[[1]] else file.path(tempdir(), "gradient-interpolation.png")
+out <- if (length(args) >= 1) {
+  args[[1]]
+} else {
+  file.path(tempdir(), "gradient-interpolation.png")
+}
 render(s, out)
 message("wrote ", out)

@@ -9,10 +9,21 @@
 two_boundaries <- function(cache, fg = "blue") {
   vl_scene(2, 1, dpi = 100, bg = "white") |>
     push(vl_viewport(cache = cache, name = "bg")) |>
-    draw(circle_grob(x = 0.45, y = 0.5, r = 0.25, gp = vl_gpar(fill = "red", col = NA))) |>
+    draw(circle_grob(
+      x = 0.45,
+      y = 0.5,
+      r = 0.25,
+      gp = vl_gpar(fill = "red", col = NA)
+    )) |>
     pop() |>
     push(vl_viewport(cache = cache, name = "fg")) |>
-    draw(circle_grob(x = 0.55, y = 0.5, r = 0.25, gp = vl_gpar(fill = fg, col = NA), name = "dot")) |>
+    draw(circle_grob(
+      x = 0.55,
+      y = 0.5,
+      r = 0.25,
+      gp = vl_gpar(fill = fg, col = NA),
+      name = "dot"
+    )) |>
     pop()
 }
 
@@ -102,15 +113,21 @@ test_that("the sub-raster cache retains multiple generations (no full wipe at ca
   n <- 50L
   for (i in seq_len(n)) {
     s <- s |>
-      push(vl_viewport(x = (i %% 8) / 8 + 0.06, y = (i %/% 8) / 8 + 0.06,
-                       width = 0.1, height = 0.1, cache = TRUE, name = paste0("b", i))) |>
+      push(vl_viewport(
+        x = (i %% 8) / 8 + 0.06,
+        y = (i %/% 8) / 8 + 0.06,
+        width = 0.1,
+        height = 0.1,
+        cache = TRUE,
+        name = paste0("b", i)
+      )) |>
       draw(circle_grob(r = 0.4, gp = vl_gpar(fill = "red", col = NA))) |>
       pop()
   }
   scene_raster(s)
   st <- rs_subraster_stats()
-  expect_equal(st[2], n)  # all 50 distinct boundaries miss on the cold pass
-  expect_equal(st[3], n)  # ...and all 50 stay resident (retain-half, not wiped)
+  expect_equal(st[2], n) # all 50 distinct boundaries miss on the cold pass
+  expect_equal(st[3], n) # ...and all 50 stay resident (retain-half, not wiped)
 })
 
 test_that("a cached boundary that inherits gpar renders byte-identical to uncached", {

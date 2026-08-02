@@ -58,26 +58,71 @@ NULL
 
 #' @rdname gradients
 #' @export
-linear_gradient <- function(colours, stops = NULL, x1 = 0, y1 = 0, x2 = 1, y2 = 0,
-                            units = "npc", extend = "pad", interpolation = "srgb") {
-  .new_gradient("linear", colours, stops, c(x1, y1, x2, y2), units, extend, interpolation)
+linear_gradient <- function(
+  colours,
+  stops = NULL,
+  x1 = 0,
+  y1 = 0,
+  x2 = 1,
+  y2 = 0,
+  units = "npc",
+  extend = "pad",
+  interpolation = "srgb"
+) {
+  .new_gradient(
+    "linear",
+    colours,
+    stops,
+    c(x1, y1, x2, y2),
+    units,
+    extend,
+    interpolation
+  )
 }
 
 #' @rdname gradients
 #' @export
-radial_gradient <- function(colours, stops = NULL, cx = 0.5, cy = 0.5, r = 0.5,
-                            fx = cx, fy = cy, fr = 0,
-                            units = "npc", extend = "pad", interpolation = "srgb") {
+radial_gradient <- function(
+  colours,
+  stops = NULL,
+  cx = 0.5,
+  cy = 0.5,
+  r = 0.5,
+  fx = cx,
+  fy = cy,
+  fr = 0,
+  units = "npc",
+  extend = "pad",
+  interpolation = "srgb"
+) {
   if (!is.numeric(r) || !is.numeric(fr) || anyNA(c(r, fr)) || r < 0 || fr < 0) {
-    cli::cli_abort("Radial gradient radii {.arg r}/{.arg fr} must be non-negative.")
+    cli::cli_abort(
+      "Radial gradient radii {.arg r}/{.arg fr} must be non-negative."
+    )
   }
-  .new_gradient("radial", colours, stops, c(cx, cy, r, fx, fy, fr), units, extend, interpolation)
+  .new_gradient(
+    "radial",
+    colours,
+    stops,
+    c(cx, cy, r, fx, fy, fr),
+    units,
+    extend,
+    interpolation
+  )
 }
 
 .gradient_extend <- c("pad", "repeat", "reflect")
 .gradient_interpolation <- c("srgb", "oklab", "oklch")
 
-.new_gradient <- function(kind, colours, stops, coords, units, extend, interpolation = "srgb") {
+.new_gradient <- function(
+  kind,
+  colours,
+  stops,
+  coords,
+  units,
+  extend,
+  interpolation = "srgb"
+) {
   n <- length(colours)
   if (n < 1L) {
     cli::cli_abort("A gradient needs at least one colour.")
@@ -116,7 +161,9 @@ radial_gradient <- function(colours, stops = NULL, cx = 0.5, cy = 0.5, r = 0.5,
 
 #' @export
 print.vellum_gradient <- function(x, ...) {
-  cli::cli_text("<vellum_gradient: {x$kind}> {length(x$colours)} stop{?s}, units = {.val {x$units}}")
+  cli::cli_text(
+    "<vellum_gradient: {x$kind}> {length(x$colours)} stop{?s}, units = {.val {x$units}}"
+  )
   invisible(x)
 }
 
@@ -176,23 +223,39 @@ print.vellum_gradient <- function(x, ...) {
 #' dots <- circle_grob(r = 0.25, gp = vl_gpar(fill = "white", col = NA))
 #' vl_pattern(dots, width = 0.08, height = 0.08)
 #' @export
-vl_pattern <- function(grob, width = 0.1, height = 0.1, x = 0.5, y = 0.5,
-                    units = "npc", extend = "repeat") {
+vl_pattern <- function(
+  grob,
+  width = 0.1,
+  height = 0.1,
+  x = 0.5,
+  y = 0.5,
+  units = "npc",
+  extend = "repeat"
+) {
   units <- match.arg(units, .coord_units)
   extend <- match.arg(extend, .gradient_extend)
   if (!all(is.finite(c(width, height, x, y)))) {
     cli::cli_abort("Pattern geometry must be finite.")
   }
   structure(
-    list(grob = grob, width = width, height = height, x = x, y = y,
-         units = units, extend = extend),
+    list(
+      grob = grob,
+      width = width,
+      height = height,
+      x = x,
+      y = y,
+      units = units,
+      extend = extend
+    ),
     class = "vellum_pattern"
   )
 }
 
 #' @export
 print.vellum_pattern <- function(x, ...) {
-  cli::cli_text("<vellum_pattern> cell {x$width} x {x$height} {.val {x$units}}, extend = {.val {x$extend}}")
+  cli::cli_text(
+    "<vellum_pattern> cell {x$width} x {x$height} {.val {x$units}}, extend = {.val {x$extend}}"
+  )
   invisible(x)
 }
 
@@ -200,7 +263,9 @@ print.vellum_pattern <- function(x, ...) {
 # `scene` is the backend Scene currently being compiled (for dpi + page size).
 .encode_pattern <- function(p, scene) {
   if (is.null(scene)) {
-    cli::cli_abort("A pattern fill can only be used inside a scene being rendered.")
+    cli::cli_abort(
+      "A pattern fill can only be used inside a scene being rendered."
+    )
   }
   dpi <- scene$dpi()
   page <- scene$dim() # c(width_px, height_px)
@@ -214,7 +279,9 @@ print.vellum_pattern <- function(x, ...) {
   th <- max(1L, as.integer(round(.paint_len_px(p$height, p$units, ref, dpi))))
   tile <- Scene$new(tw / dpi, th / dpi, dpi, c(0L, 0L, 0L, 0L))
   nodes <- if (inherits(p$grob, "S7_object")) list(p$grob) else as.list(p$grob)
-  for (nd in nodes) compile(nd, tile)
+  for (nd in nodes) {
+    compile(nd, tile)
+  }
   list(
     kind = "pattern",
     tile = tile$rgba(),
@@ -242,12 +309,17 @@ print.vellum_pattern <- function(x, ...) {
 #' @export
 as_mask <- function(grob, type = c("alpha", "luminance")) {
   type <- match.arg(type)
-  structure(list(grobs = .as_grob_list(grob), type = type), class = "vellum_mask")
+  structure(
+    list(grobs = .as_grob_list(grob), type = type),
+    class = "vellum_mask"
+  )
 }
 
 #' @export
 print.vellum_mask <- function(x, ...) {
-  cli::cli_text("<vellum_mask> type = {.val {x$type}}, {length(x$grobs)} grob{?s}")
+  cli::cli_text(
+    "<vellum_mask> type = {.val {x$type}}, {length(x$grobs)} grob{?s}"
+  )
   invisible(x)
 }
 
@@ -270,11 +342,23 @@ print.vellum_mask <- function(x, ...) {
 
 # Standard R dash patterns as on/off nibble lengths (scaled by lwd in Rust).
 .lty_patterns <- list(
-  blank = numeric(0), solid = numeric(0),
-  dashed = c(4, 4), dotted = c(1, 3), dotdash = c(1, 3, 4, 3),
-  longdash = c(7, 3), twodash = c(2, 2, 6, 2)
+  blank = numeric(0),
+  solid = numeric(0),
+  dashed = c(4, 4),
+  dotted = c(1, 3),
+  dotdash = c(1, 3, 4, 3),
+  longdash = c(7, 3),
+  twodash = c(2, 2, 6, 2)
 )
-.lty_names <- c("blank", "solid", "dashed", "dotted", "dotdash", "longdash", "twodash") # codes 0:6
+.lty_names <- c(
+  "blank",
+  "solid",
+  "dashed",
+  "dotted",
+  "dotdash",
+  "longdash",
+  "twodash"
+) # codes 0:6
 .lineend_codes <- c(round = 0L, butt = 1L, square = 2L)
 .linejoin_codes <- c(round = 0L, mitre = 1L, miter = 1L, bevel = 2L)
 
@@ -311,7 +395,9 @@ print.vellum_mask <- function(x, ...) {
     }
     return(as.double(v))
   }
-  cli::cli_abort("{.arg lty} must be a name, code, hex string, or numeric vector.")
+  cli::cli_abort(
+    "{.arg lty} must be a name, code, hex string, or numeric vector."
+  )
 }
 
 .encode_code <- function(x, table, arg) {
@@ -348,17 +434,34 @@ print.vellum_mask <- function(x, ...) {
   # record so it inherits like every other stroke property.
   paint <- if (.is_paint(gp@col)) .encode_paint(gp@col, scene) else NULL
   phase <- if (is.null(gp@dash_phase)) NULL else as.double(gp@dash_phase)
-  if (is.null(lty) && is.null(lineend) && is.null(linejoin) && is.null(linemitre) &&
-      is.null(antialias) && is.null(crisp) && is.null(paint) && is.null(phase)) {
+  if (
+    is.null(lty) &&
+      is.null(lineend) &&
+      is.null(linejoin) &&
+      is.null(linemitre) &&
+      is.null(antialias) &&
+      is.null(crisp) &&
+      is.null(paint) &&
+      is.null(phase)
+  ) {
     return(NULL)
   }
-  list(lty = lty, lineend = lineend, linejoin = linejoin, linemitre = linemitre,
-       antialias = antialias, crisp = crisp, paint = paint, phase = phase)
+  list(
+    lty = lty,
+    lineend = lineend,
+    linejoin = linejoin,
+    linemitre = linemitre,
+    antialias = antialias,
+    crisp = crisp,
+    paint = paint,
+    phase = phase
+  )
 }
 
 # TRUE for a gradient/pattern object (as opposed to a colour).
 .is_paint <- function(x) {
-  inherits(x, "vellum_gradient") || inherits(x, "vellum_pattern") ||
+  inherits(x, "vellum_gradient") ||
+    inherits(x, "vellum_pattern") ||
     inherits(x, "vellum_hatch")
 }
 
@@ -368,7 +471,9 @@ print.vellum_mask <- function(x, ...) {
     return(NULL)
   }
   if (length(x) != 1L || is.na(x) || !is.logical(x)) {
-    cli::cli_abort("{.arg {arg}} must be {.val TRUE}, {.val FALSE}, or {.val NULL} to inherit.")
+    cli::cli_abort(
+      "{.arg {arg}} must be {.val TRUE}, {.val FALSE}, or {.val NULL} to inherit."
+    )
   }
   x
 }
@@ -376,7 +481,8 @@ print.vellum_mask <- function(x, ...) {
 # A length resolved to device pixels for tile sizing. npc/native are taken
 # against the page extent `total_px`; absolute units use the dpi.
 .paint_len_px <- function(value, units, total_px, dpi) {
-  switch(units,
+  switch(
+    units,
     npc = value * total_px,
     native = value * total_px,
     mm = value / 25.4 * dpi,
@@ -411,16 +517,25 @@ vl_shadow <- function(dx = 2, dy = 2, blur = 3, col = "#00000059") {
     }
     as.numeric(v)
   }
-  if (num(blur, "blur") < 0) cli::cli_abort("{.arg blur} must be non-negative.")
+  if (num(blur, "blur") < 0) {
+    cli::cli_abort("{.arg blur} must be non-negative.")
+  }
   structure(
-    list(dx = num(dx, "dx"), dy = num(dy, "dy"), blur = num(blur, "blur"), col = col),
+    list(
+      dx = num(dx, "dx"),
+      dy = num(dy, "dy"),
+      blur = num(blur, "blur"),
+      col = col
+    ),
     class = "vellum_shadow"
   )
 }
 
 #' @export
 print.vellum_shadow <- function(x, ...) {
-  cli::cli_text("{.cls vellum_shadow} dx={x$dx} dy={x$dy} blur={x$blur} col={.val {x$col}}")
+  cli::cli_text(
+    "{.cls vellum_shadow} dx={x$dx} dy={x$dy} blur={x$blur} col={.val {x$col}}"
+  )
   invisible(x)
 }
 
@@ -475,7 +590,13 @@ print.vellum_shadow <- function(x, ...) {
 #'     fill = vl_hatch(angle = 45, spacing = 4), col = "grey30"
 #'   )))
 #' @export
-vl_hatch <- function(angle = 45, spacing = 3, width = 0.75, col = "black", bg = NA) {
+vl_hatch <- function(
+  angle = 45,
+  spacing = 3,
+  width = 0.75,
+  col = "black",
+  bg = NA
+) {
   num1 <- function(v, arg) {
     if (length(v) != 1L || is.na(v) || !is.numeric(v)) {
       cli::cli_abort("{.arg {arg}} must be a single number.")
@@ -484,11 +605,20 @@ vl_hatch <- function(angle = 45, spacing = 3, width = 0.75, col = "black", bg = 
   }
   spacing <- num1(spacing, "spacing")
   width <- num1(width, "width")
-  if (spacing <= 0) cli::cli_abort("{.arg spacing} must be positive.")
-  if (width <= 0) cli::cli_abort("{.arg width} must be positive.")
+  if (spacing <= 0) {
+    cli::cli_abort("{.arg spacing} must be positive.")
+  }
+  if (width <= 0) {
+    cli::cli_abort("{.arg width} must be positive.")
+  }
   structure(
-    list(angle = num1(angle, "angle"), spacing = spacing, width = width,
-         col = col, bg = bg),
+    list(
+      angle = num1(angle, "angle"),
+      spacing = spacing,
+      width = width,
+      col = col,
+      bg = bg
+    ),
     class = "vellum_hatch"
   )
 }
@@ -511,8 +641,11 @@ print.vellum_hatch <- function(x, ...) {
     return(NULL)
   }
   list(
-    kind = "hatch", angle = h$angle,
-    spacing = h$spacing * scale, width = h$width * scale,
-    col = rgba, bg = .col2rgba(h$bg)
+    kind = "hatch",
+    angle = h$angle,
+    spacing = h$spacing * scale,
+    width = h$width * scale,
+    col = rgba,
+    bg = .col2rgba(h$bg)
   )
 }

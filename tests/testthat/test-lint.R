@@ -13,7 +13,12 @@ test_that("a clean scene lints clean", {
 
 test_that("offscreen catches a mark past the page edge", {
   s <- vl_scene(2, 2, dpi = 100) |>
-    draw(rect_grob(x = 2.5, width = 0.2, height = 0.2, gp = vl_gpar(fill = "red")))
+    draw(rect_grob(
+      x = 2.5,
+      width = 0.2,
+      height = 0.2,
+      gp = vl_gpar(fill = "red")
+    ))
   expect_true("offscreen" %in% rules_of(vl_lint(s)))
 })
 
@@ -23,7 +28,12 @@ test_that("clipped_away catches a mark outside its viewport's clip", {
     # x = 2 npc of a viewport spanning 20..80 px puts it at ~140 px: still on a
     # 200 px page, but well outside the clip. (x = 4 would be off-page too, and
     # would be reported by `offscreen` instead.)
-    draw(rect_grob(x = 2, width = 0.2, height = 0.2, gp = vl_gpar(fill = "red"))) |>
+    draw(rect_grob(
+      x = 2,
+      width = 0.2,
+      height = 0.2,
+      gp = vl_gpar(fill = "red")
+    )) |>
     pop()
   found <- rules_of(vl_lint(s))
   expect_true("clipped_away" %in% found)
@@ -33,10 +43,18 @@ test_that("clipped_away catches a mark outside its viewport's clip", {
 
 test_that("invisible catches elements nothing will paint", {
   none <- vl_scene(2, 2, dpi = 100) |>
-    draw(rect_grob(width = 0.5, height = 0.5, gp = vl_gpar(fill = NA, col = NA)))
+    draw(rect_grob(
+      width = 0.5,
+      height = 0.5,
+      gp = vl_gpar(fill = NA, col = NA)
+    ))
   expect_true("invisible" %in% rules_of(vl_lint(none)))
   zero <- vl_scene(2, 2, dpi = 100) |>
-    draw(rect_grob(width = 0.5, height = 0.5, gp = vl_gpar(fill = "red", alpha = 0)))
+    draw(rect_grob(
+      width = 0.5,
+      height = 0.5,
+      gp = vl_gpar(fill = "red", alpha = 0)
+    ))
   expect_true("invisible" %in% rules_of(vl_lint(zero)))
 })
 
@@ -50,7 +68,12 @@ test_that("tiny_text catches illegible labels and respects the threshold", {
 
 test_that("label_overlap catches colliding labels only when they collide", {
   clash <- vl_scene(3, 2, dpi = 100) |>
-    draw(text_grob("aaaaaaaa", x = 0.5, y = 0.5, gp = vl_gpar(fontsize = 20))) |>
+    draw(text_grob(
+      "aaaaaaaa",
+      x = 0.5,
+      y = 0.5,
+      gp = vl_gpar(fontsize = 20)
+    )) |>
     draw(text_grob("bbbbbbbb", x = 0.52, y = 0.5, gp = vl_gpar(fontsize = 20)))
   expect_true("label_overlap" %in% rules_of(vl_lint(clash)))
   apart <- vl_scene(3, 2, dpi = 100) |>
@@ -71,7 +94,12 @@ test_that("low_contrast measures text against its actual backdrop", {
 
 test_that("findings carry the grob name when there is one", {
   s <- vl_scene(2, 2, dpi = 100) |>
-    draw(rect_grob(x = 3, width = 0.2, gp = vl_gpar(fill = "red"), name = "stray"))
+    draw(rect_grob(
+      x = 3,
+      width = 0.2,
+      gp = vl_gpar(fill = "red"),
+      name = "stray"
+    ))
   expect_true("stray" %in% vl_lint(s)$node)
 })
 
@@ -85,12 +113,21 @@ test_that("rules can be selected, and an unknown one errors", {
 
 test_that("a downstream package can register its own rule", {
   withr::defer(rm("test_rule", envir = vellum:::.lint_rules))
-  vl_lint_rule("test_rule", function(scene, nodes, ctx) {
-    vl_lint_finding("test_rule", "note", nodes[nodes$kind == "circle", , drop = FALSE],
-                    "a circle was found")
-  }, "test")
+  vl_lint_rule(
+    "test_rule",
+    function(scene, nodes, ctx) {
+      vl_lint_finding(
+        "test_rule",
+        "note",
+        nodes[nodes$kind == "circle", , drop = FALSE],
+        "a circle was found"
+      )
+    },
+    "test"
+  )
   expect_true("test_rule" %in% vl_lint_rules()$rule)
-  s <- vl_scene(2, 2, dpi = 100) |> draw(circle_grob(gp = vl_gpar(fill = "red")))
+  s <- vl_scene(2, 2, dpi = 100) |>
+    draw(circle_grob(gp = vl_gpar(fill = "red")))
   expect_true("test_rule" %in% rules_of(vl_lint(s)))
 })
 
@@ -101,8 +138,10 @@ test_that("the print method summarises without erroring", {
   found <- vl_lint(s)
   out <- paste(capture.output(print(found), type = "message"), collapse = " ")
   expect_match(out, "offscreen")
-  clean <- paste(capture.output(print(vl_lint(vl_scene(1, 1))), type = "message"),
-                 collapse = " ")
+  clean <- paste(
+    capture.output(print(vl_lint(vl_scene(1, 1))), type = "message"),
+    collapse = " "
+  )
   expect_match(clean, "No lint findings")
   expect_identical(print(found), found)
 })

@@ -3,38 +3,69 @@
 rich_scene <- function() {
   set.seed(1)
   vl_scene(3, 2, dpi = 120, bg = "grey95") |>
-    push(vl_viewport(name = "p", xscale = c(0, 10), clip = TRUE, angle = 15, alpha = 0.9)) |>
-    draw(rect_grob(gp = vl_gpar(fill = linear_gradient(c("red", "blue")), col = NA))) |>
-    draw(points_grob(runif(10), runif(10), key = paste0("k", 1:10), shape = "square")) |>
-    draw(text_grob("hi\nthere", gp = vl_gpar(fontsize = 14, halo_col = "white", halo_width = 1))) |>
+    push(vl_viewport(
+      name = "p",
+      xscale = c(0, 10),
+      clip = TRUE,
+      angle = 15,
+      alpha = 0.9
+    )) |>
+    draw(rect_grob(
+      gp = vl_gpar(fill = linear_gradient(c("red", "blue")), col = NA)
+    )) |>
+    draw(points_grob(
+      runif(10),
+      runif(10),
+      key = paste0("k", 1:10),
+      shape = "square"
+    )) |>
+    draw(text_grob(
+      "hi\nthere",
+      gp = vl_gpar(fontsize = 14, halo_col = "white", halo_width = 1)
+    )) |>
     draw(text_grob(md("**bold** and *it*"), y = 0.2)) |>
-    draw(segments_grob(.1, .1, .9, .9, gp = vl_gpar(lty = "dashed", dash_phase = 1))) |>
+    draw(segments_grob(
+      .1,
+      .1,
+      .9,
+      .9,
+      gp = vl_gpar(lty = "dashed", dash_phase = 1)
+    )) |>
     pop()
 }
 
 test_that("a scene round-trips through its spec", {
   s <- rich_scene()
-  expect_identical(as_scene_spec(from_scene_spec(as_scene_spec(s))), as_scene_spec(s))
+  expect_identical(
+    as_scene_spec(from_scene_spec(as_scene_spec(s))),
+    as_scene_spec(s)
+  )
 })
 
 test_that("a round-tripped scene renders byte-identically", {
   s <- rich_scene()
   a <- withr::local_tempfile(fileext = ".png")
   b <- withr::local_tempfile(fileext = ".png")
-  vl_clear_render_cache(); render(s, a)
-  vl_clear_render_cache(); render(from_scene_spec(as_scene_spec(s)), b)
+  vl_clear_render_cache()
+  render(s, a)
+  vl_clear_render_cache()
+  render(from_scene_spec(as_scene_spec(s)), b)
   expect_identical(tools::md5sum(a)[[1]], tools::md5sum(b)[[1]])
 })
 
 test_that("both file formats round-trip to identical pixels", {
   for (ext in c("rds", "json")) {
-    if (ext == "json") skip_if_not_installed("jsonlite")
+    if (ext == "json") {
+      skip_if_not_installed("jsonlite")
+    }
     f <- withr::local_tempfile(fileext = paste0(".", ext))
     scene_write(rich_scene(), f)
     a <- withr::local_tempfile(fileext = ".png")
     b <- withr::local_tempfile(fileext = ".png")
-    vl_clear_render_cache(); render(rich_scene(), a)
-    vl_clear_render_cache(); render(scene_read(f), b)
+    vl_clear_render_cache()
+    render(rich_scene(), a)
+    vl_clear_render_cache()
+    render(scene_read(f), b)
     expect_identical(tools::md5sum(a)[[1]], tools::md5sum(b)[[1]], label = ext)
   }
 })
@@ -65,7 +96,10 @@ test_that("scene_hash tracks content", {
   b <- vl_scene(2, 2) |> draw(circle_grob(gp = vl_gpar(fill = "blue")))
   expect_identical(scene_hash(a), scene_hash(a))
   expect_false(identical(scene_hash(a), scene_hash(b)))
-  expect_false(identical(scene_hash(a), scene_hash(vl_scene(3, 2) |> draw(circle_grob(gp = vl_gpar(fill = "red"))))))
+  expect_false(identical(
+    scene_hash(a),
+    scene_hash(vl_scene(3, 2) |> draw(circle_grob(gp = vl_gpar(fill = "red"))))
+  ))
 })
 
 test_that("a scene holding a function refuses to serialize", {
@@ -77,7 +111,10 @@ test_that("an unreadable spec errors clearly", {
   expect_error(from_scene_spec(list(a = 1)), "version")
   expect_error(from_scene_spec(list(version = 999L)), "Upgrade vellum")
   expect_error(scene_read(file.path(tempdir(), "nope.rds")), "No such file")
-  expect_error(scene_write(vl_scene(1, 1), tempfile(fileext = ".xyz")), "Unsupported")
+  expect_error(
+    scene_write(vl_scene(1, 1), tempfile(fileext = ".xyz")),
+    "Unsupported"
+  )
 })
 
 # --- diffing -----------------------------------------------------------------
@@ -115,8 +152,13 @@ test_that("the diff print method summarises", {
   d <- scene_diff(vl_scene(3, 2), vl_scene(4, 2))
   out <- paste(capture.output(print(d), type = "message"), collapse = " ")
   expect_match(out, "1 difference")
-  clean <- paste(capture.output(print(scene_diff(vl_scene(1, 1), vl_scene(1, 1))),
-                                type = "message"), collapse = " ")
+  clean <- paste(
+    capture.output(
+      print(scene_diff(vl_scene(1, 1), vl_scene(1, 1))),
+      type = "message"
+    ),
+    collapse = " "
+  )
   expect_match(clean, "structurally identical")
 })
 
@@ -127,8 +169,15 @@ test_that("scene_inset grafts a scene into a region", {
     draw(rect_grob(gp = vl_gpar(fill = "#eef2f6", col = NA)))
   mini <- vl_scene(1, 1) |>
     draw(circle_grob(r = 0.4, gp = vl_gpar(fill = "tomato", col = NA)))
-  comp <- scene_inset(main, mini, x = 0.8, y = 0.75, width = 0.3, height = 0.35,
-                      name = "inset")
+  comp <- scene_inset(
+    main,
+    mini,
+    x = 0.8,
+    y = 0.75,
+    width = 0.3,
+    height = 0.35,
+    name = "inset"
+  )
   expect_true("inset" %in% node_names(comp))
   expect_false(is.null(get_node(comp, "inset")))
   # The guest actually drew: there is tomato in the upper right.
@@ -139,17 +188,31 @@ test_that("scene_inset grafts a scene into a region", {
 test_that("an inset can itself be inset", {
   mini <- vl_scene(1, 1) |> draw(circle_grob(gp = vl_gpar(fill = "red")))
   once <- scene_inset(vl_scene(3, 3), mini, name = "a")
-  twice <- scene_inset(once, mini, x = 0.2, y = 0.2, width = 0.2, height = 0.2, name = "b")
+  twice <- scene_inset(
+    once,
+    mini,
+    x = 0.2,
+    y = 0.2,
+    width = 0.2,
+    height = 0.2,
+    name = "b"
+  )
   expect_true(all(c("a", "b") %in% node_names(twice)))
 })
 
 test_that("insetting an empty scene is a no-op", {
   main <- vl_scene(2, 2) |> draw(circle_grob())
-  expect_identical(as_scene_spec(scene_inset(main, vl_scene(1, 1))), as_scene_spec(main))
+  expect_identical(
+    as_scene_spec(scene_inset(main, vl_scene(1, 1))),
+    as_scene_spec(main)
+  )
 })
 
 test_that("a composed scene serializes like any other", {
   mini <- vl_scene(1, 1) |> draw(circle_grob(gp = vl_gpar(fill = "red")))
   comp <- scene_inset(vl_scene(3, 2), mini, name = "inset")
-  expect_identical(as_scene_spec(from_scene_spec(as_scene_spec(comp))), as_scene_spec(comp))
+  expect_identical(
+    as_scene_spec(from_scene_spec(as_scene_spec(comp))),
+    as_scene_spec(comp)
+  )
 })

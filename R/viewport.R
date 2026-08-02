@@ -70,22 +70,47 @@
 #' @examples
 #' vl_viewport(xscale = c(0, 10), yscale = c(0, 100))
 #' @export
-vl_viewport <- function(x = 0.5, y = 0.5, width = 1, height = 1,
-                     xscale = c(0, 1), yscale = c(0, 1), angle = 0, clip = FALSE,
-                     gp = vl_gpar(), layout = NULL,
-                     row = NULL, col = NULL, rowspan = 1, colspan = 1,
-                     mask = NULL, alpha = NULL, blend = NULL,
-                     blur = NULL, shadow = NULL, name = NULL,
-                     meta = NULL, pannable = FALSE, cache = FALSE) {
+vl_viewport <- function(
+  x = 0.5,
+  y = 0.5,
+  width = 1,
+  height = 1,
+  xscale = c(0, 1),
+  yscale = c(0, 1),
+  angle = 0,
+  clip = FALSE,
+  gp = vl_gpar(),
+  layout = NULL,
+  row = NULL,
+  col = NULL,
+  rowspan = 1,
+  colspan = 1,
+  mask = NULL,
+  alpha = NULL,
+  blend = NULL,
+  blur = NULL,
+  shadow = NULL,
+  name = NULL,
+  meta = NULL,
+  pannable = FALSE,
+  cache = FALSE
+) {
   .check_cell <- function(v, arg) {
     if (!is.null(v) && (length(v) != 1L || is.na(v) || v < 1)) {
-      cli::cli_abort("{.arg {arg}} must be a single positive integer (1-based) or NULL.")
+      cli::cli_abort(
+        "{.arg {arg}} must be a single positive integer (1-based) or NULL."
+      )
     }
   }
   .check_cell(row, "row")
   .check_cell(col, "col")
-  if (!is.null(alpha) && (length(alpha) != 1L || is.na(alpha) || alpha < 0 || alpha > 1)) {
-    cli::cli_abort("{.arg alpha} must be a single number in {.val {c(0, 1)}} or NULL.")
+  if (
+    !is.null(alpha) &&
+      (length(alpha) != 1L || is.na(alpha) || alpha < 0 || alpha > 1)
+  ) {
+    cli::cli_abort(
+      "{.arg alpha} must be a single number in {.val {c(0, 1)}} or NULL."
+    )
   }
   if (!is.null(blend)) {
     blend <- match.arg(as.character(blend), names(.blend_codes))
@@ -94,30 +119,61 @@ vl_viewport <- function(x = 0.5, y = 0.5, width = 1, height = 1,
     cli::cli_abort("{.arg cache} must be a single {.cls logical}.")
   }
   class_viewport(
-    x = as_unit(x), y = as_unit(y), width = as_unit(width), height = as_unit(height),
-    xscale = as.numeric(xscale), yscale = as.numeric(yscale),
-    angle = as.numeric(angle), clip = clip, gp = gp, layout = layout,
-    row = row, col = col, rowspan = as.integer(rowspan), colspan = as.integer(colspan),
-    mask = mask, alpha = alpha, blend = blend, blur = blur, shadow = shadow,
-    name = name, meta = meta,
-    pannable = as.logical(pannable), cache = cache
+    x = as_unit(x),
+    y = as_unit(y),
+    width = as_unit(width),
+    height = as_unit(height),
+    xscale = as.numeric(xscale),
+    yscale = as.numeric(yscale),
+    angle = as.numeric(angle),
+    clip = clip,
+    gp = gp,
+    layout = layout,
+    row = row,
+    col = col,
+    rowspan = as.integer(rowspan),
+    colspan = as.integer(colspan),
+    mask = mask,
+    alpha = alpha,
+    blend = blend,
+    blur = blur,
+    shadow = shadow,
+    name = name,
+    meta = meta,
+    pannable = as.logical(pannable),
+    cache = cache
   )
 }
 
 # Blend-mode codes. Part of the R<->Rust ABI: MUST match `BlendKind::from_code`
 # in `src/rust/src/render.rs`.
 .blend_codes <- c(
-  normal = 0L, multiply = 1L, screen = 2L, overlay = 3L, darken = 4L, lighten = 5L,
-  `color-dodge` = 6L, `color-burn` = 7L, `hard-light` = 8L, `soft-light` = 9L,
-  difference = 10L, exclusion = 11L, hue = 12L, saturation = 13L, color = 14L,
+  normal = 0L,
+  multiply = 1L,
+  screen = 2L,
+  overlay = 3L,
+  darken = 4L,
+  lighten = 5L,
+  `color-dodge` = 6L,
+  `color-burn` = 7L,
+  `hard-light` = 8L,
+  `soft-light` = 9L,
+  difference = 10L,
+  exclusion = 11L,
+  hue = 12L,
+  saturation = 13L,
+  color = 14L,
   luminosity = 15L
 )
 
 class_viewport <- S7::new_class(
-  "class_viewport", package = "vellum",
+  "class_viewport",
+  package = "vellum",
   properties = list(
-    x = .unit_prop(), y = .unit_prop(),
-    width = .unit_prop("vl_unit(1, \"npc\")"), height = .unit_prop("vl_unit(1, \"npc\")"),
+    x = .unit_prop(),
+    y = .unit_prop(),
+    width = .unit_prop("vl_unit(1, \"npc\")"),
+    height = .unit_prop("vl_unit(1, \"npc\")"),
     xscale = S7::new_property(S7::class_double, default = c(0, 1)),
     yscale = S7::new_property(S7::class_double, default = c(0, 1)),
     angle = S7::new_property(S7::class_double, default = 0),
@@ -154,7 +210,11 @@ class_viewport <- S7::new_class(
 #'   built on top of vellum.
 #' @return `grid_layout()`: a layout object.
 #' @export
-grid_layout <- function(widths = vl_unit(1, "null"), heights = vl_unit(1, "null"), respect = FALSE) {
+grid_layout <- function(
+  widths = vl_unit(1, "null"),
+  heights = vl_unit(1, "null"),
+  respect = FALSE
+) {
   stopifnot(is_unit(widths), is_unit(heights))
   if (length(respect) != 1L || is.na(respect) || !is.logical(respect)) {
     cli::cli_abort("{.arg respect} must be a single {.cls logical}.")
@@ -163,7 +223,8 @@ grid_layout <- function(widths = vl_unit(1, "null"), heights = vl_unit(1, "null"
 }
 
 class_grid_layout <- S7::new_class(
-  "class_grid_layout", package = "vellum",
+  "class_grid_layout",
+  package = "vellum",
   properties = list(
     widths = S7::new_property(S7::new_S3_class("vellum_unit")),
     heights = S7::new_property(S7::new_S3_class("vellum_unit")),

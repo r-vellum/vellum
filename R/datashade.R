@@ -69,13 +69,26 @@
 #' grp <- sample(c("a", "b"), n, replace = TRUE)
 #' gc <- datashade(x, y, category = grp, colors = c(a = "#e41a1c", b = "#377eb8"))
 #' @export
-datashade <- function(x, y, weight = NULL, width = 600L, height = 400L,
-                      xlim = NULL, ylim = NULL,
-                      category = NULL,
-                      colors = c("#deebf7", "#08306b"),
-                      how = c("eq_hist", "log", "cbrt", "linear"),
-                      span = NULL, clip = NULL, spread = NULL,
-                      interpolate = FALSE, name = NULL, vp = NULL, id = NULL, role = NULL) {
+datashade <- function(
+  x,
+  y,
+  weight = NULL,
+  width = 600L,
+  height = 400L,
+  xlim = NULL,
+  ylim = NULL,
+  category = NULL,
+  colors = c("#deebf7", "#08306b"),
+  how = c("eq_hist", "log", "cbrt", "linear"),
+  span = NULL,
+  clip = NULL,
+  spread = NULL,
+  interpolate = FALSE,
+  name = NULL,
+  vp = NULL,
+  id = NULL,
+  role = NULL
+) {
   how <- match.arg(how)
   x <- as.double(x)
   y <- as.double(y)
@@ -90,10 +103,32 @@ datashade <- function(x, y, weight = NULL, width = 600L, height = 400L,
   w <- .ds_weight(weight, length(x), "x")
 
   if (is.null(category)) {
-    counts <- rs_aggregate_2d(x, y, w, width, height, xlim[1], xlim[2], ylim[1], ylim[2])
+    counts <- rs_aggregate_2d(
+      x,
+      y,
+      w,
+      width,
+      height,
+      xlim[1],
+      xlim[2],
+      ylim[1],
+      ylim[2]
+    )
     shade <- .ds_shade(counts, colors, how, span)
   } else {
-    shade <- .ds_shade_cat(x, y, w, category, width, height, xlim, ylim, colors, how, span)
+    shade <- .ds_shade_cat(
+      x,
+      y,
+      w,
+      category,
+      width,
+      height,
+      xlim,
+      ylim,
+      colors,
+      how,
+      span
+    )
   }
   .ds_finish(shade, width, height, spread, interpolate, name, vp, id, role)
 }
@@ -124,9 +159,26 @@ datashade <- function(x, y, weight = NULL, width = 600L, height = 400L,
 # shade vector into an `height` x `width` raster, wrap it in a `raster_grob`, and
 # apply optional `spread`/dynspread. Kept in one place so the point, line, and
 # segment paths produce identical grobs.
-.ds_finish <- function(shade, width, height, spread, interpolate, name, vp, id, role) {
+.ds_finish <- function(
+  shade,
+  width,
+  height,
+  spread,
+  interpolate,
+  name,
+  vp,
+  id,
+  role
+) {
   img <- matrix(shade, nrow = height, ncol = width, byrow = TRUE)
-  g <- raster_grob(img, interpolate = interpolate, name = name, vp = vp, id = id, role = role)
+  g <- raster_grob(
+    img,
+    interpolate = interpolate,
+    name = name,
+    vp = vp,
+    id = id,
+    role = role
+  )
   .ds_apply_spread(g, spread)
 }
 
@@ -142,7 +194,9 @@ datashade <- function(x, y, weight = NULL, width = 600L, height = 400L,
   }
   sp <- as.integer(sp)
   if (length(sp) != 1L || is.na(sp) || sp < 0L) {
-    cli::cli_abort('{.arg spread} must be {.code NULL}, a non-negative integer, or {.val auto}.')
+    cli::cli_abort(
+      '{.arg spread} must be {.code NULL}, a non-negative integer, or {.val auto}.'
+    )
   }
   if (sp == 0L) g else spread(g, px = sp)
 }
@@ -200,12 +254,26 @@ datashade <- function(x, y, weight = NULL, width = 600L, height = 400L,
 #' n <- 5000
 #' e <- datashade_segments(rnorm(n), rnorm(n), rnorm(n), rnorm(n))
 #' @export
-datashade_lines <- function(x, y, group = NULL, weight = NULL,
-                            width = 600L, height = 400L, xlim = NULL, ylim = NULL,
-                            colors = c("#deebf7", "#08306b"),
-                            how = c("eq_hist", "log", "cbrt", "linear"),
-                            span = NULL, clip = NULL, spread = NULL,
-                            interpolate = FALSE, name = NULL, vp = NULL, id = NULL, role = NULL) {
+datashade_lines <- function(
+  x,
+  y,
+  group = NULL,
+  weight = NULL,
+  width = 600L,
+  height = 400L,
+  xlim = NULL,
+  ylim = NULL,
+  colors = c("#deebf7", "#08306b"),
+  how = c("eq_hist", "log", "cbrt", "linear"),
+  span = NULL,
+  clip = NULL,
+  spread = NULL,
+  interpolate = FALSE,
+  name = NULL,
+  vp = NULL,
+  id = NULL,
+  role = NULL
+) {
   how <- match.arg(how)
   x <- as.double(x)
   y <- as.double(y)
@@ -230,19 +298,45 @@ datashade_lines <- function(x, y, group = NULL, weight = NULL,
     }
     as.integer(if (is.factor(group)) group else factor(group))
   }
-  counts <- rs_aggregate_lines(x, y, brk, w, width, height, xlim[1], xlim[2], ylim[1], ylim[2])
+  counts <- rs_aggregate_lines(
+    x,
+    y,
+    brk,
+    w,
+    width,
+    height,
+    xlim[1],
+    xlim[2],
+    ylim[1],
+    ylim[2]
+  )
   shade <- .ds_shade(counts, colors, how, span)
   .ds_finish(shade, width, height, spread, interpolate, name, vp, id, role)
 }
 
 #' @rdname datashade_lines
 #' @export
-datashade_segments <- function(x0, y0, x1, y1, weight = NULL,
-                               width = 600L, height = 400L, xlim = NULL, ylim = NULL,
-                               colors = c("#deebf7", "#08306b"),
-                               how = c("eq_hist", "log", "cbrt", "linear"),
-                               span = NULL, clip = NULL, spread = NULL,
-                               interpolate = FALSE, name = NULL, vp = NULL, id = NULL, role = NULL) {
+datashade_segments <- function(
+  x0,
+  y0,
+  x1,
+  y1,
+  weight = NULL,
+  width = 600L,
+  height = 400L,
+  xlim = NULL,
+  ylim = NULL,
+  colors = c("#deebf7", "#08306b"),
+  how = c("eq_hist", "log", "cbrt", "linear"),
+  span = NULL,
+  clip = NULL,
+  spread = NULL,
+  interpolate = FALSE,
+  name = NULL,
+  vp = NULL,
+  id = NULL,
+  role = NULL
+) {
   how <- match.arg(how)
   x0 <- as.double(x0)
   y0 <- as.double(y0)
@@ -250,7 +344,9 @@ datashade_segments <- function(x0, y0, x1, y1, weight = NULL,
   y1 <- as.double(y1)
   n <- length(x0)
   if (length(y0) != n || length(x1) != n || length(y1) != n) {
-    cli::cli_abort("{.arg x0}, {.arg y0}, {.arg x1}, and {.arg y1} must have the same length.")
+    cli::cli_abort(
+      "{.arg x0}, {.arg y0}, {.arg x1}, and {.arg y1} must have the same length."
+    )
   }
   width <- max(1L, as.integer(width))
   height <- max(1L, as.integer(height))
@@ -260,7 +356,19 @@ datashade_segments <- function(x0, y0, x1, y1, weight = NULL,
   ylim <- .ds_lim(ylim, c(y0, y1), "ylim")
   span <- .ds_span(span, clip)
   w <- .ds_weight(weight, n, "x0")
-  counts <- rs_aggregate_segments(x0, y0, x1, y1, w, width, height, xlim[1], xlim[2], ylim[1], ylim[2])
+  counts <- rs_aggregate_segments(
+    x0,
+    y0,
+    x1,
+    y1,
+    w,
+    width,
+    height,
+    xlim[1],
+    xlim[2],
+    ylim[1],
+    ylim[2]
+  )
   shade <- .ds_shade(counts, colors, how, span)
   .ds_finish(shade, width, height, spread, interpolate, name, vp, id, role)
 }
@@ -270,12 +378,20 @@ datashade_segments <- function(x0, y0, x1, y1, weight = NULL,
 .ds_lim <- function(lim, v, arg) {
   if (is.null(lim)) {
     fin <- v[is.finite(v)]
-    if (length(fin) == 0L) cli::cli_abort("{.arg {arg}} is needed: {.arg {sub('lim','',arg)}} has no finite values.")
+    if (length(fin) == 0L) {
+      cli::cli_abort(
+        "{.arg {arg}} is needed: {.arg {sub('lim','',arg)}} has no finite values."
+      )
+    }
     lim <- range(fin)
   }
   lim <- as.double(lim)
-  if (length(lim) != 2L || !all(is.finite(lim))) cli::cli_abort("{.arg {arg}} must be two finite numbers.")
-  if (lim[1] == lim[2]) lim <- lim + c(-0.5, 0.5)
+  if (length(lim) != 2L || !all(is.finite(lim))) {
+    cli::cli_abort("{.arg {arg}} must be two finite numbers.")
+  }
+  if (lim[1] == lim[2]) {
+    lim <- lim + c(-0.5, 0.5)
+  }
   lim
 }
 
@@ -286,8 +402,16 @@ datashade_segments <- function(x0, y0, x1, y1, weight = NULL,
 .ds_span <- function(span, clip) {
   if (!is.null(clip)) {
     clip <- as.double(clip)
-    if (length(clip) != 2L || anyNA(clip) || any(clip < 0) || any(clip > 1) || clip[1] >= clip[2]) {
-      cli::cli_abort("{.arg clip} must be two increasing percentiles in [0, 1], e.g. {.code c(0.01, 0.99)}.")
+    if (
+      length(clip) != 2L ||
+        anyNA(clip) ||
+        any(clip < 0) ||
+        any(clip > 1) ||
+        clip[1] >= clip[2]
+    ) {
+      cli::cli_abort(
+        "{.arg clip} must be two increasing percentiles in [0, 1], e.g. {.code c(0.01, 0.99)}."
+      )
     }
     return(structure(clip, clip = TRUE))
   }
@@ -296,7 +420,9 @@ datashade_segments <- function(x0, y0, x1, y1, weight = NULL,
   }
   span <- as.double(span)
   if (length(span) != 2L || !all(is.finite(span)) || span[1] >= span[2]) {
-    cli::cli_abort("{.arg span} must be two increasing finite numbers {.code c(lo, hi)}.")
+    cli::cli_abort(
+      "{.arg span} must be two increasing finite numbers {.code c(lo, hi)}."
+    )
   }
   span
 }
@@ -315,10 +441,13 @@ datashade_segments <- function(x0, y0, x1, y1, weight = NULL,
   }
   rescale <- function(z) {
     rng <- range(z)
-    if (rng[1] == rng[2]) return(rep(1, length(z)))
+    if (rng[1] == rng[2]) {
+      return(rep(1, length(z)))
+    }
     (z - rng[1]) / (rng[2] - rng[1])
   }
-  switch(how,
+  switch(
+    how,
     eq_hist = (rank(v, ties.method = "average") - 0.5) / length(v),
     log = rescale(log(v)),
     cbrt = rescale(v^(1 / 3)),
@@ -337,7 +466,12 @@ datashade_segments <- function(x0, y0, x1, y1, weight = NULL,
     v <- counts[nz]
     t <- .ds_scale(v, how, span)
     cols <- grDevices::colorRamp(colors)(t) # n x 3 in 0..255
-    shade[nz] <- grDevices::rgb(cols[, 1], cols[, 2], cols[, 3], maxColorValue = 255)
+    shade[nz] <- grDevices::rgb(
+      cols[, 1],
+      cols[, 2],
+      cols[, 3],
+      maxColorValue = 255
+    )
   }
   shade
 }
@@ -345,7 +479,19 @@ datashade_segments <- function(x0, y0, x1, y1, weight = NULL,
 # Categorical (`count_cat`) shading: aggregate one count grid per category in a
 # single pass, then colour each non-empty cell by the count-weighted average of the
 # category hues it holds, with opacity from the cell's total density (`how`/`span`).
-.ds_shade_cat <- function(x, y, w, category, width, height, xlim, ylim, colors, how, span) {
+.ds_shade_cat <- function(
+  x,
+  y,
+  w,
+  category,
+  width,
+  height,
+  xlim,
+  ylim,
+  colors,
+  how,
+  span
+) {
   if (length(category) != length(x)) {
     cli::cli_abort(c(
       "{.arg category} must be the same length as {.arg x}.",
@@ -355,7 +501,9 @@ datashade_segments <- function(x0, y0, x1, y1, weight = NULL,
   f <- if (is.factor(category)) category else factor(category)
   levels <- levels(f)
   ncat <- length(levels)
-  if (ncat == 0L) cli::cli_abort("{.arg category} has no levels to shade.")
+  if (ncat == 0L) {
+    cli::cli_abort("{.arg category} has no levels to shade.")
+  }
   hues <- .ds_cat_colors(colors, levels)
   hue_rgb <- t(grDevices::col2rgb(hues)) # ncat x 3 (rows in level order)
 
@@ -364,7 +512,17 @@ datashade_segments <- function(x0, y0, x1, y1, weight = NULL,
 
   ncell <- as.integer(width) * as.integer(height)
   grid <- rs_aggregate_2d_cat(
-    x, y, cat_idx, ncat, w, width, height, xlim[1], xlim[2], ylim[1], ylim[2]
+    x,
+    y,
+    cat_idx,
+    ncat,
+    w,
+    width,
+    height,
+    xlim[1],
+    xlim[2],
+    ylim[1],
+    ylim[2]
   )
   # Category-major flat grid -> ncell x ncat matrix (column k = category k's grid).
   gm <- matrix(grid, nrow = ncell, ncol = ncat)
@@ -377,7 +535,11 @@ datashade_segments <- function(x0, y0, x1, y1, weight = NULL,
     mixed <- (gm[nz, , drop = FALSE] %*% hue_rgb) / total[nz]
     alpha <- .ds_scale(total[nz], how, span) # opacity from total density
     shade[nz] <- grDevices::rgb(
-      mixed[, 1], mixed[, 2], mixed[, 3], alpha * 255, maxColorValue = 255
+      mixed[, 1],
+      mixed[, 2],
+      mixed[, 3],
+      alpha * 255,
+      maxColorValue = 255
     )
   }
   shade

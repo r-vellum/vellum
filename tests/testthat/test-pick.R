@@ -5,10 +5,26 @@
 test_that("lines, polygons, paths, roundrects and text can carry a key", {
   s <- vl_scene(5, 3, dpi = 96, bg = "white") |>
     draw(lines_grob(c(.1, .9), c(.2, .8), name = "ln", key = "line-1")) |>
-    draw(polygon_grob(c(.1, .3, .2), c(.6, .6, .9), name = "pg", key = "poly-1")) |>
-    draw(path_grob(c(.5, .7, .6), c(.1, .1, .4), name = "pt", key = "path-1")) |>
-    draw(roundrect_grob(x = .8, y = .5, width = .15, height = .2, name = "rr",
-                        key = "rr-1")) |>
+    draw(polygon_grob(
+      c(.1, .3, .2),
+      c(.6, .6, .9),
+      name = "pg",
+      key = "poly-1"
+    )) |>
+    draw(path_grob(
+      c(.5, .7, .6),
+      c(.1, .1, .4),
+      name = "pt",
+      key = "path-1"
+    )) |>
+    draw(roundrect_grob(
+      x = .8,
+      y = .5,
+      width = .15,
+      height = .2,
+      name = "rr",
+      key = "rr-1"
+    )) |>
     draw(text_grob("hello", x = .5, y = .95, name = "tx", key = "text-1"))
   el <- scene_model(s)$elements
   expect_setequal(el$key, c("line-1", "poly-1", "path-1", "rr-1", "text-1"))
@@ -29,9 +45,14 @@ test_that("keyed marks reach the SVG as data-key", {
 
 test_that("a vectorised text grob keys each label separately", {
   s <- vl_scene(5, 2, dpi = 96, bg = "white") |>
-    draw(text_grob(c("a", "b", "c"), x = c(.2, .5, .8), y = .5, name = "lab",
-                   key = c("t1", "t2", "t3"),
-                   meta = list(list(v = 1), list(v = 2), list(v = 3))))
+    draw(text_grob(
+      c("a", "b", "c"),
+      x = c(.2, .5, .8),
+      y = .5,
+      name = "lab",
+      key = c("t1", "t2", "t3"),
+      meta = list(list(v = 1), list(v = 2), list(v = 3))
+    ))
   el <- scene_model(s)$elements
   expect_equal(el$key, c("t1", "t2", "t3"))
   expect_equal(unlist(lapply(el$meta, `[[`, "v")), 1:3)
@@ -41,8 +62,12 @@ test_that("a vectorised text grob keys each label separately", {
 
 test_that("rich (markdown) labels can be keyed too", {
   s <- vl_scene(4, 2, dpi = 96, bg = "white") |>
-    draw(text_grob(list(md("**a**"), md("*b*")), x = c(.3, .7),
-                   key = c("m1", "m2"), name = "rich"))
+    draw(text_grob(
+      list(md("**a**"), md("*b*")),
+      x = c(.3, .7),
+      key = c("m1", "m2"),
+      name = "rich"
+    ))
   expect_equal(scene_model(s)$elements$key, c("m1", "m2"))
 })
 
@@ -58,8 +83,12 @@ test_that("unkeyed marks stay out of the element table", {
 
 test_that("partially keyed text keeps only the keyed labels", {
   s <- vl_scene(5, 2, dpi = 96, bg = "white") |>
-    draw(text_grob(c("a", "b", "c"), x = c(.2, .5, .8), y = .5,
-                   key = c("t1", NA, "t3")))
+    draw(text_grob(
+      c("a", "b", "c"),
+      x = c(.2, .5, .8),
+      y = .5,
+      key = c("t1", NA, "t3")
+    ))
   expect_equal(scene_model(s)$elements$key, c("t1", "t3"))
 })
 
@@ -277,6 +306,9 @@ test_that("geometry covers every keyed mark family", {
     draw(text_grob("hi", x = .5, y = .9, key = "tx")) |>
     draw(segments_grob(.1, .1, .4, .15, key = "sg"))
   g <- element_geometry(s)
-  expect_setequal(unique(g$kind), c("line", "polygon", "rect", "text", "segment"))
+  expect_setequal(
+    unique(g$kind),
+    c("line", "polygon", "rect", "text", "segment")
+  )
   expect_equal(sum(g$key == "ln"), 3L) # all three vertices, not a box
 })

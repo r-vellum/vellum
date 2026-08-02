@@ -16,13 +16,24 @@ reset <- function() {
 dense <- function(n = 800, size = 10, rot = 0, w = 6, h = 6, dpi = 100) {
   set.seed(1)
   vl_scene(w, h, dpi = dpi, bg = "white") |>
-    draw(text_grob(format(seq_len(n)), x = runif(n), y = runif(n), rot = rot,
-                   gp = vl_gpar(fontsize = size, col = "black")))
+    draw(text_grob(
+      format(seq_len(n)),
+      x = runif(n),
+      y = runif(n),
+      rot = rot,
+      gp = vl_gpar(fontsize = size, col = "black")
+    ))
 }
 
-on_raster <- function(s) withr::with_options(list(vellum.glyph_bitmap = "on"), scene_raster(s))
-off_raster <- function(s) withr::with_options(list(vellum.glyph_bitmap = "off"), scene_raster(s))
-auto_raster <- function(s) withr::with_options(list(vellum.glyph_bitmap = "auto"), scene_raster(s))
+on_raster <- function(s) {
+  withr::with_options(list(vellum.glyph_bitmap = "on"), scene_raster(s))
+}
+off_raster <- function(s) {
+  withr::with_options(list(vellum.glyph_bitmap = "off"), scene_raster(s))
+}
+auto_raster <- function(s) {
+  withr::with_options(list(vellum.glyph_bitmap = "auto"), scene_raster(s))
+}
 
 test_that("below the threshold, auto mode is byte-identical to off (exact path)", {
   reset()
@@ -71,8 +82,12 @@ test_that("text in a rotated viewport falls back to the exact path", {
     set.seed(2)
     vl_scene(6, 6, dpi = 100, bg = "white") |>
       push(vl_viewport(angle = 30)) |>
-      draw(text_grob(format(1:800), x = runif(800), y = runif(800),
-                     gp = vl_gpar(fontsize = 10, col = "black"))) |>
+      draw(text_grob(
+        format(1:800),
+        x = runif(800),
+        y = runif(800),
+        gp = vl_gpar(fontsize = 10, col = "black")
+      )) |>
       pop()
   }
   a <- on_raster(mk())
@@ -84,7 +99,10 @@ test_that("text in a rotated viewport falls back to the exact path", {
 test_that("text inside a luminance mask is unaffected by the glyph-bitmap mode", {
   reset()
   mk <- function() {
-    m <- as_mask(text_grob("MASK", x = 0.5, y = 0.5, gp = vl_gpar(fontsize = 20)), type = "luminance")
+    m <- as_mask(
+      text_grob("MASK", x = 0.5, y = 0.5, gp = vl_gpar(fontsize = 20)),
+      type = "luminance"
+    )
     vl_scene(4, 2, dpi = 100, bg = "black") |>
       push(vl_viewport(mask = m)) |>
       draw(rect_grob(gp = vl_gpar(fill = "white", col = NA))) |>
@@ -118,7 +136,12 @@ test_that("dense sprite render is deterministic and close to the exact fill", {
 test_that("descenders and caps place correctly under the y-flip", {
   reset()
   s <- vl_scene(3, 1, dpi = 100, bg = "white") |>
-    draw(text_grob("gjpqyTHE", x = 0.5, y = 0.5, gp = vl_gpar(fontsize = 24, col = "black")))
+    draw(text_grob(
+      "gjpqyTHE",
+      x = 0.5,
+      y = 0.5,
+      gp = vl_gpar(fontsize = 24, col = "black")
+    ))
   on <- on_raster(s) # forced on (one label, below threshold)
   vl_clear_render_cache()
   off <- off_raster(s)

@@ -43,7 +43,16 @@ vl_unit <- function(values, units = "npc", data = NULL) {
   }
   units <- vctrs::vec_recycle(as.character(units), length(values))
 
-  known <- c(names(.unit_codes), "cm", "char", "line", "strwidth", "strheight", "grobwidth", "grobheight")
+  known <- c(
+    names(.unit_codes),
+    "cm",
+    "char",
+    "line",
+    "strwidth",
+    "strheight",
+    "grobwidth",
+    "grobheight"
+  )
   bad <- setdiff(unique(units), known)
   if (length(bad)) {
     cli::cli_abort("Unknown unit{?s}: {.val {bad}}.")
@@ -136,12 +145,20 @@ is_unit <- function(x) inherits(x, "vellum_unit")
 #' vl_convert(vl_unit(12, "native"), "mm", s2, name = "panel")
 #' vl_convert(vl_unit(12, "native"), "mm", s2, name = "panel", what = "position")
 #' @export
-vl_convert <- function(u, to = "mm", scene = NULL, name = NULL,
-                       axis = c("x", "y"), what = c("length", "position")) {
+vl_convert <- function(
+  u,
+  to = "mm",
+  scene = NULL,
+  name = NULL,
+  axis = c("x", "y"),
+  what = c("length", "position")
+) {
   axis <- match.arg(axis)
   what <- match.arg(what)
   to <- match.arg(to, c("mm", "cm", "in", "pt", "px", "npc", "native"))
-  if (!is_unit(u)) u <- as_unit(u)
+  if (!is_unit(u)) {
+    u <- as_unit(u)
+  }
   if (vctrs::vec_size(u) == 0L) {
     return(numeric(0))
   }
@@ -167,7 +184,9 @@ vl_convert <- function(u, to = "mm", scene = NULL, name = NULL,
   if (any(is_nat)) {
     span <- ctx$hi - ctx$lo
     if (!is.finite(span) || span == 0) {
-      cli::cli_abort("Can't convert {.val native} units: the viewport's {axis}-scale is degenerate.")
+      cli::cli_abort(
+        "Can't convert {.val native} units: the viewport's {axis}-scale is degenerate."
+      )
     }
     v <- p$pos[is_nat]
     frac <- if (identical(what, "position")) (v - ctx$lo) / span else v / span
@@ -175,7 +194,8 @@ vl_convert <- function(u, to = "mm", scene = NULL, name = NULL,
   }
   mm <- rel + p$off
 
-  switch(to,
+  switch(
+    to,
     mm = mm,
     cm = mm / 10,
     `in` = mm / 25.4,
@@ -202,7 +222,11 @@ vl_convert <- function(u, to = "mm", scene = NULL, name = NULL,
   }
   scene <- as_vellum_scene(scene)
   if (is.null(name)) {
-    inches <- if (identical(axis, "x")) .to_inches(scene@width) else .to_inches(scene@height)
+    inches <- if (identical(axis, "x")) {
+      .to_inches(scene@width)
+    } else {
+      .to_inches(scene@height)
+    }
     # The page's implicit root viewport spans 0..1 in native.
     return(list(extent_mm = inches * 25.4, lo = 0, hi = 1, dpi = scene@dpi))
   }
@@ -232,7 +256,11 @@ as_unit <- function(x, default = "npc") {
   is_grob <- !is.null(data) && S7::S7_inherits(data, grob)
   # `cex` multiplies `fontsize` (grid semantics), so `char`/`line`/`strwidth`/
   # `strheight` all scale with it -- see `.gp_fontsize()`.
-  fontsize <- if (is_grob) 12 else (data$fontsize %||% 12)[1] * (data$cex %||% 1)[1]
+  fontsize <- if (is_grob) {
+    12
+  } else {
+    (data$fontsize %||% 12)[1] * (data$cex %||% 1)[1]
+  }
   lineheight <- if (is_grob) 1.2 else (data$lineheight %||% 1.2)[1]
   family <- if (is_grob) "" else (data$fontfamily %||% "")[1]
   face <- if (is_grob) "plain" else (data$fontface %||% "plain")[1]
@@ -241,30 +269,45 @@ as_unit <- function(x, default = "npc") {
   ext <- if (any(units %in% c("grobwidth", "grobheight"))) {
     g <- if (is_grob) data else data$grob
     if (is.null(g) || !S7::S7_inherits(g, grob)) {
-      cli::cli_abort('{.val grobwidth}/{.val grobheight} units need a grob in {.arg data}.')
+      cli::cli_abort(
+        '{.val grobwidth}/{.val grobheight} units need a grob in {.arg data}.'
+      )
     }
     .grob_extent(g)
   } else {
     NULL
   }
-  vapply(seq_along(values), function(i) {
-    v <- values[i]
-    switch(units[i],
-      cm = v * 10,
-      char = v * fontsize / 72 * 25.4,
-      line = v * fontsize * lineheight / 72 * 25.4,
-      strwidth = {
-        if (is.null(data$label)) cli::cli_abort('{.val strwidth} units need a {.arg label} in {.arg data}.')
-        v * vl_strwidth(data$label, family, face, fontsize, unit = "mm")
-      },
-      strheight = {
-        if (is.null(data$label)) cli::cli_abort('{.val strheight} units need a {.arg label} in {.arg data}.')
-        v * vl_strheight(data$label, family, face, fontsize, unit = "mm")
-      },
-      grobwidth = v * ext[1],
-      grobheight = v * ext[2]
-    )
-  }, double(1))
+  vapply(
+    seq_along(values),
+    function(i) {
+      v <- values[i]
+      switch(
+        units[i],
+        cm = v * 10,
+        char = v * fontsize / 72 * 25.4,
+        line = v * fontsize * lineheight / 72 * 25.4,
+        strwidth = {
+          if (is.null(data$label)) {
+            cli::cli_abort(
+              '{.val strwidth} units need a {.arg label} in {.arg data}.'
+            )
+          }
+          v * vl_strwidth(data$label, family, face, fontsize, unit = "mm")
+        },
+        strheight = {
+          if (is.null(data$label)) {
+            cli::cli_abort(
+              '{.val strheight} units need a {.arg label} in {.arg data}.'
+            )
+          }
+          v * vl_strheight(data$label, family, face, fontsize, unit = "mm")
+        },
+        grobwidth = v * ext[1],
+        grobheight = v * ext[2]
+      )
+    },
+    double(1)
+  )
 }
 
 # --- vctrs machinery --------------------------------------------------------
@@ -280,8 +323,10 @@ format.vellum_unit <- function(x, ...) {
   has_off <- !is.na(off) & off != 0
   sign <- ifelse(off >= 0, "+", "-")
   base[has_off] <- paste0(
-    base[has_off], sign[has_off],
-    format(abs(off[has_off]), trim = TRUE, ...), "mm"
+    base[has_off],
+    sign[has_off],
+    format(abs(off[has_off]), trim = TRUE, ...),
+    "mm"
   )
   base
 }
@@ -312,9 +357,18 @@ vec_arith.vellum_unit.default <- function(op, x, y, ...) {
 vec_arith.vellum_unit.numeric <- function(op, x, y, ...) {
   # Scaling multiplies the base value *and* the absolute offset, so
   # `2 * (vl_unit(1, "native") + vl_unit(3, "mm"))` is `vl_unit(2, "native") + 6 mm`.
-  switch(op,
-    "*" = new_unit(vctrs::field(x, "value") * y, vctrs::field(x, "unit"), vctrs::field(x, "offset") * y),
-    "/" = new_unit(vctrs::field(x, "value") / y, vctrs::field(x, "unit"), vctrs::field(x, "offset") / y),
+  switch(
+    op,
+    "*" = new_unit(
+      vctrs::field(x, "value") * y,
+      vctrs::field(x, "unit"),
+      vctrs::field(x, "offset") * y
+    ),
+    "/" = new_unit(
+      vctrs::field(x, "value") / y,
+      vctrs::field(x, "unit"),
+      vctrs::field(x, "offset") / y
+    ),
     "+" = ,
     "-" = .abort_unit_scalar(op),
     vctrs::stop_incompatible_op(op, x, y)
@@ -323,8 +377,13 @@ vec_arith.vellum_unit.numeric <- function(op, x, y, ...) {
 #' @export
 #' @method vec_arith.numeric vellum_unit
 vec_arith.numeric.vellum_unit <- function(op, x, y, ...) {
-  switch(op,
-    "*" = new_unit(x * vctrs::field(y, "value"), vctrs::field(y, "unit"), x * vctrs::field(y, "offset")),
+  switch(
+    op,
+    "*" = new_unit(
+      x * vctrs::field(y, "value"),
+      vctrs::field(y, "unit"),
+      x * vctrs::field(y, "offset")
+    ),
     "+" = ,
     "-" = .abort_unit_scalar(op),
     vctrs::stop_incompatible_op(op, x, y)
@@ -406,7 +465,9 @@ vec_arith.vellum_unit.vellum_unit <- function(op, x, y, ...) {
 # Convert an absolute unit vector (codes mm/in/pt) to millimetres, element-wise.
 .abs_to_mm <- function(value, code) {
   if (length(value) && any(!is.finite(value))) {
-    cli::cli_abort("Can't resolve a {.cls unit} with a non-finite value ({.val NA}/{.val NaN}/{.val Inf}).")
+    cli::cli_abort(
+      "Can't resolve a {.cls unit} with a non-finite value ({.val NA}/{.val NaN}/{.val Inf})."
+    )
   }
   factor <- rep(NA_real_, length(value))
   factor[code == .unit_codes[["mm"]]] <- 1
@@ -417,7 +478,8 @@ vec_arith.vellum_unit.vellum_unit <- function(op, x, y, ...) {
 #' @export
 #' @method vec_arith.vellum_unit MISSING
 vec_arith.vellum_unit.MISSING <- function(op, x, y, ...) {
-  switch(op,
+  switch(
+    op,
     "-" = new_unit(-vctrs::field(x, "value"), vctrs::field(x, "unit")),
     "+" = x,
     vctrs::stop_incompatible_op(op, x, y)
@@ -453,7 +515,10 @@ vec_arith.vellum_unit.MISSING <- function(op, x, y, ...) {
     off <- rep(0, length(val))
   }
   if (any(code == .unit_codes[["null"]])) {
-    stop("`null` units are only valid in layouts, not coordinates", call. = FALSE)
+    stop(
+      "`null` units are only valid in layouts, not coordinates",
+      call. = FALSE
+    )
   }
   if (!is.null(n)) {
     val <- vctrs::vec_recycle(val, n)

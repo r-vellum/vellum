@@ -33,21 +33,39 @@ med <- function(label, expr, reps = 5) {
 # --- 1. the widget shape: one scene, three consumers -------------------------
 set.seed(1)
 keyed <- vellum::vl_scene(8, 6, dpi = 100) |>
-  vellum::push(vellum::vl_viewport(name = "panel", xscale = c(0, 1), yscale = c(0, 1))) |>
+  vellum::push(vellum::vl_viewport(
+    name = "panel",
+    xscale = c(0, 1),
+    yscale = c(0, 1)
+  )) |>
   vellum::draw(vellum::points_grob(
-    stats::runif(n), stats::runif(n), key = paste0("k", seq_len(n)),
+    stats::runif(n),
+    stats::runif(n),
+    key = paste0("k", seq_len(n)),
     gp = vellum::vl_gpar(fill = "steelblue")
   )) |>
   vellum::pop()
 
-cat(sprintf("Widget shape: %s keyed points (8x6 in @ 100 dpi)\n",
-            format(n, big.mark = ",", scientific = FALSE)))
-med("scene_model()", { vellum::vl_clear_render_cache(); vellum::scene_model(keyed) })
-med("scene_svg()", { vellum::vl_clear_render_cache(); vellum::scene_svg(keyed) })
-med("render() png", { vellum::vl_clear_render_cache(); vellum::render(keyed, tempfile(fileext = ".png")) })
+cat(sprintf(
+  "Widget shape: %s keyed points (8x6 in @ 100 dpi)\n",
+  format(n, big.mark = ",", scientific = FALSE)
+))
+med("scene_model()", {
+  vellum::vl_clear_render_cache()
+  vellum::scene_model(keyed)
+})
+med("scene_svg()", {
+  vellum::vl_clear_render_cache()
+  vellum::scene_svg(keyed)
+})
+med("render() png", {
+  vellum::vl_clear_render_cache()
+  vellum::render(keyed, tempfile(fileext = ".png"))
+})
 med("all three (what as_widget() does)", {
   vellum::vl_clear_render_cache()
-  vellum::scene_model(keyed); vellum::scene_svg(keyed)
+  vellum::scene_model(keyed)
+  vellum::scene_svg(keyed)
   vellum::render(keyed, tempfile(fileext = ".png"))
 })
 
@@ -56,27 +74,53 @@ facet <- local({
   s <- vellum::vl_scene(8, 6, dpi = 100)
   for (i in seq_len(m)) {
     for (j in seq_len(m)) {
-      s <- vellum::push(s, vellum::vl_viewport(
-        x = (i - 0.5) / m, y = (j - 0.5) / m, width = 1 / m, height = 1 / m,
-        clip = TRUE, name = sprintf("p%d_%d", i, j), xscale = c(0, i)
-      ))
-      s <- vellum::draw(s, vellum::rect_grob(gp = vellum::vl_gpar(fill = "grey92", col = NA)))
+      s <- vellum::push(
+        s,
+        vellum::vl_viewport(
+          x = (i - 0.5) / m,
+          y = (j - 0.5) / m,
+          width = 1 / m,
+          height = 1 / m,
+          clip = TRUE,
+          name = sprintf("p%d_%d", i, j),
+          xscale = c(0, i)
+        )
+      )
+      s <- vellum::draw(
+        s,
+        vellum::rect_grob(gp = vellum::vl_gpar(fill = "grey92", col = NA))
+      )
       s <- vellum::pop(s)
     }
   }
   s
 })
 
-cat(sprintf("\n%d x %d = %s clipped panel viewports\n", m, m,
-            format(m * m, big.mark = ",", scientific = FALSE)))
-med("render() png", { vellum::vl_clear_render_cache(); vellum::render(facet, tempfile(fileext = ".png")) })
-med("scene_model()", { vellum::vl_clear_render_cache(); vellum::scene_model(facet) })
+cat(sprintf(
+  "\n%d x %d = %s clipped panel viewports\n",
+  m,
+  m,
+  format(m * m, big.mark = ",", scientific = FALSE)
+))
+med("render() png", {
+  vellum::vl_clear_render_cache()
+  vellum::render(facet, tempfile(fileext = ".png"))
+})
+med("scene_model()", {
+  vellum::vl_clear_render_cache()
+  vellum::scene_model(facet)
+})
 
 # Split R-side from Rust: `element_table()` is the whole Rust contribution to
 # `scene_model()`. The gap between the two is R.
 vellum::vl_clear_render_cache()
 b <- vellum:::.scene_to_backend(facet)
 t_rust <- med("  of which Rust element_table()", b$element_table())
-t_all <- med("  full scene_model()", { vellum::vl_clear_render_cache(); vellum::scene_model(facet) })
-cat(sprintf("\n  Rust share of scene_model(): %.1f%%  -- the rest is R-side S7\n",
-            100 * t_rust / max(t_all, 1e-9)))
+t_all <- med("  full scene_model()", {
+  vellum::vl_clear_render_cache()
+  vellum::scene_model(facet)
+})
+cat(sprintf(
+  "\n  Rust share of scene_model(): %.1f%%  -- the rest is R-side S7\n",
+  100 * t_rust / max(t_all, 1e-9)
+))

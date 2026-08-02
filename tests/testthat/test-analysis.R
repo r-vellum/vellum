@@ -21,7 +21,8 @@ test_that("overplot ranks a crowded scene above a sparse one", {
   # The point of the metric: element *count* says nothing about overlap, so a
   # dense cluster must score far above a scattered cloud of the same marks.
   set.seed(1)
-  sparse <- vl_scene(4, 3, dpi = 100) |> draw(points_grob(runif(2000), runif(2000)))
+  sparse <- vl_scene(4, 3, dpi = 100) |>
+    draw(points_grob(runif(2000), runif(2000)))
   dense <- vl_scene(4, 3, dpi = 100) |>
     draw(points_grob(rnorm(2000, 0.5, 0.03), rnorm(2000, 0.5, 0.03)))
   expect_gt(scene_stats(dense)$overplot, scene_stats(sparse)$overplot * 5)

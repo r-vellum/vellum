@@ -17,7 +17,8 @@ keyframe <- function(x, r_mm, fill) {
     push(vl_viewport(xscale = c(0, 1), yscale = c(0, 1))) |>
     draw(rect_grob(gp = vl_gpar(fill = "grey97", col = NA))) |>
     draw(circle_grob(
-      x = vl_unit(x, "native"), y = vl_unit(0.5, "native"),
+      x = vl_unit(x, "native"),
+      y = vl_unit(0.5, "native"),
       r = vl_unit(r_mm, "mm"),
       gp = vl_gpar(fill = fill, col = "white", lwd = 1.5)
     )) |>
@@ -39,6 +40,10 @@ frac <- rep(ease_in_out(seq(0, 1, length.out = per_seg)), length(keys) - 1L)
 
 # --- render + encode ---------------------------------------------------------
 args <- commandArgs(trailingOnly = TRUE)
-out <- if (length(args) >= 1) args[[1]] else file.path(tempdir(), "vellum-bubble.gif")
+out <- if (length(args) >= 1) {
+  args[[1]]
+} else {
+  file.path(tempdir(), "vellum-bubble.gif")
+}
 vl_render_animation(keys, seg, frac, out, format = "gif", fps = 25)
 message("wrote ", out)

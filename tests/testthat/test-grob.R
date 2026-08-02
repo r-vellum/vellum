@@ -14,7 +14,11 @@ test_that("point shape is validated (constructor and S7 class)", {
   expect_error(points_grob(0.5, 0.5, shape = "pentagon"), "shape")
   # a bad shape reaching the class directly is caught too (was a cryptic if(NA))
   expect_error(
-    grob_points(x = vl_unit(0.5, "npc"), y = vl_unit(0.5, "npc"), shape = "pentagon"),
+    grob_points(
+      x = vl_unit(0.5, "npc"),
+      y = vl_unit(0.5, "npc"),
+      shape = "pentagon"
+    ),
     "shape"
   )
   expect_no_error(points_grob(c(0, 1), 0.5, shape = c("circle", "diamond")))

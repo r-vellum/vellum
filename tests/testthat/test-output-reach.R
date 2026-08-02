@@ -7,8 +7,10 @@ keyframes <- function(n = 3) {
   })
 }
 schedule <- function(k = 3, per = 8) {
-  list(seg = rep(seq_len(k - 1), each = per),
-       frac = rep(seq(0, 1, length.out = per), k - 1))
+  list(
+    seg = rep(seq_len(k - 1), each = per),
+    frac = rep(seq(0, 1, length.out = per), k - 1)
+  )
 }
 
 # --- animated SVG -------------------------------------------------------------
@@ -18,8 +20,10 @@ test_that("animated SVG emits one group per frame", {
   f <- withr::local_tempfile(fileext = ".svg")
   vl_render_animation(keyframes(), sc$seg, sc$frac, f, format = "svg", fps = 24)
   txt <- paste(readLines(f, warn = FALSE), collapse = "")
-  expect_equal(lengths(regmatches(txt, gregexpr('class="vf"', txt, fixed = TRUE))),
-               length(sc$seg))
+  expect_equal(
+    lengths(regmatches(txt, gregexpr('class="vf"', txt, fixed = TRUE))),
+    length(sc$seg)
+  )
 })
 
 test_that("the animated SVG is well-formed XML with the right page box", {
@@ -51,8 +55,12 @@ test_that("frames are staggered so exactly one is visible at a time", {
 test_that("the animation carries accessibility text once, not per frame", {
   skip_if_not_installed("xml2")
   sc <- schedule()
-  kf <- lapply(keyframes(), describe, title = "Growing circle",
-               desc = "A circle that grows and shrinks.")
+  kf <- lapply(
+    keyframes(),
+    describe,
+    title = "Growing circle",
+    desc = "A circle that grows and shrinks."
+  )
   f <- withr::local_tempfile(fileext = ".svg")
   vl_render_animation(kf, sc$seg, sc$frac, f, format = "svg", fps = 24)
   x <- xml2::read_xml(f)
@@ -77,14 +85,24 @@ test_that("frame content actually differs between frames", {
   f <- withr::local_tempfile(fileext = ".svg")
   vl_render_animation(keyframes(), sc$seg, sc$frac, f, format = "svg", fps = 12)
   x <- xml2::read_xml(f)
-  bodies <- vapply(xml2::xml_find_all(x, '//*[@class="vf"]'), as.character, character(1))
+  bodies <- vapply(
+    xml2::xml_find_all(x, '//*[@class="vf"]'),
+    as.character,
+    character(1)
+  )
   expect_gt(length(unique(bodies)), length(bodies) / 2)
 })
 
 test_that("an unknown animation format is rejected", {
   sc <- schedule()
   expect_error(
-    vl_render_animation(keyframes(), sc$seg, sc$frac, tempfile(), format = "webm"),
+    vl_render_animation(
+      keyframes(),
+      sc$seg,
+      sc$frac,
+      tempfile(),
+      format = "webm"
+    ),
     "should be one of"
   )
 })
@@ -134,7 +152,8 @@ test_that("a one-page document matches a single-page render", {
 test_that("pages may differ in size", {
   mixed <- list(
     vl_scene(4, 3, dpi = 96, bg = "white") |> draw(circle_grob(r = 0.3)),
-    vl_scene(3, 5, dpi = 96, bg = "white") |> draw(rect_grob(width = 0.5, height = 0.5))
+    vl_scene(3, 5, dpi = 96, bg = "white") |>
+      draw(rect_grob(width = 0.5, height = 0.5))
   )
   f <- withr::local_tempfile(fileext = ".pdf")
   expect_no_error(pdf_pages(mixed, f))
@@ -145,14 +164,23 @@ test_that("per-page tagging survives into a document", {
   marked <- lapply(1:2, function(i) {
     describe(
       vl_scene(3, 2, dpi = 96, bg = "white") |>
-        draw(points_grob(0.5, 0.5, name = paste0("page ", i, " mark"), role = "img")),
-      title = paste("Page", i), desc = paste("Page", i, "description.")
+        draw(points_grob(
+          0.5,
+          0.5,
+          name = paste0("page ", i, " mark"),
+          role = "img"
+        )),
+      title = paste("Page", i),
+      desc = paste("Page", i, "description.")
     )
   })
   f <- withr::local_tempfile(fileext = ".pdf")
   pdf_pages(marked, f)
   pdf <- readBin(f, "raw", file.size(f))
-  expect_gt(length(grepRaw("StructTreeRoot", pdf, fixed = TRUE, all = FALSE)), 0L)
+  expect_gt(
+    length(grepRaw("StructTreeRoot", pdf, fixed = TRUE, all = FALSE)),
+    0L
+  )
   expect_gt(length(grepRaw("page 1 mark", pdf, fixed = TRUE, all = FALSE)), 0L)
   expect_gt(length(grepRaw("page 2 mark", pdf, fixed = TRUE, all = FALSE)), 0L)
 })
@@ -168,7 +196,10 @@ batch <- function(n) {
   stats::setNames(
     lapply(seq_len(n), function(i) {
       vl_scene(3, 2, dpi = 96, bg = "white") |>
-        draw(circle_grob(r = 0.1 + i / (n * 4), gp = vl_gpar(fill = "steelblue")))
+        draw(circle_grob(
+          r = 0.1 + i / (n * 4),
+          gp = vl_gpar(fill = "steelblue")
+        ))
     }),
     paste0("fig", seq_len(n))
   )
@@ -192,8 +223,10 @@ test_that("render_all output matches rendering one at a time", {
   render_all(s, par_paths)
   render_all(s, seq_paths, workers = 1)
   for (i in seq_along(s)) {
-    expect_identical(readBin(par_paths[i], "raw", file.size(par_paths[i])),
-                     readBin(seq_paths[i], "raw", file.size(seq_paths[i])))
+    expect_identical(
+      readBin(par_paths[i], "raw", file.size(par_paths[i])),
+      readBin(seq_paths[i], "raw", file.size(seq_paths[i]))
+    )
   }
 })
 

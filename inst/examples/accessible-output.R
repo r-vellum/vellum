@@ -19,32 +19,52 @@ sales <- c(42, 31, 55, 28)
 plot <- vl_scene(5, 3.2, dpi = 150, bg = "white") |>
   # Decorative: `role = "presentation"` marks it an artifact, so a screen reader
   # skips it. A gridline announced aloud is noise.
-  draw(rect_grob(y = 0.55, height = 0.72,
-                 gp = vl_gpar(fill = "grey97", col = NA),
-                 role = "presentation", name = "panel background")) |>
-  draw(text_grob("Sales by region", y = 0.94, gp = vl_gpar(fontsize = 13),
-                 role = "heading", name = "Sales by region"))
+  draw(rect_grob(
+    y = 0.55,
+    height = 0.72,
+    gp = vl_gpar(fill = "grey97", col = NA),
+    role = "presentation",
+    name = "panel background"
+  )) |>
+  draw(text_grob(
+    "Sales by region",
+    y = 0.94,
+    gp = vl_gpar(fontsize = 13),
+    role = "heading",
+    name = "Sales by region"
+  ))
 
 for (i in seq_along(region)) {
   plot <- plot |>
-    draw(rect_grob(x = (i - 0.5) / 4, y = 0.2 + sales[i] / 200,
-                   width = 0.14, height = sales[i] / 100,
-                   gp = vl_gpar(fill = "#2C6FA6", col = NA),
-                   role = "img",
-                   # `name` becomes the mark's alt text, so make it a sentence a
-                   # screen reader can read out, not an internal identifier.
-                   name = sprintf("%s: %d units", region[i], sales[i]))) |>
-    draw(text_grob(region[i], x = (i - 0.5) / 4, y = 0.1,
-                   gp = vl_gpar(fontsize = 9, col = "grey35"),
-                   role = "presentation", name = region[i]))
+    draw(rect_grob(
+      x = (i - 0.5) / 4,
+      y = 0.2 + sales[i] / 200,
+      width = 0.14,
+      height = sales[i] / 100,
+      gp = vl_gpar(fill = "#2C6FA6", col = NA),
+      role = "img",
+      # `name` becomes the mark's alt text, so make it a sentence a
+      # screen reader can read out, not an internal identifier.
+      name = sprintf("%s: %d units", region[i], sales[i])
+    )) |>
+    draw(text_grob(
+      region[i],
+      x = (i - 0.5) / 4,
+      y = 0.1,
+      gp = vl_gpar(fontsize = 9, col = "grey35"),
+      role = "presentation",
+      name = region[i]
+    ))
 }
 
 # `describe()` supplies the alt text for the figure as a whole.
 plot <- describe(
   plot,
   title = "Sales by region",
-  desc = paste("A bar chart of unit sales across four regions. East is highest",
-               "at 55 units; West is lowest at 28.")
+  desc = paste(
+    "A bar chart of unit sales across four regions. East is highest",
+    "at 55 units; West is lowest at 28."
+  )
 )
 
 render(plot, "accessible-sales.pdf")

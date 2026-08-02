@@ -26,13 +26,32 @@ by <- runif(n)
 # A heavy, static background cloud in a cached boundary, plus a light foreground
 # marker in its own boundary -- the "highlighted" element the user moves/edits.
 scene <- vl_scene(width = 6, height = 4, dpi = 150, bg = "white") |>
-  push(vl_viewport(cache = TRUE, name = "cloud", xscale = c(0, 1), yscale = c(0, 1))) |>
-  draw(points_grob(vl_unit(bx, "native"), vl_unit(by, "native"),
-                   size = vl_unit(1.2, "mm"), gp = vl_gpar(fill = "#3a86ff30", col = NA))) |>
+  push(vl_viewport(
+    cache = TRUE,
+    name = "cloud",
+    xscale = c(0, 1),
+    yscale = c(0, 1)
+  )) |>
+  draw(points_grob(
+    vl_unit(bx, "native"),
+    vl_unit(by, "native"),
+    size = vl_unit(1.2, "mm"),
+    gp = vl_gpar(fill = "#3a86ff30", col = NA)
+  )) |>
   pop() |>
-  push(vl_viewport(cache = TRUE, name = "cursor", xscale = c(0, 1), yscale = c(0, 1))) |>
-  draw(circle_grob(x = vl_unit(0.5, "native"), y = vl_unit(0.5, "native"), r = vl_unit(4, "mm"),
-                   gp = vl_gpar(fill = NA, col = "firebrick", lwd = 3), name = "ring")) |>
+  push(vl_viewport(
+    cache = TRUE,
+    name = "cursor",
+    xscale = c(0, 1),
+    yscale = c(0, 1)
+  )) |>
+  draw(circle_grob(
+    x = vl_unit(0.5, "native"),
+    y = vl_unit(0.5, "native"),
+    r = vl_unit(4, "mm"),
+    gp = vl_gpar(fill = NA, col = "firebrick", lwd = 3),
+    name = "ring"
+  )) |>
   pop()
 
 render(scene, out)
@@ -40,8 +59,15 @@ cat(sprintf("wrote %s\n", out))
 
 # A "hover" update: move the cursor ring. The cloud boundary is unchanged, so its
 # 200k-point raster is reused; only the small cursor boundary is re-drawn.
-scene <- edit_node(scene, "ring",
-                   x = vl_unit(0.7, "native"), y = vl_unit(0.6, "native"))
+scene <- edit_node(
+  scene,
+  "ring",
+  x = vl_unit(0.7, "native"),
+  y = vl_unit(0.6, "native")
+)
 out2 <- sub("\\.png$", "-hover.png", out)
 render(scene, out2)
-cat(sprintf("wrote %s (cloud reused from cache; only the cursor re-rendered)\n", out2))
+cat(sprintf(
+  "wrote %s (cloud reused from cache; only the cursor re-rendered)\n",
+  out2
+))

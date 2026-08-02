@@ -26,10 +26,15 @@ row_bands <- function(scene) {
 # others, which silently recycles the comparison).
 line_starts <- function(scene, bands = row_bands(scene)) {
   d <- inked(scene)
-  vapply(bands, function(rr) {
-    hit <- which(apply(d[, rr, drop = FALSE], 1, any))
-    if (length(hit)) min(hit) else NA_integer_
-  }, integer(1), USE.NAMES = FALSE)
+  vapply(
+    bands,
+    function(rr) {
+      hit <- which(apply(d[, rr, drop = FALSE], 1, any))
+      if (length(hit)) min(hit) else NA_integer_
+    },
+    integer(1),
+    USE.NAMES = FALSE
+  )
 }
 ink_box <- function(scene) {
   d <- inked(scene)
@@ -67,11 +72,20 @@ test_that("a wrapped label never renders wider than the width it was given", {
   for (mm in c(25, 40, 60)) {
     for (fs in c(8, 12, 18)) {
       s <- vl_scene(4, 3, dpi = 96, bg = "white") |>
-        draw(text_grob(LONG, gp = vl_gpar(fontsize = fs), width = vl_unit(mm, "mm"),
-                       just = c("left", "top"), x = 0.02, y = 0.98))
+        draw(text_grob(
+          LONG,
+          gp = vl_gpar(fontsize = fs),
+          width = vl_unit(mm, "mm"),
+          just = c("left", "top"),
+          x = 0.02,
+          y = 0.98
+        ))
       px <- mm / 25.4 * 96
-      expect_lte(diff(ink_box(s)[1:2]), px + 2,
-                 label = sprintf("width %gmm at %gpt", mm, fs))
+      expect_lte(
+        diff(ink_box(s)[1:2]),
+        px + 2,
+        label = sprintf("width %gmm at %gpt", mm, fs)
+      )
     }
   }
 })
@@ -86,8 +100,14 @@ test_that("align places a line against the right edge of the box", {
   box_px <- box_mm / 25.4 * 96
   one <- function(align) {
     s <- vl_scene(4, 1.2, dpi = 96, bg = "white") |>
-      draw(text_grob("xx", x = 0.5, y = 0.5, width = vl_unit(box_mm, "mm"),
-                     align = align, gp = vl_gpar(fontsize = 12)))
+      draw(text_grob(
+        "xx",
+        x = 0.5,
+        y = 0.5,
+        width = vl_unit(box_mm, "mm"),
+        align = align,
+        gp = vl_gpar(fontsize = 12)
+      ))
     ink_box(s)[1:2]
   }
   page_mid <- 4 * 96 / 2
@@ -114,8 +134,12 @@ test_that("align is applied per line, not to the block", {
   lab <- "x\nxxxx\nxxxxxxxx"
   mk <- function(align) {
     vl_scene(4, 1.6, dpi = 96, bg = "white") |>
-      draw(text_grob(lab, width = vl_unit(50, "mm"), align = align,
-                     gp = vl_gpar(fontsize = 12)))
+      draw(text_grob(
+        lab,
+        width = vl_unit(50, "mm"),
+        align = align,
+        gp = vl_gpar(fontsize = 12)
+      ))
   }
   expect_false(identical(scene_png(mk("left")), scene_png(mk("right"))))
   expect_false(identical(scene_png(mk("left")), scene_png(mk("centre"))))
@@ -139,8 +163,12 @@ test_that("justify stretches short lines to the full measure", {
   box_mm <- 60
   mk <- function(align) {
     vl_scene(4, 1.6, dpi = 96, bg = "white") |>
-      draw(text_grob(lab, width = vl_unit(box_mm, "mm"), align = align,
-                     gp = vl_gpar(fontsize = 12)))
+      draw(text_grob(
+        lab,
+        width = vl_unit(box_mm, "mm"),
+        align = align,
+        gp = vl_gpar(fontsize = 12)
+      ))
   }
   box_px <- box_mm / 25.4 * 96
   w_left <- diff(ink_box(mk("left"))[1:2])
@@ -153,8 +181,13 @@ test_that("justify stretches short lines to the full measure", {
 test_that("fit shrinks the font until the block fits, and never grows it", {
   box <- list(width = vl_unit(40, "mm"), height = vl_unit(12, "mm"))
   big <- vl_scene(4, 2, dpi = 96, bg = "white") |>
-    draw(text_grob(LONG, gp = vl_gpar(fontsize = 20), width = box$width,
-                   height = box$height, fit = TRUE))
+    draw(text_grob(
+      LONG,
+      gp = vl_gpar(fontsize = 20),
+      width = box$width,
+      height = box$height,
+      fit = TRUE
+    ))
   expect_lte(diff(ink_box(big)[3:4]), 12 / 25.4 * 96 + 2)
   expect_lte(diff(ink_box(big)[1:2]), 40 / 25.4 * 96 + 2)
 
@@ -162,12 +195,25 @@ test_that("fit shrinks the font until the block fits, and never grows it", {
   # the same scene without `fit`.
   short <- "ok"
   expect_identical(
-    scene_png(vl_scene(4, 2, dpi = 96, bg = "white") |>
-      draw(text_grob(short, gp = vl_gpar(fontsize = 10), width = box$width,
-                     height = box$height, fit = TRUE))),
-    scene_png(vl_scene(4, 2, dpi = 96, bg = "white") |>
-      draw(text_grob(short, gp = vl_gpar(fontsize = 10), width = box$width,
-                     height = box$height)))
+    scene_png(
+      vl_scene(4, 2, dpi = 96, bg = "white") |>
+        draw(text_grob(
+          short,
+          gp = vl_gpar(fontsize = 10),
+          width = box$width,
+          height = box$height,
+          fit = TRUE
+        ))
+    ),
+    scene_png(
+      vl_scene(4, 2, dpi = 96, bg = "white") |>
+        draw(text_grob(
+          short,
+          gp = vl_gpar(fontsize = 10),
+          width = box$width,
+          height = box$height
+        ))
+    )
   )
 })
 
@@ -175,23 +221,32 @@ test_that("hard newlines survive wrapping, including blank lines", {
   # A blank line is a paragraph break and must not be swallowed -- the same
   # `x[[""]]` trap that bit the multi-line batch path.
   s <- vl_scene(4, 3, dpi = 96, bg = "white") |>
-    draw(text_grob("first\n\nthird", gp = vl_gpar(fontsize = 12),
-                   width = vl_unit(60, "mm")))
+    draw(text_grob(
+      "first\n\nthird",
+      gp = vl_gpar(fontsize = 12),
+      width = vl_unit(60, "mm")
+    ))
   # At least two inked bands with a gap between. Not an exact count: a
   # descender can split a band on some fonts, which is why the alignment tests
   # above stopped relying on banding altogether.
   expect_gte(length(line_starts(s)), 2L)
   gap <- vl_scene(4, 3, dpi = 96, bg = "white") |>
-    draw(text_grob("first\nthird", gp = vl_gpar(fontsize = 12),
-                   width = vl_unit(60, "mm")))
+    draw(text_grob(
+      "first\nthird",
+      gp = vl_gpar(fontsize = 12),
+      width = vl_unit(60, "mm")
+    ))
   # The blank line pushes them further apart than a single newline does.
   expect_gt(diff(ink_box(s)[3:4]), diff(ink_box(gap)[3:4]))
 })
 
 test_that("a word wider than the box overflows rather than vanishing", {
   s <- vl_scene(4, 2, dpi = 96, bg = "white") |>
-    draw(text_grob("Antidisestablishmentarianism", gp = vl_gpar(fontsize = 16),
-                   width = vl_unit(10, "mm")))
+    draw(text_grob(
+      "Antidisestablishmentarianism",
+      gp = vl_gpar(fontsize = 16),
+      width = vl_unit(10, "mm")
+    ))
   expect_gt(sum(inked(s)), 100) # it is drawn, not silently dropped
 })
 
@@ -203,8 +258,14 @@ test_that("relative widths are rejected with an explanation", {
 
 test_that("text without a width takes the unmodified path", {
   # Guards the whole feature against regressing ordinary labels.
-  s <- function() vl_scene(4, 2, dpi = 96, bg = "white") |>
-    draw(text_grob(c("alpha", "beta\ngamma"), x = c(0.3, 0.7), gp = vl_gpar(fontsize = 14)))
+  s <- function() {
+    vl_scene(4, 2, dpi = 96, bg = "white") |>
+      draw(text_grob(
+        c("alpha", "beta\ngamma"),
+        x = c(0.3, 0.7),
+        gp = vl_gpar(fontsize = 14)
+      ))
+  }
   expect_identical(scene_png(s()), scene_png(s()))
   expect_null(.text_wrap(text_grob("x")))
 })
@@ -215,13 +276,19 @@ test_that("a multi-line block is centred on its anchor, whatever its line count"
   # an n-line block hung (n-1)*lead/2 too low -- a 6-line block at 12pt was 75px
   # low at 150dpi. Every line count must now land on the anchor.
   centre <- function(lab) {
-    d <- inked(vl_scene(4, 2, dpi = 150, bg = "white") |>
-      draw(text_grob(lab, gp = vl_gpar(fontsize = 12))))
+    d <- inked(
+      vl_scene(4, 2, dpi = 150, bg = "white") |>
+        draw(text_grob(lab, gp = vl_gpar(fontsize = 12)))
+    )
     mean(range(which(apply(d, 2, any))))
   }
   page_mid <- 150 # 2in at 150dpi
   for (lab in c("one line", "two\nlines", "a\nb\nc\nd\ne\nf")) {
-    expect_lt(abs(centre(lab) - page_mid), 4, label = sprintf("centre of %s", dQuote(lab)))
+    expect_lt(
+      abs(centre(lab) - page_mid),
+      4,
+      label = sprintf("centre of %s", dQuote(lab))
+    )
   }
 })
 
@@ -230,18 +297,31 @@ test_that("SVG keeps multi-line text as one <text> per line", {
   # silently collapses onto one line. Harmless while multi-line was a corner
   # case; not harmless once wrapping exists.
   ntext <- function(s) lengths(regmatches(s, gregexpr("<text", s)))
-  svg1 <- scene_svg(vl_scene(4, 2, dpi = 96, bg = "white") |>
-    draw(text_grob("single", gp = vl_gpar(fontsize = 14))))
-  svg3 <- scene_svg(vl_scene(4, 2, dpi = 96, bg = "white") |>
-    draw(text_grob("one\ntwo\nthree", gp = vl_gpar(fontsize = 14))))
+  svg1 <- scene_svg(
+    vl_scene(4, 2, dpi = 96, bg = "white") |>
+      draw(text_grob("single", gp = vl_gpar(fontsize = 14)))
+  )
+  svg3 <- scene_svg(
+    vl_scene(4, 2, dpi = 96, bg = "white") |>
+      draw(text_grob("one\ntwo\nthree", gp = vl_gpar(fontsize = 14)))
+  )
   expect_equal(ntext(svg1), 1L)
   expect_equal(ntext(svg3), 3L)
 
   # A wrapped label reaches SVG as the lines it was broken into, not as the
   # original string -- the label is metadata describing what was drawn.
-  svgw <- scene_svg(vl_scene(4, 2, dpi = 96, bg = "white") |>
-    draw(text_grob(LONG, width = vl_unit(40, "mm"), gp = vl_gpar(fontsize = 10))))
-  parts <- regmatches(svgw, gregexpr("(?<=>)[^<>]+(?=</text>)", svgw, perl = TRUE))[[1]]
+  svgw <- scene_svg(
+    vl_scene(4, 2, dpi = 96, bg = "white") |>
+      draw(text_grob(
+        LONG,
+        width = vl_unit(40, "mm"),
+        gp = vl_gpar(fontsize = 10)
+      ))
+  )
+  parts <- regmatches(
+    svgw,
+    gregexpr("(?<=>)[^<>]+(?=</text>)", svgw, perl = TRUE)
+  )[[1]]
   expect_gt(length(parts), 1L)
   expect_equal(paste(parts, collapse = " "), LONG)
 })
@@ -249,8 +329,10 @@ test_that("SVG keeps multi-line text as one <text> per line", {
 test_that("a blank line falls back to outlines rather than mis-set native text", {
   # Blank lines produce no glyphs, so the label split cannot be matched against
   # the glyph baselines. Outlines carry no such assumption.
-  svg <- scene_svg(vl_scene(4, 2, dpi = 96, bg = "white") |>
-    draw(text_grob("a\n\nb", gp = vl_gpar(fontsize = 14))))
+  svg <- scene_svg(
+    vl_scene(4, 2, dpi = 96, bg = "white") |>
+      draw(text_grob("a\n\nb", gp = vl_gpar(fontsize = 14)))
+  )
   expect_equal(lengths(regmatches(svg, gregexpr("<text", svg))), 0L)
   expect_gt(lengths(regmatches(svg, gregexpr("<path", svg))), 0L)
 })
@@ -259,12 +341,22 @@ test_that("top and bottom justification anchor the block's outer edge", {
   # The other half of the same fix: with vjust at an extreme, an n-line block's
   # outer edge should sit where a one-line block's does.
   edge <- function(lab, just, which) {
-    d <- inked(vl_scene(4, 2.6, dpi = 150, bg = "white") |>
-      draw(text_grob(lab, y = 0.5, just = c("centre", just), gp = vl_gpar(fontsize = 12))))
+    d <- inked(
+      vl_scene(4, 2.6, dpi = 150, bg = "white") |>
+        draw(text_grob(
+          lab,
+          y = 0.5,
+          just = c("centre", just),
+          gp = vl_gpar(fontsize = 12)
+        ))
+    )
     which(apply(d, 2, any))[if (which == "top") 1L else sum(apply(d, 2, any))]
   }
   expect_lt(abs(edge("a\nb\nc", "top", "top") - edge("a", "top", "top")), 4)
-  expect_lt(abs(edge("a\nb\nc", "bottom", "bottom") - edge("a", "bottom", "bottom")), 4)
+  expect_lt(
+    abs(edge("a\nb\nc", "bottom", "bottom") - edge("a", "bottom", "bottom")),
+    4
+  )
 })
 
 # --- text on a path ---------------------------------------------------------
@@ -275,8 +367,13 @@ ARC <- local({
 })
 on_path <- function(...) {
   vl_scene(4, 2.2, dpi = 96, bg = "white") |>
-    draw(text_path_grob("following a curve", x = ARC$x, y = ARC$y,
-                        gp = vl_gpar(fontsize = 13), ...))
+    draw(text_path_grob(
+      "following a curve",
+      x = ARC$x,
+      y = ARC$y,
+      gp = vl_gpar(fontsize = 13),
+      ...
+    ))
 }
 
 test_that("text on a path draws, and follows the curve rather than a line", {
@@ -287,7 +384,10 @@ test_that("text on a path draws, and follows the curve rather than a line", {
   # legitimately spans almost as little as flat text does.)
   flat <- vl_scene(4, 2.2, dpi = 96, bg = "white") |>
     draw(text_grob("following a curve", gp = vl_gpar(fontsize = 13)))
-  expect_gt(diff(ink_box(on_path(just = "left"))[3:4]), 3 * diff(ink_box(flat)[3:4]))
+  expect_gt(
+    diff(ink_box(on_path(just = "left"))[3:4]),
+    3 * diff(ink_box(flat)[3:4])
+  )
 })
 
 test_that("offset moves the baseline perpendicular to the path", {
@@ -295,7 +395,10 @@ test_that("offset moves the baseline perpendicular to the path", {
   b <- ink_box(on_path(offset = 8))
   # Standing off to the left of travel lifts the run on this left-to-right arc.
   expect_lt(b[3], a[3])
-  expect_false(identical(scene_png(on_path(offset = 0)), scene_png(on_path(offset = 8))))
+  expect_false(identical(
+    scene_png(on_path(offset = 0)),
+    scene_png(on_path(offset = 8))
+  ))
 })
 
 test_that("just slides the run along the path", {
@@ -329,20 +432,38 @@ test_that("a straight path reproduces ordinary left-aligned text closely", {
   # should land where a plain left-justified label lands.
   lab <- "straight"
   a <- vl_scene(3, 1, dpi = 96, bg = "white") |>
-    draw(text_path_grob(lab, x = c(0.1, 0.9), y = c(0.5, 0.5), just = "left",
-                        gp = vl_gpar(fontsize = 14)))
+    draw(text_path_grob(
+      lab,
+      x = c(0.1, 0.9),
+      y = c(0.5, 0.5),
+      just = "left",
+      gp = vl_gpar(fontsize = 14)
+    ))
   b <- vl_scene(3, 1, dpi = 96, bg = "white") |>
-    draw(text_grob(lab, x = 0.1, y = 0.5, just = c("left", "centre"),
-                   gp = vl_gpar(fontsize = 14)))
+    draw(text_grob(
+      lab,
+      x = 0.1,
+      y = 0.5,
+      just = c("left", "centre"),
+      gp = vl_gpar(fontsize = 14)
+    ))
   expect_equal(ink_box(a), ink_box(b), tolerance = 0.02)
 })
 
 test_that("halo and OpenType features carry through to on-path text", {
   plain <- on_path()
   haloed <- vl_scene(4, 2.2, dpi = 96, bg = "white") |>
-    draw(text_path_grob("following a curve", x = ARC$x, y = ARC$y,
-                        gp = vl_gpar(fontsize = 13, col = "white",
-                                     halo_col = "black", halo_width = 2)))
+    draw(text_path_grob(
+      "following a curve",
+      x = ARC$x,
+      y = ARC$y,
+      gp = vl_gpar(
+        fontsize = 13,
+        col = "white",
+        halo_col = "black",
+        halo_width = 2
+      )
+    ))
   expect_false(identical(scene_png(plain), scene_png(haloed)))
   expect_gt(sum(inked(haloed)), 200)
 })
@@ -358,9 +479,13 @@ test_that("a halo does not eat the neighbouring glyphs on a path", {
   bg <- "#20304A"
   mk <- function(...) {
     vl_scene(5, 1.6, dpi = 96, bg = bg) |>
-      draw(text_path_grob("ammmmmmmma", x = seq(0.05, 0.95, length.out = 60),
-                          y = 0.5, just = "left",
-                          gp = vl_gpar(fontsize = 15, col = "white", ...)))
+      draw(text_path_grob(
+        "ammmmmmmma",
+        x = seq(0.05, 0.95, length.out = 60),
+        y = 0.5,
+        just = "left",
+        gp = vl_gpar(fontsize = 15, col = "white", ...)
+      ))
   }
   white <- function(s) sum(scene_raster(s)[1, , ] > 200)
   plain <- white(mk())
@@ -373,9 +498,13 @@ test_that("an on-path halo still renders", {
   # ...and the fix did not simply disable it: a contrasting halo must add ink.
   mk <- function(...) {
     vl_scene(5, 1.6, dpi = 96, bg = "white") |>
-      draw(text_path_grob("halo here", x = seq(0.05, 0.95, length.out = 60),
-                          y = 0.5, just = "left",
-                          gp = vl_gpar(fontsize = 15, col = "white", ...)))
+      draw(text_path_grob(
+        "halo here",
+        x = seq(0.05, 0.95, length.out = 60),
+        y = 0.5,
+        just = "left",
+        gp = vl_gpar(fontsize = 15, col = "white", ...)
+      ))
   }
   ink <- function(s) sum(scene_raster(s)[1, , ] < 200)
   expect_equal(ink(mk()), 0) # white on white draws nothing visible
@@ -383,5 +512,8 @@ test_that("an on-path halo still renders", {
 })
 
 test_that("text_path_grob takes exactly one label", {
-  expect_error(text_path_grob(c("a", "b"), x = c(0, 1), y = c(0, 1)), "single string")
+  expect_error(
+    text_path_grob(c("a", "b"), x = c(0, 1), y = c(0, 1)),
+    "single string"
+  )
 })

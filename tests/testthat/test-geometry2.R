@@ -14,9 +14,11 @@ ring_area <- function(x, y, nper) {
   abs(total)
 }
 grob_area <- function(g) {
-  ring_area(as.numeric(vctrs::field(g@x, "value")),
-            as.numeric(vctrs::field(g@y, "value")),
-            as.integer(g@nper %||% length(g@x)))
+  ring_area(
+    as.numeric(vctrs::field(g@x, "value")),
+    as.numeric(vctrs::field(g@y, "value")),
+    as.integer(g@nper %||% length(g@x))
+  )
 }
 sq <- function(x0, y0, s = 1) {
   list(x = c(x0, x0 + s, x0 + s, x0), y = c(y0, y0, y0 + s, y0 + s))
@@ -37,10 +39,16 @@ test_that("difference is not symmetric, union and intersection are", {
   b <- sq(0.5, 0, s = 2)
   expect_equal(grob_area(vl_path_op(a, b, "difference")), 0.5, tolerance = 1e-9)
   expect_equal(grob_area(vl_path_op(b, a, "difference")), 3.5, tolerance = 1e-9)
-  expect_equal(grob_area(vl_path_op(a, b, "union")),
-               grob_area(vl_path_op(b, a, "union")), tolerance = 1e-9)
-  expect_equal(grob_area(vl_path_op(a, b, "intersect")),
-               grob_area(vl_path_op(b, a, "intersect")), tolerance = 1e-9)
+  expect_equal(
+    grob_area(vl_path_op(a, b, "union")),
+    grob_area(vl_path_op(b, a, "union")),
+    tolerance = 1e-9
+  )
+  expect_equal(
+    grob_area(vl_path_op(a, b, "intersect")),
+    grob_area(vl_path_op(b, a, "intersect")),
+    tolerance = 1e-9
+  )
 })
 
 test_that("cutting a hole gives an outer ring and a hole", {
@@ -77,11 +85,15 @@ test_that("booleans accept grobs as well as lists, and compose", {
 })
 
 test_that("mixed or offset units are refused with a reason", {
-  a <- list(x = vl_unit(c(0, 1, 1, 0), c("npc", "npc", "mm", "npc")),
-            y = vl_unit(c(0, 0, 1, 1)))
+  a <- list(
+    x = vl_unit(c(0, 1, 1, 0), c("npc", "npc", "mm", "npc")),
+    y = vl_unit(c(0, 0, 1, 1))
+  )
   expect_error(vl_path_op(a, sq(0, 0), "union"), "single, offset-free unit")
-  b <- list(x = vl_unit(c(0, 1, 1, 0)) + vl_unit(1, "mm"),
-            y = vl_unit(c(0, 0, 1, 1)))
+  b <- list(
+    x = vl_unit(c(0, 1, 1, 0)) + vl_unit(1, "mm"),
+    y = vl_unit(c(0, 0, 1, 1))
+  )
   expect_error(vl_path_op(b, sq(0, 0), "union"), "single, offset-free unit")
   expect_error(vl_path_op(42, sq(0, 0), "union"), "closed rings")
 })
@@ -89,9 +101,11 @@ test_that("mixed or offset units are refused with a reason", {
 test_that("the fill rule changes how nested input rings are read", {
   # An outer ring with an inner ring wound the same way. Under even-odd the
   # inner one is a hole; under non-zero it is filled over.
-  rings <- list(x = c(sq(0, 0, 4)$x, sq(1, 1, 2)$x),
-                y = c(sq(0, 0, 4)$y, sq(1, 1, 2)$y),
-                nper = c(4L, 4L))
+  rings <- list(
+    x = c(sq(0, 0, 4)$x, sq(1, 1, 2)$x),
+    y = c(sq(0, 0, 4)$y, sq(1, 1, 2)$y),
+    nper = c(4L, 4L)
+  )
   far <- sq(20, 20)
   eo <- vl_path_op(rings, far, "difference", rule = "evenodd")
   nz <- vl_path_op(rings, far, "difference", rule = "nonzero")
@@ -137,9 +151,12 @@ test_that("two contours over a datashade grid land on their modes", {
       exp(-((x - 1.2)^2 / 0.5 + (y + 0.8)^2 / 1.2))
   })
   cl <- vl_contour(dens, levels = 0.5, xlim = c(-4, 4), ylim = c(-4, 4))
-  ctr <- do.call(rbind, lapply(split(cl, cl$id), function(d) {
-    data.frame(x = mean(range(d$x)), y = mean(range(d$y)))
-  }))
+  ctr <- do.call(
+    rbind,
+    lapply(split(cl, cl$id), function(d) {
+      data.frame(x = mean(range(d$x)), y = mean(range(d$y)))
+    })
+  )
   ctr <- ctr[order(ctr$x), ]
   expect_equal(nrow(ctr), 2L)
   expect_equal(ctr$x, c(-1, 1.2), tolerance = 0.1)
@@ -179,13 +196,20 @@ test_that("contours are chained, not returned as loose segments", {
 
 test_that("two separate features give two contour lines", {
   s <- seq(-6, 6, length.out = 90)
-  z <- outer(s, s, function(a, b) exp(-((a - 3)^2 + b^2) / 2) + exp(-((a + 3)^2 + b^2) / 2))
+  z <- outer(s, s, function(a, b) {
+    exp(-((a - 3)^2 + b^2) / 2) + exp(-((a + 3)^2 + b^2) / 2)
+  })
   cl <- vl_contour(z, levels = 0.5, xlim = c(-6, 6), ylim = c(-6, 6))
   expect_equal(length(unique(cl$id)), 2L)
 })
 
 test_that("ids stay distinct across levels", {
-  cl <- vl_contour(bump(), levels = c(0.2, 0.5, 0.8), xlim = c(-3, 3), ylim = c(-3, 3))
+  cl <- vl_contour(
+    bump(),
+    levels = c(0.2, 0.5, 0.8),
+    xlim = c(-3, 3),
+    ylim = c(-3, 3)
+  )
   per_level <- tapply(cl$id, cl$level, function(i) unique(i))
   expect_equal(length(unique(unlist(per_level))), 3L)
   # No id is shared between two levels, or `lines_grob(id=)` would join them.
@@ -225,28 +249,44 @@ test_that("missing data breaks a contour instead of crossing it", {
 })
 
 test_that("contour_grob makes one grob per contour, and does not join them", {
-  cl <- vl_contour(bump(), levels = c(0.2, 0.5, 0.8), xlim = c(-3, 3), ylim = c(-3, 3))
+  cl <- vl_contour(
+    bump(),
+    levels = c(0.2, 0.5, 0.8),
+    xlim = c(-3, 3),
+    ylim = c(-3, 3)
+  )
   g <- contour_grob(cl)
   expect_length(g, length(unique(cl$id)))
   # Closed contours get their first point repeated so the stroke closes.
   n_closed <- sum(tapply(cl$closed, cl$id, `[`, 1L))
-  expect_equal(sum(vapply(g, function(x) length(x@x), integer(1))),
-               nrow(cl) + n_closed)
-  expect_equal(length(contour_grob(cl, close = FALSE)[[1]]@x),
-               sum(cl$id == cl$id[1]))
+  expect_equal(
+    sum(vapply(g, function(x) length(x@x), integer(1))),
+    nrow(cl) + n_closed
+  )
+  expect_equal(
+    length(contour_grob(cl, close = FALSE)[[1]]@x),
+    sum(cl$id == cl$id[1])
+  )
 })
 
 test_that("lines_grob rejects a grouping vector passed as `id`", {
   # `path_grob(id=)` groups; `lines_grob(id=)` is the accessibility identifier.
   # Passing one for the other used to draw a single polyline joining every
   # group with a straight line, which is silent and looks like a solver bug.
-  expect_error(lines_grob(c(0, 1, 0, 1), c(0, 1, 1, 0), id = c(1, 1, 2, 2)),
-               "single value")
+  expect_error(
+    lines_grob(c(0, 1, 0, 1), c(0, 1, 1, 0), id = c(1, 1, 2, 2)),
+    "single value"
+  )
   expect_no_error(lines_grob(c(0, 1), c(0, 1), id = "one-line"))
 })
 
 test_that("contours draw", {
-  cl <- vl_contour(bump(), levels = c(0.2, 0.5, 0.8), xlim = c(-3, 3), ylim = c(-3, 3))
+  cl <- vl_contour(
+    bump(),
+    levels = c(0.2, 0.5, 0.8),
+    xlim = c(-3, 3),
+    ylim = c(-3, 3)
+  )
   s <- vl_scene(3, 3, dpi = 96, bg = "white") |>
     push(vl_viewport(xscale = c(-3, 3), yscale = c(-3, 3))) |>
     draw(contour_grob(cl, gp = vl_gpar(col = "steelblue", lwd = 2))) |>
@@ -267,8 +307,10 @@ test_that("SVG path data parses to rings", {
 })
 
 test_that("relative and absolute path data agree", {
-  expect_equal(vl_svg_path("M0 0 L10 0 L10 10 Z")$x,
-               vl_svg_path("m0 0 l10 0 l0 10 z")$x)
+  expect_equal(
+    vl_svg_path("M0 0 L10 0 L10 10 Z")$x,
+    vl_svg_path("m0 0 l10 0 l0 10 z")$x
+  )
 })
 
 test_that("curves and arcs are flattened", {
@@ -278,7 +320,11 @@ test_that("curves and arcs are flattened", {
   arc <- vl_svg_path("M0 0 A1 1 0 0 1 2 0")
   expect_gt(nrow(arc), 5L)
   # Every arc point is on the unit circle centred at (1, 0).
-  expect_equal(sqrt((arc$x - 1)^2 + arc$y^2), rep(1, nrow(arc)), tolerance = 1e-6)
+  expect_equal(
+    sqrt((arc$x - 1)^2 + arc$y^2),
+    rep(1, nrow(arc)),
+    tolerance = 1e-6
+  )
 })
 
 test_that("several subpaths become several ids", {
@@ -321,7 +367,11 @@ test_that("svg_grob flips y, fits the size, and centres", {
 test_that("svg_grob draws, and scales without losing shape", {
   ink <- function(mm) {
     s <- vl_scene(2, 2, dpi = 96, bg = "white") |>
-      draw(svg_grob(STAR, size = vl_unit(mm, "mm"), gp = vl_gpar(fill = "black", col = NA)))
+      draw(svg_grob(
+        STAR,
+        size = vl_unit(mm, "mm"),
+        gp = vl_gpar(fill = "black", col = NA)
+      ))
     sum(scene_raster(s)[1, , ] < 128)
   }
   small <- ink(8)
@@ -341,15 +391,21 @@ test_that("an empty path gives a grob that draws nothing", {
 test_that("SVG geometry composes with the rest of the engine", {
   # The payoff of importing as geometry rather than as a bitmap: it is an
   # ordinary path, so it takes a gradient fill and a boolean operand.
-  g <- svg_grob(STAR, size = vl_unit(30, "mm"),
-                gp = vl_gpar(fill = linear_gradient(c("gold", "tomato"))))
+  g <- svg_grob(
+    STAR,
+    size = vl_unit(30, "mm"),
+    gp = vl_gpar(fill = linear_gradient(c("gold", "tomato")))
+  )
   s <- vl_scene(2, 2, dpi = 96, bg = "white") |> draw(g)
   px <- scene_raster(s)
   expect_gt(length(unique(as.vector(px[1, , ]))), 5L) # a ramp, not one flat fill
 
   p <- vl_svg_path(STAR)
-  cut <- vl_path_op(list(x = p$x, y = p$y, nper = nrow(p)),
-                    list(x = c(0, 24, 24, 0), y = c(0, 0, 12, 12)),
-                    "difference", rule = "evenodd")
+  cut <- vl_path_op(
+    list(x = p$x, y = p$y, nper = nrow(p)),
+    list(x = c(0, 24, 24, 0), y = c(0, 0, 12, 12)),
+    "difference",
+    rule = "evenodd"
+  )
   expect_gt(length(cut@x), 0L)
 })

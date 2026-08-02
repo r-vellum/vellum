@@ -15,7 +15,13 @@ misses <- function() .render_cache$.misses
 
 demo_scene <- function(w = 2, h = 1, dpi = 100, col = "red") {
   vl_scene(w, h, dpi = dpi, bg = "white") |>
-    draw(circle_grob(x = 0.5, y = 0.5, r = 0.3, gp = vl_gpar(fill = col, col = NA), name = "dot"))
+    draw(circle_grob(
+      x = 0.5,
+      y = 0.5,
+      r = 0.3,
+      gp = vl_gpar(fill = col, col = NA),
+      name = "dot"
+    ))
 }
 
 test_that("a cached render is byte-identical to an uncached one", {
@@ -78,7 +84,12 @@ test_that("device size participates in the key: resize misses, return-to-size hi
 
 test_that("a device-only set_props preserves the content identity token", {
   s <- demo_scene()
-  s2 <- S7::set_props(s, width = vl_unit(4, "in"), height = vl_unit(3, "in"), dpi = 150)
+  s2 <- S7::set_props(
+    s,
+    width = vl_unit(4, "in"),
+    height = vl_unit(3, "in"),
+    dpi = 150
+  )
   expect_identical(s2@bstate$cid, s@bstate$cid) # resize keeps identity
 })
 
@@ -121,8 +132,12 @@ test_that("a scene with no identity token bypasses the cache (fail-safe)", {
   base <- demo_scene()
   root <- .materialize(base)
   foreign <- vellum_scene(
-    width = vl_unit(2, "in"), height = vl_unit(1, "in"), dpi = 100, bg = "white",
-    root = root, bstate = NULL # hand-built: no cid stamped
+    width = vl_unit(2, "in"),
+    height = vl_unit(1, "in"),
+    dpi = 100,
+    bg = "white",
+    root = root,
+    bstate = NULL # hand-built: no cid stamped
   )
   expect_null(foreign@cid)
   r <- scene_raster(foreign) # renders fine, uncached
@@ -134,7 +149,11 @@ test_that("a carrier-invariant violation (both root and bstate set) fails safe, 
   reset_cache()
   s <- demo_scene(col = "red")
   scene_raster(s) # cache the red scene under its bstate cid
-  blue_tree <- .materialize(edit_node(s, "dot", gp = vl_gpar(fill = "blue", col = NA)))
+  blue_tree <- .materialize(edit_node(
+    s,
+    "dot",
+    gp = vl_gpar(fill = "blue", col = NA)
+  ))
   # Unsupported: graft a new tree onto a still-building scene (both carriers set).
   bad <- S7::set_props(s, root = blue_tree)
   r <- scene_raster(bad)
@@ -145,9 +164,14 @@ test_that("a carrier-invariant violation (both root and bstate set) fails safe, 
 test_that("the LRU cap bounds resident entries", {
   reset_cache()
   withr::with_options(list(vellum.cache_size = 2L), {
-    for (i in 1:4) scene_raster(demo_scene(w = 1 + i * 0.1)) # 4 distinct sizes
+    for (i in 1:4) {
+      scene_raster(demo_scene(w = 1 + i * 0.1))
+    } # 4 distinct sizes
     # order tracks at most `cap` live entries (plus the .order/.hits/.misses fields)
-    entries <- setdiff(ls(.render_cache, all.names = TRUE), c(".order", ".hits", ".misses"))
+    entries <- setdiff(
+      ls(.render_cache, all.names = TRUE),
+      c(".order", ".hits", ".misses")
+    )
     expect_lte(length(entries), 2L)
     expect_lte(length(.render_cache$.order), 2L)
   })
@@ -156,8 +180,20 @@ test_that("the LRU cap bounds resident entries", {
 test_that("vl_clear_render_cache empties the cache", {
   reset_cache()
   scene_raster(demo_scene())
-  expect_gt(length(setdiff(ls(.render_cache, all.names = TRUE), c(".order", ".hits", ".misses"))), 0L)
+  expect_gt(
+    length(setdiff(
+      ls(.render_cache, all.names = TRUE),
+      c(".order", ".hits", ".misses")
+    )),
+    0L
+  )
   vl_clear_render_cache()
-  expect_equal(length(setdiff(ls(.render_cache, all.names = TRUE), c(".order", ".hits", ".misses"))), 0L)
+  expect_equal(
+    length(setdiff(
+      ls(.render_cache, all.names = TRUE),
+      c(".order", ".hits", ".misses")
+    )),
+    0L
+  )
   expect_equal(c(misses(), hits()), c(0L, 0L))
 })

@@ -23,12 +23,14 @@ NULL
 # on the R scene and surfaces via [scene_model()]. Both default `NULL` (absent), so
 # a scene without interactivity is byte-for-byte unchanged and pays nothing.
 grob <- S7::new_class(
-  "grob", package = "vellum", abstract = TRUE,
+  "grob",
+  package = "vellum",
+  abstract = TRUE,
   properties = list(
     name = S7::new_property(S7::class_any, default = NULL),
-    gp   = S7::new_property(vl_gpar, default = quote(vl_gpar())),
-    vp   = S7::new_property(S7::class_any, default = NULL),
-    id   = S7::new_property(S7::class_any, default = NULL),
+    gp = S7::new_property(vl_gpar, default = quote(vl_gpar())),
+    vp = S7::new_property(S7::class_any, default = NULL),
+    id = S7::new_property(S7::class_any, default = NULL),
     role = S7::new_property(S7::class_any, default = NULL),
     keys = S7::new_property(S7::class_any, default = NULL),
     meta = S7::new_property(S7::class_any, default = NULL)
@@ -38,51 +40,94 @@ grob <- S7::new_class(
 # Recycle a per-element `key` vector to `n` (coerced to character); NULL -> NULL
 # so an absent key emits no `data-key` and costs nothing.
 .recycle_keys <- function(key, n) {
-  if (is.null(key)) return(NULL)
+  if (is.null(key)) {
+    return(NULL)
+  }
   rep_len(as.character(key), n)
 }
 
 # Recycle a per-element `meta` list to `n`. `meta` is a list of records (one per
 # element); a length-1 list is recycled to every element. NULL -> NULL.
 .recycle_meta <- function(meta, n) {
-  if (is.null(meta)) return(NULL)
+  if (is.null(meta)) {
+    return(NULL)
+  }
   if (!is.list(meta)) {
-    cli::cli_abort("{.arg meta} must be a list, one entry (record) per element.")
+    cli::cli_abort(
+      "{.arg meta} must be a list, one entry (record) per element."
+    )
   }
   rep_len(meta, n)
 }
 
-grob_rect <- S7::new_class("grob_rect", parent = grob, package = "vellum",
+grob_rect <- S7::new_class(
+  "grob_rect",
+  parent = grob,
+  package = "vellum",
   properties = list(
-    x = .unit_prop(), y = .unit_prop(),
-    width = .unit_prop("vl_unit(1, \"npc\")"), height = .unit_prop("vl_unit(1, \"npc\")"),
+    x = .unit_prop(),
+    y = .unit_prop(),
+    width = .unit_prop("vl_unit(1, \"npc\")"),
+    height = .unit_prop("vl_unit(1, \"npc\")"),
     sketch = S7::new_property(S7::class_any, default = NULL)
   )
 )
-grob_roundrect <- S7::new_class("grob_roundrect", parent = grob, package = "vellum",
+grob_roundrect <- S7::new_class(
+  "grob_roundrect",
+  parent = grob,
+  package = "vellum",
   properties = list(
-    x = .unit_prop(), y = .unit_prop(),
-    width = .unit_prop("vl_unit(1, \"npc\")"), height = .unit_prop("vl_unit(1, \"npc\")"),
+    x = .unit_prop(),
+    y = .unit_prop(),
+    width = .unit_prop("vl_unit(1, \"npc\")"),
+    height = .unit_prop("vl_unit(1, \"npc\")"),
     r = .unit_prop("vl_unit(0.1, \"npc\")"),
     sketch = S7::new_property(S7::class_any, default = NULL)
   )
 )
-grob_lines <- S7::new_class("grob_lines", parent = grob, package = "vellum",
-  properties = list(x = .unit_prop(), y = .unit_prop(),
-                    arrow = S7::new_property(S7::class_any, default = NULL),
-                    start_cap = S7::new_property(S7::class_any, default = NULL),
-                    end_cap = S7::new_property(S7::class_any, default = NULL),
-                    offset = S7::new_property(S7::class_any, default = NULL),
-                    sketch = S7::new_property(S7::class_any, default = NULL)))
-grob_polygon <- S7::new_class("grob_polygon", parent = grob, package = "vellum",
-  properties = list(x = .unit_prop(), y = .unit_prop(),
-                    sketch = S7::new_property(S7::class_any, default = NULL)))
-grob_circle <- S7::new_class("grob_circle", parent = grob, package = "vellum",
-  properties = list(x = .unit_prop(), y = .unit_prop(), r = .unit_prop("vl_unit(0.25, \"npc\")"),
-                    sketch = S7::new_property(S7::class_any, default = NULL)))
-grob_points <- S7::new_class("grob_points", parent = grob, package = "vellum",
+grob_lines <- S7::new_class(
+  "grob_lines",
+  parent = grob,
+  package = "vellum",
   properties = list(
-    x = .unit_prop(), y = .unit_prop(), size = .unit_prop("vl_unit(2, \"mm\")"),
+    x = .unit_prop(),
+    y = .unit_prop(),
+    arrow = S7::new_property(S7::class_any, default = NULL),
+    start_cap = S7::new_property(S7::class_any, default = NULL),
+    end_cap = S7::new_property(S7::class_any, default = NULL),
+    offset = S7::new_property(S7::class_any, default = NULL),
+    sketch = S7::new_property(S7::class_any, default = NULL)
+  )
+)
+grob_polygon <- S7::new_class(
+  "grob_polygon",
+  parent = grob,
+  package = "vellum",
+  properties = list(
+    x = .unit_prop(),
+    y = .unit_prop(),
+    sketch = S7::new_property(S7::class_any, default = NULL)
+  )
+)
+grob_circle <- S7::new_class(
+  "grob_circle",
+  parent = grob,
+  package = "vellum",
+  properties = list(
+    x = .unit_prop(),
+    y = .unit_prop(),
+    r = .unit_prop("vl_unit(0.25, \"npc\")"),
+    sketch = S7::new_property(S7::class_any, default = NULL)
+  )
+)
+grob_points <- S7::new_class(
+  "grob_points",
+  parent = grob,
+  package = "vellum",
+  properties = list(
+    x = .unit_prop(),
+    y = .unit_prop(),
+    size = .unit_prop("vl_unit(2, \"mm\")"),
     shape = S7::new_property(S7::class_character, default = "circle"),
     sketch = S7::new_property(S7::class_any, default = NULL)
   ),
@@ -93,48 +138,77 @@ grob_points <- S7::new_class("grob_points", parent = grob, package = "vellum",
     if (length(bad)) {
       sprintf("unknown point shape(s): %s", paste(bad, collapse = ", "))
     }
-  })
+  }
+)
 
-grob_hexagon <- S7::new_class("grob_hexagon", parent = grob, package = "vellum",
+grob_hexagon <- S7::new_class(
+  "grob_hexagon",
+  parent = grob,
+  package = "vellum",
   properties = list(
-    x = .unit_prop(), y = .unit_prop(), size = .unit_prop("vl_unit(2, \"mm\")"),
+    x = .unit_prop(),
+    y = .unit_prop(),
+    size = .unit_prop("vl_unit(2, \"mm\")"),
     width = S7::new_property(S7::class_any, default = NULL),
     height = S7::new_property(S7::class_any, default = NULL),
     fill = S7::new_property(S7::class_any, default = NULL),
     orientation = S7::new_property(S7::class_character, default = "flat")
-  ))
+  )
+)
 
-grob_sector <- S7::new_class("grob_sector", parent = grob, package = "vellum",
+grob_sector <- S7::new_class(
+  "grob_sector",
+  parent = grob,
+  package = "vellum",
   properties = list(
-    x = .unit_prop(), y = .unit_prop(),
-    r0 = .unit_prop("vl_unit(0, \"native\")"), r1 = .unit_prop("vl_unit(0.5, \"native\")"),
+    x = .unit_prop(),
+    y = .unit_prop(),
+    r0 = .unit_prop("vl_unit(0, \"native\")"),
+    r1 = .unit_prop("vl_unit(0.5, \"native\")"),
     theta0 = S7::new_property(S7::class_double, default = 0),
     theta1 = S7::new_property(S7::class_double, default = 0),
     fill = S7::new_property(S7::class_any, default = NULL),
     arrow = S7::new_property(S7::class_any, default = NULL),
     sketch = S7::new_property(S7::class_any, default = NULL)
-  ))
+  )
+)
 
 # Marker shape names -> backend codes (must match the `markers` arm in scene.rs).
-.marker_codes <- c(circle = 0L, square = 1L, triangle = 2L, diamond = 3L, plus = 4L,
-                   cross = 5L, triangle_down = 6L, star = 7L)
+.marker_codes <- c(
+  circle = 0L,
+  square = 1L,
+  triangle = 2L,
+  diamond = 3L,
+  plus = 4L,
+  cross = 5L,
+  triangle_down = 6L,
+  star = 7L
+)
 # Extension point for rich text labels (plotmath, markdown, ...). A concrete
 # rich-label type subclasses this and adds a `.text_labels()` method that returns
 # the strings to shape; until such a type exists only plain character labels are
 # drawn. The seam keeps the grammar's text path from hard-coding `character`, so a
 # future label kind plugs in here rather than in every geom (see DESIGN, the
 # grammar-coupled items section).
-vellum_label <- S7::new_class("vellum_label", package = "vellum", abstract = TRUE)
+vellum_label <- S7::new_class(
+  "vellum_label",
+  package = "vellum",
+  abstract = TRUE
+)
 
 # A concrete rich label: a markdown-subset string parsed into styled runs (see
 # `md()` and `.md_parse()` in text.R). `runs` is a list of run descriptors (text +
 # per-run face/size/baseline/colour); `text` is the markup-stripped plain string,
 # used by the `.text_labels()` seam and as a measurement fallback.
-vellum_md_label <- S7::new_class("vellum_md_label", parent = vellum_label, package = "vellum",
+vellum_md_label <- S7::new_class(
+  "vellum_md_label",
+  parent = vellum_label,
+  package = "vellum",
   properties = list(
     runs = S7::new_property(S7::class_list, default = list()),
     text = S7::new_property(S7::class_character, default = "")
-  ))
+  )
+)
 
 # The single place a label becomes the character vector the backend shapes.
 .text_labels <- S7::new_generic("text_labels", "label")
@@ -142,65 +216,107 @@ S7::method(.text_labels, S7::class_character) <- function(label) label
 S7::method(.text_labels, S7::class_any) <- function(label) as.character(label)
 S7::method(.text_labels, vellum_md_label) <- function(label) label@text
 
-grob_text <- S7::new_class("grob_text", parent = grob, package = "vellum",
+grob_text <- S7::new_class(
+  "grob_text",
+  parent = grob,
+  package = "vellum",
   properties = list(
     # A plain character vector, a single rich label, or a list of rich labels
     # (one per datum — the per-datum mark_text case).
-    label = S7::new_property(S7::new_union(S7::class_character, vellum_label, S7::class_list)),
-    x = .unit_prop(), y = .unit_prop(),
-    just = S7::new_property(S7::class_character, default = c("centre", "centre")),
-    rot  = S7::new_property(S7::class_double, default = 0),
+    label = S7::new_property(S7::new_union(
+      S7::class_character,
+      vellum_label,
+      S7::class_list
+    )),
+    x = .unit_prop(),
+    y = .unit_prop(),
+    just = S7::new_property(
+      S7::class_character,
+      default = c("centre", "centre")
+    ),
+    rot = S7::new_property(S7::class_double, default = 0),
     # Width-constrained text. `width`/`height` are absolute millimetres (see
     # `text_grob()`), NA when unset; `align` is line alignment within the box and
     # `fit` the floor for auto-fit sizing (NA = no auto-fit).
-    width  = S7::new_property(S7::class_double, default = NA_real_),
+    width = S7::new_property(S7::class_double, default = NA_real_),
     height = S7::new_property(S7::class_double, default = NA_real_),
-    align  = S7::new_property(S7::class_character, default = "left"),
-    fit    = S7::new_property(S7::class_double, default = NA_real_)
+    align = S7::new_property(S7::class_character, default = "left"),
+    fit = S7::new_property(S7::class_double, default = NA_real_)
   )
 )
-grob_textpath <- S7::new_class("grob_textpath", parent = grob, package = "vellum",
+grob_textpath <- S7::new_class(
+  "grob_textpath",
+  parent = grob,
+  package = "vellum",
   properties = list(
     label = S7::new_property(S7::class_character),
-    x = .unit_prop(), y = .unit_prop(),
-    just = S7::new_property(S7::class_character, default = c("centre", "centre")),
+    x = .unit_prop(),
+    y = .unit_prop(),
+    just = S7::new_property(
+      S7::class_character,
+      default = c("centre", "centre")
+    ),
     # Baseline shift perpendicular to the path, in points (+ = left of travel).
     offset = S7::new_property(S7::class_double, default = 0)
   )
 )
-grob_segments <- S7::new_class("grob_segments", parent = grob, package = "vellum",
-  properties = list(x0 = .unit_prop(), y0 = .unit_prop(), x1 = .unit_prop(), y1 = .unit_prop(),
-                    arrow = S7::new_property(S7::class_any, default = NULL),
-                    start_cap = S7::new_property(S7::class_any, default = NULL),
-                    end_cap = S7::new_property(S7::class_any, default = NULL),
-                    offset = S7::new_property(S7::class_any, default = NULL),
-                    sketch = S7::new_property(S7::class_any, default = NULL),
-                    ecol = S7::new_property(S7::class_any, default = NULL),
-                    elwd = S7::new_property(S7::class_any, default = NULL)))
-
-grob_loop <- S7::new_class("grob_loop", parent = grob, package = "vellum",
+grob_segments <- S7::new_class(
+  "grob_segments",
+  parent = grob,
+  package = "vellum",
   properties = list(
-    x = .unit_prop(), y = .unit_prop(),
-    size = .unit_prop("vl_unit(4, \"mm\")"), foot = .unit_prop("vl_unit(0, \"mm\")"),
+    x0 = .unit_prop(),
+    y0 = .unit_prop(),
+    x1 = .unit_prop(),
+    y1 = .unit_prop(),
+    arrow = S7::new_property(S7::class_any, default = NULL),
+    start_cap = S7::new_property(S7::class_any, default = NULL),
+    end_cap = S7::new_property(S7::class_any, default = NULL),
+    offset = S7::new_property(S7::class_any, default = NULL),
+    sketch = S7::new_property(S7::class_any, default = NULL),
+    ecol = S7::new_property(S7::class_any, default = NULL),
+    elwd = S7::new_property(S7::class_any, default = NULL)
+  )
+)
+
+grob_loop <- S7::new_class(
+  "grob_loop",
+  parent = grob,
+  package = "vellum",
+  properties = list(
+    x = .unit_prop(),
+    y = .unit_prop(),
+    size = .unit_prop("vl_unit(4, \"mm\")"),
+    foot = .unit_prop("vl_unit(0, \"mm\")"),
     angle = S7::new_property(S7::class_double, default = 0),
     width = S7::new_property(S7::class_double, default = 1),
     arrow = S7::new_property(S7::class_any, default = NULL)
-  ))
-grob_path <- S7::new_class("grob_path", parent = grob, package = "vellum",
+  )
+)
+grob_path <- S7::new_class(
+  "grob_path",
+  parent = grob,
+  package = "vellum",
   properties = list(
-    x = .unit_prop(), y = .unit_prop(),
+    x = .unit_prop(),
+    y = .unit_prop(),
     nper = S7::new_property(S7::class_integer, default = integer(0)),
     rule = S7::new_property(S7::class_character, default = "winding"),
     sketch = S7::new_property(S7::class_any, default = NULL)
   )
 )
-grob_raster <- S7::new_class("grob_raster", parent = grob, package = "vellum",
+grob_raster <- S7::new_class(
+  "grob_raster",
+  parent = grob,
+  package = "vellum",
   properties = list(
     rgba = S7::new_property(S7::class_integer, default = integer(0)),
     iw = S7::new_property(S7::class_integer, default = 0L),
     ih = S7::new_property(S7::class_integer, default = 0L),
-    x = .unit_prop(), y = .unit_prop(),
-    width = .unit_prop("vl_unit(1, \"npc\")"), height = .unit_prop("vl_unit(1, \"npc\")"),
+    x = .unit_prop(),
+    y = .unit_prop(),
+    width = .unit_prop("vl_unit(1, \"npc\")"),
+    height = .unit_prop("vl_unit(1, \"npc\")"),
     interpolate = S7::new_property(S7::class_logical, default = TRUE)
   )
 )
@@ -234,17 +350,39 @@ grob_raster <- S7::new_class("grob_raster", parent = grob, package = "vellum",
 #' @param role Optional ARIA role, emitted by the SVG backend as `role=` for
 #'   accessibility (ignored by the raster and PDF backends).
 #' @export
-rect_grob <- function(x = 0.5, y = 0.5, width = 1, height = 1,
-                      sketch = NULL, gp = vl_gpar(), name = NULL, vp = NULL, id = NULL, role = NULL,
-                      key = NULL, meta = NULL) {
+rect_grob <- function(
+  x = 0.5,
+  y = 0.5,
+  width = 1,
+  height = 1,
+  sketch = NULL,
+  gp = vl_gpar(),
+  name = NULL,
+  vp = NULL,
+  id = NULL,
+  role = NULL,
+  key = NULL,
+  meta = NULL
+) {
   w <- as_unit(width)
   h <- as_unit(height)
   .check_extent(w, "width")
   .check_extent(h, "height")
   n <- .common_n(x, y, w, h)
-  grob_rect(x = as_unit(x), y = as_unit(y), width = w, height = h,
-            sketch = sketch, gp = gp, name = name, vp = vp, id = id, role = role,
-            keys = .recycle_keys(key, n), meta = .recycle_meta(meta, n))
+  grob_rect(
+    x = as_unit(x),
+    y = as_unit(y),
+    width = w,
+    height = h,
+    sketch = sketch,
+    gp = gp,
+    name = name,
+    vp = vp,
+    id = id,
+    role = role,
+    keys = .recycle_keys(key, n),
+    meta = .recycle_meta(meta, n)
+  )
 }
 
 #' @rdname grob
@@ -252,9 +390,21 @@ rect_grob <- function(x = 0.5, y = 0.5, width = 1, height = 1,
 #'   isotropic (a fraction of the shorter side, like grid's `"snpc"`), so corners
 #'   stay circular on non-square rectangles; clamped to half the shorter side.
 #' @export
-roundrect_grob <- function(x = 0.5, y = 0.5, width = 1, height = 1, r = 0.1,
-                           sketch = NULL, gp = vl_gpar(), name = NULL, vp = NULL, id = NULL,
-                           role = NULL, key = NULL, meta = NULL) {
+roundrect_grob <- function(
+  x = 0.5,
+  y = 0.5,
+  width = 1,
+  height = 1,
+  r = 0.1,
+  sketch = NULL,
+  gp = vl_gpar(),
+  name = NULL,
+  vp = NULL,
+  id = NULL,
+  role = NULL,
+  key = NULL,
+  meta = NULL
+) {
   w <- as_unit(width)
   h <- as_unit(height)
   rr <- as_unit(r)
@@ -265,9 +415,21 @@ roundrect_grob <- function(x = 0.5, y = 0.5, width = 1, height = 1, r = 0.1,
   # `rect_grob()`. Recycle keys/meta to that element count (not to 1, which
   # silently dropped every key past the first on a multi-box grob).
   n <- .common_n(x, y, w, h, rr)
-  grob_roundrect(x = as_unit(x), y = as_unit(y), width = w, height = h, r = rr,
-                 sketch = sketch, gp = gp, name = name, vp = vp, id = id, role = role,
-                 keys = .recycle_keys(key, n), meta = .recycle_meta(meta, n))
+  grob_roundrect(
+    x = as_unit(x),
+    y = as_unit(y),
+    width = w,
+    height = h,
+    r = rr,
+    sketch = sketch,
+    gp = gp,
+    name = name,
+    vp = vp,
+    id = id,
+    role = role,
+    keys = .recycle_keys(key, n),
+    meta = .recycle_meta(meta, n)
+  )
 }
 
 # An extent (width/height/radius/size) must be non-negative. Checks the resolved
@@ -287,7 +449,9 @@ roundrect_grob <- function(x = 0.5, y = 0.5, width = 1, height = 1, r = 0.1,
 .check_finite_num <- function(v, arg) {
   v <- as.numeric(v)
   if (length(v) && any(!is.finite(v))) {
-    cli::cli_abort("{.arg {arg}} must be finite (no {.val NA}/{.val NaN}/{.val Inf}).")
+    cli::cli_abort(
+      "{.arg {arg}} must be finite (no {.val NA}/{.val NaN}/{.val Inf})."
+    )
   }
   invisible(v)
 }
@@ -320,9 +484,22 @@ roundrect_grob <- function(x = 0.5, y = 0.5, width = 1, height = 1, r = 0.1,
 #'   then cap, then head). `NULL`/`0` (default) leaves the geometry untouched.
 #' @param sketch Optional [sketch()] spec for a hand-drawn look; `NULL` = crisp.
 #' @export
-lines_grob <- function(x, y, arrow = NULL, start_cap = NULL, end_cap = NULL, offset = NULL,
-                       sketch = NULL, gp = vl_gpar(), name = NULL, vp = NULL, id = NULL, role = NULL,
-                       key = NULL, meta = NULL) {
+lines_grob <- function(
+  x,
+  y,
+  arrow = NULL,
+  start_cap = NULL,
+  end_cap = NULL,
+  offset = NULL,
+  sketch = NULL,
+  gp = vl_gpar(),
+  name = NULL,
+  vp = NULL,
+  id = NULL,
+  role = NULL,
+  key = NULL,
+  meta = NULL
+) {
   n <- .coord_n(x, y)
   # `id` here is the accessibility identifier, NOT a grouping variable — unlike
   # `path_grob(id=)`, which splits points into rings. Passing a grouping vector
@@ -338,11 +515,22 @@ lines_grob <- function(x, y, arrow = NULL, start_cap = NULL, end_cap = NULL, off
   start_cap <- .check_cap(start_cap, "start_cap", scalar = TRUE)
   end_cap <- .check_cap(end_cap, "end_cap", scalar = TRUE)
   offset <- .check_cap(offset, "offset", scalar = TRUE, nonneg = FALSE)
-  grob_lines(x = vctrs::vec_recycle(as_unit(x, "native"), n),
-             y = vctrs::vec_recycle(as_unit(y, "native"), n),
-             arrow = arrow, start_cap = start_cap, end_cap = end_cap, offset = offset,
-             sketch = sketch, gp = gp, name = name, vp = vp, id = id, role = role,
-             keys = .recycle_keys(key, 1L), meta = .recycle_meta(meta, 1L))
+  grob_lines(
+    x = vctrs::vec_recycle(as_unit(x, "native"), n),
+    y = vctrs::vec_recycle(as_unit(y, "native"), n),
+    arrow = arrow,
+    start_cap = start_cap,
+    end_cap = end_cap,
+    offset = offset,
+    sketch = sketch,
+    gp = gp,
+    name = name,
+    vp = vp,
+    id = id,
+    role = role,
+    keys = .recycle_keys(key, 1L),
+    meta = .recycle_meta(meta, 1L)
+  )
 }
 
 # Validate a cap/offset argument: NULL passes through; otherwise it must resolve
@@ -356,7 +544,9 @@ lines_grob <- function(x, y, arrow = NULL, start_cap = NULL, end_cap = NULL, off
     return(NULL)
   }
   cap <- as_unit(cap, "mm")
-  if (nonneg) .check_extent(cap, arg)
+  if (nonneg) {
+    .check_extent(cap, arg)
+  }
   abs_codes <- unname(.unit_codes[c("mm", "in", "pt")])
   if (!all(vctrs::field(cap, "unit") %in% abs_codes)) {
     cli::cli_abort(c(
@@ -365,7 +555,9 @@ lines_grob <- function(x, y, arrow = NULL, start_cap = NULL, end_cap = NULL, off
     ))
   }
   if (scalar && .vsize(cap) > 1L) {
-    cli::cli_abort("{.arg {arg}} on a {.fn lines_grob} must be a single value (it trims the whole-path ends).")
+    cli::cli_abort(
+      "{.arg {arg}} on a {.fn lines_grob} must be a single value (it trims the whole-path ends)."
+    )
   }
   cap
 }
@@ -383,8 +575,12 @@ lines_grob <- function(x, y, arrow = NULL, start_cap = NULL, end_cap = NULL, off
 #' @examples
 #' lines_grob(c(0.1, 0.9), c(0.1, 0.9), arrow = vl_arrow(type = "closed"))
 #' @export
-vl_arrow <- function(angle = 30, length = vl_unit(0.25, "in"),
-                  ends = c("last", "first", "both"), type = c("open", "closed")) {
+vl_arrow <- function(
+  angle = 30,
+  length = vl_unit(0.25, "in"),
+  ends = c("last", "first", "both"),
+  type = c("open", "closed")
+) {
   ends <- match.arg(ends)
   type <- match.arg(type)
   len <- as_unit(length, "in")
@@ -399,13 +595,22 @@ vl_arrow <- function(angle = 30, length = vl_unit(0.25, "in"),
   if (is.null(a)) {
     return(list(angle = 0, len = 0, ends = 0L, closed = FALSE))
   }
-  list(angle = a$angle, len = .to_inches(a$length),
-       ends = switch(a$ends, first = 1L, last = 2L, both = 3L),
-       closed = identical(a$type, "closed"))
+  list(
+    angle = a$angle,
+    len = .to_inches(a$length),
+    ends = switch(a$ends, first = 1L, last = 2L, both = 3L),
+    closed = identical(a$type, "closed")
+  )
 }
 
 # Fill-style names -> the integer codes `sketch.rs` decodes (FillStyle::from_code).
-.sketch_fill_codes <- c(solid = 0L, hachure = 1L, crosshatch = 2L, zigzag = 3L, dots = 4L)
+.sketch_fill_codes <- c(
+  solid = 0L,
+  hachure = 1L,
+  crosshatch = 2L,
+  zigzag = 3L,
+  dots = 4L
+)
 
 #' Hand-drawn ("sketch") rendering
 #'
@@ -435,22 +640,43 @@ vl_arrow <- function(angle = 30, length = vl_unit(0.25, "in"),
 #' @examples
 #' rect_grob(gp = vl_gpar(fill = "steelblue", col = "black"), sketch = sketch())
 #' @export
-sketch <- function(roughness = 1, bowing = 1,
-                   fill_style = c("hachure", "solid", "crosshatch", "zigzag", "dots"),
-                   fill_weight = NULL, hachure_angle = -41, hachure_gap = NULL,
-                   curve_tightness = 0, disable_multi_stroke = FALSE,
-                   preserve_vertices = FALSE, seed = 1L) {
+sketch <- function(
+  roughness = 1,
+  bowing = 1,
+  fill_style = c("hachure", "solid", "crosshatch", "zigzag", "dots"),
+  fill_weight = NULL,
+  hachure_angle = -41,
+  hachure_gap = NULL,
+  curve_tightness = 0,
+  disable_multi_stroke = FALSE,
+  preserve_vertices = FALSE,
+  seed = 1L
+) {
   fill_style <- match.arg(fill_style)
-  if (!is.numeric(roughness) || length(roughness) != 1L || is.na(roughness) || roughness < 0) {
+  if (
+    !is.numeric(roughness) ||
+      length(roughness) != 1L ||
+      is.na(roughness) ||
+      roughness < 0
+  ) {
     cli::cli_abort("{.arg roughness} must be a single number >= 0.")
   }
   structure(
     list(
-      roughness = as.numeric(roughness)[1], bowing = as.numeric(bowing)[1],
+      roughness = as.numeric(roughness)[1],
+      bowing = as.numeric(bowing)[1],
       fill_style = fill_style,
-      fill_weight = if (is.null(fill_weight)) -1 else as.numeric(fill_weight)[1],
+      fill_weight = if (is.null(fill_weight)) {
+        -1
+      } else {
+        as.numeric(fill_weight)[1]
+      },
       hachure_angle = as.numeric(hachure_angle)[1],
-      hachure_gap = if (is.null(hachure_gap)) -1 else as.numeric(hachure_gap)[1],
+      hachure_gap = if (is.null(hachure_gap)) {
+        -1
+      } else {
+        as.numeric(hachure_gap)[1]
+      },
       curve_tightness = as.numeric(curve_tightness)[1],
       disable_multi_stroke = isTRUE(disable_multi_stroke),
       preserve_vertices = isTRUE(preserve_vertices),
@@ -465,19 +691,36 @@ sketch <- function(roughness = 1, bowing = 1,
 # sketch is byte-for-byte unchanged.
 .encode_sketch <- function(s) {
   if (is.null(s)) {
-    return(list(roughness = -1, bowing = 0, fill_style = 0L, fill_weight = -1,
-                hachure_angle = 0, hachure_gap = -1, curve_tightness = 0,
-                disable_multi = FALSE, preserve = FALSE, seed = 1))
+    return(list(
+      roughness = -1,
+      bowing = 0,
+      fill_style = 0L,
+      fill_weight = -1,
+      hachure_angle = 0,
+      hachure_gap = -1,
+      curve_tightness = 0,
+      disable_multi = FALSE,
+      preserve = FALSE,
+      seed = 1
+    ))
   }
   if (!inherits(s, "vellum_sketch")) {
-    cli::cli_abort("{.arg sketch} must be a {.fn sketch} object or {.code NULL}.")
+    cli::cli_abort(
+      "{.arg sketch} must be a {.fn sketch} object or {.code NULL}."
+    )
   }
-  list(roughness = s$roughness, bowing = s$bowing,
-       fill_style = unname(.sketch_fill_codes[[s$fill_style]]),
-       fill_weight = s$fill_weight, hachure_angle = s$hachure_angle,
-       hachure_gap = s$hachure_gap, curve_tightness = s$curve_tightness,
-       disable_multi = s$disable_multi_stroke, preserve = s$preserve_vertices,
-       seed = s$seed)
+  list(
+    roughness = s$roughness,
+    bowing = s$bowing,
+    fill_style = unname(.sketch_fill_codes[[s$fill_style]]),
+    fill_weight = s$fill_weight,
+    hachure_angle = s$hachure_angle,
+    hachure_gap = s$hachure_gap,
+    curve_tightness = s$curve_tightness,
+    disable_multi = s$disable_multi_stroke,
+    preserve = s$preserve_vertices,
+    seed = s$seed
+  )
 }
 
 # Encode a cap unit (or NULL) into the parallel (value, code) streams the backend
@@ -488,18 +731,39 @@ sketch <- function(roughness = 1, bowing = 1,
   if (is.null(cap)) {
     return(list(value = numeric(0), code = integer(0)))
   }
-  list(value = vctrs::field(cap, "value"), code = as.integer(vctrs::field(cap, "unit")))
+  list(
+    value = vctrs::field(cap, "value"),
+    code = as.integer(vctrs::field(cap, "unit"))
+  )
 }
 
 #' @rdname grob
 #' @export
-polygon_grob <- function(x, y, sketch = NULL, gp = vl_gpar(), name = NULL, vp = NULL, id = NULL,
-                         role = NULL, key = NULL, meta = NULL) {
+polygon_grob <- function(
+  x,
+  y,
+  sketch = NULL,
+  gp = vl_gpar(),
+  name = NULL,
+  vp = NULL,
+  id = NULL,
+  role = NULL,
+  key = NULL,
+  meta = NULL
+) {
   n <- .coord_n(x, y)
-  grob_polygon(x = vctrs::vec_recycle(as_unit(x, "native"), n),
-               y = vctrs::vec_recycle(as_unit(y, "native"), n),
-               sketch = sketch, gp = gp, name = name, vp = vp, id = id, role = role,
-               keys = .recycle_keys(key, 1L), meta = .recycle_meta(meta, 1L))
+  grob_polygon(
+    x = vctrs::vec_recycle(as_unit(x, "native"), n),
+    y = vctrs::vec_recycle(as_unit(y, "native"), n),
+    sketch = sketch,
+    gp = gp,
+    name = name,
+    vp = vp,
+    id = id,
+    role = role,
+    keys = .recycle_keys(key, 1L),
+    meta = .recycle_meta(meta, 1L)
+  )
 }
 
 # Decompose a curve coordinate into (values, single unit name). Flattening is a
@@ -513,16 +777,25 @@ polygon_grob <- function(x, y, sketch = NULL, gp = vl_gpar(), name = NULL, vp = 
   if (length(unique(codes)) > 1L) {
     cli::cli_abort("Curve coordinates on one axis must use a single unit.")
   }
-  list(value = vctrs::field(a, "value"), unit = names(.unit_codes)[match(codes[1], .unit_codes)])
+  list(
+    value = vctrs::field(a, "value"),
+    unit = names(.unit_codes)[match(codes[1], .unit_codes)]
+  )
 }
 
 # Evaluate a Bezier (control values `p`) at parameters `t` via de Casteljau.
 .bezier_eval <- function(p, t) {
-  vapply(t, function(tt) {
-    b <- p
-    while (length(b) > 1L) b <- b[-length(b)] * (1 - tt) + b[-1] * tt
-    b
-  }, double(1))
+  vapply(
+    t,
+    function(tt) {
+      b <- p
+      while (length(b) > 1L) {
+        b <- b[-length(b)] * (1 - tt) + b[-1] * tt
+      }
+      b
+    },
+    double(1)
+  )
 }
 
 # Cardinal (Catmull-Rom) spline through control values `p`; `tension` 0 = loose
@@ -532,7 +805,9 @@ polygon_grob <- function(x, y, sketch = NULL, gp = vl_gpar(), name = NULL, vp = 
   if (k < 3L) {
     return(p)
   }
-  at <- function(i) if (closed) p[((i - 1L) %% k) + 1L] else p[min(max(i, 1L), k)]
+  at <- function(i) {
+    if (closed) p[((i - 1L) %% k) + 1L] else p[min(max(i, 1L), k)]
+  }
   c_ <- 1 - tension
   tt <- seq(0, 1, length.out = per + 1L)[-(per + 1L)]
   h00 <- 2 * tt^3 - 3 * tt^2 + 1
@@ -540,26 +815,50 @@ polygon_grob <- function(x, y, sketch = NULL, gp = vl_gpar(), name = NULL, vp = 
   h01 <- -2 * tt^3 + 3 * tt^2
   h11 <- tt^3 - tt^2
   segs <- if (closed) seq_len(k) else seq_len(k - 1L)
-  out <- unlist(lapply(segs, function(i) {
-    p1 <- at(i); p2 <- at(i + 1L)
-    m1 <- c_ * (p2 - at(i - 1L)) / 2
-    m2 <- c_ * (at(i + 2L) - p1) / 2
-    h00 * p1 + h10 * m1 + h01 * p2 + h11 * m2
-  }), use.names = FALSE)
+  out <- unlist(
+    lapply(segs, function(i) {
+      p1 <- at(i)
+      p2 <- at(i + 1L)
+      m1 <- c_ * (p2 - at(i - 1L)) / 2
+      m2 <- c_ * (at(i + 2L) - p1) / 2
+      h00 * p1 + h10 * m1 + h01 * p2 + h11 * m2
+    }),
+    use.names = FALSE
+  )
   c(out, at(if (closed) 1L else k))
 }
 
 #' @rdname grob
 #' @param n Number of points to sample the curve at (flattened to a polyline).
 #' @export
-bezier_grob <- function(x, y, n = 60, gp = vl_gpar(), name = NULL, vp = NULL, id = NULL, role = NULL) {
+bezier_grob <- function(
+  x,
+  y,
+  n = 60,
+  gp = vl_gpar(),
+  name = NULL,
+  vp = NULL,
+  id = NULL,
+  role = NULL
+) {
   ax <- .axis_unit(x)
   ay <- .axis_unit(y)
-  if (length(ax$value) != length(ay$value)) cli::cli_abort("{.arg x} and {.arg y} must have the same length.")
-  if (length(ax$value) < 2L) cli::cli_abort("A Bezier needs at least 2 control points.")
+  if (length(ax$value) != length(ay$value)) {
+    cli::cli_abort("{.arg x} and {.arg y} must have the same length.")
+  }
+  if (length(ax$value) < 2L) {
+    cli::cli_abort("A Bezier needs at least 2 control points.")
+  }
   t <- seq(0, 1, length.out = max(2L, n))
-  lines_grob(vl_unit(.bezier_eval(ax$value, t), ax$unit), vl_unit(.bezier_eval(ay$value, t), ay$unit),
-             gp = gp, name = name, vp = vp, id = id, role = role)
+  lines_grob(
+    vl_unit(.bezier_eval(ax$value, t), ax$unit),
+    vl_unit(.bezier_eval(ay$value, t), ay$unit),
+    gp = gp,
+    name = name,
+    vp = vp,
+    id = id,
+    role = role
+  )
 }
 
 #' @rdname grob
@@ -567,29 +866,69 @@ bezier_grob <- function(x, y, n = 60, gp = vl_gpar(), name = NULL, vp = NULL, id
 #'   Catmull-Rom curve through the points, `0` straight segments.
 #' @param open If `FALSE`, the spline is closed (wraps end to start).
 #' @export
-spline_grob <- function(x, y, shape = 1, n = 20, open = TRUE, gp = vl_gpar(), name = NULL, vp = NULL, id = NULL, role = NULL) {
+spline_grob <- function(
+  x,
+  y,
+  shape = 1,
+  n = 20,
+  open = TRUE,
+  gp = vl_gpar(),
+  name = NULL,
+  vp = NULL,
+  id = NULL,
+  role = NULL
+) {
   ax <- .axis_unit(x)
   ay <- .axis_unit(y)
-  if (length(ax$value) != length(ay$value)) cli::cli_abort("{.arg x} and {.arg y} must have the same length.")
+  if (length(ax$value) != length(ay$value)) {
+    cli::cli_abort("{.arg x} and {.arg y} must have the same length.")
+  }
   tension <- 1 - max(0, min(1, shape))
   fx <- .cardinal(ax$value, tension, max(1L, n), !open)
   fy <- .cardinal(ay$value, tension, max(1L, n), !open)
-  lines_grob(vl_unit(fx, ax$unit), vl_unit(fy, ay$unit), gp = gp, name = name, vp = vp, id = id, role = role)
+  lines_grob(
+    vl_unit(fx, ax$unit),
+    vl_unit(fy, ay$unit),
+    gp = gp,
+    name = name,
+    vp = vp,
+    id = id,
+    role = role
+  )
 }
 
 #' @rdname grob
 #' @param r Radius ([vl_unit()] or numeric).
 #' @export
-circle_grob <- function(x = 0.5, y = 0.5, r = 0.25, sketch = NULL, gp = vl_gpar(), name = NULL, vp = NULL, id = NULL, role = NULL,
-                        key = NULL, meta = NULL) {
+circle_grob <- function(
+  x = 0.5,
+  y = 0.5,
+  r = 0.25,
+  sketch = NULL,
+  gp = vl_gpar(),
+  name = NULL,
+  vp = NULL,
+  id = NULL,
+  role = NULL,
+  key = NULL,
+  meta = NULL
+) {
   n <- .common_n(x, y, r)
   ru <- as_unit(r)
   .check_extent(ru, "r")
-  grob_circle(x = vctrs::vec_recycle(as_unit(x), n),
-              y = vctrs::vec_recycle(as_unit(y), n),
-              r = vctrs::vec_recycle(ru, n),
-              sketch = sketch, gp = gp, name = name, vp = vp, id = id, role = role,
-              keys = .recycle_keys(key, n), meta = .recycle_meta(meta, n))
+  grob_circle(
+    x = vctrs::vec_recycle(as_unit(x), n),
+    y = vctrs::vec_recycle(as_unit(y), n),
+    r = vctrs::vec_recycle(ru, n),
+    sketch = sketch,
+    gp = gp,
+    name = name,
+    vp = vp,
+    id = id,
+    role = role,
+    keys = .recycle_keys(key, n),
+    meta = .recycle_meta(meta, n)
+  )
 }
 
 #' @rdname grob
@@ -600,23 +939,44 @@ circle_grob <- function(x = 0.5, y = 0.5, r = 0.25, sketch = NULL, gp = vl_gpar(
 #'   with `gp$col`, so an *open* marker is `fill = NA` with a `col`, a *filled* one
 #'   sets `fill`; `"plus"`/`"cross"` are stroke-only line glyphs.
 #' @export
-points_grob <- function(x, y, size = vl_unit(2, "mm"), shape = "circle",
-                        sketch = NULL, gp = vl_gpar(), name = NULL, vp = NULL, id = NULL, role = NULL,
-                        key = NULL, meta = NULL) {
+points_grob <- function(
+  x,
+  y,
+  size = vl_unit(2, "mm"),
+  shape = "circle",
+  sketch = NULL,
+  gp = vl_gpar(),
+  name = NULL,
+  vp = NULL,
+  id = NULL,
+  role = NULL,
+  key = NULL,
+  meta = NULL
+) {
   n <- .coord_n(x, y)
   sz <- as_unit(size, "mm")
   .check_extent(sz, "size")
   shape <- as.character(shape)
   bad <- setdiff(unique(shape), names(.marker_codes))
   if (length(bad)) {
-    cli::cli_abort("Unknown point {.arg shape}: {.val {bad}}. Use {.or {names(.marker_codes)}}.")
+    cli::cli_abort(
+      "Unknown point {.arg shape}: {.val {bad}}. Use {.or {names(.marker_codes)}}."
+    )
   }
-  grob_points(x = vctrs::vec_recycle(as_unit(x), n),
-              y = vctrs::vec_recycle(as_unit(y), n),
-              size = vctrs::vec_recycle(sz, n),
-              shape = vctrs::vec_recycle(shape, n),
-              sketch = sketch, gp = gp, name = name, vp = vp, id = id, role = role,
-              keys = .recycle_keys(key, n), meta = .recycle_meta(meta, n))
+  grob_points(
+    x = vctrs::vec_recycle(as_unit(x), n),
+    y = vctrs::vec_recycle(as_unit(y), n),
+    size = vctrs::vec_recycle(sz, n),
+    shape = vctrs::vec_recycle(shape, n),
+    sketch = sketch,
+    gp = gp,
+    name = name,
+    vp = vp,
+    id = id,
+    role = role,
+    keys = .recycle_keys(key, n),
+    meta = .recycle_meta(meta, n)
+  )
 }
 
 #' @rdname grob
@@ -627,11 +987,22 @@ points_grob <- function(x, y, size = vl_unit(2, "mm"), shape = "circle",
 #' @param orientation Hexagon orientation: `"flat"` (default, flat top/bottom edge)
 #'   or `"pointy"` (vertex at top). `size` is the circumradius (centre to vertex).
 #' @export
-hexagon_grob <- function(x = 0.5, y = 0.5, size = vl_unit(2, "mm"),
-                         width = NULL, height = NULL, fill = NULL,
-                         orientation = c("flat", "pointy"),
-                         gp = vl_gpar(), name = NULL, vp = NULL, id = NULL, role = NULL,
-                         key = NULL, meta = NULL) {
+hexagon_grob <- function(
+  x = 0.5,
+  y = 0.5,
+  size = vl_unit(2, "mm"),
+  width = NULL,
+  height = NULL,
+  fill = NULL,
+  orientation = c("flat", "pointy"),
+  gp = vl_gpar(),
+  name = NULL,
+  vp = NULL,
+  id = NULL,
+  role = NULL,
+  key = NULL,
+  meta = NULL
+) {
   orientation <- match.arg(orientation)
   n <- .coord_n(x, y)
   sz <- as_unit(size, "mm")
@@ -647,14 +1018,25 @@ hexagon_grob <- function(x = 0.5, y = 0.5, size = vl_unit(2, "mm"),
     width <- vctrs::vec_recycle(width, n)
     height <- vctrs::vec_recycle(height, n)
   }
-  if (!is.null(fill)) fill <- rep_len(fill, n)
-  grob_hexagon(x = vctrs::vec_recycle(as_unit(x), n),
-               y = vctrs::vec_recycle(as_unit(y), n),
-               size = vctrs::vec_recycle(sz, n),
-               width = width, height = height,
-               fill = fill, orientation = orientation,
-               gp = gp, name = name, vp = vp, id = id, role = role,
-               keys = .recycle_keys(key, n), meta = .recycle_meta(meta, n))
+  if (!is.null(fill)) {
+    fill <- rep_len(fill, n)
+  }
+  grob_hexagon(
+    x = vctrs::vec_recycle(as_unit(x), n),
+    y = vctrs::vec_recycle(as_unit(y), n),
+    size = vctrs::vec_recycle(sz, n),
+    width = width,
+    height = height,
+    fill = fill,
+    orientation = orientation,
+    gp = gp,
+    name = name,
+    vp = vp,
+    id = id,
+    role = role,
+    keys = .recycle_keys(key, n),
+    meta = .recycle_meta(meta, n)
+  )
 }
 
 #' @rdname grob
@@ -676,13 +1058,30 @@ hexagon_grob <- function(x = 0.5, y = 0.5, size = vl_unit(2, "mm"),
 #' end. (For node-link **self-loops**, prefer [loop_grob()] — a teardrop, not a
 #' ring.)
 #' @export
-sector_grob <- function(x = 0.5, y = 0.5, r0 = 0, r1 = 0.5, theta0 = 0, theta1 = 2 * pi,
-                        fill = NULL, arrow = NULL, sketch = NULL, gp = vl_gpar(), name = NULL, vp = NULL, id = NULL, role = NULL,
-                        key = NULL, meta = NULL) {
+sector_grob <- function(
+  x = 0.5,
+  y = 0.5,
+  r0 = 0,
+  r1 = 0.5,
+  theta0 = 0,
+  theta1 = 2 * pi,
+  fill = NULL,
+  arrow = NULL,
+  sketch = NULL,
+  gp = vl_gpar(),
+  name = NULL,
+  vp = NULL,
+  id = NULL,
+  role = NULL,
+  key = NULL,
+  meta = NULL
+) {
   n <- .common_n(x, y, r0, r1, theta0, theta1)
   .check_finite_num(theta0, "theta0")
   .check_finite_num(theta1, "theta1")
-  if (!is.null(fill)) fill <- rep_len(fill, n)
+  if (!is.null(fill)) {
+    fill <- rep_len(fill, n)
+  }
   grob_sector(
     x = vctrs::vec_recycle(as_unit(x), n),
     y = vctrs::vec_recycle(as_unit(y), n),
@@ -690,8 +1089,16 @@ sector_grob <- function(x = 0.5, y = 0.5, r0 = 0, r1 = 0.5, theta0 = 0, theta1 =
     r1 = vctrs::vec_recycle(as_unit(r1, "native"), n),
     theta0 = vctrs::vec_recycle(as.numeric(theta0), n),
     theta1 = vctrs::vec_recycle(as.numeric(theta1), n),
-    fill = fill, arrow = arrow, sketch = sketch, gp = gp, name = name, vp = vp, id = id, role = role,
-    keys = .recycle_keys(key, n), meta = .recycle_meta(meta, n)
+    fill = fill,
+    arrow = arrow,
+    sketch = sketch,
+    gp = gp,
+    name = name,
+    vp = vp,
+    id = id,
+    role = role,
+    keys = .recycle_keys(key, n),
+    meta = .recycle_meta(meta, n)
   )
 }
 
@@ -715,8 +1122,20 @@ sector_grob <- function(x = 0.5, y = 0.5, r0 = 0, r1 = 0.5, theta0 = 0, theta1 =
 #' device px **at render**, so the loop is a fixed physical size that scales with the
 #' mm node markers — no native-per-mm estimation, exact at any figure size/dpi.
 #' @export
-loop_grob <- function(x = 0.5, y = 0.5, size = vl_unit(4, "mm"), foot = vl_unit(0, "mm"),
-                      angle = 0, width = 1, arrow = NULL, gp = vl_gpar(), name = NULL, vp = NULL, id = NULL, role = NULL) {
+loop_grob <- function(
+  x = 0.5,
+  y = 0.5,
+  size = vl_unit(4, "mm"),
+  foot = vl_unit(0, "mm"),
+  angle = 0,
+  width = 1,
+  arrow = NULL,
+  gp = vl_gpar(),
+  name = NULL,
+  vp = NULL,
+  id = NULL,
+  role = NULL
+) {
   n <- .common_n(x, y, size, foot, angle, width)
   .check_finite_num(angle, "angle")
   sz <- .check_cap(as_unit(size, "mm"), "size")
@@ -728,31 +1147,68 @@ loop_grob <- function(x = 0.5, y = 0.5, size = vl_unit(4, "mm"), foot = vl_unit(
     foot = vctrs::vec_recycle(ft, n),
     angle = vctrs::vec_recycle(as.numeric(angle), n),
     width = vctrs::vec_recycle(as.numeric(width), n),
-    arrow = arrow, gp = gp, name = name, vp = vp, id = id, role = role
+    arrow = arrow,
+    gp = gp,
+    name = name,
+    vp = vp,
+    id = id,
+    role = role
   )
 }
 
 #' @rdname grob
 #' @param x0,y0,x1,y1 Segment start/end coordinates ([vl_unit()] or numeric).
 #' @export
-segments_grob <- function(x0, y0, x1, y1, arrow = NULL, start_cap = NULL, end_cap = NULL,
-                          offset = NULL, sketch = NULL, gp = vl_gpar(), name = NULL, vp = NULL, id = NULL, role = NULL,
-                          key = NULL, meta = NULL, col = NULL, lwd = NULL) {
+segments_grob <- function(
+  x0,
+  y0,
+  x1,
+  y1,
+  arrow = NULL,
+  start_cap = NULL,
+  end_cap = NULL,
+  offset = NULL,
+  sketch = NULL,
+  gp = vl_gpar(),
+  name = NULL,
+  vp = NULL,
+  id = NULL,
+  role = NULL,
+  key = NULL,
+  meta = NULL,
+  col = NULL,
+  lwd = NULL
+) {
   n <- .common_n(x0, y0, x1, y1)
   start_cap <- .check_cap(start_cap, "start_cap")
   end_cap <- .check_cap(end_cap, "end_cap")
   offset <- .check_cap(offset, "offset", nonneg = FALSE)
-  if (!is.null(start_cap)) start_cap <- vctrs::vec_recycle(start_cap, n)
-  if (!is.null(end_cap)) end_cap <- vctrs::vec_recycle(end_cap, n)
-  if (!is.null(offset)) offset <- vctrs::vec_recycle(offset, n)
+  if (!is.null(start_cap)) {
+    start_cap <- vctrs::vec_recycle(start_cap, n)
+  }
+  if (!is.null(end_cap)) {
+    end_cap <- vctrs::vec_recycle(end_cap, n)
+  }
+  if (!is.null(offset)) {
+    offset <- vctrs::vec_recycle(offset, n)
+  }
   grob_segments(
     x0 = vctrs::vec_recycle(as_unit(x0, "native"), n),
     y0 = vctrs::vec_recycle(as_unit(y0, "native"), n),
     x1 = vctrs::vec_recycle(as_unit(x1, "native"), n),
     y1 = vctrs::vec_recycle(as_unit(y1, "native"), n),
-    arrow = arrow, start_cap = start_cap, end_cap = end_cap, offset = offset,
-    sketch = sketch, gp = gp, name = name, vp = vp, id = id, role = role,
-    keys = .recycle_keys(key, n), meta = .recycle_meta(meta, n),
+    arrow = arrow,
+    start_cap = start_cap,
+    end_cap = end_cap,
+    offset = offset,
+    sketch = sketch,
+    gp = gp,
+    name = name,
+    vp = vp,
+    id = id,
+    role = role,
+    keys = .recycle_keys(key, n),
+    meta = .recycle_meta(meta, n),
     ecol = if (is.null(col)) NULL else rep_len(col, n),
     elwd = if (is.null(lwd)) NULL else rep_len(as.numeric(lwd), n)
   )
@@ -787,9 +1243,19 @@ segments_grob <- function(x0, y0, x1, y1, arrow = NULL, start_cap = NULL, end_ca
 #'   field values. It never reaches the backend (nothing drawn changes); it rides
 #'   on the scene and is returned by [scene_model()]. `NULL` (default) = none.
 #' @export
-path_grob <- function(x, y, id = NULL, rule = c("winding", "evenodd"),
-                      sketch = NULL, gp = vl_gpar(), name = NULL, vp = NULL, role = NULL,
-                      key = NULL, meta = NULL) {
+path_grob <- function(
+  x,
+  y,
+  id = NULL,
+  rule = c("winding", "evenodd"),
+  sketch = NULL,
+  gp = vl_gpar(),
+  name = NULL,
+  vp = NULL,
+  role = NULL,
+  key = NULL,
+  meta = NULL
+) {
   rule <- match.arg(rule)
   n <- .coord_n(x, y)
   xu <- vctrs::vec_recycle(as_unit(x, "native"), n)
@@ -797,16 +1263,27 @@ path_grob <- function(x, y, id = NULL, rule = c("winding", "evenodd"),
   if (is.null(id)) {
     nper <- n
   } else {
-    if (length(id) != n) cli::cli_abort("{.arg id} must have one value per point ({n}).")
+    if (length(id) != n) {
+      cli::cli_abort("{.arg id} must have one value per point ({n}).")
+    }
     grp <- match(id, unique(id)) # group index in first-appearance order
     ord <- order(grp, seq_along(grp)) # stable: gather each id's points together
-    xu <- xu[ord]; yu <- yu[ord]
+    xu <- xu[ord]
+    yu <- yu[ord]
     nper <- tabulate(grp)
   }
   grob_path(
-    x = xu, y = yu, nper = as.integer(nper), rule = rule,
-    sketch = sketch, gp = gp, name = name, vp = vp, role = role,
-    keys = .recycle_keys(key, 1L), meta = .recycle_meta(meta, 1L)
+    x = xu,
+    y = yu,
+    nper = as.integer(nper),
+    rule = rule,
+    sketch = sketch,
+    gp = gp,
+    name = name,
+    vp = vp,
+    role = role,
+    keys = .recycle_keys(key, 1L),
+    meta = .recycle_meta(meta, 1L)
   )
 }
 
@@ -820,14 +1297,34 @@ path_grob <- function(x, y, id = NULL, rule = c("winding", "evenodd"),
 #' @param interpolate Smoothly interpolate when scaling (default `TRUE`)? `FALSE`
 #'   keeps hard pixel edges.
 #' @export
-raster_grob <- function(image, x = 0.5, y = 0.5, width = 1, height = 1,
-                        interpolate = TRUE, gp = vl_gpar(), name = NULL, vp = NULL, id = NULL, role = NULL) {
+raster_grob <- function(
+  image,
+  x = 0.5,
+  y = 0.5,
+  width = 1,
+  height = 1,
+  interpolate = TRUE,
+  gp = vl_gpar(),
+  name = NULL,
+  vp = NULL,
+  id = NULL,
+  role = NULL
+) {
   px <- .image_to_rgba(image)
   grob_raster(
-    rgba = px$rgba, iw = px$iw, ih = px$ih,
-    x = as_unit(x), y = as_unit(y),
-    width = as_unit(width), height = as_unit(height),
-    interpolate = isTRUE(interpolate), gp = gp, name = name, vp = vp, id = id, role = role
+    rgba = px$rgba,
+    iw = px$iw,
+    ih = px$ih,
+    x = as_unit(x),
+    y = as_unit(y),
+    width = as_unit(width),
+    height = as_unit(height),
+    interpolate = isTRUE(interpolate),
+    gp = gp,
+    name = name,
+    vp = vp,
+    id = id,
+    role = role
   )
 }
 
@@ -844,8 +1341,11 @@ raster_grob <- function(image, x = 0.5, y = 0.5, width = 1, height = 1,
   }
   r <- grDevices::as.raster(image)
   d <- dim(r)
-  if (is.null(d) || any(d == 0L)) cli::cli_abort("{.arg image} has no pixels.")
-  ih <- d[1]; iw <- d[2]
+  if (is.null(d) || any(d == 0L)) {
+    cli::cli_abort("{.arg image} has no pixels.")
+  }
+  ih <- d[1]
+  iw <- d[2]
   rgba <- grDevices::col2rgb(as.vector(r), alpha = TRUE) # 4 x N (r, g, b, alpha)
   list(rgba = as.integer(rgba), iw = as.integer(iw), ih = as.integer(ih))
 }
@@ -876,13 +1376,15 @@ raster_grob <- function(image, x = 0.5, y = 0.5, width = 1, height = 1,
   if (anyNA(image) || min(image) < 0 || max(image) > 1) {
     return(NULL)
   }
-  ih <- d[1]; iw <- d[2]; nc <- d[3]
+  ih <- d[1]
+  iw <- d[2]
+  nc <- d[3]
   n <- ih * iw
   # `image` is column-major (row, col, channel); the general path flattens the
   # raster the same way, so channel slices line up element for element.
   # `as.raster.array()` transposes each plane before building its strings, so the
   # flattened raster runs across rows; transpose here to match element for element.
-  ch <- function(k) as.integer(255 * t(image[, , k]) + 0.5)
+  ch <- function(k) as.integer(255 * t(image[,, k]) + 0.5)
   px <- if (nc == 3L) {
     list(ch(1), ch(2), ch(3), rep.int(255L, n))
   } else {
@@ -904,8 +1406,11 @@ raster_grob <- function(image, x = 0.5, y = 0.5, width = 1, height = 1,
     cli::cli_abort("{.arg image} file does not exist: {.path {path}}.")
   }
   v <- rs_read_png(path)
-  iw <- v[1]; ih <- v[2]
-  if (iw <= 0L || ih <= 0L) cli::cli_abort("{.arg image} has no pixels.")
+  iw <- v[1]
+  ih <- v[2]
+  if (iw <= 0L || ih <= 0L) {
+    cli::cli_abort("{.arg image} has no pixels.")
+  }
   # Rust emits row-major RGBA, top-left first -- already the order the scene wants.
   # (`as.raster.array()` transposes each plane before building its strings, so the
   # `as.raster()` path flattens row-major too; no permutation is needed here.)
@@ -925,24 +1430,56 @@ raster_grob <- function(image, x = 0.5, y = 0.5, width = 1, height = 1,
 #'   `width` × `height`, down to a floor of 4 pt; a number sets that floor
 #'   instead. Requires `width`.
 #' @export
-text_grob <- function(label, x = 0.5, y = 0.5, just = "centre", rot = 0,
-                      gp = vl_gpar(), name = NULL, vp = NULL, id = NULL, role = NULL,
-                      width = NULL, height = NULL, align = "left", fit = FALSE,
-                      key = NULL, meta = NULL) {
+text_grob <- function(
+  label,
+  x = 0.5,
+  y = 0.5,
+  just = "centre",
+  rot = 0,
+  gp = vl_gpar(),
+  name = NULL,
+  vp = NULL,
+  id = NULL,
+  role = NULL,
+  width = NULL,
+  height = NULL,
+  align = "left",
+  fit = FALSE,
+  key = NULL,
+  meta = NULL
+) {
   # Rich labels pass through untouched; everything else coerces to character.
-  if (!S7::S7_inherits(label, vellum_label)) label <- as.character(label)
+  if (!S7::S7_inherits(label, vellum_label)) {
+    label <- as.character(label)
+  }
   align <- match.arg(align, c("left", "centre", "center", "right", "justify"))
   if (!isFALSE(fit) && is.null(width)) {
     cli::cli_abort("{.arg fit} needs a {.arg width} to fit into.")
   }
-  grob_text(label = label, x = as_unit(x), y = as_unit(y),
-            just = as.character(just), rot = as.numeric(rot),
-            width = .abs_mm(width, "width"), height = .abs_mm(height, "height"),
-            align = align,
-            fit = if (isFALSE(fit)) NA_real_ else if (isTRUE(fit)) 4 else as.numeric(fit),
-            gp = gp, name = name, vp = vp, id = id, role = role,
-            keys = .recycle_keys(key, .vsize(as_unit(x))),
-            meta = .recycle_meta(meta, .vsize(as_unit(x))))
+  grob_text(
+    label = label,
+    x = as_unit(x),
+    y = as_unit(y),
+    just = as.character(just),
+    rot = as.numeric(rot),
+    width = .abs_mm(width, "width"),
+    height = .abs_mm(height, "height"),
+    align = align,
+    fit = if (isFALSE(fit)) {
+      NA_real_
+    } else if (isTRUE(fit)) {
+      4
+    } else {
+      as.numeric(fit)
+    },
+    gp = gp,
+    name = name,
+    vp = vp,
+    id = id,
+    role = role,
+    keys = .recycle_keys(key, .vsize(as_unit(x))),
+    meta = .recycle_meta(meta, .vsize(as_unit(x)))
+  )
 }
 
 #' Text set along a path
@@ -990,16 +1527,34 @@ text_grob <- function(label, x = 0.5, y = 0.5, just = "centre", rot = 0,
 #'     offset = 3, gp = vl_gpar(fontsize = 13)
 #'   ))
 #' @export
-text_path_grob <- function(label, x, y, just = "centre", offset = 0,
-                           gp = vl_gpar(), name = NULL, vp = NULL, id = NULL,
-                           role = NULL) {
+text_path_grob <- function(
+  label,
+  x,
+  y,
+  just = "centre",
+  offset = 0,
+  gp = vl_gpar(),
+  name = NULL,
+  vp = NULL,
+  id = NULL,
+  role = NULL
+) {
   label <- as.character(label)
   if (length(label) != 1L) {
     cli::cli_abort("{.arg label} must be a single string; got {length(label)}.")
   }
-  grob_textpath(label = label, x = as_unit(x), y = as_unit(y),
-                just = as.character(just), offset = as.numeric(offset),
-                gp = gp, name = name, vp = vp, id = id, role = role)
+  grob_textpath(
+    label = label,
+    x = as_unit(x),
+    y = as_unit(y),
+    just = as.character(just),
+    offset = as.numeric(offset),
+    gp = gp,
+    name = name,
+    vp = vp,
+    id = id,
+    role = role
+  )
 }
 
 # Resolve a text-box dimension to millimetres, insisting it be absolute. NULL
@@ -1068,25 +1623,48 @@ grobheight <- function(grob, mult = 1) vl_unit(mult, "grobheight", data = grob)
       # box is `width` mm wide, and its height is the stacked wrapped-line count
       # (after auto-fit shrinks the font, if `fit` is set).
       labs <- .text_labels(g@label)
-      if (length(labs) == 0L) return(c(0, 0))
+      if (length(labs) == 0L) {
+        return(c(0, 0))
+      }
       rf <- .rs_face(face)
       wpt <- g@width / 25.4 * 72
       hpt <- if (is.na(g@height)) NULL else g@height / 25.4 * 72
       size <- fs
       if (!is.na(g@fit)) {
-        size <- min(vapply(labs, .fit_size, double(1),
-          width = wpt, height = hpt, align = g@align, family = fam,
-          italic = rf$italic, weight = rf$weight, size = fs, min_size = g@fit,
-          features = feat, USE.NAMES = FALSE))
+        size <- min(vapply(
+          labs,
+          .fit_size,
+          double(1),
+          width = wpt,
+          height = hpt,
+          align = g@align,
+          family = fam,
+          italic = rf$italic,
+          weight = rf$weight,
+          size = fs,
+          min_size = g@fit,
+          features = feat,
+          USE.NAMES = FALSE
+        ))
       }
-      ext <- lapply(labs, .compose_wrapped, width = wpt, align = g@align,
-        family = fam, italic = rf$italic, weight = rf$weight, size = size,
-        features = feat)
+      ext <- lapply(
+        labs,
+        .compose_wrapped,
+        width = wpt,
+        align = g@align,
+        family = fam,
+        italic = rf$italic,
+        weight = rf$weight,
+        size = size,
+        features = feat
+      )
       w <- max(vapply(ext, function(e) e$w, double(1))) / 72 * 25.4
       h <- max(vapply(ext, function(e) e$h, double(1))) / 72 * 25.4
     } else {
       labs <- .text_labels(g@label)
-      if (length(labs) == 0L) return(c(0, 0))
+      if (length(labs) == 0L) {
+        return(c(0, 0))
+      }
       w <- max(vl_strwidth(labs, fam, face, fs, unit = "mm", features = feat))
       h <- max(vl_strheight(labs, fam, face, fs, unit = "mm", features = feat))
     }
@@ -1095,16 +1673,27 @@ grobheight <- function(grob, mult = 1) vl_unit(mult, "grobheight", data = grob)
     rot <- (g@rot %||% 0)[1]
     if (!is.null(rot) && rot %% 180 != 0) {
       th <- rot * pi / 180
-      c <- abs(cos(th)); s <- abs(sin(th))
+      c <- abs(cos(th))
+      s <- abs(sin(th))
       return(c(w * c + h * s, w * s + h * c))
     }
     return(c(w, h))
   }
-  sc <- Scene$new(.MEASURE_REF_IN, .MEASURE_REF_IN, .MEASURE_DPI, c(0L, 0L, 0L, 0L))
+  sc <- Scene$new(
+    .MEASURE_REF_IN,
+    .MEASURE_REF_IN,
+    .MEASURE_DPI,
+    c(0L, 0L, 0L, 0L)
+  )
   compile(g, sc)
   bb <- sc$content_bbox() # c(min_x, min_y, max_x, max_y) px, or empty
-  if (length(bb) < 4L) return(c(0, 0))
-  c((bb[3] - bb[1] + 1) / .MEASURE_DPI * 25.4, (bb[4] - bb[2] + 1) / .MEASURE_DPI * 25.4)
+  if (length(bb) < 4L) {
+    return(c(0, 0))
+  }
+  c(
+    (bb[3] - bb[1] + 1) / .MEASURE_DPI * 25.4,
+    (bb[4] - bb[2] + 1) / .MEASURE_DPI * 25.4
+  )
 }
 
 # Common length across several coordinate args, allowing length-1 recycling.
@@ -1159,7 +1748,8 @@ grobheight <- function(grob, mult = 1) vl_unit(mult, "grobheight", data = grob)
 #'   )))
 #' @export
 stroke_to_path <- function(grob, width = 6, height = 4, dpi = 96, gp = NULL) {
-  ok <- S7::S7_inherits(grob, grob_lines) || S7::S7_inherits(grob, grob_polygon) ||
+  ok <- S7::S7_inherits(grob, grob_lines) ||
+    S7::S7_inherits(grob, grob_polygon) ||
     S7::S7_inherits(grob, grob_path)
   if (!ok) {
     cli::cli_abort(c(
@@ -1183,13 +1773,19 @@ stroke_to_path <- function(grob, width = 6, height = 4, dpi = 96, gp = NULL) {
   }
   lwd_px <- (style@lwd %||% 1) * dpi / 96
   v <- rs_stroke_to_path(
-    xs, ys, nper, closed, lwd_px,
+    xs,
+    ys,
+    nper,
+    closed,
+    lwd_px,
     .encode_code(style@lineend, .lineend_codes, "lineend") %||% 0L,
     .encode_code(style@linejoin, .linejoin_codes, "linejoin") %||% 0L,
     style@linemitre %||% 10
   )
   if (!length(v)) {
-    cli::cli_abort("The stroke expanded to nothing (a zero width, or no geometry).")
+    cli::cli_abort(
+      "The stroke expanded to nothing (a zero width, or no geometry)."
+    )
   }
   nsub <- as.integer(v[1])
   lens <- as.integer(v[1 + seq_len(nsub)])
@@ -1229,6 +1825,10 @@ stroke_to_path <- function(grob, width = 6, height = 4, dpi = 96, gp = NULL) {
     ))
   }
   mm_to_px <- dpi / 25.4
-  base <- ifelse(code %in% rel, val * extent_px, .abs_to_mm(val, code) * mm_to_px)
+  base <- ifelse(
+    code %in% rel,
+    val * extent_px,
+    .abs_to_mm(val, code) * mm_to_px
+  )
   as.numeric(base) + off * mm_to_px
 }

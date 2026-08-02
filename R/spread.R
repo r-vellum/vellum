@@ -30,7 +30,12 @@
 #' g <- datashade_segments(rnorm(2000), rnorm(2000), rnorm(2000), rnorm(2000))
 #' g2 <- spread(g, px = 2)
 #' @export
-spread <- function(grob, px = 1L, shape = c("circle", "square"), how = c("over", "add")) {
+spread <- function(
+  grob,
+  px = 1L,
+  shape = c("circle", "square"),
+  how = c("over", "add")
+) {
   shape <- match.arg(shape)
   how <- match.arg(how)
   if (!S7::S7_inherits(grob, grob_raster)) {
@@ -67,8 +72,13 @@ spread <- function(grob, px = 1L, shape = c("circle", "square"), how = c("over",
 #' g <- datashade_segments(rnorm(2000), rnorm(2000), rnorm(2000), rnorm(2000))
 #' g2 <- dynspread(g)
 #' @export
-dynspread <- function(grob, max_px = 3L, threshold = 0.5, shape = c("circle", "square"),
-                      how = c("over", "add")) {
+dynspread <- function(
+  grob,
+  max_px = 3L,
+  threshold = 0.5,
+  shape = c("circle", "square"),
+  how = c("over", "add")
+) {
   shape <- match.arg(shape)
   how <- match.arg(how)
   if (!S7::S7_inherits(grob, grob_raster)) {
@@ -79,7 +89,12 @@ dynspread <- function(grob, max_px = 3L, threshold = 0.5, shape = c("circle", "s
     cli::cli_abort("{.arg max_px} must be a non-negative integer.")
   }
   threshold <- as.double(threshold)
-  if (length(threshold) != 1L || is.na(threshold) || threshold <= 0 || threshold > 1) {
+  if (
+    length(threshold) != 1L ||
+      is.na(threshold) ||
+      threshold <= 0 ||
+      threshold > 1
+  ) {
     cli::cli_abort("{.arg threshold} must be a single number in (0, 1].")
   }
   ch <- .rgba_channels(grob@rgba, grob@iw, grob@ih)
@@ -107,7 +122,9 @@ dynspread <- function(grob, max_px = 3L, threshold = 0.5, shape = c("circle", "s
   iw <- as.integer(iw)
   ih <- as.integer(ih)
   base <- 4L * (seq_len(iw * ih) - 1L)
-  mk <- function(off) matrix(rgba[base + off], nrow = ih, ncol = iw, byrow = TRUE)
+  mk <- function(off) {
+    matrix(rgba[base + off], nrow = ih, ncol = iw, byrow = TRUE)
+  }
   list(r = mk(1L), g = mk(2L), b = mk(3L), a = mk(4L), iw = iw, ih = ih)
 }
 
@@ -127,10 +144,19 @@ dynspread <- function(grob, max_px = 3L, threshold = 0.5, shape = c("circle", "s
 # Rebuild a raster grob keeping every property except the pixels.
 .grob_with_rgba <- function(grob, rgba) {
   grob_raster(
-    rgba = as.integer(rgba), iw = grob@iw, ih = grob@ih,
-    x = grob@x, y = grob@y, width = grob@width, height = grob@height,
-    interpolate = grob@interpolate, gp = grob@gp,
-    name = grob@name, vp = grob@vp, id = grob@id, role = grob@role
+    rgba = as.integer(rgba),
+    iw = grob@iw,
+    ih = grob@ih,
+    x = grob@x,
+    y = grob@y,
+    width = grob@width,
+    height = grob@height,
+    interpolate = grob@interpolate,
+    gp = grob@gp,
+    name = grob@name,
+    vp = grob@vp,
+    id = grob@id,
+    role = grob@role
   )
 }
 
@@ -140,7 +166,11 @@ dynspread <- function(grob, max_px = 3L, threshold = 0.5, shape = c("circle", "s
 .spread_offsets <- function(px, shape) {
   g <- expand.grid(dr = -px:px, dc = -px:px)
   g <- g[!(g$dr == 0 & g$dc == 0), , drop = FALSE]
-  keep <- if (shape == "circle") g$dr^2 + g$dc^2 <= px^2 else pmax(abs(g$dr), abs(g$dc)) <= px
+  keep <- if (shape == "circle") {
+    g$dr^2 + g$dc^2 <= px^2
+  } else {
+    pmax(abs(g$dr), abs(g$dc)) <= px
+  }
   g[keep, , drop = FALSE]
 }
 
@@ -207,7 +237,9 @@ dynspread <- function(grob, max_px = 3L, threshold = 0.5, shape = c("circle", "s
   neigh <- matrix(0L, nrow(a), ncol(a))
   for (dr in -1:1) {
     for (dc in -1:1) {
-      if (dr == 0L && dc == 0L) next
+      if (dr == 0L && dc == 0L) {
+        next
+      }
       neigh <- neigh + .shift_mat(nonempty, dr, dc, 0L)
     }
   }

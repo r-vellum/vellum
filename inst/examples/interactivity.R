@@ -19,28 +19,45 @@ months <- seq_len(12)
 value <- cumsum(rnorm(12, 2, 5)) + 20
 
 plot <- vl_scene(6, 3.6, dpi = 150, bg = "white") |>
-  push(vl_viewport(name = "panel", y = 0.46, width = 0.86, height = 0.7,
-                   xscale = c(1, 12), yscale = range(value) + c(-4, 4))) |>
-  draw(rect_grob(gp = vl_gpar(fill = "grey97", col = "grey85"),
-                 role = "presentation")) |>
+  push(vl_viewport(
+    name = "panel",
+    y = 0.46,
+    width = 0.86,
+    height = 0.7,
+    xscale = c(1, 12),
+    yscale = range(value) + c(-4, 4)
+  )) |>
+  draw(rect_grob(
+    gp = vl_gpar(fill = "grey97", col = "grey85"),
+    role = "presentation"
+  )) |>
   # A whole series as one addressable thing -- hover the line, highlight the
   # series. This is the case that was impossible before.
-  draw(lines_grob(vl_unit(months, "native"), vl_unit(value, "native"),
-                  gp = vl_gpar(col = "#2C6FA6", lwd = 2.5),
-                  key = "series-A", meta = list(list(series = "A", n = 12)))) |>
+  draw(lines_grob(
+    vl_unit(months, "native"),
+    vl_unit(value, "native"),
+    gp = vl_gpar(col = "#2C6FA6", lwd = 2.5),
+    key = "series-A",
+    meta = list(list(series = "A", n = 12))
+  )) |>
   # The points, keyed per datum, as they always could be.
-  draw(points_grob(vl_unit(months, "native"), vl_unit(value, "native"),
-                   size = vl_unit(2.2, "mm"),
-                   gp = vl_gpar(fill = "#2C6FA6", col = "white", lwd = 1),
-                   key = paste0("pt-", months),
-                   meta = lapply(months, function(m) list(month = m, value = value[m])))) |>
+  draw(points_grob(
+    vl_unit(months, "native"),
+    vl_unit(value, "native"),
+    size = vl_unit(2.2, "mm"),
+    gp = vl_gpar(fill = "#2C6FA6", col = "white", lwd = 1),
+    key = paste0("pt-", months),
+    meta = lapply(months, function(m) list(month = m, value = value[m]))
+  )) |>
   # Data labels, keyed per label -- a vectorised text grob compiles to one node
   # per label, so each gets its own key.
-  draw(text_grob(sprintf("%.0f", value),
-                 x = vl_unit(months, "native"),
-                 y = vl_unit(value + 3, "native"),
-                 gp = vl_gpar(fontsize = 7, col = "grey35"),
-                 key = paste0("lbl-", months))) |>
+  draw(text_grob(
+    sprintf("%.0f", value),
+    x = vl_unit(months, "native"),
+    y = vl_unit(value + 3, "native"),
+    gp = vl_gpar(fontsize = 7, col = "grey35"),
+    key = paste0("lbl-", months)
+  )) |>
   pop()
 
 render(plot, "interactivity-keyed.png")
@@ -65,10 +82,21 @@ cat("rows with no key:", sum(is.na(el$key)), "of", nrow(el), "\n")
 # corner of a panel to the other has a bounding box covering the WHOLE panel.
 
 demo <- vl_scene(4, 3, dpi = 150, bg = "white") |>
-  draw(segments_grob(0.12, 0.12, 0.88, 0.88,
-                     gp = vl_gpar(col = "#C0392B", lwd = 2), key = "diagonal")) |>
-  draw(points_grob(0.82, 0.18, size = vl_unit(3, "mm"),
-                   gp = vl_gpar(fill = "#2C6FA6", col = NA), key = "corner"))
+  draw(segments_grob(
+    0.12,
+    0.12,
+    0.88,
+    0.88,
+    gp = vl_gpar(col = "#C0392B", lwd = 2),
+    key = "diagonal"
+  )) |>
+  draw(points_grob(
+    0.82,
+    0.18,
+    size = vl_unit(3, "mm"),
+    gp = vl_gpar(fill = "#2C6FA6", col = NA),
+    key = "corner"
+  ))
 
 probe <- c(0.82, 0.18) # right on the blue point
 
@@ -76,8 +104,10 @@ box <- scene_model(demo)$elements
 d <- box[box$key == "diagonal", ]
 px <- probe[1] * 600
 py <- (1 - probe[2]) * 450
-cat(sprintf("\nprobe is inside the diagonal's bbox: %s\n",
-            px > d$x0 && px < d$x1 && py > d$y0 && py < d$y1))
+cat(sprintf(
+  "\nprobe is inside the diagonal's bbox: %s\n",
+  px > d$x0 && px < d$x1 && py > d$y0 && py < d$y1
+))
 cat("...but by true geometry:\n")
 print(vl_nearest(demo, probe[1], probe[2], n = 2))
 
@@ -88,8 +118,12 @@ print(vl_nearest(demo, probe[1], probe[2], n = 2))
 # A filled shape contains its interior, so clicking the middle of a region hits
 # the region rather than its nearest edge.
 region <- vl_scene(3, 3, dpi = 150, bg = "white") |>
-  draw(polygon_grob(c(.2, .8, .5), c(.2, .2, .8),
-                    gp = vl_gpar(fill = "#F1C40F", col = "grey30"), key = "tri"))
+  draw(polygon_grob(
+    c(.2, .8, .5),
+    c(.2, .2, .8),
+    gp = vl_gpar(fill = "#F1C40F", col = "grey30"),
+    key = "tri"
+  ))
 cat("\ninside the triangle:\n")
 print(vl_nearest(region, 0.5, 0.4))
 

@@ -18,14 +18,25 @@ NULL
 # rather than resolved dynamically -- a spec cannot name an arbitrary function.
 .spec_classes <- function() {
   list(
-    gtree = gtree, vl_gpar = vl_gpar, class_viewport = class_viewport,
-    class_grid_layout = class_grid_layout, style = style,
+    gtree = gtree,
+    vl_gpar = vl_gpar,
+    class_viewport = class_viewport,
+    class_grid_layout = class_grid_layout,
+    style = style,
     vellum_md_label = vellum_md_label,
-    grob_rect = grob_rect, grob_roundrect = grob_roundrect, grob_lines = grob_lines,
-    grob_polygon = grob_polygon, grob_circle = grob_circle, grob_points = grob_points,
-    grob_hexagon = grob_hexagon, grob_sector = grob_sector, grob_text = grob_text,
+    grob_rect = grob_rect,
+    grob_roundrect = grob_roundrect,
+    grob_lines = grob_lines,
+    grob_polygon = grob_polygon,
+    grob_circle = grob_circle,
+    grob_points = grob_points,
+    grob_hexagon = grob_hexagon,
+    grob_sector = grob_sector,
+    grob_text = grob_text,
     grob_textpath = grob_textpath,
-    grob_segments = grob_segments, grob_loop = grob_loop, grob_path = grob_path,
+    grob_segments = grob_segments,
+    grob_loop = grob_loop,
+    grob_path = grob_path,
     grob_raster = grob_raster
   )
 }
@@ -76,7 +87,9 @@ as_scene_spec <- function(scene) {
 #' @export
 from_scene_spec <- function(spec) {
   if (!is.list(spec) || is.null(spec$version)) {
-    cli::cli_abort("{.arg spec} does not look like a scene spec (no {.field version}).")
+    cli::cli_abort(
+      "{.arg spec} does not look like a scene spec (no {.field version})."
+    )
   }
   # A local, dot-free name: cli reads `{.SPEC_VERSION}` as an inline style.
   supported <- .SPEC_VERSION
@@ -89,8 +102,10 @@ from_scene_spec <- function(spec) {
   # JSON has one number type and reads 120 back as an integer, so coerce the
   # numerics the S7 properties are typed on rather than failing validation.
   s <- vl_scene(
-    width = .spec_decode(spec$width), height = .spec_decode(spec$height),
-    dpi = as.double(.spec_decode(spec$dpi)), bg = spec$bg
+    width = .spec_decode(spec$width),
+    height = .spec_decode(spec$height),
+    dpi = as.double(.spec_decode(spec$dpi)),
+    bg = spec$bg
   )
   if (!is.null(spec$title) || !is.null(spec$desc)) {
     s <- describe(s, title = spec$title, desc = spec$desc)
@@ -107,8 +122,12 @@ from_scene_spec <- function(spec) {
   }
   if (is_unit(x)) {
     d <- vctrs::vec_data(x)
-    return(list(`_t` = "unit", value = .spec_encode(d$value),
-                unit = d$unit, offset = .spec_encode(d$offset)))
+    return(list(
+      `_t` = "unit",
+      value = .spec_encode(d$value),
+      unit = d$unit,
+      offset = .spec_encode(d$offset)
+    ))
   }
   if (S7::S7_inherits(x)) {
     cls <- attr(S7::S7_class(x), "name")
@@ -122,17 +141,27 @@ from_scene_spec <- function(spec) {
     props$nid <- NULL
     return(c(list(`_t` = "s7", class = cls), lapply(props, .spec_encode)))
   }
-  if (inherits(x, "vellum_gradient") || inherits(x, "vellum_pattern") ||
-      inherits(x, "vellum_mask") || inherits(x, "vellum_shadow")) {
-    return(c(list(`_t` = "tagged", class = class(x)[1]), lapply(unclass(x), .spec_encode)))
+  if (
+    inherits(x, "vellum_gradient") ||
+      inherits(x, "vellum_pattern") ||
+      inherits(x, "vellum_mask") ||
+      inherits(x, "vellum_shadow")
+  ) {
+    return(c(
+      list(`_t` = "tagged", class = class(x)[1]),
+      lapply(unclass(x), .spec_encode)
+    ))
   }
   if (is.list(x)) {
     # Positional elements go in their own `items` array rather than alongside
     # `_t`: a JSON object with one named and several unnamed keys is not
     # representable, and jsonlite invents names for them on the way back.
-    return(list(`_t` = "list", named = !is.null(names(x)),
-                names = names(x) %||% character(),
-                items = unname(lapply(x, .spec_encode))))
+    return(list(
+      `_t` = "list",
+      named = !is.null(names(x)),
+      names = names(x) %||% character(),
+      items = unname(lapply(x, .spec_encode))
+    ))
   }
   if (is.function(x) || is.environment(x)) {
     cli::cli_abort(c(
@@ -166,18 +195,26 @@ from_scene_spec <- function(spec) {
   # Select by POSITION, not by name: list elements are unnamed, and `x[""]`
   # silently yields a NULL element rather than matching them.
   nm <- names(x)
-  if (is.null(nm)) nm <- rep("", length(x))
+  if (is.null(nm)) {
+    nm <- rep("", length(x))
+  }
   body <- x[!nm %in% c("_t", "class")]
-  switch(tag,
+  switch(
+    tag,
     dbl = as.double(unlist(x$v)),
     chr = as.character(unlist(x$v)),
-    unit = new_unit(as.double(.spec_decode(x$value)), as.integer(.spec_decode(x$unit)),
-                    as.double(.spec_decode(x$offset))),
+    unit = new_unit(
+      as.double(.spec_decode(x$value)),
+      as.integer(.spec_decode(x$unit)),
+      as.double(.spec_decode(x$offset))
+    ),
     list = {
       out <- lapply(x$items, .spec_decode)
       # Restore names only if the original had them: a `md()` label's runs are
       # named lists, and unnaming them rebuilds a different object.
-      if (isTRUE(unlist(x$named))) names(out) <- as.character(unlist(x$names))
+      if (isTRUE(unlist(x$named))) {
+        names(out) <- as.character(unlist(x$names))
+      }
       out
     },
     tagged = {
@@ -222,17 +259,22 @@ from_scene_spec <- function(spec) {
 #' @export
 scene_write <- function(scene, path) {
   spec <- as_scene_spec(scene)
-  switch(.spec_format(path),
-    rds = saveRDS(spec, path),
-    json = {
-      .spec_need_jsonlite()
-      # `auto_unbox = FALSE` deliberately: unboxing turns a length-1 `NA` into a
-      # bare `null`, which reads back as NULL and loses the value. Keeping every
-      # vector an array costs some verbosity and round-trips NA correctly.
-      writeLines(jsonlite::toJSON(spec, auto_unbox = FALSE, digits = NA, null = "null",
-                                  na = "null"), path)
-    }
-  )
+  switch(.spec_format(path), rds = saveRDS(spec, path), json = {
+    .spec_need_jsonlite()
+    # `auto_unbox = FALSE` deliberately: unboxing turns a length-1 `NA` into a
+    # bare `null`, which reads back as NULL and loses the value. Keeping every
+    # vector an array costs some verbosity and round-trips NA correctly.
+    writeLines(
+      jsonlite::toJSON(
+        spec,
+        auto_unbox = FALSE,
+        digits = NA,
+        null = "null",
+        na = "null"
+      ),
+      path
+    )
+  })
   invisible(path)
 }
 
@@ -242,21 +284,23 @@ scene_read <- function(path) {
   if (!file.exists(path)) {
     cli::cli_abort("No such file: {.path {path}}.")
   }
-  spec <- switch(.spec_format(path),
-    rds = readRDS(path),
-    json = {
-      .spec_need_jsonlite()
-      jsonlite::fromJSON(paste(readLines(path, warn = FALSE), collapse = "\n"),
-                         simplifyVector = TRUE, simplifyDataFrame = FALSE)
-    }
-  )
+  spec <- switch(.spec_format(path), rds = readRDS(path), json = {
+    .spec_need_jsonlite()
+    jsonlite::fromJSON(
+      paste(readLines(path, warn = FALSE), collapse = "\n"),
+      simplifyVector = TRUE,
+      simplifyDataFrame = FALSE
+    )
+  })
   from_scene_spec(spec)
 }
 
 .spec_format <- function(path) {
   ext <- tolower(tools::file_ext(path))
   if (!ext %in% c("rds", "json")) {
-    cli::cli_abort("Unsupported scene format {.val {ext}}; use {.file .rds} or {.file .json}.")
+    cli::cli_abort(
+      "Unsupported scene format {.val {ext}}; use {.file .rds} or {.file .json}."
+    )
   }
   ext
 }
@@ -331,8 +375,12 @@ scene_diff <- function(a, b, max_depth = 40L) {
   sb <- as_scene_spec(b)
   rows <- .diff_node(sa, sb, "", max_depth)
   out <- if (!length(rows)) {
-    data.frame(path = character(), change = character(), detail = character(),
-               stringsAsFactors = FALSE)
+    data.frame(
+      path = character(),
+      change = character(),
+      detail = character(),
+      stringsAsFactors = FALSE
+    )
   } else {
     do.call(rbind, lapply(rows, as.data.frame, stringsAsFactors = FALSE))
   }
@@ -360,14 +408,18 @@ scene_diff <- function(a, b, max_depth = 40L) {
     if (isTRUE(all.equal(a, b))) {
       return(list())
     }
-    return(list(list(path = path, change = "changed",
-                     detail = sprintf("%s -> %s", .diff_leaf(a), .diff_leaf(b)))))
+    return(list(list(
+      path = path,
+      change = "changed",
+      detail = sprintf("%s -> %s", .diff_leaf(a), .diff_leaf(b))
+    )))
   }
   if (is.list(a) && is.list(b)) {
     # A different class at the same position is a replacement, not a field edit.
     if (!identical(a[["class"]], b[["class"]])) {
       return(list(list(
-        path = path, change = "changed",
+        path = path,
+        change = "changed",
         detail = sprintf("%s -> %s", .diff_desc(a), .diff_desc(b))
       )))
     }
@@ -378,22 +430,45 @@ scene_diff <- function(a, b, max_depth = 40L) {
       ea <- a$items
       eb <- b$items
       n <- max(length(ea), length(eb))
-      return(unlist(lapply(seq_len(n), function(i) {
-        .diff_node(if (i <= length(ea)) ea[[i]] else NULL,
-                   if (i <= length(eb)) eb[[i]] else NULL,
-                   sprintf("%s[%d]", path, i), depth - 1L)
-      }), recursive = FALSE) %||% list())
+      return(
+        unlist(
+          lapply(seq_len(n), function(i) {
+            .diff_node(
+              if (i <= length(ea)) ea[[i]] else NULL,
+              if (i <= length(eb)) eb[[i]] else NULL,
+              sprintf("%s[%d]", path, i),
+              depth - 1L
+            )
+          }),
+          recursive = FALSE
+        ) %||%
+          list()
+      )
     }
     keys <- setdiff(union(names(a), names(b)), c("_t", "class"))
-    return(unlist(lapply(keys, function(k) {
-      .diff_node(a[[k]], b[[k]], if (nzchar(path)) paste0(path, "$", k) else k, depth - 1L)
-    }), recursive = FALSE) %||% list())
+    return(
+      unlist(
+        lapply(keys, function(k) {
+          .diff_node(
+            a[[k]],
+            b[[k]],
+            if (nzchar(path)) paste0(path, "$", k) else k,
+            depth - 1L
+          )
+        }),
+        recursive = FALSE
+      ) %||%
+        list()
+    )
   }
   if (isTRUE(all.equal(a, b))) {
     return(list())
   }
-  list(list(path = path, change = "changed",
-            detail = sprintf("%s -> %s", .diff_val(a), .diff_val(b))))
+  list(list(
+    path = path,
+    change = "changed",
+    detail = sprintf("%s -> %s", .diff_val(a), .diff_val(b))
+  ))
 }
 
 .diff_is_leaf <- function(x) {
@@ -408,7 +483,8 @@ scene_diff <- function(a, b, max_depth = 40L) {
   if (!is.list(x)) {
     return(.diff_val(x))
   }
-  switch(x[["_t"]],
+  switch(
+    x[["_t"]],
     dbl = ,
     chr = .diff_val(unlist(x$v)),
     unit = .diff_val(format(.spec_decode(x))),
@@ -419,7 +495,9 @@ scene_diff <- function(a, b, max_depth = 40L) {
 # The payload elements of a spec node, dropping the `_t`/`class` bookkeeping.
 .diff_body <- function(x) {
   nm <- names(x)
-  if (is.null(nm)) nm <- rep("", length(x))
+  if (is.null(nm)) {
+    nm <- rep("", length(x))
+  }
   unname(x[!nm %in% c("_t", "class")])
 }
 
@@ -495,8 +573,16 @@ print.vellum_diff <- function(x, ...) {
 #'   draw(circle_grob(r = 0.4, gp = vl_gpar(fill = "tomato", col = NA)))
 #' scene_inset(main, mini, x = 0.8, y = 0.75, width = 0.3, height = 0.35)
 #' @export
-scene_inset <- function(host, guest, x = 0.5, y = 0.5, width = 0.3, height = 0.3,
-                        name = NULL, ...) {
+scene_inset <- function(
+  host,
+  guest,
+  x = 0.5,
+  y = 0.5,
+  width = 0.3,
+  height = 0.3,
+  name = NULL,
+  ...
+) {
   host <- as_vellum_scene(host)
   guest <- as_vellum_scene(guest)
   groot <- .materialize(guest)
@@ -504,8 +590,10 @@ scene_inset <- function(host, guest, x = 0.5, y = 0.5, width = 0.3, height = 0.3
   if (!length(kids)) {
     return(host)
   }
-  out <- push(host, vl_viewport(x = x, y = y, width = width, height = height,
-                                name = name, ...))
+  out <- push(
+    host,
+    vl_viewport(x = x, y = y, width = width, height = height, name = name, ...)
+  )
   # The guest's own root viewport is dropped: the region we just pushed takes
   # its place, which is exactly what "inset this scene here" means.
   for (k in kids) {

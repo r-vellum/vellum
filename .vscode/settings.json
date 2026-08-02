@@ -1,15 +1,23 @@
 {
-  "rust-analyzer.linkedProjects": [
-    "${workspaceFolder}/src/rust/Cargo.toml"
-  ],
-  "files.associations": {
-    "Makevars": "makefile",
-    "Makevars.in": "makefile",
-    "Makevars.win": "makefile",
-    "Makevars.win.in": "makefile",
-    "configure": "shellscript",
-    "configure.win": "shellscript",
-    "cleanup": "shellscript",
-    "cleanup.win": "shellscript"
-  }
+    "rust-analyzer.linkedProjects": [
+        "${workspaceFolder}/src/rust/Cargo.toml"
+    ],
+    "files.associations": {
+        "Makevars": "makefile",
+        "Makevars.in": "makefile",
+        "Makevars.win": "makefile",
+        "Makevars.win.in": "makefile",
+        "configure": "shellscript",
+        "configure.win": "shellscript",
+        "cleanup": "shellscript",
+        "cleanup.win": "shellscript"
+    },
+    "[r]": {
+        "editor.formatOnSave": true,
+        "editor.defaultFormatter": "Posit.air-vscode"
+    },
+    "[quarto]": {
+        "editor.formatOnSave": true,
+        "editor.defaultFormatter": "quarto.quarto"
+    }
 }

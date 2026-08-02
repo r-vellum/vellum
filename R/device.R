@@ -37,7 +37,9 @@ as_vellum <- function(x, width = 7, height = 7, dpi = 96, bg = "white") {
   acc$grobs <- list()
   .gv_walk(grob, acc, list())
   s <- vl_scene(width = width, height = height, dpi = dpi, bg = bg)
-  for (g in acc$grobs) s <- draw(s, g)
+  for (g in acc$grobs) {
+    s <- draw(s, g)
+  }
   s
 }
 
@@ -45,8 +47,15 @@ as_vellum <- function(x, width = 7, height = 7, dpi = 96, bg = "white") {
 #' @param path Output file (`.png`/`.svg`/`.pdf`).
 #' @param text Passed to [render()] (SVG text mode).
 #' @export
-render_grid <- function(x, path, width = 7, height = 7, dpi = 96, bg = "white",
-                        text = c("native", "outline")) {
+render_grid <- function(
+  x,
+  path,
+  width = 7,
+  height = 7,
+  dpi = 96,
+  bg = "white",
+  text = c("native", "outline")
+) {
   render(as_vellum(x, width, height, dpi, bg), path, text = match.arg(text))
 }
 
@@ -93,7 +102,9 @@ render_grid <- function(x, path, width = 7, height = 7, dpi = 96, bg = "white",
     }
     grob <- tryCatch(grid::makeContent(grob), error = function(e) grob)
     kids <- grob$children
-    for (nm in (grob$childrenOrder %||% names(kids))) .gv_walk(kids[[nm]], acc, gp)
+    for (nm in (grob$childrenOrder %||% names(kids))) {
+      .gv_walk(kids[[nm]], acc, gp)
+    }
     if (cn > 0L) grid::popViewport(cn)
   } else {
     .gv_leaf(grob, acc, gp)
@@ -105,7 +116,11 @@ render_grid <- function(x, path, width = 7, height = 7, dpi = 96, bg = "white",
 # Current viewport-stack depth (0 at the page root).
 .vp_depth_now <- function() {
   p <- grid::current.vpPath()
-  if (is.null(p)) 0L else length(strsplit(as.character(p), "::", fixed = TRUE)[[1]])
+  if (is.null(p)) {
+    0L
+  } else {
+    length(strsplit(as.character(p), "::", fixed = TRUE)[[1]])
+  }
 }
 
 # Enter a grob's vp: a viewport/stack/list is pushed; a vpPath is navigated.
@@ -132,7 +147,8 @@ render_grid <- function(x, path, width = 7, height = 7, dpi = 96, bg = "white",
 # --- leaf conversion --------------------------------------------------------
 
 .gv_leaf <- function(grob, acc, gp) {
-  switch(class(grob)[1],
+  switch(
+    class(grob)[1],
     rect = .gv_rect(grob, gp, acc),
     lines = .gv_lines(grob, gp, acc),
     polyline = .gv_polyline(grob, gp, acc),
@@ -163,8 +179,20 @@ render_grid <- function(x, path, width = 7, height = 7, dpi = 96, bg = "white",
 # grid allows per-element (vector) gpar, but a vellum grob carries one gpar; so
 # group `n` elements by their distinct style (+ any `extra` per-element keys such
 # as pch/size) and return a list of index vectors, one per group.
-.gv_style_fields <- c("col", "fill", "lwd", "lty", "alpha", "lineend", "linejoin",
-                      "linemitre", "fontface", "fontfamily", "fontsize", "lineheight")
+.gv_style_fields <- c(
+  "col",
+  "fill",
+  "lwd",
+  "lty",
+  "alpha",
+  "lineend",
+  "linejoin",
+  "linemitre",
+  "fontface",
+  "fontfamily",
+  "fontsize",
+  "lineheight"
+)
 .gv_groups <- function(gp, n, extra = list()) {
   # Group by EXACT per-element style: encode each field's distinct values as
   # integer codes (match against unique) — `format()` would merge numerically
@@ -174,8 +202,12 @@ render_grid <- function(x, path, width = 7, height = 7, dpi = 96, bg = "white",
     match(v, unique(v))
   }
   cols <- list()
-  for (f in .gv_style_fields) if (!is.null(gp[[f]])) cols[[f]] <- code(gp[[f]])
-  for (nm in names(extra)) cols[[nm]] <- code(extra[[nm]])
+  for (f in .gv_style_fields) {
+    if (!is.null(gp[[f]])) cols[[f]] <- code(gp[[f]])
+  }
+  for (nm in names(extra)) {
+    cols[[nm]] <- code(extra[[nm]])
+  }
   if (!length(cols)) {
     return(list(seq_len(n)))
   }
@@ -195,19 +227,39 @@ render_grid <- function(x, path, width = 7, height = 7, dpi = 96, bg = "white",
   w <- .cw(g$width)
   h <- .ch(g$height)
   n <- max(length(loc$x), length(loc$y), length(w), length(h))
-  loc$x <- rep_len(loc$x, n); loc$y <- rep_len(loc$y, n); w <- rep_len(w, n); h <- rep_len(h, n)
+  loc$x <- rep_len(loc$x, n)
+  loc$y <- rep_len(loc$y, n)
+  w <- rep_len(w, n)
+  h <- rep_len(h, n)
   hv <- .gv_just(g$just, g$hjust, g$vjust)
   cx <- loc$x + (0.5 - hv[1]) * w
   cy <- loc$y + (0.5 - hv[2]) * h
   for (idx in .gv_groups(gp, n)) {
-    .gv_emit(acc, rect_grob(.in(cx[idx]), .in(cy[idx]), .in(abs(w[idx])), .in(abs(h[idx])), gp = .gv_gpar_at(gp, idx[1])))
+    .gv_emit(
+      acc,
+      rect_grob(
+        .in(cx[idx]),
+        .in(cy[idx]),
+        .in(abs(w[idx])),
+        .in(abs(h[idx])),
+        gp = .gv_gpar_at(gp, idx[1])
+      )
+    )
   }
 }
 
 .gv_lines <- function(g, gp, acc) {
   loc <- .gv_xy(g$x, g$y)
   if (length(loc$x) >= 2L) {
-    .gv_emit(acc, lines_grob(.in(loc$x), .in(loc$y), arrow = .gv_arrow(g$arrow), gp = .gv_gpar_at(gp, 1L)))
+    .gv_emit(
+      acc,
+      lines_grob(
+        .in(loc$x),
+        .in(loc$y),
+        arrow = .gv_arrow(g$arrow),
+        gp = .gv_gpar_at(gp, 1L)
+      )
+    )
   }
 }
 
@@ -237,7 +289,17 @@ render_grid <- function(x, path, width = 7, height = 7, dpi = 96, bg = "white",
   grp <- .gv_id_groups(id)
   for (j in seq_along(grp)) {
     k <- grp[[j]]
-    if (length(k) >= 2L) .gv_emit(acc, lines_grob(.in(loc$x[k]), .in(loc$y[k]), arrow = .gv_arrow(g$arrow), gp = .gv_gpar_at(gp, j)))
+    if (length(k) >= 2L) {
+      .gv_emit(
+        acc,
+        lines_grob(
+          .in(loc$x[k]),
+          .in(loc$y[k]),
+          arrow = .gv_arrow(g$arrow),
+          gp = .gv_gpar_at(gp, j)
+        )
+      )
+    }
   }
 }
 
@@ -246,8 +308,17 @@ render_grid <- function(x, path, width = 7, height = 7, dpi = 96, bg = "white",
   b <- .gv_xy(g$x1, g$y1)
   n <- length(a$x)
   for (idx in .gv_groups(gp, n)) {
-    .gv_emit(acc, segments_grob(.in(a$x[idx]), .in(a$y[idx]), .in(b$x[idx]), .in(b$y[idx]),
-                                arrow = .gv_arrow(g$arrow), gp = .gv_gpar_at(gp, idx[1])))
+    .gv_emit(
+      acc,
+      segments_grob(
+        .in(a$x[idx]),
+        .in(a$y[idx]),
+        .in(b$x[idx]),
+        .in(b$y[idx]),
+        arrow = .gv_arrow(g$arrow),
+        gp = .gv_gpar_at(gp, idx[1])
+      )
+    )
   }
 }
 
@@ -257,7 +328,12 @@ render_grid <- function(x, path, width = 7, height = 7, dpi = 96, bg = "white",
   grp <- .gv_id_groups(id)
   for (j in seq_along(grp)) {
     k <- grp[[j]]
-    if (length(k) >= 3L) .gv_emit(acc, polygon_grob(.in(loc$x[k]), .in(loc$y[k]), gp = .gv_gpar_at(gp, j)))
+    if (length(k) >= 3L) {
+      .gv_emit(
+        acc,
+        polygon_grob(.in(loc$x[k]), .in(loc$y[k]), gp = .gv_gpar_at(gp, j))
+      )
+    }
   }
 }
 
@@ -265,9 +341,19 @@ render_grid <- function(x, path, width = 7, height = 7, dpi = 96, bg = "white",
   loc <- .gv_xy(g$x, g$y)
   r <- .cw(g$r)
   n <- max(length(loc$x), length(r))
-  loc$x <- rep_len(loc$x, n); loc$y <- rep_len(loc$y, n); r <- rep_len(r, n)
+  loc$x <- rep_len(loc$x, n)
+  loc$y <- rep_len(loc$y, n)
+  r <- rep_len(r, n)
   for (idx in .gv_groups(gp, n)) {
-    .gv_emit(acc, circle_grob(.in(loc$x[idx]), .in(loc$y[idx]), .in(r[idx]), gp = .gv_gpar_at(gp, idx[1])))
+    .gv_emit(
+      acc,
+      circle_grob(
+        .in(loc$x[idx]),
+        .in(loc$y[idx]),
+        .in(r[idx]),
+        gp = .gv_gpar_at(gp, idx[1])
+      )
+    )
   }
 }
 
@@ -280,8 +366,19 @@ render_grid <- function(x, path, width = 7, height = 7, dpi = 96, bg = "white",
     i <- idx[1]
     shp <- .gv_pch(pch[i])
     vgp <- .gv_gpar_at(gp, i)
-    if (shp$fill && is.null(vgp@fill)) vgp@fill <- vgp@col
-    .gv_emit(acc, points_grob(.in(loc$x[idx]), .in(loc$y[idx]), size = .in(size[idx]), shape = shp$shape, gp = vgp))
+    if (shp$fill && is.null(vgp@fill)) {
+      vgp@fill <- vgp@col
+    }
+    .gv_emit(
+      acc,
+      points_grob(
+        .in(loc$x[idx]),
+        .in(loc$y[idx]),
+        size = .in(size[idx]),
+        shape = shp$shape,
+        gp = vgp
+      )
+    )
   }
 }
 
@@ -292,14 +389,25 @@ render_grid <- function(x, path, width = 7, height = 7, dpi = 96, bg = "white",
   if (n == 0L) {
     return(invisible())
   }
-  loc$x <- rep_len(loc$x, n); loc$y <- rep_len(loc$y, n); lab <- rep_len(lab, n)
+  loc$x <- rep_len(loc$x, n)
+  loc$y <- rep_len(loc$y, n)
+  lab <- rep_len(lab, n)
   fs <- (gp$fontsize %||% 12) * (gp$cex %||% 1)
   gp$fontsize <- fs
   rot <- g$rot %||% 0
   just <- .gv_just_names(g$just, g$hjust, g$vjust)
   for (idx in .gv_groups(gp, n)) {
-    .gv_emit(acc, text_grob(lab[idx], .in(loc$x[idx]), .in(loc$y[idx]), just = just,
-                            rot = rep_len(rot, n)[idx], gp = .gv_gpar_at(gp, idx[1])))
+    .gv_emit(
+      acc,
+      text_grob(
+        lab[idx],
+        .in(loc$x[idx]),
+        .in(loc$y[idx]),
+        just = just,
+        rot = rep_len(rot, n)[idx],
+        gp = .gv_gpar_at(gp, idx[1])
+      )
+    )
   }
 }
 
@@ -308,8 +416,18 @@ render_grid <- function(x, path, width = 7, height = 7, dpi = 96, bg = "white",
   w <- .cw(g$width)
   h <- .ch(g$height)
   hv <- .gv_just(g$just, g$hjust, g$vjust)
-  .gv_emit(acc, raster_grob(g$raster, .in(loc$x[1] + (0.5 - hv[1]) * w[1]), .in(loc$y[1] + (0.5 - hv[2]) * h[1]),
-                            .in(abs(w[1])), .in(abs(h[1])), interpolate = isTRUE(g$interpolate), gp = .gv_to_gpar(gp)))
+  .gv_emit(
+    acc,
+    raster_grob(
+      g$raster,
+      .in(loc$x[1] + (0.5 - hv[1]) * w[1]),
+      .in(loc$y[1] + (0.5 - hv[2]) * h[1]),
+      .in(abs(w[1])),
+      .in(abs(h[1])),
+      interpolate = isTRUE(g$interpolate),
+      gp = .gv_to_gpar(gp)
+    )
+  )
 }
 
 # --- gpar / unit helpers ----------------------------------------------------
@@ -331,16 +449,31 @@ render_grid <- function(x, path, width = 7, height = 7, dpi = 96, bg = "white",
     ff <- c("plain", "bold", "italic", "bold.italic")[ff]
   }
   vl_gpar(
-    col = gp$col, fill = gp$fill, lwd = gp$lwd, lty = gp$lty,
-    alpha = gp$alpha, lineend = gp$lineend, linejoin = gp$linejoin,
-    linemitre = gp$linemitre, fontfamily = gp$fontfamily, fontface = ff,
-    fontsize = gp$fontsize, lineheight = gp$lineheight
+    col = gp$col,
+    fill = gp$fill,
+    lwd = gp$lwd,
+    lty = gp$lty,
+    alpha = gp$alpha,
+    lineend = gp$lineend,
+    linejoin = gp$linejoin,
+    linemitre = gp$linemitre,
+    fontfamily = gp$fontfamily,
+    fontface = ff,
+    fontsize = gp$fontsize,
+    lineheight = gp$lineheight
   )
 }
 
 # grid just -> c(hjust, vjust) fractions.
 .gv_just <- function(just, hjust, hjust2) {
-  hmap <- c(left = 0, centre = 0.5, center = 0.5, right = 1, bottom = 0, top = 1)
+  hmap <- c(
+    left = 0,
+    centre = 0.5,
+    center = 0.5,
+    right = 1,
+    bottom = 0,
+    top = 1
+  )
   h <- 0.5
   v <- 0.5
   if (!is.null(just)) {
@@ -349,12 +482,18 @@ render_grid <- function(x, path, width = 7, height = 7, dpi = 96, bg = "white",
       h <- j[1]
       v <- if (length(j) > 1) j[2] else 0.5
     } else {
-      if (j[1] %in% names(hmap)) h <- hmap[[j[1]]]
+      if (j[1] %in% names(hmap)) {
+        h <- hmap[[j[1]]]
+      }
       if (length(j) > 1 && j[2] %in% names(hmap)) v <- hmap[[j[2]]]
     }
   }
-  if (!is.null(hjust)) h <- hjust[1]
-  if (!is.null(hjust2)) v <- hjust2[1]
+  if (!is.null(hjust)) {
+    h <- hjust[1]
+  }
+  if (!is.null(hjust2)) {
+    v <- hjust2[1]
+  }
   c(h, v)
 }
 
@@ -372,13 +511,26 @@ render_grid <- function(x, path, width = 7, height = 7, dpi = 96, bg = "white",
   }
   # Solid pch (15-20) take col as fill; 21-25 keep their own gp$fill/border.
   filled <- pch %in% c(15:20)
-  shape <- switch(as.character(pch),
-    "0" = "square", "15" = "square", "22" = "square",
-    "1" = "circle", "16" = "circle", "19" = "circle", "20" = "circle", "21" = "circle",
-    "2" = "triangle", "17" = "triangle", "24" = "triangle",
-    "6" = "triangle_down", "25" = "triangle_down",
-    "5" = "diamond", "18" = "diamond", "23" = "diamond",
-    "3" = "plus", "4" = "cross",
+  shape <- switch(
+    as.character(pch),
+    "0" = "square",
+    "15" = "square",
+    "22" = "square",
+    "1" = "circle",
+    "16" = "circle",
+    "19" = "circle",
+    "20" = "circle",
+    "21" = "circle",
+    "2" = "triangle",
+    "17" = "triangle",
+    "24" = "triangle",
+    "6" = "triangle_down",
+    "25" = "triangle_down",
+    "5" = "diamond",
+    "18" = "diamond",
+    "23" = "diamond",
+    "3" = "plus",
+    "4" = "cross",
     "8" = "star",
     "circle"
   )
@@ -392,6 +544,8 @@ render_grid <- function(x, path, width = 7, height = 7, dpi = 96, bg = "white",
   }
   ends <- c("first", "last", "both")[a$ends %||% 2L]
   type <- c("open", "closed")[a$type %||% 1L]
-  len <- tryCatch(vl_unit(.cw(a$length), "in"), error = function(e) vl_unit(0.1, "in"))
+  len <- tryCatch(vl_unit(.cw(a$length), "in"), error = function(e) {
+    vl_unit(0.1, "in")
+  })
   vl_arrow(angle = a$angle %||% 30, length = len, ends = ends, type = type)
 }

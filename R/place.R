@@ -94,8 +94,15 @@
 #'                  gp = vl_gpar(fontsize = 9), name = "lab"))
 #' head(vl_place(s))
 #' @export
-vl_place <- function(scene, labels = NULL, avoid = NULL, padding = 1,
-                     max_shift = 10, max_iter = 200, pull = 0.1) {
+vl_place <- function(
+  scene,
+  labels = NULL,
+  avoid = NULL,
+  padding = 1,
+  max_shift = 10,
+  max_iter = 200,
+  pull = 0.1
+) {
   scene <- as_vellum_scene(scene)
   b <- .scene_to_backend(scene)
   nodes <- .resolved_nodes(scene, b)
@@ -112,9 +119,17 @@ vl_place <- function(scene, labels = NULL, avoid = NULL, padding = 1,
   all_obs <- .obstacle_boxes(scene, b)
   is_obs <- .pick_nodes(all_obs, avoid, !(all_obs$node %in% lab$node))
   obs <- all_obs[is_obs, , drop = FALSE]
-  empty <- data.frame(name = character(0), index = integer(0),
-                      x0 = numeric(0), y0 = numeric(0), x1 = numeric(0), y1 = numeric(0),
-                      dx = numeric(0), dy = numeric(0), resolved = logical(0))
+  empty <- data.frame(
+    name = character(0),
+    index = integer(0),
+    x0 = numeric(0),
+    y0 = numeric(0),
+    x1 = numeric(0),
+    y1 = numeric(0),
+    dx = numeric(0),
+    dy = numeric(0),
+    resolved = logical(0)
+  )
   if (!nrow(lab)) {
     return(empty)
   }
@@ -151,10 +166,14 @@ vl_place <- function(scene, labels = NULL, avoid = NULL, padding = 1,
   hi_y <- pmax(clip_hi_y - hh, ay)
   # A region narrower than the label leaves nothing to choose; pin to the anchor.
   bad <- !is.finite(lo_x) | !is.finite(hi_x) | lo_x > hi_x
-  lo_x[bad] <- ax[bad]; hi_x[bad] <- ax[bad]
+  lo_x[bad] <- ax[bad]
+  hi_x[bad] <- ax[bad]
   bad <- !is.finite(lo_y) | !is.finite(hi_y) | lo_y > hi_y
-  lo_y[bad] <- ay[bad]; hi_y[bad] <- ay[bad]
-  in_bounds <- function(px, py, i) px >= lo_x[i] & px <= hi_x[i] & py >= lo_y[i] & py <= hi_y[i]
+  lo_y[bad] <- ay[bad]
+  hi_y[bad] <- ay[bad]
+  in_bounds <- function(px, py, i) {
+    px >= lo_x[i] & px <= hi_x[i] & py >= lo_y[i] & py <= hi_y[i]
+  }
 
   # Resolve collisions to just BEYOND contact. Pushing to exactly zero overlap
   # leaves every separation on a floating-point knife edge, where "do these
@@ -197,8 +216,10 @@ vl_place <- function(scene, labels = NULL, avoid = NULL, padding = 1,
     if (!nrow(obs)) {
       return(integer(0))
     }
-    inside <- obs$x0 <= lab$x0[i] & obs$x1 >= lab$x1[i] &
-      obs$y0 <= lab$y0[i] & obs$y1 >= lab$y1[i]
+    inside <- obs$x0 <= lab$x0[i] &
+      obs$x1 >= lab$x1[i] &
+      obs$y0 <= lab$y0[i] &
+      obs$y1 >= lab$y1[i]
     which(!inside)
   }
   live <- lapply(seq_len(n), contains_label)
@@ -234,12 +255,16 @@ vl_place <- function(scene, labels = NULL, avoid = NULL, padding = 1,
           jj <- j[k]
           if (ox_[k] < oy_[k]) {
             push <- sign(dx[k] %||% 0)
-            if (push == 0) push <- if ((i + jj) %% 2 == 0) 1 else -1
+            if (push == 0) {
+              push <- if ((i + jj) %% 2 == 0) 1 else -1
+            }
             fx[i] <- fx[i] - push * (ox_[k] + eps) / 2
             fx[jj] <- fx[jj] + push * (ox_[k] + eps) / 2
           } else {
             push <- sign(dy[k])
-            if (push == 0) push <- if ((i + jj) %% 2 == 0) 1 else -1
+            if (push == 0) {
+              push <- if ((i + jj) %% 2 == 0) 1 else -1
+            }
             fy[i] <- fy[i] - push * (oy_[k] + eps) / 2
             fy[jj] <- fy[jj] + push * (oy_[k] + eps) / 2
           }
@@ -254,7 +279,9 @@ vl_place <- function(scene, labels = NULL, avoid = NULL, padding = 1,
     if (nrow(obs)) {
       for (i in seq_len(n)) {
         j <- live[[i]]
-        if (!length(j)) next
+        if (!length(j)) {
+          next
+        }
         dx <- cx[i] - ox[j]
         dy <- cy[i] - oy[j]
         ox_ <- (hw[i] + ohw[j]) - abs(dx)
@@ -263,11 +290,15 @@ vl_place <- function(scene, labels = NULL, avoid = NULL, padding = 1,
         for (k in hit) {
           if (ox_[k] < oy_[k]) {
             push <- sign(dx[k])
-            if (push == 0) push <- 1
+            if (push == 0) {
+              push <- 1
+            }
             fx[i] <- fx[i] + push * (ox_[k] + eps)
           } else {
             push <- sign(dy[k])
-            if (push == 0) push <- 1
+            if (push == 0) {
+              push <- 1
+            }
             fy[i] <- fy[i] + push * (oy_[k] + eps)
           }
           hit_any[i] <- TRUE
@@ -330,12 +361,16 @@ vl_place <- function(scene, labels = NULL, avoid = NULL, padding = 1,
   hits <- function(i, px, py) {
     others <- setdiff(seq_len(n), i)
     lab_hit <- length(others) > 0 &&
-      any(abs(cx[others] - px) < (hw[others] + hw[i]) - 1e-9 &
-            abs(cy[others] - py) < (hh[others] + hh[i]) - 1e-9)
+      any(
+        abs(cx[others] - px) < (hw[others] + hw[i]) - 1e-9 &
+          abs(cy[others] - py) < (hh[others] + hh[i]) - 1e-9
+      )
     j <- live[[i]]
     obs_hit <- length(j) > 0 &&
-      any(abs(ox[j] - px) < (ohw[j] + hw[i]) - 1e-9 &
-            abs(oy[j] - py) < (ohh[j] + hh[i]) - 1e-9)
+      any(
+        abs(ox[j] - px) < (ohw[j] + hw[i]) - 1e-9 &
+          abs(oy[j] - py) < (ohh[j] + hh[i]) - 1e-9
+      )
     lab_hit || obs_hit
   }
   ang <- seq(0, 2 * pi, length.out = 17)[-17]
@@ -348,8 +383,10 @@ vl_place <- function(scene, labels = NULL, avoid = NULL, padding = 1,
     for (rad in seq(max(hw[i], hh[i]) * 0.6, cap, length.out = 8)) {
       px <- ax[i] + rad * cos(ang)
       py <- ay[i] + rad * sin(ang)
-      ok <- which(in_bounds(px, py, i) &
-                    !vapply(seq_along(ang), function(k) hits(i, px[k], py[k]), logical(1)))
+      ok <- which(
+        in_bounds(px, py, i) &
+          !vapply(seq_along(ang), function(k) hits(i, px[k], py[k]), logical(1))
+      )
       if (length(ok)) {
         # Among the clear candidates at this radius, the one closest to where
         # relaxation had already pushed the label -- so the two passes agree
@@ -363,32 +400,52 @@ vl_place <- function(scene, labels = NULL, avoid = NULL, padding = 1,
   }
 
   # Did each label end up clear of everything?
-  clear <- vapply(seq_len(n), function(i) {
-    others <- setdiff(seq_len(n), i)
-    lab_hit <- any(abs(cx[others] - cx[i]) < (hw[others] + hw[i]) &
-                     abs(cy[others] - cy[i]) < (hh[others] + hh[i]))
-    j <- live[[i]]
-    obs_hit <- length(j) > 0 && any(abs(ox[j] - cx[i]) < (ohw[j] + hw[i]) &
-                                      abs(oy[j] - cy[i]) < (ohh[j] + hh[i]))
-    !(lab_hit || obs_hit)
-  }, logical(1))
+  clear <- vapply(
+    seq_len(n),
+    function(i) {
+      others <- setdiff(seq_len(n), i)
+      lab_hit <- any(
+        abs(cx[others] - cx[i]) < (hw[others] + hw[i]) &
+          abs(cy[others] - cy[i]) < (hh[others] + hh[i])
+      )
+      j <- live[[i]]
+      obs_hit <- length(j) > 0 &&
+        any(
+          abs(ox[j] - cx[i]) < (ohw[j] + hw[i]) &
+            abs(oy[j] - cy[i]) < (ohh[j] + hh[i])
+        )
+      !(lab_hit || obs_hit)
+    },
+    logical(1)
+  )
 
   data.frame(
     name = lab$name,
     index = unlist(lapply(rle(lab$name)$lengths, seq_len), use.names = FALSE),
-    x0 = lab$x0, y0 = lab$y0, x1 = lab$x1, y1 = lab$y1,
+    x0 = lab$x0,
+    y0 = lab$y0,
+    x1 = lab$x1,
+    y1 = lab$y1,
     # Device y grows downward; a unit offset is in user space, where it grows up.
     dx = (cx - ax) / dpi * 25.4,
     dy = -(cy - ay) / dpi * 25.4,
     resolved = clear,
-    row.names = NULL, stringsAsFactors = FALSE
+    row.names = NULL,
+    stringsAsFactors = FALSE
   )
 }
 
 #' @rdname vl_place
 #' @export
-vl_repel <- function(scene, labels = NULL, avoid = NULL, padding = 1,
-                     max_shift = 10, max_iter = 200, pull = 0.1) {
+vl_repel <- function(
+  scene,
+  labels = NULL,
+  avoid = NULL,
+  padding = 1,
+  max_shift = 10,
+  max_iter = 200,
+  pull = 0.1
+) {
   scene <- as_vellum_scene(scene)
   sol <- vl_place(scene, labels, avoid, padding, max_shift, max_iter, pull)
   if (!nrow(sol)) {
@@ -410,9 +467,12 @@ vl_repel <- function(scene, labels = NULL, avoid = NULL, padding = 1,
     # data anchor and moves by exactly the distance the solver asked for.
     nx <- vctrs::vec_recycle(node@x, nrow(s))
     ny <- vctrs::vec_recycle(node@y, nrow(s))
-    scene <- edit_node(scene, nm,
-                       x = nx + vl_unit(s$dx, "mm"),
-                       y = ny + vl_unit(s$dy, "mm"))
+    scene <- edit_node(
+      scene,
+      nm,
+      x = nx + vl_unit(s$dx, "mm"),
+      y = ny + vl_unit(s$dy, "mm")
+    )
   }
   scene
 }
@@ -442,8 +502,13 @@ vl_repel <- function(scene, labels = NULL, avoid = NULL, padding = 1,
 #'                    gp = vl_gpar(fill = "steelblue", col = NA)))
 #' vl_empty_region(s)
 #' @export
-vl_empty_region <- function(scene, avoid = NULL, within = NULL, grid = 200,
-                            unit = c("npc", "mm")) {
+vl_empty_region <- function(
+  scene,
+  avoid = NULL,
+  within = NULL,
+  grid = 200,
+  unit = c("npc", "mm")
+) {
   unit <- match.arg(unit)
   scene <- as_vellum_scene(scene)
   nodes <- .resolved_nodes(scene)

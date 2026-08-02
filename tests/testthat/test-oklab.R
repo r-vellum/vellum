@@ -2,15 +2,25 @@
 # the stops in Oklab so the ramp blends perceptually on every backend; the default
 # "srgb" is unchanged.
 
-px <- function(scene, x, y) .scene_to_backend(scene)$pixel(as.integer(x), as.integer(y))
+px <- function(scene, x, y) {
+  .scene_to_backend(scene)$pixel(as.integer(x), as.integer(y))
+}
 
 grad_scene <- function(interp) {
   vl_scene(width = 1, height = 1, dpi = 100, bg = "white") |>
-    draw(rect_grob(gp = vl_gpar(
-      col = NA,
-      fill = linear_gradient(c("black", "white"), x1 = 0, y1 = 0.5, x2 = 1, y2 = 0.5,
-                             interpolation = interp)
-    )))
+    draw(rect_grob(
+      gp = vl_gpar(
+        col = NA,
+        fill = linear_gradient(
+          c("black", "white"),
+          x1 = 0,
+          y1 = 0.5,
+          x2 = 1,
+          y2 = 0.5,
+          interpolation = interp
+        )
+      )
+    ))
 }
 
 test_that("interpolation is validated and stored", {
@@ -18,8 +28,14 @@ test_that("interpolation is validated and stored", {
   expect_identical(g$interpolation, "oklab")
   # default is sRGB
   expect_identical(linear_gradient(c("black", "white"))$interpolation, "srgb")
-  expect_identical(radial_gradient(c("red", "yellow"), interpolation = "oklab")$interpolation, "oklab")
-  expect_identical(linear_gradient(c("blue", "yellow"), interpolation = "oklch")$interpolation, "oklch")
+  expect_identical(
+    radial_gradient(c("red", "yellow"), interpolation = "oklab")$interpolation,
+    "oklab"
+  )
+  expect_identical(
+    linear_gradient(c("blue", "yellow"), interpolation = "oklch")$interpolation,
+    "oklch"
+  )
   expect_error(linear_gradient(c("black", "white"), interpolation = "furlong"))
 })
 
@@ -27,11 +43,19 @@ test_that("interpolation is validated and stored", {
 # grey at the midpoint while oklch rotates the hue at held chroma.
 bluyel_scene <- function(interp) {
   vl_scene(width = 1, height = 1, dpi = 100, bg = "white") |>
-    draw(rect_grob(gp = vl_gpar(
-      col = NA,
-      fill = linear_gradient(c("blue", "yellow"), x1 = 0, y1 = 0.5, x2 = 1, y2 = 0.5,
-                             interpolation = interp)
-    )))
+    draw(rect_grob(
+      gp = vl_gpar(
+        col = NA,
+        fill = linear_gradient(
+          c("blue", "yellow"),
+          x1 = 0,
+          y1 = 0.5,
+          x2 = 1,
+          y2 = 0.5,
+          interpolation = interp
+        )
+      )
+    ))
 }
 
 test_that("oklch keeps the midpoint more vivid than oklab", {
@@ -56,7 +80,9 @@ test_that("oklch preserves endpoints (blue -> yellow)", {
 })
 
 test_that("oklch pre-samples into more SVG stops; srgb is unchanged", {
-  n <- function(interp) lengths(gregexpr("<stop ", scene_svg(bluyel_scene(interp))))
+  n <- function(interp) {
+    lengths(gregexpr("<stop ", scene_svg(bluyel_scene(interp))))
+  }
   expect_equal(n("srgb"), 2L)
   expect_gt(n("oklch"), 2L)
 })
@@ -88,9 +114,20 @@ test_that("oklab pre-samples into more SVG stops; srgb is unchanged", {
 })
 
 test_that("the default gradient is byte-identical to explicit srgb (additivity)", {
-  default <- scene_svg(vl_scene(1, 1, dpi = 100) |>
-    draw(rect_grob(gp = vl_gpar(col = NA, fill = linear_gradient(c("black", "white"))))))
-  explicit <- scene_svg(vl_scene(1, 1, dpi = 100) |>
-    draw(rect_grob(gp = vl_gpar(col = NA, fill = linear_gradient(c("black", "white"), interpolation = "srgb")))))
+  default <- scene_svg(
+    vl_scene(1, 1, dpi = 100) |>
+      draw(rect_grob(
+        gp = vl_gpar(col = NA, fill = linear_gradient(c("black", "white")))
+      ))
+  )
+  explicit <- scene_svg(
+    vl_scene(1, 1, dpi = 100) |>
+      draw(rect_grob(
+        gp = vl_gpar(
+          col = NA,
+          fill = linear_gradient(c("black", "white"), interpolation = "srgb")
+        )
+      ))
+  )
   expect_identical(default, explicit)
 })

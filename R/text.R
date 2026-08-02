@@ -24,22 +24,44 @@
 #' @examples
 #' vl_strwidth(c("short", "a longer label"), fontsize = 14)
 #' @export
-vl_strwidth <- function(label, family = "", fontface = "plain",
-                        fontsize = 12, cex = 1, unit = "in", features = NULL) {
+vl_strwidth <- function(
+  label,
+  family = "",
+  fontface = "plain",
+  fontsize = 12,
+  cex = 1,
+  unit = "in",
+  features = NULL
+) {
   .text_metric(label, family, fontface, fontsize, cex, unit, "width", features)
 }
 
 #' @rdname vl_strwidth
 #' @export
-vl_strheight <- function(label, family = "", fontface = "plain",
-                         fontsize = 12, cex = 1, unit = "in", features = NULL) {
+vl_strheight <- function(
+  label,
+  family = "",
+  fontface = "plain",
+  fontsize = 12,
+  cex = 1,
+  unit = "in",
+  features = NULL
+) {
   .text_metric(label, family, fontface, fontsize, cex, unit, "height", features)
 }
 
 # Shared width/height measurement (vectorised over `label`); `which` is the
 # `shape_text` metric column ("width"/"height"). `res = 72` => points.
-.text_metric <- function(label, family, fontface, fontsize, cex, unit, which,
-                         features = NULL) {
+.text_metric <- function(
+  label,
+  family,
+  fontface,
+  fontsize,
+  cex,
+  unit,
+  which,
+  features = NULL
+) {
   unit <- match.arg(unit, c("in", "pt", "mm", "cm"))
   # Rich md() labels are measured through the same composition path the renderer
   # draws (`.md_extent_pt`), so reserved layout space matches drawn glyphs. A
@@ -48,9 +70,13 @@ vl_strheight <- function(label, family = "", fontface = "plain",
   if (.is_md_labelish(label)) {
     labs <- if (S7::S7_inherits(label, vellum_label)) list(label) else label
     col <- if (which == "width") 1L else 2L
-    pt <- vapply(labs, function(l) {
-      .md_extent_pt(l, family, fontface, fontsize * cex, features)[col]
-    }, numeric(1))
+    pt <- vapply(
+      labs,
+      function(l) {
+        .md_extent_pt(l, family, fontface, fontsize * cex, features)[col]
+      },
+      numeric(1)
+    )
     return(.pt_to_unit(pt, unit))
   }
   label <- as.character(label)
@@ -62,8 +88,12 @@ vl_strheight <- function(label, family = "", fontface = "plain",
   # track reserves the wrong space for the glyphs that actually get drawn.
   pt <- textshaping::shape_text(
     label,
-    family = family, italic = face$italic, weight = face$weight,
-    size = fontsize * cex, res = 72, features = .as_font_feature(features)
+    family = family,
+    italic = face$italic,
+    weight = face$weight,
+    size = fontsize * cex,
+    res = 72,
+    features = .as_font_feature(features)
   )$metrics[[which]]
   .pt_to_unit(pt, unit)
 }
@@ -71,13 +101,15 @@ vl_strheight <- function(label, family = "", fontface = "plain",
 # TRUE for a single md() label or a non-empty list of them.
 .is_md_labelish <- function(x) {
   S7::S7_inherits(x, vellum_label) ||
-    (is.list(x) && length(x) &&
+    (is.list(x) &&
+      length(x) &&
       all(vapply(x, S7::S7_inherits, logical(1), vellum_label)))
 }
 
 # Convert points to an output unit (one of "pt"/"in"/"mm"/"cm").
 .pt_to_unit <- function(pt, unit) {
-  switch(unit,
+  switch(
+    unit,
     pt = pt,
     "in" = pt / 72,
     mm = pt / 72 * 25.4,
@@ -103,16 +135,38 @@ vl_strheight <- function(label, family = "", fontface = "plain",
   # The feature set is part of the font's identity for shaping: the same string
   # in the same font shapes to different glyphs under `smcp` or `onum`, so it
   # must be in the key, or a second grob would be served the first one's glyphs.
-  keys <- paste(family, italic, weight, size, .feature_key(features), uniq, sep = "")
-  if (.shape_cache$.n > .SHAPE_CACHE_CAP) { # memory backstop: drop everything
-    rm(list = setdiff(ls(.shape_cache, all.names = TRUE), ".n"), envir = .shape_cache)
+  keys <- paste(
+    family,
+    italic,
+    weight,
+    size,
+    .feature_key(features),
+    uniq,
+    sep = ""
+  )
+  if (.shape_cache$.n > .SHAPE_CACHE_CAP) {
+    # memory backstop: drop everything
+    rm(
+      list = setdiff(ls(.shape_cache, all.names = TRUE), ".n"),
+      envir = .shape_cache
+    )
     .shape_cache$.n <- 0L
   }
-  hit <- vapply(keys, exists, logical(1), envir = .shape_cache, inherits = FALSE)
+  hit <- vapply(
+    keys,
+    exists,
+    logical(1),
+    envir = .shape_cache,
+    inherits = FALSE
+  )
   miss <- which(!hit)
   if (length(miss)) {
-    sh <- textshaping::shape_text(uniq[miss],
-      family = family, italic = italic, weight = weight, size = size,
+    sh <- textshaping::shape_text(
+      uniq[miss],
+      family = family,
+      italic = italic,
+      weight = weight,
+      size = size,
       features = .as_font_feature(features)
     )
     g <- sh$shape
@@ -123,10 +177,15 @@ vl_strheight <- function(label, family = "", fontface = "plain",
         list(w = sh$metrics$width[j], h = sh$metrics$height[j], n = 0L)
       } else {
         list(
-          w = sh$metrics$width[j], h = sh$metrics$height[j], n = length(r),
-          index = as.integer(g$index[r]), xoff = as.numeric(g$x_offset[r]),
-          yoff = as.numeric(g$y_offset[r]), fsize = as.numeric(g$font_size[r]),
-          fpath = as.character(g$font_path[r]), findex = as.integer(g$font_index[r])
+          w = sh$metrics$width[j],
+          h = sh$metrics$height[j],
+          n = length(r),
+          index = as.integer(g$index[r]),
+          xoff = as.numeric(g$x_offset[r]),
+          yoff = as.numeric(g$y_offset[r]),
+          fsize = as.numeric(g$font_size[r]),
+          fpath = as.character(g$font_path[r]),
+          findex = as.integer(g$font_index[r])
         )
       }
       assign(keys[miss[j]], entry, envir = .shape_cache)
@@ -184,11 +243,17 @@ vl_strheight <- function(label, family = "", fontface = "plain",
 .stack_lines <- function(sh, size, align = "left", box_w = NULL) {
   nl <- length(sh)
   lead <- size * .LINEHEIGHT
-  idx <- integer(0); xo <- numeric(0); yo <- numeric(0)
-  fs <- numeric(0); fp <- character(0); fi <- integer(0)
-  wmax <- 0; hmax <- 0
+  idx <- integer(0)
+  xo <- numeric(0)
+  yo <- numeric(0)
+  fs <- numeric(0)
+  fp <- character(0)
+  fi <- integer(0)
+  wmax <- 0
+  hmax <- 0
   for (i in seq_len(nl)) {
-    wmax <- max(wmax, sh[[i]]$w); hmax <- max(hmax, sh[[i]]$h)
+    wmax <- max(wmax, sh[[i]]$w)
+    hmax <- max(hmax, sh[[i]]$h)
   }
   block <- box_w %||% wmax
   for (i in seq_len(nl)) {
@@ -206,18 +271,33 @@ vl_strheight <- function(label, family = "", fontface = "plain",
     # would sit, top does the same for the first, and centre puts the block's
     # mean baseline where a single centred line's is.
     off <- ((nl - 1) - (i - 1)) * lead
-    dx <- switch(align,
-      centre = , center = (block - e$w) / 2,
+    dx <- switch(
+      align,
+      centre = ,
+      center = (block - e$w) / 2,
       right = block - e$w,
       0
     )
     if (e$n > 0L) {
-      idx <- c(idx, e$index); xo <- c(xo, e$xoff + dx); yo <- c(yo, e$yoff + off)
-      fs <- c(fs, e$fsize); fp <- c(fp, e$fpath); fi <- c(fi, e$findex)
+      idx <- c(idx, e$index)
+      xo <- c(xo, e$xoff + dx)
+      yo <- c(yo, e$yoff + off)
+      fs <- c(fs, e$fsize)
+      fp <- c(fp, e$fpath)
+      fi <- c(fi, e$findex)
     }
   }
-  list(w = block, h = (nl - 1) * lead + hmax, n = length(idx),
-       index = idx, xoff = xo, yoff = yo, fsize = fs, fpath = fp, findex = fi)
+  list(
+    w = block,
+    h = (nl - 1) * lead + hmax,
+    n = length(idx),
+    index = idx,
+    xoff = xo,
+    yoff = yo,
+    fsize = fs,
+    fpath = fp,
+    findex = fi
+  )
 }
 
 # --- width-constrained text -------------------------------------------------
@@ -235,7 +315,15 @@ vl_strheight <- function(label, family = "", fontface = "plain",
 # A word that cannot fit on a line of its own is placed anyway rather than being
 # broken: hyphenation needs a dictionary, and a silently clipped label is worse
 # than one that overflows visibly.
-.wrap_label <- function(label, width, family, italic, weight, size, features = NULL) {
+.wrap_label <- function(
+  label,
+  width,
+  family,
+  italic,
+  weight,
+  size,
+  features = NULL
+) {
   out <- character(0)
   for (para in .label_lines(label)) {
     words <- strsplit(para, "[ \t]+")[[1]]
@@ -247,9 +335,17 @@ vl_strheight <- function(label, family = "", fontface = "plain",
     i <- 1L
     while (i <= length(words)) {
       j <- seq.int(i, length(words))
-      cand <- vapply(j, function(k) paste(words[i:k], collapse = " "), character(1))
-      w <- vapply(.shape_cached(cand, family, italic, weight, size, features),
-                  `[[`, double(1), "w")
+      cand <- vapply(
+        j,
+        function(k) paste(words[i:k], collapse = " "),
+        character(1)
+      )
+      w <- vapply(
+        .shape_cached(cand, family, italic, weight, size, features),
+        `[[`,
+        double(1),
+        "w"
+      )
       # Widths grow with each added word, so the fitting candidates are a prefix.
       ok <- which(w <= width)
       take <- if (length(ok)) max(ok) else 1L
@@ -264,7 +360,15 @@ vl_strheight <- function(label, family = "", fontface = "plain",
 # words. Words are shaped individually and re-placed, which drops kerning across
 # the space -- there is essentially none, and the alternative is guessing which
 # glyphs are spaces in an already-shaped run.
-.justify_line <- function(line, width, family, italic, weight, size, features = NULL) {
+.justify_line <- function(
+  line,
+  width,
+  family,
+  italic,
+  weight,
+  size,
+  features = NULL
+) {
   words <- strsplit(line, " ", fixed = TRUE)[[1]]
   words <- words[nzchar(words)]
   if (length(words) < 2L) {
@@ -279,10 +383,14 @@ vl_strheight <- function(label, family = "", fontface = "plain",
   at <- cumsum(c(0, ww[-length(ww)] + gap))
   keep <- vapply(e, `[[`, integer(1), "n") > 0L
   list(
-    w = width, h = max(vapply(e, `[[`, double(1), "h")),
+    w = width,
+    h = max(vapply(e, `[[`, double(1), "h")),
     n = sum(vapply(e[keep], `[[`, integer(1), "n")),
     index = unlist(lapply(e[keep], `[[`, "index"), use.names = FALSE),
-    xoff = unlist(Map(function(g, d) g$xoff + d, e[keep], at[keep]), use.names = FALSE),
+    xoff = unlist(
+      Map(function(g, d) g$xoff + d, e[keep], at[keep]),
+      use.names = FALSE
+    ),
     yoff = unlist(lapply(e[keep], `[[`, "yoff"), use.names = FALSE),
     fsize = unlist(lapply(e[keep], `[[`, "fsize"), use.names = FALSE),
     fpath = unlist(lapply(e[keep], `[[`, "fpath"), use.names = FALSE),
@@ -293,8 +401,16 @@ vl_strheight <- function(label, family = "", fontface = "plain",
 # Compose one label wrapped to `width` points. Returns a `.shape_cached`-shaped
 # entry whose `w` is the box width, so justification against the anchor treats
 # the block as a box of the requested width rather than as ragged lines.
-.compose_wrapped <- function(label, width, align, family, italic, weight, size,
-                             features = NULL) {
+.compose_wrapped <- function(
+  label,
+  width,
+  align,
+  family,
+  italic,
+  weight,
+  size,
+  features = NULL
+) {
   lines <- .wrap_label(label, width, family, italic, weight, size, features)
   sh <- .shape_cached(lines, family, italic, weight, size, features)
   if (identical(align, "justify")) {
@@ -302,8 +418,18 @@ vl_strheight <- function(label, family = "", fontface = "plain",
     # two-word final line stretched to full width is the classic ugly artifact.
     last <- c(which(!nzchar(lines)) - 1L, length(lines))
     for (i in seq_along(lines)) {
-      if (i %in% last) next
-      j <- .justify_line(lines[i], width, family, italic, weight, size, features)
+      if (i %in% last) {
+        next
+      }
+      j <- .justify_line(
+        lines[i],
+        width,
+        family,
+        italic,
+        weight,
+        size,
+        features
+      )
       if (!is.null(j)) sh[[i]] <- j
     }
     align <- "left" # words are already positioned absolutely
@@ -316,10 +442,29 @@ vl_strheight <- function(label, family = "", fontface = "plain",
 # Largest font size in [`min`, `size`] at which `label` wrapped to `width` still
 # fits `width` x `height` points. Bisection on a continuous size to 0.1 pt: the
 # wrap depends on the size, so each probe re-wraps.
-.fit_size <- function(label, width, height, align, family, italic, weight, size,
-                      min_size, features = NULL) {
+.fit_size <- function(
+  label,
+  width,
+  height,
+  align,
+  family,
+  italic,
+  weight,
+  size,
+  min_size,
+  features = NULL
+) {
   fits <- function(s) {
-    e <- .compose_wrapped(label, width, align, family, italic, weight, s, features)
+    e <- .compose_wrapped(
+      label,
+      width,
+      align,
+      family,
+      italic,
+      weight,
+      s,
+      features
+    )
     e$w <= width + 1e-6 && (is.null(height) || e$h <= height + 1e-6)
   }
   if (fits(size)) {
@@ -341,11 +486,21 @@ vl_strheight <- function(label, family = "", fontface = "plain",
 #
 # Prefer `.compose_plain_batch()` when composing many labels: this one shapes a
 # single label per call, which defeats `.shape_cached()`'s miss-batching.
-.compose_plain <- function(label, family, italic, weight, size, features = NULL) {
+.compose_plain <- function(
+  label,
+  family,
+  italic,
+  weight,
+  size,
+  features = NULL
+) {
   if (!grepl("\n", label, fixed = TRUE)) {
     return(.shape_cached(label, family, italic, weight, size, features)[[1]])
   }
-  .stack_lines(.shape_cached(.label_lines(label), family, italic, weight, size, features), size)
+  .stack_lines(
+    .shape_cached(.label_lines(label), family, italic, weight, size, features),
+    size
+  )
 }
 
 # Compose MANY plain labels, shaping every distinct line across ALL of them in a
@@ -360,7 +515,14 @@ vl_strheight <- function(label, family = "", fontface = "plain",
 # other label's before shaping, then re-stacked per label.
 #
 # Returns a list aligned with `labels`, each element a `.shape_cached`-shaped entry.
-.compose_plain_batch <- function(labels, family, italic, weight, size, features = NULL) {
+.compose_plain_batch <- function(
+  labels,
+  family,
+  italic,
+  weight,
+  size,
+  features = NULL
+) {
   multi <- grepl("\n", labels, fixed = TRUE)
   # Common case: nothing to split, so each label is its own only line and the
   # cache call is exactly the pre-e6d4d19 one.
@@ -386,9 +548,24 @@ vl_strheight <- function(label, family = "", fontface = "plain",
 # text node per label from the flat glyph arrays. `x`/`y` are unit vectors
 # recycled to the label count; `rot` is per-label; the rest are shared. Labels may
 # contain "\n" (multi-line); each unique label is composed once.
-.draw_text_batch <- function(scene, labels, x, y, hjust, vjust, rot,
-                             family, fontface, fontsize, col, alpha, halo = NULL,
-                             features = NULL, wrap = NULL, keys = NULL) {
+.draw_text_batch <- function(
+  scene,
+  labels,
+  x,
+  y,
+  hjust,
+  vjust,
+  rot,
+  family,
+  fontface,
+  fontsize,
+  col,
+  alpha,
+  halo = NULL,
+  features = NULL,
+  wrap = NULL,
+  keys = NULL
+) {
   labels <- as.character(labels)
   n <- length(labels)
   keep <- !is.na(labels) & nzchar(labels)
@@ -399,22 +576,44 @@ vl_strheight <- function(label, family = "", fontface = "plain",
   face <- .rs_face(fontface)
   uniq <- unique(labels[keep])
   if (is.null(wrap)) {
-    shaped <- .compose_plain_batch(uniq, family, face$italic, face$weight, fontsize, features)
+    shaped <- .compose_plain_batch(
+      uniq,
+      family,
+      face$italic,
+      face$weight,
+      fontsize,
+      features
+    )
   } else {
     # Auto-fit picks ONE size for the whole grob -- the smallest any label needs.
     # Per-label sizes would render fine (glyph sizes are per glyph) but a row of
     # labels at four different sizes is a defect, not a feature.
     if (!is.null(wrap$fit)) {
-      fontsize <- min(vapply(uniq, .fit_size, double(1),
-        width = wrap$width, height = wrap$height, align = wrap$align,
-        family = family, italic = face$italic, weight = face$weight,
-        size = fontsize, min_size = wrap$fit, features = features,
+      fontsize <- min(vapply(
+        uniq,
+        .fit_size,
+        double(1),
+        width = wrap$width,
+        height = wrap$height,
+        align = wrap$align,
+        family = family,
+        italic = face$italic,
+        weight = face$weight,
+        size = fontsize,
+        min_size = wrap$fit,
+        features = features,
         USE.NAMES = FALSE
       ))
     }
-    shaped <- lapply(uniq, .compose_wrapped,
-      width = wrap$width, align = wrap$align, family = family,
-      italic = face$italic, weight = face$weight, size = fontsize,
+    shaped <- lapply(
+      uniq,
+      .compose_wrapped,
+      width = wrap$width,
+      align = wrap$align,
+      family = family,
+      italic = face$italic,
+      weight = face$weight,
+      size = fontsize,
       features = features
     )
     # The label travelling to the backend is the *wrapped* one, with the chosen
@@ -422,8 +621,11 @@ vl_strheight <- function(label, family = "", fontface = "plain",
     # -- and it has to describe what was actually drawn: the SVG backend splits
     # it per line and matches the parts against the glyph baselines, so the
     # unwrapped string would not line up and would cost native text.
-    wrapped_lab <- vapply(shaped, function(e) paste(e$lines, collapse = "\n"),
-                          character(1))
+    wrapped_lab <- vapply(
+      shaped,
+      function(e) paste(e$lines, collapse = "\n"),
+      character(1)
+    )
     labels[keep] <- wrapped_lab[match(labels[keep], uniq)]
     uniq <- wrapped_lab
   }
@@ -444,17 +646,32 @@ vl_strheight <- function(label, family = "", fontface = "plain",
   rot <- vctrs::vec_recycle(as.numeric(rot), n)
   # One FFI call builds one text node per label from the flat glyph arrays.
   scene$texts(
-    cx$value[drawn], cy$value[drawn], cx$code[drawn], cx$offset[drawn], cy$code[drawn], cy$offset[drawn],
-    rot[drawn], hjust, vjust,
-    vapply(ent, `[[`, double(1), "w") * scale, vapply(ent, `[[`, double(1), "h") * scale, as.integer(nper),
+    cx$value[drawn],
+    cy$value[drawn],
+    cx$code[drawn],
+    cx$offset[drawn],
+    cy$code[drawn],
+    cy$offset[drawn],
+    rot[drawn],
+    hjust,
+    vjust,
+    vapply(ent, `[[`, double(1), "w") * scale,
+    vapply(ent, `[[`, double(1), "h") * scale,
+    as.integer(nper),
     unlist(lapply(ent, `[[`, "index"), use.names = FALSE),
     unlist(lapply(ent, `[[`, "xoff"), use.names = FALSE) * scale,
     unlist(lapply(ent, `[[`, "yoff"), use.names = FALSE) * scale,
     unlist(lapply(ent, `[[`, "fsize"), use.names = FALSE) * scale,
     unlist(lapply(ent, `[[`, "fpath"), use.names = FALSE),
     unlist(lapply(ent, `[[`, "findex"), use.names = FALSE),
-    labels[drawn], family, fontface, fontsize, .rs_col_inh(col), .rs_num_inh(alpha),
-    .rs_col_inh(halo$col), (halo$width %||% 0) * scale,
+    labels[drawn],
+    family,
+    fontface,
+    fontsize,
+    .rs_col_inh(col),
+    .rs_num_inh(alpha),
+    .rs_col_inh(halo$col),
+    (halo$width %||% 0) * scale,
     if (is.null(keys)) character(0) else keys[drawn]
   )
   invisible()
@@ -467,28 +684,67 @@ vl_strheight <- function(label, family = "", fontface = "plain",
 #
 # A newline is meaningless on a curve (there is no second baseline to stack
 # onto), so the label is flattened to one line.
-.draw_text_path <- function(scene, label, x, y, hjust, vjust, offset,
-                            family, fontface, fontsize, col, alpha, halo = NULL,
-                            features = NULL) {
+.draw_text_path <- function(
+  scene,
+  label,
+  x,
+  y,
+  hjust,
+  vjust,
+  offset,
+  family,
+  fontface,
+  fontsize,
+  col,
+  alpha,
+  halo = NULL,
+  features = NULL
+) {
   label <- gsub("[\r\n]+", " ", as.character(label))
   if (is.na(label) || !nzchar(label)) {
     return(invisible())
   }
   scale <- scene$dpi() / 72
   face <- .rs_face(fontface)
-  e <- .shape_cached(label, family, face$italic, face$weight, fontsize, features)[[1]]
+  e <- .shape_cached(
+    label,
+    family,
+    face$italic,
+    face$weight,
+    fontsize,
+    features
+  )[[1]]
   if (e$n == 0L) {
     return(invisible())
   }
   cx <- .coord(x, "npc", length(x))
   cy <- .coord(y, "npc", length(y))
   scene$text_path(
-    cx$value, cy$value, cx$code, cx$offset, cy$code, cy$offset,
-    offset, hjust, vjust,
-    e$w * scale, e$h * scale,
-    e$index, e$xoff * scale, e$yoff * scale, e$fsize * scale, e$fpath, e$findex,
-    label, family, fontface, fontsize, .rs_col_inh(col), .rs_num_inh(alpha),
-    .rs_col_inh(halo$col), (halo$width %||% 0) * scale
+    cx$value,
+    cy$value,
+    cx$code,
+    cx$offset,
+    cy$code,
+    cy$offset,
+    offset,
+    hjust,
+    vjust,
+    e$w * scale,
+    e$h * scale,
+    e$index,
+    e$xoff * scale,
+    e$yoff * scale,
+    e$fsize * scale,
+    e$fpath,
+    e$findex,
+    label,
+    family,
+    fontface,
+    fontsize,
+    .rs_col_inh(col),
+    .rs_num_inh(alpha),
+    .rs_col_inh(halo$col),
+    (halo$width %||% 0) * scale
   )
   invisible()
 }
@@ -535,32 +791,56 @@ md <- function(text) {
 # Build one `vellum_md_label` from a single markup string, splitting on "\n" into
 # lines whose run lists are joined by a break marker (`list(brk = TRUE)`).
 .md_one <- function(text) {
-  if (is.na(text)) text <- ""
+  if (is.na(text)) {
+    text <- ""
+  }
   lines <- strsplit(text, "\n", fixed = TRUE)[[1]]
-  if (!length(lines)) lines <- ""
+  if (!length(lines)) {
+    lines <- ""
+  }
   runs <- list()
   for (i in seq_along(lines)) {
-    if (i > 1L) runs[[length(runs) + 1L]] <- list(brk = TRUE)
+    if (i > 1L) {
+      runs[[length(runs) + 1L]] <- list(brk = TRUE)
+    }
     runs <- c(runs, .md_parse(lines[i]))
   }
-  plain <- paste0(vapply(runs, function(r) r$text %||% "\n", character(1)), collapse = "")
+  plain <- paste0(
+    vapply(runs, function(r) r$text %||% "\n", character(1)),
+    collapse = ""
+  )
   vellum_md_label(runs = runs, text = plain)
 }
 
 # A run-style descriptor. `size` is a multiplier on the base fontsize; `dy` is a
 # baseline shift in base-em (fraction of the base fontsize, +up); `col` is NA to
 # inherit the base colour.
-.md_style <- function(bold = FALSE, italic = FALSE, size = 1, dy = 0, col = NA_character_) {
+.md_style <- function(
+  bold = FALSE,
+  italic = FALSE,
+  size = 1,
+  dy = 0,
+  col = NA_character_
+) {
   list(bold = bold, italic = italic, size = size, dy = dy, col = col)
 }
 .md_run <- function(text, st) {
-  list(text = text, bold = st$bold, italic = st$italic, size = st$size, dy = st$dy, col = st$col)
+  list(
+    text = text,
+    bold = st$bold,
+    italic = st$italic,
+    size = st$size,
+    dy = st$dy,
+    col = st$col
+  )
 }
 
 # First index >= `from` where the fixed substring `delim` occurs, or NA.
 .md_find <- function(text, delim, from) {
   n <- nchar(text)
-  if (from > n) return(NA_integer_)
+  if (from > n) {
+    return(NA_integer_)
+  }
   hay <- substr(text, from, n)
   p <- regexpr(delim, hay, fixed = TRUE)
   if (p[1] < 0) NA_integer_ else from + p[1] - 1L
@@ -570,12 +850,18 @@ md <- function(text) {
 # end) where `end` is the index of the closing `}`, or NULL if not a colour span.
 .md_find_colspan <- function(text, i) {
   br <- .md_find(text, "]{", i + 1L)
-  if (is.na(br)) return(NULL)
+  if (is.na(br)) {
+    return(NULL)
+  }
   brace <- .md_find(text, "}", br + 2L)
-  if (is.na(brace)) return(NULL)
-  list(inner = substr(text, i + 1L, br - 1L),
-       col = substr(text, br + 2L, brace - 1L),
-       end = brace)
+  if (is.na(brace)) {
+    return(NULL)
+  }
+  list(
+    inner = substr(text, i + 1L, br - 1L),
+    col = substr(text, br + 2L, brace - 1L),
+    end = brace
+  )
 }
 
 # Parse a markup string into a flat list of styled runs. Recursive descent: each
@@ -593,7 +879,9 @@ md <- function(text) {
   n <- nchar(text)
   i <- 1L
   emit <- function() {
-    if (nzchar(buf)) runs[[length(runs) + 1L]] <<- .md_run(buf, st)
+    if (nzchar(buf)) {
+      runs[[length(runs) + 1L]] <<- .md_run(buf, st)
+    }
     buf <<- ""
   }
   while (i <= n) {
@@ -604,7 +892,10 @@ md <- function(text) {
       if (!is.na(close)) {
         emit()
         inner <- substr(text, i + 2L, close - 1L)
-        runs <- c(runs, .md_parse_region(inner, utils::modifyList(st, list(bold = TRUE))))
+        runs <- c(
+          runs,
+          .md_parse_region(inner, utils::modifyList(st, list(bold = TRUE)))
+        )
         i <- close + 2L
         next
       }
@@ -614,7 +905,10 @@ md <- function(text) {
       if (!is.na(close)) {
         emit()
         inner <- substr(text, i + 1L, close - 1L)
-        runs <- c(runs, .md_parse_region(inner, utils::modifyList(st, list(italic = TRUE))))
+        runs <- c(
+          runs,
+          .md_parse_region(inner, utils::modifyList(st, list(italic = TRUE)))
+        )
         i <- close + 1L
         next
       }
@@ -624,7 +918,10 @@ md <- function(text) {
       if (!is.na(close)) {
         emit()
         inner <- substr(text, i + 1L, close - 1L)
-        sub <- utils::modifyList(st, list(size = st$size * 0.7, dy = st$dy + 0.35 * st$size))
+        sub <- utils::modifyList(
+          st,
+          list(size = st$size * 0.7, dy = st$dy + 0.35 * st$size)
+        )
         runs <- c(runs, .md_parse_region(inner, sub))
         i <- close + 1L
         next
@@ -635,7 +932,10 @@ md <- function(text) {
       if (!is.na(close)) {
         emit()
         inner <- substr(text, i + 1L, close - 1L)
-        sub <- utils::modifyList(st, list(size = st$size * 0.7, dy = st$dy - 0.15 * st$size))
+        sub <- utils::modifyList(
+          st,
+          list(size = st$size * 0.7, dy = st$dy - 0.15 * st$size)
+        )
         runs <- c(runs, .md_parse_region(inner, sub))
         i <- close + 1L
         next
@@ -645,7 +945,10 @@ md <- function(text) {
       cs <- .md_find_colspan(text, i)
       if (!is.null(cs)) {
         emit()
-        runs <- c(runs, .md_parse_region(cs$inner, utils::modifyList(st, list(col = cs$col))))
+        runs <- c(
+          runs,
+          .md_parse_region(cs$inner, utils::modifyList(st, list(col = cs$col)))
+        )
         i <- cs$end + 1L
         next
       }
@@ -662,7 +965,15 @@ md <- function(text) {
   base <- tolower(as.character(base)[1])
   b <- isTRUE(run$bold) || grepl("bold", base)
   it <- isTRUE(run$italic) || grepl("italic|oblique", base)
-  if (b && it) "bold.italic" else if (b) "bold" else if (it) "italic" else "plain"
+  if (b && it) {
+    "bold.italic"
+  } else if (b) {
+    "bold"
+  } else if (it) {
+    "italic"
+  } else {
+    "plain"
+  }
 }
 
 # Shape every run of a markdown label and concatenate into one advance-accumulated
@@ -670,30 +981,57 @@ md <- function(text) {
 # per-glyph colour character vector, and the composed extent (w, h). All lengths
 # are in points (the caller scales by dpi/72 for drawing, or converts for
 # measurement). `base_col` resolves a run's inherited colour.
-.md_compose <- function(label, family, fontface, fontsize, base_col, features = NULL) {
+.md_compose <- function(
+  label,
+  family,
+  fontface,
+  fontsize,
+  base_col,
+  features = NULL
+) {
   # Split the flat run list into lines at the `brk` markers (single-line labels
   # yield one line and a zero line-offset, so their output is unchanged).
-  lines <- list(); cur <- list()
+  lines <- list()
+  cur <- list()
   for (run in label@runs) {
-    if (isTRUE(run$brk)) { lines[[length(lines) + 1L]] <- cur; cur <- list() }
-    else cur[[length(cur) + 1L]] <- run
+    if (isTRUE(run$brk)) {
+      lines[[length(lines) + 1L]] <- cur
+      cur <- list()
+    } else {
+      cur[[length(cur) + 1L]] <- run
+    }
   }
   lines[[length(lines) + 1L]] <- cur
   nl <- length(lines)
   lead <- fontsize * .LINEHEIGHT
 
-  gid <- integer(0); gx <- numeric(0); gy <- numeric(0)
-  gsize <- numeric(0); gpath <- character(0); gface <- integer(0)
+  gid <- integer(0)
+  gx <- numeric(0)
+  gy <- numeric(0)
+  gsize <- numeric(0)
+  gpath <- character(0)
+  gface <- integer(0)
   cols <- character(0)
-  wmax <- 0; top <- 0; bot <- 0
+  wmax <- 0
+  top <- 0
+  bot <- 0
   for (li in seq_len(nl)) {
     loff <- ((nl - 1) / 2 - (li - 1)) * lead # line baseline, centred about 0 (+up)
     adv <- 0
     for (run in lines[[li]]) {
-      if (!nzchar(run$text)) next
+      if (!nzchar(run$text)) {
+        next
+      }
       face <- .rs_face(.md_run_face(fontface, run))
       rsize <- fontsize * run$size
-      sh <- .shape_cached(run$text, family, face$italic, face$weight, rsize, features)[[1]]
+      sh <- .shape_cached(
+        run$text,
+        family,
+        face$italic,
+        face$weight,
+        rsize,
+        features
+      )[[1]]
       dyp <- run$dy * fontsize + loff
       if (sh$n > 0L) {
         gid <- c(gid, sh$index)
@@ -711,8 +1049,17 @@ md <- function(text) {
     }
     wmax <- max(wmax, adv)
   }
-  list(gid = gid, gx = gx, gy = gy, gsize = gsize, gpath = gpath, gface = gface,
-       cols = cols, w = wmax, h = top - bot)
+  list(
+    gid = gid,
+    gx = gx,
+    gy = gy,
+    gsize = gsize,
+    gpath = gpath,
+    gface = gface,
+    cols = cols,
+    w = wmax,
+    h = top - bot
+  )
 }
 
 # Draw rich (markdown) labels at the `x`/`y` positions. `label` is either a single
@@ -720,9 +1067,23 @@ md <- function(text) {
 # case) or a list of them (one per position, recycled — the per-datum mark_text
 # case). Distinct labels are composed once (deduped by plain text). Mirrors
 # `.draw_text_batch` but calls `texts_rich` with the per-glyph colour stream.
-.draw_richtext_batch <- function(scene, label, x, y, hjust, vjust, rot,
-                                 family, fontface, fontsize, col, alpha, halo = NULL,
-                                 features = NULL, keys = NULL) {
+.draw_richtext_batch <- function(
+  scene,
+  label,
+  x,
+  y,
+  hjust,
+  vjust,
+  rot,
+  family,
+  fontface,
+  fontsize,
+  col,
+  alpha,
+  halo = NULL,
+  features = NULL,
+  keys = NULL
+) {
   base_col <- if (is.null(col) || is.na(col)) "black" else col
   scale <- scene$dpi() / 72
   n <- vctrs::vec_size_common(x, y)
@@ -742,36 +1103,84 @@ md <- function(text) {
     rep(list(label), np)
   } else {
     m <- length(label)
-    if (m == 0L) return(invisible())
+    if (m == 0L) {
+      return(invisible())
+    }
     label[((drawn - 1L) %% m) + 1L]
   }
   keytxt <- vapply(labs, function(l) l@text, character(1))
   uk <- unique(keytxt)
-  comp <- lapply(uk, function(t) .md_compose(labs[[match(t, keytxt)]], family, fontface, fontsize, base_col, features))
+  comp <- lapply(uk, function(t) {
+    .md_compose(
+      labs[[match(t, keytxt)]],
+      family,
+      fontface,
+      fontsize,
+      base_col,
+      features
+    )
+  })
   names(comp) <- uk
   # Concatenate the per-position glyph sets into the flat FFI arrays; `gp$alpha`
   # folds into the per-glyph RGBA alpha channel (mirrors hexagon_grob's fill).
-  gid <- integer(0); gx <- numeric(0); gy <- numeric(0); gsize <- numeric(0)
-  gpath <- character(0); gface <- integer(0); gcol <- integer(0)
-  nper <- integer(np); w <- numeric(np); h <- numeric(np)
+  gid <- integer(0)
+  gx <- numeric(0)
+  gy <- numeric(0)
+  gsize <- numeric(0)
+  gpath <- character(0)
+  gface <- integer(0)
+  gcol <- integer(0)
+  nper <- integer(np)
+  w <- numeric(np)
+  h <- numeric(np)
   for (j in seq_len(np)) {
     g <- comp[[keytxt[j]]]
     ng <- length(g$gid)
-    nper[j] <- ng; w[j] <- g$w * scale; h[j] <- g$h * scale
+    nper[j] <- ng
+    w[j] <- g$w * scale
+    h[j] <- g$h * scale
     if (ng > 0L) {
-      gid <- c(gid, g$gid); gx <- c(gx, g$gx * scale); gy <- c(gy, g$gy * scale)
-      gsize <- c(gsize, g$gsize * scale); gpath <- c(gpath, g$gpath); gface <- c(gface, g$gface)
+      gid <- c(gid, g$gid)
+      gx <- c(gx, g$gx * scale)
+      gy <- c(gy, g$gy * scale)
+      gsize <- c(gsize, g$gsize * scale)
+      gpath <- c(gpath, g$gpath)
+      gface <- c(gface, g$gface)
       m <- grDevices::col2rgb(g$cols, alpha = TRUE)
-      if (!is.null(alpha) && !is.na(alpha)) m[4L, ] <- round(m[4L, ] * alpha)
+      if (!is.null(alpha) && !is.na(alpha)) {
+        m[4L, ] <- round(m[4L, ] * alpha)
+      }
       gcol <- c(gcol, as.integer(m))
     }
   }
   scene$texts_rich(
-    cx$value[drawn], cy$value[drawn], cx$code[drawn], cx$offset[drawn], cy$code[drawn], cy$offset[drawn],
-    rot[drawn], hjust, vjust, w, h, as.integer(nper),
-    gid, gx, gy, gsize, gpath, gface, gcol,
-    keytxt, family, fontface, fontsize, .rs_col_inh(base_col), .rs_num_inh(alpha),
-    .rs_col_inh(halo$col), (halo$width %||% 0) * scale,
+    cx$value[drawn],
+    cy$value[drawn],
+    cx$code[drawn],
+    cx$offset[drawn],
+    cy$code[drawn],
+    cy$offset[drawn],
+    rot[drawn],
+    hjust,
+    vjust,
+    w,
+    h,
+    as.integer(nper),
+    gid,
+    gx,
+    gy,
+    gsize,
+    gpath,
+    gface,
+    gcol,
+    keytxt,
+    family,
+    fontface,
+    fontsize,
+    .rs_col_inh(base_col),
+    .rs_num_inh(alpha),
+    .rs_col_inh(halo$col),
+    (halo$width %||% 0) * scale,
     if (is.null(keys)) character(0) else keys[drawn]
   )
   invisible()
@@ -794,7 +1203,10 @@ md <- function(text) {
   }
   v <- .face_cache[[f]]
   if (is.null(v)) {
-    v <- list(italic = grepl("italic|oblique", f), weight = if (grepl("bold", f)) "bold" else "normal")
+    v <- list(
+      italic = grepl("italic|oblique", f),
+      weight = if (grepl("bold", f)) "bold" else "normal"
+    )
     .face_cache[[f]] <- v
   }
   v

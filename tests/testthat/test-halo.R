@@ -10,8 +10,10 @@ halo_scene <- function(...) {
 test_that("a halo changes the raster output, and its absence does not", {
   plain <- withr::local_tempfile(fileext = ".png")
   haloed <- withr::local_tempfile(fileext = ".png")
-  vl_clear_render_cache(); render(halo_scene(), plain)
-  vl_clear_render_cache(); render(halo_scene(halo_col = "black", halo_width = 2), haloed)
+  vl_clear_render_cache()
+  render(halo_scene(), plain)
+  vl_clear_render_cache()
+  render(halo_scene(halo_col = "black", halo_width = 2), haloed)
   expect_false(identical(tools::md5sum(plain)[[1]], tools::md5sum(haloed)[[1]]))
 })
 
@@ -20,12 +22,20 @@ test_that("a halo is drawn under the fill, not over it", {
   # still be white (the halo must not have painted over the fill), while pixels
   # just outside the glyph edge must be darker than the page.
   s <- vl_scene(3, 1, dpi = 100, bg = "#4682B4") |>
-    draw(text_grob("H", x = 0.5, y = 0.5,
-                   gp = vl_gpar(fontsize = 60, col = "white",
-                                halo_col = "black", halo_width = 3)))
+    draw(text_grob(
+      "H",
+      x = 0.5,
+      y = 0.5,
+      gp = vl_gpar(
+        fontsize = 60,
+        col = "white",
+        halo_col = "black",
+        halo_width = 3
+      )
+    ))
   r <- scene_raster(s)
   # The stem of a big centred "H" runs through the middle rows.
-  mid <- r[, , dim(r)[3] %/% 2]
+  mid <- r[,, dim(r)[3] %/% 2]
   # Somewhere on that row there must be near-white (fill) and near-black (halo).
   white <- any(mid[1, ] > 240 & mid[2, ] > 240 & mid[3, ] > 240)
   black <- any(mid[1, ] < 40 & mid[2, ] < 40 & mid[3, ] < 40)
@@ -35,11 +45,15 @@ test_that("a halo is drawn under the fill, not over it", {
 
 test_that("halo needs both a colour and a positive width", {
   base <- withr::local_tempfile(fileext = ".png")
-  vl_clear_render_cache(); render(halo_scene(), base)
+  vl_clear_render_cache()
+  render(halo_scene(), base)
   ref <- tools::md5sum(base)[[1]]
-  for (gp in list(list(halo_col = "black"), list(halo_width = 2),
-                  list(halo_col = "black", halo_width = 0),
-                  list(halo_col = NA, halo_width = 2))) {
+  for (gp in list(
+    list(halo_col = "black"),
+    list(halo_width = 2),
+    list(halo_col = "black", halo_width = 0),
+    list(halo_col = NA, halo_width = 2)
+  )) {
     f <- withr::local_tempfile(fileext = ".png")
     vl_clear_render_cache()
     render(do.call(halo_scene, gp), f)
@@ -74,10 +88,12 @@ test_that("the glyph-sprite fast path is bypassed for haloed text", {
   f2 <- withr::local_tempfile(fileext = ".png")
   s <- halo_scene(halo_col = "black", halo_width = 2)
   withr::with_options(list(vellum.glyph_bitmap = "on"), {
-    vl_clear_render_cache(); render(s, f1)
+    vl_clear_render_cache()
+    render(s, f1)
   })
   withr::with_options(list(vellum.glyph_bitmap = "off"), {
-    vl_clear_render_cache(); render(s, f2)
+    vl_clear_render_cache()
+    render(s, f2)
   })
   expect_identical(tools::md5sum(f1)[[1]], tools::md5sum(f2)[[1]])
 })
@@ -92,7 +108,10 @@ test_that("halo works on rich md() labels and multi-line text", {
     vl_clear_render_cache()
     expect_no_error(render(
       vl_scene(3, 1.5, dpi = 100) |>
-        draw(text_grob(lab, gp = vl_gpar(fontsize = 20, halo_col = "yellow", halo_width = 1.5))),
+        draw(text_grob(
+          lab,
+          gp = vl_gpar(fontsize = 20, halo_col = "yellow", halo_width = 1.5)
+        )),
       f
     ))
   }

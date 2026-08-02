@@ -4,7 +4,12 @@ anim_keys <- function() {
   mk <- function(x, fill) {
     vl_scene(3, 2, bg = "white") |>
       push(vl_viewport(xscale = c(0, 1), yscale = c(0, 1), name = "panel")) |>
-      draw(circle_grob(x = x, y = 0.5, r = vl_unit(5, "mm"), gp = vl_gpar(fill = fill, col = NA))) |>
+      draw(circle_grob(
+        x = x,
+        y = 0.5,
+        r = vl_unit(5, "mm"),
+        gp = vl_gpar(fill = fill, col = NA)
+      )) |>
       pop()
   }
   list(mk(0.2, "steelblue"), mk(0.5, "tomato"), mk(0.8, "gold"))
@@ -32,16 +37,36 @@ test_that("vl_render_animation honours the GIF quality controls", {
   # dithered (default) and undithered both produce a valid 10-frame GIF.
   for (dither in c(TRUE, FALSE)) {
     out <- withr::local_tempfile(fileext = ".gif")
-    vl_render_animation(keys, seg, frac, out, format = "gif", gif_speed = 3, gif_dither = dither)
+    vl_render_animation(
+      keys,
+      seg,
+      frac,
+      out,
+      format = "gif",
+      gif_speed = 3,
+      gif_dither = dither
+    )
     expect_equal(nrow(magick::image_info(magick::image_read(out))), 10L)
   }
 
   expect_error(
-    vl_render_animation(keys, seg, frac, withr::local_tempfile(fileext = ".gif"), gif_speed = 0),
+    vl_render_animation(
+      keys,
+      seg,
+      frac,
+      withr::local_tempfile(fileext = ".gif"),
+      gif_speed = 0
+    ),
     "1:30"
   )
   expect_error(
-    vl_render_animation(keys, seg, frac, withr::local_tempfile(fileext = ".gif"), gif_speed = 99),
+    vl_render_animation(
+      keys,
+      seg,
+      frac,
+      withr::local_tempfile(fileext = ".gif"),
+      gif_speed = 99
+    ),
     "1:30"
   )
 })

@@ -21,7 +21,10 @@ test_that("branching diverges correctly across push/pop", {
     draw(rect_grob(name = "R0")) |>
     push(vl_viewport(name = "P")) |>
     draw(rect_grob(name = "R1"))
-  b1 <- base |> draw(rect_grob(name = "X")) |> pop() |> draw(rect_grob(name = "topX"))
+  b1 <- base |>
+    draw(rect_grob(name = "X")) |>
+    pop() |>
+    draw(rect_grob(name = "topX"))
   b2 <- base |> draw(rect_grob(name = "Y"))
   expect_equal(node_names(base), c("R0", "P", "R1"))
   expect_equal(node_names(b1), c("R0", "P", "R1", "X", "topX"))
@@ -30,9 +33,14 @@ test_that("branching diverges correctly across push/pop", {
 })
 
 test_that("pop(n) never ascends past the root and ignores n < 0", {
-  s <- vl_scene() |> push(vl_viewport(name = "p")) |> pop(5) |> draw(rect_grob(name = "g"))
+  s <- vl_scene() |>
+    push(vl_viewport(name = "p")) |>
+    pop(5) |>
+    draw(rect_grob(name = "g"))
   expect_equal(node_names(s), c("p", "g")) # 'g' lands at the root, not in a phantom frame
-  expect_no_error(.scene_to_backend(vl_scene() |> push(vl_viewport()) |> pop(-1)))
+  expect_no_error(.scene_to_backend(
+    vl_scene() |> push(vl_viewport()) |> pop(-1)
+  ))
 })
 
 test_that("get_node returns the named grob; missing errors", {
@@ -43,8 +51,14 @@ test_that("get_node returns the named grob; missing errors", {
 
 test_that("edit_node changes a property and is reflected in the render", {
   s <- vl_scene(width = 1, height = 1, dpi = 100, bg = "white") |>
-    draw(rect_grob(x = 0.5, y = 0.5, width = 0.5, height = 0.5,
-                   gp = vl_gpar(fill = "red", col = NA), name = "box"))
+    draw(rect_grob(
+      x = 0.5,
+      y = 0.5,
+      width = 0.5,
+      height = 0.5,
+      gp = vl_gpar(fill = "red", col = NA),
+      name = "box"
+    ))
   expect_equal(px(s, 50, 50)[1:3], c(255L, 0L, 0L))
 
   s2 <- edit_node(s, "box", gp = vl_gpar(fill = "blue", col = NA))
@@ -66,9 +80,19 @@ test_that("an edit rebuilds nodes without dropping any property", {
   # name every property. If gtree or vellum_scene gains one, this fails.
   s <- vl_scene(width = 3, height = 2, dpi = 123, bg = "#eeddcc") |>
     describe(title = "t", desc = "d") |>
-    push(vl_viewport(name = "panel", xscale = c(0, 10), clip = TRUE, cache = TRUE)) |>
-    draw(rect_grob(name = "box", gp = vl_gpar(fill = "red", col = NA),
-                   key = "k1", meta = list(list(a = 1)), id = "i1")) |>
+    push(vl_viewport(
+      name = "panel",
+      xscale = c(0, 10),
+      clip = TRUE,
+      cache = TRUE
+    )) |>
+    draw(rect_grob(
+      name = "box",
+      gp = vl_gpar(fill = "red", col = NA),
+      key = "k1",
+      meta = list(list(a = 1)),
+      id = "i1"
+    )) |>
     pop()
   s <- edit_node(s, "box", gp = vl_gpar(fill = "grey", col = NA)) # materialise
 

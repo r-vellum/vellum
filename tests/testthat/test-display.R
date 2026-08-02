@@ -8,8 +8,13 @@ test_that("display() draws the scene into the active device (asymmetric, no shea
   # A top-left red block: an asymmetric target so a transpose/shear/stride bug in
   # the draw path changes the output (a centred blob would not catch it).
   s <- vl_scene(4, 2, bg = "white") |>
-    draw(rect_grob(x = 0.12, y = 0.82, width = 0.18, height = 0.28,
-                   gp = vl_gpar(fill = "red", col = NA)))
+    draw(rect_grob(
+      x = 0.12,
+      y = 0.82,
+      width = 0.18,
+      height = 0.28,
+      gp = vl_gpar(fill = "red", col = NA)
+    ))
   display(s)
   grDevices::dev.off()
   img <- png::readPNG(f) # [150, 300, c]
@@ -29,8 +34,10 @@ test_that("display() fills the device at any aspect (reflow, no letterbox)", {
     display(s)
     grDevices::dev.off()
     img <- png::readPNG(f) # [H, W, c]; steelblue has low red, white is high red
-    max(img[1, , 1]) < 0.7 && max(img[H, , 1]) < 0.7 && # top, bottom rows
-      max(img[, 1, 1]) < 0.7 && max(img[, W, 1]) < 0.7 # left, right cols
+    max(img[1, , 1]) < 0.7 &&
+      max(img[H, , 1]) < 0.7 && # top, bottom rows
+      max(img[, 1, 1]) < 0.7 &&
+      max(img[, W, 1]) < 0.7 # left, right cols
   }
   expect_true(edges_filled(500, 500)) # square: previously letterboxed top/bottom
   expect_true(edges_filled(800, 300)) # wide: previously letterboxed left/right
@@ -43,8 +50,12 @@ test_that("display() re-renders on resize so round markers stay round", {
   skip_if_not_installed("png")
   s <- vl_scene(4, 4, bg = "white") |>
     push(vl_viewport(xscale = c(0, 10), yscale = c(0, 10))) |>
-    draw(points_grob(vl_unit(5, "native"), vl_unit(5, "native"),
-                     size = vl_unit(6, "mm"), gp = vl_gpar(fill = "red", col = NA)))
+    draw(points_grob(
+      vl_unit(5, "native"),
+      vl_unit(5, "native"),
+      size = vl_unit(6, "mm"),
+      gp = vl_gpar(fill = "red", col = NA)
+    ))
   f1 <- tempfile(fileext = ".png")
   f2 <- tempfile(fileext = ".png")
   grDevices::png(f1, 400, 400)
@@ -56,7 +67,7 @@ test_that("display() re-renders on resize so round markers stay round", {
   grDevices::replayPlot(p)
   grDevices::dev.off()
   img <- png::readPNG(f2)
-  red <- which(img[, , 1] > 0.7 & img[, , 2] < 0.3, arr.ind = TRUE)
+  red <- which(img[,, 1] > 0.7 & img[,, 2] < 0.3, arr.ind = TRUE)
   expect_gt(nrow(red), 0)
   wpx <- diff(range(red[, 2]))
   hpx <- diff(range(red[, 1]))
@@ -71,14 +82,21 @@ test_that("display() re-renders on resize so round markers stay round", {
   s <- vl_scene(7, 5, bg = "white", dpi = 96)
   set.seed(1)
   for (i in seq_len(120)) {
-    s <- draw(s, circle_grob(x = stats::runif(1), y = stats::runif(1), r = 0.015,
-                             gp = vl_gpar(fill = "tomato", col = "black")))
+    s <- draw(
+      s,
+      circle_grob(
+        x = stats::runif(1),
+        y = stats::runif(1),
+        r = 0.015,
+        gp = vl_gpar(fill = "tomato", col = "black")
+      )
+    )
   }
   s
 }
 .sharpness <- function(f) {
   img <- png::readPNG(f)
-  g <- apply(img[, , 1:3, drop = FALSE], c(1, 2), mean)
+  g <- apply(img[,, 1:3, drop = FALSE], c(1, 2), mean)
   dx <- diff(g, differences = 2)
   dy <- diff(t(g), differences = 2)
   (mean(dx^2) + mean(dy^2)) * 1e4
@@ -95,7 +113,9 @@ test_that("display() honors the authored dpi on a device that misreports px size
   # device density win. Mock it so this test deterministically exercises the
   # untrustworthy-device fallback on every backend.
   local_mocked_bindings(
-    dev.size = function(units = "in", ...) if (identical(units, "px")) c(504, 360) else c(7, 5),
+    dev.size = function(units = "in", ...) {
+      if (identical(units, "px")) c(504, 360) else c(7, 5)
+    },
     .package = "grDevices"
   )
   s <- .dpi_probe_scene()
@@ -117,14 +137,18 @@ test_that("display() lets the knitr chunk dpi win when knitting", {
   # Pin the px misreport (see the previous test) so the non-knit render falls
   # back to the authored dpi on cairo as well as quartz.
   local_mocked_bindings(
-    dev.size = function(units = "in", ...) if (identical(units, "px")) c(504, 360) else c(7, 5),
+    dev.size = function(units = "in", ...) {
+      if (identical(units, "px")) c(504, 360) else c(7, 5)
+    },
     .package = "grDevices"
   )
   s <- S7::set_props(.dpi_probe_scene(), dpi = 72) # authored low; chunk asks high
   withr::local_options(knitr.in.progress = TRUE)
   # Stub knitr::opts_current$get('dpi') -> 200 without a full knit.
   local_mocked_bindings(
-    opts_current = list(get = function(name, ...) if (identical(name, "dpi")) 200 else NULL),
+    opts_current = list(get = function(name, ...) {
+      if (identical(name, "dpi")) 200 else NULL
+    }),
     .package = "knitr"
   )
   f_knit <- withr::local_tempfile(fileext = ".png")
@@ -145,7 +169,8 @@ test_that("display() lets the knitr chunk dpi win when knitting", {
 test_that("print() and plot() dispatch to display()", {
   f <- withr::local_tempfile(fileext = ".png")
   grDevices::png(f)
-  s <- vl_scene(1, 1, bg = "white") |> draw(rect_grob(gp = vl_gpar(fill = "blue", col = NA)))
+  s <- vl_scene(1, 1, bg = "white") |>
+    draw(rect_grob(gp = vl_gpar(fill = "blue", col = NA)))
   expect_no_error(print(s))
   expect_no_error(plot(s))
   grDevices::dev.off()
@@ -154,7 +179,8 @@ test_that("print() and plot() dispatch to display()", {
 test_that("display() coerces through as_vellum_scene()", {
   Spec3 <- S7::new_class("Spec3", properties = list())
   S7::method(as_vellum_scene, Spec3) <- function(x, ...) {
-    vl_scene(1, 1, bg = "white") |> draw(rect_grob(gp = vl_gpar(fill = "green", col = NA)))
+    vl_scene(1, 1, bg = "white") |>
+      draw(rect_grob(gp = vl_gpar(fill = "green", col = NA)))
   }
   f <- withr::local_tempfile(fileext = ".png")
   grDevices::png(f)
@@ -164,7 +190,9 @@ test_that("display() coerces through as_vellum_scene()", {
 
 test_that("display() is a no-op with no device in a non-interactive session", {
   # (we are non-interactive under testthat) close any device first
-  while (grDevices::dev.cur() > 1L) grDevices::dev.off()
+  while (grDevices::dev.cur() > 1L) {
+    grDevices::dev.off()
+  }
   s <- vl_scene(1, 1) |> draw(rect_grob())
   expect_no_error(display(s)) # must not error or spawn Rplots.pdf
   expect_equal(unname(grDevices::dev.cur()), 1L) # still the null device

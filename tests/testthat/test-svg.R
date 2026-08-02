@@ -6,8 +6,13 @@ svg_of <- function(scene) {
 
 test_that("render() writes an SVG with the expected shape elements", {
   s <- vl_scene(1, 1, dpi = 100, bg = "white") |>
-    draw(rect_grob(x = 0.5, y = 0.5, width = 0.5, height = 0.5,
-                   gp = vl_gpar(fill = "red", col = "blue", lwd = 2)))
+    draw(rect_grob(
+      x = 0.5,
+      y = 0.5,
+      width = 0.5,
+      height = 0.5,
+      gp = vl_gpar(fill = "red", col = "blue", lwd = 2)
+    ))
   svg <- svg_of(s)
   expect_match(svg, "^<\\?xml")
   expect_match(svg, 'viewBox="0 0 100 100"')
@@ -18,8 +23,13 @@ test_that("render() writes an SVG with the expected shape elements", {
 
 test_that("scene_svg() returns the SVG as a string, matching render()", {
   s <- vl_scene(1, 1, dpi = 100, bg = "white") |>
-    draw(rect_grob(x = 0.5, y = 0.5, width = 0.5, height = 0.5,
-                   gp = vl_gpar(fill = "red")))
+    draw(rect_grob(
+      x = 0.5,
+      y = 0.5,
+      width = 0.5,
+      height = 0.5,
+      gp = vl_gpar(fill = "red")
+    ))
   svg <- scene_svg(s)
   expect_type(svg, "character")
   expect_length(svg, 1L)
@@ -34,8 +44,13 @@ test_that("scene_svg() returns the SVG as a string, matching render()", {
 test_that("per-element keys emit a data-key on each batched primitive", {
   # points (circle fast path)
   s <- vl_scene(1, 1, dpi = 100) |>
-    draw(points_grob(c(0.3, 0.6, 0.9), 0.5, size = vl_unit(4, "mm"),
-                     gp = vl_gpar(fill = "red"), key = c("a", "b", "c")))
+    draw(points_grob(
+      c(0.3, 0.6, 0.9),
+      0.5,
+      size = vl_unit(4, "mm"),
+      gp = vl_gpar(fill = "red"),
+      key = c("a", "b", "c")
+    ))
   svg <- scene_svg(s)
   expect_match(svg, 'data-key="a"')
   expect_match(svg, 'data-key="b"')
@@ -43,29 +58,52 @@ test_that("per-element keys emit a data-key on each batched primitive", {
 
   # rects
   s2 <- vl_scene(1, 1, dpi = 100) |>
-    draw(rect_grob(x = c(0.3, 0.7), y = 0.5, width = 0.2, height = 0.2,
-                   gp = vl_gpar(fill = "blue"), key = c("r1", "r2")))
+    draw(rect_grob(
+      x = c(0.3, 0.7),
+      y = 0.5,
+      width = 0.2,
+      height = 0.2,
+      gp = vl_gpar(fill = "blue"),
+      key = c("r1", "r2")
+    ))
   expect_match(scene_svg(s2), 'data-key="r1"')
   expect_match(scene_svg(s2), 'data-key="r2"')
 
   # segments (combined path is split per-element when keyed)
   s3 <- vl_scene(1, 1, dpi = 100) |>
-    draw(segments_grob(c(0.1, 0.5), c(0.1, 0.5), c(0.4, 0.9), c(0.4, 0.9),
-                       gp = vl_gpar(col = "black", lwd = 2), key = c("s1", "s2")))
+    draw(segments_grob(
+      c(0.1, 0.5),
+      c(0.1, 0.5),
+      c(0.4, 0.9),
+      c(0.4, 0.9),
+      gp = vl_gpar(col = "black", lwd = 2),
+      key = c("s1", "s2")
+    ))
   expect_match(scene_svg(s3), 'data-key="s1"')
   expect_match(scene_svg(s3), 'data-key="s2"')
 
   # markers (non-circle shapes)
   s4 <- vl_scene(1, 1, dpi = 100) |>
-    draw(points_grob(c(0.3, 0.7), 0.5, shape = c("square", "triangle"),
-                     size = vl_unit(4, "mm"), gp = vl_gpar(fill = "green"), key = c("m1", "m2")))
+    draw(points_grob(
+      c(0.3, 0.7),
+      0.5,
+      shape = c("square", "triangle"),
+      size = vl_unit(4, "mm"),
+      gp = vl_gpar(fill = "green"),
+      key = c("m1", "m2")
+    ))
   expect_match(scene_svg(s4), 'data-key="m1"')
   expect_match(scene_svg(s4), 'data-key="m2"')
 })
 
 test_that("keys are gated: no keys => no data-key attribute (unchanged output)", {
   keyed <- vl_scene(1, 1, dpi = 100) |>
-    draw(points_grob(c(0.3, 0.6), 0.5, gp = vl_gpar(fill = "red"), key = c("a", "b")))
+    draw(points_grob(
+      c(0.3, 0.6),
+      0.5,
+      gp = vl_gpar(fill = "red"),
+      key = c("a", "b")
+    ))
   keyless <- vl_scene(1, 1, dpi = 100) |>
     draw(points_grob(c(0.3, 0.6), 0.5, gp = vl_gpar(fill = "red")))
   expect_match(scene_svg(keyed), "data-key")
@@ -75,7 +113,13 @@ test_that("keys are gated: no keys => no data-key attribute (unchanged output)",
 test_that("a data-key never leaks from a keyed grob onto a later keyless grob", {
   s <- vl_scene(1, 1, dpi = 100) |>
     draw(points_grob(0.3, 0.5, gp = vl_gpar(fill = "red"), key = "a")) |>
-    draw(rect_grob(x = 0.7, y = 0.5, width = 0.2, height = 0.2, gp = vl_gpar(fill = "blue")))
+    draw(rect_grob(
+      x = 0.7,
+      y = 0.5,
+      width = 0.2,
+      height = 0.2,
+      gp = vl_gpar(fill = "blue")
+    ))
   svg <- scene_svg(s)
   # the point carries the key; the rect (drawn after) must not inherit it —
   # i.e. every data-key in the document is ="a" (none leaked onto the rect).
@@ -89,15 +133,30 @@ test_that("single-shape grobs (path/lines/polygon) carry a data-key when keyed",
     g@keys <- "feat1"
     scene_svg(vl_scene(1, 1, dpi = 100) |> draw(g))
   }
-  expect_match(mk(path_grob(c(.2, .8, .8), c(.2, .2, .8), gp = vl_gpar(fill = "red"))),
-               'data-key="feat1"')
-  expect_match(mk(polygon_grob(c(.2, .8, .8), c(.2, .2, .8), gp = vl_gpar(fill = "red"))),
-               'data-key="feat1"')
-  expect_match(mk(lines_grob(c(.2, .8), c(.2, .8), gp = vl_gpar(col = "black", lwd = 2))),
-               'data-key="feat1"')
+  expect_match(
+    mk(path_grob(c(.2, .8, .8), c(.2, .2, .8), gp = vl_gpar(fill = "red"))),
+    'data-key="feat1"'
+  )
+  expect_match(
+    mk(polygon_grob(c(.2, .8, .8), c(.2, .2, .8), gp = vl_gpar(fill = "red"))),
+    'data-key="feat1"'
+  )
+  expect_match(
+    mk(lines_grob(c(.2, .8), c(.2, .8), gp = vl_gpar(col = "black", lwd = 2))),
+    'data-key="feat1"'
+  )
   # unkeyed single-shape grobs emit no data-key (unchanged output)
-  expect_no_match(scene_svg(vl_scene(1, 1, dpi = 100) |>
-    draw(path_grob(c(.2, .8, .8), c(.2, .2, .8), gp = vl_gpar(fill = "red")))), "data-key")
+  expect_no_match(
+    scene_svg(
+      vl_scene(1, 1, dpi = 100) |>
+        draw(path_grob(
+          c(.2, .8, .8),
+          c(.2, .2, .8),
+          gp = vl_gpar(fill = "red")
+        ))
+    ),
+    "data-key"
+  )
 })
 
 test_that("a named viewport becomes a <g data-vellum-panel> group", {
@@ -140,7 +199,13 @@ test_that("clip on an offset viewport wraps a <g> (clip space stays in device co
   # Regression: putting clip-path on the transformed element double-transforms
   # the clip region; an off-origin clipped viewport must clip via a wrapping <g>.
   s <- vl_scene(1, 1, dpi = 100) |>
-    push(vl_viewport(x = 0.7, y = 0.3, width = 0.4, height = 0.4, clip = TRUE)) |>
+    push(vl_viewport(
+      x = 0.7,
+      y = 0.3,
+      width = 0.4,
+      height = 0.4,
+      clip = TRUE
+    )) |>
     draw(rect_grob(gp = vl_gpar(fill = "red", col = NA)))
   expect_match(svg_of(s), '<g clip-path="url\\(#[^)]+\\)"><path')
 })
@@ -156,7 +221,8 @@ test_that("text becomes a <text> element carrying the label and font", {
 })
 
 test_that("text = 'outline' emits glyph outlines instead of <text> (FW5)", {
-  s <- vl_scene(2, 1, dpi = 100) |> draw(text_grob("Ag", x = 0.5, y = 0.5, gp = vl_gpar(fontsize = 40)))
+  s <- vl_scene(2, 1, dpi = 100) |>
+    draw(text_grob("Ag", x = 0.5, y = 0.5, gp = vl_gpar(fontsize = 40)))
   f <- withr::local_tempfile(fileext = ".svg")
   render(s, f, text = "outline")
   svg <- paste(readLines(f, warn = FALSE), collapse = "\n")
@@ -183,7 +249,11 @@ test_that("SVG image colour survives under fully-transparent texels", {
   f <- withr::local_tempfile(fileext = ".svg")
   render(vl_scene(1, 1, dpi = 50, bg = "white") |> draw(raster_grob(img)), f)
   svg <- paste(readLines(f), collapse = "")
-  b64 <- sub("^base64,", "", regmatches(svg, regexpr("base64,[A-Za-z0-9+/=]+", svg)))
+  b64 <- sub(
+    "^base64,",
+    "",
+    regmatches(svg, regexpr("base64,[A-Za-z0-9+/=]+", svg))
+  )
   tmp <- withr::local_tempfile(fileext = ".png")
   writeBin(base64enc::base64decode(b64), tmp)
   arr <- png::readPNG(tmp) # h x w x 4, 0..1

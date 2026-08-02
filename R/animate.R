@@ -74,9 +74,16 @@
 #' vl_render_animation(grow, seg, frac, tempfile(fileext = ".gif"))
 #' }
 #' @export
-vl_render_animation <- function(keyframes, seg, frac,
-                                path, format = c("gif", "apng", "svg", "frames"),
-                                fps = 25, gif_speed = 1, gif_dither = TRUE) {
+vl_render_animation <- function(
+  keyframes,
+  seg,
+  frac,
+  path,
+  format = c("gif", "apng", "svg", "frames"),
+  fps = 25,
+  gif_speed = 1,
+  gif_dither = TRUE
+) {
   format <- match.arg(format)
   if (!is.list(keyframes) || length(keyframes) < 2L) {
     cli::cli_abort("{.arg keyframes} must be a list of at least 2 scenes.")
@@ -99,20 +106,30 @@ vl_render_animation <- function(keyframes, seg, frac,
     cli::cli_abort("{.arg fps} must be a positive number.")
   }
 
-  backends <- lapply(keyframes, function(s) .scene_to_backend(as_vellum_scene(s)))
+  backends <- lapply(keyframes, function(s) {
+    .scene_to_backend(as_vellum_scene(s))
+  })
 
   # Frame duration = 1 / fps seconds, passed as an exact numerator/denominator so
   # the encoders can round to their own time base (APNG: fraction of a second;
   # GIF: centiseconds). `seg` is 1-based here, 0-based across the FFI.
   gif_speed <- as.integer(gif_speed[[1L]])
   if (is.na(gif_speed) || gif_speed < 1L || gif_speed > 30L) {
-    cli::cli_abort("{.arg gif_speed} must be an integer in 1:30 (1 = best quality).")
+    cli::cli_abort(
+      "{.arg gif_speed} must be an integer in 1:30 (1 = best quality)."
+    )
   }
 
   warns <- render_animation(
-    backends, seg - 1L, frac, format, path,
-    delay_num = 1L, delay_den = as.integer(round(fps)),
-    gif_speed = gif_speed, gif_dither = isTRUE(gif_dither)
+    backends,
+    seg - 1L,
+    frac,
+    format,
+    path,
+    delay_num = 1L,
+    delay_den = as.integer(round(fps)),
+    gif_speed = gif_speed,
+    gif_dither = isTRUE(gif_dither)
   )
   .emit_degrade_warnings(warns)
   # An animated SVG emits every frame in full, so a dense scene times a long

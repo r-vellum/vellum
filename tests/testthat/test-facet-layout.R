@@ -18,8 +18,14 @@
 facet_scene <- function(dpi = 100) {
   ylabs <- c("100", "200")
   xlabs <- c("A", "B")
-  gutter_w <- grobwidth(text_grob("200", gp = vl_gpar(fontsize = 12)), mult = 1.5)
-  gutter_h <- grobheight(text_grob("A", gp = vl_gpar(fontsize = 12)), mult = 1.8)
+  gutter_w <- grobwidth(
+    text_grob("200", gp = vl_gpar(fontsize = 12)),
+    mult = 1.5
+  )
+  gutter_h <- grobheight(
+    text_grob("A", gp = vl_gpar(fontsize = 12)),
+    mult = 1.8
+  )
   cols <- c(gutter_w, vl_unit(1, "null"), vl_unit(1, "null"))
   rows <- c(vl_unit(1, "null"), vl_unit(1, "null"), gutter_h)
   fills <- c("red", "green", "blue", "orange") # (r1c2, r1c3, r2c2, r2c3)
@@ -27,31 +33,41 @@ facet_scene <- function(dpi = 100) {
   s <- vl_scene(width = 4, height = 4, dpi = dpi, bg = "white") |>
     push(vl_viewport(layout = grid_layout(cols, rows)))
   k <- 0L
-  for (r in 1:2) for (cc in 2:3) {
-    k <- k + 1L
-    s <- s |>
-      push(vl_viewport(row = r, col = cc)) |>
-      draw(rect_grob(gp = vl_gpar(fill = fills[k], col = NA))) |>
-      pop()
+  for (r in 1:2) {
+    for (cc in 2:3) {
+      k <- k + 1L
+      s <- s |>
+        push(vl_viewport(row = r, col = cc)) |>
+        draw(rect_grob(gp = vl_gpar(fill = fills[k], col = NA))) |>
+        pop()
+    }
   }
   # axis labels in the gutters (just exercises the gutter cells)
   for (r in 1:2) {
-    s <- s |> push(vl_viewport(row = r, col = 1)) |>
-      draw(text_grob(ylabs[r], gp = vl_gpar(fontsize = 12))) |> pop()
+    s <- s |>
+      push(vl_viewport(row = r, col = 1)) |>
+      draw(text_grob(ylabs[r], gp = vl_gpar(fontsize = 12))) |>
+      pop()
   }
   for (cc in 2:3) {
-    s <- s |> push(vl_viewport(row = 3, col = cc)) |>
-      draw(text_grob(xlabs[cc - 1L], gp = vl_gpar(fontsize = 12))) |> pop()
+    s <- s |>
+      push(vl_viewport(row = 3, col = cc)) |>
+      draw(text_grob(xlabs[cc - 1L], gp = vl_gpar(fontsize = 12))) |>
+      pop()
   }
   list(scene = s, gutter_w = gutter_w, dpi = dpi)
 }
 
 # First/last column index whose pixel matches an RGB triple (within tol).
 runs <- function(row_rgb, rgb, tol = 30) {
-  hit <- which(abs(row_rgb[1, ] - rgb[1]) < tol &
-               abs(row_rgb[2, ] - rgb[2]) < tol &
-               abs(row_rgb[3, ] - rgb[3]) < tol)
-  if (!length(hit)) return(NULL)
+  hit <- which(
+    abs(row_rgb[1, ] - rgb[1]) < tol &
+      abs(row_rgb[2, ] - rgb[2]) < tol &
+      abs(row_rgb[3, ] - rgb[3]) < tol
+  )
+  if (!length(hit)) {
+    return(NULL)
+  }
   c(min(hit), max(hit))
 }
 

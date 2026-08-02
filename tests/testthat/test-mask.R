@@ -11,7 +11,10 @@ test_that("as_mask validates its type", {
 })
 
 test_that("an alpha mask shows content only where the mask is opaque", {
-  m <- as_mask(circle_grob(r = 0.3, gp = vl_gpar(fill = "white", col = NA)), type = "alpha")
+  m <- as_mask(
+    circle_grob(r = 0.3, gp = vl_gpar(fill = "white", col = NA)),
+    type = "alpha"
+  )
   s <- vl_scene(2, 2, dpi = 100, bg = "white") |>
     push(vl_viewport(mask = m)) |>
     draw(rect_grob(gp = vl_gpar(fill = "blue", col = NA))) |>
@@ -38,10 +41,18 @@ test_that("alpha vs luminance read coverage differently", {
 test_that("a soft (gradient) mask gives partial coverage", {
   # Luminance mask: black (left) -> white (right). Right shows, left hidden,
   # middle partially blends blue with the white page.
-  grad <- rect_grob(gp = vl_gpar(
-    col = NA,
-    fill = linear_gradient(c("black", "white"), x1 = 0, y1 = 0.5, x2 = 1, y2 = 0.5)
-  ))
+  grad <- rect_grob(
+    gp = vl_gpar(
+      col = NA,
+      fill = linear_gradient(
+        c("black", "white"),
+        x1 = 0,
+        y1 = 0.5,
+        x2 = 1,
+        y2 = 0.5
+      )
+    )
+  )
   s <- vl_scene(2, 1, dpi = 100, bg = "white") |>
     push(vl_viewport(mask = as_mask(grad, type = "luminance"))) |>
     draw(rect_grob(gp = vl_gpar(fill = "blue", col = NA))) |>
@@ -57,7 +68,12 @@ test_that("a soft (gradient) mask gives partial coverage", {
 test_that("SVG emits a <mask> referenced by the group", {
   f <- withr::local_tempfile(fileext = ".svg")
   s <- vl_scene(1, 1, dpi = 100, bg = "white") |>
-    push(vl_viewport(mask = as_mask(circle_grob(r = 0.4, gp = vl_gpar(fill = "white", col = NA))))) |>
+    push(vl_viewport(
+      mask = as_mask(circle_grob(
+        r = 0.4,
+        gp = vl_gpar(fill = "white", col = NA)
+      ))
+    )) |>
     draw(rect_grob(gp = vl_gpar(fill = "blue", col = NA))) |>
     pop()
   render(s, f)
@@ -70,7 +86,12 @@ test_that("SVG emits a <mask> referenced by the group", {
 test_that("PDF renders a masked group (unmasked fallback) without error", {
   f <- withr::local_tempfile(fileext = ".pdf")
   s <- vl_scene(2, 1, dpi = 100) |>
-    push(vl_viewport(mask = as_mask(circle_grob(r = 0.4, gp = vl_gpar(fill = "white", col = NA))))) |>
+    push(vl_viewport(
+      mask = as_mask(circle_grob(
+        r = 0.4,
+        gp = vl_gpar(fill = "white", col = NA)
+      ))
+    )) |>
     draw(rect_grob(gp = vl_gpar(fill = "blue", col = NA))) |>
     pop()
   expect_no_error(render(s, f))

@@ -27,7 +27,11 @@ library(vellum)
 args <- commandArgs(trailingOnly = TRUE)
 out <- if (length(args) >= 1) args[[1]] else "lines.png"
 scale <- if (length(args) >= 2) as.numeric(args[[2]]) else 1
-seed <- if (length(args) >= 3) as.integer(args[[3]]) else sample.int(.Machine$integer.max, 1)
+seed <- if (length(args) >= 3) {
+  as.integer(args[[3]])
+} else {
+  sample.int(.Machine$integer.max, 1)
+}
 set.seed(seed)
 message("seed: ", seed, "  (pass as the 3rd argument to reproduce this figure)")
 
@@ -36,8 +40,13 @@ message("seed: ", seed, "  (pass as the 3rd argument to reproduce this figure)")
 # vectors. The walk is a cumulative sum (each sample depends on the last), so the
 # traces fan out over time from a shared origin.
 k <- round(600 * scale) # series
-m <- 800                # samples each
-message(sprintf("timeseries: %d walks x %d samples = %s vertices", k, m, format(k * m, big.mark = ",")))
+m <- 800 # samples each
+message(sprintf(
+  "timeseries: %d walks x %d samples = %s vertices",
+  k,
+  m,
+  format(k * m, big.mark = ",")
+))
 
 walks <- apply(matrix(rnorm(k * m, sd = 0.4), m, k), 2, cumsum)
 t <- rep(seq_len(m), times = k)
@@ -45,8 +54,11 @@ y <- as.vector(walks)
 grp <- rep(seq_len(k), each = m)
 
 ts_panel <- datashade_lines(
-  t, y, group = grp,
-  width = 700, height = 500,
+  t,
+  y,
+  group = grp,
+  width = 700,
+  height = 500,
   colors = c("#ffffff", "#fdd0a2", "#fd8d3c", "#d94801", "#7f2704"),
   how = "eq_hist"
 )
@@ -58,14 +70,22 @@ n_nodes <- round(400 * scale)
 node_x <- c(rnorm(n_nodes %/% 2, -1), rnorm(n_nodes - n_nodes %/% 2, 1))
 node_y <- rnorm(n_nodes)
 n_edges <- round(12000 * scale)
-message(sprintf("network: %d nodes, %s edges", n_nodes, format(n_edges, big.mark = ",")))
+message(sprintf(
+  "network: %d nodes, %s edges",
+  n_nodes,
+  format(n_edges, big.mark = ",")
+))
 
 ea <- sample(n_nodes, n_edges, replace = TRUE)
 eb <- sample(n_nodes, n_edges, replace = TRUE)
 
 net_panel <- datashade_segments(
-  node_x[ea], node_y[ea], node_x[eb], node_y[eb],
-  width = 700, height = 500,
+  node_x[ea],
+  node_y[ea],
+  node_x[eb],
+  node_y[eb],
+  width = 700,
+  height = 500,
   colors = c("#ffffff", "#c6dbef", "#6baed6", "#2171b5", "#08306b"),
   how = "eq_hist",
   spread = "auto" # dynspread: bold the thin edges so sparse regions stay visible
@@ -77,14 +97,21 @@ H <- 5
 dpi <- 100
 
 s <- vl_scene(width = W, height = H, dpi = dpi, bg = "white") |>
-  push(vl_viewport(layout = grid_layout(
-    widths = vl_unit(c(1, 1), "null"),
-    heights = vl_unit(1, "null")
-  ))) |>
+  push(vl_viewport(
+    layout = grid_layout(
+      widths = vl_unit(c(1, 1), "null"),
+      heights = vl_unit(1, "null")
+    )
+  )) |>
   push(vl_viewport(row = 1, col = 1, xscale = range(t), yscale = range(y))) |>
   draw(ts_panel) |>
   pop() |>
-  push(vl_viewport(row = 1, col = 2, xscale = range(node_x), yscale = range(node_y))) |>
+  push(vl_viewport(
+    row = 1,
+    col = 2,
+    xscale = range(node_x),
+    yscale = range(node_y)
+  )) |>
   draw(net_panel) |>
   pop()
 

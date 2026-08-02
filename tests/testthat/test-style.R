@@ -23,7 +23,11 @@ test_that("a child gp overrides an inherited style (more-specific wins)", {
   accent <- style(col = "red", name = "accent")
   s <- vl_scene(2, 2, bg = "white") |>
     push(vl_viewport(gp = accent)) |>
-    draw(rect_grob(width = 0.5, height = 0.5, gp = vl_gpar(fill = NA, col = "blue", lwd = 4)))
+    draw(rect_grob(
+      width = 0.5,
+      height = 0.5,
+      gp = vl_gpar(fill = NA, col = "blue", lwd = 4)
+    ))
   px <- scene_raster(s)
   blue <- px[3, , ] > 180 & px[1, , ] < 80 & px[2, , ] < 80
   red <- px[1, , ] > 180 & px[2, , ] < 80 & px[3, , ] < 80
@@ -57,8 +61,10 @@ test_that("cex renders identically to the equivalent fontsize", {
   mk <- function(gp) vl_scene(2, 1, dpi = 100) |> draw(text_grob("Wg", gp = gp))
   f1 <- withr::local_tempfile(fileext = ".png")
   f2 <- withr::local_tempfile(fileext = ".png")
-  vl_clear_render_cache(); render(mk(vl_gpar(fontsize = 10, cex = 1.5)), f1)
-  vl_clear_render_cache(); render(mk(vl_gpar(fontsize = 15)), f2)
+  vl_clear_render_cache()
+  render(mk(vl_gpar(fontsize = 10, cex = 1.5)), f1)
+  vl_clear_render_cache()
+  render(mk(vl_gpar(fontsize = 15)), f2)
   expect_identical(tools::md5sum(f1)[[1]], tools::md5sum(f2)[[1]])
 })
 

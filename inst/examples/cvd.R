@@ -19,10 +19,25 @@ swatch <- function() {
   s <- vl_scene(5, 1.4, dpi = 150, bg = "white")
   n <- length(pal)
   for (i in seq_len(n)) {
-    s <- draw(s, rect_grob(x = (i - 0.5) / n, width = 1 / n * 0.9, height = 0.62,
-                           y = 0.58, gp = vl_gpar(fill = pal[[i]], col = NA)))
-    s <- draw(s, text_grob(names(pal)[i], x = (i - 0.5) / n, y = 0.14,
-                           gp = vl_gpar(fontsize = 10, col = "grey30")))
+    s <- draw(
+      s,
+      rect_grob(
+        x = (i - 0.5) / n,
+        width = 1 / n * 0.9,
+        height = 0.62,
+        y = 0.58,
+        gp = vl_gpar(fill = pal[[i]], col = NA)
+      )
+    )
+    s <- draw(
+      s,
+      text_grob(
+        names(pal)[i],
+        x = (i - 0.5) / n,
+        y = 0.14,
+        gp = vl_gpar(fontsize = 10, col = "grey30")
+      )
+    )
   }
   s
 }
@@ -46,7 +61,15 @@ sep <- function(a, b, kind) {
 }
 cat("\nchannel distance between the red and green swatches:\n")
 for (k in kinds) {
-  cat(sprintf("  %-14s %4d%s\n", k, sep(1, 2, k),
-              if (sep(1, 2, k) < sep(1, 2, "none") / 3) "   <- effectively identical" else ""))
+  cat(sprintf(
+    "  %-14s %4d%s\n",
+    k,
+    sep(1, 2, k),
+    if (sep(1, 2, k) < sep(1, 2, "none") / 3) {
+      "   <- effectively identical"
+    } else {
+      ""
+    }
+  ))
 }
 cat("\nA red/green pair is the classic failure. Check yours before shipping.\n")

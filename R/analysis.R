@@ -61,20 +61,29 @@ profile_render <- function(scene, reps = 3) {
   for (i in seq_len(reps)) {
     s$render_png(f)
     t <- rs_take_node_times()
-    if (!length(times)) times <- numeric(nrow(idx))
-    if (length(t)) times[seq_along(t)] <- times[seq_along(t)] + t
+    if (!length(times)) {
+      times <- numeric(nrow(idx))
+    }
+    if (length(t)) {
+      times[seq_along(t)] <- times[seq_along(t)] + t
+    }
     # The pixmap memo would make later reps free, so drop it.
     s <- .scene_to_backend(scene)
     vl_clear_render_cache()
   }
   rs_set_profiling(FALSE)
-  if (!length(times)) times <- numeric(nrow(idx))
+  if (!length(times)) {
+    times <- numeric(nrow(idx))
+  }
   times <- times / reps
 
   keep <- nzchar(idx$kind)
   raw <- data.frame(
-    kind = idx$kind[keep], name = idx$name[keep], n = idx$n[keep],
-    seconds = times[keep], stringsAsFactors = FALSE
+    kind = idx$kind[keep],
+    name = idx$name[keep],
+    n = idx$n[keep],
+    seconds = times[keep],
+    stringsAsFactors = FALSE
   )
   # Aggregate by mark, not by node. A vectorised `text_grob()` of 200 labels
   # compiles to 200 nodes, and 200 rows of ~0 s is noise, not a profile -- what
@@ -104,8 +113,14 @@ print.vellum_profile <- function(x, ...) {
   ph <- attr(x, "phases")
   cli::cli_text("{.strong Phases} (median of the timed reps):")
   cli::cli_bullets(c(
-    "*" = sprintf("build    %7.3f s  (constructing the R value)", ph[["build"]]),
-    "*" = sprintf("compile  %7.3f s  (R -> Rust replay, incl. text shaping)", ph[["compile"]]),
+    "*" = sprintf(
+      "build    %7.3f s  (constructing the R value)",
+      ph[["build"]]
+    ),
+    "*" = sprintf(
+      "compile  %7.3f s  (R -> Rust replay, incl. text shaping)",
+      ph[["compile"]]
+    ),
     "*" = sprintf("raster   %7.3f s  (drawing)", ph[["raster"]])
   ))
   if (ph[["compile"]] > ph[["raster"]]) {
@@ -119,8 +134,14 @@ print.vellum_profile <- function(x, ...) {
     cli::cli_text("{.strong Slowest marks} (raster time):")
     top <- x[seq_len(n), , drop = FALSE]
     cli::cli_bullets(stats::setNames(
-      sprintf("%-10s %-14s %7d elem  %7.4f s  %4.1f%%",
-              top$kind, ifelse(nzchar(top$name), top$name, "-"), top$n, top$seconds, top$pct),
+      sprintf(
+        "%-10s %-14s %7d elem  %7.4f s  %4.1f%%",
+        top$kind,
+        ifelse(nzchar(top$name), top$name, "-"),
+        top$n,
+        top$seconds,
+        top$pct
+      ),
       rep("*", n)
     ))
   }
@@ -170,8 +191,11 @@ scene_stats <- function(scene) {
   # Pack RGBA into one integer per pixel: cheaper to compare and to count
   # distinct values than four parallel vectors.
   i <- seq_len(npix)
-  packed <- px[(i - 1) * 4 + 1] * 2^24 + px[(i - 1) * 4 + 2] * 2^16 +
-    px[(i - 1) * 4 + 3] * 2^8 + px[(i - 1) * 4 + 4]
+  packed <- px[(i - 1) * 4 + 1] *
+    2^24 +
+    px[(i - 1) * 4 + 2] * 2^16 +
+    px[(i - 1) * 4 + 3] * 2^8 +
+    px[(i - 1) * 4 + 4]
   bg <- .rs_col(scene@bg) %||% c(255L, 255L, 255L, 255L)
   bg_packed <- bg[1] * 2^24 + bg[2] * 2^16 + bg[3] * 2^8 + bg[4]
   inked <- sum(packed != bg_packed)

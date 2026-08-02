@@ -38,13 +38,24 @@ bench <- function(label, expr) {
   invisible(t)
 }
 
-cat(sprintf("Text: %s distinct labels @ %dpt (%dx%d in @ %d dpi)\n\n",
-            format(n, big.mark = ",", scientific = FALSE), fontsize, width, height, dpi))
+cat(sprintf(
+  "Text: %s distinct labels @ %dpt (%dx%d in @ %d dpi)\n\n",
+  format(n, big.mark = ",", scientific = FALSE),
+  fontsize,
+  width,
+  height,
+  dpi
+))
 
 # --- grid -------------------------------------------------------------------
 grid_png <- file.path(out_dir, "text-grid.png")
 t_grid <- bench("grid", {
-  grDevices::png(grid_png, width = width * dpi, height = height * dpi, res = dpi)
+  grDevices::png(
+    grid_png,
+    width = width * dpi,
+    height = height * dpi,
+    res = dpi
+  )
   grid::grid.newpage()
   grid::grid.text(labs, x = x, y = y, gp = grid::gpar(fontsize = fontsize))
   grDevices::dev.off()
@@ -52,8 +63,12 @@ t_grid <- bench("grid", {
 
 vellum_scene <- function() {
   vellum::vl_scene(width, height, dpi = dpi, bg = "white") |>
-    vellum::draw(vellum::text_grob(labs, x = x, y = y,
-                                   gp = vellum::vl_gpar(fontsize = fontsize, col = "black")))
+    vellum::draw(vellum::text_grob(
+      labs,
+      x = x,
+      y = y,
+      gp = vellum::vl_gpar(fontsize = fontsize, col = "black")
+    ))
 }
 out <- file.path(out_dir, "text-vellum.png")
 
@@ -79,12 +94,25 @@ t_off <- bench("vellum (warm, bitmap off)", render_mode("off"))
 t_on <- bench("vellum (warm, bitmap on)", render_mode("on"))
 t_auto <- bench("vellum (warm, bitmap auto)", render_mode("auto"))
 
-cat(sprintf("\n  shaping share of the cold render: %.0f%% (%.3f s of %.3f s)\n",
-            100 * (t_cold - t_auto) / max(t_cold, 1e-6), t_cold - t_auto, t_cold))
-cat(sprintf("  glyph-bitmap speedup, warm (off / on): %.1fx\n", t_off / max(t_on, 1e-6)))
-cat(sprintf("  auto engaged? %s (auto/on = %.2f; auto should track on above the\n",
-            if (abs(t_auto - t_on) < 0.25 * t_on) "yes" else "NO", t_auto / max(t_on, 1e-6)))
+cat(sprintf(
+  "\n  shaping share of the cold render: %.0f%% (%.3f s of %.3f s)\n",
+  100 * (t_cold - t_auto) / max(t_cold, 1e-6),
+  t_cold - t_auto,
+  t_cold
+))
+cat(sprintf(
+  "  glyph-bitmap speedup, warm (off / on): %.1fx\n",
+  t_off / max(t_on, 1e-6)
+))
+cat(sprintf(
+  "  auto engaged? %s (auto/on = %.2f; auto should track on above the\n",
+  if (abs(t_auto - t_on) < 0.25 * t_on) "yes" else "NO",
+  t_auto / max(t_on, 1e-6)
+))
 cat("                2000-glyph threshold, and off below it)\n")
-cat(sprintf("  vs grid: cold %.2fx, warm-on %.2fx  (>1 = vellum faster)\n",
-            t_grid / t_cold, t_grid / t_on))
+cat(sprintf(
+  "  vs grid: cold %.2fx, warm-on %.2fx  (>1 = vellum faster)\n",
+  t_grid / t_cold,
+  t_grid / t_on
+))
 cat(sprintf("  wrote %s\n        %s\n", grid_png, out))

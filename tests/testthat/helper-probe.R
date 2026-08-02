@@ -2,7 +2,9 @@
 # scenes with the public API (vl_scene |> push |> draw |> pop) and assert on
 # rendered pixels via these helpers.
 
-px <- function(scene, x, y) .scene_to_backend(scene)$pixel(as.integer(x), as.integer(y))
+px <- function(scene, x, y) {
+  .scene_to_backend(scene)$pixel(as.integer(x), as.integer(y))
+}
 
 # `scene_raster()` is now an exported package function (channels x x y array);
 # tests use it directly.

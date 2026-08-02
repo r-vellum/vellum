@@ -24,6 +24,8 @@
   # what is rasterised; 0 disables the pass entirely.
   defaults <- list(vellum.warn_on_degrade = TRUE, vellum.simplify = 0.1)
   toset <- !(names(defaults) %in% names(op))
-  if (any(toset)) options(defaults[toset])
+  if (any(toset)) {
+    options(defaults[toset])
+  }
   invisible()
 }
