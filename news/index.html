@@ -70,6 +70,11 @@
     </div>
 
     <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.6.6.9000" id="vellum-0669000-development-version">vellum 0.6.6.9000 (development version)<a class="anchor" aria-label="anchor" href="#vellum-0669000-development-version"></a></h2>
+<ul><li>
+<strong>Fix: a gradient (or pattern) <code>col</code> collapsed to its first stop on circle outlines.</strong> Circles take a batched fast path that draws a unit circle placed by an affine transform; a gradient stroke is resolved in viewport pixels, so on the unit circle it sampled a single point of the ramp and rendered one flat colour. The same gradient stroked rects and polylines correctly. A gradient/ pattern stroke now drops circles to the per-element, real-coordinate build (as rects already did), so the ramp runs along the outline. Solid strokes keep the fast path and render byte-identically.</li>
+</ul></div>
+    <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.6.6" id="vellum-066">vellum 0.6.6<a class="anchor" aria-label="anchor" href="#vellum-066"></a></h2>
 <ul><li>
 <p><strong>Fix: <code><a href="../reference/element_geometry.html">element_geometry()</a></code> and <code><a href="../reference/vl_nearest.html">vl_nearest()</a></code> reported viewport-local coordinates, not device pixels.</strong> The pick table resolved every vertex through <code>vp.x_pos()</code>/<code>y_pos()</code> — which answer in the viewport’s own frame — and never applied the viewport’s transform. So for any viewport not at the page origin, which is every panel of every real plot:</p>
