@@ -143,6 +143,16 @@ vl_lint_finding <- function(
   x[, .lint_cols, drop = FALSE]
 }
 
+# Stack findings from one rule that reports at more than one severity. Drops the
+# `NULL`s `vl_lint_finding()` returns for "nothing matched".
+.lint_bind <- function(...) {
+  parts <- Filter(function(x) !is.null(x) && nrow(x), list(...))
+  if (!length(parts)) {
+    return(NULL)
+  }
+  do.call(rbind, parts)
+}
+
 # A rule that fails is reported, not fatal. The registry is open to downstream
 # packages, so one broken rule must not cost the findings of every other rule --
 # and an opaque `Error in get(id, ...)$fn(...)` does not say which rule broke.
@@ -348,6 +358,147 @@ print.vellum_lint <- function(x, ...) {
       )
     },
     "An element resolves to zero size."
+  )
+
+  vl_lint_rule(
+    "truncated",
+    function(scene, nodes, ctx) {
+      # `offscreen` and `clipped_away` both need the mark to be *entirely* gone.
+      # This is the defect that actually ships: the axis label with its last two
+      # characters cut off, the title chopped by the page edge. The visible
+      # region is the node's clip intersected with the page -- `lint_table()`
+      # reports the whole page as the clip when a node is unclipped, so the two
+      # cases fall out of the same arithmetic.
+      vx0 <- pmax(0, nodes$clip_x0)
+      vy0 <- pmax(0, nodes$clip_y0)
+      vx1 <- pmin(ctx$w, nodes$clip_x1)
+      vy1 <- pmin(ctx$h, nodes$clip_y1)
+      # A whole pixel of overhang before this is a defect. A mark filling its
+      # viewport sits exactly on the boundary, stroke width is not in the box at
+      # all, and text placed a hair from the page edge loses a fraction of a
+      # descender row -- none of which is worth a finding.
+      tol <- 1
+      w <- nodes$x1 - nodes$x0
+      h <- nodes$y1 - nodes$y0
+      ow <- pmin(nodes$x1, vx1) - pmax(nodes$x0, vx0)
+      oh <- pmin(nodes$y1, vy1) - pmax(nodes$y0, vy0)
+      lost <- pmax(w - ow, h - oh)
+      # The worst axis, not the area: a label losing half its width is half
+      # unreadable whatever its height does.
+      kept <- pmin(ifelse(w > 0, ow / w, 1), ifelse(h > 0, oh / h, 1))
+      overlaps <- ow > 0 & oh > 0
+      # A batched mark is one node whose box is the union over every element, so
+      # a scatter always grazes its panel edge and a small loss says nothing
+      # about any individual point. Only a union box that is mostly gone means
+      # the batch itself landed wrong; the per-element view is `ctx$elements`.
+      enough <- ifelse(nodes$n > 1L, kept < 0.5, lost > tol)
+      cut <- overlaps & enough
+      if (!any(cut)) {
+        return(NULL)
+      }
+      hits <- nodes[cut, , drop = FALSE]
+      kept <- kept[cut]
+      offpage <- hits$x0 < -tol |
+        hits$y0 < -tol |
+        hits$x1 > ctx$w + tol |
+        hits$y1 > ctx$h + tol
+      msg <- sprintf(
+        "%.0f px (%.0f%%) of it is cut off by %s",
+        lost[cut],
+        100 * (1 - kept),
+        ifelse(offpage, "the page edge", "its viewport's clip")
+      )
+      # A cut label is unreadable; a cut mark is often a deliberate crop.
+      istext <- hits$kind == "text"
+      .lint_bind(
+        vl_lint_finding(
+          "truncated",
+          "warning",
+          hits[istext, , drop = FALSE],
+          msg[istext]
+        ),
+        vl_lint_finding(
+          "truncated",
+          "note",
+          hits[!istext, , drop = FALSE],
+          msg[!istext]
+        )
+      )
+    },
+    "A mark is partly cut off by the page edge or by its viewport's clip."
+  )
+
+  vl_lint_rule(
+    "subpixel",
+    function(scene, nodes, ctx) {
+      # An area mark thinner than a pixel does not survive rasterisation as
+      # itself: it aliases into a faint smear whose weight changes with dpi.
+      # Restricted to filled area kinds -- a horizontal segment legitimately has
+      # a zero-height box, because its thickness comes from `lwd`, not geometry.
+      area <- c("rect", "roundrect", "circle", "hexagon", "sector", "raster")
+      w <- nodes$x1 - nodes$x0
+      h <- nodes$y1 - nodes$y0
+      thin <- nodes$kind %in%
+        area &
+        nodes$has_fill == 1L &
+        pmin(w, h) < 1 &
+        # `degenerate` owns the case where the mark has no extent at all.
+        !(w <= 0 & h <= 0)
+      hits <- nodes[thin, , drop = FALSE]
+      if (!nrow(hits)) {
+        return(NULL)
+      }
+      vl_lint_finding(
+        "subpixel",
+        "note",
+        hits,
+        sprintf(
+          "%.2f x %.2f px - thinner than one pixel, so it renders as a smear",
+          hits$x1 - hits$x0,
+          hits$y1 - hits$y0
+        )
+      )
+    },
+    "An area mark is less than one pixel across."
+  )
+
+  vl_lint_rule(
+    "blank_label",
+    function(scene, nodes, ctx) {
+      blank <- nodes$kind == "text" & !grepl("[^[:space:]]", nodes$label)
+      vl_lint_finding(
+        "blank_label",
+        "note",
+        nodes[blank, , drop = FALSE],
+        "the label is empty or all whitespace, so this draws nothing"
+      )
+    },
+    "A text mark has no visible characters."
+  )
+
+  vl_lint_rule(
+    "duplicate_name",
+    function(scene, nodes, ctx) {
+      named <- nzchar(nodes$name)
+      dup <- named & nodes$name %in% nodes$name[named & duplicated(nodes$name)]
+      hits <- nodes[dup, , drop = FALSE]
+      if (!nrow(hits)) {
+        return(NULL)
+      }
+      # `get_node()` and `edit_node()` take the first match and say nothing, so
+      # a duplicate name silently makes every later one unaddressable -- which
+      # also means `vl_repel()` cannot move it.
+      vl_lint_finding(
+        "duplicate_name",
+        "warning",
+        hits,
+        sprintf(
+          "%d nodes share this name, and only the first can be addressed",
+          as.integer(table(hits$name)[hits$name])
+        )
+      )
+    },
+    "Two nodes share a name, so only the first can be addressed."
   )
 
   vl_lint_rule(

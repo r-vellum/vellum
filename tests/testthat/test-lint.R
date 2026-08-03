@@ -41,6 +41,132 @@ test_that("clipped_away catches a mark outside its viewport's clip", {
   expect_false("offscreen" %in% found)
 })
 
+test_that("truncated catches a label partly cut off by its clip", {
+  s <- vl_scene(2, 2, dpi = 100) |>
+    push(vl_viewport(width = 0.4, height = 0.4, clip = TRUE)) |>
+    draw(text_grob(
+      "a long label that overflows",
+      gp = vl_gpar(fontsize = 12)
+    )) |>
+    pop()
+  found <- vl_lint(s)
+  expect_true("truncated" %in% rules_of(found))
+  cut <- found[found$rule == "truncated", , drop = FALSE]
+  # A cut label is unreadable, so it is a warning rather than a note.
+  expect_equal(cut$severity, "warning")
+  expect_match(cut$message, "viewport's clip")
+  # It is still partly visible, so the entirely-gone rules must stay quiet.
+  expect_false(any(c("offscreen", "clipped_away") %in% rules_of(found)))
+})
+
+test_that("truncated catches a mark hanging off the page, as a note", {
+  s <- vl_scene(2, 2, dpi = 100) |>
+    draw(rect_grob(
+      x = 0.95,
+      width = 0.4,
+      height = 0.3,
+      gp = vl_gpar(fill = "red")
+    ))
+  found <- vl_lint(s)
+  cut <- found[found$rule == "truncated", , drop = FALSE]
+  expect_equal(nrow(cut), 1L)
+  # A cropped mark is often deliberate, so it is only a note.
+  expect_equal(cut$severity, "note")
+  expect_match(cut$message, "page edge")
+})
+
+test_that("truncated ignores boundary contact and sub-pixel overhang", {
+  # A rect filling its own clipped viewport sits exactly on the boundary.
+  flush <- vl_scene(4, 3, dpi = 96) |>
+    push(vl_viewport(width = 0.8, height = 0.8, clip = TRUE)) |>
+    draw(rect_grob(gp = vl_gpar(fill = "grey95", col = "grey40"))) |>
+    pop()
+  expect_false("truncated" %in% rules_of(vl_lint(flush)))
+  # A label a hair from the page edge loses a fraction of a descender row.
+  hair <- vl_scene(5, 3, dpi = 96) |>
+    draw(text_grob("x axis", x = 0.55, y = 0.02, gp = vl_gpar(fontsize = 10)))
+  expect_false("truncated" %in% rules_of(vl_lint(hair)))
+})
+
+test_that("truncated treats a batched mark by its whole union box", {
+  set.seed(1)
+  # A scatter spanning its panel always grazes the clip; that says nothing about
+  # any individual point, so it must not fire.
+  grazing <- vl_scene(4, 3, dpi = 96) |>
+    push(vl_viewport(width = 0.8, height = 0.8, clip = TRUE)) |>
+    draw(points_grob(
+      runif(200),
+      runif(200),
+      gp = vl_gpar(fill = "steelblue", col = NA)
+    )) |>
+    pop()
+  expect_false("truncated" %in% rules_of(vl_lint(grazing)))
+  # A batch drawn at the wrong scale loses most of its union box, and does.
+  wrong <- vl_scene(3, 3, dpi = 96) |>
+    push(vl_viewport(width = 0.5, height = 0.5, clip = TRUE)) |>
+    draw(points_grob(
+      runif(200) * 4 - 1.5,
+      runif(200),
+      gp = vl_gpar(fill = "red", col = NA)
+    )) |>
+    pop()
+  expect_true("truncated" %in% rules_of(vl_lint(wrong)))
+})
+
+test_that("subpixel catches an area mark thinner than a pixel", {
+  s <- vl_scene(2, 2, dpi = 100) |>
+    draw(rect_grob(
+      width = vl_unit(0.4, "pt"),
+      height = 0.5,
+      gp = vl_gpar(fill = "red")
+    ))
+  found <- vl_lint(s)
+  expect_true("subpixel" %in% rules_of(found))
+  expect_match(
+    found$message[found$rule == "subpixel"],
+    "thinner than one pixel"
+  )
+  # A horizontal segment has a zero-height box by construction -- its thickness
+  # is `lwd`, not geometry -- so stroke-only kinds are left alone.
+  line <- vl_scene(2, 2, dpi = 100) |>
+    draw(segments_grob(0.1, 0.5, 0.9, 0.5, gp = vl_gpar(col = "black")))
+  expect_false("subpixel" %in% rules_of(vl_lint(line)))
+})
+
+test_that("blank_label catches text with nothing in it", {
+  s <- vl_scene(2, 2, dpi = 100) |> draw(text_grob("   "))
+  expect_true("blank_label" %in% rules_of(vl_lint(s)))
+  ok <- vl_scene(2, 2, dpi = 100) |> draw(text_grob("hello"))
+  expect_false("blank_label" %in% rules_of(vl_lint(ok)))
+})
+
+test_that("duplicate_name catches an unaddressable node", {
+  s <- vl_scene(2, 2, dpi = 100) |>
+    draw(rect_grob(
+      width = 0.2,
+      height = 0.2,
+      gp = vl_gpar(fill = "red"),
+      name = "box"
+    )) |>
+    draw(rect_grob(
+      width = 0.3,
+      height = 0.3,
+      gp = vl_gpar(fill = "blue"),
+      name = "box"
+    ))
+  found <- vl_lint(s)
+  dup <- found[found$rule == "duplicate_name", , drop = FALSE]
+  # Both nodes are reported: the finding is about the pair.
+  expect_equal(nrow(dup), 2L)
+  expect_equal(dup$severity, rep("warning", 2))
+  expect_match(dup$message[1], "2 nodes share this name")
+  # Unnamed nodes are not duplicates of each other.
+  anon <- vl_scene(2, 2, dpi = 100) |>
+    draw(rect_grob(width = 0.2, height = 0.2, gp = vl_gpar(fill = "red"))) |>
+    draw(rect_grob(width = 0.3, height = 0.3, gp = vl_gpar(fill = "blue")))
+  expect_false("duplicate_name" %in% rules_of(vl_lint(anon)))
+})
+
 test_that("invisible catches elements nothing will paint", {
   none <- vl_scene(2, 2, dpi = 100) |>
     draw(rect_grob(

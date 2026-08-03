@@ -1,5 +1,17 @@
 # vellum 0.6.7.9000
 
+* **Four new lint rules.** `truncated` is the one worth having: `offscreen` and
+  `clipped_away` both require a mark to be *entirely* gone, so the defect that
+  actually ships — the axis label with its last characters cut off, the title
+  chopped by the page edge — went unreported. It fires on a mark partly outside
+  the page or its viewport's clip, as a warning for text and a note otherwise,
+  and it says how much was lost. Boundary contact, sub-pixel overhang and a
+  batched mark merely grazing its panel edge are deliberately quiet.
+  `subpixel` catches an area mark thinner than a pixel, `blank_label` a text
+  mark with no visible characters, and `duplicate_name` two nodes sharing a
+  name — which silently makes all but the first unaddressable by `get_node()`,
+  `edit_node()` and `vl_repel()`.
+
 * **`vl_lint()` gained a point-based legibility floor, and `tiny_text` fires on
   either floor.** `font_px` scales with `dpi`, so the pixel floor alone stopped
   seeing illegible text on a print-resolution render: a 4 pt label at
