@@ -239,7 +239,8 @@ threading between interior points and crossing itself.
 #| fig.height: 1.8
 p <- data.frame(x = rnorm(40, 0.5, 0.1), y = rnorm(40, 0.5, 0.12))
 row <- vl_scene(6, 1.8, dpi = 96, bg = "white")
-for (i in seq_along(cs <- c(Inf, 8, 4, 2))) {
+cs <- c(Inf, 8, 4, 2)
+for (i in seq_along(cs)) {
   h <- vl_hull(p$x, p$y, concavity = cs[i])
   row <- row |>
     push(vl_viewport(x = (i - 0.5) / 4, width = 0.25)) |>

@@ -6,14 +6,14 @@ test_that(".emit_degrade_warnings warns by default and is silent when opted out"
   msg <- "a tiling-pattern fill could not be rendered to PDF"
   withr::local_options(vellum.warn_on_degrade = TRUE)
   expect_warning(
-    vellum:::.emit_degrade_warnings(msg),
+    .emit_degrade_warnings(msg),
     "could not be fully reproduced"
   )
   withr::local_options(vellum.warn_on_degrade = FALSE)
-  expect_no_warning(vellum:::.emit_degrade_warnings(msg))
+  expect_no_warning(.emit_degrade_warnings(msg))
   # an empty warning set never warns, regardless of the option
   withr::local_options(vellum.warn_on_degrade = TRUE)
-  expect_no_warning(vellum:::.emit_degrade_warnings(character(0)))
+  expect_no_warning(.emit_degrade_warnings(character(0)))
 })
 
 test_that("a render that the backend can fully honour emits no degradation warning", {

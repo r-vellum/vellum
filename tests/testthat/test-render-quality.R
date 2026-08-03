@@ -67,7 +67,7 @@ test_that("cvd on a vector target warns and leaves the file unsimulated", {
   expect_warning(render(s, f, cvd = "deuteranopia"), "raster")
   plain <- withr::local_tempfile(fileext = ".svg")
   vl_clear_render_cache()
-  render(plain_s <- s, plain)
+  render(s, plain)
   expect_identical(tools::md5sum(f)[[1]], tools::md5sum(plain)[[1]])
 })
 

@@ -205,7 +205,8 @@ cap <- paste("Text that must fit a fixed measure is the ordinary case for a",
              "OpenType features in force.")
 
 s <- vl_scene(7.2, 2.6, dpi = 150, bg = "white")
-for (i in seq_along(hs <- c(34, 22, 14))) {
+hs <- c(34, 22, 14)
+for (i in seq_along(hs)) {
   x <- c(0.17, 0.5, 0.83)[i]
   s <- s |>
     draw(rect_grob(x = x, y = 0.52, width = vl_unit(46, "mm"),

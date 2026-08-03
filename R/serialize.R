@@ -492,15 +492,6 @@ scene_diff <- function(a, b, max_depth = 40L) {
   )
 }
 
-# The payload elements of a spec node, dropping the `_t`/`class` bookkeeping.
-.diff_body <- function(x) {
-  nm <- names(x)
-  if (is.null(nm)) {
-    nm <- rep("", length(x))
-  }
-  unname(x[!nm %in% c("_t", "class")])
-}
-
 # A short human label for a spec node.
 .diff_desc <- function(x) {
   if (is.list(x) && !is.null(x[["class"]])) {

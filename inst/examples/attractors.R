@@ -44,6 +44,7 @@ message(
 # parameters, so the random gallery samples only the families below.
 attractor <- function(kind, p, n = N, x0 = 0.1, y0 = 0.1) {
   n <- as.integer(n)
+  # jarl-ignore internal_function: the Rust kernel is internal; the example drives it directly
   v <- vellum:::rs_attractor(kind, n, p[1], p[2], p[3], p[4], x0, y0)
   list(x = v[seq_len(n)], y = v[n + seq_len(n)])
 }
@@ -88,6 +89,7 @@ is_interesting <- function(kind, p, n = 1e5, g = 96L) {
     return(FALSE)
   }
   w <- window(x, y)
+  # jarl-ignore internal_function: the Rust kernel is internal; the example drives it directly
   occ <- mean(
     vellum:::rs_aggregate_2d(
       x,

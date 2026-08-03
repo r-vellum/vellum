@@ -97,10 +97,10 @@ zig <- function(...) {
 
 test_that("stroke_to_path returns a fillable path", {
   o <- stroke_to_path(zig(), width = 3, height = 2)
-  expect_true(S7::S7_inherits(o, vellum:::grob_path))
+  expect_true(S7::S7_inherits(o, grob_path))
   expect_gt(length(vctrs::field(o@x, "value")), 4L)
   # Absolute units, because an outline is baked at one size.
-  expect_true(all(vctrs::field(o@x, "unit") == vellum:::.unit_codes[["mm"]]))
+  expect_true(all(vctrs::field(o@x, "unit") == .unit_codes[["mm"]]))
 })
 
 test_that("the outline covers roughly the area the stroke inked", {

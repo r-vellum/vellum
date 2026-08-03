@@ -1024,8 +1024,8 @@ vl_clear_render_cache <- function() {
     reg <- new.env(parent = emptyenv())
     reg$items <- list()
     old <- .debug_state$reg
-    .debug_state$reg <- reg
-    on.exit(.debug_state$reg <- old, add = TRUE)
+    .set_debug_reg(reg)
+    on.exit(.set_debug_reg(old), add = TRUE)
     compile(root, s)
     .debug_state$reg <- old
     .draw_debug_overlay(s, reg$items)

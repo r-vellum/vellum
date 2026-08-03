@@ -39,7 +39,8 @@ a <- circ(0.42, 0.5)
 b <- circ(0.58, 0.5)
 
 s <- vl_scene(6, 2, dpi = 96, bg = "white")
-for (i in seq_along(o <- c("union", "intersect", "difference", "xor"))) {
+o <- c("union", "intersect", "difference", "xor")
+for (i in seq_along(o)) {
   s <- s |>
     push(vl_viewport(x = (i - 0.5) / 4, width = 0.25)) |>
     draw(vl_path_op(a, b, o[i], gp = vl_gpar(fill = "#7FB2E5", col = "#1B4F72"))) |>

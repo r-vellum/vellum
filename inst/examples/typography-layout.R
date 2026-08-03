@@ -65,7 +65,8 @@ render(alignment, "typography-wrapping.png")
 # different sizes is a defect, not a feature.
 
 fitted <- vl_scene(6, 2.4, dpi = 150, bg = "white")
-for (i in seq_along(hs <- c(34, 22, 14))) {
+hs <- c(34, 22, 14)
+for (i in seq_along(hs)) {
   x <- c(0.18, 0.5, 0.82)[i]
   fitted <- fitted |>
     draw(rect_grob(

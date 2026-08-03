@@ -44,10 +44,10 @@ test_that("render_animation interpolates geometry across frames", {
   s <- anim_scenes() # circle: x 0.25 -> 0.75 (npc), r 4 -> 12 mm
   fracs <- c(0, 0.5, 1)
   dir <- withr::local_tempdir()
-  warns <- vellum:::render_animation(
+  warns <- render_animation(
     keyframes = list(
-      vellum:::.scene_to_backend(s$a),
-      vellum:::.scene_to_backend(s$b)
+      .scene_to_backend(s$a),
+      .scene_to_backend(s$b)
     ),
     seg = rep(0L, length(fracs)),
     frac = fracs,
@@ -76,10 +76,10 @@ test_that("render_animation interpolates geometry across frames", {
 test_that("endpoints render identically to the keyframes themselves", {
   skip_if_not_installed("png")
   s <- anim_scenes()
-  ba <- vellum:::.scene_to_backend(s$a)
-  bb <- vellum:::.scene_to_backend(s$b)
+  ba <- .scene_to_backend(s$a)
+  bb <- .scene_to_backend(s$b)
   dir <- withr::local_tempdir()
-  vellum:::render_animation(
+  render_animation(
     list(ba, bb),
     seg = c(0L, 0L),
     frac = c(0, 1),
@@ -100,10 +100,10 @@ test_that("endpoints render identically to the keyframes themselves", {
 test_that("render_animation writes a valid multi-frame APNG", {
   skip_if_not_installed("png")
   s <- anim_scenes()
-  ba <- vellum:::.scene_to_backend(s$a)
-  bb <- vellum:::.scene_to_backend(s$b)
+  ba <- .scene_to_backend(s$a)
+  bb <- .scene_to_backend(s$b)
   out <- withr::local_tempfile(fileext = ".png")
-  vellum:::render_animation(
+  render_animation(
     list(ba, bb),
     seg = rep(0L, 10),
     frac = seq(0, 1, length.out = 10),
@@ -136,10 +136,10 @@ test_that("render_animation writes a valid multi-frame APNG", {
 test_that("render_animation writes a valid looping GIF", {
   skip_if_not_installed("magick")
   s <- anim_scenes()
-  ba <- vellum:::.scene_to_backend(s$a)
-  bb <- vellum:::.scene_to_backend(s$b)
+  ba <- .scene_to_backend(s$a)
+  bb <- .scene_to_backend(s$b)
   out <- withr::local_tempfile(fileext = ".gif")
-  vellum:::render_animation(
+  render_animation(
     list(ba, bb),
     seg = rep(0L, 8),
     frac = seq(0, 1, length.out = 8),
@@ -153,7 +153,7 @@ test_that("render_animation writes a valid looping GIF", {
   expect_true(file.exists(out))
   info <- magick::image_info(magick::image_read(out))
   expect_equal(nrow(info), 8L)
-  expect_equal(info$width[1], vellum:::.scene_to_backend(s$a)$dim()[1])
+  expect_equal(info$width[1], .scene_to_backend(s$a)$dim()[1])
 })
 
 test_that("keyed elements enter and exit (per-element fade)", {
@@ -175,8 +175,8 @@ test_that("keyed elements enter and exit (per-element fade)", {
   a <- mk(c("a", "b"), c(0.2, 0.5))
   b <- mk(c("b", "c"), c(0.5, 0.8))
   dir <- withr::local_tempdir()
-  vellum:::render_animation(
-    list(vellum:::.scene_to_backend(a), vellum:::.scene_to_backend(b)),
+  render_animation(
+    list(.scene_to_backend(a), .scene_to_backend(b)),
     seg = c(0L, 0L, 0L),
     frac = c(0, 0.5, 1),
     format = "frames",
@@ -221,8 +221,8 @@ test_that("viewport masks tween (a reveal wipe)", {
       pop()
   }
   dir <- withr::local_tempdir()
-  vellum:::render_animation(
-    list(vellum:::.scene_to_backend(mk(0)), vellum:::.scene_to_backend(mk(1))),
+  render_animation(
+    list(.scene_to_backend(mk(0)), .scene_to_backend(mk(1))),
     seg = c(0L, 0L, 0L),
     frac = c(0, 0.5, 1),
     format = "frames",
@@ -249,11 +249,11 @@ test_that("viewport masks tween (a reveal wipe)", {
 
 test_that("render_animation validates its inputs", {
   s <- anim_scenes()
-  ba <- vellum:::.scene_to_backend(s$a)
-  bb <- vellum:::.scene_to_backend(s$b)
+  ba <- .scene_to_backend(s$a)
+  bb <- .scene_to_backend(s$b)
   dir <- withr::local_tempdir()
   expect_error(
-    vellum:::render_animation(
+    render_animation(
       list(ba),
       seg = 0L,
       frac = 0,
@@ -267,7 +267,7 @@ test_that("render_animation validates its inputs", {
     "at least 2 keyframes"
   )
   expect_error(
-    vellum:::render_animation(
+    render_animation(
       list(ba, bb),
       seg = c(0L, 0L),
       frac = 0,
@@ -281,7 +281,7 @@ test_that("render_animation validates its inputs", {
     "same length"
   )
   expect_error(
-    vellum:::render_animation(
+    render_animation(
       list(ba, bb),
       seg = 5L,
       frac = 0.5,
@@ -295,7 +295,7 @@ test_that("render_animation validates its inputs", {
     "references keyframe pair"
   )
   expect_error(
-    vellum:::render_animation(
+    render_animation(
       list(ba, bb),
       seg = 0L,
       frac = 0.5,

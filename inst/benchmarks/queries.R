@@ -114,6 +114,7 @@ med("scene_model()", {
 # Split R-side from Rust: `element_table()` is the whole Rust contribution to
 # `scene_model()`. The gap between the two is R.
 vellum::vl_clear_render_cache()
+# jarl-ignore internal_function: the benchmark times the internal Rust boundary directly
 b <- vellum:::.scene_to_backend(facet)
 t_rust <- med("  of which Rust element_table()", b$element_table())
 t_all <- med("  full scene_model()", {
