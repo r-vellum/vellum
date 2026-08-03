@@ -42,13 +42,29 @@ test_that("clipped_away catches a mark outside its viewport's clip", {
 })
 
 test_that("truncated catches a label partly cut off by its clip", {
-  s <- vl_scene(2, 2, dpi = 100) |>
-    push(vl_viewport(width = 0.4, height = 0.4, clip = TRUE)) |>
+  # A narrow clipped viewport in the middle of a wide page, so the label
+  # overflows its clip with room to spare before the page edge. Text width is a
+  # font metric and varies by platform, which is exactly why the page is this
+  # much wider than it needs to be: the message names whichever boundary did the
+  # cutting, and this fixture has to isolate the clip.
+  s <- vl_scene(8, 2, dpi = 100) |>
+    push(vl_viewport(
+      x = 0.5,
+      y = 0.5,
+      width = 0.15,
+      height = 0.3,
+      clip = TRUE
+    )) |>
     draw(text_grob(
-      "a long label that overflows",
+      "a long label that overflows its viewport",
       gp = vl_gpar(fontsize = 12)
     )) |>
     pop()
+  b <- .scene_to_backend(s)
+  n <- as.data.frame(b$lint_table())
+  # State the precondition, so a font change that breaks the fixture says so.
+  expect_gt(n$x0, 0)
+  expect_lt(n$x1, b$dim()[1])
   found <- vl_lint(s)
   expect_true("truncated" %in% rules_of(found))
   cut <- found[found$rule == "truncated", , drop = FALSE]
@@ -75,17 +91,35 @@ test_that("truncated catches a mark hanging off the page, as a note", {
   expect_match(cut$message, "page edge")
 })
 
-test_that("truncated ignores boundary contact and sub-pixel overhang", {
+test_that("truncated ignores boundary contact", {
   # A rect filling its own clipped viewport sits exactly on the boundary.
   flush <- vl_scene(4, 3, dpi = 96) |>
     push(vl_viewport(width = 0.8, height = 0.8, clip = TRUE)) |>
     draw(rect_grob(gp = vl_gpar(fill = "grey95", col = "grey40"))) |>
     pop()
   expect_false("truncated" %in% rules_of(vl_lint(flush)))
-  # A label a hair from the page edge loses a fraction of a descender row.
-  hair <- vl_scene(5, 3, dpi = 96) |>
-    draw(text_grob("x axis", x = 0.55, y = 0.02, gp = vl_gpar(fontsize = 10)))
+})
+
+test_that("truncated ignores a sub-pixel overhang but not a real one", {
+  # The motivating false positive: an axis label placed a hair from the page edge
+  # loses a fraction of a descender row. How much it loses is a font metric, so
+  # the label is *placed* to overhang by a known number of pixels rather than
+  # trusting this machine's descender to land where macOS put it.
+  label <- function(y) {
+    vl_scene(5, 3, dpi = 96) |>
+      draw(text_grob("x axis", x = 0.55, y = y, gp = vl_gpar(fontsize = 10)))
+  }
+  b <- .scene_to_backend(label(0.5))
+  h <- b$dim()[2]
+  y1 <- as.data.frame(b$lint_table())$y1
+  # npc y for a box bottom `over` pixels below the page edge.
+  place <- function(over) 0.5 - (h + over - y1) / h
+  hair <- label(place(0.5))
+  expect_equal(as.data.frame(.scene_to_backend(hair)$lint_table())$y1 - h, 0.5)
   expect_false("truncated" %in% rules_of(vl_lint(hair)))
+  # Past a whole pixel it is a real cut, and reported.
+  real <- label(place(4))
+  expect_true("truncated" %in% rules_of(vl_lint(real)))
 })
 
 test_that("truncated treats a batched mark by its whole union box", {
@@ -416,7 +450,11 @@ test_that("the cross-node rules stay quiet on an ordinary plot", {
   # title: text over marks everywhere, and nothing wrong with any of it.
   v <- c(3, 7, 5, 9)
   xs <- seq(0.15, 0.85, length.out = 4)
-  s <- vl_scene(5, 3, dpi = 96, bg = "white") |>
+  # Laid out with headroom on purpose. Text extents are font metrics, so a
+  # fixture whose labels sit a few pixels from the page edge asserts "no
+  # findings" on one platform and fails on the next; here the nearest label is
+  # more than a text height clear of every edge.
+  s <- vl_scene(5, 3.4, dpi = 96, bg = "white") |>
     draw(rect_grob(
       x = 0.5,
       y = 0.5,
@@ -427,19 +465,19 @@ test_that("the cross-node rules stay quiet on an ordinary plot", {
     )) |>
     draw(rect_grob(
       x = xs,
-      y = v / 20,
+      y = v / 28,
       width = 0.12,
-      height = v / 10,
+      height = v / 14,
       gp = vl_gpar(fill = "steelblue", col = NA),
       name = "bars"
     )) |>
     draw(text_grob(
       as.character(v),
       x = xs,
-      y = v / 10 + 0.06,
+      y = v / 14 + 0.05,
       gp = vl_gpar(fontsize = 10)
     )) |>
-    draw(text_grob("Counts", x = 0.5, y = 0.94, gp = vl_gpar(fontsize = 14)))
+    draw(text_grob("Counts", x = 0.5, y = 0.88, gp = vl_gpar(fontsize = 14)))
   expect_equal(nrow(vl_lint(s)), 0L)
 })
 
