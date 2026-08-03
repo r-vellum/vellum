@@ -168,6 +168,17 @@ separability rather than eyeball it:</p>
 <span><span class="co">#&gt;          none    protanopia  deuteranopia    tritanopia achromatopsia </span></span>
 <span><span class="co">#&gt;           295           136            48           485            84</span></span></code></pre></div>
 <p><code>achromatopsia</code> doubles as a greyscale-printing check.</p>
+<p>That measurement is worth doing by hand when you want the number for
+a specific pair. For the general question — <em>does any pair in this
+palette collapse?</em> — <code><a href="../reference/vl_lint.html">vl_lint()</a></code>’s
+<code>cvd_collision</code> rule asks it over every colour in the scene,
+using these same matrices and comparing in Oklab rather than in raw
+channel distance:</p>
+<div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="../reference/vl_lint.html">vl_lint</a></span><span class="op">(</span><span class="va">swatches</span>, rules <span class="op">=</span> <span class="st">"cvd_collision"</span><span class="op">)</span></span>
+<span><span class="co">#&gt; <span style="font-weight: bold;">2</span> lint findings (2 warnings):</span></span>
+<span><span class="co">#&gt; <span style="color: #BB0000;">✖</span> [cvd_collision] rect: #D62728 and #2CA02C look the same under deuteranopia</span></span>
+<span><span class="co">#&gt; <span style="color: #BB0000;">✖</span> [cvd_collision] rect: #1F77B4 and #9467BD look the same under deuteranopia</span></span></code></pre></div>
 <p><strong>And when the simulation says your palette fails, the fix is
 texture.</strong> Encoding a category by hatch angle as well as hue
 survives any of these simulations, and greyscale printing too — see
@@ -187,7 +198,7 @@ renders it as two grey rows instead of one black one. Multiply by every
 gridline and this is why plots often look slightly muddy on screen.</p>
 <p><code>crisp = TRUE</code> snaps axis-parallel strokes onto the pixel
 grid:</p>
-<div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">rule</span> <span class="op">&lt;-</span> <span class="kw">function</span><span class="op">(</span><span class="va">...</span><span class="op">)</span> <span class="op">{</span></span>
 <span>  <span class="fu"><a href="../reference/vl_scene.html">vl_scene</a></span><span class="op">(</span><span class="fl">4</span>, <span class="fl">0.5</span>, dpi <span class="op">=</span> <span class="fl">96</span>, bg <span class="op">=</span> <span class="st">"white"</span><span class="op">)</span> <span class="op">|&gt;</span></span>
 <span>    <span class="fu"><a href="../reference/vl_scene.html">draw</a></span><span class="op">(</span><span class="fu"><a href="../reference/grob.html">segments_grob</a></span><span class="op">(</span><span class="fl">0.05</span>, <span class="fl">0.5013</span>, <span class="fl">0.95</span>, <span class="fl">0.5013</span>,</span>
@@ -205,12 +216,12 @@ coordinate falls, which is the problem.)</p>
 <p>Diagonals are left alone — there is no grid to snap them to — and it
 only affects raster output, since a vector format has no pixel grid.</p>
 <p>Set it once on a viewport and every rule inside inherits it:</p>
-<div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/vl_scene.html">push</a></span><span class="op">(</span><span class="fu"><a href="../reference/vl_viewport.html">vl_viewport</a></span><span class="op">(</span>gp <span class="op">=</span> <span class="fu"><a href="../reference/vl_gpar.html">vl_gpar</a></span><span class="op">(</span>crisp <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
 <p>The companion is <code>antialias = FALSE</code>, for the cases where
 soft edges are wrong rather than right: pixel art, QR codes, and heatmap
 cells that must tile without a seam.</p>
-<div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">tri</span> <span class="op">&lt;-</span> <span class="kw">function</span><span class="op">(</span><span class="va">aa</span><span class="op">)</span> <span class="op">{</span></span>
 <span>  <span class="fu"><a href="../reference/vl_scene.html">vl_scene</a></span><span class="op">(</span><span class="fl">1</span>, <span class="fl">1</span>, dpi <span class="op">=</span> <span class="fl">96</span>, bg <span class="op">=</span> <span class="st">"white"</span><span class="op">)</span> <span class="op">|&gt;</span></span>
 <span>    <span class="fu"><a href="../reference/vl_scene.html">draw</a></span><span class="op">(</span><span class="fu"><a href="../reference/grob.html">polygon_grob</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.1</span>, <span class="fl">0.9</span>, <span class="fl">0.5</span><span class="op">)</span>, <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.1</span>, <span class="fl">0.1</span>, <span class="fl">0.9</span><span class="op">)</span>,</span>
@@ -231,7 +242,7 @@ effects: they act on a viewport’s contents composited as one layer. That
 is the important distinction. Overlapping shapes inside the viewport
 cast a single shadow together, rather than each casting one onto the
 others.</p>
-<div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">s</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/vl_scene.html">vl_scene</a></span><span class="op">(</span><span class="fl">6</span>, <span class="fl">2</span>, dpi <span class="op">=</span> <span class="fl">96</span>, bg <span class="op">=</span> <span class="st">"grey97"</span><span class="op">)</span></span>
 <span><span class="kw">for</span> <span class="op">(</span><span class="va">spec</span> <span class="kw">in</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span></span>
 <span>  <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span>x <span class="op">=</span> <span class="fl">0.14</span>, args <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span><span class="op">)</span><span class="op">)</span>,</span>
@@ -244,7 +255,7 @@ others.</p>
 <span>  <span class="va">s</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/vl_scene.html">pop</a></span><span class="op">(</span><span class="va">s</span><span class="op">)</span></span>
 <span><span class="op">}</span></span>
 <span><span class="fu"><a href="../reference/display.html">display</a></span><span class="op">(</span><span class="va">s</span><span class="op">)</span></span></code></pre></div>
-<p><img src="render-quality_files/figure-html/unnamed-chunk-9-1.png" class="r-plt" alt="" width="576"></p>
+<p><img src="render-quality_files/figure-html/unnamed-chunk-10-1.png" class="r-plt" alt="" width="576"></p>
 <p>Left to right: plain, drop shadow, blur, and a glow — which is simply
 a shadow with no offset, so it needs no separate function.</p>
 <p>Per backend: the raster path convolves (three box passes, the
@@ -253,7 +264,7 @@ standard Gaussian approximation); SVG emits native
 stays vector and the viewer does the work; PDF has no filter model at
 all, and says so through vellum’s degradation warning rather than
 silently rasterising your vector output.</p>
-<div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb10"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/vl_scene.html">render</a></span><span class="op">(</span><span class="va">s</span>, <span class="st">"cards.pdf"</span><span class="op">)</span></span>
 <span><span class="co">#&gt; Warning: a group blur/shadow (PDF has no filter model; the group is drawn unfiltered)</span></span></code></pre></div>
 <p>That warning is the design principle at work: where a backend cannot
@@ -265,8 +276,9 @@ honour something, it fails visibly.</p>
 <ul>
 <li>
 <code><a href="../articles/inspecting-scenes.html">vignette("inspecting-scenes")</a></code>: <code><a href="../reference/vl_lint.html">vl_lint()</a></code>
-will flag low-contrast text and illegible labels for you, which pairs
-directly with the simulation above.</li>
+will flag low-contrast text, illegible labels, colours that collide
+under simulation and strokes too thin to render consistently — the
+checked form of everything on this page.</li>
 <li>
 <code><a href="../articles/typography.html">vignette("typography")</a></code>: halos and OpenType
 features.</li>

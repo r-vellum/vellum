@@ -326,9 +326,12 @@ rather than a tail item.</p>
 <ul>
 <li>
 <code><a href="../articles/inspecting-scenes.html">vignette("inspecting-scenes")</a></code>: <code><a href="../reference/vl_lint.html">vl_lint()</a></code>,
-whose <code>low_contrast</code> and <code>tiny_text</code> rules cover
-the other half of accessibility — whether the figure can be
-<em>seen</em>.</li>
+whose <code>low_contrast</code>, <code>tiny_text</code> and
+<code>cvd_collision</code> rules cover the other half of accessibility —
+whether the figure can be <em>seen</em>. Its <code>font_fallback</code>
+rule is the companion to <code><a href="../reference/font_pin.html">font_pin()</a></code> below: one asks whether
+the fonts moved, the other whether a character has any glyph at all on
+this machine.</li>
 <li>
 <code><a href="../articles/render-quality.html">vignette("render-quality")</a></code>: colour-vision
 simulation.</li>

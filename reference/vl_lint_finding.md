@@ -31,4 +31,6 @@ vl_lint_finding(rule, severity = c("warning", "note"), nodes, message)
 
 ## Value
 
-A data frame of findings.
+A data frame of findings, one row per node, with the node's device-px
+box carried through in `x0`/`y0`/`x1`/`y1` so a caller can point at the
+finding on the image. The box is `NA` when `nodes` has no geometry.

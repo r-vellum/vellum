@@ -45,10 +45,12 @@
 <url><loc>https://r-vellum.github.io/vellum/reference/render_all.html</loc></url>
 <url><loc>https://r-vellum.github.io/vellum/reference/render_animation.html</loc></url>
 <url><loc>https://r-vellum.github.io/vellum/reference/rs_backend_info.html</loc></url>
+<url><loc>https://r-vellum.github.io/vellum/reference/rs_box_overlaps.html</loc></url>
 <url><loc>https://r-vellum.github.io/vellum/reference/rs_clear_glyph_cache.html</loc></url>
 <url><loc>https://r-vellum.github.io/vellum/reference/rs_clear_subraster_cache.html</loc></url>
 <url><loc>https://r-vellum.github.io/vellum/reference/rs_contour.html</loc></url>
 <url><loc>https://r-vellum.github.io/vellum/reference/rs_contour_lines.html</loc></url>
+<url><loc>https://r-vellum.github.io/vellum/reference/rs_cvd_oklab.html</loc></url>
 <url><loc>https://r-vellum.github.io/vellum/reference/rs_glyph_sprite_stats.html</loc></url>
 <url><loc>https://r-vellum.github.io/vellum/reference/rs_hull.html</loc></url>
 <url><loc>https://r-vellum.github.io/vellum/reference/rs_largest_empty_rect.html</loc></url>
@@ -90,7 +92,9 @@
 <url><loc>https://r-vellum.github.io/vellum/reference/vl_hatch.html</loc></url>
 <url><loc>https://r-vellum.github.io/vellum/reference/vl_hull.html</loc></url>
 <url><loc>https://r-vellum.github.io/vellum/reference/vl_lint.html</loc></url>
+<url><loc>https://r-vellum.github.io/vellum/reference/vl_lint_assert.html</loc></url>
 <url><loc>https://r-vellum.github.io/vellum/reference/vl_lint_finding.html</loc></url>
+<url><loc>https://r-vellum.github.io/vellum/reference/vl_lint_overlay.html</loc></url>
 <url><loc>https://r-vellum.github.io/vellum/reference/vl_lint_rule.html</loc></url>
 <url><loc>https://r-vellum.github.io/vellum/reference/vl_nearest.html</loc></url>
 <url><loc>https://r-vellum.github.io/vellum/reference/vl_path_op.html</loc></url>

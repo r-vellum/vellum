@@ -85,6 +85,10 @@ the resolved geometry the renderer draws with.
 
 - [`vl_lint()`](https://r-vellum.github.io/vellum/reference/vl_lint.md)
   : Check a scene for likely mistakes
+- [`vl_lint_assert()`](https://r-vellum.github.io/vellum/reference/vl_lint_assert.md)
+  : Fail on lint findings
+- [`vl_lint_overlay()`](https://r-vellum.github.io/vellum/reference/vl_lint_overlay.md)
+  : Draw lint findings onto the scene
 - [`vl_lint_rule()`](https://r-vellum.github.io/vellum/reference/vl_lint_rule.md)
   [`vl_lint_rules()`](https://r-vellum.github.io/vellum/reference/vl_lint_rule.md)
   : Register a lint rule

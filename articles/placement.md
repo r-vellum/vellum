@@ -291,7 +291,11 @@ repairing either is a boolean union, which vellum does not have yet.
   the width-constrained text this pairs with.
 - [`vignette("inspecting-scenes")`](https://r-vellum.github.io/vellum/articles/inspecting-scenes.md):
   [`vl_lint()`](https://r-vellum.github.io/vellum/reference/vl_lint.md),
-  which reports overlap and legibility problems rather than fixing them.
+  which reports these problems rather than fixing them — `label_overlap`
+  for labels that collide with each other, `label_on_mark` for a label
+  swallowing the point it names, which is exactly the situation
+  [`vl_repel()`](https://r-vellum.github.io/vellum/reference/vl_place.md)
+  resolves.
 - [`vignette("retained-mode")`](https://r-vellum.github.io/vellum/articles/retained-mode.md):
   [`edit_node()`](https://r-vellum.github.io/vellum/reference/node_names.md),
   the mechanism

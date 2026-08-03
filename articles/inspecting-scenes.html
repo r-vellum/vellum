@@ -160,60 +160,184 @@ it.</p>
 <span></span>
 <span><span class="fu"><a href="../reference/vl_lint.html">vl_lint</a></span><span class="op">(</span><span class="va">bad</span><span class="op">)</span></span>
 <span><span class="co">#&gt; <span style="font-weight: bold;">4</span> lint findings (4 warnings):</span></span>
-<span><span class="co">#&gt; <span style="color: #BB0000;">✖</span> [invisible] empty_box: nothing will paint this - alpha is 0, or both fill and</span></span>
-<span><span class="co">#&gt;   col are absent</span></span>
-<span><span class="co">#&gt; <span style="color: #BB0000;">✖</span> [low_contrast] watermark: contrast 1.3:1 against its backdrop - below 3:1</span></span>
+<span><span class="co">#&gt; <span style="color: #BB0000;">✖</span> [invisible] empty_box: nothing will paint this - alpha is 0, or it has no</span></span>
+<span><span class="co">#&gt;   opaque fill and no stroke</span></span>
+<span><span class="co">#&gt; <span style="color: #BB0000;">✖</span> [low_contrast] watermark: contrast 1.0:1 against its backdrop - below 3:1</span></span>
 <span><span class="co">#&gt; <span style="color: #BB0000;">✖</span> [offscreen] stray_point: drawn entirely outside the page - check the</span></span>
 <span><span class="co">#&gt;   coordinates or the scale</span></span>
 <span><span class="co">#&gt; <span style="color: #BB0000;">✖</span> [tiny_text] n_label: 3.3 px tall - below the 7 px legibility floor</span></span></code></pre></div>
 <p>Every finding names the grob, so you can go straight to it. Nothing
 here needed you to look at the picture.</p>
-<p>The rules that ship:</p>
+<div class="section level3">
+<h3 id="seeing-the-findings">Seeing the findings<a class="anchor" aria-label="anchor" href="#seeing-the-findings"></a>
+</h3>
+<p>For a graphics linter, a message describing a defect is second best.
+<code><a href="../reference/vl_lint_overlay.html">vl_lint_overlay()</a></code> draws the report onto the scene — a box
+round each finding, labelled with the rules that fired, red for warnings
+and orange for notes:</p>
 <div class="sourceCode" id="cb2"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="fu"><a href="../reference/vl_lint_rule.html">vl_lint_rules</a></span><span class="op">(</span><span class="op">)</span></span>
-<span><span class="co">#&gt;            rule                                                     description</span></span>
-<span><span class="co">#&gt; 1  clipped_away             A mark is clipped out of existence by its viewport.</span></span>
-<span><span class="co">#&gt; 2    degenerate                               An element resolves to zero size.</span></span>
-<span><span class="co">#&gt; 3     invisible               An element has no fill, no stroke, or zero alpha.</span></span>
-<span><span class="co">#&gt; 4 label_overlap                                        Two text labels overlap.</span></span>
-<span><span class="co">#&gt; 5  low_contrast Text contrast against its backdrop is below the WCAG threshold.</span></span>
-<span><span class="co">#&gt; 6     offscreen                          A mark lies completely off the canvas.</span></span>
-<span><span class="co">#&gt; 7     tiny_text                 Text is too small to read at the rendered size.</span></span></code></pre></div>
-<p>Two are worth explaining.</p>
-<p><code>tiny_text</code> measures in <strong>device pixels at the size
-you are actually rendering</strong>, not in points. A 6 pt label is fine
-in a print figure and illegible in a thumbnail, and the same scene
-rendered at two sizes should — correctly — lint differently. Adjust the
-floor with <code>min_text_px</code>.</p>
-<p><code>low_contrast</code> samples the <strong>rendered image</strong>
-just outside each label’s box, on four sides, and takes the worst. So it
-measures the backdrop the label really sits on, including any marks that
-happen to be behind it, rather than assuming the page colour:</p>
+<code class="sourceCode R"><span><span class="fu"><a href="../reference/display.html">display</a></span><span class="op">(</span><span class="fu"><a href="../reference/vl_lint_overlay.html">vl_lint_overlay</a></span><span class="op">(</span><span class="va">bad</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
+<p><img src="inspecting-scenes_files/figure-html/unnamed-chunk-3-1.png" class="r-plt" alt="The scene above with red and orange boxes drawn around each linted mark." width="576"></p>
+<p>The box around <code>empty_box</code> is the one to notice: there is
+nothing there to see, which is precisely the finding.</p>
+</div>
+<div class="section level3">
+<h3 id="the-rules-that-ship">The rules that ship<a class="anchor" aria-label="anchor" href="#the-rules-that-ship"></a>
+</h3>
 <div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="../reference/vl_lint_rule.html">vl_lint_rules</a></span><span class="op">(</span><span class="op">)</span><span class="op">[</span>, <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"rule"</span>, <span class="st">"description"</span><span class="op">)</span><span class="op">]</span></span>
+<span><span class="co">#&gt;              rule</span></span>
+<span><span class="co">#&gt; 1     blank_label</span></span>
+<span><span class="co">#&gt; 2           bleed</span></span>
+<span><span class="co">#&gt; 3    clipped_away</span></span>
+<span><span class="co">#&gt; 4   cvd_collision</span></span>
+<span><span class="co">#&gt; 5      degenerate</span></span>
+<span><span class="co">#&gt; 6     double_draw</span></span>
+<span><span class="co">#&gt; 7  duplicate_name</span></span>
+<span><span class="co">#&gt; 8   font_fallback</span></span>
+<span><span class="co">#&gt; 9        hairline</span></span>
+<span><span class="co">#&gt; 10      invisible</span></span>
+<span><span class="co">#&gt; 11 invisible_fill</span></span>
+<span><span class="co">#&gt; 12  label_on_mark</span></span>
+<span><span class="co">#&gt; 13  label_overlap</span></span>
+<span><span class="co">#&gt; 14   low_contrast</span></span>
+<span><span class="co">#&gt; 15       occluded</span></span>
+<span><span class="co">#&gt; 16      offscreen</span></span>
+<span><span class="co">#&gt; 17    overplotted</span></span>
+<span><span class="co">#&gt; 18       subpixel</span></span>
+<span><span class="co">#&gt; 19      tiny_text</span></span>
+<span><span class="co">#&gt; 20      truncated</span></span>
+<span><span class="co">#&gt;                                                              description</span></span>
+<span><span class="co">#&gt; 1                                 A text mark has no visible characters.</span></span>
+<span><span class="co">#&gt; 2                      A mark escapes its viewport, which does not clip.</span></span>
+<span><span class="co">#&gt; 3                    A mark is clipped out of existence by its viewport.</span></span>
+<span><span class="co">#&gt; 4        Two colours collapse into one under a colour-vision deficiency.</span></span>
+<span><span class="co">#&gt; 5                                      An element resolves to zero size.</span></span>
+<span><span class="co">#&gt; 6                        The same mark is drawn twice in the same place.</span></span>
+<span><span class="co">#&gt; 7            Two nodes share a name, so only the first can be addressed.</span></span>
+<span><span class="co">#&gt; 8                  A character has no glyph in any font on this machine.</span></span>
+<span><span class="co">#&gt; 9                          A stroke is thinner than half a device pixel.</span></span>
+<span><span class="co">#&gt; 10                     An element has no fill, no stroke, or zero alpha.</span></span>
+<span><span class="co">#&gt; 11         A mark is filled in the background colour and has no outline.</span></span>
+<span><span class="co">#&gt; 12                           A label covers most of the mark it sits on.</span></span>
+<span><span class="co">#&gt; 13                                              Two text labels overlap.</span></span>
+<span><span class="co">#&gt; 14       Text contrast against its backdrop is below the WCAG threshold.</span></span>
+<span><span class="co">#&gt; 15               An opaque mark is completely hidden behind a later one.</span></span>
+<span><span class="co">#&gt; 16                                A mark lies completely off the canvas.</span></span>
+<span><span class="co">#&gt; 17 A batched mark overplots itself badly enough to hide its own density.</span></span>
+<span><span class="co">#&gt; 18                           An area mark is less than one pixel across.</span></span>
+<span><span class="co">#&gt; 19                       Text is too small to read at the rendered size.</span></span>
+<span><span class="co">#&gt; 20  A mark is partly cut off by the page edge or by its viewport's clip.</span></span></code></pre></div>
+<p>Findings come at two severities. A <strong>warning</strong> is a
+probable defect — text nobody can read, a mark that never reaches the
+page. A <strong>note</strong> is something to look at, because the same
+geometry is sometimes deliberate: a cropped mark, a label inside the bar
+it belongs to.</p>
+<p>A few rules are worth explaining.</p>
+<p><strong><code>tiny_text</code> has two floors, and fires on
+either.</strong> Device pixels decide whether glyphs survive
+rasterisation; points decide whether a human can read them. A pixel
+floor alone goes blind at print resolution, because <code>font_px</code>
+scales with <code>dpi</code> — 4 pt at 300 dpi is 16.7 px, comfortably
+clear of the 7 px default and still unreadable on paper:</p>
+<div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">tiny</span> <span class="op">&lt;-</span> <span class="kw">function</span><span class="op">(</span><span class="va">dpi</span><span class="op">)</span> <span class="op">{</span></span>
+<span>  <span class="fu"><a href="../reference/vl_scene.html">vl_scene</a></span><span class="op">(</span><span class="fl">3</span>, <span class="fl">1</span>, dpi <span class="op">=</span> <span class="va">dpi</span><span class="op">)</span> <span class="op">|&gt;</span></span>
+<span>    <span class="fu"><a href="../reference/vl_scene.html">draw</a></span><span class="op">(</span><span class="fu"><a href="../reference/grob.html">text_grob</a></span><span class="op">(</span><span class="st">"4 pt caption"</span>, gp <span class="op">=</span> <span class="fu"><a href="../reference/vl_gpar.html">vl_gpar</a></span><span class="op">(</span>fontsize <span class="op">=</span> <span class="fl">4</span><span class="op">)</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="op">}</span></span>
+<span><span class="fu"><a href="../reference/vl_lint.html">vl_lint</a></span><span class="op">(</span><span class="fu">tiny</span><span class="op">(</span><span class="fl">96</span><span class="op">)</span><span class="op">)</span><span class="op">$</span><span class="va">message</span></span>
+<span><span class="co">#&gt; [1] "5.3 px tall - below the 7 px legibility floor"</span></span>
+<span><span class="fu"><a href="../reference/vl_lint.html">vl_lint</a></span><span class="op">(</span><span class="fu">tiny</span><span class="op">(</span><span class="fl">300</span><span class="op">)</span><span class="op">)</span><span class="op">$</span><span class="va">message</span></span>
+<span><span class="co">#&gt; [1] "4.0 pt - below the 6 pt legibility floor"</span></span></code></pre></div>
+<p><strong><code>low_contrast</code> samples the rendered
+image</strong>, just outside each label’s box on four sides, so it
+measures the backdrop the label really sits on — including marks behind
+it — rather than assuming the page colour:</p>
+<div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">faint</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/vl_scene.html">vl_scene</a></span><span class="op">(</span><span class="fl">4</span>, <span class="fl">1.2</span>, dpi <span class="op">=</span> <span class="fl">96</span>, bg <span class="op">=</span> <span class="st">"white"</span><span class="op">)</span> <span class="op">|&gt;</span></span>
 <span>  <span class="fu"><a href="../reference/vl_scene.html">draw</a></span><span class="op">(</span><span class="fu"><a href="../reference/grob.html">text_grob</a></span><span class="op">(</span><span class="st">"hard to read"</span>, gp <span class="op">=</span> <span class="fu"><a href="../reference/vl_gpar.html">vl_gpar</a></span><span class="op">(</span>fontsize <span class="op">=</span> <span class="fl">22</span>, col <span class="op">=</span> <span class="st">"#DDDDDD"</span><span class="op">)</span><span class="op">)</span><span class="op">)</span></span>
 <span><span class="fu"><a href="../reference/vl_lint.html">vl_lint</a></span><span class="op">(</span><span class="va">faint</span><span class="op">)</span></span>
 <span><span class="co">#&gt; <span style="font-weight: bold;">1</span> lint finding (1 warning):</span></span>
-<span><span class="co">#&gt; <span style="color: #BB0000;">✖</span> [low_contrast] text: contrast 1.7:1 against its backdrop - below 3:1</span></span>
+<span><span class="co">#&gt; <span style="color: #BB0000;">✖</span> [low_contrast] text: contrast 1.4:1 against its backdrop - below 3:1</span></span>
 <span></span>
 <span><span class="co"># Same text colour, dark page: now it is fine, and the linter agrees.</span></span>
 <span><span class="fu"><a href="../reference/vl_lint.html">vl_lint</a></span><span class="op">(</span><span class="fu"><a href="../reference/vl_scene.html">vl_scene</a></span><span class="op">(</span><span class="fl">4</span>, <span class="fl">1.2</span>, dpi <span class="op">=</span> <span class="fl">96</span>, bg <span class="op">=</span> <span class="st">"grey15"</span><span class="op">)</span> <span class="op">|&gt;</span></span>
 <span>  <span class="fu"><a href="../reference/vl_scene.html">draw</a></span><span class="op">(</span><span class="fu"><a href="../reference/grob.html">text_grob</a></span><span class="op">(</span><span class="st">"easy to read"</span>, gp <span class="op">=</span> <span class="fu"><a href="../reference/vl_gpar.html">vl_gpar</a></span><span class="op">(</span>fontsize <span class="op">=</span> <span class="fl">22</span>, col <span class="op">=</span> <span class="st">"#DDDDDD"</span><span class="op">)</span><span class="op">)</span><span class="op">)</span><span class="op">)</span></span>
 <span><span class="co">#&gt; <span style="color: #00BB00;">✔</span> No lint findings.</span></span></code></pre></div>
+<p><strong><code>cvd_collision</code> catches what the person reviewing
+the figure cannot.</strong> Two colours meant to be told apart, that a
+colour-blind reader sees as one. The colours go through the same
+simulation matrices <code>render(cvd = )</code> draws with, and
+distances are compared in Oklab:</p>
+<div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">swatches</span> <span class="op">&lt;-</span> <span class="kw">function</span><span class="op">(</span><span class="va">cols</span><span class="op">)</span> <span class="op">{</span></span>
+<span>  <span class="va">s</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/vl_scene.html">vl_scene</a></span><span class="op">(</span><span class="fl">4</span>, <span class="fl">1</span>, dpi <span class="op">=</span> <span class="fl">96</span>, bg <span class="op">=</span> <span class="st">"white"</span><span class="op">)</span></span>
+<span>  <span class="va">xs</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/seq.html" class="external-link">seq</a></span><span class="op">(</span><span class="fl">0.1</span>, <span class="fl">0.9</span>, length.out <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/length.html" class="external-link">length</a></span><span class="op">(</span><span class="va">cols</span><span class="op">)</span><span class="op">)</span></span>
+<span>  <span class="kw">for</span> <span class="op">(</span><span class="va">i</span> <span class="kw">in</span> <span class="fu"><a href="https://rdrr.io/r/base/seq.html" class="external-link">seq_along</a></span><span class="op">(</span><span class="va">cols</span><span class="op">)</span><span class="op">)</span> <span class="op">{</span></span>
+<span>    <span class="va">s</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/vl_scene.html">draw</a></span><span class="op">(</span><span class="va">s</span>, <span class="fu"><a href="../reference/grob.html">rect_grob</a></span><span class="op">(</span>x <span class="op">=</span> <span class="va">xs</span><span class="op">[</span><span class="va">i</span><span class="op">]</span>, width <span class="op">=</span> <span class="fl">0.12</span>, height <span class="op">=</span> <span class="fl">0.6</span>,</span>
+<span>                           gp <span class="op">=</span> <span class="fu"><a href="../reference/vl_gpar.html">vl_gpar</a></span><span class="op">(</span>fill <span class="op">=</span> <span class="va">cols</span><span class="op">[</span><span class="va">i</span><span class="op">]</span>, col <span class="op">=</span> <span class="cn">NA</span><span class="op">)</span><span class="op">)</span><span class="op">)</span></span>
+<span>  <span class="op">}</span></span>
+<span>  <span class="va">s</span></span>
+<span><span class="op">}</span></span>
+<span></span>
+<span><span class="co"># ggplot2's default three-colour palette.</span></span>
+<span><span class="fu"><a href="../reference/vl_lint.html">vl_lint</a></span><span class="op">(</span><span class="fu">swatches</span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"#F8766D"</span>, <span class="st">"#00BA38"</span>, <span class="st">"#619CFF"</span><span class="op">)</span><span class="op">)</span>, rules <span class="op">=</span> <span class="st">"cvd_collision"</span><span class="op">)</span></span>
+<span><span class="co">#&gt; <span style="font-weight: bold;">1</span> lint finding (1 warning):</span></span>
+<span><span class="co">#&gt; <span style="color: #BB0000;">✖</span> [cvd_collision] rect: #F8766D and #00BA38 look the same under deuteranopia</span></span>
+<span></span>
+<span><span class="co"># Okabe-Ito, designed to survive colour-vision deficiency.</span></span>
+<span><span class="fu"><a href="../reference/vl_lint.html">vl_lint</a></span><span class="op">(</span><span class="fu">swatches</span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"#E69F00"</span>, <span class="st">"#56B4E9"</span>, <span class="st">"#009E73"</span>, <span class="st">"#CC79A7"</span><span class="op">)</span><span class="op">)</span>,</span>
+<span>        rules <span class="op">=</span> <span class="st">"cvd_collision"</span><span class="op">)</span></span>
+<span><span class="co">#&gt; <span style="color: #00BB00;">✔</span> No lint findings.</span></span></code></pre></div>
+<p>The threshold is calibrated so that the second call stays quiet: a
+rule that flags a CVD-safe palette is a rule you would switch off. Point
+it at other deficiencies with <code>cvd =</code>, where
+<code>"achromatopsia"</code> doubles as a greyscale-printer check, or
+switch it off with <code>cvd = "none"</code>. See
+<code><a href="../articles/accessible-output.html">vignette("accessible-output")</a></code> for simulating the whole
+image.</p>
+<p><strong><code>font_fallback</code> reports characters no font on
+<em>this machine</em> can draw.</strong> They shape to glyph 0 and
+render as tofu boxes, and nothing about the label string says so. The
+answer is deliberately machine-dependent, which makes it the rule most
+worth running in CI — alongside <code><a href="../reference/font_pin.html">font_pin()</a></code> for the related
+question of whether the fonts moved.</p>
+<p><strong><code>overplotted</code></strong> is the rule form of the
+<code><a href="../reference/scene_stats.html">scene_stats()</a></code> measurement below, measured per layer so it
+names the one to fix.</p>
+</div>
 <div class="section level3">
 <h3 id="adding-your-own-rules">Adding your own rules<a class="anchor" aria-label="anchor" href="#adding-your-own-rules"></a>
 </h3>
 <p>The rule set is a registry, which is the point: vellum knows about
-geometry, but it knows nothing about <em>your</em> semantics. A package
-layered on top can add rules that do, and both come back from one
-<code><a href="../reference/vl_lint.html">vl_lint()</a></code> call.</p>
-<p>A rule is a function of <code>(scene, nodes, ctx)</code>.
-<code>nodes</code> is the resolved per-node table — device-px box, clip
-box, kind, name, element count, alpha, whether a fill or stroke is
-present, font size in px, colour, label — and <code>ctx</code> carries
-the page size, dpi, thresholds, and a <code>pixel(x, y)</code>
-sampler.</p>
-<div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
+geometry, but it knows nothing about <em>your</em> semantics. A grammar
+layer can add rules that do — a scale with one level, a legend with
+forty entries — and both come back from one <code><a href="../reference/vl_lint.html">vl_lint()</a></code>
+call.</p>
+<p>A rule is a function of <code>(scene, nodes, ctx)</code> returning
+<code><a href="../reference/vl_lint_finding.html">vl_lint_finding()</a></code>, or <code>NULL</code>. <code>nodes</code>
+is the resolved per-node table, in paint order:</p>
+<div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="../reference/vl_lint_rule.html">vl_lint_rule</a></span><span class="op">(</span><span class="st">"show_columns"</span>, <span class="kw">function</span><span class="op">(</span><span class="va">scene</span>, <span class="va">nodes</span>, <span class="va">ctx</span><span class="op">)</span> <span class="op">{</span></span>
+<span>  <span class="fu"><a href="https://rdrr.io/r/base/print.html" class="external-link">print</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/names.html" class="external-link">names</a></span><span class="op">(</span><span class="va">nodes</span><span class="op">)</span><span class="op">)</span></span>
+<span>  <span class="cn">NULL</span></span>
+<span><span class="op">}</span>, <span class="st">"prints its own input"</span><span class="op">)</span></span>
+<span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/base/invisible.html" class="external-link">invisible</a></span><span class="op">(</span><span class="fu"><a href="../reference/vl_lint.html">vl_lint</a></span><span class="op">(</span><span class="va">bad</span>, rules <span class="op">=</span> <span class="st">"show_columns"</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="co">#&gt;  [1] "kind"      "name"      "id"        "node"      "vp"        "x0"       </span></span>
+<span><span class="co">#&gt;  [7] "y0"        "x1"        "y1"        "clip_x0"   "clip_y0"   "clip_x1"  </span></span>
+<span><span class="co">#&gt; [13] "clip_y1"   "n"         "alpha"     "has_fill"  "has_col"   "font_px"  </span></span>
+<span><span class="co">#&gt; [19] "col"       "label"     "notdef"    "fill"      "fill_kind" "lwd_px"   </span></span>
+<span><span class="co">#&gt; [25] "vp_x0"     "vp_y0"     "vp_x1"     "vp_y1"</span></span></code></pre></div>
+<p>Boxes and clip boxes in device pixels, the viewport extent, the
+resolved fill and stroke, stroke width, text size, and a
+<code>notdef</code> count. <code>ctx</code> carries the page size, the
+dpi, the thresholds, and three lazy accessors: <code>pixel(x, y)</code>,
+<code>region(x0, y0, x1, y1)</code> for a whole block of composited
+pixels, and <code>elements()</code> for per-element geometry — which is
+what you want whenever a node is a batch, since a scatter is
+<em>one</em> node whose box is the union over every point.</p>
+<div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/vl_lint_rule.html">vl_lint_rule</a></span><span class="op">(</span></span>
 <span>  <span class="st">"wide_marks"</span>,</span>
 <span>  <span class="kw">function</span><span class="op">(</span><span class="va">scene</span>, <span class="va">nodes</span>, <span class="va">ctx</span><span class="op">)</span> <span class="op">{</span></span>
@@ -228,6 +352,12 @@ sampler.</p>
 <span><span class="co">#&gt; <span style="color: #BB0000;">✖</span> [tiny_text] n_label: 3.3 px tall - below the 7 px legibility floor</span></span>
 <span><span class="co">#&gt; <span style="color: #00BBBB;">ℹ</span> [wide_marks] rect: spans almost the whole page</span></span>
 <span><span class="co">#&gt; <span style="color: #00BBBB;">ℹ</span> [wide_marks] cloud: spans almost the whole page</span></span></code></pre></div>
+<p>Declaring <code>kinds</code> lets <code><a href="../reference/vl_lint.html">vl_lint()</a></code> skip your
+rule entirely on a scene that contains none of them, and
+<code>needs_pixels</code> tells a caller which rules cost a render. A
+rule that fails does not take the lint down with it — it comes back as a
+<code>rule_error</code> finding naming the rule, and everything else
+still runs.</p>
 <p>Register from your package’s <code>.onLoad()</code> and your users
 get your rules for free.</p>
 </div>
@@ -239,7 +369,7 @@ get your rules for free.</p>
 <p>A mark count tells you nothing about whether the marks land on top of
 each other. <code><a href="../reference/scene_stats.html">scene_stats()</a></code> measures what actually reached
 the canvas:</p>
-<div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">cloud</span> <span class="op">&lt;-</span> <span class="kw">function</span><span class="op">(</span><span class="va">n</span>, <span class="va">sd</span> <span class="op">=</span> <span class="cn">NA</span><span class="op">)</span> <span class="op">{</span></span>
 <span>  <span class="va">xy</span> <span class="op">&lt;-</span> <span class="kw">if</span> <span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/NA.html" class="external-link">is.na</a></span><span class="op">(</span><span class="va">sd</span><span class="op">)</span><span class="op">)</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/stats/Uniform.html" class="external-link">runif</a></span><span class="op">(</span><span class="va">n</span><span class="op">)</span>, <span class="fu"><a href="https://rdrr.io/r/stats/Uniform.html" class="external-link">runif</a></span><span class="op">(</span><span class="va">n</span><span class="op">)</span><span class="op">)</span> <span class="kw">else</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/stats/Normal.html" class="external-link">rnorm</a></span><span class="op">(</span><span class="va">n</span>, <span class="fl">0.5</span>, <span class="va">sd</span><span class="op">)</span>, <span class="fu"><a href="https://rdrr.io/r/stats/Normal.html" class="external-link">rnorm</a></span><span class="op">(</span><span class="va">n</span>, <span class="fl">0.5</span>, <span class="va">sd</span><span class="op">)</span><span class="op">)</span></span>
 <span>  <span class="fu"><a href="../reference/vl_scene.html">vl_scene</a></span><span class="op">(</span><span class="fl">4</span>, <span class="fl">3</span>, dpi <span class="op">=</span> <span class="fl">96</span><span class="op">)</span> <span class="op">|&gt;</span></span>
@@ -268,7 +398,7 @@ unkeyed lines/polygons contribute to <code>ink</code> but not to
 <h2 id="profile_render-where-the-time-goes">
 <code>profile_render()</code>: where the time goes<a class="anchor" aria-label="anchor" href="#profile_render-where-the-time-goes"></a>
 </h2>
-<div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb10"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">heavy</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/vl_scene.html">vl_scene</a></span><span class="op">(</span><span class="fl">6</span>, <span class="fl">4</span>, dpi <span class="op">=</span> <span class="fl">96</span><span class="op">)</span> <span class="op">|&gt;</span></span>
 <span>  <span class="fu"><a href="../reference/vl_scene.html">draw</a></span><span class="op">(</span><span class="fu"><a href="../reference/grob.html">points_grob</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/stats/Uniform.html" class="external-link">runif</a></span><span class="op">(</span><span class="fl">20000</span><span class="op">)</span>, <span class="fu"><a href="https://rdrr.io/r/stats/Uniform.html" class="external-link">runif</a></span><span class="op">(</span><span class="fl">20000</span><span class="op">)</span>, name <span class="op">=</span> <span class="st">"points"</span><span class="op">)</span><span class="op">)</span> <span class="op">|&gt;</span></span>
 <span>  <span class="fu"><a href="../reference/vl_scene.html">draw</a></span><span class="op">(</span><span class="fu"><a href="../reference/grob.html">segments_grob</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/stats/Uniform.html" class="external-link">runif</a></span><span class="op">(</span><span class="fl">2000</span><span class="op">)</span>, <span class="fu"><a href="https://rdrr.io/r/stats/Uniform.html" class="external-link">runif</a></span><span class="op">(</span><span class="fl">2000</span><span class="op">)</span>, <span class="fu"><a href="https://rdrr.io/r/stats/Uniform.html" class="external-link">runif</a></span><span class="op">(</span><span class="fl">2000</span><span class="op">)</span>, <span class="fu"><a href="https://rdrr.io/r/stats/Uniform.html" class="external-link">runif</a></span><span class="op">(</span><span class="fl">2000</span><span class="op">)</span>, name <span class="op">=</span> <span class="st">"edges"</span><span class="op">)</span><span class="op">)</span> <span class="op">|&gt;</span></span>
@@ -278,13 +408,13 @@ unkeyed lines/polygons contribute to <code>ink</code> but not to
 <span><span class="fu"><a href="../reference/profile_render.html">profile_render</a></span><span class="op">(</span><span class="va">heavy</span>, reps <span class="op">=</span> <span class="fl">1</span><span class="op">)</span></span>
 <span><span class="co">#&gt; <span style="font-weight: bold;">Phases</span> (median of the timed reps):</span></span>
 <span><span class="co">#&gt; <span style="color: #00BBBB;">•</span> build 0.001 s (constructing the R value)</span></span>
-<span><span class="co">#&gt; <span style="color: #00BBBB;">•</span> compile 0.025 s (R -&gt; Rust replay, incl. text shaping)</span></span>
+<span><span class="co">#&gt; <span style="color: #00BBBB;">•</span> compile 0.024 s (R -&gt; Rust replay, incl. text shaping)</span></span>
 <span><span class="co">#&gt; <span style="color: #00BBBB;">•</span> raster 0.185 s (drawing)</span></span>
 <span><span class="co">#&gt; </span></span>
 <span><span class="co">#&gt; <span style="font-weight: bold;">Slowest marks</span> (raster time):</span></span>
-<span><span class="co">#&gt; <span style="color: #00BBBB;">•</span> circle points 20000 elem 0.1176 s 76.7%</span></span>
-<span><span class="co">#&gt; <span style="color: #00BBBB;">•</span> segments edges 2000 elem 0.0331 s 21.6%</span></span>
-<span><span class="co">#&gt; <span style="color: #00BBBB;">•</span> text labels 200 elem 0.0027 s 1.8%</span></span></code></pre></div>
+<span><span class="co">#&gt; <span style="color: #00BBBB;">•</span> circle points 20000 elem 0.1180 s 76.7%</span></span>
+<span><span class="co">#&gt; <span style="color: #00BBBB;">•</span> segments edges 2000 elem 0.0333 s 21.6%</span></span>
+<span><span class="co">#&gt; <span style="color: #00BBBB;">•</span> text labels 200 elem 0.0027 s 1.7%</span></span></code></pre></div>
 <p><strong>Read the phase split first.</strong> A render is three
 phases: <em>build</em> (constructing the R value), <em>compile</em> (the
 R→Rust replay, including text shaping), and <em>raster</em> (drawing).
@@ -303,11 +433,25 @@ for it.</p>
 <h2 id="putting-it-in-a-test">Putting it in a test<a class="anchor" aria-label="anchor" href="#putting-it-in-a-test"></a>
 </h2>
 <p>All three return plain data frames, so they drop straight into a test
-suite. A lint check is a reasonable thing to assert in CI:</p>
-<div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
+suite. <code><a href="../reference/vl_lint_assert.html">vl_lint_assert()</a></code> is the gate: it fails on warnings,
+reports what it found, and passes everything else through to
+<code><a href="../reference/vl_lint.html">vl_lint()</a></code>.</p>
+<div class="sourceCode" id="cb11"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu">test_that</span><span class="op">(</span><span class="st">"the figure has no lint findings"</span>, <span class="op">{</span></span>
-<span>  <span class="fu">expect_equal</span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/nrow.html" class="external-link">nrow</a></span><span class="op">(</span><span class="fu"><a href="../reference/vl_lint.html">vl_lint</a></span><span class="op">(</span><span class="fu">my_plot</span><span class="op">(</span><span class="op">)</span><span class="op">)</span><span class="op">)</span>, <span class="fl">0L</span><span class="op">)</span></span>
+<span>  <span class="fu"><a href="../reference/vl_lint_assert.html">vl_lint_assert</a></span><span class="op">(</span><span class="fu">my_plot</span><span class="op">(</span><span class="op">)</span><span class="op">)</span></span>
 <span><span class="op">}</span><span class="op">)</span></span></code></pre></div>
+<p>Real figures usually contain one deliberate oddity, and a linter you
+cannot satisfy is a linter you turn off. <code>exclude</code> names the
+nodes you have already looked at and accepted:</p>
+<div class="sourceCode" id="cb12"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="../reference/vl_lint_assert.html">vl_lint_assert</a></span><span class="op">(</span><span class="fu">my_plot</span><span class="op">(</span><span class="op">)</span>, exclude <span class="op">=</span> <span class="st">"bleed_marker"</span>, severity <span class="op">=</span> <span class="st">"note"</span><span class="op">)</span></span></code></pre></div>
+<p>Suppression is by node rather than by rule, so the rule keeps working
+everywhere else in the figure. An <code>exclude</code> entry that
+matches nothing warns — a stale suppression list otherwise looks exactly
+like a working one.</p>
+<p>Because <code>font_fallback</code> and <code>low_contrast</code> read
+the machine and the rendered image, the CI run genuinely checks
+something the author’s machine could not.</p>
 </div>
 <div class="section level2">
 <h2 id="where-to-go-next">Where to go next<a class="anchor" aria-label="anchor" href="#where-to-go-next"></a>

@@ -2,6 +2,148 @@
 
 ## vellum 0.6.7.9000
 
+### Linting
+
+The linter grew from 7 rules to 20, and from something you read to
+something you can gate a build on.
+[`vignette("inspecting-scenes")`](https://r-vellum.github.io/vellum/articles/inspecting-scenes.md)
+covers all of it.
+
+- **Thirteen new rules.** The one worth having first is `truncated`:
+  `offscreen` and `clipped_away` both require a mark to be *entirely*
+  gone, so the defect that actually ships — the axis label with its last
+  characters cut off, the title chopped by the page edge — had no rule
+  at all. It reports how much was lost, as a warning for text and a note
+  otherwise.
+
+  Then, in rough order of how hard they are to catch by eye:
+
+  - `cvd_collision` — two colours a reader is meant to tell apart that a
+    colour-blind reader cannot. Nobody catches this by looking, because
+    the person looking can see the difference.
+  - `font_fallback` — a character no font on *this* machine can draw,
+    which renders as a tofu box. Deliberately machine-dependent, which
+    makes it the rule most worth running on CI rather than on the
+    author’s laptop.
+  - `invisible_fill` — a mark filled in the page’s own background colour
+    with no outline. Painted, correctly sized, correctly placed, and
+    invisible.
+  - `occluded` — an opaque mark completely hidden behind a later one:
+    ink that never reaches the page, usually a layer ordering mistake.
+  - `label_on_mark` — a label swallowing the mark it annotates, which is
+    exactly what
+    [`vl_repel()`](https://r-vellum.github.io/vellum/reference/vl_place.md)
+    exists to fix.
+  - `overplotted` — a batched mark dense enough to hide its own
+    distribution, measured per layer so it names the one to fix, and
+    suggesting
+    [`datashade()`](https://r-vellum.github.io/vellum/reference/datashade.md).
+  - `hairline` — a stroke under half a pixel, which the raster backends
+    render as a dpi-dependent smudge and the vector backends as a crisp
+    line.
+  - `subpixel` — an area mark less than a pixel across.
+  - `bleed` — a mark drawn outside a viewport that does not clip.
+  - `duplicate_name` — two nodes sharing a name, which silently makes
+    all but the first unaddressable by
+    [`get_node()`](https://r-vellum.github.io/vellum/reference/node_names.md),
+    [`edit_node()`](https://r-vellum.github.io/vellum/reference/node_names.md)
+    and
+    [`vl_repel()`](https://r-vellum.github.io/vellum/reference/vl_place.md).
+  - `double_draw` — the same mark drawn twice in the same place.
+  - `blank_label` — a text mark with no visible characters.
+
+  Every rule was checked against realistic figures as well as planted
+  defects, and several were deliberately narrowed as a result: a bar
+  chart with value labels, a panel with axis text, a scatter grazing its
+  clip and a viewport-filling background rect all lint clean, and there
+  are tests to keep it that way. The same applies to `cvd_collision`’s
+  threshold, which is calibrated to report ggplot2’s default red/green
+  pair while staying quiet on the CVD-safe Okabe-Ito and viridis
+  palettes.
+
+- **`tiny_text` gained a point floor and fires on either.** `font_px`
+  scales with `dpi`, so the pixel floor alone stopped seeing illegible
+  text on a print-resolution render: 4 pt at `dpi = 300` is 16.7 device
+  px and cleared the 7 px default comfortably. `min_text_pt` (default
+  `6`) asks the other question — can a human read this. Text between 6
+  pt and the pixel floor may now be flagged where it was not before;
+  pass both arguments to move both floors.
+
+- **[`vl_lint_assert()`](https://r-vellum.github.io/vellum/reference/vl_lint_assert.md)
+  turns a lint into a gate** for a test suite or a CI job, without
+  vellum taking a testthat dependency. `severity = "note"` fails on
+  anything at all; `on = "warn"` reports without stopping.
+
+- **[`vl_lint_overlay()`](https://r-vellum.github.io/vellum/reference/vl_lint_overlay.md)
+  draws the findings onto the scene** — a box round each one, labelled
+  with the rules that fired, red for warnings and orange for notes. For
+  a graphics linter this is usually the faster way to read a report: a
+  message says a mark is clipped, an outline shows you which.
+
+- **`vl_lint(exclude = )` suppresses findings for named nodes.**
+  Suppression is by node, since `rules` already selects rules, and the
+  usual case is one deliberate oddity in an otherwise clean figure —
+  without it a project with a single intentional off-canvas mark could
+  never reach a clean lint to assert on. An entry matching nothing
+  warns, because a stale exclude list looks exactly like a working one.
+  `vl_lint(severity = )` likewise overrides a rule’s own severity for a
+  project that cares about it more, or less, than vellum does.
+
+- **Findings carry the node’s device-px box**, so a caller can point at
+  a defect rather than only describe it — which is what the overlay is
+  built on. A rule reporting something with no geometry gets `NA`.
+
+- **A failing rule is reported instead of aborting the lint.** The
+  registry is open to downstream packages, and one broken rule used to
+  lose every other rule’s findings behind an opaque
+  `Error in get(id, envir = .lint_rules)$fn(...)`. Failures come back as
+  a `rule_error` finding naming the rule, as does a rule returning a
+  data frame without the required columns.
+
+- **Rules can see more, and describe themselves.** `ctx` gained
+  `elements()` — the per-element table, the only honest view of a
+  batched mark, since a scatter is one node whose box is the union over
+  every point — and `region(x0, y0, x1, y1)` for a whole block of
+  composited pixels rather than probing point by point. Both are lazy,
+  like `pixel()`. The node table gained the resolved `fill` and
+  `fill_kind`, `lwd_px`, the viewport id and extent, and a `notdef`
+  count.
+  [`vl_lint_rule()`](https://r-vellum.github.io/vellum/reference/vl_lint_rule.md)
+  takes `kinds`, `needs_pixels` and `tags`: a rule naming the kinds it
+  reads is skipped on a scene with none of them, and
+  [`vl_lint_rules()`](https://r-vellum.github.io/vellum/reference/vl_lint_rule.md)
+  reports all three.
+
+- **Fix: the lint node table reported light colours wrongly.** `col` was
+  packed as `0xRRGGBBAA` into a signed 32-bit integer, which overflows
+  as soon as red reaches 128 — `#EEEEEE` came back as `-286331137` and
+  unpacked to a red channel of `-18`. `low_contrast` therefore
+  mis-measured the luminance of every light or reddish text colour,
+  landing on the right side of its threshold by luck rather than by
+  arithmetic. Colours are now packed as doubles, which hold all 32 bits
+  exactly. Reported contrast ratios change accordingly: the README’s
+  `#F2F2F2` watermark on white is 1.1:1, not the 1.4:1 previously
+  claimed.
+
+- **`invisible` also catches a fill that is present but fully
+  transparent.** `fill = "#FF000000"` sets a colour and then asks for
+  none of it; `has_fill` cannot see that, and the fill’s alpha channel
+  can.
+
+- **`label_overlap` no longer compares every pair of labels in
+  interpreted R.** The collision search moved to a sort-and-sweep in
+  Rust, which drops a quadratic term: the detection itself goes from
+  3.02 s to 0.007 s on 2400 labels, and a full
+  [`vl_lint()`](https://r-vellum.github.io/vellum/reference/vl_lint.md)
+  of that scene from 7.78 s to 2.14 s. At a few hundred labels the win
+  is smaller, because compiling the scene dominates either way. Results
+  are unchanged, and tests assert the sweep agrees with the all-pairs
+  check it replaced. `occluded`, `label_on_mark` and `double_draw` were
+  measured and left alone — their inner loops are already vectorised,
+  and they cost milliseconds on 400 marks.
+
+### Other changes
+
 - **Fix: knitting a scene with a `dpi` chunk option errored.** A YAML
   `dpi: 150` parses as an `<integer>`, and the display path passed it
   straight to the scene’s `@dpi` property, which is declared

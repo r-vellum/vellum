@@ -88,7 +88,14 @@ from one <code><a href="vl_lint.html">vl_lint()</a></code> call.</p>
 
     <div class="section level2">
     <h2 id="ref-usage">Usage<a class="anchor" aria-label="anchor" href="#ref-usage"></a></h2>
-    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">vl_lint_rule</span><span class="op">(</span><span class="va">name</span>, <span class="va">fn</span>, description <span class="op">=</span> <span class="st">""</span><span class="op">)</span></span>
+    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">vl_lint_rule</span><span class="op">(</span></span>
+<span>  <span class="va">name</span>,</span>
+<span>  <span class="va">fn</span>,</span>
+<span>  description <span class="op">=</span> <span class="st">""</span>,</span>
+<span>  kinds <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  needs_pixels <span class="op">=</span> <span class="cn">FALSE</span>,</span>
+<span>  tags <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/character.html" class="external-link">character</a></span><span class="op">(</span><span class="op">)</span></span>
+<span><span class="op">)</span></span>
 <span></span>
 <span><span class="fu">vl_lint_rules</span><span class="op">(</span><span class="op">)</span></span></code></pre></div>
     </div>
@@ -102,22 +109,109 @@ from one <code><a href="vl_lint.html">vl_lint()</a></code> call.</p>
 
 
 <dt id="arg-fn">fn<a class="anchor" aria-label="anchor" href="#arg-fn"></a></dt>
-<dd><p>A function of <code>(scene, nodes, ctx)</code> returning a data frame with
-columns <code>rule</code>, <code>severity</code> (<code>"warning"</code>/<code>"note"</code>), <code>node</code>, <code>message</code> — or
-<code>NULL</code> for "nothing found". <code>nodes</code> is the resolved per-node table
-(device-px <code>x0</code>/<code>y0</code>/<code>x1</code>/<code>y1</code>, clip box, <code>kind</code>, <code>name</code>, <code>n</code>, <code>alpha</code>,
-<code>has_fill</code>, <code>has_col</code>, <code>font_px</code>, <code>col</code>, <code>label</code>); <code>ctx</code> carries the page
-size (<code>w</code>, <code>h</code>), <code>dpi</code>, and a <code>pixel(x, y)</code> sampler over the rendered image.</p></dd>
+<dd><p>A function of <code>(scene, nodes, ctx)</code> returning a data frame of
+findings — build it with <code><a href="vl_lint_finding.html">vl_lint_finding()</a></code> — or <code>NULL</code> for "nothing
+found". A rule that fails is reported as a <code>rule_error</code> finding rather than
+aborting the lint.</p>
+<p><code>nodes</code> is the resolved per-node table, one row per drawn node in paint
+order:</p><dl><dt><code>kind</code>, <code>name</code>, <code>id</code>, <code>label</code></dt>
+<dd><p>what the node is, and what it was
+called. <code>label</code> is the string, for text nodes.</p></dd>
+
+<dt><code>node</code></dt>
+<dd><p>the paint index — later means drawn on top.</p></dd>
+
+<dt><code>x0</code>, <code>y0</code>, <code>x1</code>, <code>y1</code></dt>
+<dd><p>the device-px box, y-down. For a batched
+mark this is the union over every element, so reach for
+<code>ctx$elements()</code> when that distinction matters.</p></dd>
+
+<dt><code>clip_x0</code>…<code>clip_y1</code></dt>
+<dd><p>the innermost clip box, which is the whole
+page when the node is unclipped.</p></dd>
+
+<dt><code>vp</code>, <code>vp_x0</code>…<code>vp_y1</code></dt>
+<dd><p>the node's viewport: an id that nodes
+sharing a viewport share, and that viewport's own device-px extent.
+Not the same as the clip box — an unclipped viewport still has an
+extent, and a mark can leave it.</p></dd>
+
+<dt><code>n</code></dt>
+<dd><p>how many elements the node draws.</p></dd>
+
+<dt><code>alpha</code>, <code>has_fill</code>, <code>has_col</code></dt>
+<dd><p>the group alpha, and whether a fill
+and a stroke are present at all.</p></dd>
+
+<dt><code>col</code>, <code>fill</code></dt>
+<dd><p>stroke and fill colour as <code>0xRRGGBBAA</code> packed into a
+double (not an integer — the value overflows a signed 32-bit int once
+red reaches 128). Group alpha is already folded in.</p></dd>
+
+<dt><code>fill_kind</code></dt>
+<dd><p><code>"none"</code>, <code>"solid"</code>, <code>"linear"</code>, <code>"radial"</code>,
+<code>"pattern"</code> or <code>"hatch"</code>. A gradient has no single colour, so a rule
+reasoning about colour must check this before reading <code>fill</code>.</p></dd>
+
+<dt><code>lwd_px</code></dt>
+<dd><p>stroke width in device pixels.</p></dd>
+
+<dt><code>font_px</code></dt>
+<dd><p>text size in device pixels; <code>0</code> for everything else.</p></dd>
+
+<dt><code>notdef</code></dt>
+<dd><p>how many characters of a text node shaped to glyph 0 —
+no font on this machine has them, and they will render as tofu boxes.</p></dd>
+
+
+</dl><p><code>ctx</code> carries:</p><dl><dt><code>w</code>, <code>h</code>, <code>dpi</code></dt>
+<dd><p>the page in device pixels, and its resolution.</p></dd>
+
+<dt><code>min_text_px</code>, <code>min_text_pt</code>, <code>min_contrast</code>, <code>max_overplot</code>,
+<code>cvd</code>, <code>min_cvd_delta</code></dt>
+<dd><p>the thresholds <code><a href="vl_lint.html">vl_lint()</a></code> was called with.</p></dd>
+
+<dt><code>pixel(x, y)</code></dt>
+<dd><p>one composited RGBA pixel, as a length-4 vector.</p></dd>
+
+<dt><code>region(x0, y0, x1, y1)</code></dt>
+<dd><p>every composited pixel in a box, as a
+4-column RGBA matrix — cheaper and steadier than probing point by
+point, since a single probe can land on an incidental gridline.</p></dd>
+
+<dt><code>elements()</code></dt>
+<dd><p>the per-element table (<code>key</code>, <code>panel</code>, <code>name</code>,
+<code>kind</code>, <code>node</code>, box), which is what to use when a node is a batch: a
+scatter is one node whose box is the union over every point.</p></dd>
+
+
+</dl><p><code>pixel()</code>, <code>region()</code> and <code>elements()</code> are all lazy. Rendering the scene to
+look at it is the expensive part of linting, and most rules never need to.</p></dd>
 
 
 <dt id="arg-description">description<a class="anchor" aria-label="anchor" href="#arg-description"></a></dt>
 <dd><p>One line, shown by <code>vl_lint_rules()</code>.</p></dd>
 
+
+<dt id="arg-kinds">kinds<a class="anchor" aria-label="anchor" href="#arg-kinds"></a></dt>
+<dd><p>Node kinds the rule looks at, e.g. <code>"text"</code>. The rule is skipped
+when the scene contains none of them. <code>NULL</code> (default) means "any".</p></dd>
+
+
+<dt id="arg-needs-pixels">needs_pixels<a class="anchor" aria-label="anchor" href="#arg-needs-pixels"></a></dt>
+<dd><p>Whether the rule renders the scene. Reported by
+<code>vl_lint_rules()</code> so a caller can select the cheap rules for a tight loop.</p></dd>
+
+
+<dt id="arg-tags">tags<a class="anchor" aria-label="anchor" href="#arg-tags"></a></dt>
+<dd><p>Free-form labels for grouping rules, e.g. <code>"accessibility"</code>.</p></dd>
+
 </dl></div>
     <div class="section level2">
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
     <p>Invisibly, <code>name</code>.</p>
-<p><code>vl_lint_rules()</code>: a data frame of registered rules.</p>
+<p><code>vl_lint_rules()</code>: a data frame of registered rules, with the
+<code>kinds</code> a rule looks at, whether it renders the scene, and its <code>tags</code>.</p>
     </div>
     <div class="section level2">
     <h2 id="see-also">See also<a class="anchor" aria-label="anchor" href="#see-also"></a></h2>
@@ -130,7 +224,7 @@ size (<code>w</code>, <code>h</code>), <code>dpi</code>, and a <code>pixel(x, y)
 <span class="r-in"><span>  <span class="va">hits</span> <span class="op">&lt;-</span> <span class="va">nodes</span><span class="op">[</span><span class="va">nodes</span><span class="op">$</span><span class="va">kind</span> <span class="op">==</span> <span class="st">"hexagon"</span>, , drop <span class="op">=</span> <span class="cn">FALSE</span><span class="op">]</span></span></span>
 <span class="r-in"><span>  <span class="kw">if</span> <span class="op">(</span><span class="op">!</span><span class="fu"><a href="https://rdrr.io/r/base/nrow.html" class="external-link">nrow</a></span><span class="op">(</span><span class="va">hits</span><span class="op">)</span><span class="op">)</span> <span class="kw"><a href="https://rdrr.io/r/base/function.html" class="external-link">return</a></span><span class="op">(</span><span class="cn">NULL</span><span class="op">)</span></span></span>
 <span class="r-in"><span>  <span class="fu"><a href="vl_lint_finding.html">vl_lint_finding</a></span><span class="op">(</span><span class="st">"no_hexagons"</span>, <span class="st">"note"</span>, <span class="va">hits</span>, <span class="st">"hexagons are banned here"</span><span class="op">)</span></span></span>
-<span class="r-in"><span><span class="op">}</span>, <span class="st">"example rule"</span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="op">}</span>, <span class="st">"example rule"</span>, kinds <span class="op">=</span> <span class="st">"hexagon"</span><span class="op">)</span></span></span>
 </code></pre></div>
     </div>
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>

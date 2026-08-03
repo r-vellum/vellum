@@ -54,9 +54,9 @@ bad <- vl_scene(5, 3, dpi = 96) |>
 
 vl_lint(bad)
 #> 4 lint findings (4 warnings):
-#> ✖ [invisible] empty_box: nothing will paint this - alpha is 0, or both fill and
-#>   col are absent
-#> ✖ [low_contrast] watermark: contrast 1.3:1 against its backdrop - below 3:1
+#> ✖ [invisible] empty_box: nothing will paint this - alpha is 0, or it has no
+#>   opaque fill and no stroke
+#> ✖ [low_contrast] watermark: contrast 1.0:1 against its backdrop - below 3:1
 #> ✖ [offscreen] stray_point: drawn entirely outside the page - check the
 #>   coordinates or the scale
 #> ✖ [tiny_text] n_label: 3.3 px tall - below the 7 px legibility floor
@@ -65,33 +65,101 @@ vl_lint(bad)
 Every finding names the grob, so you can go straight to it. Nothing here
 needed you to look at the picture.
 
-The rules that ship:
+### Seeing the findings
+
+For a graphics linter, a message describing a defect is second best.
+[`vl_lint_overlay()`](https://r-vellum.github.io/vellum/reference/vl_lint_overlay.md)
+draws the report onto the scene — a box round each finding, labelled
+with the rules that fired, red for warnings and orange for notes:
 
 ``` r
 
-vl_lint_rules()
-#>            rule                                                     description
-#> 1  clipped_away             A mark is clipped out of existence by its viewport.
-#> 2    degenerate                               An element resolves to zero size.
-#> 3     invisible               An element has no fill, no stroke, or zero alpha.
-#> 4 label_overlap                                        Two text labels overlap.
-#> 5  low_contrast Text contrast against its backdrop is below the WCAG threshold.
-#> 6     offscreen                          A mark lies completely off the canvas.
-#> 7     tiny_text                 Text is too small to read at the rendered size.
+display(vl_lint_overlay(bad))
 ```
 
-Two are worth explaining.
+![The scene above with red and orange boxes drawn around each linted
+mark.](inspecting-scenes_files/figure-html/unnamed-chunk-3-1.png)
 
-`tiny_text` measures in **device pixels at the size you are actually
-rendering**, not in points. A 6 pt label is fine in a print figure and
-illegible in a thumbnail, and the same scene rendered at two sizes
-should — correctly — lint differently. Adjust the floor with
-`min_text_px`.
+The box around `empty_box` is the one to notice: there is nothing there
+to see, which is precisely the finding.
 
-`low_contrast` samples the **rendered image** just outside each label’s
-box, on four sides, and takes the worst. So it measures the backdrop the
-label really sits on, including any marks that happen to be behind it,
-rather than assuming the page colour:
+### The rules that ship
+
+``` r
+
+vl_lint_rules()[, c("rule", "description")]
+#>              rule
+#> 1     blank_label
+#> 2           bleed
+#> 3    clipped_away
+#> 4   cvd_collision
+#> 5      degenerate
+#> 6     double_draw
+#> 7  duplicate_name
+#> 8   font_fallback
+#> 9        hairline
+#> 10      invisible
+#> 11 invisible_fill
+#> 12  label_on_mark
+#> 13  label_overlap
+#> 14   low_contrast
+#> 15       occluded
+#> 16      offscreen
+#> 17    overplotted
+#> 18       subpixel
+#> 19      tiny_text
+#> 20      truncated
+#>                                                              description
+#> 1                                 A text mark has no visible characters.
+#> 2                      A mark escapes its viewport, which does not clip.
+#> 3                    A mark is clipped out of existence by its viewport.
+#> 4        Two colours collapse into one under a colour-vision deficiency.
+#> 5                                      An element resolves to zero size.
+#> 6                        The same mark is drawn twice in the same place.
+#> 7            Two nodes share a name, so only the first can be addressed.
+#> 8                  A character has no glyph in any font on this machine.
+#> 9                          A stroke is thinner than half a device pixel.
+#> 10                     An element has no fill, no stroke, or zero alpha.
+#> 11         A mark is filled in the background colour and has no outline.
+#> 12                           A label covers most of the mark it sits on.
+#> 13                                              Two text labels overlap.
+#> 14       Text contrast against its backdrop is below the WCAG threshold.
+#> 15               An opaque mark is completely hidden behind a later one.
+#> 16                                A mark lies completely off the canvas.
+#> 17 A batched mark overplots itself badly enough to hide its own density.
+#> 18                           An area mark is less than one pixel across.
+#> 19                       Text is too small to read at the rendered size.
+#> 20  A mark is partly cut off by the page edge or by its viewport's clip.
+```
+
+Findings come at two severities. A **warning** is a probable defect —
+text nobody can read, a mark that never reaches the page. A **note** is
+something to look at, because the same geometry is sometimes deliberate:
+a cropped mark, a label inside the bar it belongs to.
+
+A few rules are worth explaining.
+
+**`tiny_text` has two floors, and fires on either.** Device pixels
+decide whether glyphs survive rasterisation; points decide whether a
+human can read them. A pixel floor alone goes blind at print resolution,
+because `font_px` scales with `dpi` — 4 pt at 300 dpi is 16.7 px,
+comfortably clear of the 7 px default and still unreadable on paper:
+
+``` r
+
+tiny <- function(dpi) {
+  vl_scene(3, 1, dpi = dpi) |>
+    draw(text_grob("4 pt caption", gp = vl_gpar(fontsize = 4)))
+}
+vl_lint(tiny(96))$message
+#> [1] "5.3 px tall - below the 7 px legibility floor"
+vl_lint(tiny(300))$message
+#> [1] "4.0 pt - below the 6 pt legibility floor"
+```
+
+**`low_contrast` samples the rendered image**, just outside each label’s
+box on four sides, so it measures the backdrop the label really sits on
+— including marks behind it — rather than assuming the page colour:
 
 ``` r
 
@@ -99,7 +167,7 @@ faint <- vl_scene(4, 1.2, dpi = 96, bg = "white") |>
   draw(text_grob("hard to read", gp = vl_gpar(fontsize = 22, col = "#DDDDDD")))
 vl_lint(faint)
 #> 1 lint finding (1 warning):
-#> ✖ [low_contrast] text: contrast 1.7:1 against its backdrop - below 3:1
+#> ✖ [low_contrast] text: contrast 1.4:1 against its backdrop - below 3:1
 
 # Same text colour, dark page: now it is fine, and the linter agrees.
 vl_lint(vl_scene(4, 1.2, dpi = 96, bg = "grey15") |>
@@ -107,19 +175,88 @@ vl_lint(vl_scene(4, 1.2, dpi = 96, bg = "grey15") |>
 #> ✔ No lint findings.
 ```
 
+**`cvd_collision` catches what the person reviewing the figure cannot.**
+Two colours meant to be told apart, that a colour-blind reader sees as
+one. The colours go through the same simulation matrices
+`render(cvd = )` draws with, and distances are compared in Oklab:
+
+``` r
+
+swatches <- function(cols) {
+  s <- vl_scene(4, 1, dpi = 96, bg = "white")
+  xs <- seq(0.1, 0.9, length.out = length(cols))
+  for (i in seq_along(cols)) {
+    s <- draw(s, rect_grob(x = xs[i], width = 0.12, height = 0.6,
+                           gp = vl_gpar(fill = cols[i], col = NA)))
+  }
+  s
+}
+
+# ggplot2's default three-colour palette.
+vl_lint(swatches(c("#F8766D", "#00BA38", "#619CFF")), rules = "cvd_collision")
+#> 1 lint finding (1 warning):
+#> ✖ [cvd_collision] rect: #F8766D and #00BA38 look the same under deuteranopia
+
+# Okabe-Ito, designed to survive colour-vision deficiency.
+vl_lint(swatches(c("#E69F00", "#56B4E9", "#009E73", "#CC79A7")),
+        rules = "cvd_collision")
+#> ✔ No lint findings.
+```
+
+The threshold is calibrated so that the second call stays quiet: a rule
+that flags a CVD-safe palette is a rule you would switch off. Point it
+at other deficiencies with `cvd =`, where `"achromatopsia"` doubles as a
+greyscale-printer check, or switch it off with `cvd = "none"`. See
+[`vignette("accessible-output")`](https://r-vellum.github.io/vellum/articles/accessible-output.md)
+for simulating the whole image.
+
+**`font_fallback` reports characters no font on *this machine* can
+draw.** They shape to glyph 0 and render as tofu boxes, and nothing
+about the label string says so. The answer is deliberately
+machine-dependent, which makes it the rule most worth running in CI —
+alongside
+[`font_pin()`](https://r-vellum.github.io/vellum/reference/font_pin.md)
+for the related question of whether the fonts moved.
+
+**`overplotted`** is the rule form of the
+[`scene_stats()`](https://r-vellum.github.io/vellum/reference/scene_stats.md)
+measurement below, measured per layer so it names the one to fix.
+
 ### Adding your own rules
 
 The rule set is a registry, which is the point: vellum knows about
-geometry, but it knows nothing about *your* semantics. A package layered
-on top can add rules that do, and both come back from one
+geometry, but it knows nothing about *your* semantics. A grammar layer
+can add rules that do — a scale with one level, a legend with forty
+entries — and both come back from one
 [`vl_lint()`](https://r-vellum.github.io/vellum/reference/vl_lint.md)
 call.
 
-A rule is a function of `(scene, nodes, ctx)`. `nodes` is the resolved
-per-node table — device-px box, clip box, kind, name, element count,
-alpha, whether a fill or stroke is present, font size in px, colour,
-label — and `ctx` carries the page size, dpi, thresholds, and a
-`pixel(x, y)` sampler.
+A rule is a function of `(scene, nodes, ctx)` returning
+[`vl_lint_finding()`](https://r-vellum.github.io/vellum/reference/vl_lint_finding.md),
+or `NULL`. `nodes` is the resolved per-node table, in paint order:
+
+``` r
+
+vl_lint_rule("show_columns", function(scene, nodes, ctx) {
+  print(names(nodes))
+  NULL
+}, "prints its own input")
+
+invisible(vl_lint(bad, rules = "show_columns"))
+#>  [1] "kind"      "name"      "id"        "node"      "vp"        "x0"       
+#>  [7] "y0"        "x1"        "y1"        "clip_x0"   "clip_y0"   "clip_x1"  
+#> [13] "clip_y1"   "n"         "alpha"     "has_fill"  "has_col"   "font_px"  
+#> [19] "col"       "label"     "notdef"    "fill"      "fill_kind" "lwd_px"   
+#> [25] "vp_x0"     "vp_y0"     "vp_x1"     "vp_y1"
+```
+
+Boxes and clip boxes in device pixels, the viewport extent, the resolved
+fill and stroke, stroke width, text size, and a `notdef` count. `ctx`
+carries the page size, the dpi, the thresholds, and three lazy
+accessors: `pixel(x, y)`, `region(x0, y0, x1, y1)` for a whole block of
+composited pixels, and `elements()` for per-element geometry — which is
+what you want whenever a node is a batch, since a scatter is *one* node
+whose box is the union over every point.
 
 ``` r
 
@@ -138,6 +275,13 @@ vl_lint(bad, rules = c("wide_marks", "tiny_text"))
 #> ℹ [wide_marks] rect: spans almost the whole page
 #> ℹ [wide_marks] cloud: spans almost the whole page
 ```
+
+Declaring `kinds` lets
+[`vl_lint()`](https://r-vellum.github.io/vellum/reference/vl_lint.md)
+skip your rule entirely on a scene that contains none of them, and
+`needs_pixels` tells a caller which rules cost a render. A rule that
+fails does not take the lint down with it — it comes back as a
+`rule_error` finding naming the rule, and everything else still runs.
 
 Register from your package’s `.onLoad()` and your users get your rules
 for free.
@@ -190,13 +334,13 @@ heavy <- vl_scene(6, 4, dpi = 96) |>
 profile_render(heavy, reps = 1)
 #> Phases (median of the timed reps):
 #> • build 0.001 s (constructing the R value)
-#> • compile 0.025 s (R -> Rust replay, incl. text shaping)
+#> • compile 0.024 s (R -> Rust replay, incl. text shaping)
 #> • raster 0.185 s (drawing)
 #> 
 #> Slowest marks (raster time):
-#> • circle points 20000 elem 0.1176 s 76.7%
-#> • segments edges 2000 elem 0.0331 s 21.6%
-#> • text labels 200 elem 0.0027 s 1.8%
+#> • circle points 20000 elem 0.1180 s 76.7%
+#> • segments edges 2000 elem 0.0333 s 21.6%
+#> • text labels 200 elem 0.0027 s 1.7%
 ```
 
 **Read the phase split first.** A render is three phases: *build*
@@ -220,14 +364,36 @@ it.
 ## Putting it in a test
 
 All three return plain data frames, so they drop straight into a test
-suite. A lint check is a reasonable thing to assert in CI:
+suite.
+[`vl_lint_assert()`](https://r-vellum.github.io/vellum/reference/vl_lint_assert.md)
+is the gate: it fails on warnings, reports what it found, and passes
+everything else through to
+[`vl_lint()`](https://r-vellum.github.io/vellum/reference/vl_lint.md).
 
 ``` r
 
 test_that("the figure has no lint findings", {
-  expect_equal(nrow(vl_lint(my_plot())), 0L)
+  vl_lint_assert(my_plot())
 })
 ```
+
+Real figures usually contain one deliberate oddity, and a linter you
+cannot satisfy is a linter you turn off. `exclude` names the nodes you
+have already looked at and accepted:
+
+``` r
+
+vl_lint_assert(my_plot(), exclude = "bleed_marker", severity = "note")
+```
+
+Suppression is by node rather than by rule, so the rule keeps working
+everywhere else in the figure. An `exclude` entry that matches nothing
+warns — a stale suppression list otherwise looks exactly like a working
+one.
+
+Because `font_fallback` and `low_contrast` read the machine and the
+rendered image, the CI run genuinely checks something the author’s
+machine could not.
 
 ## Where to go next
 

@@ -203,8 +203,12 @@ tail item.
 
 - [`vignette("inspecting-scenes")`](https://r-vellum.github.io/vellum/articles/inspecting-scenes.md):
   [`vl_lint()`](https://r-vellum.github.io/vellum/reference/vl_lint.md),
-  whose `low_contrast` and `tiny_text` rules cover the other half of
-  accessibility — whether the figure can be *seen*.
+  whose `low_contrast`, `tiny_text` and `cvd_collision` rules cover the
+  other half of accessibility — whether the figure can be *seen*. Its
+  `font_fallback` rule is the companion to
+  [`font_pin()`](https://r-vellum.github.io/vellum/reference/font_pin.md)
+  below: one asks whether the fonts moved, the other whether a character
+  has any glyph at all on this machine.
 - [`vignette("render-quality")`](https://r-vellum.github.io/vellum/articles/render-quality.md):
   colour-vision simulation.
 - [`vignette("scene-contract")`](https://r-vellum.github.io/vellum/articles/scene-contract.md):

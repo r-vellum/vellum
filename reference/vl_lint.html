@@ -88,7 +88,18 @@ that is invisible because nothing was ever going to paint it.</p>
 
     <div class="section level2">
     <h2 id="ref-usage">Usage<a class="anchor" aria-label="anchor" href="#ref-usage"></a></h2>
-    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">vl_lint</span><span class="op">(</span><span class="va">scene</span>, rules <span class="op">=</span> <span class="cn">NULL</span>, min_text_px <span class="op">=</span> <span class="fl">7</span>, min_contrast <span class="op">=</span> <span class="fl">3</span><span class="op">)</span></span></code></pre></div>
+    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">vl_lint</span><span class="op">(</span></span>
+<span>  <span class="va">scene</span>,</span>
+<span>  rules <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  exclude <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  severity <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  min_text_px <span class="op">=</span> <span class="fl">7</span>,</span>
+<span>  min_text_pt <span class="op">=</span> <span class="fl">6</span>,</span>
+<span>  min_contrast <span class="op">=</span> <span class="fl">3</span>,</span>
+<span>  max_overplot <span class="op">=</span> <span class="fl">8</span>,</span>
+<span>  cvd <span class="op">=</span> <span class="st">"deuteranopia"</span>,</span>
+<span>  min_cvd_delta <span class="op">=</span> <span class="fl">0.06</span></span>
+<span><span class="op">)</span></span></code></pre></div>
     </div>
 
     <div class="section level2">
@@ -103,9 +114,35 @@ that is invisible because nothing was ever going to paint it.</p>
 <dd><p>Rule ids to run; <code>NULL</code> (default) runs all registered rules.</p></dd>
 
 
+<dt id="arg-exclude">exclude<a class="anchor" aria-label="anchor" href="#arg-exclude"></a></dt>
+<dd><p>Node names (or ids, or kinds) whose findings to drop — the
+deliberate oddity you have already looked at and accepted. Suppression is by
+node because <code>rules</code> already selects rules, and without it a figure with one
+intentional off-canvas mark could never reach a clean lint to assert on. An
+entry matching nothing in the scene warns, since a stale exclude list looks
+exactly like a working one.</p></dd>
+
+
+<dt id="arg-severity">severity<a class="anchor" aria-label="anchor" href="#arg-severity"></a></dt>
+<dd><p>Named character vector overriding a rule's own severity, e.g.
+<code>c(tiny_text = "note")</code>. Useful when a project cares about a rule more, or
+less, than vellum does.</p></dd>
+
+
 <dt id="arg-min-text-px">min_text_px<a class="anchor" aria-label="anchor" href="#arg-min-text-px"></a></dt>
 <dd><p>Text shorter than this many device pixels is flagged as
 illegible. Default <code>7</code>.</p></dd>
+
+
+<dt id="arg-min-text-pt">min_text_pt<a class="anchor" aria-label="anchor" href="#arg-min-text-pt"></a></dt>
+<dd><p>Text smaller than this many points is flagged as
+illegible. Default <code>6</code>.</p>
+<p>The two floors answer different questions and <code>tiny_text</code> fires on either.
+Device pixels decide whether the glyphs survive rasterisation, and points
+decide whether a human can read them — which is why a pixel floor alone is
+not enough: <code>font_px</code> scales with <code>dpi</code>, so a 4 pt label rendered at
+<code>dpi = 300</code> clears a 7 px floor comfortably while remaining illegible on
+paper.</p></dd>
 
 
 <dt id="arg-min-contrast">min_contrast<a class="anchor" aria-label="anchor" href="#arg-min-contrast"></a></dt>
@@ -113,11 +150,39 @@ illegible. Default <code>7</code>.</p></dd>
 <code>low_contrast</code> fires. Default <code>3</code> (WCAG AA for large text); WCAG AA for
 body text is <code>4.5</code>.</p></dd>
 
+
+<dt id="arg-max-overplot">max_overplot<a class="anchor" aria-label="anchor" href="#arg-max-overplot"></a></dt>
+<dd><p>How many times an average pixel inside a batched mark's
+own extent may be painted before <code>overplotted</code> fires. Default <code>8</code>; a
+well-spread scatter sits below <code>1</code>, a few thousand points around <code>4</code>, and a
+dense cluster in the hundreds.</p></dd>
+
+
+<dt id="arg-cvd">cvd<a class="anchor" aria-label="anchor" href="#arg-cvd"></a></dt>
+<dd><p>Colour-vision deficiencies <code>cvd_collision</code> should check:
+<code>"deuteranopia"</code> (the default, and the most common form),
+<code>"protanopia"</code>, <code>"tritanopia"</code>, <code>"achromatopsia"</code> — which doubles as
+"will this survive a greyscale printer" — or <code>"none"</code> to switch the rule
+off. Simulated with the same matrices <code>render(cvd = )</code> draws with.</p></dd>
+
+
+<dt id="arg-min-cvd-delta">min_cvd_delta<a class="anchor" aria-label="anchor" href="#arg-min-cvd-delta"></a></dt>
+<dd><p>How close two colours may come, as an Oklab distance
+after simulation, before <code>cvd_collision</code> calls them the same colour.
+Default <code>0.06</code>. Two references for that number: ggplot2's default
+three-colour palette puts red and green <code>0.325</code> apart in normal vision and
+<code>0.048</code> apart under deuteranopia, while the closest pair in the CVD-safe
+Okabe-Ito palette stays at <code>0.075</code>.</p></dd>
+
 </dl></div>
     <div class="section level2">
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
-    <p>A data frame of findings (<code>rule</code>, <code>severity</code>, <code>node</code>, <code>message</code>),
-empty if the scene is clean. Printing shows a grouped summary.</p>
+    <p>A data frame of findings, empty if the scene is clean: <code>rule</code>,
+<code>severity</code>, <code>node</code>, <code>message</code>, and the finding's device-px box
+(<code>x0</code>, <code>y0</code>, <code>x1</code>, <code>y1</code>, <code>NA</code> where a rule reported something with no
+geometry). Printing shows a grouped summary.</p>
+<p>A rule that fails does not abort the lint: it is reported as a
+<code>rule_error</code> finding naming the rule, and the other rules still run.</p>
     </div>
     <div class="section level2">
     <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>

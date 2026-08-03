@@ -356,8 +356,10 @@ yet.</p>
 pairs with.</li>
 <li>
 <code><a href="../articles/inspecting-scenes.html">vignette("inspecting-scenes")</a></code>: <code><a href="../reference/vl_lint.html">vl_lint()</a></code>,
-which reports overlap and legibility problems rather than fixing
-them.</li>
+which reports these problems rather than fixing them —
+<code>label_overlap</code> for labels that collide with each other,
+<code>label_on_mark</code> for a label swallowing the point it names,
+which is exactly the situation <code><a href="../reference/vl_place.html">vl_repel()</a></code> resolves.</li>
 <li>
 <code><a href="../articles/retained-mode.html">vignette("retained-mode")</a></code>: <code><a href="../reference/node_names.html">edit_node()</a></code>,
 the mechanism <code><a href="../reference/vl_place.html">vl_repel()</a></code> uses to return a modified

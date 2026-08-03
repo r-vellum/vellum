@@ -137,7 +137,7 @@
 <p><strong>Move colliding labels apart, in the engine.</strong> Solved in device pixels and applied as an absolute offset, so faceted, polar and warped panels are all solved <em>together</em>, in one pass, with no second compile.</p>
 <div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="reference/vl_place.html">vl_repel</a></span><span class="op">(</span><span class="va">plot</span><span class="op">)</span>                      <span class="co"># or vl_place(plot) for the answer alone</span></span></code></pre></div>
-<p><strong>Lint a figure before anyone sees it.</strong> Static analysis for graphics: the label too small to read at this size, the mark that will never be painted, the text that will not contrast with what lands behind it.</p>
+<p><strong>Lint a figure before anyone sees it.</strong> Static analysis for graphics: the label too small to read at this size, the mark that will never be painted, the text that will not contrast with what lands behind it, the two palette colours a colour-blind reader sees as one. <code><a href="reference/vl_lint_assert.html">vl_lint_assert()</a></code> turns it into a CI gate and <code><a href="reference/vl_lint_overlay.html">vl_lint_overlay()</a></code> draws the findings onto the figure.</p>
 <div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="reference/vl_scene.html">vl_scene</a></span><span class="op">(</span><span class="fl">4</span>, <span class="fl">2</span>, dpi <span class="op">=</span> <span class="fl">96</span>, bg <span class="op">=</span> <span class="st">"white"</span><span class="op">)</span> <span class="op">|&gt;</span></span>
 <span>  <span class="fu"><a href="reference/vl_scene.html">draw</a></span><span class="op">(</span><span class="fu"><a href="reference/grob.html">text_grob</a></span><span class="op">(</span><span class="st">"n = 120"</span>, x <span class="op">=</span> <span class="fl">0.1</span>, y <span class="op">=</span> <span class="fl">0.9</span>, gp <span class="op">=</span> <span class="fu"><a href="reference/vl_gpar.html">vl_gpar</a></span><span class="op">(</span>fontsize <span class="op">=</span> <span class="fl">2.5</span><span class="op">)</span>,</span>
@@ -147,7 +147,7 @@
 <span>                 name <span class="op">=</span> <span class="st">"watermark"</span><span class="op">)</span><span class="op">)</span> <span class="op">|&gt;</span></span>
 <span>  <span class="fu"><a href="reference/vl_lint.html">vl_lint</a></span><span class="op">(</span><span class="op">)</span></span>
 <span><span class="co">#&gt; 3 lint findings (3 warnings):</span></span>
-<span><span class="co">#&gt; ✖ [low_contrast] watermark: contrast 1.4:1 against its backdrop - below 3:1</span></span>
+<span><span class="co">#&gt; ✖ [low_contrast] watermark: contrast 1.1:1 against its backdrop - below 3:1</span></span>
 <span><span class="co">#&gt; ✖ [offscreen] stray_point: drawn entirely outside the page - check the</span></span>
 <span><span class="co">#&gt;   coordinates or the scale</span></span>
 <span><span class="co">#&gt; ✖ [tiny_text] n_label: 3.3 px tall - below the 7 px legibility floor</span></span></code></pre></div>

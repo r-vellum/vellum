@@ -61,7 +61,12 @@ vl_repel(plot)                      # or vl_place(plot) for the answer alone
 
 **Lint a figure before anyone sees it.** Static analysis for graphics:
 the label too small to read at this size, the mark that will never be
-painted, the text that will not contrast with what lands behind it.
+painted, the text that will not contrast with what lands behind it, the
+two palette colours a colour-blind reader sees as one.
+[`vl_lint_assert()`](https://r-vellum.github.io/vellum/reference/vl_lint_assert.md)
+turns it into a CI gate and
+[`vl_lint_overlay()`](https://r-vellum.github.io/vellum/reference/vl_lint_overlay.md)
+draws the findings onto the figure.
 
 ``` r
 
@@ -73,7 +78,7 @@ vl_scene(4, 2, dpi = 96, bg = "white") |>
                  name = "watermark")) |>
   vl_lint()
 #> 3 lint findings (3 warnings):
-#> ✖ [low_contrast] watermark: contrast 1.4:1 against its backdrop - below 3:1
+#> ✖ [low_contrast] watermark: contrast 1.1:1 against its backdrop - below 3:1
 #> ✖ [offscreen] stray_point: drawn entirely outside the page - check the
 #>   coordinates or the scale
 #> ✖ [tiny_text] n_label: 3.3 px tall - below the 7 px legibility floor
@@ -462,6 +467,10 @@ the resolved geometry the renderer draws with.
 
 - [`vl_lint()`](https://r-vellum.github.io/vellum/reference/vl_lint.md)
   : Check a scene for likely mistakes
+- [`vl_lint_assert()`](https://r-vellum.github.io/vellum/reference/vl_lint_assert.md)
+  : Fail on lint findings
+- [`vl_lint_overlay()`](https://r-vellum.github.io/vellum/reference/vl_lint_overlay.md)
+  : Draw lint findings onto the scene
 - [`vl_lint_rule()`](https://r-vellum.github.io/vellum/reference/vl_lint_rule.md)
   [`vl_lint_rules()`](https://r-vellum.github.io/vellum/reference/vl_lint_rule.md)
   : Register a lint rule

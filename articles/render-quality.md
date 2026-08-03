@@ -83,6 +83,22 @@ vapply(c("none", "protanopia", "deuteranopia", "tritanopia", "achromatopsia"),
 
 `achromatopsia` doubles as a greyscale-printing check.
 
+That measurement is worth doing by hand when you want the number for a
+specific pair. For the general question — *does any pair in this palette
+collapse?* —
+[`vl_lint()`](https://r-vellum.github.io/vellum/reference/vl_lint.md)’s
+`cvd_collision` rule asks it over every colour in the scene, using these
+same matrices and comparing in Oklab rather than in raw channel
+distance:
+
+``` r
+
+vl_lint(swatches, rules = "cvd_collision")
+#> 2 lint findings (2 warnings):
+#> ✖ [cvd_collision] rect: #D62728 and #2CA02C look the same under deuteranopia
+#> ✖ [cvd_collision] rect: #1F77B4 and #9467BD look the same under deuteranopia
+```
+
 **And when the simulation says your palette fails, the fix is texture.**
 Encoding a category by hatch angle as well as hue survives any of these
 simulations, and greyscale printing too — see
@@ -178,7 +194,7 @@ for (spec in list(
 display(s)
 ```
 
-![](render-quality_files/figure-html/unnamed-chunk-9-1.png)
+![](render-quality_files/figure-html/unnamed-chunk-10-1.png)
 
 Left to right: plain, drop shadow, blur, and a glow — which is simply a
 shadow with no offset, so it needs no separate function.
@@ -202,7 +218,8 @@ honour something, it fails visibly.
 
 - [`vignette("inspecting-scenes")`](https://r-vellum.github.io/vellum/articles/inspecting-scenes.md):
   [`vl_lint()`](https://r-vellum.github.io/vellum/reference/vl_lint.md)
-  will flag low-contrast text and illegible labels for you, which pairs
-  directly with the simulation above.
+  will flag low-contrast text, illegible labels, colours that collide
+  under simulation and strokes too thin to render consistently — the
+  checked form of everything on this page.
 - [`vignette("typography")`](https://r-vellum.github.io/vellum/articles/typography.md):
   halos and OpenType features.
