@@ -1,5 +1,13 @@
 # Changelog
 
+## vellum 0.6.7.9000
+
+- **Fix: knitting a scene with a `dpi` chunk option errored.** A YAML
+  `dpi: 150` parses as an `<integer>`, and the display path passed it
+  straight to the scene’s `@dpi` property, which is declared
+  `<double>` - S7 rejected it with
+  `@dpi must be <double>, not <integer>`. The chunk dpi is now coerced.
+
 ## vellum 0.6.7
 
 - **Fix: an animated SVG showed one frame and then near-nothing.** Every

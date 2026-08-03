@@ -13,7 +13,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">vellum</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.6.7</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.6.7.9000</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -66,9 +66,14 @@
 <div class="row">
   <main id="main" class="col-md-9"><div class="page-header">
       <img src="../logo.png" class="logo" alt=""><h1>Changelog</h1>
-      <small>Source: <a href="https://github.com/r-vellum/vellum/blob/v0.6.7/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
+      <small>Source: <a href="https://github.com/r-vellum/vellum/blob/main/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.6.7.9000" id="vellum-0679000">vellum 0.6.7.9000<a class="anchor" aria-label="anchor" href="#vellum-0679000"></a></h2>
+<ul><li>
+<strong>Fix: knitting a scene with a <code>dpi</code> chunk option errored.</strong> A YAML <code>dpi: 150</code> parses as an <code>&lt;integer&gt;</code>, and the display path passed it straight to the scene’s <code>@dpi</code> property, which is declared <code>&lt;double&gt;</code> - S7 rejected it with <code>@dpi must be &lt;double&gt;, not &lt;integer&gt;</code>. The chunk dpi is now coerced.</li>
+</ul></div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.6.7" id="vellum-067">vellum 0.6.7<a class="anchor" aria-label="anchor" href="#vellum-067"></a></h2>
 <ul><li><p><strong>Fix: an animated SVG showed one frame and then near-nothing.</strong> Every frame is rendered separately, so each restarted its <code>&lt;defs&gt;</code> id counters and the whole document ended up with N copies of <code>id="c0"</code>. All N <code>clip-path="url(#c0)"</code> references therefore resolved to the <em>first</em> frame’s clip — which lives inside a <code>visibility:hidden</code> group, and a hidden <code>&lt;clipPath&gt;</code> child contributes no geometry, so the clip was empty for the 47/48 of the cycle when frame 0 was hidden. Everything inside the panel was clipped away, leaving only the axis labels and legend drawn outside it, and the plot appeared to blink once and then vanish. Generated <code>&lt;defs&gt;</code> ids now carry a per-frame prefix.</p></li>
