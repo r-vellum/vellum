@@ -1043,20 +1043,12 @@ print.vellum_lint <- function(x, ...) {
       if (nrow(txt) < 2L) {
         return(NULL)
       }
+      # Every colliding pair, from the sweep. The all-pairs loop this replaces
+      # was the dominant cost of linting a label-heavy scene: 0.25 s for 600
+      # labels, growing quadratically.
+      pairs <- .lint_box_pairs(txt)
       hit <- rep(FALSE, nrow(txt))
-      for (i in seq_len(nrow(txt) - 1L)) {
-        for (j in seq(i + 1L, nrow(txt))) {
-          if (
-            txt$x0[i] < txt$x1[j] &&
-              txt$x1[i] > txt$x0[j] &&
-              txt$y0[i] < txt$y1[j] &&
-              txt$y1[i] > txt$y0[j]
-          ) {
-            hit[i] <- TRUE
-            hit[j] <- TRUE
-          }
-        }
-      }
+      hit[unique(as.vector(pairs))] <- TRUE
       vl_lint_finding(
         "label_overlap",
         "note",
@@ -1371,6 +1363,18 @@ print.vellum_lint <- function(x, ...) {
 
 # The alpha channel alone, vectorised over a packed column.
 .lint_alpha <- function(v) as.numeric(v) %% 256
+
+# Overlapping pairs of rows of a node table, as a two-column matrix of row
+# indices (empty when nothing collides). The sweep lives in Rust because the
+# obvious all-pairs loop is quadratic in interpreted R, and a few hundred labels
+# is an ordinary number of labels.
+.lint_box_pairs <- function(rows, pad = 0) {
+  if (nrow(rows) < 2L) {
+    return(matrix(integer(), ncol = 2L))
+  }
+  boxes <- as.numeric(t(as.matrix(rows[, c("x0", "y0", "x1", "y1")])))
+  matrix(rs_box_overlaps(boxes, pad), ncol = 2L, byrow = TRUE)
+}
 
 # A packed colour as "#RRGGBB", for a message a human has to act on.
 .lint_hex <- function(v) {

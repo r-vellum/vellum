@@ -99,6 +99,14 @@ rs_take_node_times <- function() .Call(wrap__rs_take_node_times)
 #' @keywords internal
 rs_largest_empty_rect <- function(boxes, region, nx, ny) .Call(wrap__rs_largest_empty_rect, boxes, region, nx, ny)
 
+#' Every overlapping pair among `boxes`, as flat 1-based index pairs.
+#'
+#' @param boxes Flat numeric `c(x0, y0, x1, y1, ...)`.
+#' @param pad Grow every box outward by this much before testing.
+#' @return Flat `c(i1, j1, i2, j2, ...)`, 1-based, low index first.
+#' @keywords internal
+rs_box_overlaps <- function(boxes, pad) .Call(wrap__rs_box_overlaps, boxes, pad)
+
 #' Convex or concave hull of a point set, as 1-based point indices in order.
 #'
 #' @param x,y Point coordinates.

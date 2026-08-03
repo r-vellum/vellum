@@ -353,6 +353,17 @@ fn rs_largest_empty_rect(boxes: &[f64], region: &[f64], nx: i32, ny: i32) -> Vec
     place::largest_empty_rect(boxes, r, nx.max(1) as usize, ny.max(1) as usize).to_vec()
 }
 
+/// Every overlapping pair among `boxes`, as flat 1-based index pairs.
+///
+/// @param boxes Flat numeric `c(x0, y0, x1, y1, ...)`.
+/// @param pad Grow every box outward by this much before testing.
+/// @return Flat `c(i1, j1, i2, j2, ...)`, 1-based, low index first.
+/// @keywords internal
+#[extendr]
+fn rs_box_overlaps(boxes: &[f64], pad: f64) -> Vec<i32> {
+    place::box_overlaps(boxes, pad).into_iter().map(|i| i + 1).collect()
+}
+
 /// Convex or concave hull of a point set, as 1-based point indices in order.
 ///
 /// @param x,y Point coordinates.
@@ -463,6 +474,7 @@ extendr_module! {
     fn rs_set_profiling;
     fn rs_take_node_times;
     fn rs_largest_empty_rect;
+    fn rs_box_overlaps;
     fn rs_hull;
     fn rs_path_op;
     fn rs_contour;

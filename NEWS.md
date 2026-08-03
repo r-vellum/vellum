@@ -1,5 +1,15 @@
 # vellum 0.6.7.9000
 
+* **`label_overlap` no longer compares every pair of labels in interpreted R.**
+  The collision search moved to a sort-and-sweep in Rust, which drops a
+  quadratic term: the detection itself goes from 3.02 s to 0.007 s on 2400
+  labels, and a full `vl_lint()` of that scene from 7.78 s to 2.14 s. At a few
+  hundred labels the win is smaller, because compiling the scene dominates
+  either way. Results are unchanged, and a test asserts the sweep agrees with
+  the all-pairs check it replaced. `occluded`, `label_on_mark` and `double_draw`
+  were measured and left alone — their inner loops are already vectorised, and
+  they cost milliseconds on 400 marks.
+
 * **`vl_lint_assert()` turns a lint into a gate**, for a test suite or a CI job,
   without vellum taking a testthat dependency. `severity = "note"` fails on
   anything at all; `on = "warn"` reports without stopping.

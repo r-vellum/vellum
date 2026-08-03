@@ -1,14 +1,63 @@
 //! Geometry services for label placement (Phase 11).
 //!
-//! Three primitives that a layer above vellum would otherwise reimplement, and
-//! that all reduce to "geometry over resolved boxes and points":
+//! Primitives that a layer above vellum would otherwise reimplement, and that
+//! all reduce to "geometry over resolved boxes and points":
 //!
+//! * [`box_overlaps`] — which of these boxes collide?
 //! * [`largest_empty_rect`] — where is there room to put something?
 //! * [`convex_hull`] / [`concave_hull`] — what region does this group occupy?
 //!
 //! Repulsion itself stays on the R side: it runs over tens or hundreds of
 //! boxes, not millions, and its cost is dominated by the single geometry
 //! capture that feeds it.
+
+/// Every pair of overlapping boxes, as flat 0-based index pairs.
+///
+/// `boxes` is a flat `[x0, y0, x1, y1, ...]`; `pad` grows every box outward
+/// before testing, so touching boxes can be treated as clear. Boxes are
+/// half-open: sharing an edge exactly is not an overlap.
+///
+/// Sort the boxes by left edge and sweep, keeping only the boxes whose right
+/// edge is still ahead of the sweep line. The all-pairs loop this replaces is
+/// quadratic in the label count and was the dominant cost of linting a scene
+/// with a few hundred labels; this touches only the pairs that actually share an
+/// x-range, which for a spread-out set of labels is a handful each. The worst
+/// case (every box spanning the full width) is still quadratic, because then
+/// every pair genuinely does overlap in x and the answer itself is quadratic.
+pub fn box_overlaps(boxes: &[f64], pad: f64) -> Vec<i32> {
+    let n = boxes.len() / 4;
+    let get = |i: usize| {
+        (
+            boxes[i * 4] - pad,
+            boxes[i * 4 + 1] - pad,
+            boxes[i * 4 + 2] + pad,
+            boxes[i * 4 + 3] + pad,
+        )
+    };
+    let mut order: Vec<usize> = (0..n).collect();
+    order.sort_by(|&a, &b| {
+        get(a).0.partial_cmp(&get(b).0).unwrap_or(std::cmp::Ordering::Equal)
+    });
+    let mut out: Vec<i32> = Vec::new();
+    // Indices whose right edge has not yet passed the sweep line.
+    let mut active: Vec<usize> = Vec::new();
+    for &i in &order {
+        let (ix0, iy0, _, iy1) = get(i);
+        active.retain(|&j| get(j).2 > ix0);
+        for &j in &active {
+            let (_, jy0, _, jy1) = get(j);
+            if iy1 > jy0 && iy0 < jy1 {
+                // Emitted low index first, so the caller sees each pair once in a
+                // stable order regardless of the sweep order.
+                let (a, b) = if i < j { (i, j) } else { (j, i) };
+                out.push(a as i32);
+                out.push(b as i32);
+            }
+        }
+        active.push(i);
+    }
+    out
+}
 
 /// The largest axis-aligned empty rectangle inside `region`, avoiding `boxes`.
 ///
@@ -203,6 +252,82 @@ pub fn concave_hull(x: &[f64], y: &[f64], concavity: f64) -> Vec<usize> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // Brute-force reference for `box_overlaps`: the quadratic answer, which is
+    // the thing the sweep has to reproduce exactly.
+    fn overlaps_naive(boxes: &[f64], pad: f64) -> Vec<i32> {
+        let n = boxes.len() / 4;
+        let mut out = Vec::new();
+        for i in 0..n {
+            for j in (i + 1)..n {
+                let (ax0, ay0, ax1, ay1) = (
+                    boxes[i * 4] - pad,
+                    boxes[i * 4 + 1] - pad,
+                    boxes[i * 4 + 2] + pad,
+                    boxes[i * 4 + 3] + pad,
+                );
+                let (bx0, by0, bx1, by1) = (
+                    boxes[j * 4] - pad,
+                    boxes[j * 4 + 1] - pad,
+                    boxes[j * 4 + 2] + pad,
+                    boxes[j * 4 + 3] + pad,
+                );
+                if ax1 > bx0 && ax0 < bx1 && ay1 > by0 && ay0 < by1 {
+                    out.push(i as i32);
+                    out.push(j as i32);
+                }
+            }
+        }
+        out
+    }
+
+    fn sorted_pairs(v: Vec<i32>) -> Vec<(i32, i32)> {
+        let mut p: Vec<(i32, i32)> = v.chunks(2).map(|c| (c[0], c[1])).collect();
+        p.sort();
+        p
+    }
+
+    #[test]
+    fn box_overlaps_matches_brute_force_on_a_spread_of_boxes() {
+        // A deterministic pseudo-random spread: enough boxes for the sweep's
+        // active-list pruning to matter, with plenty of genuine collisions.
+        let mut boxes = Vec::new();
+        let mut seed: u64 = 12345;
+        let mut next = || {
+            seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+            ((seed >> 33) as f64) / (u32::MAX as f64 / 2.0)
+        };
+        for _ in 0..200 {
+            let x = next() * 500.0;
+            let y = next() * 500.0;
+            boxes.extend_from_slice(&[x, y, x + 20.0 + next() * 30.0, y + 10.0 + next() * 20.0]);
+        }
+        let swept = sorted_pairs(box_overlaps(&boxes, 0.0));
+        let naive = sorted_pairs(overlaps_naive(&boxes, 0.0));
+        assert!(!naive.is_empty(), "the fixture must actually collide");
+        assert_eq!(swept, naive);
+        // And again with padding, which changes which pairs qualify.
+        assert_eq!(
+            sorted_pairs(box_overlaps(&boxes, 5.0)),
+            sorted_pairs(overlaps_naive(&boxes, 5.0))
+        );
+    }
+
+    #[test]
+    fn box_overlaps_treats_a_shared_edge_as_clear() {
+        // Half-open boxes: touching is not overlapping, so a grid of adjacent
+        // cells reports nothing.
+        let boxes = [0.0, 0.0, 10.0, 10.0, 10.0, 0.0, 20.0, 10.0];
+        assert!(box_overlaps(&boxes, 0.0).is_empty());
+        // Padding turns contact into overlap.
+        assert_eq!(box_overlaps(&boxes, 1.0), vec![0, 1]);
+    }
+
+    #[test]
+    fn box_overlaps_handles_degenerate_input() {
+        assert!(box_overlaps(&[], 0.0).is_empty());
+        assert!(box_overlaps(&[0.0, 0.0, 1.0, 1.0], 0.0).is_empty());
+    }
 
     #[test]
     fn empty_rect_finds_the_gap() {

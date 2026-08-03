@@ -630,6 +630,75 @@ test_that("cvd simulation in the linter matches what render() draws", {
   expect_false(identical(px[1:4], px2))
 })
 
+test_that("the overlap sweep agrees with the all-pairs check it replaced", {
+  # The rewrite that matters: `label_overlap` used to compare every pair in
+  # interpreted R. This is the equivalence test that keeps the sweep honest.
+  naive <- function(txt) {
+    hit <- rep(FALSE, nrow(txt))
+    for (i in seq_len(nrow(txt) - 1L)) {
+      for (j in seq(i + 1L, nrow(txt))) {
+        if (
+          txt$x0[i] < txt$x1[j] &&
+            txt$x1[i] > txt$x0[j] &&
+            txt$y0[i] < txt$y1[j] &&
+            txt$y1[i] > txt$y0[j]
+        ) {
+          hit[i] <- TRUE
+          hit[j] <- TRUE
+        }
+      }
+    }
+    hit
+  }
+  set.seed(42)
+  n <- 120
+  x <- runif(n)
+  y <- runif(n)
+  s <- vl_scene(6, 4, dpi = 96)
+  for (i in seq_len(n)) {
+    s <- draw(
+      s,
+      text_grob(
+        sprintf("lbl%d", i),
+        x = x[i],
+        y = y[i],
+        gp = vl_gpar(fontsize = 9)
+      )
+    )
+  }
+  txt <- as.data.frame(.scene_to_backend(s)$lint_table())
+  pairs <- .lint_box_pairs(txt)
+  swept <- rep(FALSE, nrow(txt))
+  swept[unique(as.vector(pairs))] <- TRUE
+  expect_identical(swept, naive(txt))
+  # And the scene really does have collisions, so this is not a vacuous pass.
+  expect_gt(sum(swept), 0L)
+})
+
+test_that("the overlap sweep handles edges, padding and degenerate input", {
+  boxes <- function(...) as.numeric(c(...))
+  # Sharing an edge exactly is not an overlap.
+  expect_length(rs_box_overlaps(boxes(0, 0, 10, 10, 10, 0, 20, 10), 0), 0L)
+  # Padding closes a gap.
+  expect_equal(
+    rs_box_overlaps(boxes(0, 0, 10, 10, 12, 0, 20, 10), 0),
+    integer()
+  )
+  expect_equal(
+    rs_box_overlaps(boxes(0, 0, 10, 10, 12, 0, 20, 10), 2),
+    c(1L, 2L)
+  )
+  # Overlap in x but not y is not an overlap.
+  expect_length(rs_box_overlaps(boxes(0, 0, 10, 10, 5, 50, 15, 60), 0), 0L)
+  # Pairs come back low index first, and one box cannot collide with itself.
+  expect_equal(rs_box_overlaps(boxes(5, 5, 15, 15, 0, 0, 10, 10), 0), c(1L, 2L))
+  expect_length(rs_box_overlaps(boxes(0, 0, 10, 10), 0), 0L)
+  expect_length(rs_box_overlaps(numeric(), 0), 0L)
+  # Three mutually overlapping boxes give all three pairs.
+  all3 <- rs_box_overlaps(boxes(0, 0, 10, 10, 1, 1, 11, 11, 2, 2, 12, 12), 0)
+  expect_equal(length(all3), 6L)
+})
+
 test_that("low_contrast measures text against its actual backdrop", {
   faint <- vl_scene(3, 2, dpi = 100, bg = "white") |>
     draw(text_grob("faint", gp = vl_gpar(col = "#EEEEEE", fontsize = 20)))
