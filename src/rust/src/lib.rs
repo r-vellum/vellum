@@ -78,6 +78,47 @@ fn rs_set_cvd_mode(kind: &str) {
     scene::set_cvd_mode(mode);
 }
 
+/// Packed `0xRRGGBBAA` colours to Oklab, optionally as a viewer with a
+/// colour-vision deficiency would see them.
+///
+/// One call answers both halves of "are these two colours distinct to everyone":
+/// pass `kind = ""` for normal vision and a deficiency name for the simulated
+/// view, then compare distances in the same perceptual space. It reuses the
+/// render path's own matrices, so the linter cannot drift from what
+/// `render(cvd = )` draws.
+///
+/// @param cols Packed colours as doubles (0xRRGGBBAA).
+/// @param kind A deficiency name, or "" for no simulation.
+/// @return Flattened `L, a, b` triples, three doubles per colour.
+/// @keywords internal
+#[extendr]
+fn rs_cvd_oklab(cols: Vec<f64>, kind: &str) -> Vec<f64> {
+    let sim = if kind.is_empty() || kind == "none" {
+        None
+    } else {
+        match crate::cvd::Cvd::from_name(kind) {
+            Some(k) => Some(k),
+            None => throw_r_error(format!("unknown cvd kind '{kind}'")),
+        }
+    };
+    let mut out = Vec::with_capacity(cols.len() * 3);
+    for v in cols {
+        let p = v.max(0.0) as u32;
+        let mut c = crate::color::Rgba {
+            r: (p >> 24) as u8,
+            g: (p >> 16) as u8,
+            b: (p >> 8) as u8,
+            a: p as u8,
+        };
+        if let Some(k) = sim {
+            c = crate::cvd::simulate(c, k);
+        }
+        let (lab, _) = crate::oklab::rgba_to_oklab(c);
+        out.extend(lab.iter().map(|v| *v as f64));
+    }
+    out
+}
+
 /// Arm or disarm per-node render timing on this thread.
 /// @param on Logical.
 /// @keywords internal
@@ -312,6 +353,17 @@ fn rs_largest_empty_rect(boxes: &[f64], region: &[f64], nx: i32, ny: i32) -> Vec
     place::largest_empty_rect(boxes, r, nx.max(1) as usize, ny.max(1) as usize).to_vec()
 }
 
+/// Every overlapping pair among `boxes`, as flat 1-based index pairs.
+///
+/// @param boxes Flat numeric `c(x0, y0, x1, y1, ...)`.
+/// @param pad Grow every box outward by this much before testing.
+/// @return Flat `c(i1, j1, i2, j2, ...)`, 1-based, low index first.
+/// @keywords internal
+#[extendr]
+fn rs_box_overlaps(boxes: &[f64], pad: f64) -> Vec<i32> {
+    place::box_overlaps(boxes, pad).into_iter().map(|i| i + 1).collect()
+}
+
 /// Convex or concave hull of a point set, as 1-based point indices in order.
 ///
 /// @param x,y Point coordinates.
@@ -416,11 +468,13 @@ extendr_module! {
     fn rs_glyph_sprite_stats;
     fn rs_read_png;
     fn rs_set_cvd_mode;
+    fn rs_cvd_oklab;
     fn rs_set_simplify_tol;
     fn rs_stroke_to_path;
     fn rs_set_profiling;
     fn rs_take_node_times;
     fn rs_largest_empty_rect;
+    fn rs_box_overlaps;
     fn rs_hull;
     fn rs_path_op;
     fn rs_contour;

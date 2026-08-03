@@ -189,9 +189,11 @@ than a tail item.
 
 ## Where to go next
 
-- `vignette("inspecting-scenes")`: `vl_lint()`, whose `low_contrast` and
-  `tiny_text` rules cover the other half of accessibility — whether the figure
-  can be *seen*.
+- `vignette("inspecting-scenes")`: `vl_lint()`, whose `low_contrast`,
+  `tiny_text` and `cvd_collision` rules cover the other half of accessibility —
+  whether the figure can be *seen*. Its `font_fallback` rule is the companion to
+  `font_pin()` below: one asks whether the fonts moved, the other whether a
+  character has any glyph at all on this machine.
 - `vignette("render-quality")`: colour-vision simulation.
 - `vignette("scene-contract")`: what the `id`/`role`/`name` channel promises to
   layers above vellum.

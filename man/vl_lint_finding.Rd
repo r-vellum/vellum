@@ -16,7 +16,9 @@ vl_lint_finding(rule, severity = c("warning", "note"), nodes, message)
 \item{message}{One message, or one per row.}
 }
 \value{
-A data frame of findings.
+A data frame of findings, one row per node, with the node's
+device-px box carried through in \code{x0}/\code{y0}/\code{x1}/\code{y1} so a caller can point
+at the finding on the image. The box is \code{NA} when \code{nodes} has no geometry.
 }
 \description{
 The return shape \code{\link[=vl_lint_rule]{vl_lint_rule()}} functions must produce. Vectorised over

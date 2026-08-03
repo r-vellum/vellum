@@ -48,6 +48,21 @@ rs_read_png <- function(path) .Call(wrap__rs_read_png, path)
 #' @keywords internal
 rs_set_cvd_mode <- function(kind) .Call(wrap__rs_set_cvd_mode, kind)
 
+#' Packed `0xRRGGBBAA` colours to Oklab, optionally as a viewer with a
+#' colour-vision deficiency would see them.
+#'
+#' One call answers both halves of "are these two colours distinct to everyone":
+#' pass `kind = ""` for normal vision and a deficiency name for the simulated
+#' view, then compare distances in the same perceptual space. It reuses the
+#' render path's own matrices, so the linter cannot drift from what
+#' `render(cvd = )` draws.
+#'
+#' @param cols Packed colours as doubles (0xRRGGBBAA).
+#' @param kind A deficiency name, or "" for no simulation.
+#' @return Flattened `L, a, b` triples, three doubles per colour.
+#' @keywords internal
+rs_cvd_oklab <- function(cols, kind) .Call(wrap__rs_cvd_oklab, cols, kind)
+
 #' Set the path-simplification tolerance in device pixels (0 disables).
 #' @param tol Tolerance in device px.
 #' @keywords internal
@@ -83,6 +98,14 @@ rs_take_node_times <- function() .Call(wrap__rs_take_node_times)
 #' @return Numeric `c(x0, y0, x1, y1)`, all zero if there is no room.
 #' @keywords internal
 rs_largest_empty_rect <- function(boxes, region, nx, ny) .Call(wrap__rs_largest_empty_rect, boxes, region, nx, ny)
+
+#' Every overlapping pair among `boxes`, as flat 1-based index pairs.
+#'
+#' @param boxes Flat numeric `c(x0, y0, x1, y1, ...)`.
+#' @param pad Grow every box outward by this much before testing.
+#' @return Flat `c(i1, j1, i2, j2, ...)`, 1-based, low index first.
+#' @keywords internal
+rs_box_overlaps <- function(boxes, pad) .Call(wrap__rs_box_overlaps, boxes, pad)
 
 #' Convex or concave hull of a point set, as 1-based point indices in order.
 #'

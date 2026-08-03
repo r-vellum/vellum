@@ -91,6 +91,15 @@ vapply(c("none", "protanopia", "deuteranopia", "tritanopia", "achromatopsia"),
 
 `achromatopsia` doubles as a greyscale-printing check.
 
+That measurement is worth doing by hand when you want the number for a specific
+pair. For the general question — *does any pair in this palette collapse?* —
+`vl_lint()`'s `cvd_collision` rule asks it over every colour in the scene, using
+these same matrices and comparing in Oklab rather than in raw channel distance:
+
+```{r}
+vl_lint(swatches, rules = "cvd_collision")
+```
+
 **And when the simulation says your palette fails, the fix is texture.** Encoding
 a category by hatch angle as well as hue survives any of these simulations, and
 greyscale printing too — see `vl_hatch()` in `vignette("scene-and-paint")`.
@@ -193,6 +202,7 @@ something, it fails visibly.
 
 ## Where to go next
 
-- `vignette("inspecting-scenes")`: `vl_lint()` will flag low-contrast text and
-  illegible labels for you, which pairs directly with the simulation above.
+- `vignette("inspecting-scenes")`: `vl_lint()` will flag low-contrast text,
+  illegible labels, colours that collide under simulation and strokes too thin to
+  render consistently — the checked form of everything on this page.
 - `vignette("typography")`: halos and OpenType features.

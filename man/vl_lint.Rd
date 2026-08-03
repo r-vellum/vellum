@@ -4,23 +4,78 @@
 \alias{vl_lint}
 \title{Check a scene for likely mistakes}
 \usage{
-vl_lint(scene, rules = NULL, min_text_px = 7, min_contrast = 3)
+vl_lint(
+  scene,
+  rules = NULL,
+  exclude = NULL,
+  severity = NULL,
+  min_text_px = 7,
+  min_text_pt = 6,
+  min_contrast = 3,
+  max_overplot = 8,
+  cvd = "deuteranopia",
+  min_cvd_delta = 0.06
+)
 }
 \arguments{
 \item{scene}{A \code{\link[=vl_scene]{vl_scene()}}, or anything with an \code{\link[=as_vellum_scene]{as_vellum_scene()}} method.}
 
 \item{rules}{Rule ids to run; \code{NULL} (default) runs all registered rules.}
 
+\item{exclude}{Node names (or ids, or kinds) whose findings to drop — the
+deliberate oddity you have already looked at and accepted. Suppression is by
+node because \code{rules} already selects rules, and without it a figure with one
+intentional off-canvas mark could never reach a clean lint to assert on. An
+entry matching nothing in the scene warns, since a stale exclude list looks
+exactly like a working one.}
+
+\item{severity}{Named character vector overriding a rule's own severity, e.g.
+\code{c(tiny_text = "note")}. Useful when a project cares about a rule more, or
+less, than vellum does.}
+
 \item{min_text_px}{Text shorter than this many device pixels is flagged as
 illegible. Default \code{7}.}
+
+\item{min_text_pt}{Text smaller than this many points is flagged as
+illegible. Default \code{6}.
+
+The two floors answer different questions and \code{tiny_text} fires on either.
+Device pixels decide whether the glyphs survive rasterisation, and points
+decide whether a human can read them — which is why a pixel floor alone is
+not enough: \code{font_px} scales with \code{dpi}, so a 4 pt label rendered at
+\code{dpi = 300} clears a 7 px floor comfortably while remaining illegible on
+paper.}
 
 \item{min_contrast}{Minimum text-to-backdrop contrast ratio before
 \code{low_contrast} fires. Default \code{3} (WCAG AA for large text); WCAG AA for
 body text is \code{4.5}.}
+
+\item{max_overplot}{How many times an average pixel inside a batched mark's
+own extent may be painted before \code{overplotted} fires. Default \code{8}; a
+well-spread scatter sits below \code{1}, a few thousand points around \code{4}, and a
+dense cluster in the hundreds.}
+
+\item{cvd}{Colour-vision deficiencies \code{cvd_collision} should check:
+\code{"deuteranopia"} (the default, and the most common form),
+\code{"protanopia"}, \code{"tritanopia"}, \code{"achromatopsia"} — which doubles as
+"will this survive a greyscale printer" — or \code{"none"} to switch the rule
+off. Simulated with the same matrices \code{render(cvd = )} draws with.}
+
+\item{min_cvd_delta}{How close two colours may come, as an Oklab distance
+after simulation, before \code{cvd_collision} calls them the same colour.
+Default \code{0.06}. Two references for that number: ggplot2's default
+three-colour palette puts red and green \code{0.325} apart in normal vision and
+\code{0.048} apart under deuteranopia, while the closest pair in the CVD-safe
+Okabe-Ito palette stays at \code{0.075}.}
 }
 \value{
-A data frame of findings (\code{rule}, \code{severity}, \code{node}, \code{message}),
-empty if the scene is clean. Printing shows a grouped summary.
+A data frame of findings, empty if the scene is clean: \code{rule},
+\code{severity}, \code{node}, \code{message}, and the finding's device-px box
+(\code{x0}, \code{y0}, \code{x1}, \code{y1}, \code{NA} where a rule reported something with no
+geometry). Printing shows a grouped summary.
+
+A rule that fails does not abort the lint: it is reported as a
+\code{rule_error} finding naming the rule, and the other rules still run.
 }
 \description{
 Static analysis for graphics. \code{vl_lint()} resolves the scene and inspects the

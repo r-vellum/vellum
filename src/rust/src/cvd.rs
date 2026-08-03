@@ -88,6 +88,26 @@ fn to_srgb(c: f32) -> f32 {
     }
 }
 
+/// Simulate `kind` for a single sRGB colour.
+///
+/// The same matrices and the same linear-light path as [`apply()`], so a linter
+/// asking "would a viewer see these two fills as one colour" gets the answer the
+/// rendered image would actually show rather than a second, drifting
+/// approximation of it. Alpha is carried through untouched.
+pub fn simulate(c: crate::color::Rgba, kind: Cvd) -> crate::color::Rgba {
+    let m = kind.matrix();
+    let r = to_linear(c.r as f32 / 255.0);
+    let g = to_linear(c.g as f32 / 255.0);
+    let b = to_linear(c.b as f32 / 255.0);
+    let q = |v: f32| (to_srgb(v) * 255.0).round().clamp(0.0, 255.0) as u8;
+    crate::color::Rgba {
+        r: q(m[0] * r + m[1] * g + m[2] * b),
+        g: q(m[3] * r + m[4] * g + m[5] * b),
+        b: q(m[6] * r + m[7] * g + m[8] * b),
+        a: c.a,
+    }
+}
+
 /// Simulate `kind` over a finished pixmap, in place.
 ///
 /// The pixmap is **premultiplied**, so each pixel is un-premultiplied first,
