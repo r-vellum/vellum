@@ -80,8 +80,8 @@ report("time series (polyline)", function() {
 small <- function() {
   vellum::vl_scene(2, 2, dpi = 100) |>
     vellum::draw(vellum::polygon_grob(
-      c(.1, .9, .5),
-      c(.1, .1, .9),
+      c(0.1, 0.9, 0.5),
+      c(0.1, 0.1, 0.9),
       gp = vellum::vl_gpar(fill = "tomato")
     ))
 }

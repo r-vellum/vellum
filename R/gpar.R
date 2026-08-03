@@ -130,7 +130,7 @@ vl_gpar <- S7::new_class(
     return(f)
   }
   nm <- names(f)
-  if (is.null(nm) || any(!nzchar(nm))) {
+  if (is.null(nm) || !all(nzchar(nm))) {
     cli::cli_abort(c(
       "{.arg features} must be a {.emph named} vector of OpenType tags.",
       i = 'For example {.code c(tnum = 1)} or {.code c(liga = 0)}.'

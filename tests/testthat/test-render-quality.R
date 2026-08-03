@@ -117,8 +117,8 @@ test_that("antialias = FALSE gives hard edges", {
   tri <- function(aa) {
     vl_scene(1, 1, dpi = 100, bg = "white") |>
       draw(polygon_grob(
-        c(.1, .9, .5),
-        c(.1, .1, .9),
+        c(0.1, 0.9, 0.5),
+        c(0.1, 0.1, 0.9),
         gp = vl_gpar(fill = "black", col = NA, antialias = aa)
       ))
   }
@@ -131,8 +131,8 @@ test_that("antialias inherits from a viewport", {
   s <- vl_scene(1, 1, dpi = 100, bg = "white") |>
     push(vl_viewport(gp = vl_gpar(antialias = FALSE))) |>
     draw(polygon_grob(
-      c(.1, .9, .5),
-      c(.1, .1, .9),
+      c(0.1, 0.9, 0.5),
+      c(0.1, 0.1, 0.9),
       gp = vl_gpar(fill = "black", col = NA)
     )) |>
     pop()

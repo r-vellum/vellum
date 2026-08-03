@@ -93,12 +93,12 @@ test_that("scene_model() yields a geometry table even without keys/meta", {
 })
 
 test_that("scene_model() includes keyed single-shape marks (path) but not unkeyed ones", {
-  keyed <- path_grob(c(.2, .8, .8), c(.2, .2, .8), gp = vl_gpar(fill = "red"))
+  keyed <- path_grob(c(0.2, 0.8, 0.8), c(0.2, 0.2, 0.8), gp = vl_gpar(fill = "red"))
   keyed@keys <- "county-a"
   keyed@meta <- list(list(tooltip = "County A"))
   sc <- vl_scene(2, 2, dpi = 100) |>
     draw(keyed) |>
-    draw(path_grob(c(.1, .3, .3), c(.1, .1, .3), gp = vl_gpar(fill = "blue"))) # unkeyed
+    draw(path_grob(c(0.1, 0.3, 0.3), c(0.1, 0.1, 0.3), gp = vl_gpar(fill = "blue"))) # unkeyed
   m <- scene_model(sc)
   kr <- m$elements[!is.na(m$elements$key), ]
   expect_equal(nrow(kr), 1L)

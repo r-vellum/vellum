@@ -119,8 +119,8 @@ print(vl_nearest(demo, probe[1], probe[2], n = 2))
 # the region rather than its nearest edge.
 region <- vl_scene(3, 3, dpi = 150, bg = "white") |>
   draw(polygon_grob(
-    c(.2, .8, .5),
-    c(.2, .2, .8),
+    c(0.2, 0.8, 0.5),
+    c(0.2, 0.2, 0.8),
     gp = vl_gpar(fill = "#F1C40F", col = "grey30"),
     key = "tri"
   ))

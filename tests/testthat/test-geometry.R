@@ -23,8 +23,8 @@ test_that("a path below the density threshold is byte-identical", {
   # Ordinary shapes must not be touched at all: every vertex was placed on
   # purpose and there is nothing to win.
   tri <- polygon_grob(
-    c(.1, .9, .5),
-    c(.1, .1, .9),
+    c(0.1, 0.9, 0.5),
+    c(0.1, 0.1, 0.9),
     gp = vl_gpar(fill = "tomato")
   )
   expect_identical(svg_of(tri, 0), svg_of(tri, 0.1))
@@ -163,8 +163,8 @@ test_that("stroke_to_path rejects what it cannot expand", {
 test_that("a closed shape expands too", {
   o <- stroke_to_path(
     polygon_grob(
-      c(.2, .8, .5),
-      c(.2, .2, .8),
+      c(0.2, 0.8, 0.5),
+      c(0.2, 0.2, 0.8),
       gp = vl_gpar(col = "black", lwd = 8)
     ),
     width = 3,

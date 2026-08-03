@@ -171,7 +171,7 @@ vl_convert <- function(
     ))
   }
   # Relative input, or a relative/device target, needs a resolved region.
-  needs_ctx <- any(!is.na(p$code)) || to %in% c("npc", "native", "px")
+  needs_ctx <- !all(is.na(p$code)) || to %in% c("npc", "native", "px")
   ctx <- if (needs_ctx) .convert_context(scene, name, axis) else NULL
 
   npc_code <- .unit_codes[["npc"]]
@@ -464,7 +464,7 @@ vec_arith.vellum_unit.vellum_unit <- function(op, x, y, ...) {
 
 # Convert an absolute unit vector (codes mm/in/pt) to millimetres, element-wise.
 .abs_to_mm <- function(value, code) {
-  if (length(value) && any(!is.finite(value))) {
+  if (length(value) && !all(is.finite(value))) {
     cli::cli_abort(
       "Can't resolve a {.cls unit} with a non-finite value ({.val NA}/{.val NaN}/{.val Inf})."
     )
