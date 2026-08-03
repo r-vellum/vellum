@@ -502,6 +502,153 @@ print.vellum_lint <- function(x, ...) {
   )
 
   vl_lint_rule(
+    "double_draw",
+    function(scene, nodes, ctx) {
+      # Two nodes you cannot tell apart: same kind, same box, same paint. One of
+      # them is doing nothing, and the usual cause is a `draw()` that ran twice.
+      #
+      # Drawing the same box twice is a legitimate idiom when the two differ --
+      # a filled rect and then the same rect with `fill = NA` to put its border
+      # on top -- so the key covers everything about the paint that the node
+      # table can see. It cannot yet see the fill colour, so two same-box rects
+      # in different fills are reported here; the earlier one is invisible in
+      # any case, which is what `occluded` would say about it.
+      paint <- nodes$has_fill == 1L | nodes$has_col == 1L
+      key <- paste(
+        nodes$kind,
+        round(nodes$x0, 1),
+        round(nodes$y0, 1),
+        round(nodes$x1, 1),
+        round(nodes$y1, 1),
+        nodes$n,
+        nodes$has_fill,
+        nodes$has_col,
+        nodes$alpha,
+        nodes$col,
+        nodes$label,
+        sep = "|"
+      )
+      dup <- paint & key %in% key[paint & duplicated(key)]
+      vl_lint_finding(
+        "double_draw",
+        "note",
+        nodes[dup, , drop = FALSE],
+        "an identical mark is drawn in the same place, so one of them is wasted"
+      )
+    },
+    "The same mark is drawn twice in the same place."
+  )
+
+  vl_lint_rule(
+    "occluded",
+    function(scene, nodes, ctx) {
+      # An opaque mark completely covered by a later opaque one: ink that never
+      # reaches the page, and usually a layer ordering mistake.
+      #
+      # The covering kinds are restricted to the marks that actually fill their
+      # bounding box. A circle covers only ~79% of its box, so containment in a
+      # circle's box says nothing -- reporting on it would be wrong, not merely
+      # noisy.
+      solid <- c("rect", "roundrect", "raster")
+      covers <- which(
+        nodes$kind %in% solid & nodes$has_fill == 1L & nodes$alpha >= 1
+      )
+      if (!length(covers)) {
+        return(NULL)
+      }
+      painted <- (nodes$has_fill == 1L | nodes$has_col == 1L) & nodes$alpha > 0
+      hidden <- rep(FALSE, nrow(nodes))
+      by <- character(nrow(nodes))
+      for (j in covers) {
+        # Only what was painted *before* the cover, and never the cover itself.
+        under <- painted &
+          nodes$node < nodes$node[j] &
+          nodes$x0 >= nodes$x0[j] &
+          nodes$y0 >= nodes$y0[j] &
+          nodes$x1 <= nodes$x1[j] &
+          nodes$y1 <= nodes$y1[j]
+        by[under & !hidden] <- if (nzchar(nodes$name[j])) {
+          nodes$name[j]
+        } else {
+          nodes$kind[j]
+        }
+        hidden <- hidden | under
+      }
+      hits <- nodes[hidden, , drop = FALSE]
+      if (!nrow(hits)) {
+        return(NULL)
+      }
+      vl_lint_finding(
+        "occluded",
+        "note",
+        hits,
+        sprintf("completely covered by %s, drawn later", by[hidden])
+      )
+    },
+    "An opaque mark is completely hidden behind a later one."
+  )
+
+  vl_lint_rule(
+    "label_on_mark",
+    function(scene, nodes, ctx) {
+      # A label lying on top of the mark it annotates -- the thing `vl_repel()`
+      # exists to fix. `label_overlap` compares text with text; this is text
+      # against everything else.
+      #
+      # The condition is deliberately narrow, because text over a mark is
+      # normally the whole point: every panel background has labels over it, and
+      # a value label inside a bar is a style, not a defect. So the test is on
+      # the fraction of the MARK that the label covers rather than on overlap
+      # alone, which leaves a small label on a large mark alone and catches a
+      # label swallowing the point it names. Batched nodes are out for the usual
+      # reason -- their box is a union, so it is not any one element's extent.
+      txt <- nodes[nodes$kind == "text" & nodes$n == 1L, , drop = FALSE]
+      marks <- nodes[
+        nodes$kind != "text" &
+          nodes$n == 1L &
+          (nodes$has_fill == 1L | nodes$has_col == 1L) &
+          nodes$alpha > 0,
+        ,
+        drop = FALSE
+      ]
+      if (!nrow(txt) || !nrow(marks)) {
+        return(NULL)
+      }
+      hit <- rep(FALSE, nrow(txt))
+      hidden <- character(nrow(txt))
+      area <- (marks$x1 - marks$x0) * (marks$y1 - marks$y0)
+      for (i in seq_len(nrow(txt))) {
+        ow <- pmin(txt$x1[i], marks$x1) - pmax(txt$x0[i], marks$x0)
+        oh <- pmin(txt$y1[i], marks$y1) - pmax(txt$y0[i], marks$y0)
+        frac <- ifelse(area > 0, pmax(0, ow) * pmax(0, oh) / area, 0)
+        j <- which.max(frac)
+        if (length(j) && frac[j] > 0.25) {
+          hit[i] <- TRUE
+          hidden[i] <- if (nzchar(marks$name[j])) {
+            marks$name[j]
+          } else {
+            marks$kind[j]
+          }
+        }
+      }
+      hits <- txt[hit, , drop = FALSE]
+      if (!nrow(hits)) {
+        return(NULL)
+      }
+      vl_lint_finding(
+        "label_on_mark",
+        "note",
+        hits,
+        sprintf(
+          "hides the %s it sits on - vl_repel() would move it clear",
+          hidden[hit]
+        )
+      )
+    },
+    "A label covers most of the mark it sits on."
+  )
+
+  vl_lint_rule(
     "tiny_text",
     function(scene, nodes, ctx) {
       # Two floors, because `font_px` scales with dpi: a px floor alone stops

@@ -184,6 +184,135 @@ test_that("invisible catches elements nothing will paint", {
   expect_true("invisible" %in% rules_of(vl_lint(zero)))
 })
 
+test_that("double_draw catches an identical mark drawn twice", {
+  s <- vl_scene(3, 2, dpi = 100) |>
+    draw(rect_grob(width = 0.4, height = 0.4, gp = vl_gpar(fill = "red"))) |>
+    draw(rect_grob(width = 0.4, height = 0.4, gp = vl_gpar(fill = "red")))
+  found <- vl_lint(s)
+  # Both nodes are reported: neither is the culprit on its own.
+  expect_equal(sum(found$rule == "double_draw"), 2L)
+})
+
+test_that("double_draw leaves the fill-then-border idiom alone", {
+  # Drawing the same box twice is legitimate when the two differ: a filled rect
+  # and then the same rect with `fill = NA` to put its border on top.
+  s <- vl_scene(3, 2, dpi = 100) |>
+    draw(rect_grob(
+      width = 0.4,
+      height = 0.4,
+      gp = vl_gpar(fill = "red", col = NA)
+    )) |>
+    draw(rect_grob(
+      width = 0.4,
+      height = 0.4,
+      gp = vl_gpar(fill = NA, col = "black")
+    ))
+  expect_false("double_draw" %in% rules_of(vl_lint(s)))
+})
+
+test_that("occluded catches a mark hidden behind a later one", {
+  s <- vl_scene(3, 2, dpi = 100) |>
+    draw(rect_grob(
+      width = 0.3,
+      height = 0.3,
+      gp = vl_gpar(fill = "red"),
+      name = "under"
+    )) |>
+    draw(rect_grob(
+      width = 0.9,
+      height = 0.9,
+      gp = vl_gpar(fill = "blue"),
+      name = "over"
+    ))
+  found <- vl_lint(s)
+  hit <- found[found$rule == "occluded", , drop = FALSE]
+  expect_equal(hit$node, "under")
+  expect_match(hit$message, "covered by over")
+})
+
+test_that("occluded respects paint order and transparency", {
+  # The same two rects the other way round: the small one is on top and visible.
+  ordered <- vl_scene(3, 2, dpi = 100) |>
+    draw(rect_grob(width = 0.9, height = 0.9, gp = vl_gpar(fill = "blue"))) |>
+    draw(rect_grob(width = 0.3, height = 0.3, gp = vl_gpar(fill = "red")))
+  expect_false("occluded" %in% rules_of(vl_lint(ordered)))
+  # A see-through cover hides nothing.
+  ghost <- vl_scene(3, 2, dpi = 100) |>
+    draw(rect_grob(width = 0.3, height = 0.3, gp = vl_gpar(fill = "red"))) |>
+    draw(rect_grob(
+      width = 0.9,
+      height = 0.9,
+      gp = vl_gpar(fill = "blue", alpha = 0.4)
+    ))
+  expect_false("occluded" %in% rules_of(vl_lint(ghost)))
+})
+
+test_that("occluded does not treat a circle's box as a cover", {
+  # A circle fills about 79% of its bounding box, so containment in that box is
+  # not containment in the circle -- reporting it would be wrong, not just noisy.
+  s <- vl_scene(3, 2, dpi = 100) |>
+    draw(rect_grob(width = 0.05, height = 0.5, gp = vl_gpar(fill = "red"))) |>
+    draw(circle_grob(r = 0.4, gp = vl_gpar(fill = "blue")))
+  expect_false("occluded" %in% rules_of(vl_lint(s)))
+})
+
+test_that("label_on_mark catches a label swallowing the point it names", {
+  s <- vl_scene(4, 3, dpi = 96, bg = "white") |>
+    draw(circle_grob(
+      x = 0.4,
+      y = 0.5,
+      r = vl_unit(4, "pt"),
+      gp = vl_gpar(fill = "steelblue", col = NA),
+      name = "pt"
+    )) |>
+    draw(text_grob("Berlin", x = 0.4, y = 0.5, gp = vl_gpar(fontsize = 10)))
+  found <- vl_lint(s)
+  expect_true("label_on_mark" %in% rules_of(found))
+  expect_match(found$message[found$rule == "label_on_mark"], "vl_repel")
+  # Offset clear of the marker, it is fine.
+  ok <- vl_scene(4, 3, dpi = 96, bg = "white") |>
+    draw(circle_grob(
+      x = 0.4,
+      y = 0.5,
+      r = vl_unit(4, "pt"),
+      gp = vl_gpar(fill = "steelblue", col = NA)
+    )) |>
+    draw(text_grob("Berlin", x = 0.4, y = 0.58, gp = vl_gpar(fontsize = 10)))
+  expect_false("label_on_mark" %in% rules_of(vl_lint(ok)))
+})
+
+test_that("the cross-node rules stay quiet on an ordinary plot", {
+  # The noise test. A panel background, bars, value labels above them and a
+  # title: text over marks everywhere, and nothing wrong with any of it.
+  v <- c(3, 7, 5, 9)
+  xs <- seq(0.15, 0.85, length.out = 4)
+  s <- vl_scene(5, 3, dpi = 96, bg = "white") |>
+    draw(rect_grob(
+      x = 0.5,
+      y = 0.5,
+      width = 0.9,
+      height = 0.9,
+      gp = vl_gpar(fill = "grey96", col = NA),
+      name = "panel"
+    )) |>
+    draw(rect_grob(
+      x = xs,
+      y = v / 20,
+      width = 0.12,
+      height = v / 10,
+      gp = vl_gpar(fill = "steelblue", col = NA),
+      name = "bars"
+    )) |>
+    draw(text_grob(
+      as.character(v),
+      x = xs,
+      y = v / 10 + 0.06,
+      gp = vl_gpar(fontsize = 10)
+    )) |>
+    draw(text_grob("Counts", x = 0.5, y = 0.94, gp = vl_gpar(fontsize = 14)))
+  expect_equal(nrow(vl_lint(s)), 0L)
+})
+
 test_that("tiny_text catches illegible labels and respects the threshold", {
   s <- vl_scene(3, 2, dpi = 100) |>
     draw(text_grob("small", gp = vl_gpar(fontsize = 2)))

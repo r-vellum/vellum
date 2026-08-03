@@ -1,5 +1,15 @@
 # vellum 0.6.7.9000
 
+* **Three new lint rules about how marks relate to each other.** `double_draw`
+  reports a mark drawn twice in the same place with the same paint — while
+  leaving the legitimate fill-then-border idiom alone. `occluded` reports an
+  opaque mark completely covered by a later opaque one, which is ink that never
+  reaches the page and usually a layer ordering mistake; only the kinds that
+  really fill their bounding box count as a cover, since a circle fills about
+  79% of its. `label_on_mark` reports a label swallowing the mark it annotates —
+  the case `vl_repel()` exists to fix — and deliberately says nothing about a
+  value label inside a bar or a title over a panel background.
+
 * **Four new lint rules.** `truncated` is the one worth having: `offscreen` and
   `clipped_away` both require a mark to be *entirely* gone, so the defect that
   actually ships — the axis label with its last characters cut off, the title
