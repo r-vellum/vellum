@@ -8,6 +8,13 @@ NULL
 .debug_state <- new.env(parent = emptyenv())
 .debug_state$reg <- NULL
 
+# Swap the active registry. A function (rather than a bare assignment) so the
+# callers below can install it from `on.exit()`.
+.set_debug_reg <- function(reg) {
+  .debug_state$reg <- reg
+  invisible(reg)
+}
+
 # Palette for viewport region outlines (cycled by viewport index).
 .debug_palette <- c(
   "#E41A1C",
@@ -136,8 +143,8 @@ NULL
   reg <- new.env(parent = emptyenv())
   reg$items <- list()
   old <- .debug_state$reg
-  .debug_state$reg <- reg
-  on.exit(.debug_state$reg <- old, add = TRUE)
+  .set_debug_reg(reg)
+  on.exit(.set_debug_reg(old), add = TRUE)
   compile(.materialize(scene), s)
   .debug_state$reg <- old
   list(

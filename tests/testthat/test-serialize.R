@@ -25,10 +25,10 @@ rich_scene <- function() {
     )) |>
     draw(text_grob(md("**bold** and *it*"), y = 0.2)) |>
     draw(segments_grob(
-      .1,
-      .1,
-      .9,
-      .9,
+      0.1,
+      0.1,
+      0.9,
+      0.9,
       gp = vl_gpar(lty = "dashed", dash_phase = 1)
     )) |>
     pop()

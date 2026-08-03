@@ -480,7 +480,7 @@ svg_grob <- function(
     cx <- mean(rx)
     cy <- mean(ry)
   }
-  if (!(span > 0)) {
+  if (span <= 0) {
     return(NULL)
   }
   list(cx = cx, cy = cy, span = span)

@@ -448,7 +448,7 @@ roundrect_grob <- function(
 # segment count (see the render-time clamp in `sector_path`). Named cli error.
 .check_finite_num <- function(v, arg) {
   v <- as.numeric(v)
-  if (length(v) && any(!is.finite(v))) {
+  if (length(v) && !all(is.finite(v))) {
     cli::cli_abort(
       "{.arg {arg}} must be finite (no {.val NA}/{.val NaN}/{.val Inf})."
     )
@@ -1817,7 +1817,7 @@ stroke_to_path <- function(grob, width = 6, height = 4, dpi = 96, gp = NULL) {
   # first; there is no viewport here to ask.
   rel <- unname(.unit_codes[c("npc", "native")])
   abs_codes <- unname(.unit_codes[c("mm", "in", "pt")])
-  if (any(!(code %in% c(rel, abs_codes)))) {
+  if (!all((code %in% c(rel, abs_codes)))) {
     cli::cli_abort(c(
       "{.fn stroke_to_path} needs coordinates it can resolve without a viewport.",
       x = "Found {.val null} units, which only a layout can size.",

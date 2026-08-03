@@ -142,7 +142,7 @@ a seam.
 ```{r}
 tri <- function(aa) {
   vl_scene(1, 1, dpi = 96, bg = "white") |>
-    draw(polygon_grob(c(.1, .9, .5), c(.1, .1, .9),
+    draw(polygon_grob(c(0.1, 0.9, 0.5), c(0.1, 0.1, 0.9),
                       gp = vl_gpar(fill = "black", col = NA, antialias = aa)))
 }
 c(antialiased = length(unique(as.vector(scene_raster(tri(TRUE))[1, , ]))),

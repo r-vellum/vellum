@@ -655,7 +655,7 @@ vl_buffer <- function(x, y, width, arc = 6) {
 # Outward unit normal of the edge (dx, dy) for a ring of orientation `sgn`.
 .unit_normal <- function(dx, dy, sgn) {
   len <- sqrt(dx * dx + dy * dy)
-  if (!(len > 0)) {
+  if (len <= 0) {
     return(c(0, 0))
   }
   c(sgn * dy / len, -sgn * dx / len)

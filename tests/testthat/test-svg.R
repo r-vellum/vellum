@@ -134,15 +134,15 @@ test_that("single-shape grobs (path/lines/polygon) carry a data-key when keyed",
     scene_svg(vl_scene(1, 1, dpi = 100) |> draw(g))
   }
   expect_match(
-    mk(path_grob(c(.2, .8, .8), c(.2, .2, .8), gp = vl_gpar(fill = "red"))),
+    mk(path_grob(c(0.2, 0.8, 0.8), c(0.2, 0.2, 0.8), gp = vl_gpar(fill = "red"))),
     'data-key="feat1"'
   )
   expect_match(
-    mk(polygon_grob(c(.2, .8, .8), c(.2, .2, .8), gp = vl_gpar(fill = "red"))),
+    mk(polygon_grob(c(0.2, 0.8, 0.8), c(0.2, 0.2, 0.8), gp = vl_gpar(fill = "red"))),
     'data-key="feat1"'
   )
   expect_match(
-    mk(lines_grob(c(.2, .8), c(.2, .8), gp = vl_gpar(col = "black", lwd = 2))),
+    mk(lines_grob(c(0.2, 0.8), c(0.2, 0.8), gp = vl_gpar(col = "black", lwd = 2))),
     'data-key="feat1"'
   )
   # unkeyed single-shape grobs emit no data-key (unchanged output)
@@ -150,8 +150,8 @@ test_that("single-shape grobs (path/lines/polygon) carry a data-key when keyed",
     scene_svg(
       vl_scene(1, 1, dpi = 100) |>
         draw(path_grob(
-          c(.2, .8, .8),
-          c(.2, .2, .8),
+          c(0.2, 0.8, 0.8),
+          c(0.2, 0.2, 0.8),
           gp = vl_gpar(fill = "red")
         ))
     ),

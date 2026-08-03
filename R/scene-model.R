@@ -378,8 +378,8 @@ scene_model <- function(scene) {
   reg <- new.env(parent = emptyenv())
   reg$items <- list()
   old <- .debug_state$reg
-  .debug_state$reg <- reg
-  on.exit(.debug_state$reg <- old, add = TRUE)
+  .set_debug_reg(reg)
+  on.exit(.set_debug_reg(old), add = TRUE)
   cid <- .scene_cid(scene)
   backend <- .compile_backend(scene, cid = cid)
   # A cache *hit* would skip the id<->name capture (`.push_vp` only records during a

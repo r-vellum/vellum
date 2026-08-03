@@ -112,7 +112,7 @@ test_that("rules can be selected, and an unknown one errors", {
 })
 
 test_that("a downstream package can register its own rule", {
-  withr::defer(rm("test_rule", envir = vellum:::.lint_rules))
+  withr::defer(rm("test_rule", envir = .lint_rules))
   vl_lint_rule(
     "test_rule",
     function(scene, nodes, ctx) {

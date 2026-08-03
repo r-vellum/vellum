@@ -80,5 +80,5 @@ test_that("why_size() returns the documented record shape", {
   expect_match(w$determined_by, "width = 2in")
   # The print method runs cleanly (dispatch mirrors the package's other internal
   # `print.vellum_*` methods; cli writes via its own connection).
-  expect_no_error(vellum:::print.vellum_why_size(w))
+  expect_no_error(print.vellum_why_size(w))
 })

@@ -407,7 +407,7 @@ print.vellum_mask <- function(x, ...) {
   if (is.numeric(x)) {
     v <- as.integer(x)
     ok <- unique(unname(table))
-    if (any(is.na(v)) || !all(v %in% ok)) {
+    if (anyNA(v) || !all(v %in% ok)) {
       cli::cli_abort(c(
         "{.arg {arg}} code must be one of {.val {ok}}.",
         i = "Or use a name: {.or {names(table)}}."

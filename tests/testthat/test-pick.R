@@ -4,28 +4,28 @@
 
 test_that("lines, polygons, paths, roundrects and text can carry a key", {
   s <- vl_scene(5, 3, dpi = 96, bg = "white") |>
-    draw(lines_grob(c(.1, .9), c(.2, .8), name = "ln", key = "line-1")) |>
+    draw(lines_grob(c(0.1, 0.9), c(0.2, 0.8), name = "ln", key = "line-1")) |>
     draw(polygon_grob(
-      c(.1, .3, .2),
-      c(.6, .6, .9),
+      c(0.1, 0.3, 0.2),
+      c(0.6, 0.6, 0.9),
       name = "pg",
       key = "poly-1"
     )) |>
     draw(path_grob(
-      c(.5, .7, .6),
-      c(.1, .1, .4),
+      c(0.5, 0.7, 0.6),
+      c(0.1, 0.1, 0.4),
       name = "pt",
       key = "path-1"
     )) |>
     draw(roundrect_grob(
-      x = .8,
-      y = .5,
-      width = .15,
-      height = .2,
+      x = 0.8,
+      y = 0.5,
+      width = 0.15,
+      height = 0.2,
       name = "rr",
       key = "rr-1"
     )) |>
-    draw(text_grob("hello", x = .5, y = .95, name = "tx", key = "text-1"))
+    draw(text_grob("hello", x = 0.5, y = 0.95, name = "tx", key = "text-1"))
   el <- scene_model(s)$elements
   expect_setequal(el$key, c("line-1", "poly-1", "path-1", "rr-1", "text-1"))
   expect_setequal(el$mark, c("line", "polygon", "path", "roundrect", "text"))
@@ -36,8 +36,8 @@ test_that("lines, polygons, paths, roundrects and text can carry a key", {
 
 test_that("keyed marks reach the SVG as data-key", {
   s <- vl_scene(4, 2, dpi = 96, bg = "white") |>
-    draw(lines_grob(c(.1, .9), c(.5, .5), key = "ln")) |>
-    draw(text_grob("hi", x = .5, y = .8, key = "tx"))
+    draw(lines_grob(c(0.1, 0.9), c(0.5, 0.5), key = "ln")) |>
+    draw(text_grob("hi", x = 0.5, y = 0.8, key = "tx"))
   svg <- scene_svg(s)
   expect_true(grepl('data-key="ln"', svg, fixed = TRUE))
   expect_true(grepl('data-key="tx"', svg, fixed = TRUE))
@@ -47,8 +47,8 @@ test_that("a vectorised text grob keys each label separately", {
   s <- vl_scene(5, 2, dpi = 96, bg = "white") |>
     draw(text_grob(
       c("a", "b", "c"),
-      x = c(.2, .5, .8),
-      y = .5,
+      x = c(0.2, 0.5, 0.8),
+      y = 0.5,
       name = "lab",
       key = c("t1", "t2", "t3"),
       meta = list(list(v = 1), list(v = 2), list(v = 3))
@@ -64,7 +64,7 @@ test_that("rich (markdown) labels can be keyed too", {
   s <- vl_scene(4, 2, dpi = 96, bg = "white") |>
     draw(text_grob(
       list(md("**a**"), md("*b*")),
-      x = c(.3, .7),
+      x = c(0.3, 0.7),
       key = c("m1", "m2"),
       name = "rich"
     ))
@@ -76,8 +76,8 @@ test_that("unkeyed marks stay out of the element table", {
   # thousands of phantom elements.
   s <- vl_scene(4, 2, dpi = 96, bg = "white") |>
     draw(text_grob("axis label")) |>
-    draw(lines_grob(c(.1, .9), c(.5, .5))) |>
-    draw(polygon_grob(c(.1, .3, .2), c(.6, .6, .9)))
+    draw(lines_grob(c(0.1, 0.9), c(0.5, 0.5))) |>
+    draw(polygon_grob(c(0.1, 0.3, 0.2), c(0.6, 0.6, 0.9)))
   expect_equal(nrow(scene_model(s)$elements), 0L)
 })
 
@@ -85,8 +85,8 @@ test_that("partially keyed text keeps only the keyed labels", {
   s <- vl_scene(5, 2, dpi = 96, bg = "white") |>
     draw(text_grob(
       c("a", "b", "c"),
-      x = c(.2, .5, .8),
-      y = .5,
+      x = c(0.2, 0.5, 0.8),
+      y = 0.5,
       key = c("t1", NA, "t3")
     ))
   expect_equal(scene_model(s)$elements$key, c("t1", "t3"))
@@ -96,8 +96,8 @@ test_that("adding a key changes nothing that is drawn", {
   # Keys are metadata. The raster must be identical with and without them.
   mk <- function(...) {
     vl_scene(4, 2, dpi = 96, bg = "white") |>
-      draw(lines_grob(c(.1, .9), c(.2, .8), ...)) |>
-      draw(text_grob("hi", x = .5, y = .9, ...))
+      draw(lines_grob(c(0.1, 0.9), c(0.2, 0.8), ...)) |>
+      draw(text_grob("hi", x = 0.5, y = 0.9, ...))
   }
   expect_identical(scene_raster(mk()), scene_raster(mk(key = "k")))
   expect_identical(scene_png(mk()), scene_png(mk(key = "k")))
@@ -109,7 +109,7 @@ diag_scene <- function() {
   vl_scene(4, 3, dpi = 96, bg = "white") |>
     draw(segments_grob(0.1, 0.1, 0.9, 0.9, key = "diagonal")) |>
     draw(points_grob(0.8, 0.2, key = "corner")) |>
-    draw(polygon_grob(c(.1, .4, .25), c(.6, .6, .9), key = "tri"))
+    draw(polygon_grob(c(0.1, 0.4, 0.25), c(0.6, 0.6, 0.9), key = "tri"))
 }
 
 test_that("a diagonal is ranked by its geometry, not its bounding box", {
@@ -230,11 +230,11 @@ offset_scene <- function() {
   vl_scene(4, 3, dpi = 100, bg = "white") |>
     push(vl_viewport(x = 0.7, y = 0.7, width = 0.4, height = 0.4)) |>
     draw(segments_grob(0.1, 0.1, 0.9, 0.9, key = "diag")) |>
-    draw(lines_grob(c(.1, .5, .9), c(.2, .8, .2), key = "ln")) |>
-    draw(polygon_grob(c(.2, .8, .5), c(.2, .2, .8), key = "pg")) |>
-    draw(rect_grob(x = .5, y = .5, width = .2, height = .2, key = "rc")) |>
+    draw(lines_grob(c(0.1, 0.5, 0.9), c(0.2, 0.8, 0.2), key = "ln")) |>
+    draw(polygon_grob(c(0.2, 0.8, 0.5), c(0.2, 0.2, 0.8), key = "pg")) |>
+    draw(rect_grob(x = 0.5, y = 0.5, width = 0.2, height = 0.2, key = "rc")) |>
     draw(points_grob(0.5, 0.9, size = vl_unit(3, "mm"), key = "dot")) |>
-    draw(text_grob("hi", x = .5, y = .5, key = "tx"))
+    draw(text_grob("hi", x = 0.5, y = 0.5, key = "tx"))
 }
 
 test_that("element_geometry reports device px in an off-origin viewport", {
@@ -300,11 +300,11 @@ test_that("vl_nearest measures against device coordinates, offset viewport", {
 
 test_that("geometry covers every keyed mark family", {
   s <- vl_scene(5, 3, dpi = 96, bg = "white") |>
-    draw(lines_grob(c(.1, .5, .9), c(.2, .4, .2), key = "ln")) |>
-    draw(polygon_grob(c(.1, .3, .2), c(.6, .6, .9), key = "pg")) |>
-    draw(rect_grob(x = .8, width = .1, height = .1, key = "rc")) |>
-    draw(text_grob("hi", x = .5, y = .9, key = "tx")) |>
-    draw(segments_grob(.1, .1, .4, .15, key = "sg"))
+    draw(lines_grob(c(0.1, 0.5, 0.9), c(0.2, 0.4, 0.2), key = "ln")) |>
+    draw(polygon_grob(c(0.1, 0.3, 0.2), c(0.6, 0.6, 0.9), key = "pg")) |>
+    draw(rect_grob(x = 0.8, width = 0.1, height = 0.1, key = "rc")) |>
+    draw(text_grob("hi", x = 0.5, y = 0.9, key = "tx")) |>
+    draw(segments_grob(0.1, 0.1, 0.4, 0.15, key = "sg"))
   g <- element_geometry(s)
   expect_setequal(
     unique(g$kind),

@@ -5,6 +5,15 @@
   scene's `@dpi` property, which is declared `<double>` - S7 rejected it with
   `@dpi must be <double>, not <integer>`. The chunk dpi is now coerced.
 
+* **Internal: the sources are clean under the `jarl` linter.** Dropped a dead
+  `.diff_body()` helper, hoisted assignments out of `for()` heads and out of
+  `on.exit()` (via a new `.set_debug_reg()` setter), added the leading zero to
+  fractional literals in the vignettes, and removed the redundant `vellum:::`
+  prefix from the test suite, which already evaluates inside the package
+  namespace. The `:::` calls that reach Rust kernels from the vignettes and
+  `inst/` scripts are genuinely required and carry a `# jarl-ignore` with a
+  reason. No user-visible behaviour changes.
+
 # vellum 0.6.7
 
 * **Fix: an animated SVG showed one frame and then near-nothing.** Every frame is

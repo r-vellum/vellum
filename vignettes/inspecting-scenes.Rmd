@@ -134,7 +134,7 @@ other. `scene_stats()` measures what actually reached the canvas:
 
 ```{r}
 cloud <- function(n, sd = NA) {
-  xy <- if (is.na(sd)) list(runif(n), runif(n)) else list(rnorm(n, .5, sd), rnorm(n, .5, sd))
+  xy <- if (is.na(sd)) list(runif(n), runif(n)) else list(rnorm(n, 0.5, sd), rnorm(n, 0.5, sd))
   vl_scene(4, 3, dpi = 96) |>
     draw(points_grob(xy[[1]], xy[[2]], gp = vl_gpar(fill = "steelblue", col = NA)))
 }

@@ -113,7 +113,7 @@ cloud <- function(n, sd) {
   xy <- if (is.na(sd)) {
     list(runif(n), runif(n))
   } else {
-    list(rnorm(n, .5, sd), rnorm(n, .5, sd))
+    list(rnorm(n, 0.5, sd), rnorm(n, 0.5, sd))
   }
   vl_scene(4, 3, dpi = 100) |>
     draw(points_grob(
