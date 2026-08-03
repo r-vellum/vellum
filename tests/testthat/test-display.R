@@ -166,6 +166,24 @@ test_that("display() lets the knitr chunk dpi win when knitting", {
   expect_gt(sharp_knit, .sharpness(f_plain) * 3)
 })
 
+test_that("display() accepts an integer knitr chunk dpi", {
+  # A YAML `dpi: 150` chunk/execute option parses as <integer>, but @dpi is
+  # declared <double> — passing it through unconverted tripped S7 validation.
+  withr::local_options(knitr.in.progress = TRUE)
+  local_mocked_bindings(
+    opts_current = list(get = function(name, ...) {
+      if (identical(name, "dpi")) 150L else NULL
+    }),
+    .package = "knitr"
+  )
+  f <- withr::local_tempfile(fileext = ".png")
+  grDevices::png(f, 4, 3, "in", res = 150)
+  on.exit(grDevices::dev.off(), add = TRUE)
+  s <- vl_scene(4, 3, bg = "white") |>
+    draw(rect_grob(gp = vl_gpar(fill = "blue", col = NA)))
+  expect_no_error(display(s))
+})
+
 test_that("print() and plot() dispatch to display()", {
   f <- withr::local_tempfile(fileext = ".png")
   grDevices::png(f)

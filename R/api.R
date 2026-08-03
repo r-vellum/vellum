@@ -763,6 +763,8 @@ makeContent.vellum_scene_grob <- function(x) {
     error = function(e) NA_real_
   )
   dpi <- knit_dpi %||% (if (is.na(dev_dpi)) x$scene@dpi else max(72, dev_dpi))
+  # A YAML `dpi: 150` chunk option arrives as an integer; @dpi is <double>.
+  dpi <- as.double(dpi)
   s2 <- S7::set_props(
     x$scene,
     width = vl_unit(w_in, "in"),
