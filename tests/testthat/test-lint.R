@@ -845,6 +845,124 @@ test_that("a rule can hand-build a finding without the geometry columns", {
   expect_true(is.na(found$x0))
 })
 
+test_that("exclude drops findings for a node you have accepted", {
+  s <- vl_scene(3, 2, dpi = 96) |>
+    draw(text_grob("off the edge", x = 1.6, y = 0.5, name = "stray")) |>
+    draw(text_grob(
+      "tiny",
+      x = 0.5,
+      y = 0.2,
+      gp = vl_gpar(fontsize = 2),
+      name = "small"
+    ))
+  expect_equal(rules_of(vl_lint(s)), c("offscreen", "tiny_text"))
+  expect_equal(rules_of(vl_lint(s, exclude = "stray")), "tiny_text")
+  expect_equal(nrow(vl_lint(s, exclude = c("stray", "small"))), 0L)
+  # A stale exclude list looks exactly like a working one, so it says so.
+  expect_warning(vl_lint(s, exclude = "strya"), "matches nothing")
+})
+
+test_that("vl_lint_assert fails on findings and passes a clean scene", {
+  s <- vl_scene(3, 2, dpi = 96) |>
+    draw(text_grob("off the edge", x = 1.6, y = 0.5, name = "stray"))
+  expect_error(vl_lint_assert(s), "lint finding")
+  expect_error(vl_lint_assert(s), "offscreen")
+  expect_warning(vl_lint_assert(s, on = "warn"), "lint finding")
+  # Arguments pass through to `vl_lint()`, so a suppressed scene asserts clean.
+  expect_silent(vl_lint_assert(s, exclude = "stray"))
+  clean <- vl_scene(3, 2, dpi = 96) |>
+    draw(text_grob("fine", gp = vl_gpar(fontsize = 12)))
+  expect_equal(nrow(vl_lint_assert(clean)), 0L)
+})
+
+test_that("vl_lint_assert can be made to fail on notes too", {
+  # A note-only scene: a mark cropped by the page edge.
+  s <- vl_scene(2, 2, dpi = 100) |>
+    draw(rect_grob(
+      x = 0.95,
+      width = 0.4,
+      height = 0.3,
+      gp = vl_gpar(fill = "red")
+    ))
+  expect_equal(unique(vl_lint(s)$severity), "note")
+  expect_silent(vl_lint_assert(s))
+  expect_error(vl_lint_assert(s, severity = "note"), "lint finding")
+})
+
+test_that("vl_lint_assert survives a rule message containing braces", {
+  # A finding's message is data, not a glue template.
+  withr::defer(rm("bracey", envir = .lint_rules))
+  vl_lint_rule(
+    "bracey",
+    function(scene, nodes, ctx) {
+      vl_lint_finding(
+        "bracey",
+        "warning",
+        nodes[1, , drop = FALSE],
+        "a {brace} here"
+      )
+    },
+    "braces"
+  )
+  s <- vl_scene(2, 2, dpi = 96) |> draw(rect_grob(width = 0.2, height = 0.2))
+  expect_error(vl_lint_assert(s, rules = "bracey"), "brace")
+})
+
+test_that("vl_lint_overlay boxes every finding that has geometry", {
+  s <- vl_scene(3, 2, dpi = 96) |>
+    draw(text_grob("off the edge", x = 1.6, y = 0.5, name = "stray")) |>
+    draw(text_grob(
+      "tiny",
+      x = 0.5,
+      y = 0.2,
+      gp = vl_gpar(fontsize = 2),
+      name = "small"
+    ))
+  ov <- vl_lint_overlay(s)
+  nms <- node_names(ov)
+  expect_equal(sum(grepl("^lint_box_", nms)), 2L)
+  expect_equal(sum(grepl("^lint_label_", nms)), 2L)
+  expect_false(any(grepl(
+    "^lint_label_",
+    node_names(vl_lint_overlay(s, labels = FALSE))
+  )))
+  # It renders.
+  expect_gt(length(scene_png(ov)), 0L)
+})
+
+test_that("vl_lint_overlay draws at page level, not inside a pushed viewport", {
+  # A scene left inside a viewport would otherwise get the overlay in that
+  # viewport's coordinates, while the boxes are in page npc.
+  s <- vl_scene(3, 2, dpi = 96) |>
+    push(vl_viewport(x = 0.3, y = 0.3, width = 0.3, height = 0.3)) |>
+    draw(text_grob("tiny", gp = vl_gpar(fontsize = 2), name = "small"))
+  n <- as.data.frame(.scene_to_backend(vl_lint_overlay(s))$lint_table())
+  mark <- n[n$name == "small", , drop = FALSE]
+  box <- n[n$name == "lint_box_1", , drop = FALSE]
+  # Different viewports, and the box still surrounds the mark it points at.
+  expect_false(box$vp == mark$vp)
+  expect_lt(box$x0, mark$x0)
+  expect_gt(box$x1, mark$x1)
+})
+
+test_that("vl_lint_overlay merges findings that share a box and skips geometry-free ones", {
+  # One label that is both too small and too faint gets one box naming both.
+  s <- vl_scene(3, 2, dpi = 96, bg = "white") |>
+    draw(text_grob(
+      "faint",
+      gp = vl_gpar(fontsize = 4, col = "#F4F4F4"),
+      name = "t"
+    ))
+  found <- vl_lint(s)
+  expect_gt(length(unique(found$rule)), 1L)
+  ov <- vl_lint_overlay(s)
+  expect_equal(sum(grepl("^lint_box_", node_names(ov))), 1L)
+  # A finding with no geometry has nothing to point at.
+  bare <- found[1, , drop = FALSE]
+  bare[, c("x0", "y0", "x1", "y1")] <- NA_real_
+  expect_equal(node_names(vl_lint_overlay(s, bare)), "t")
+})
+
 test_that("the print method summarises without erroring", {
   # cli writes through conditions rather than stdout, so capture that stream
   # instead of using expect_output.

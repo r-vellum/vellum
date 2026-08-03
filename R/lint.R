@@ -253,6 +253,26 @@ vl_lint_finding <- function(
   out
 }
 
+# Drop findings the caller has accepted. Suppression is by node rather than by
+# rule -- `rules =` already selects rules -- because the usual case is one
+# deliberate oddity in an otherwise clean figure, and without this a project can
+# never reach a clean lint to assert on.
+.lint_exclude <- function(out, exclude, nodes) {
+  if (!length(exclude)) {
+    return(out)
+  }
+  # A stale exclude list is worth hearing about: silently suppressing nothing
+  # looks exactly like suppressing something.
+  known <- unique(c(nodes$name, nodes$id, nodes$kind))
+  unused <- setdiff(exclude, known)
+  if (length(unused)) {
+    cli::cli_warn(
+      "{.arg exclude} matches nothing in this scene: {.val {unused}}."
+    )
+  }
+  out[!out$node %in% exclude, , drop = FALSE]
+}
+
 # A rule that fails is reported, not fatal. The registry is open to downstream
 # packages, so one broken rule must not cost the findings of every other rule --
 # and an opaque `Error in get(id, ...)$fn(...)` does not say which rule broke.
@@ -286,6 +306,12 @@ vl_lint_finding <- function(
 #'
 #' @param scene A [vl_scene()], or anything with an [as_vellum_scene()] method.
 #' @param rules Rule ids to run; `NULL` (default) runs all registered rules.
+#' @param exclude Node names (or ids, or kinds) whose findings to drop — the
+#'   deliberate oddity you have already looked at and accepted. Suppression is by
+#'   node because `rules` already selects rules, and without it a figure with one
+#'   intentional off-canvas mark could never reach a clean lint to assert on. An
+#'   entry matching nothing in the scene warns, since a stale exclude list looks
+#'   exactly like a working one.
 #' @param severity Named character vector overriding a rule's own severity, e.g.
 #'   `c(tiny_text = "note")`. Useful when a project cares about a rule more, or
 #'   less, than vellum does.
@@ -336,6 +362,7 @@ vl_lint_finding <- function(
 vl_lint <- function(
   scene,
   rules = NULL,
+  exclude = NULL,
   severity = NULL,
   min_text_px = 7,
   min_text_pt = 6,
@@ -430,11 +457,157 @@ vl_lint <- function(
     out <- .lint_no_findings()
   } else {
     out <- .lint_reseverity(out, severity)
+    out <- .lint_exclude(out, exclude, nodes)
     # Warnings first, then by rule, so the important things are at the top.
     out <- out[order(out$severity != "warning", out$rule), , drop = FALSE]
     row.names(out) <- NULL
   }
   structure(out, class = c("vellum_lint", class(out)))
+}
+
+#' Fail on lint findings
+#'
+#' `vl_lint()` for a test suite or a CI job: run the rules and stop if anything
+#' turns up. A figure that lints clean today stays that way, in the same spirit
+#' as [font_pin()] and [scene_hash()] — with the difference that this one
+#' catches defects rather than changes.
+#'
+#' @param scene A [vl_scene()], or anything with an [as_vellum_scene()] method.
+#' @param ... Passed to [vl_lint()] — `rules`, `exclude`, the thresholds.
+#' @param severity `"warning"` (default) fails only on warnings; `"note"` fails
+#'   on anything at all.
+#' @param on `"error"` (default) or `"warn"`.
+#' @return Invisibly, the findings that triggered the failure — a zero-row frame
+#'   when the scene is clean.
+#' @seealso [vl_lint()], [vl_lint_overlay()] to see what was reported.
+#' @examples
+#' clean <- vl_scene(3, 2) |> draw(text_grob("fine", gp = vl_gpar(fontsize = 12)))
+#' vl_lint_assert(clean)
+#'
+#' # In a test:
+#' # test_that("the figure has no lint findings", vl_lint_assert(my_plot()))
+#' @export
+vl_lint_assert <- function(
+  scene,
+  ...,
+  severity = c("warning", "note"),
+  on = c("error", "warn")
+) {
+  severity <- match.arg(severity)
+  on <- match.arg(on)
+  found <- vl_lint(scene, ...)
+  bad <- if (severity == "warning") {
+    found[found$severity == "warning", , drop = FALSE]
+  } else {
+    found
+  }
+  if (nrow(bad)) {
+    # Braces are doubled because a rule's message is data, not a glue template,
+    # and a downstream rule is free to put a `{` in one.
+    lines <- gsub(
+      "\\{",
+      "{{",
+      sprintf("[%s] %s: %s", bad$rule, bad$node, bad$message)
+    )
+    lines <- gsub("\\}", "}}", lines)
+    msg <- c(
+      "Scene has {nrow(bad)} lint finding{?s}.",
+      stats::setNames(lines, rep("*", length(lines)))
+    )
+    if (on == "error") {
+      cli::cli_abort(msg)
+    } else {
+      cli::cli_warn(msg)
+    }
+  }
+  invisible(bad)
+}
+
+#' Draw lint findings onto the scene
+#'
+#' Puts a box around every finding that has geometry, and labels it with the
+#' rules that fired. For a graphics linter this is usually the fastest way to
+#' understand a report: a message says a mark is clipped, an outline shows you
+#' which one.
+#'
+#' Findings with no geometry (a `rule_error`, or a rule reporting something
+#' scene-wide) have nothing to point at and are skipped.
+#'
+#' @param scene A [vl_scene()], or anything with an [as_vellum_scene()] method.
+#' @param findings The result of [vl_lint()]. `NULL` (default) lints `scene`.
+#' @param labels Whether to write the rule name beside each box.
+#' @return A new scene: `scene` with the overlay drawn on top, at page level.
+#' @seealso [vl_lint()], [vl_lint_assert()]
+#' @examples
+#' s <- vl_scene(3, 2) |>
+#'   draw(text_grob("off the edge", x = 1.6, y = 0.5)) |>
+#'   draw(text_grob("tiny", x = 0.5, y = 0.2, gp = vl_gpar(fontsize = 2)))
+#' # display(vl_lint_overlay(s))
+#' nrow(vl_lint(s)) > 0
+#' @export
+vl_lint_overlay <- function(scene, findings = NULL, labels = TRUE) {
+  scene <- as_vellum_scene(scene)
+  findings <- findings %||% vl_lint(scene)
+  keep <- is.finite(findings$x0) &
+    is.finite(findings$y0) &
+    is.finite(findings$x1) &
+    is.finite(findings$y1)
+  f <- findings[keep, , drop = FALSE]
+  if (!nrow(f)) {
+    return(scene)
+  }
+  d <- .scene_to_backend(scene)$dim()
+  w <- d[1]
+  h <- d[2]
+  # Findings often share a node -- a label can be both tiny and low-contrast --
+  # so draw one box per distinct box and name every rule that landed on it.
+  key <- paste(
+    round(f$x0, 1),
+    round(f$y0, 1),
+    round(f$x1, 1),
+    round(f$y1, 1),
+    sep = "|"
+  )
+  pad <- 2
+  grobs <- list()
+  for (k in unique(key)) {
+    rows <- f[key == k, , drop = FALSE]
+    warn <- any(rows$severity == "warning")
+    col <- if (warn) "#D62728" else "#FF7F0E"
+    # Outward padding, so the box surrounds the mark instead of coinciding with
+    # it -- and so a zero-size mark still gets something visible.
+    x0 <- rows$x0[1] - pad
+    y0 <- rows$y0[1] - pad
+    x1 <- rows$x1[1] + pad
+    y1 <- rows$y1[1] + pad
+    grobs[[length(grobs) + 1L]] <- rect_grob(
+      x = (x0 + x1) / 2 / w,
+      # Device pixels run y-down and the page runs y-up.
+      y = 1 - (y0 + y1) / 2 / h,
+      width = (x1 - x0) / w,
+      height = (y1 - y0) / h,
+      gp = vl_gpar(fill = NA, col = col, lwd = 1.5),
+      name = paste0("lint_box_", length(grobs) + 1L)
+    )
+    if (labels) {
+      # Above the box, or below it when that would leave the page.
+      above <- y0 - pad
+      grobs[[length(grobs) + 1L]] <- text_grob(
+        paste(unique(rows$rule), collapse = ", "),
+        x = x0 / w,
+        y = if (above > 12) 1 - above / h else 1 - (y1 + 12) / h,
+        just = c("left", "bottom"),
+        gp = vl_gpar(col = col, fontsize = 7),
+        name = paste0("lint_label_", length(grobs) + 1L)
+      )
+    }
+  }
+  # Appended to the ROOT's children, not drawn through `draw()`: a scene left
+  # inside a pushed viewport would otherwise put the overlay in that viewport's
+  # coordinates, and these boxes are in page npc.
+  root <- .materialize(scene)
+  root@children <- c(root@children, grobs)
+  .scene_with_root(scene, root)
 }
 
 #' @export

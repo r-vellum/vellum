@@ -7,6 +7,7 @@
 vl_lint(
   scene,
   rules = NULL,
+  exclude = NULL,
   severity = NULL,
   min_text_px = 7,
   min_text_pt = 6,
@@ -20,6 +21,13 @@ vl_lint(
 \item{scene}{A \code{\link[=vl_scene]{vl_scene()}}, or anything with an \code{\link[=as_vellum_scene]{as_vellum_scene()}} method.}
 
 \item{rules}{Rule ids to run; \code{NULL} (default) runs all registered rules.}
+
+\item{exclude}{Node names (or ids, or kinds) whose findings to drop — the
+deliberate oddity you have already looked at and accepted. Suppression is by
+node because \code{rules} already selects rules, and without it a figure with one
+intentional off-canvas mark could never reach a clean lint to assert on. An
+entry matching nothing in the scene warns, since a stale exclude list looks
+exactly like a working one.}
 
 \item{severity}{Named character vector overriding a rule's own severity, e.g.
 \code{c(tiny_text = "note")}. Useful when a project cares about a rule more, or

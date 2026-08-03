@@ -149,6 +149,8 @@ reference:
     resolved geometry the renderer draws with.
   contents:
   - vl_lint
+  - vl_lint_assert
+  - vl_lint_overlay
   - vl_lint_rule
   - vl_lint_finding
   - scene_stats

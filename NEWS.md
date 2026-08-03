@@ -1,5 +1,23 @@
 # vellum 0.6.7.9000
 
+* **`vl_lint_assert()` turns a lint into a gate**, for a test suite or a CI job,
+  without vellum taking a testthat dependency. `severity = "note"` fails on
+  anything at all; `on = "warn"` reports without stopping.
+
+* **`vl_lint_overlay()` draws the findings onto the scene** — a box round each
+  one, labelled with the rules that fired, red for warnings and orange for
+  notes. For a graphics linter this is usually the faster way to read a report:
+  a message says a mark is clipped, an outline shows you which. It is appended
+  at page level rather than through `draw()`, so a scene left inside a pushed
+  viewport still gets its boxes in page coordinates.
+
+* **`vl_lint(exclude = )` suppresses findings for named nodes.** Suppression is
+  by node, since `rules` already selects rules, and the usual case is one
+  deliberate oddity in an otherwise clean figure — without it a project with a
+  single intentional off-canvas mark could never reach a clean lint to assert on.
+  An entry matching nothing in the scene warns, because a stale exclude list
+  looks exactly like a working one.
+
 * **New rule `font_fallback`: a character no font on this machine can draw.**
   It shapes to glyph 0, `.notdef`, and renders as a tofu box; nothing about the
   label string says so, which is why the shaped glyph stream is the only place
