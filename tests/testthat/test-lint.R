@@ -485,6 +485,36 @@ test_that("label_overlap catches colliding labels only when they collide", {
   expect_false("label_overlap" %in% rules_of(vl_lint(apart)))
 })
 
+test_that("font_fallback catches a character no font on this machine can draw", {
+  # System-dependent by nature -- that a glyph is missing *here* is the whole
+  # point of the rule -- so ask the shaper first and skip where it resolves.
+  s <- vl_scene(3, 1, dpi = 96) |>
+    draw(text_grob("\U0002A6B2 label"))
+  n <- as.data.frame(.scene_to_backend(s)$lint_table())
+  skip_if(n$notdef[1] == 0L, "a font on this machine covers U+2A6B2")
+  found <- vl_lint(s)
+  expect_true("font_fallback" %in% rules_of(found))
+  hit <- found[found$rule == "font_fallback", , drop = FALSE]
+  expect_equal(hit$severity, "warning")
+  expect_match(hit$message, "tofu")
+  # Ordinary text is left alone.
+  ok <- vl_scene(3, 1, dpi = 96) |> draw(text_grob("plain latin text"))
+  expect_false("font_fallback" %in% rules_of(vl_lint(ok)))
+})
+
+test_that("the node table counts notdef glyphs per text node", {
+  s <- vl_scene(3, 1, dpi = 96) |>
+    draw(text_grob("ok")) |>
+    draw(text_grob("\U0002A6B2 x", y = 0.2)) |>
+    draw(rect_grob(width = 0.1, height = 0.1))
+  n <- as.data.frame(.scene_to_backend(s)$lint_table())
+  expect_equal(n$notdef[1], 0L)
+  # Non-text nodes have no glyphs to be missing.
+  expect_equal(n$notdef[3], 0L)
+  skip_if(n$notdef[2] == 0L, "a font on this machine covers U+2A6B2")
+  expect_equal(n$notdef[2], 1L)
+})
+
 bars_of <- function(cols, w = 0.06) {
   s <- vl_scene(6, 3, dpi = 96, bg = "white")
   xs <- seq(0.08, 0.92, length.out = length(cols))

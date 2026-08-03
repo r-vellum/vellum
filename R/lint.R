@@ -48,6 +48,8 @@ NULL
 #'       reasoning about colour must check this before reading `fill`.}
 #'     \item{`lwd_px`}{stroke width in device pixels.}
 #'     \item{`font_px`}{text size in device pixels; `0` for everything else.}
+#'     \item{`notdef`}{how many characters of a text node shaped to glyph 0 —
+#'       no font on this machine has them, and they will render as tofu boxes.}
 #'   }
 #'
 #'   `ctx` carries:
@@ -1007,6 +1009,33 @@ print.vellum_lint <- function(x, ...) {
       )
     },
     "A batched mark overplots itself badly enough to hide its own density."
+  )
+
+  vl_lint_rule(
+    "font_fallback",
+    function(scene, nodes, ctx) {
+      # Glyph 0 is `.notdef`: no font on this machine had the character, so the
+      # renderer draws a tofu box. Nothing about the label string says so, which
+      # is why this needs the shaped glyph stream to see it -- and why it is the
+      # rule most worth having on a machine that is not the author's.
+      hits <- nodes[nodes$kind == "text" & nodes$notdef > 0L, , drop = FALSE]
+      if (!nrow(hits)) {
+        return(NULL)
+      }
+      vl_lint_finding(
+        "font_fallback",
+        "warning",
+        hits,
+        sprintf(
+          "%d character%s no font here can draw - they render as tofu boxes",
+          hits$notdef,
+          ifelse(hits$notdef == 1L, "", "s")
+        )
+      )
+    },
+    "A character has no glyph in any font on this machine.",
+    kinds = "text",
+    tags = "reproducibility"
   )
 
   vl_lint_rule(

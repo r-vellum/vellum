@@ -2060,6 +2060,7 @@ impl Scene {
         let (mut cx0, mut cy0, mut cx1, mut cy1) = (Vec::new(), Vec::new(), Vec::new(), Vec::new());
         let (mut nelem, mut alpha, mut has_fill, mut has_col) = (Vec::new(), Vec::new(), Vec::new(), Vec::new());
         let (mut font_px, mut col_rgba, mut label) = (Vec::new(), Vec::new(), Vec::new());
+        let mut notdef: Vec<i32> = Vec::new();
         // The fill as a colour, plus what kind of paint it is: a gradient or a
         // pattern has no single colour, and a rule that reasons about colour
         // (contrast, CVD confusion) must be able to tell that case apart from a
@@ -2113,13 +2114,20 @@ impl Scene {
             has_col.push(i32::from(gp.col.is_some_and(|c| c.a > 0)));
             // Text-only fields; 0 / "" elsewhere.
             match node {
-                Node::Text { gsize, label: l, .. } => {
+                Node::Text { gsize, label: l, gid, .. } => {
                     font_px.push(gsize.iter().cloned().fold(0.0_f64, f64::max));
                     label.push(l.clone());
+                    // Glyph 0 is `.notdef` by OpenType convention: the shaper
+                    // found no font on this machine with the character and the
+                    // renderer will draw a tofu box. Counted here because the
+                    // shaped glyph stream is the only place that knows -- the
+                    // label string looks perfectly fine.
+                    notdef.push(gid.iter().filter(|&&g| g == 0).count() as i32);
                 }
                 _ => {
                     font_px.push(0.0);
                     label.push(String::new());
+                    notdef.push(0);
                 }
             }
             // Packed as f64, not i32: `0xRRGGBBAA` does not fit in a signed
@@ -2149,7 +2157,7 @@ impl Scene {
             x0 = x0, y0 = y0, x1 = x1, y1 = y1,
             clip_x0 = cx0, clip_y0 = cy0, clip_x1 = cx1, clip_y1 = cy1,
             n = nelem, alpha = alpha, has_fill = has_fill, has_col = has_col,
-            font_px = font_px, col = col_rgba, label = label,
+            font_px = font_px, col = col_rgba, label = label, notdef = notdef,
             fill = fill_rgba, fill_kind = fill_kind, lwd_px = lwd_px,
             vp_x0 = vx0, vp_y0 = vy0, vp_x1 = vx1, vp_y1 = vy1
         )

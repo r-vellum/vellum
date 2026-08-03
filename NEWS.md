@@ -1,5 +1,13 @@
 # vellum 0.6.7.9000
 
+* **New rule `font_fallback`: a character no font on this machine can draw.**
+  It shapes to glyph 0, `.notdef`, and renders as a tofu box; nothing about the
+  label string says so, which is why the shaped glyph stream is the only place
+  that knows. The node table now reports a `notdef` count per text node. This is
+  system-dependent by design — that the glyph is missing *here* is the finding —
+  so it complements `font_pin()`/`font_check()`: a lint on the CI machine catches
+  what looked fine on the author's.
+
 * **New rule `cvd_collision`: two colours a reader is meant to tell apart that a
   colour-blind reader cannot.** Nobody catches this by looking, because the
   person looking can see the difference. The rule takes the scene's solid fills

@@ -50,6 +50,8 @@ red reaches 128). Group alpha is already folded in.}
 reasoning about colour must check this before reading \code{fill}.}
 \item{\code{lwd_px}}{stroke width in device pixels.}
 \item{\code{font_px}}{text size in device pixels; \code{0} for everything else.}
+\item{\code{notdef}}{how many characters of a text node shaped to glyph 0 —
+no font on this machine has them, and they will render as tofu boxes.}
 }
 
 \code{ctx} carries:
