@@ -275,7 +275,7 @@ choropleth region hits the region rather than its nearest border.
 ``` r
 
 region <- vl_scene(3, 3, bg = "white") |>
-  draw(polygon_grob(c(.2, .8, .5), c(.2, .2, .8),
+  draw(polygon_grob(c(0.2, 0.8, 0.5), c(0.2, 0.2, 0.8),
                     gp = vl_gpar(fill = "#F1C40F", col = "grey30"), key = "tri"))
 vl_nearest(region, 0.5, 0.4)
 #>   key    kind dist

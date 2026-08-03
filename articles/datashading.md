@@ -38,6 +38,7 @@ n_points <- 2e6
 
 attractor <- function(kind, p, n = n_points, x0 = 0.1, y0 = 0.1) {
   n <- as.integer(n)
+  # jarl-ignore internal_function: the Rust kernel is internal; the vignette drives it directly
   v <- vellum:::rs_attractor(kind, n, p[1], p[2], p[3], p[4], x0, y0)
   list(x = v[seq_len(n)], y = v[n + seq_len(n)])
 }
@@ -82,6 +83,7 @@ calls an aggregation kernel that is the O(N) heart of the method:
 
 ``` r
 
+# jarl-ignore internal_function: the Rust kernel is internal; the vignette drives it directly
 counts <- vellum:::rs_aggregate_2d(
   pts$x, pts$y,
   NULL,          # optional per-point weights

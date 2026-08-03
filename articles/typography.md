@@ -84,7 +84,8 @@ fits `width` × `height`:
 ``` r
 
 fitted <- vl_scene(6, 2.2, dpi = 96, bg = "white")
-for (i in seq_along(hs <- c(30, 20, 12))) {
+hs <- c(30, 20, 12)
+for (i in seq_along(hs)) {
   x <- c(0.18, 0.5, 0.82)[i]
   fitted <- fitted |>
     draw(rect_grob(x = x, y = 0.45, width = vl_unit(38, "mm"),

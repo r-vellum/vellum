@@ -152,7 +152,7 @@ measures what actually reached the canvas:
 ``` r
 
 cloud <- function(n, sd = NA) {
-  xy <- if (is.na(sd)) list(runif(n), runif(n)) else list(rnorm(n, .5, sd), rnorm(n, .5, sd))
+  xy <- if (is.na(sd)) list(runif(n), runif(n)) else list(rnorm(n, 0.5, sd), rnorm(n, 0.5, sd))
   vl_scene(4, 3, dpi = 96) |>
     draw(points_grob(xy[[1]], xy[[2]], gp = vl_gpar(fill = "steelblue", col = NA)))
 }
@@ -189,14 +189,14 @@ heavy <- vl_scene(6, 4, dpi = 96) |>
 
 profile_render(heavy, reps = 1)
 #> Phases (median of the timed reps):
-#> • build 0.000 s (constructing the R value)
-#> • compile 0.024 s (R -> Rust replay, incl. text shaping)
-#> • raster 0.186 s (drawing)
+#> • build 0.001 s (constructing the R value)
+#> • compile 0.025 s (R -> Rust replay, incl. text shaping)
+#> • raster 0.185 s (drawing)
 #> 
 #> Slowest marks (raster time):
-#> • circle points 20000 elem 0.1184 s 76.7%
-#> • segments edges 2000 elem 0.0333 s 21.6%
-#> • text labels 200 elem 0.0027 s 1.7%
+#> • circle points 20000 elem 0.1176 s 76.7%
+#> • segments edges 2000 elem 0.0331 s 21.6%
+#> • text labels 200 elem 0.0027 s 1.8%
 ```
 
 **Read the phase split first.** A render is three phases: *build*

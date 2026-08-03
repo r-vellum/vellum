@@ -71,8 +71,8 @@
 
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.6.7.9000" id="vellum-0679000">vellum 0.6.7.9000<a class="anchor" aria-label="anchor" href="#vellum-0679000"></a></h2>
-<ul><li>
-<strong>Fix: knitting a scene with a <code>dpi</code> chunk option errored.</strong> A YAML <code>dpi: 150</code> parses as an <code>&lt;integer&gt;</code>, and the display path passed it straight to the scene’s <code>@dpi</code> property, which is declared <code>&lt;double&gt;</code> - S7 rejected it with <code>@dpi must be &lt;double&gt;, not &lt;integer&gt;</code>. The chunk dpi is now coerced.</li>
+<ul><li><p><strong>Fix: knitting a scene with a <code>dpi</code> chunk option errored.</strong> A YAML <code>dpi: 150</code> parses as an <code>&lt;integer&gt;</code>, and the display path passed it straight to the scene’s <code>@dpi</code> property, which is declared <code>&lt;double&gt;</code> - S7 rejected it with <code>@dpi must be &lt;double&gt;, not &lt;integer&gt;</code>. The chunk dpi is now coerced.</p></li>
+<li><p><strong>Internal: the sources are clean under the <code>jarl</code> linter.</strong> Dropped a dead <code>.diff_body()</code> helper, hoisted assignments out of <code>for()</code> heads and out of <code><a href="https://rdrr.io/r/base/on.exit.html" class="external-link">on.exit()</a></code> (via a new <code>.set_debug_reg()</code> setter), added the leading zero to fractional literals in the vignettes, and removed the redundant <code>vellum:::</code> prefix from the test suite, which already evaluates inside the package namespace. The <code>:::</code> calls that reach Rust kernels from the vignettes and <code>inst/</code> scripts are genuinely required and carry a <code># jarl-ignore</code> with a reason. No user-visible behaviour changes.</p></li>
 </ul></div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.6.7" id="vellum-067">vellum 0.6.7<a class="anchor" aria-label="anchor" href="#vellum-067"></a></h2>
