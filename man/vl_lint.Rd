@@ -4,7 +4,13 @@
 \alias{vl_lint}
 \title{Check a scene for likely mistakes}
 \usage{
-vl_lint(scene, rules = NULL, min_text_px = 7, min_contrast = 3)
+vl_lint(
+  scene,
+  rules = NULL,
+  min_text_px = 7,
+  min_text_pt = 6,
+  min_contrast = 3
+)
 }
 \arguments{
 \item{scene}{A \code{\link[=vl_scene]{vl_scene()}}, or anything with an \code{\link[=as_vellum_scene]{as_vellum_scene()}} method.}
@@ -14,13 +20,28 @@ vl_lint(scene, rules = NULL, min_text_px = 7, min_contrast = 3)
 \item{min_text_px}{Text shorter than this many device pixels is flagged as
 illegible. Default \code{7}.}
 
+\item{min_text_pt}{Text smaller than this many points is flagged as
+illegible. Default \code{6}.
+
+The two floors answer different questions and \code{tiny_text} fires on either.
+Device pixels decide whether the glyphs survive rasterisation, and points
+decide whether a human can read them — which is why a pixel floor alone is
+not enough: \code{font_px} scales with \code{dpi}, so a 4 pt label rendered at
+\code{dpi = 300} clears a 7 px floor comfortably while remaining illegible on
+paper.}
+
 \item{min_contrast}{Minimum text-to-backdrop contrast ratio before
 \code{low_contrast} fires. Default \code{3} (WCAG AA for large text); WCAG AA for
 body text is \code{4.5}.}
 }
 \value{
-A data frame of findings (\code{rule}, \code{severity}, \code{node}, \code{message}),
-empty if the scene is clean. Printing shows a grouped summary.
+A data frame of findings, empty if the scene is clean: \code{rule},
+\code{severity}, \code{node}, \code{message}, and the finding's device-px box
+(\code{x0}, \code{y0}, \code{x1}, \code{y1}, \code{NA} where a rule reported something with no
+geometry). Printing shows a grouped summary.
+
+A rule that fails does not abort the lint: it is reported as a
+\code{rule_error} finding naming the rule, and the other rules still run.
 }
 \description{
 Static analysis for graphics. \code{vl_lint()} resolves the scene and inspects the

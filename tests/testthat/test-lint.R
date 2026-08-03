@@ -62,8 +62,26 @@ test_that("tiny_text catches illegible labels and respects the threshold", {
   s <- vl_scene(3, 2, dpi = 100) |>
     draw(text_grob("small", gp = vl_gpar(fontsize = 2)))
   expect_true("tiny_text" %in% rules_of(vl_lint(s)))
-  # Lower the floor below the rendered size and it stops firing.
-  expect_false("tiny_text" %in% rules_of(vl_lint(s, min_text_px = 1)))
+  # Lower both floors below the rendered size and it stops firing.
+  expect_false(
+    "tiny_text" %in% rules_of(vl_lint(s, min_text_px = 1, min_text_pt = 1))
+  )
+  # Lowering only one is not enough: the rule fires on either floor.
+  expect_true("tiny_text" %in% rules_of(vl_lint(s, min_text_px = 1)))
+})
+
+test_that("tiny_text catches illegible text at print resolution", {
+  # 4 pt is unreadable on paper, but at 300 dpi it is 16.7 device px -- well
+  # clear of the pixel floor, so only the point floor can see it.
+  s <- vl_scene(3, 2, dpi = 300) |>
+    draw(text_grob("4pt caption", gp = vl_gpar(fontsize = 4)))
+  found <- vl_lint(s)
+  expect_true("tiny_text" %in% rules_of(found))
+  expect_match(found$message[found$rule == "tiny_text"], "pt legibility floor")
+  # The same label at a size that reads on paper is left alone.
+  ok <- vl_scene(3, 2, dpi = 300) |>
+    draw(text_grob("9pt caption", gp = vl_gpar(fontsize = 9)))
+  expect_false("tiny_text" %in% rules_of(vl_lint(ok)))
 })
 
 test_that("label_overlap catches colliding labels only when they collide", {
@@ -129,6 +147,67 @@ test_that("a downstream package can register its own rule", {
   s <- vl_scene(2, 2, dpi = 100) |>
     draw(circle_grob(gp = vl_gpar(fill = "red")))
   expect_true("test_rule" %in% rules_of(vl_lint(s)))
+})
+
+test_that("findings carry the node's device box", {
+  s <- vl_scene(2, 2, dpi = 100) |>
+    draw(rect_grob(
+      x = 3,
+      width = 0.2,
+      height = 0.2,
+      gp = vl_gpar(fill = "red"),
+      name = "stray"
+    ))
+  found <- vl_lint(s)
+  box <- found[found$node == "stray", c("x0", "y0", "x1", "y1")][1, ]
+  expect_true(all(is.finite(unlist(box))))
+  # x = 3 npc of a 200 px page is 600 px, so the box is off to the right.
+  expect_gt(box$x0, 200)
+})
+
+test_that("a rule that fails is reported, not fatal", {
+  withr::defer(rm("boom", envir = .lint_rules))
+  vl_lint_rule("boom", function(scene, nodes, ctx) stop("kaboom"), "explodes")
+  s <- vl_scene(2, 2, dpi = 100) |> draw(text_grob("x", x = 5))
+  found <- vl_lint(s)
+  expect_true("rule_error" %in% found$rule)
+  err <- found[found$rule == "rule_error", , drop = FALSE]
+  expect_equal(err$node, "boom")
+  expect_match(err$message, "kaboom")
+  # The other rules still ran.
+  expect_true("offscreen" %in% found$rule)
+})
+
+test_that("a rule returning the wrong shape is reported as a rule error", {
+  withr::defer(rm("wrong", envir = .lint_rules))
+  vl_lint_rule(
+    "wrong",
+    function(scene, nodes, ctx) data.frame(oops = 1),
+    "bad shape"
+  )
+  found <- vl_lint(vl_scene(2, 2, dpi = 100))
+  expect_true("rule_error" %in% found$rule)
+  expect_match(found$message[found$rule == "rule_error"], "required column")
+})
+
+test_that("a rule can hand-build a finding without the geometry columns", {
+  withr::defer(rm("bare", envir = .lint_rules))
+  vl_lint_rule(
+    "bare",
+    function(scene, nodes, ctx) {
+      data.frame(
+        rule = "bare",
+        severity = "note",
+        node = "somewhere",
+        message = "no geometry here",
+        stringsAsFactors = FALSE
+      )
+    },
+    "minimal"
+  )
+  found <- vl_lint(vl_scene(2, 2, dpi = 100))
+  expect_equal(nrow(found), 1L)
+  expect_true(is.na(found$x0))
 })
 
 test_that("the print method summarises without erroring", {

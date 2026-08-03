@@ -70,7 +70,9 @@ vl_lint_rules <- function() {
 #' @param severity `"warning"` (likely a real defect) or `"note"`.
 #' @param nodes The matching rows of the node table.
 #' @param message One message, or one per row.
-#' @return A data frame of findings.
+#' @return A data frame of findings, one row per node, with the node's
+#'   device-px box carried through in `x0`/`y0`/`x1`/`y1` so a caller can point
+#'   at the finding on the image. The box is `NA` when `nodes` has no geometry.
 #' @export
 vl_lint_finding <- function(
   rule,
@@ -82,12 +84,78 @@ vl_lint_finding <- function(
   if (is.null(nodes) || !nrow(nodes)) {
     return(NULL)
   }
+  # A rule may match rows of something other than the node table, so take the
+  # box when it is there and say nothing when it is not.
+  box <- function(nm) {
+    if (is.null(nodes[[nm]])) NA_real_ else as.numeric(nodes[[nm]])
+  }
   data.frame(
     rule = rule,
     severity = severity,
     node = ifelse(nzchar(nodes$name), nodes$name, nodes$kind),
     message = rep_len(message, nrow(nodes)),
+    x0 = box("x0"),
+    y0 = box("y0"),
+    x1 = box("x1"),
+    y1 = box("y1"),
     row.names = NULL,
+    stringsAsFactors = FALSE
+  )
+}
+
+# The canonical finding columns. Every rule's return value is coerced to exactly
+# these before the results are stacked.
+.lint_cols <- c("rule", "severity", "node", "message", "x0", "y0", "x1", "y1")
+
+.lint_no_findings <- function() {
+  data.frame(
+    rule = character(),
+    severity = character(),
+    node = character(),
+    message = character(),
+    x0 = numeric(),
+    y0 = numeric(),
+    x1 = numeric(),
+    y1 = numeric(),
+    stringsAsFactors = FALSE
+  )
+}
+
+# Coerce one rule's return value to `.lint_cols`. Rules built on
+# `vl_lint_finding()` already comply; one that hand-builds a data frame may not,
+# and `rbind()` needs every frame to agree on its columns.
+.lint_normalize <- function(x, id) {
+  if (is.null(x) || !nrow(x)) {
+    return(NULL)
+  }
+  absent <- setdiff(c("rule", "severity", "node", "message"), names(x))
+  if (length(absent)) {
+    cli::cli_abort(c(
+      "returned a data frame without the required column{?s} {.field {absent}}",
+      i = "Build findings with {.fn vl_lint_finding}."
+    ))
+  }
+  for (nm in c("x0", "y0", "x1", "y1")) {
+    if (is.null(x[[nm]])) {
+      x[[nm]] <- NA_real_
+    }
+  }
+  x[, .lint_cols, drop = FALSE]
+}
+
+# A rule that fails is reported, not fatal. The registry is open to downstream
+# packages, so one broken rule must not cost the findings of every other rule --
+# and an opaque `Error in get(id, ...)$fn(...)` does not say which rule broke.
+.lint_rule_error <- function(id, e) {
+  data.frame(
+    rule = "rule_error",
+    severity = "warning",
+    node = id,
+    message = paste0("the rule failed: ", conditionMessage(e)),
+    x0 = NA_real_,
+    y0 = NA_real_,
+    x1 = NA_real_,
+    y1 = NA_real_,
     stringsAsFactors = FALSE
   )
 }
@@ -110,11 +178,25 @@ vl_lint_finding <- function(
 #' @param rules Rule ids to run; `NULL` (default) runs all registered rules.
 #' @param min_text_px Text shorter than this many device pixels is flagged as
 #'   illegible. Default `7`.
+#' @param min_text_pt Text smaller than this many points is flagged as
+#'   illegible. Default `6`.
+#'
+#'   The two floors answer different questions and `tiny_text` fires on either.
+#'   Device pixels decide whether the glyphs survive rasterisation, and points
+#'   decide whether a human can read them — which is why a pixel floor alone is
+#'   not enough: `font_px` scales with `dpi`, so a 4 pt label rendered at
+#'   `dpi = 300` clears a 7 px floor comfortably while remaining illegible on
+#'   paper.
 #' @param min_contrast Minimum text-to-backdrop contrast ratio before
 #'   `low_contrast` fires. Default `3` (WCAG AA for large text); WCAG AA for
 #'   body text is `4.5`.
-#' @return A data frame of findings (`rule`, `severity`, `node`, `message`),
-#'   empty if the scene is clean. Printing shows a grouped summary.
+#' @return A data frame of findings, empty if the scene is clean: `rule`,
+#'   `severity`, `node`, `message`, and the finding's device-px box
+#'   (`x0`, `y0`, `x1`, `y1`, `NA` where a rule reported something with no
+#'   geometry). Printing shows a grouped summary.
+#'
+#'   A rule that fails does not abort the lint: it is reported as a
+#'   `rule_error` finding naming the rule, and the other rules still run.
 #' @seealso [vl_lint_rule()], [scene_stats()], [why_size()]
 #' @examples
 #' # A label pushed off the page, and one too small to read.
@@ -123,7 +205,13 @@ vl_lint_finding <- function(
 #'   draw(text_grob("tiny", x = 0.5, y = 0.2, gp = vl_gpar(fontsize = 2)))
 #' vl_lint(s)
 #' @export
-vl_lint <- function(scene, rules = NULL, min_text_px = 7, min_contrast = 3) {
+vl_lint <- function(
+  scene,
+  rules = NULL,
+  min_text_px = 7,
+  min_text_pt = 6,
+  min_contrast = 3
+) {
   scene <- as_vellum_scene(scene)
   s <- .scene_to_backend(scene)
   nodes <- as.data.frame(s$lint_table(), stringsAsFactors = FALSE)
@@ -134,6 +222,7 @@ vl_lint <- function(scene, rules = NULL, min_text_px = 7, min_contrast = 3) {
     h = d[2],
     dpi = scene@dpi,
     min_text_px = min_text_px,
+    min_text_pt = min_text_pt,
     min_contrast = min_contrast,
     # Sampled lazily: most rules never need pixels, and rendering to look at
     # them is the expensive part of linting.
@@ -153,17 +242,14 @@ vl_lint <- function(scene, rules = NULL, min_text_px = 7, min_contrast = 3) {
     cli::cli_abort("Unknown lint rule{?s}: {.val {unknown}}.")
   }
   out <- lapply(sort(ids), function(id) {
-    get(id, envir = .lint_rules)$fn(scene, nodes, ctx)
+    tryCatch(
+      .lint_normalize(get(id, envir = .lint_rules)$fn(scene, nodes, ctx), id),
+      error = function(e) .lint_rule_error(id, e)
+    )
   })
   out <- do.call(rbind, out[!vapply(out, is.null, logical(1))])
   if (is.null(out)) {
-    out <- data.frame(
-      rule = character(),
-      severity = character(),
-      node = character(),
-      message = character(),
-      stringsAsFactors = FALSE
-    )
+    out <- .lint_no_findings()
   } else {
     # Warnings first, then by rule, so the important things are at the top.
     out <- out[order(out$severity != "warning", out$rule), , drop = FALSE]
@@ -267,9 +353,14 @@ print.vellum_lint <- function(x, ...) {
   vl_lint_rule(
     "tiny_text",
     function(scene, nodes, ctx) {
+      # Two floors, because `font_px` scales with dpi: a px floor alone stops
+      # firing on a print-resolution render (4 pt at 300 dpi is 16.7 px, well
+      # clear of a 7 px floor, and still unreadable on paper), and a pt floor
+      # alone misses text that is physically fine but rasterises to mush.
+      pt <- nodes$font_px * 72 / ctx$dpi
       txt <- nodes$kind == "text" &
         nodes$font_px > 0 &
-        nodes$font_px < ctx$min_text_px
+        (nodes$font_px < ctx$min_text_px | pt < ctx$min_text_pt)
       hits <- nodes[txt, , drop = FALSE]
       if (!nrow(hits)) {
         return(NULL)
@@ -278,10 +369,18 @@ print.vellum_lint <- function(x, ...) {
         "tiny_text",
         "warning",
         hits,
-        sprintf(
-          "%.1f px tall - below the %g px legibility floor",
-          hits$font_px,
-          ctx$min_text_px
+        ifelse(
+          hits$font_px < ctx$min_text_px,
+          sprintf(
+            "%.1f px tall - below the %g px legibility floor",
+            hits$font_px,
+            ctx$min_text_px
+          ),
+          sprintf(
+            "%.1f pt - below the %g pt legibility floor",
+            hits$font_px * 72 / ctx$dpi,
+            ctx$min_text_pt
+          )
         )
       )
     },

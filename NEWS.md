@@ -1,5 +1,27 @@
 # vellum 0.6.7.9000
 
+* **`vl_lint()` gained a point-based legibility floor, and `tiny_text` fires on
+  either floor.** `font_px` scales with `dpi`, so the pixel floor alone stopped
+  seeing illegible text on a print-resolution render: a 4 pt label at
+  `dpi = 300` is 16.7 device px and cleared the 7 px default comfortably. The
+  new `min_text_pt` (default `6`) asks the other question — is this readable by
+  a human — and `tiny_text` reports whichever floor was breached. Text between
+  6 pt and the pixel floor may now be flagged where it was not before; pass
+  both arguments to move both floors.
+
+* **Lint findings carry the node's device-px box.** `vl_lint()` now returns
+  `x0`/`y0`/`x1`/`y1` alongside `rule`, `severity`, `node` and `message`, so a
+  caller can point at the finding on the image rather than only describe it.
+  `vl_lint_finding()` fills them from the rows it is handed, and a rule that
+  reports something with no geometry gets `NA`.
+
+* **A failing lint rule is reported instead of aborting the lint.** The rule
+  registry is open to downstream packages, and one broken rule used to lose
+  every other rule's findings behind an opaque
+  `Error in get(id, envir = .lint_rules)$fn(...)`. Failures now come back as a
+  `rule_error` finding naming the rule, as does a rule that returns a data
+  frame without the required columns.
+
 * **Fix: knitting a scene with a `dpi` chunk option errored.** A YAML `dpi: 150`
   parses as an `<integer>`, and the display path passed it straight to the
   scene's `@dpi` property, which is declared `<double>` - S7 rejected it with
