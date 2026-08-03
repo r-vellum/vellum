@@ -83,7 +83,9 @@ vl_repel(plot)                      # or vl_place(plot) for the answer alone
 
 **Lint a figure before anyone sees it.** Static analysis for graphics: the label
 too small to read at this size, the mark that will never be painted, the text
-that will not contrast with what lands behind it.
+that will not contrast with what lands behind it, the two palette colours a
+colour-blind reader sees as one. `vl_lint_assert()` turns it into a CI gate and
+`vl_lint_overlay()` draws the findings onto the figure.
 
 ```{r lint, message = TRUE}
 vl_scene(4, 2, dpi = 96, bg = "white") |>

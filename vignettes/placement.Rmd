@@ -262,7 +262,9 @@ union, which vellum does not have yet.
 ## Where to go next
 
 - `vignette("typography")`: the width-constrained text this pairs with.
-- `vignette("inspecting-scenes")`: `vl_lint()`, which reports overlap and
-  legibility problems rather than fixing them.
+- `vignette("inspecting-scenes")`: `vl_lint()`, which reports these problems
+  rather than fixing them — `label_overlap` for labels that collide with each
+  other, `label_on_mark` for a label swallowing the point it names, which is
+  exactly the situation `vl_repel()` resolves.
 - `vignette("retained-mode")`: `edit_node()`, the mechanism `vl_repel()` uses to
   return a modified scene.
