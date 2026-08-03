@@ -5,26 +5,63 @@
 \alias{vl_lint_rules}
 \title{Register a lint rule}
 \usage{
-vl_lint_rule(name, fn, description = "")
+vl_lint_rule(
+  name,
+  fn,
+  description = "",
+  kinds = NULL,
+  needs_pixels = FALSE,
+  tags = character()
+)
 
 vl_lint_rules()
 }
 \arguments{
 \item{name}{Short rule id, e.g. \code{"tiny_text"}. Re-registering replaces.}
 
-\item{fn}{A function of \verb{(scene, nodes, ctx)} returning a data frame with
-columns \code{rule}, \code{severity} (\code{"warning"}/\code{"note"}), \code{node}, \code{message} — or
-\code{NULL} for "nothing found". \code{nodes} is the resolved per-node table
-(device-px \code{x0}/\code{y0}/\code{x1}/\code{y1}, clip box, \code{kind}, \code{name}, \code{n}, \code{alpha},
-\code{has_fill}, \code{has_col}, \code{font_px}, \code{col}, \code{label}); \code{ctx} carries the page
-size (\code{w}, \code{h}), \code{dpi}, and a \code{pixel(x, y)} sampler over the rendered image.}
+\item{fn}{A function of \verb{(scene, nodes, ctx)} returning a data frame of
+findings — build it with \code{\link[=vl_lint_finding]{vl_lint_finding()}} — or \code{NULL} for "nothing
+found". A rule that fails is reported as a \code{rule_error} finding rather than
+aborting the lint.
+
+\code{nodes} is the resolved per-node table, one row per drawn node in paint
+order: \code{kind}, \code{name}, \code{id}, \code{node} (the paint index), the device-px box
+\code{x0}/\code{y0}/\code{x1}/\code{y1}, the innermost clip box \code{clip_x0}…\code{clip_y1} (the whole
+page when unclipped), \code{n} (elements in the node), \code{alpha}, \code{has_fill},
+\code{has_col}, \code{font_px}, \code{col} (packed \verb{0xRRGGBBAA}) and \code{label}.
+
+\code{ctx} carries:
+\describe{
+\item{\code{w}, \code{h}, \code{dpi}}{the page in device pixels, and its resolution.}
+\item{\code{min_text_px}, \code{min_text_pt}, \code{min_contrast}, \code{max_overplot}}{the
+thresholds \code{\link[=vl_lint]{vl_lint()}} was called with.}
+\item{\code{pixel(x, y)}}{one composited RGBA pixel, as a length-4 vector.}
+\item{\code{region(x0, y0, x1, y1)}}{every composited pixel in a box, as a
+4-column RGBA matrix — cheaper and steadier than probing point by
+point, since a single probe can land on an incidental gridline.}
+\item{\code{elements()}}{the per-element table (\code{key}, \code{panel}, \code{name},
+\code{kind}, \code{node}, box), which is what to use when a node is a batch: a
+scatter is one node whose box is the union over every point.}
+}
+
+\code{pixel()}, \code{region()} and \code{elements()} are all lazy. Rendering the scene to
+look at it is the expensive part of linting, and most rules never need to.}
 
 \item{description}{One line, shown by \code{vl_lint_rules()}.}
+
+\item{kinds}{Node kinds the rule looks at, e.g. \code{"text"}. The rule is skipped
+when the scene contains none of them. \code{NULL} (default) means "any".}
+
+\item{needs_pixels}{Whether the rule renders the scene. Reported by
+\code{vl_lint_rules()} so a caller can select the cheap rules for a tight loop.}
+
+\item{tags}{Free-form labels for grouping rules, e.g. \code{"accessibility"}.}
 }
 \value{
 Invisibly, \code{name}.
 
-\code{vl_lint_rules()}: a data frame of registered rules.
+\code{vl_lint_rules()}: a data frame of registered rules, with the
+\code{kinds} a rule looks at, whether it renders the scene, and its \code{tags}.
 }
 \description{
 Adds a rule to the registry \code{\link[=vl_lint]{vl_lint()}} runs. A package layered on vellum can
@@ -38,7 +75,7 @@ vl_lint_rule("no_hexagons", function(scene, nodes, ctx) {
   hits <- nodes[nodes$kind == "hexagon", , drop = FALSE]
   if (!nrow(hits)) return(NULL)
   vl_lint_finding("no_hexagons", "note", hits, "hexagons are banned here")
-}, "example rule")
+}, "example rule", kinds = "hexagon")
 }
 \seealso{
 \code{\link[=vl_lint]{vl_lint()}}, \code{\link[=vl_lint_rules]{vl_lint_rules()}}

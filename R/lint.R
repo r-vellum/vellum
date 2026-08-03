@@ -17,13 +17,39 @@ NULL
 #' from one `vl_lint()` call.
 #'
 #' @param name Short rule id, e.g. `"tiny_text"`. Re-registering replaces.
-#' @param fn A function of `(scene, nodes, ctx)` returning a data frame with
-#'   columns `rule`, `severity` (`"warning"`/`"note"`), `node`, `message` — or
-#'   `NULL` for "nothing found". `nodes` is the resolved per-node table
-#'   (device-px `x0`/`y0`/`x1`/`y1`, clip box, `kind`, `name`, `n`, `alpha`,
-#'   `has_fill`, `has_col`, `font_px`, `col`, `label`); `ctx` carries the page
-#'   size (`w`, `h`), `dpi`, and a `pixel(x, y)` sampler over the rendered image.
+#' @param fn A function of `(scene, nodes, ctx)` returning a data frame of
+#'   findings — build it with [vl_lint_finding()] — or `NULL` for "nothing
+#'   found". A rule that fails is reported as a `rule_error` finding rather than
+#'   aborting the lint.
+#'
+#'   `nodes` is the resolved per-node table, one row per drawn node in paint
+#'   order: `kind`, `name`, `id`, `node` (the paint index), the device-px box
+#'   `x0`/`y0`/`x1`/`y1`, the innermost clip box `clip_x0`…`clip_y1` (the whole
+#'   page when unclipped), `n` (elements in the node), `alpha`, `has_fill`,
+#'   `has_col`, `font_px`, `col` (packed `0xRRGGBBAA`) and `label`.
+#'
+#'   `ctx` carries:
+#'   \describe{
+#'     \item{`w`, `h`, `dpi`}{the page in device pixels, and its resolution.}
+#'     \item{`min_text_px`, `min_text_pt`, `min_contrast`, `max_overplot`}{the
+#'       thresholds [vl_lint()] was called with.}
+#'     \item{`pixel(x, y)`}{one composited RGBA pixel, as a length-4 vector.}
+#'     \item{`region(x0, y0, x1, y1)`}{every composited pixel in a box, as a
+#'       4-column RGBA matrix — cheaper and steadier than probing point by
+#'       point, since a single probe can land on an incidental gridline.}
+#'     \item{`elements()`}{the per-element table (`key`, `panel`, `name`,
+#'       `kind`, `node`, box), which is what to use when a node is a batch: a
+#'       scatter is one node whose box is the union over every point.}
+#'   }
+#'
+#'   `pixel()`, `region()` and `elements()` are all lazy. Rendering the scene to
+#'   look at it is the expensive part of linting, and most rules never need to.
 #' @param description One line, shown by `vl_lint_rules()`.
+#' @param kinds Node kinds the rule looks at, e.g. `"text"`. The rule is skipped
+#'   when the scene contains none of them. `NULL` (default) means "any".
+#' @param needs_pixels Whether the rule renders the scene. Reported by
+#'   `vl_lint_rules()` so a caller can select the cheap rules for a tight loop.
+#' @param tags Free-form labels for grouping rules, e.g. `"accessibility"`.
 #' @return Invisibly, `name`.
 #' @seealso [vl_lint()], [vl_lint_rules()]
 #' @examples
@@ -31,31 +57,55 @@ NULL
 #'   hits <- nodes[nodes$kind == "hexagon", , drop = FALSE]
 #'   if (!nrow(hits)) return(NULL)
 #'   vl_lint_finding("no_hexagons", "note", hits, "hexagons are banned here")
-#' }, "example rule")
+#' }, "example rule", kinds = "hexagon")
 #' @export
-vl_lint_rule <- function(name, fn, description = "") {
+vl_lint_rule <- function(
+  name,
+  fn,
+  description = "",
+  kinds = NULL,
+  needs_pixels = FALSE,
+  tags = character()
+) {
   if (!is.character(name) || length(name) != 1L) {
     cli::cli_abort("{.arg name} must be a single string.")
   }
   if (!is.function(fn)) {
     cli::cli_abort("{.arg fn} must be a function.")
   }
-  assign(name, list(fn = fn, description = description), envir = .lint_rules)
+  if (!is.null(kinds) && !is.character(kinds)) {
+    cli::cli_abort("{.arg kinds} must be a character vector or {.code NULL}.")
+  }
+  assign(
+    name,
+    list(
+      fn = fn,
+      description = description,
+      kinds = kinds,
+      needs_pixels = isTRUE(needs_pixels),
+      tags = as.character(tags)
+    ),
+    envir = .lint_rules
+  )
   invisible(name)
 }
 
 #' @rdname vl_lint_rule
-#' @return `vl_lint_rules()`: a data frame of registered rules.
+#' @return `vl_lint_rules()`: a data frame of registered rules, with the
+#'   `kinds` a rule looks at, whether it renders the scene, and its `tags`.
 #' @export
 vl_lint_rules <- function() {
   nm <- sort(ls(.lint_rules))
+  meta <- lapply(nm, function(n) get(n, envir = .lint_rules))
+  join <- function(field) {
+    vapply(meta, function(m) paste(m[[field]], collapse = ", "), "")
+  }
   data.frame(
     rule = nm,
-    description = vapply(
-      nm,
-      function(n) get(n, envir = .lint_rules)$description,
-      ""
-    ),
+    description = vapply(meta, function(m) m$description, ""),
+    kinds = join("kinds"),
+    needs_pixels = vapply(meta, function(m) isTRUE(m$needs_pixels), TRUE),
+    tags = join("tags"),
     row.names = NULL,
     stringsAsFactors = FALSE
   )
@@ -153,6 +203,32 @@ vl_lint_finding <- function(
   do.call(rbind, parts)
 }
 
+# Apply the caller's per-rule severity override. A rule declares the severity of
+# each finding, which is the expressive place for it -- `truncated` reports cut
+# text as a warning and a cut mark as a note -- so this reassigns rather than
+# asks the rule again.
+.lint_reseverity <- function(out, severity) {
+  if (is.null(severity)) {
+    return(out)
+  }
+  if (!is.character(severity) || is.null(names(severity))) {
+    cli::cli_abort(
+      "{.arg severity} must be a named character vector, e.g. \\
+       {.code c(tiny_text = \"note\")}."
+    )
+  }
+  bad <- setdiff(severity, c("warning", "note"))
+  if (length(bad)) {
+    cli::cli_abort(
+      "Severity must be {.val warning} or {.val note}, not {.val {bad}}."
+    )
+  }
+  for (r in names(severity)) {
+    out$severity[out$rule == r] <- severity[[r]]
+  }
+  out
+}
+
 # A rule that fails is reported, not fatal. The registry is open to downstream
 # packages, so one broken rule must not cost the findings of every other rule --
 # and an opaque `Error in get(id, ...)$fn(...)` does not say which rule broke.
@@ -186,6 +262,9 @@ vl_lint_finding <- function(
 #'
 #' @param scene A [vl_scene()], or anything with an [as_vellum_scene()] method.
 #' @param rules Rule ids to run; `NULL` (default) runs all registered rules.
+#' @param severity Named character vector overriding a rule's own severity, e.g.
+#'   `c(tiny_text = "note")`. Useful when a project cares about a rule more, or
+#'   less, than vellum does.
 #' @param min_text_px Text shorter than this many device pixels is flagged as
 #'   illegible. Default `7`.
 #' @param min_text_pt Text smaller than this many points is flagged as
@@ -200,6 +279,10 @@ vl_lint_finding <- function(
 #' @param min_contrast Minimum text-to-backdrop contrast ratio before
 #'   `low_contrast` fires. Default `3` (WCAG AA for large text); WCAG AA for
 #'   body text is `4.5`.
+#' @param max_overplot How many times an average pixel inside a batched mark's
+#'   own extent may be painted before `overplotted` fires. Default `8`; a
+#'   well-spread scatter sits below `1`, a few thousand points around `4`, and a
+#'   dense cluster in the hundreds.
 #' @return A data frame of findings, empty if the scene is clean: `rule`,
 #'   `severity`, `node`, `message`, and the finding's device-px box
 #'   (`x0`, `y0`, `x1`, `y1`, `NA` where a rule reported something with no
@@ -218,15 +301,29 @@ vl_lint_finding <- function(
 vl_lint <- function(
   scene,
   rules = NULL,
+  severity = NULL,
   min_text_px = 7,
   min_text_pt = 6,
-  min_contrast = 3
+  min_contrast = 3,
+  max_overplot = 8
 ) {
   scene <- as_vellum_scene(scene)
   s <- .scene_to_backend(scene)
   nodes <- as.data.frame(s$lint_table(), stringsAsFactors = FALSE)
   d <- s$dim()
+  # Everything that costs a render or a second backend call is behind a closure
+  # and memoised: most rules never need pixels, and rasterising the scene to
+  # look at it is the expensive part of linting.
   raster <- NULL
+  pixels <- function() {
+    if (is.null(raster)) {
+      raster <<- s$rgba()
+    }
+    raster
+  }
+  elements <- NULL
+  clampx <- function(x) pmax(1L, pmin(d[1], as.integer(round(x))))
+  clampy <- function(y) pmax(1L, pmin(d[2], as.integer(round(y))))
   ctx <- list(
     w = d[1],
     h = d[2],
@@ -234,16 +331,36 @@ vl_lint <- function(
     min_text_px = min_text_px,
     min_text_pt = min_text_pt,
     min_contrast = min_contrast,
-    # Sampled lazily: most rules never need pixels, and rendering to look at
-    # them is the expensive part of linting.
+    max_overplot = max_overplot,
     pixel = function(x, y) {
-      if (is.null(raster)) {
-        raster <<- s$rgba()
+      px <- pixels()
+      i <- ((clampy(y) - 1L) * d[1] + (clampx(x) - 1L)) * 4L
+      px[i + 1:4]
+    },
+    # Every pixel in a box, as a 4-column RGBA matrix. A single probe can land
+    # on an incidental gridline; a block cannot.
+    region = function(x0, y0, x1, y1) {
+      px <- pixels()
+      xs <- seq.int(clampx(min(x0, x1)), clampx(max(x0, x1)))
+      ys <- seq.int(clampy(min(y0, y1)), clampy(max(y0, y1)))
+      i <- rep((ys - 1L) * d[1], each = length(xs)) + rep(xs - 1L, length(ys))
+      matrix(
+        px[rep(i * 4L, each = 4L) + seq_len(4L)],
+        ncol = 4L,
+        byrow = TRUE,
+        dimnames = list(NULL, c("r", "g", "b", "a"))
+      )
+    },
+    # Per-element geometry. A batched mark is ONE node whose box is the union
+    # over every element, so this is the only honest view of a scatter.
+    elements = function() {
+      if (is.null(elements)) {
+        elements <<- as.data.frame(
+          s$element_table(),
+          stringsAsFactors = FALSE
+        )
       }
-      x <- max(1L, min(d[1], as.integer(round(x))))
-      y <- max(1L, min(d[2], as.integer(round(y))))
-      i <- ((y - 1L) * d[1] + (x - 1L)) * 4L
-      raster[i + 1:4]
+      elements
     }
   )
   ids <- if (is.null(rules)) ls(.lint_rules) else rules
@@ -252,8 +369,14 @@ vl_lint <- function(
     cli::cli_abort("Unknown lint rule{?s}: {.val {unknown}}.")
   }
   out <- lapply(sort(ids), function(id) {
+    rule <- get(id, envir = .lint_rules)
+    # A rule that declares the kinds it reads is skipped when the scene has
+    # none of them, which is both a saving and a statement of intent.
+    if (!is.null(rule$kinds) && !any(nodes$kind %in% rule$kinds)) {
+      return(NULL)
+    }
     tryCatch(
-      .lint_normalize(get(id, envir = .lint_rules)$fn(scene, nodes, ctx), id),
+      .lint_normalize(rule$fn(scene, nodes, ctx), id),
       error = function(e) .lint_rule_error(id, e)
     )
   })
@@ -261,6 +384,7 @@ vl_lint <- function(
   if (is.null(out)) {
     out <- .lint_no_findings()
   } else {
+    out <- .lint_reseverity(out, severity)
     # Warnings first, then by rule, so the important things are at the top.
     out <- out[order(out$severity != "warning", out$rule), , drop = FALSE]
     row.names(out) <- NULL
@@ -473,7 +597,8 @@ print.vellum_lint <- function(x, ...) {
         "the label is empty or all whitespace, so this draws nothing"
       )
     },
-    "A text mark has no visible characters."
+    "A text mark has no visible characters.",
+    kinds = "text"
   )
 
   vl_lint_rule(
@@ -645,7 +770,8 @@ print.vellum_lint <- function(x, ...) {
         )
       )
     },
-    "A label covers most of the mark it sits on."
+    "A label covers most of the mark it sits on.",
+    kinds = "text"
   )
 
   vl_lint_rule(
@@ -682,7 +808,8 @@ print.vellum_lint <- function(x, ...) {
         )
       )
     },
-    "Text is too small to read at the rendered size."
+    "Text is too small to read at the rendered size.",
+    kinds = "text"
   )
 
   vl_lint_rule(
@@ -713,7 +840,45 @@ print.vellum_lint <- function(x, ...) {
         "its box overlaps another label"
       )
     },
-    "Two text labels overlap."
+    "Two text labels overlap.",
+    kinds = "text"
+  )
+
+  vl_lint_rule(
+    "overplotted",
+    function(scene, nodes, ctx) {
+      # How many times an average pixel inside a batch's own extent was painted.
+      # Measured per node from the element boxes, so it names the layer to fix
+      # rather than the scene, and needs no render: a count of marks says
+      # nothing about whether they overlap, and overlap is the thing that
+      # decides whether a scatter is readable or a blob.
+      el <- ctx$elements()
+      batches <- nodes[nodes$n > 1L, , drop = FALSE]
+      if (!nrow(el) || !nrow(batches)) {
+        return(NULL)
+      }
+      area <- (pmax(0, el$x1 - el$x0) * pmax(0, el$y1 - el$y0))
+      per <- vapply(batches$node, function(i) sum(area[el$node == i]), 0)
+      box <- (batches$x1 - batches$x0) * (batches$y1 - batches$y0)
+      # Bounding boxes over-estimate for round marks (a circle fills ~79% of
+      # its box), so this is an index, not a measurement -- the same caveat
+      # `scene_stats()` carries.
+      density <- ifelse(box > 0, per / box, 0)
+      hits <- batches[density > ctx$max_overplot, , drop = FALSE]
+      if (!nrow(hits)) {
+        return(NULL)
+      }
+      vl_lint_finding(
+        "overplotted",
+        "note",
+        hits,
+        sprintf(
+          "an average pixel here is painted ~%.0f times - consider datashade()",
+          density[density > ctx$max_overplot]
+        )
+      )
+    },
+    "A batched mark overplots itself badly enough to hide its own density."
   )
 
   vl_lint_rule(
@@ -770,7 +935,10 @@ print.vellum_lint <- function(x, ...) {
         )
       )
     },
-    "Text contrast against its backdrop is below the WCAG threshold."
+    "Text contrast against its backdrop is below the WCAG threshold.",
+    kinds = "text",
+    needs_pixels = TRUE,
+    tags = "accessibility"
   )
 }
 

@@ -7,15 +7,21 @@
 vl_lint(
   scene,
   rules = NULL,
+  severity = NULL,
   min_text_px = 7,
   min_text_pt = 6,
-  min_contrast = 3
+  min_contrast = 3,
+  max_overplot = 8
 )
 }
 \arguments{
 \item{scene}{A \code{\link[=vl_scene]{vl_scene()}}, or anything with an \code{\link[=as_vellum_scene]{as_vellum_scene()}} method.}
 
 \item{rules}{Rule ids to run; \code{NULL} (default) runs all registered rules.}
+
+\item{severity}{Named character vector overriding a rule's own severity, e.g.
+\code{c(tiny_text = "note")}. Useful when a project cares about a rule more, or
+less, than vellum does.}
 
 \item{min_text_px}{Text shorter than this many device pixels is flagged as
 illegible. Default \code{7}.}
@@ -33,6 +39,11 @@ paper.}
 \item{min_contrast}{Minimum text-to-backdrop contrast ratio before
 \code{low_contrast} fires. Default \code{3} (WCAG AA for large text); WCAG AA for
 body text is \code{4.5}.}
+
+\item{max_overplot}{How many times an average pixel inside a batched mark's
+own extent may be painted before \code{overplotted} fires. Default \code{8}; a
+well-spread scatter sits below \code{1}, a few thousand points around \code{4}, and a
+dense cluster in the hundreds.}
 }
 \value{
 A data frame of findings, empty if the scene is clean: \code{rule},

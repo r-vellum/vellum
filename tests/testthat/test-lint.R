@@ -376,6 +376,111 @@ test_that("findings carry the grob name when there is one", {
   expect_true("stray" %in% vl_lint(s)$node)
 })
 
+test_that("overplotted names the layer that is too dense", {
+  set.seed(1)
+  # 20000 points in a panel paints an average pixel ~38 times.
+  dense <- vl_scene(4, 3, dpi = 96) |>
+    draw(points_grob(runif(20000), runif(20000), name = "cloud"))
+  found <- vl_lint(dense)
+  hit <- found[found$rule == "overplotted", , drop = FALSE]
+  expect_equal(hit$node, "cloud")
+  expect_match(hit$message, "datashade")
+  # A few thousand well-spread points sit around 4, and are left alone.
+  ok <- vl_scene(4, 3, dpi = 96) |>
+    draw(points_grob(runif(2000), runif(2000)))
+  expect_false("overplotted" %in% rules_of(vl_lint(ok)))
+  # The threshold is the caller's to move.
+  expect_true("overplotted" %in% rules_of(vl_lint(ok, max_overplot = 2)))
+})
+
+test_that("ctx$region reads a block of composited pixels", {
+  withr::defer(rm("probe", envir = .lint_rules))
+  seen <- NULL
+  vl_lint_rule(
+    "probe",
+    function(scene, nodes, ctx) {
+      seen <<- list(block = ctx$region(40, 40, 42, 41), one = ctx$pixel(41, 40))
+      NULL
+    },
+    "probe"
+  )
+  s <- vl_scene(1, 1, dpi = 100, bg = "white") |>
+    draw(rect_grob(gp = vl_gpar(fill = "black", col = NA)))
+  vl_lint(s, rules = "probe")
+  # 3 x 2 pixels, one row each, RGBA columns.
+  expect_equal(dim(seen$block), c(6L, 4L))
+  expect_equal(colnames(seen$block), c("r", "g", "b", "a"))
+  # All inside the black rect, and agreeing with the single-pixel sampler.
+  expect_equal(nrow(unique(seen$block)), 1L)
+  expect_equal(as.numeric(seen$block[1, ]), c(0, 0, 0, 255))
+  expect_equal(as.numeric(seen$one), as.numeric(seen$block[2, ]))
+})
+
+test_that("ctx$elements gives the per-element view of a batch", {
+  withr::defer(rm("probe", envir = .lint_rules))
+  seen <- NULL
+  vl_lint_rule(
+    "probe",
+    function(scene, nodes, ctx) {
+      seen <<- list(el = ctx$elements(), nodes = nodes)
+      NULL
+    },
+    "probe"
+  )
+  s <- vl_scene(3, 2, dpi = 96) |>
+    draw(points_grob(c(0.2, 0.5, 0.8), c(0.5, 0.5, 0.5)))
+  vl_lint(s, rules = "probe")
+  # One node, three elements.
+  expect_equal(nrow(seen$nodes), 1L)
+  expect_equal(nrow(seen$el), 3L)
+  expect_true(all(c("node", "x0", "y1") %in% names(seen$el)))
+})
+
+test_that("a rule declaring kinds is skipped when the scene has none", {
+  withr::defer(rm("hexes", envir = .lint_rules))
+  ran <- FALSE
+  vl_lint_rule(
+    "hexes",
+    function(scene, nodes, ctx) {
+      ran <<- TRUE
+      NULL
+    },
+    "hexagons only",
+    kinds = "hexagon"
+  )
+  vl_lint(
+    vl_scene(2, 2, dpi = 96) |> draw(rect_grob(width = 0.2, height = 0.2))
+  )
+  expect_false(ran)
+  vl_lint(vl_scene(2, 2, dpi = 96) |> draw(hexagon_grob(0.5, 0.5, r = 0.2)))
+  expect_true(ran)
+})
+
+test_that("vl_lint_rules reports the rule metadata", {
+  meta <- vl_lint_rules()
+  expect_true(all(c("kinds", "needs_pixels", "tags") %in% names(meta)))
+  # `low_contrast` is the one built-in rule that has to render the scene.
+  expect_true(meta$needs_pixels[meta$rule == "low_contrast"])
+  expect_false(meta$needs_pixels[meta$rule == "offscreen"])
+  expect_equal(meta$kinds[meta$rule == "tiny_text"], "text")
+})
+
+test_that("severity can be overridden per rule", {
+  s <- vl_scene(3, 2, dpi = 100) |>
+    draw(text_grob("small", gp = vl_gpar(fontsize = 2)))
+  expect_equal(
+    unique(vl_lint(s)$severity[vl_lint(s)$rule == "tiny_text"]),
+    "warning"
+  )
+  quiet <- vl_lint(s, severity = c(tiny_text = "note"))
+  expect_equal(quiet$severity[quiet$rule == "tiny_text"], "note")
+  expect_error(
+    vl_lint(s, severity = c(tiny_text = "fatal")),
+    "Severity must be"
+  )
+  expect_error(vl_lint(s, severity = "note"), "named character vector")
+})
+
 test_that("rules can be selected, and an unknown one errors", {
   s <- vl_scene(2, 2, dpi = 100) |>
     draw(text_grob("x", x = 3, gp = vl_gpar(fontsize = 2)))

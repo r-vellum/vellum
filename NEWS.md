@@ -1,5 +1,25 @@
 # vellum 0.6.7.9000
 
+* **Lint rules can now see per-element geometry and blocks of pixels, and can
+  describe themselves.** `ctx` gained `elements()` — the per-element table,
+  which is the only honest view of a batched mark, since a scatter is one node
+  whose box is the union over every point — and `region(x0, y0, x1, y1)`, which
+  returns every composited pixel in a box as an RGBA matrix rather than making a
+  rule probe point by point. Both are lazy, like `pixel()`.
+  `vl_lint_rule()` takes `kinds`, `needs_pixels` and `tags`: a rule that names
+  the kinds it reads is skipped on a scene that has none of them, and
+  `vl_lint_rules()` reports all three so a caller can pick out the cheap rules.
+
+* **`vl_lint(severity = )` overrides a rule's severity.** For a project that
+  cares about a rule more, or less, than vellum does:
+  `vl_lint(s, severity = c(tiny_text = "note"))`.
+
+* **New rule `overplotted`.** The rule form of what `scene_stats()$overplot`
+  reports, but measured per node from the element boxes, so it names the layer
+  to fix and needs no render. A well-spread scatter sits below `1`, a few
+  thousand points around `4`, and a dense cluster in the hundreds; the default
+  `max_overplot = 8` sits in the gap.
+
 * **Three new lint rules about how marks relate to each other.** `double_draw`
   reports a mark drawn twice in the same place with the same paint — while
   leaving the legitimate fill-then-border idiom alone. `occluded` reports an
