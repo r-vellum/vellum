@@ -1,5 +1,24 @@
 # vellum 0.6.7.9000
 
+* **New rule `cvd_collision`: two colours a reader is meant to tell apart that a
+  colour-blind reader cannot.** Nobody catches this by looking, because the
+  person looking can see the difference. The rule takes the scene's solid fills
+  and stroke colours, pushes them through the same colour-vision-deficiency
+  matrices `render(cvd = )` draws with, and compares distances in Oklab — so the
+  linter cannot drift from the simulation, which a test pins by rendering a page
+  and checking the two agree. Controlled by `vl_lint(cvd = , min_cvd_delta = )`;
+  `"deuteranopia"` by default, `"none"` to switch it off, and `"achromatopsia"`
+  doubles as a greyscale-printer check.
+
+  The default threshold is set from measurements, not taste. ggplot2's default
+  three-colour palette puts red and green 0.325 apart in normal vision and 0.048
+  apart under deuteranopia, so it is reported; the closest pair in the CVD-safe
+  Okabe-Ito palette holds at 0.075 and viridis at 0.212, so neither is — a rule
+  that flagged those is a rule nobody would leave switched on, and there are
+  tests to keep it that way. A continuous ramp can collide with itself dozens of
+  times (57 pairs for a 40-step red-to-green diverging scale), so the rule
+  reports the worst five per deficiency and counts the rest out loud.
+
 * **Fix: the lint node table reported light colours wrongly.** `col` was packed
   as `0xRRGGBBAA` into a signed 32-bit integer, which overflows as soon as red
   reaches 128 — `#EEEEEE` came back as `-286331137` and unpacked to a red channel

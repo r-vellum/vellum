@@ -55,8 +55,8 @@ reasoning about colour must check this before reading \code{fill}.}
 \code{ctx} carries:
 \describe{
 \item{\code{w}, \code{h}, \code{dpi}}{the page in device pixels, and its resolution.}
-\item{\code{min_text_px}, \code{min_text_pt}, \code{min_contrast}, \code{max_overplot}}{the
-thresholds \code{\link[=vl_lint]{vl_lint()}} was called with.}
+\item{\code{min_text_px}, \code{min_text_pt}, \code{min_contrast}, \code{max_overplot},
+\code{cvd}, \code{min_cvd_delta}}{the thresholds \code{\link[=vl_lint]{vl_lint()}} was called with.}
 \item{\code{pixel(x, y)}}{one composited RGBA pixel, as a length-4 vector.}
 \item{\code{region(x0, y0, x1, y1)}}{every composited pixel in a box, as a
 4-column RGBA matrix — cheaper and steadier than probing point by

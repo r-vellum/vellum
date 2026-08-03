@@ -485,6 +485,121 @@ test_that("label_overlap catches colliding labels only when they collide", {
   expect_false("label_overlap" %in% rules_of(vl_lint(apart)))
 })
 
+bars_of <- function(cols, w = 0.06) {
+  s <- vl_scene(6, 3, dpi = 96, bg = "white")
+  xs <- seq(0.08, 0.92, length.out = length(cols))
+  for (i in seq_along(cols)) {
+    s <- draw(
+      s,
+      rect_grob(
+        x = xs[i],
+        y = 0.3,
+        width = w,
+        height = 0.5,
+        gp = vl_gpar(fill = cols[i], col = NA)
+      )
+    )
+  }
+  s
+}
+
+test_that("cvd_collision catches a palette that collapses", {
+  # ggplot2's default three-colour palette: red and green sit 0.325 apart in
+  # normal vision and 0.048 apart under deuteranopia.
+  found <- vl_lint(bars_of(c("#F8766D", "#00BA38", "#619CFF")))
+  hit <- found[found$rule == "cvd_collision", , drop = FALSE]
+  expect_equal(nrow(hit), 1L)
+  expect_equal(hit$severity, "warning")
+  expect_match(hit$message, "#F8766D and #00BA38")
+  expect_match(hit$message, "deuteranopia")
+})
+
+test_that("cvd_collision leaves CVD-safe palettes alone", {
+  # The regression that matters most: a rule that flags Okabe-Ito or viridis is
+  # a rule nobody will leave switched on. Okabe-Ito's closest pair holds at
+  # 0.075 under deuteranopia, viridis's at 0.212.
+  okabe <- c("#E69F00", "#56B4E9", "#009E73", "#CC79A7", "#0072B2", "#D55E00")
+  expect_false("cvd_collision" %in% rules_of(vl_lint(bars_of(okabe, w = 0.04))))
+  viridis <- c("#440154", "#31688E", "#35B779", "#FDE725")
+  expect_false("cvd_collision" %in% rules_of(vl_lint(bars_of(viridis))))
+})
+
+test_that("cvd_collision can be pointed at other deficiencies, or switched off", {
+  s <- bars_of(c("#D62728", "#2CA02C"))
+  expect_false("cvd_collision" %in% rules_of(vl_lint(s, cvd = "none")))
+  # Red and green survive protanopia in this metric (0.207 apart) and collapse
+  # under deuteranopia (0.041), so asking for both reports once.
+  both <- vl_lint(s, cvd = c("deuteranopia", "protanopia"))
+  expect_equal(sum(both$rule == "cvd_collision"), 1L)
+  expect_error(vl_lint(s, cvd = "nope"), "Unknown")
+})
+
+test_that("cvd_collision caps a self-colliding ramp and says how many it dropped", {
+  # A 40-step red-to-green diverging scale collides with itself 57 times, and 57
+  # findings about one palette communicate nothing.
+  ramp <- grDevices::colorRampPalette(c("#B2182B", "#F7F7F7", "#1A9850"))(40)
+  found <- vl_lint(bars_of(ramp, w = 0.02))
+  hit <- found[found$rule == "cvd_collision", , drop = FALSE]
+  expect_equal(nrow(hit), 6L)
+  expect_match(hit$message[nrow(hit)], "further colour pairs? also collapse")
+})
+
+test_that("cvd_collision ignores translucent and non-solid fills", {
+  # A translucent fill's perceived colour is its composite with the backdrop,
+  # which is not the value in the node table, so the rule must not guess.
+  faded <- vl_scene(6, 3, dpi = 96, bg = "white") |>
+    draw(rect_grob(
+      x = 0.3,
+      width = 0.2,
+      height = 0.5,
+      gp = vl_gpar(fill = "#F8766D80", col = NA)
+    )) |>
+    draw(rect_grob(
+      x = 0.7,
+      width = 0.2,
+      height = 0.5,
+      gp = vl_gpar(fill = "#00BA3880", col = NA)
+    ))
+  expect_false("cvd_collision" %in% rules_of(vl_lint(faded)))
+  # A gradient has no single colour either.
+  grad <- vl_scene(6, 3, dpi = 96, bg = "white") |>
+    draw(rect_grob(
+      x = 0.3,
+      width = 0.2,
+      height = 0.5,
+      gp = vl_gpar(fill = linear_gradient(c("#F8766D", "#00BA38")), col = NA)
+    )) |>
+    draw(rect_grob(
+      x = 0.7,
+      width = 0.2,
+      height = 0.5,
+      gp = vl_gpar(fill = "#00BA38", col = NA)
+    ))
+  expect_false("cvd_collision" %in% rules_of(vl_lint(grad)))
+})
+
+test_that("cvd simulation in the linter matches what render() draws", {
+  # The linter must not carry a second, drifting copy of the CVD matrices.
+  hex <- "#F8766D"
+  packed <- {
+    m <- grDevices::col2rgb(hex)
+    m[1] * 2^24 + m[2] * 2^16 + m[3] * 2^8 + 255
+  }
+  lab <- rs_cvd_oklab(packed, "deuteranopia")
+  # Render a solid page of that colour with the same simulation and convert the
+  # resulting pixel through the same path.
+  s <- vl_scene(1, 1, dpi = 32, bg = hex)
+  px <- .scene_to_backend(s)$rgba()
+  rs_set_cvd_mode("deuteranopia")
+  on.exit(rs_set_cvd_mode(""), add = TRUE)
+  s2 <- vl_scene(1, 1, dpi = 32, bg = hex)
+  px2 <- .scene_to_backend(s2)$rgba()[1:4]
+  rs_set_cvd_mode("")
+  drawn <- px2[1] * 2^24 + px2[2] * 2^16 + px2[3] * 2^8 + 255
+  expect_equal(rs_cvd_oklab(drawn, ""), lab, tolerance = 1e-6)
+  expect_false(identical(px[1:4], px2))
+})
+
 test_that("low_contrast measures text against its actual backdrop", {
   faint <- vl_scene(3, 2, dpi = 100, bg = "white") |>
     draw(text_grob("faint", gp = vl_gpar(col = "#EEEEEE", fontsize = 20)))

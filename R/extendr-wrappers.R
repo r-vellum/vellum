@@ -48,6 +48,21 @@ rs_read_png <- function(path) .Call(wrap__rs_read_png, path)
 #' @keywords internal
 rs_set_cvd_mode <- function(kind) .Call(wrap__rs_set_cvd_mode, kind)
 
+#' Packed `0xRRGGBBAA` colours to Oklab, optionally as a viewer with a
+#' colour-vision deficiency would see them.
+#'
+#' One call answers both halves of "are these two colours distinct to everyone":
+#' pass `kind = ""` for normal vision and a deficiency name for the simulated
+#' view, then compare distances in the same perceptual space. It reuses the
+#' render path's own matrices, so the linter cannot drift from what
+#' `render(cvd = )` draws.
+#'
+#' @param cols Packed colours as doubles (0xRRGGBBAA).
+#' @param kind A deficiency name, or "" for no simulation.
+#' @return Flattened `L, a, b` triples, three doubles per colour.
+#' @keywords internal
+rs_cvd_oklab <- function(cols, kind) .Call(wrap__rs_cvd_oklab, cols, kind)
+
 #' Set the path-simplification tolerance in device pixels (0 disables).
 #' @param tol Tolerance in device px.
 #' @keywords internal

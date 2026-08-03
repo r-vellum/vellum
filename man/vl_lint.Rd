@@ -11,7 +11,9 @@ vl_lint(
   min_text_px = 7,
   min_text_pt = 6,
   min_contrast = 3,
-  max_overplot = 8
+  max_overplot = 8,
+  cvd = "deuteranopia",
+  min_cvd_delta = 0.06
 )
 }
 \arguments{
@@ -44,6 +46,19 @@ body text is \code{4.5}.}
 own extent may be painted before \code{overplotted} fires. Default \code{8}; a
 well-spread scatter sits below \code{1}, a few thousand points around \code{4}, and a
 dense cluster in the hundreds.}
+
+\item{cvd}{Colour-vision deficiencies \code{cvd_collision} should check:
+\code{"deuteranopia"} (the default, and the most common form),
+\code{"protanopia"}, \code{"tritanopia"}, \code{"achromatopsia"} — which doubles as
+"will this survive a greyscale printer" — or \code{"none"} to switch the rule
+off. Simulated with the same matrices \code{render(cvd = )} draws with.}
+
+\item{min_cvd_delta}{How close two colours may come, as an Oklab distance
+after simulation, before \code{cvd_collision} calls them the same colour.
+Default \code{0.06}. Two references for that number: ggplot2's default
+three-colour palette puts red and green \code{0.325} apart in normal vision and
+\code{0.048} apart under deuteranopia, while the closest pair in the CVD-safe
+Okabe-Ito palette stays at \code{0.075}.}
 }
 \value{
 A data frame of findings, empty if the scene is clean: \code{rule},

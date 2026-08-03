@@ -53,8 +53,8 @@ NULL
 #'   `ctx` carries:
 #'   \describe{
 #'     \item{`w`, `h`, `dpi`}{the page in device pixels, and its resolution.}
-#'     \item{`min_text_px`, `min_text_pt`, `min_contrast`, `max_overplot`}{the
-#'       thresholds [vl_lint()] was called with.}
+#'     \item{`min_text_px`, `min_text_pt`, `min_contrast`, `max_overplot`,
+#'       `cvd`, `min_cvd_delta`}{the thresholds [vl_lint()] was called with.}
 #'     \item{`pixel(x, y)`}{one composited RGBA pixel, as a length-4 vector.}
 #'     \item{`region(x0, y0, x1, y1)`}{every composited pixel in a box, as a
 #'       4-column RGBA matrix — cheaper and steadier than probing point by
@@ -301,6 +301,17 @@ vl_lint_finding <- function(
 #' @param min_contrast Minimum text-to-backdrop contrast ratio before
 #'   `low_contrast` fires. Default `3` (WCAG AA for large text); WCAG AA for
 #'   body text is `4.5`.
+#' @param cvd Colour-vision deficiencies `cvd_collision` should check:
+#'   `"deuteranopia"` (the default, and the most common form),
+#'   `"protanopia"`, `"tritanopia"`, `"achromatopsia"` — which doubles as
+#'   "will this survive a greyscale printer" — or `"none"` to switch the rule
+#'   off. Simulated with the same matrices `render(cvd = )` draws with.
+#' @param min_cvd_delta How close two colours may come, as an Oklab distance
+#'   after simulation, before `cvd_collision` calls them the same colour.
+#'   Default `0.06`. Two references for that number: ggplot2's default
+#'   three-colour palette puts red and green `0.325` apart in normal vision and
+#'   `0.048` apart under deuteranopia, while the closest pair in the CVD-safe
+#'   Okabe-Ito palette stays at `0.075`.
 #' @param max_overplot How many times an average pixel inside a batched mark's
 #'   own extent may be painted before `overplotted` fires. Default `8`; a
 #'   well-spread scatter sits below `1`, a few thousand points around `4`, and a
@@ -327,8 +338,16 @@ vl_lint <- function(
   min_text_px = 7,
   min_text_pt = 6,
   min_contrast = 3,
-  max_overplot = 8
+  max_overplot = 8,
+  cvd = "deuteranopia",
+  min_cvd_delta = 0.06
 ) {
+  # Shares `render()`'s list of valid deficiencies, so the two cannot drift.
+  cvd <- setdiff(cvd, "none")
+  bad <- setdiff(cvd, .CVD_KINDS)
+  if (length(bad)) {
+    cli::cli_abort("Unknown {.arg cvd} value{?s}: {.val {bad}}.")
+  }
   scene <- as_vellum_scene(scene)
   s <- .scene_to_backend(scene)
   nodes <- as.data.frame(s$lint_table(), stringsAsFactors = FALSE)
@@ -354,6 +373,8 @@ vl_lint <- function(
     min_text_pt = min_text_pt,
     min_contrast = min_contrast,
     max_overplot = max_overplot,
+    cvd = cvd,
+    min_cvd_delta = min_cvd_delta,
     pixel = function(x, y) {
       px <- pixels()
       i <- ((clampy(y) - 1L) * d[1] + (clampx(x) - 1L)) * 4L
@@ -989,6 +1010,96 @@ print.vellum_lint <- function(x, ...) {
   )
 
   vl_lint_rule(
+    "cvd_collision",
+    function(scene, nodes, ctx) {
+      if (!length(ctx$cvd)) {
+        return(NULL)
+      }
+      # Two colours a reader is meant to tell apart, that a colour-blind reader
+      # cannot. Nobody catches this by looking, because the person looking can
+      # see the difference -- which is exactly the kind of defect a linter with
+      # the resolved paint in hand should be reporting.
+      #
+      # Only fully opaque authored colours. A translucent fill's perceived colour
+      # is the composite with whatever is behind it, which is not the value in
+      # this table, so claiming anything about it would be guesswork.
+      opaque <- function(v) v[.lint_alpha(v) == 255]
+      fills <- opaque(nodes$fill[nodes$fill_kind == "solid"])
+      strokes <- opaque(nodes$col[nodes$has_col == 1L & nodes$kind != "text"])
+      cols <- unique(c(fills, strokes))
+      if (length(cols) < 2L) {
+        return(NULL)
+      }
+      normal <- .lint_oklab_dist(cols, "")
+      # Colours that were nearly the same to begin with are a palette problem,
+      # not a CVD one, so only pairs that are clearly distinct in normal vision
+      # can collide.
+      distinct <- normal >= 2 * ctx$min_cvd_delta
+      # A continuous ramp can collide with itself dozens of times over -- a
+      # 40-step red-to-green diverging scale yields 57 pairs -- and 57 findings
+      # about one palette is a way of saying nothing. Report the worst few, worst
+      # meaning furthest apart in normal vision and closest after simulation, and
+      # count the rest out loud rather than dropping them silently.
+      cap <- 5L
+      out <- NULL
+      for (kind in ctx$cvd) {
+        gone <- distinct & .lint_oklab_dist(cols, kind) < ctx$min_cvd_delta
+        hits <- which(gone & upper.tri(gone), arr.ind = TRUE)
+        if (!nrow(hits)) {
+          next
+        }
+        hits <- hits[order(-normal[hits]), , drop = FALSE]
+        extra <- max(0L, nrow(hits) - cap)
+        for (k in seq_len(min(cap, nrow(hits)))) {
+          a <- cols[hits[k, 1L]]
+          b <- cols[hits[k, 2L]]
+          # Report against the last node carrying either colour: the finding is
+          # about a pair, and the later mark is the one drawn knowing the other.
+          using <- which(
+            nodes$fill %in%
+              c(a, b) &
+              nodes$fill_kind == "solid" |
+              nodes$col %in% c(a, b) & nodes$has_col == 1L
+          )
+          out <- .lint_bind(
+            out,
+            vl_lint_finding(
+              "cvd_collision",
+              "warning",
+              nodes[max(using), , drop = FALSE],
+              sprintf(
+                "%s and %s look the same under %s",
+                .lint_hex(a),
+                .lint_hex(b),
+                kind
+              )
+            )
+          )
+        }
+        if (extra > 0L) {
+          out <- .lint_bind(
+            out,
+            vl_lint_finding(
+              "cvd_collision",
+              "warning",
+              nodes[nrow(nodes), , drop = FALSE],
+              sprintf(
+                "%d further colour pair%s also collapse under %s",
+                extra,
+                if (extra == 1L) "" else "s",
+                kind
+              )
+            )
+          )
+        }
+      }
+      out
+    },
+    "Two colours collapse into one under a colour-vision deficiency.",
+    tags = "accessibility"
+  )
+
+  vl_lint_rule(
     "low_contrast",
     function(scene, nodes, ctx) {
       txt <- nodes[nodes$kind == "text" & nodes$has_col == 1L, , drop = FALSE]
@@ -1058,6 +1169,21 @@ print.vellum_lint <- function(x, ...) {
 
 # The alpha channel alone, vectorised over a packed column.
 .lint_alpha <- function(v) as.numeric(v) %% 256
+
+# A packed colour as "#RRGGBB", for a message a human has to act on.
+.lint_hex <- function(v) {
+  c <- .lint_unpack_col(v)
+  sprintf("#%02X%02X%02X", c[1], c[2], c[3])
+}
+
+# Pairwise perceptual distance between packed colours, as a full symmetric
+# matrix, optionally as a viewer with `kind` would see them. Oklab is the space
+# the gradient interpolator already uses, and the simulation reuses the render
+# path's own matrices -- so this cannot drift from what `render(cvd = )` draws.
+.lint_oklab_dist <- function(cols, kind) {
+  lab <- matrix(rs_cvd_oklab(as.numeric(cols), kind), ncol = 3L, byrow = TRUE)
+  as.matrix(stats::dist(lab))
+}
 
 # WCAG relative luminance from 0-255 sRGB.
 .lint_luminance <- function(rgb) {
