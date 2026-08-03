@@ -23,10 +23,32 @@ NULL
 #'   aborting the lint.
 #'
 #'   `nodes` is the resolved per-node table, one row per drawn node in paint
-#'   order: `kind`, `name`, `id`, `node` (the paint index), the device-px box
-#'   `x0`/`y0`/`x1`/`y1`, the innermost clip box `clip_x0`…`clip_y1` (the whole
-#'   page when unclipped), `n` (elements in the node), `alpha`, `has_fill`,
-#'   `has_col`, `font_px`, `col` (packed `0xRRGGBBAA`) and `label`.
+#'   order:
+#'   \describe{
+#'     \item{`kind`, `name`, `id`, `label`}{what the node is, and what it was
+#'       called. `label` is the string, for text nodes.}
+#'     \item{`node`}{the paint index — later means drawn on top.}
+#'     \item{`x0`, `y0`, `x1`, `y1`}{the device-px box, y-down. For a batched
+#'       mark this is the union over every element, so reach for
+#'       `ctx$elements()` when that distinction matters.}
+#'     \item{`clip_x0`…`clip_y1`}{the innermost clip box, which is the whole
+#'       page when the node is unclipped.}
+#'     \item{`vp`, `vp_x0`…`vp_y1`}{the node's viewport: an id that nodes
+#'       sharing a viewport share, and that viewport's own device-px extent.
+#'       Not the same as the clip box — an unclipped viewport still has an
+#'       extent, and a mark can leave it.}
+#'     \item{`n`}{how many elements the node draws.}
+#'     \item{`alpha`, `has_fill`, `has_col`}{the group alpha, and whether a fill
+#'       and a stroke are present at all.}
+#'     \item{`col`, `fill`}{stroke and fill colour as `0xRRGGBBAA` packed into a
+#'       double (not an integer — the value overflows a signed 32-bit int once
+#'       red reaches 128). Group alpha is already folded in.}
+#'     \item{`fill_kind`}{`"none"`, `"solid"`, `"linear"`, `"radial"`,
+#'       `"pattern"` or `"hatch"`. A gradient has no single colour, so a rule
+#'       reasoning about colour must check this before reading `fill`.}
+#'     \item{`lwd_px`}{stroke width in device pixels.}
+#'     \item{`font_px`}{text size in device pixels; `0` for everything else.}
+#'   }
 #'
 #'   `ctx` carries:
 #'   \describe{
@@ -457,12 +479,17 @@ print.vellum_lint <- function(x, ...) {
     "invisible",
     function(scene, nodes, ctx) {
       # Nothing will paint it: fully transparent, or neither a fill nor a stroke.
-      blank <- nodes$alpha <= 0 | (nodes$has_fill == 0L & nodes$has_col == 0L)
+      # A fill can also be present but fully transparent in its own right --
+      # `fill = "#FF000000"` sets a colour and then asks for none of it -- which
+      # `has_fill` alone cannot see.
+      opaque_fill <- nodes$has_fill == 1L &
+        (nodes$fill_kind != "solid" | .lint_alpha(nodes$fill) > 0)
+      blank <- nodes$alpha <= 0 | (!opaque_fill & nodes$has_col == 0L)
       vl_lint_finding(
         "invisible",
         "warning",
         nodes[blank, , drop = FALSE],
-        "nothing will paint this - alpha is 0, or both fill and col are absent"
+        "nothing will paint this - alpha is 0, or it has no opaque fill and no stroke"
       )
     },
     "An element has no fill, no stroke, or zero alpha."
@@ -634,10 +661,8 @@ print.vellum_lint <- function(x, ...) {
       #
       # Drawing the same box twice is a legitimate idiom when the two differ --
       # a filled rect and then the same rect with `fill = NA` to put its border
-      # on top -- so the key covers everything about the paint that the node
-      # table can see. It cannot yet see the fill colour, so two same-box rects
-      # in different fills are reported here; the earlier one is invisible in
-      # any case, which is what `occluded` would say about it.
+      # on top -- so the key covers everything about the paint the node table can
+      # see, down to the fill and stroke colours.
       paint <- nodes$has_fill == 1L | nodes$has_col == 1L
       key <- paste(
         nodes$kind,
@@ -650,6 +675,9 @@ print.vellum_lint <- function(x, ...) {
         nodes$has_col,
         nodes$alpha,
         nodes$col,
+        nodes$fill,
+        nodes$fill_kind,
+        nodes$lwd_px,
         nodes$label,
         sep = "|"
       )
@@ -845,6 +873,85 @@ print.vellum_lint <- function(x, ...) {
   )
 
   vl_lint_rule(
+    "invisible_fill",
+    function(scene, nodes, ctx) {
+      # A mark filled in the page's own background colour. It is painted, it is
+      # the right size and in the right place, and it cannot be seen -- so no
+      # geometric rule will ever report it.
+      bg <- .rs_col(scene@bg) %||% c(255L, 255L, 255L, 255L)
+      solid <- nodes$fill_kind == "solid" & .lint_alpha(nodes$fill) > 0
+      packed <- bg[1] * 2^24 + bg[2] * 2^16 + bg[3] * 2^8 + bg[4]
+      # An outline saves it: a white-filled, black-stroked mark is a legitimate
+      # and common thing to draw on a white page.
+      same <- solid & nodes$fill == packed & nodes$has_col == 0L
+      vl_lint_finding(
+        "invisible_fill",
+        "warning",
+        nodes[same, , drop = FALSE],
+        "filled in the page background colour, with no stroke to outline it"
+      )
+    },
+    "A mark is filled in the background colour and has no outline."
+  )
+
+  vl_lint_rule(
+    "hairline",
+    function(scene, nodes, ctx) {
+      # A stroke thinner than half a pixel. The raster backends render it as a
+      # faint, dpi-dependent smudge and the vector backends as a crisp line, so
+      # it is also a place where the outputs stop agreeing.
+      thin <- nodes$has_col == 1L &
+        nodes$kind != "text" &
+        nodes$lwd_px > 0 &
+        nodes$lwd_px < 0.5
+      hits <- nodes[thin, , drop = FALSE]
+      if (!nrow(hits)) {
+        return(NULL)
+      }
+      vl_lint_finding(
+        "hairline",
+        "note",
+        hits,
+        sprintf(
+          "stroked at %.2f px - too thin to render consistently",
+          hits$lwd_px
+        )
+      )
+    },
+    "A stroke is thinner than half a device pixel."
+  )
+
+  vl_lint_rule(
+    "bleed",
+    function(scene, nodes, ctx) {
+      # A mark drawn outside the viewport it was pushed into, where nothing
+      # clips it. Sometimes deliberate -- an annotation reaching into the margin
+      # -- so this is only a note, but it is also what a scale error looks like
+      # before it grows big enough for `truncated` to notice.
+      tol <- 1
+      # A viewport as big as the page is the page: escaping it is not a thing.
+      real_vp <- (nodes$vp_x1 - nodes$vp_x0) < ctx$w - tol |
+        (nodes$vp_y1 - nodes$vp_y0) < ctx$h - tol
+      # Nothing clips it: the effective clip is still the whole page.
+      unclipped <- nodes$clip_x0 <= tol &
+        nodes$clip_y0 <= tol &
+        nodes$clip_x1 >= ctx$w - tol &
+        nodes$clip_y1 >= ctx$h - tol
+      out <- nodes$x0 < nodes$vp_x0 - tol |
+        nodes$y0 < nodes$vp_y0 - tol |
+        nodes$x1 > nodes$vp_x1 + tol |
+        nodes$y1 > nodes$vp_y1 + tol
+      vl_lint_finding(
+        "bleed",
+        "note",
+        nodes[real_vp & unclipped & out, , drop = FALSE],
+        "drawn outside its viewport, and nothing clips it"
+      )
+    },
+    "A mark escapes its viewport, which does not clip."
+  )
+
+  vl_lint_rule(
     "overplotted",
     function(scene, nodes, ctx) {
       # How many times an average pixel inside a batch's own extent was painted.
@@ -942,11 +1049,15 @@ print.vellum_lint <- function(x, ...) {
   )
 }
 
-# 0xRRGGBBAA packed int -> c(r, g, b, a).
+# 0xRRGGBBAA packed as a double -> c(r, g, b, a). A double, not an integer,
+# because the value does not fit in a signed 32-bit int once red reaches 128.
 .lint_unpack_col <- function(v) {
   v <- as.numeric(v)
   c(v %/% 2^24, (v %/% 2^16) %% 256, (v %/% 2^8) %% 256, v %% 256)
 }
+
+# The alpha channel alone, vectorised over a packed column.
+.lint_alpha <- function(v) as.numeric(v) %% 256
 
 # WCAG relative luminance from 0-255 sRGB.
 .lint_luminance <- function(rgb) {

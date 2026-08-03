@@ -2060,6 +2060,17 @@ impl Scene {
         let (mut cx0, mut cy0, mut cx1, mut cy1) = (Vec::new(), Vec::new(), Vec::new(), Vec::new());
         let (mut nelem, mut alpha, mut has_fill, mut has_col) = (Vec::new(), Vec::new(), Vec::new(), Vec::new());
         let (mut font_px, mut col_rgba, mut label) = (Vec::new(), Vec::new(), Vec::new());
+        // The fill as a colour, plus what kind of paint it is: a gradient or a
+        // pattern has no single colour, and a rule that reasons about colour
+        // (contrast, CVD confusion) must be able to tell that case apart from a
+        // solid rather than silently reading a stop out of it.
+        let (mut fill_rgba, mut fill_kind) = (Vec::new(), Vec::new());
+        // Stroke width and viewport, in device px and viewport id respectively.
+        let (mut lwd_px, mut vp_ix) = (Vec::new(), Vec::new());
+        // The node's viewport extent in device px, which is NOT the clip box: an
+        // unclipped viewport reports the whole page as its clip, so a mark
+        // escaping its viewport is only visible by comparing against this.
+        let (mut vx0, mut vy0, mut vx1, mut vy1) = (Vec::new(), Vec::new(), Vec::new(), Vec::new());
 
         let mut acc_stack: Vec<GparAcc> = Vec::new();
         for (i, (vp_id, node)) in self.nodes.iter().enumerate() {
@@ -2111,16 +2122,36 @@ impl Scene {
                     label.push(String::new());
                 }
             }
+            // Packed as f64, not i32: `0xRRGGBBAA` does not fit in a signed
+            // 32-bit integer once red reaches 128, and the sign bit silently ate
+            // the red channel of every light colour (`#EEEEEE` unpacked to -18).
+            // A double holds all 32 bits exactly and R has no unsigned integer.
             let c = gp.col.unwrap_or(Rgba { r: 0, g: 0, b: 0, a: 0 });
-            col_rgba.push(((c.r as i32) << 24) | ((c.g as i32) << 16) | ((c.b as i32) << 8) | c.a as i32);
+            col_rgba.push(pack_rgba(c));
+            let (fk, fc) = match &gp.fill {
+                None => ("none", Rgba { r: 0, g: 0, b: 0, a: 0 }),
+                Some(Paint::Solid(c)) => ("solid", *c),
+                Some(Paint::Linear { .. }) => ("linear", Rgba { r: 0, g: 0, b: 0, a: 0 }),
+                Some(Paint::Radial { .. }) => ("radial", Rgba { r: 0, g: 0, b: 0, a: 0 }),
+                Some(Paint::Pattern(_)) => ("pattern", Rgba { r: 0, g: 0, b: 0, a: 0 }),
+                Some(Paint::Hatch { col, .. }) => ("hatch", *col),
+            };
+            fill_kind.push(fk.to_string());
+            fill_rgba.push(pack_rgba(fc));
+            lwd_px.push(gp.lwd_px(self.dpi) as f64);
+            vp_ix.push(*vp_id as i32);
+            let vb = dev_bbox(vp, 0.0, 0.0, vp.w, vp.h);
+            vx0.push(vb.0); vy0.push(vb.1); vx1.push(vb.2); vy1.push(vb.3);
             acc_stack.clear();
         }
         list!(
-            kind = kind, name = name, id = id, node = node_ix,
+            kind = kind, name = name, id = id, node = node_ix, vp = vp_ix,
             x0 = x0, y0 = y0, x1 = x1, y1 = y1,
             clip_x0 = cx0, clip_y0 = cy0, clip_x1 = cx1, clip_y1 = cy1,
             n = nelem, alpha = alpha, has_fill = has_fill, has_col = has_col,
-            font_px = font_px, col = col_rgba, label = label
+            font_px = font_px, col = col_rgba, label = label,
+            fill = fill_rgba, fill_kind = fill_kind, lwd_px = lwd_px,
+            vp_x0 = vx0, vp_y0 = vy0, vp_x1 = vx1, vp_y1 = vy1
         )
     }
 
@@ -4854,6 +4885,13 @@ fn vertex_bbox(vp: &Vp, x: &[f64], y: &[f64], xu: &[Unit], yu: &[Unit]) -> Optio
 /// A short, stable name for a node kind, used by the linter and by
 /// `profile_render()`. Empty for structural markers (group/panel/subraster
 /// brackets), which draw nothing.
+/// `0xRRGGBBAA` as an f64. The lint table reports colours this way because the
+/// value does not fit in a signed 32-bit integer -- red >= 128 sets the sign bit
+/// -- and R has no unsigned integer type to receive it.
+fn pack_rgba(c: Rgba) -> f64 {
+    ((c.r as u32) << 24 | (c.g as u32) << 16 | (c.b as u32) << 8 | c.a as u32) as f64
+}
+
 fn node_kind(node: &Node) -> &'static str {
     match node {
         Node::Rect { .. } | Node::Rects { .. } => "rect",

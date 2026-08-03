@@ -184,6 +184,136 @@ test_that("invisible catches elements nothing will paint", {
   expect_true("invisible" %in% rules_of(vl_lint(zero)))
 })
 
+test_that("invisible catches a fill that is present but fully transparent", {
+  # `has_fill` sees a fill; only the fill's own alpha says it paints nothing.
+  s <- vl_scene(2, 2, dpi = 100) |>
+    draw(rect_grob(
+      width = 0.4,
+      height = 0.4,
+      gp = vl_gpar(fill = "#FF000000", col = NA)
+    ))
+  expect_true("invisible" %in% rules_of(vl_lint(s)))
+})
+
+test_that("invisible_fill catches a mark filled in the background colour", {
+  s <- vl_scene(2, 2, dpi = 100, bg = "white") |>
+    draw(rect_grob(
+      width = 0.4,
+      height = 0.4,
+      gp = vl_gpar(fill = "white", col = NA)
+    ))
+  expect_true("invisible_fill" %in% rules_of(vl_lint(s)))
+  # An outline saves it: white-on-white with a border is a normal thing to draw.
+  outlined <- vl_scene(2, 2, dpi = 100, bg = "white") |>
+    draw(rect_grob(
+      width = 0.4,
+      height = 0.4,
+      gp = vl_gpar(fill = "white", col = "black")
+    ))
+  expect_false("invisible_fill" %in% rules_of(vl_lint(outlined)))
+  # On a dark page the same fill is perfectly visible.
+  dark <- vl_scene(2, 2, dpi = 100, bg = "grey10") |>
+    draw(rect_grob(
+      width = 0.4,
+      height = 0.4,
+      gp = vl_gpar(fill = "white", col = NA)
+    ))
+  expect_false("invisible_fill" %in% rules_of(vl_lint(dark)))
+})
+
+test_that("hairline catches a stroke thinner than half a pixel", {
+  s <- vl_scene(2, 2, dpi = 100) |>
+    draw(segments_grob(
+      0.1,
+      0.5,
+      0.9,
+      0.5,
+      gp = vl_gpar(col = "black", lwd = 0.3)
+    ))
+  found <- vl_lint(s)
+  expect_true("hairline" %in% rules_of(found))
+  expect_match(found$message[found$rule == "hairline"], "0.31 px")
+  ok <- vl_scene(2, 2, dpi = 100) |>
+    draw(segments_grob(0.1, 0.5, 0.9, 0.5, gp = vl_gpar(col = "black")))
+  expect_false("hairline" %in% rules_of(vl_lint(ok)))
+})
+
+test_that("bleed catches a mark escaping a viewport that does not clip", {
+  s <- vl_scene(4, 3, dpi = 96) |>
+    push(vl_viewport(
+      x = 0.5,
+      y = 0.5,
+      width = 0.4,
+      height = 0.4,
+      clip = FALSE
+    )) |>
+    draw(rect_grob(
+      width = 1.8,
+      height = 0.5,
+      gp = vl_gpar(fill = "green", col = NA)
+    )) |>
+    pop()
+  found <- vl_lint(s)
+  expect_true("bleed" %in% rules_of(found))
+  expect_equal(found$severity[found$rule == "bleed"], "note")
+  # Clip the same viewport and it is `truncated`'s business, not `bleed`'s.
+  clipped <- vl_scene(4, 3, dpi = 96) |>
+    push(vl_viewport(
+      x = 0.5,
+      y = 0.5,
+      width = 0.4,
+      height = 0.4,
+      clip = TRUE
+    )) |>
+    draw(rect_grob(
+      width = 1.8,
+      height = 0.5,
+      gp = vl_gpar(fill = "green", col = NA)
+    )) |>
+    pop()
+  found2 <- rules_of(vl_lint(clipped))
+  expect_false("bleed" %in% found2)
+  expect_true("truncated" %in% found2)
+  # A mark in the root viewport cannot escape it -- that is the page.
+  root <- vl_scene(4, 3, dpi = 96) |>
+    draw(rect_grob(
+      x = 0.5,
+      width = 0.9,
+      height = 0.5,
+      gp = vl_gpar(fill = "green", col = NA)
+    ))
+  expect_false("bleed" %in% rules_of(vl_lint(root)))
+})
+
+test_that("the node table reports colours that survive the round trip", {
+  # `0xRRGGBBAA` does not fit in a signed 32-bit integer once red reaches 128,
+  # and packing it there silently ate the red channel of every light colour.
+  s <- vl_scene(2, 2, dpi = 100) |>
+    draw(rect_grob(
+      width = 0.5,
+      height = 0.5,
+      gp = vl_gpar(fill = "#EEEEEE", col = "#FF8800")
+    ))
+  n <- as.data.frame(.scene_to_backend(s)$lint_table())
+  expect_equal(.lint_unpack_col(n$fill[1]), c(238, 238, 238, 255))
+  expect_equal(.lint_unpack_col(n$col[1]), c(255, 136, 0, 255))
+  expect_equal(n$fill_kind[1], "solid")
+})
+
+test_that("the node table marks a non-solid fill as such", {
+  s <- vl_scene(2, 2, dpi = 100) |>
+    draw(rect_grob(
+      width = 0.5,
+      height = 0.5,
+      gp = vl_gpar(fill = linear_gradient(c("red", "blue")), col = NA)
+    ))
+  n <- as.data.frame(.scene_to_backend(s)$lint_table())
+  # A gradient has no single colour, so `fill` must not pretend otherwise.
+  expect_equal(n$fill_kind[1], "linear")
+  expect_equal(n$fill[1], 0)
+  expect_equal(n$has_fill[1], 1L)
+})
+
 test_that("double_draw catches an identical mark drawn twice", {
   s <- vl_scene(3, 2, dpi = 100) |>
     draw(rect_grob(width = 0.4, height = 0.4, gp = vl_gpar(fill = "red"))) |>

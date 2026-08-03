@@ -1,5 +1,34 @@
 # vellum 0.6.7.9000
 
+* **Fix: the lint node table reported light colours wrongly.** `col` was packed
+  as `0xRRGGBBAA` into a signed 32-bit integer, which overflows as soon as red
+  reaches 128 — `#EEEEEE` came back as `-286331137` and unpacked to a red channel
+  of `-18`. `low_contrast` therefore mis-measured the luminance of every light or
+  reddish text colour (0.67 instead of 0.83 for `#EEEEEE`), landing on the right
+  side of the threshold by luck rather than by arithmetic. Colours are now packed
+  as doubles, which hold all 32 bits exactly.
+
+* **The lint node table reports the fill, the stroke width and the viewport.**
+  New columns `fill` and `fill_kind` (`"none"`, `"solid"`, `"linear"`,
+  `"radial"`, `"pattern"`, `"hatch"` — a gradient has no single colour, and a
+  rule reasoning about colour needs to know that rather than read a stop out of
+  it), `lwd_px`, and `vp` with the viewport's own extent `vp_x0`…`vp_y1`. That
+  extent is deliberately not the clip box: an unclipped viewport reports the
+  whole page as its clip, so nothing could previously tell that a mark had left
+  the viewport it was pushed into.
+
+* **Three new lint rules from those columns.** `invisible_fill` catches a mark
+  filled in the page's own background colour with no stroke to outline it — it is
+  painted, correctly sized, correctly placed, and cannot be seen, so no
+  geometric rule would ever report it. `hairline` catches a stroke under half a
+  pixel, which the raster backends render as a dpi-dependent smudge and the
+  vector backends as a crisp line. `bleed` catches a mark drawn outside a
+  viewport that does not clip.
+
+* **`invisible` also catches a fill that is present but fully transparent.**
+  `fill = "#FF000000"` sets a colour and then asks for none of it; `has_fill`
+  cannot see that, and the fill's alpha channel can.
+
 * **Lint rules can now see per-element geometry and blocks of pixels, and can
   describe themselves.** `ctx` gained `elements()` — the per-element table,
   which is the only honest view of a batched mark, since a scatter is one node

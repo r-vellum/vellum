@@ -25,10 +25,32 @@ found". A rule that fails is reported as a \code{rule_error} finding rather than
 aborting the lint.
 
 \code{nodes} is the resolved per-node table, one row per drawn node in paint
-order: \code{kind}, \code{name}, \code{id}, \code{node} (the paint index), the device-px box
-\code{x0}/\code{y0}/\code{x1}/\code{y1}, the innermost clip box \code{clip_x0}…\code{clip_y1} (the whole
-page when unclipped), \code{n} (elements in the node), \code{alpha}, \code{has_fill},
-\code{has_col}, \code{font_px}, \code{col} (packed \verb{0xRRGGBBAA}) and \code{label}.
+order:
+\describe{
+\item{\code{kind}, \code{name}, \code{id}, \code{label}}{what the node is, and what it was
+called. \code{label} is the string, for text nodes.}
+\item{\code{node}}{the paint index — later means drawn on top.}
+\item{\code{x0}, \code{y0}, \code{x1}, \code{y1}}{the device-px box, y-down. For a batched
+mark this is the union over every element, so reach for
+\code{ctx$elements()} when that distinction matters.}
+\item{\code{clip_x0}…\code{clip_y1}}{the innermost clip box, which is the whole
+page when the node is unclipped.}
+\item{\code{vp}, \code{vp_x0}…\code{vp_y1}}{the node's viewport: an id that nodes
+sharing a viewport share, and that viewport's own device-px extent.
+Not the same as the clip box — an unclipped viewport still has an
+extent, and a mark can leave it.}
+\item{\code{n}}{how many elements the node draws.}
+\item{\code{alpha}, \code{has_fill}, \code{has_col}}{the group alpha, and whether a fill
+and a stroke are present at all.}
+\item{\code{col}, \code{fill}}{stroke and fill colour as \verb{0xRRGGBBAA} packed into a
+double (not an integer — the value overflows a signed 32-bit int once
+red reaches 128). Group alpha is already folded in.}
+\item{\code{fill_kind}}{\code{"none"}, \code{"solid"}, \code{"linear"}, \code{"radial"},
+\code{"pattern"} or \code{"hatch"}. A gradient has no single colour, so a rule
+reasoning about colour must check this before reading \code{fill}.}
+\item{\code{lwd_px}}{stroke width in device pixels.}
+\item{\code{font_px}}{text size in device pixels; \code{0} for everything else.}
+}
 
 \code{ctx} carries:
 \describe{
