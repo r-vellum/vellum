@@ -255,6 +255,77 @@ test_that("invisible_fill catches a mark filled in the background colour", {
   expect_false("invisible_fill" %in% rules_of(vl_lint(dark)))
 })
 
+test_that("invisible_fill leaves a background rect alone", {
+  # A mark spanning its whole viewport is a substrate, not a mark: painting the
+  # page in the page's own colour is how a theme guarantees an opaque export.
+  # Every plot a grammar layer emits draws one, so this exemption is what keeps
+  # the rule from firing on every plot in the world.
+  page <- vl_scene(4, 3, dpi = 96, bg = "white") |>
+    draw(rect_grob(gp = vl_gpar(fill = "white", col = NA), name = "page_bg"))
+  expect_false("invisible_fill" %in% rules_of(vl_lint(page)))
+  # The same goes for a panel backdrop filling its own viewport.
+  panel <- vl_scene(4, 3, dpi = 96, bg = "white") |>
+    push(vl_viewport(width = 0.8, height = 0.8)) |>
+    draw(rect_grob(
+      gp = vl_gpar(fill = "white", col = NA),
+      name = "panel_bg"
+    )) |>
+    pop()
+  expect_false("invisible_fill" %in% rules_of(vl_lint(panel)))
+  # A mark that merely sits inside the viewport is still reported.
+  mark <- vl_scene(4, 3, dpi = 96, bg = "white") |>
+    push(vl_viewport(width = 0.8, height = 0.8)) |>
+    draw(rect_grob(
+      width = 0.3,
+      height = 0.3,
+      gp = vl_gpar(fill = "white", col = NA)
+    )) |>
+    pop()
+  expect_true("invisible_fill" %in% rules_of(vl_lint(mark)))
+})
+
+test_that("bleed ignores text overhanging its layout strip", {
+  # A label is routinely placed in a strip sized from an approximate metric and
+  # overhangs it by a few pixels. Measured across a grammar layer's output, every
+  # escape was a title clearing its strip by 4-8 px and none was a mark, so
+  # reporting text here means reporting every plot.
+  strip <- vl_scene(6, 2, dpi = 96) |>
+    push(vl_viewport(
+      x = 0.5,
+      y = 0.5,
+      width = 0.08,
+      height = 0.2,
+      clip = FALSE
+    )) |>
+    draw(text_grob(
+      "a title wider than its strip",
+      gp = vl_gpar(fontsize = 12)
+    )) |>
+    pop()
+  b <- .scene_to_backend(strip)
+  n <- as.data.frame(b$lint_table())
+  # The fixture must actually escape, or it proves nothing.
+  expect_lt(n$x0, n$vp_x0)
+  expect_gt(n$x1, n$vp_x1)
+  expect_false("bleed" %in% rules_of(vl_lint(strip)))
+  # A non-text mark escaping the same viewport is still reported.
+  mark <- vl_scene(6, 2, dpi = 96) |>
+    push(vl_viewport(
+      x = 0.5,
+      y = 0.5,
+      width = 0.08,
+      height = 0.2,
+      clip = FALSE
+    )) |>
+    draw(rect_grob(
+      width = 6,
+      height = 0.5,
+      gp = vl_gpar(fill = "red", col = NA)
+    )) |>
+    pop()
+  expect_true("bleed" %in% rules_of(vl_lint(mark)))
+})
+
 test_that("hairline catches a stroke thinner than half a pixel", {
   s <- vl_scene(2, 2, dpi = 100) |>
     draw(segments_grob(

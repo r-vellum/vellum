@@ -1071,7 +1071,19 @@ print.vellum_lint <- function(x, ...) {
       packed <- bg[1] * 2^24 + bg[2] * 2^16 + bg[3] * 2^8 + bg[4]
       # An outline saves it: a white-filled, black-stroked mark is a legitimate
       # and common thing to draw on a white page.
-      same <- solid & nodes$fill == packed & nodes$has_col == 0L
+      #
+      # So does filling the whole container. Something spanning its entire
+      # viewport is a substrate rather than a mark -- a theme's page background,
+      # a panel backdrop -- and painting the page in the page's own colour is how
+      # you guarantee an opaque export rather than an oversight. Every plot a
+      # grammar layer emits draws one, so without this the rule fires on every
+      # plot in the world and reports nothing.
+      tol <- 1
+      backdrop <- nodes$x0 <= nodes$vp_x0 + tol &
+        nodes$y0 <= nodes$vp_y0 + tol &
+        nodes$x1 >= nodes$vp_x1 - tol &
+        nodes$y1 >= nodes$vp_y1 - tol
+      same <- solid & nodes$fill == packed & nodes$has_col == 0L & !backdrop
       vl_lint_finding(
         "invisible_fill",
         "warning",
@@ -1116,6 +1128,12 @@ print.vellum_lint <- function(x, ...) {
       # clips it. Sometimes deliberate -- an annotation reaching into the margin
       # -- so this is only a note, but it is also what a scale error looks like
       # before it grows big enough for `truncated` to notice.
+      #
+      # Text is exempt, and that exemption is most of the rule. A label is
+      # routinely placed in a strip sized from an approximate metric and then
+      # overhangs it by a few pixels: measured across a grammar layer's output,
+      # every single escape was an axis title or plot title clearing its strip by
+      # 4-8 px, and none was a mark. Reporting those means reporting every plot.
       tol <- 1
       # A viewport as big as the page is the page: escaping it is not a thing.
       real_vp <- (nodes$vp_x1 - nodes$vp_x0) < ctx$w - tol |
@@ -1125,10 +1143,11 @@ print.vellum_lint <- function(x, ...) {
         nodes$clip_y0 <= tol &
         nodes$clip_x1 >= ctx$w - tol &
         nodes$clip_y1 >= ctx$h - tol
-      out <- nodes$x0 < nodes$vp_x0 - tol |
-        nodes$y0 < nodes$vp_y0 - tol |
-        nodes$x1 > nodes$vp_x1 + tol |
-        nodes$y1 > nodes$vp_y1 + tol
+      out <- nodes$kind != "text" &
+        (nodes$x0 < nodes$vp_x0 - tol |
+          nodes$y0 < nodes$vp_y0 - tol |
+          nodes$x1 > nodes$vp_x1 + tol |
+          nodes$y1 > nodes$vp_y1 + tol)
       vl_lint_finding(
         "bleed",
         "note",
@@ -1136,7 +1155,7 @@ print.vellum_lint <- function(x, ...) {
         "drawn outside its viewport, and nothing clips it"
       )
     },
-    "A mark escapes its viewport, which does not clip."
+    "A mark, other than text, escapes its viewport, which does not clip."
   )
 
   vl_lint_rule(
