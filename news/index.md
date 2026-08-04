@@ -1,6 +1,6 @@
 # Changelog
 
-## vellum 0.6.7.9000
+## vellum 0.6.8
 
 ### Linting
 

@@ -13,7 +13,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">vellum</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.6.7.9000</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.6.8</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -66,13 +66,13 @@
 <div class="row">
   <main id="main" class="col-md-9"><div class="page-header">
       <img src="../logo.png" class="logo" alt=""><h1>Changelog</h1>
-      <small>Source: <a href="https://github.com/r-vellum/vellum/blob/main/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
+      <small>Source: <a href="https://github.com/r-vellum/vellum/blob/v0.6.8/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
     </div>
 
     <div class="section level2">
-<h2 class="pkg-version" data-toc-text="0.6.7.9000" id="vellum-0679000">vellum 0.6.7.9000<a class="anchor" aria-label="anchor" href="#vellum-0679000"></a></h2>
+<h2 class="pkg-version" data-toc-text="0.6.8" id="vellum-068">vellum 0.6.8<a class="anchor" aria-label="anchor" href="#vellum-068"></a></h2>
 <div class="section level3">
-<h3 id="linting-0-6-7-9000">Linting<a class="anchor" aria-label="anchor" href="#linting-0-6-7-9000"></a></h3>
+<h3 id="linting-0-6-8">Linting<a class="anchor" aria-label="anchor" href="#linting-0-6-8"></a></h3>
 <ul><li>
 <p><strong>Fix: <code>invisible_fill</code> and <code>bleed</code> fired on every plot a grammar layer produces.</strong> Found by running the new rules against vellumplot’s output, where each of five ordinary plots collected one of each with no true positives among them.</p>
 <p><code>invisible_fill</code> now exempts a mark that spans its whole viewport. Something filling its entire container is a substrate rather than a mark — a theme’s page background, a panel backdrop — and painting the page in the page’s own colour is how you guarantee an opaque export, not an oversight. A mark that merely sits inside the viewport is still reported.</p>
@@ -120,7 +120,7 @@
 <li><p><strong><code>label_overlap</code> no longer compares every pair of labels in interpreted R.</strong> The collision search moved to a sort-and-sweep in Rust, which drops a quadratic term: the detection itself goes from 3.02 s to 0.007 s on 2400 labels, and a full <code><a href="../reference/vl_lint.html">vl_lint()</a></code> of that scene from 7.78 s to 2.14 s. At a few hundred labels the win is smaller, because compiling the scene dominates either way. Results are unchanged, and tests assert the sweep agrees with the all-pairs check it replaced. <code>occluded</code>, <code>label_on_mark</code> and <code>double_draw</code> were measured and left alone — their inner loops are already vectorised, and they cost milliseconds on 400 marks.</p></li>
 </ul></div>
 <div class="section level3">
-<h3 id="other-changes-0-6-7-9000">Other changes<a class="anchor" aria-label="anchor" href="#other-changes-0-6-7-9000"></a></h3>
+<h3 id="other-changes-0-6-8">Other changes<a class="anchor" aria-label="anchor" href="#other-changes-0-6-8"></a></h3>
 <ul><li><p><strong>Fix: knitting a scene with a <code>dpi</code> chunk option errored.</strong> A YAML <code>dpi: 150</code> parses as an <code>&lt;integer&gt;</code>, and the display path passed it straight to the scene’s <code>@dpi</code> property, which is declared <code>&lt;double&gt;</code> - S7 rejected it with <code>@dpi must be &lt;double&gt;, not &lt;integer&gt;</code>. The chunk dpi is now coerced.</p></li>
 <li><p><strong>Internal: the sources are clean under the <code>jarl</code> linter.</strong> Dropped a dead <code>.diff_body()</code> helper, hoisted assignments out of <code>for()</code> heads and out of <code><a href="https://rdrr.io/r/base/on.exit.html" class="external-link">on.exit()</a></code> (via a new <code>.set_debug_reg()</code> setter), added the leading zero to fractional literals in the vignettes, and removed the redundant <code>vellum:::</code> prefix from the test suite, which already evaluates inside the package namespace. The <code>:::</code> calls that reach Rust kernels from the vignettes and <code>inst/</code> scripts are genuinely required and carry a <code># jarl-ignore</code> with a reason. No user-visible behaviour changes.</p></li>
 </ul></div>
