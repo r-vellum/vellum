@@ -263,7 +263,12 @@ vl_lint_finding <- function(
   }
   # A stale exclude list is worth hearing about: silently suppressing nothing
   # looks exactly like suppressing something.
-  known <- unique(c(nodes$name, nodes$id, nodes$kind))
+  #
+  # `out$node` is in the list because not every finding is about a node in the
+  # table. A registered rule is free to report something else entirely -- a
+  # grammar layer reports on a scale, as `scale:color` -- and excluding one of
+  # those was suppressing the finding and warning that it had not.
+  known <- unique(c(nodes$name, nodes$id, nodes$kind, out$node))
   unused <- setdiff(exclude, known)
   if (length(unused)) {
     cli::cli_warn(

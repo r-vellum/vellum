@@ -1040,6 +1040,33 @@ test_that("exclude drops findings for a node you have accepted", {
   expect_warning(vl_lint(s, exclude = "strya"), "matches nothing")
 })
 
+test_that("exclude can name what a rule reported, not just a node", {
+  # A registered rule is free to report something that is not a node in the
+  # table -- a grammar layer reports on a scale -- and excluding one of those
+  # used to suppress the finding and warn that it had matched nothing.
+  withr::defer(rm("scale_rule", envir = .lint_rules))
+  vl_lint_rule(
+    "scale_rule",
+    function(scene, nodes, ctx) {
+      data.frame(
+        rule = "scale_rule",
+        severity = "note",
+        node = "scale:color",
+        message = "the colour scale has one level",
+        stringsAsFactors = FALSE
+      )
+    },
+    "reports on a scale, not a node"
+  )
+  s <- vl_scene(2, 2, dpi = 96) |> draw(rect_grob(width = 0.2, height = 0.2))
+  expect_equal(nrow(vl_lint(s, rules = "scale_rule")), 1L)
+  expect_silent(vl_lint(s, rules = "scale_rule", exclude = "scale:color"))
+  out <- vl_lint(s, rules = "scale_rule", exclude = "scale:color")
+  expect_equal(nrow(out), 0L)
+  # A genuinely stale entry still warns.
+  expect_warning(vl_lint(s, exclude = "scale:nope"), "matches nothing")
+})
+
 test_that("vl_lint_assert fails on findings and passes a clean scene", {
   s <- vl_scene(3, 2, dpi = 96) |>
     draw(text_grob("off the edge", x = 1.6, y = 0.5, name = "stray"))
