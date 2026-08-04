@@ -4,6 +4,25 @@
 
 ### Linting
 
+- **Fix: `invisible_fill` and `bleed` fired on every plot a grammar
+  layer produces.** Found by running the new rules against vellumplot’s
+  output, where each of five ordinary plots collected one of each with
+  no true positives among them.
+
+  `invisible_fill` now exempts a mark that spans its whole viewport.
+  Something filling its entire container is a substrate rather than a
+  mark — a theme’s page background, a panel backdrop — and painting the
+  page in the page’s own colour is how you guarantee an opaque export,
+  not an oversight. A mark that merely sits inside the viewport is still
+  reported.
+
+  `bleed` now exempts text, which is most of what the rule was
+  reporting. A label is routinely placed in a strip sized from an
+  approximate metric and overhangs it by a few pixels; measured across
+  that corpus, every escape was an axis or plot title clearing its strip
+  by 4–8 px and none was a mark. A non-text mark escaping an unclipped
+  viewport is still reported.
+
 The linter grew from 7 rules to 20, and from something you read to
 something you can gate a build on.
 [`vignette("inspecting-scenes")`](https://r-vellum.github.io/vellum/articles/inspecting-scenes.md)

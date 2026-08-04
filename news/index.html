@@ -73,7 +73,12 @@
 <h2 class="pkg-version" data-toc-text="0.6.7.9000" id="vellum-0679000">vellum 0.6.7.9000<a class="anchor" aria-label="anchor" href="#vellum-0679000"></a></h2>
 <div class="section level3">
 <h3 id="linting-0-6-7-9000">Linting<a class="anchor" aria-label="anchor" href="#linting-0-6-7-9000"></a></h3>
-<p>The linter grew from 7 rules to 20, and from something you read to something you can gate a build on. <code><a href="../articles/inspecting-scenes.html">vignette("inspecting-scenes")</a></code> covers all of it.</p>
+<ul><li>
+<p><strong>Fix: <code>invisible_fill</code> and <code>bleed</code> fired on every plot a grammar layer produces.</strong> Found by running the new rules against vellumplot’s output, where each of five ordinary plots collected one of each with no true positives among them.</p>
+<p><code>invisible_fill</code> now exempts a mark that spans its whole viewport. Something filling its entire container is a substrate rather than a mark — a theme’s page background, a panel backdrop — and painting the page in the page’s own colour is how you guarantee an opaque export, not an oversight. A mark that merely sits inside the viewport is still reported.</p>
+<p><code>bleed</code> now exempts text, which is most of what the rule was reporting. A label is routinely placed in a strip sized from an approximate metric and overhangs it by a few pixels; measured across that corpus, every escape was an axis or plot title clearing its strip by 4–8 px and none was a mark. A non-text mark escaping an unclipped viewport is still reported.</p>
+</li>
+</ul><p>The linter grew from 7 rules to 20, and from something you read to something you can gate a build on. <code><a href="../articles/inspecting-scenes.html">vignette("inspecting-scenes")</a></code> covers all of it.</p>
 <ul><li>
 <p><strong>Thirteen new rules.</strong> The one worth having first is <code>truncated</code>: <code>offscreen</code> and <code>clipped_away</code> both require a mark to be <em>entirely</em> gone, so the defect that actually ships — the axis label with its last characters cut off, the title chopped by the page edge — had no rule at all. It reports how much was lost, as a warning for text and a note otherwise.</p>
 <p>Then, in rough order of how hard they are to catch by eye:</p>

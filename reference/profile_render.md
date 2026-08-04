@@ -61,10 +61,10 @@ s <- vl_scene(4, 3) |>
 profile_render(s)
 #> Phases (median of the timed reps):
 #> • build 0.001 s (constructing the R value)
-#> • compile 0.002 s (R -> Rust replay, incl. text shaping)
+#> • compile 0.003 s (R -> Rust replay, incl. text shaping)
 #> • raster 0.038 s (drawing)
 #> 
 #> Slowest marks (raster time):
-#> • circle - 2000 elem 0.0078 s 99.6%
+#> • circle - 2000 elem 0.0079 s 99.6%
 #> • text - 1 elem 0.0000 s 0.4%
 ```

@@ -111,7 +111,7 @@ vl_lint_rules()[, c("rule", "description")]
 #> 20      truncated
 #>                                                              description
 #> 1                                 A text mark has no visible characters.
-#> 2                      A mark escapes its viewport, which does not clip.
+#> 2    A mark, other than text, escapes its viewport, which does not clip.
 #> 3                    A mark is clipped out of existence by its viewport.
 #> 4        Two colours collapse into one under a colour-vision deficiency.
 #> 5                                      An element resolves to zero size.
@@ -338,8 +338,8 @@ profile_render(heavy, reps = 1)
 #> • raster 0.185 s (drawing)
 #> 
 #> Slowest marks (raster time):
-#> • circle points 20000 elem 0.1180 s 76.7%
-#> • segments edges 2000 elem 0.0333 s 21.6%
+#> • circle points 20000 elem 0.1176 s 76.6%
+#> • segments edges 2000 elem 0.0332 s 21.6%
 #> • text labels 200 elem 0.0027 s 1.7%
 ```
 
