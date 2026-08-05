@@ -1,5 +1,18 @@
 # vellum 0.6.8
 
+## Accessibility
+
+* **Fix: an all-decorative described scene lost its tagged Figure.** When every
+  drawn node was decorative (`role = "presentation"`, `"grid"`, …) but still
+  carried metadata such as a provenance `id`, the per-mark tagging path fired on
+  that metadata alone — suppressing the single whole-content span — and then, since
+  decorative nodes are artifacts rather than structure entries, the tagged PDF was
+  left with no `Figure` and no `Alt` at all. Decorative metadata no longer counts
+  as per-mark metadata: such a scene keeps its single `Figure` carrying the
+  `describe()` text, with the marks as its artifact content. This is what lets a
+  charting frontend tag its marks `role = "presentation"` to get one clean figure
+  description instead of a screen reader announcing every mark's internal id.
+
 ## Linting
 
 * **Fix: `invisible_fill` and `bleed` fired on every plot a grammar layer
