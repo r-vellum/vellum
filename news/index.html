@@ -66,11 +66,16 @@
 <div class="row">
   <main id="main" class="col-md-9"><div class="page-header">
       <img src="../logo.png" class="logo" alt=""><h1>Changelog</h1>
-      <small>Source: <a href="https://github.com/r-vellum/vellum/blob/v0.6.8/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
+      <small>Source: <a href="https://github.com/r-vellum/vellum/blob/main/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
     </div>
 
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.6.8" id="vellum-068">vellum 0.6.8<a class="anchor" aria-label="anchor" href="#vellum-068"></a></h2>
+<div class="section level3">
+<h3 id="accessibility-0-6-8">Accessibility<a class="anchor" aria-label="anchor" href="#accessibility-0-6-8"></a></h3>
+<ul><li>
+<strong>Fix: an all-decorative described scene lost its tagged Figure.</strong> When every drawn node was decorative (<code>role = "presentation"</code>, <code>"grid"</code>, …) but still carried metadata such as a provenance <code>id</code>, the per-mark tagging path fired on that metadata alone — suppressing the single whole-content span — and then, since decorative nodes are artifacts rather than structure entries, the tagged PDF was left with no <code>Figure</code> and no <code>Alt</code> at all. Decorative metadata no longer counts as per-mark metadata: such a scene keeps its single <code>Figure</code> carrying the <code><a href="../reference/describe.html">describe()</a></code> text, with the marks as its artifact content. This is what lets a charting frontend tag its marks <code>role = "presentation"</code> to get one clean figure description instead of a screen reader announcing every mark’s internal id.</li>
+</ul></div>
 <div class="section level3">
 <h3 id="linting-0-6-8">Linting<a class="anchor" aria-label="anchor" href="#linting-0-6-8"></a></h3>
 <ul><li>
