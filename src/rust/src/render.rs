@@ -2381,6 +2381,13 @@ pub struct PdfBackend<'a, 'b> {
     tagged: Vec<(krilla::tagging::Identifier, NodeMeta)>,
     /// Depth of open tagged spans, so `end_node` only closes one it opened.
     tag_depth: usize,
+    /// A single whole-content tagged span is open around the entire page (the
+    /// caller opened it directly on the surface). Per-node tagging must then
+    /// stand down entirely: PDF forbids nesting one tagged span in another, and
+    /// the whole page already belongs to the one Figure. Set when every node is
+    /// decorative, so the marks are the visual content of a single figure rather
+    /// than figures in their own right.
+    outer_tagged: bool,
 }
 
 impl<'a, 'b> PdfBackend<'a, 'b> {
@@ -2392,7 +2399,14 @@ impl<'a, 'b> PdfBackend<'a, 'b> {
             warnings: Vec::new(),
             tagged: Vec::new(),
             tag_depth: 0,
+            outer_tagged: false,
         }
+    }
+
+    /// Stand down per-node tagging because a whole-content span is open around
+    /// the page (see `outer_tagged`).
+    pub fn set_outer_tagged(&mut self, on: bool) {
+        self.outer_tagged = on;
     }
 
     /// Record a degradation, de-duplicated (the same gap usually recurs across
@@ -2527,7 +2541,7 @@ pub fn pdf_tag(meta: &NodeMeta) -> krilla::tagging::TagKind {
 /// Such content is tagged as an *artifact* rather than given a structure entry,
 /// which is how PDF says "skip this": a screen reader announcing every gridline
 /// is worse than one announcing none.
-fn is_decorative(meta: &NodeMeta) -> bool {
+pub(crate) fn is_decorative(meta: &NodeMeta) -> bool {
     // `grid` is the role a downstream (e.g. vellumplot gridlines) sets so an
     // interactive SVG host can find and hide the gridlines; it is also, plainly,
     // decorative furniture that a screen reader must not read. Treating it as
@@ -2545,6 +2559,11 @@ impl RenderBackend for PdfBackend<'_, '_> {
     }
 
     fn begin_node(&mut self, meta: &NodeMeta) {
+        // A whole-content span already brackets the whole page (one Figure); stand
+        // down so we do not nest a second tagged span inside it.
+        if self.outer_tagged {
+            return;
+        }
         // One tagged content span per node. Nesting tagged spans is not allowed
         // in PDF, and the walk never nests them, but guard anyway: a stray
         // unbalanced pair would corrupt the whole content stream.
@@ -2562,6 +2581,10 @@ impl RenderBackend for PdfBackend<'_, '_> {
     }
 
     fn end_node(&mut self) {
+        // The whole-content span is closed by the caller, not per node.
+        if self.outer_tagged {
+            return;
+        }
         if self.tag_depth > 0 {
             self.surface.end_tagged();
             self.tag_depth -= 1;

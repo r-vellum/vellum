@@ -111,6 +111,42 @@ test_that("decorative marks are artifacts, not structure entries", {
   expect_false(grepl("background panel", alts, fixed = TRUE))
 })
 
+test_that("an all-decorative described scene still gets its single figure", {
+  # Regression (vellumplot#145): when every mark is decorative
+  # (`role = "presentation"`) but still carries a provenance `id`, the per-mark
+  # path used to fire on those ids alone -- suppressing the whole-content span --
+  # and then, since decorative marks are artifacts rather than structure entries,
+  # leave the scene with NO Figure and no Alt at all. Decorative metadata must not
+  # count as per-mark metadata: the page stays one Figure carrying the
+  # description, with the marks as its (artifact) content.
+  s <- describe(
+    vl_scene(3, 2, dpi = 96, bg = "white") |>
+      draw(points_grob(
+        c(0.3, 0.7),
+        c(0.5, 0.5),
+        id = "layer-1-point",
+        role = "presentation"
+      )) |>
+      draw(text_grob(
+        "peak",
+        y = 0.9,
+        name = "repel:panel-1-1:2:0",
+        role = "presentation"
+      )),
+    title = "One figure",
+    desc = "A described chart."
+  )
+  pdf <- scene_pdf(s)
+  expect_true(has_bytes(pdf, "StructTreeRoot"))
+  expect_true(has_bytes(pdf, "/Figure"))
+  # The description is the figure's alt text ...
+  expect_true(has_bytes(pdf, "A described chart."))
+  # ... and no internal id / repel handle ever surfaces as an /Alt.
+  alts <- paste(pdf_labels(pdf), collapse = " ")
+  expect_false(grepl("layer-1-point", alts, fixed = TRUE))
+  expect_false(grepl("repel:", alts, fixed = TRUE))
+})
+
 test_that("tagging does not disturb the rendered pixels", {
   # Structure is metadata. The raster of a marked scene must equal the raster of
   # the same scene without the marks.

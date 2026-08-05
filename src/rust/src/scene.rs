@@ -892,11 +892,18 @@ impl Scene {
         // exclusive: PDF does not allow one tagged content span inside another,
         // and krilla aborts rather than emitting an invalid stream.
         //
-        // So when any node carries metadata, the marks own the tagging and the
-        // root Figure is built from them. When none does, the old single-span
-        // behaviour is kept exactly, which is what keeps every existing scene's
-        // PDF byte-for-byte unchanged.
-        let per_mark = self.meta.iter().any(|m| !m.is_empty());
+        // So when any node carries *meaningful* metadata, the marks own the
+        // tagging and the root Figure is built from them. When none does — either
+        // no metadata at all, or only decorative nodes (artifacts) — the whole page
+        // is one Figure and the marks are its visual content. A decorative node
+        // must not count here: an all-decorative chart (every mark tagged
+        // `role = "presentation"`) is exactly the one-Figure case, not a per-mark
+        // one. This keeps every existing metadata-free scene byte-for-byte
+        // unchanged.
+        let per_mark = self
+            .meta
+            .iter()
+            .any(|m| !m.is_empty() && !crate::render::is_decorative(m));
         let tag_id = if alt.is_empty() || per_mark {
             None
         } else {
@@ -904,6 +911,9 @@ impl Scene {
         };
         let (warnings, marks) = {
             let mut b = PdfBackend::new(&mut surface);
+            // With the whole-content span open, per-node tagging stands down (no
+            // nested spans); the decorative marks draw as the figure's content.
+            b.set_outer_tagged(tag_id.is_some());
             b.fill_background(self.w_px, self.h_px, self.bg);
             let w = self.render_to(&mut b);
             (w, b.take_tagged())
