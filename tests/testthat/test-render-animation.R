@@ -56,7 +56,10 @@ test_that("render_animation interpolates geometry across frames", {
     delay_num = 1L,
     delay_den = 25L,
     gif_speed = 1L,
-    gif_dither = TRUE
+    gif_dither = TRUE,
+    frac_col = fracs,
+    frac_size = fracs,
+    frac_alpha = fracs
   )
   expect_length(warns, 0L)
   files <- sort(list.files(dir, pattern = "\\.png$", full.names = TRUE))
@@ -88,7 +91,10 @@ test_that("endpoints render identically to the keyframes themselves", {
     delay_num = 1L,
     delay_den = 25L,
     gif_speed = 1L,
-    gif_dither = TRUE
+    gif_dither = TRUE,
+    frac_col = c(0, 1),
+    frac_size = c(0, 1),
+    frac_alpha = c(0, 1)
   )
   files <- sort(list.files(dir, pattern = "\\.png$", full.names = TRUE))
   # t = 0 is keyframe A, t = 1 is keyframe B, byte-for-byte on geometry (colour
@@ -112,7 +118,10 @@ test_that("render_animation writes a valid multi-frame APNG", {
     delay_num = 1L,
     delay_den = 25L,
     gif_speed = 1L,
-    gif_dither = TRUE
+    gif_dither = TRUE,
+    frac_col = seq(0, 1, length.out = 10),
+    frac_size = seq(0, 1, length.out = 10),
+    frac_alpha = seq(0, 1, length.out = 10)
   )
   expect_true(file.exists(out))
   expect_gt(file.size(out), 100)
@@ -148,7 +157,10 @@ test_that("render_animation writes a valid looping GIF", {
     delay_num = 1L,
     delay_den = 20L,
     gif_speed = 1L,
-    gif_dither = TRUE
+    gif_dither = TRUE,
+    frac_col = seq(0, 1, length.out = 8),
+    frac_size = seq(0, 1, length.out = 8),
+    frac_alpha = seq(0, 1, length.out = 8)
   )
   expect_true(file.exists(out))
   info <- magick::image_info(magick::image_read(out))
@@ -184,7 +196,10 @@ test_that("keyed elements enter and exit (per-element fade)", {
     delay_num = 1L,
     delay_den = 10L,
     gif_speed = 1L,
-    gif_dither = TRUE
+    gif_dither = TRUE,
+    frac_col = c(0, 0.5, 1),
+    frac_size = c(0, 0.5, 1),
+    frac_alpha = c(0, 0.5, 1)
   )
   files <- sort(list.files(dir, pattern = "\\.png$", full.names = TRUE))
   red_at <- function(png, xnpc) {
@@ -230,7 +245,10 @@ test_that("viewport masks tween (a reveal wipe)", {
     delay_num = 1L,
     delay_den = 10L,
     gif_speed = 1L,
-    gif_dither = TRUE
+    gif_dither = TRUE,
+    frac_col = c(0, 0.5, 1),
+    frac_size = c(0, 0.5, 1),
+    frac_alpha = c(0, 0.5, 1)
   )
   files <- sort(list.files(dir, pattern = "\\.png$", full.names = TRUE))
   blue <- vapply(
@@ -245,6 +263,182 @@ test_that("viewport masks tween (a reveal wipe)", {
   expect_equal(blue[[1]], 0)
   expect_gt(blue[[2]], 0)
   expect_gt(blue[[3]], blue[[2]])
+})
+
+# --- per-aesthetic easing ----------------------------------------------------
+# `frac` schedules position (and every discrete snap); `frac_col`/`frac_size`/
+# `frac_alpha` schedule their own classes. All four equal == single-curve easing.
+
+# Render one frame at an explicit set of class fractions; return its PNG path.
+one_frame <- function(scenes, pos, col = pos, size = pos, alpha = pos, dir) {
+  render_animation(
+    list(.scene_to_backend(scenes$a), .scene_to_backend(scenes$b)),
+    seg = 0L,
+    frac = pos,
+    format = "frames",
+    path = dir,
+    delay_num = 1L,
+    delay_den = 25L,
+    gif_speed = 1L,
+    gif_dither = TRUE,
+    frac_col = col,
+    frac_size = size,
+    frac_alpha = alpha
+  )
+  sort(list.files(dir, pattern = "\\.png$", full.names = TRUE))[[1]]
+}
+
+test_that("equal class fractions reproduce single-curve easing byte-for-byte", {
+  skip_if_not_installed("png")
+  s <- anim_scenes()
+  # The same frame, once with the three companions left to default and once with
+  # them passed explicitly as `frac`. The engine must not be able to tell.
+  d1 <- withr::local_tempdir()
+  d2 <- withr::local_tempdir()
+  f1 <- one_frame(s, pos = 0.37, dir = d1)
+  render_animation(
+    list(.scene_to_backend(s$a), .scene_to_backend(s$b)),
+    seg = 0L,
+    frac = 0.37,
+    format = "frames",
+    path = d2,
+    delay_num = 1L,
+    delay_den = 25L,
+    gif_speed = 1L,
+    gif_dither = TRUE,
+    frac_col = 0.37,
+    frac_size = 0.37,
+    frac_alpha = 0.37
+  )
+  f2 <- sort(list.files(d2, pattern = "\\.png$", full.names = TRUE))[[1]]
+  expect_identical(readBin(f1, "raw", 1e6), readBin(f2, "raw", 1e6))
+})
+
+test_that("size eases independently of position", {
+  skip_if_not_installed("png")
+  # The fixture circle moves 0.25 -> 0.75 npc AND grows 4 -> 12 mm. Hold position
+  # at the midpoint and drive size to each end: the ink must sit at the same
+  # centroid but be the keyframes' widths, not an interpolated one.
+  s <- anim_scenes()
+  small <- ink_stats(one_frame(
+    s,
+    pos = 0.5,
+    size = 0,
+    dir = withr::local_tempdir()
+  ))
+  big <- ink_stats(one_frame(
+    s,
+    pos = 0.5,
+    size = 1,
+    dir = withr::local_tempdir()
+  ))
+  # Same place ...
+  expect_equal(small$cx, big$cx, tolerance = 0.01)
+  expect_equal(small$cx, 0.5, tolerance = 0.02)
+  # ... very different size: 4 mm vs 12 mm is a 3x diameter.
+  expect_gt(big$width_px / small$width_px, 2.5)
+  # And each matches the width that keyframe's radius renders at on its own.
+  expect_equal(
+    small$width_px,
+    ink_stats(one_frame(s, pos = 0, dir = withr::local_tempdir()))$width_px,
+    tolerance = 1
+  )
+})
+
+test_that("colour eases independently of position", {
+  skip_if_not_installed("png")
+  # Fill runs #1f77b4 (blue-ish, low red) -> #e6ab02 (amber, high red). Hold the
+  # circle at mid-position and drive only colour.
+  s <- anim_scenes()
+  centre_rgb <- function(png) {
+    arr <- png::readPNG(png)
+    round(arr[round(dim(arr)[1] / 2), round(dim(arr)[2] / 2), 1:3] * 255)
+  }
+  cold <- centre_rgb(one_frame(
+    s,
+    pos = 0.5,
+    col = 0,
+    dir = withr::local_tempdir()
+  ))
+  warm <- centre_rgb(one_frame(
+    s,
+    pos = 0.5,
+    col = 1,
+    dir = withr::local_tempdir()
+  ))
+  expect_equal(cold, c(31, 119, 180), tolerance = 2) # the left keyframe's fill
+  expect_equal(warm, c(230, 171, 2), tolerance = 2) # the right keyframe's fill
+})
+
+test_that("alpha eases independently, and drives the enter/exit fade", {
+  skip_if_not_installed("png")
+  # Two keyed points: `a` exits, `b` enters. Hold every other class at the
+  # midpoint and move only alpha -- the fade must follow it, not `frac`.
+  mk <- function(keys, xs) {
+    vl_scene(3, 2, dpi = 96, bg = "white") |>
+      push(vl_viewport(xscale = c(0, 1), yscale = c(0, 1), name = "p")) |>
+      draw(points_grob(
+        x = xs,
+        y = rep(0.5, length(xs)),
+        size = vl_unit(6, "mm"),
+        gp = vl_gpar(fill = "steelblue", col = NA),
+        key = keys
+      )) |>
+      pop()
+  }
+  s <- list(a = mk("a", 0.25), b = mk("b", 0.75))
+  red_at <- function(png, xnpc) {
+    arr <- png::readPNG(png)
+    round(arr[round(0.5 * dim(arr)[1]), round(xnpc * dim(arr)[2]), 1] * 255)
+  }
+  # alpha = 0: the exiting point is fully opaque, the entering one invisible.
+  early <- one_frame(s, pos = 0.5, alpha = 0, dir = withr::local_tempdir())
+  expect_lt(red_at(early, 0.25), 90)
+  expect_gt(red_at(early, 0.75), 240)
+  # alpha = 1, same `frac`: the crossfade has completed even though nothing moved.
+  late <- one_frame(s, pos = 0.5, alpha = 1, dir = withr::local_tempdir())
+  expect_gt(red_at(late, 0.25), 240)
+  expect_lt(red_at(late, 0.75), 90)
+})
+
+test_that("vl_render_animation defaults each class schedule to frac", {
+  skip_if_not_installed("png")
+  s <- anim_scenes()
+  d1 <- withr::local_tempdir()
+  d2 <- withr::local_tempdir()
+  fr <- c(0, 0.5, 1)
+  vl_render_animation(list(s$a, s$b), rep(1L, 3), fr, d1, format = "frames")
+  vl_render_animation(
+    list(s$a, s$b),
+    rep(1L, 3),
+    fr,
+    d2,
+    format = "frames",
+    frac_col = fr,
+    frac_size = fr,
+    frac_alpha = fr
+  )
+  f1 <- sort(list.files(d1, pattern = "\\.png$", full.names = TRUE))
+  f2 <- sort(list.files(d2, pattern = "\\.png$", full.names = TRUE))
+  expect_length(f1, 3)
+  for (i in seq_along(f1)) {
+    expect_identical(readBin(f1[[i]], "raw", 1e6), readBin(f2[[i]], "raw", 1e6))
+  }
+})
+
+test_that("vl_render_animation rejects a mis-sized class schedule", {
+  s <- anim_scenes()
+  expect_error(
+    vl_render_animation(
+      list(s$a, s$b),
+      rep(1L, 3),
+      c(0, 0.5, 1),
+      withr::local_tempdir(),
+      format = "frames",
+      frac_size = c(0, 1)
+    ),
+    "same length as"
+  )
 })
 
 test_that("render_animation validates its inputs", {
@@ -262,7 +456,10 @@ test_that("render_animation validates its inputs", {
       1L,
       25L,
       1L,
-      TRUE
+      TRUE,
+      0,
+      0,
+      0
     ),
     "at least 2 keyframes"
   )
@@ -276,7 +473,10 @@ test_that("render_animation validates its inputs", {
       1L,
       25L,
       1L,
-      TRUE
+      TRUE,
+      0,
+      0,
+      0
     ),
     "same length"
   )
@@ -290,7 +490,10 @@ test_that("render_animation validates its inputs", {
       1L,
       25L,
       1L,
-      TRUE
+      TRUE,
+      0.5,
+      0.5,
+      0.5
     ),
     "references keyframe pair"
   )
@@ -304,7 +507,10 @@ test_that("render_animation validates its inputs", {
       1L,
       25L,
       1L,
-      TRUE
+      TRUE,
+      0.5,
+      0.5,
+      0.5
     ),
     "unknown format"
   )
