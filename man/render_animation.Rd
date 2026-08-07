@@ -13,7 +13,10 @@ render_animation(
   delay_num,
   delay_den,
   gif_speed,
-  gif_dither
+  gif_dither,
+  frac_col,
+  frac_size,
+  frac_alpha
 )
 }
 \description{
@@ -21,7 +24,14 @@ render_animation(
 \item \code{keyframes} — a list of compiled \code{Scene} external pointers (the \code{K} states).
 \item \code{seg} — per frame, the 0-based index of the frame's \strong{left} keyframe (the
 right one is \code{seg + 1}).
-\item \code{frac} — per frame, the eased interpolation fraction in \verb{[0, 1]}.
+\item \code{frac} — per frame, the eased interpolation fraction in \verb{[0, 1]}, applied to
+\strong{positional} geometry (and to every discrete \code{t >= 0.5} snap).
+\item \code{frac_col}, \code{frac_size}, \code{frac_alpha} — the same schedule for the colour,
+size and opacity classes, each the same length as \code{frac}. Pass \code{frac} for
+all three to ease everything on one curve (the default, and byte-identical
+to a single-fraction tween); pass a differently-eased vector to have, say,
+position arrive on a cubic curve while colour crossfades linearly. The
+alpha schedule also drives the enter/exit fade of keyed elements.
 \item \code{format} — \code{"frames"} (a PNG per frame into directory \code{path}), \code{"apng"} (a
 single animated PNG at \code{path}), or \code{"gif"} (a looping animated GIF).
 \item \code{delay_num}/\code{delay_den} — per-frame delay as a fraction of a second (e.g.

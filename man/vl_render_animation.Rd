@@ -12,7 +12,10 @@ vl_render_animation(
   format = c("gif", "apng", "svg", "frames"),
   fps = 25,
   gif_speed = 1,
-  gif_dither = TRUE
+  gif_dither = TRUE,
+  frac_col = NULL,
+  frac_size = NULL,
+  frac_alpha = NULL
 )
 }
 \arguments{
@@ -24,7 +27,8 @@ the frame's left keyframe (it is interpolated with keyframe \code{seg + 1}).}
 
 \item{frac}{Numeric vector, one per output frame: the eased interpolation
 fraction in \verb{[0, 1]} (0 = the left keyframe, 1 = the right one). Same length
-as \code{seg}.}
+as \code{seg}. This is the schedule for \strong{positional} geometry, and for every
+discrete attribute that snaps at the halfway point.}
 
 \item{path}{Output path: an image file for \code{"gif"}/\code{"apng"}/\code{"svg"}, or a
 directory (created if needed) for \code{"frames"}.}
@@ -42,6 +46,13 @@ palette, so the default is \code{1}. Ignored for \code{"apng"}/\code{"frames"}.}
 \item{gif_dither}{GIF only: apply Floyd–Steinberg dithering (default \code{TRUE}),
 which greatly reduces the banding a 256-colour palette leaves on gradients and
 antialiased edges. A frame that already fits in 256 colours is kept exact.}
+
+\item{frac_col, frac_size, frac_alpha}{Optional per-aesthetic schedules, each a
+numeric vector the same length as \code{frac}, for the colour, size and opacity
+classes respectively. \code{NULL} (the default) uses \code{frac}, so one easing curve
+shapes the whole scene. Supplying a differently-eased vector lets each
+aesthetic travel on its own curve — position arriving on \verb{cubic-in-out}
+while colour crossfades \code{linear}, say. See \emph{Per-aesthetic easing} below.}
 }
 \value{
 \code{path}, invisibly.
@@ -88,6 +99,28 @@ compression on); uncompressed it is several times larger again.
 
 It also honours \code{prefers-reduced-motion}: a reader who has asked their system
 not to animate gets the first frame, held.
+}
+
+\section{Per-aesthetic easing}{
+\code{frac} and its three companions carry one eased fraction per \strong{property
+class}, so a single frame can interpolate different properties at different
+points along their transitions. Every drawn property belongs to exactly one
+class:\tabular{ll}{
+   schedule \tab drives \cr
+   \code{frac} \tab x/y and all coordinate geometry, widths and heights, angles, path vertices, text rotation, dash phase — \strong{and every discrete attribute's halfway snap} (\code{lty}, \code{lineend}, labels, a variant mismatch) \cr
+   \code{frac_col} \tab \code{fill}, \code{col}, the stroke paint, and per-element colour vectors (hexagon and sector fills) \cr
+   \code{frac_size} \tab \code{lwd}, marker size, circle and corner radius, hexagon extent, \code{linemitre} \cr
+   \code{frac_alpha} \tab \code{alpha}, \strong{including the enter/exit fade} — a keyed element appearing or leaving fades on this curve \cr
+}
+
+
+Two consequences worth knowing. Easing \code{alpha} retimes entrances and exits,
+not just explicit opacity changes. And because a discrete attribute flips when
+its fraction crosses \code{0.5}, and an eased curve reaches \code{0.5} at a different
+\emph{frame} than a linear one, \code{frac} decides which frame those snaps land on.
+
+Passing all four identical (the default) reproduces single-curve easing
+exactly — the output is byte-identical to omitting them.
 }
 
 \examples{

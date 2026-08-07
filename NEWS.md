@@ -1,3 +1,22 @@
+# vellum 0.6.8.9000 (development version)
+
+## Animation
+
+* **The tween carries one eased fraction per property class, not one for the
+  whole scene.** `vl_render_animation()` gains `frac_col`, `frac_size` and
+  `frac_alpha` alongside `frac`, each an optional per-frame schedule for one
+  class of drawn property. This is what lets a grammar layer offer per-aesthetic
+  easing — position arriving on a cubic curve while colour crossfades linearly.
+
+  `frac` drives coordinate geometry and every discrete attribute's halfway snap;
+  `frac_col` drives paints and per-element colour vectors; `frac_size` drives
+  `lwd`, marker size, radii and `linemitre`; `frac_alpha` drives opacity **and
+  the enter/exit fade of keyed elements**.
+
+  All three default to `frac`, and passing four identical schedules is
+  byte-identical to the previous single-fraction tween, so existing animations
+  are unchanged.
+
 # vellum 0.6.8
 
 ## Accessibility

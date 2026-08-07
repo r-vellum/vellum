@@ -10,11 +10,14 @@
 //!
 //! This is a **child module of `scene`**, so it reaches `Scene`/`Node` and the
 //! private `render_to`/`want_bitmap_text` directly, with no visibility widening.
-//! The interpolation is the byte-for-byte specification the pure-R oracle
-//! (`R/tween-oracle.R`) pins down: unit geometry lerps its resolved value on a
-//! matching base code (mismatched bases and vertex counts snap here — the clean,
-//! frozen-scale P1 scope keeps them matched); colours lerp in Oklab (reusing
-//! `oklab.rs`); bounded gpar numerics lerp; discrete fields snap at `t >= 0.5`.
+//! The interpolation: unit geometry lerps its resolved value on a matching base
+//! code (mismatched bases and vertex counts snap here — the clean, frozen-scale
+//! P1 scope keeps them matched); colours lerp in Oklab (reusing `oklab.rs`);
+//! bounded gpar numerics lerp; discrete fields snap at `t >= 0.5`.
+//!
+//! The fraction is not one number but a [`Fracs`] — one per property class
+//! (position, colour, size, alpha) — so an animation can ease each aesthetic on
+//! its own curve. All four equal is the single-curve case.
 
 use crate::scene::xml_escape;
 use std::borrow::Cow;
@@ -33,6 +36,38 @@ use super::{MaskDef, Node, Scene};
 use crate::color::{Inh, Paint, PartialGpar, Rgba};
 use crate::oklab::{oklab_to_rgba, rgba_to_oklab};
 use crate::render::RasterBackend;
+
+// --- per-aesthetic fractions -------------------------------------------------
+
+/// The eased interpolation fraction for one frame, **per property class**.
+///
+/// A single curve for the whole scene is the special case where all four are
+/// equal, which is what an animation with one `ease_aes()` sends and what keeps
+/// its output byte-identical. Splitting them lets position arrive on, say,
+/// `cubic-in-out` while colour crossfades `linear`.
+///
+/// The classes, and what picks each:
+///
+/// * `pos` — coordinate-space geometry: x/y, widths/heights, angles, path
+///   vertices, text rotation. Also the **tie-breaker for everything discrete**:
+///   the `t >= 0.5` snap of `lty`/`lineend`/`label`/…, and the fallback for a
+///   structural or variant mismatch. Note that this is a real choice, not a
+///   neutral one — an eased curve crosses 0.5 at a different *frame* than a
+///   linear one, so the class driving a snap decides which frame it flips on.
+/// * `col` — anything that resolves to a colour: `fill`, `col`, the stroke
+///   paint, and the per-element colour vectors on `Hexagons`/`Sectors`.
+/// * `size` — extents that read as thickness rather than place: `lwd`, marker
+///   `size`, circle radius, hex size, corner radius, `linemitre`.
+/// * `alpha` — opacity, including the **enter/exit fade**: a keyed element
+///   appearing or leaving fades on this curve, so `ease_aes(alpha =)` retimes
+///   entrances as well as explicit alpha changes.
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct Fracs {
+    pub pos: f64,
+    pub col: f64,
+    pub size: f64,
+    pub alpha: f64,
+}
 
 // --- scalar / colour interpolation ------------------------------------------
 
@@ -122,14 +157,20 @@ fn snap<'a, T>(a: &'a T, b: &'a T, t: f64) -> &'a T {
 /// Tween two graphical-parameter sets: colours in Oklab, bounded numerics
 /// linearly; discrete stroke style (lty/lineend/linejoin) snaps with the near
 /// side.
-fn lerp_gpar(a: &PartialGpar, b: &PartialGpar, t: f64) -> PartialGpar {
-    let base = snap(a, b, t);
+///
+/// This is where the per-class fractions do most of their work: paints move on
+/// `fr.col`, stroke width and mitre on `fr.size`, opacity on `fr.alpha`, and the
+/// discrete near-side pick on `fr.pos`.
+fn lerp_gpar(a: &PartialGpar, b: &PartialGpar, fr: &Fracs) -> PartialGpar {
+    // Discrete style has no aesthetic class of its own; it rides the positional
+    // curve, like every other `t >= 0.5` snap.
+    let base = snap(a, b, fr.pos);
     PartialGpar {
-        fill: lerp_paint_inh(&a.fill, &b.fill, t),
-        col: lerp_col_inh(&a.col, &b.col, t),
-        lwd: lerp_f64_inh(&a.lwd, &b.lwd, t),
-        alpha: lerp_f64_inh(&a.alpha, &b.alpha, t),
-        linemitre: lerp_f64_inh(&a.linemitre, &b.linemitre, t),
+        fill: lerp_paint_inh(&a.fill, &b.fill, fr.col),
+        col: lerp_col_inh(&a.col, &b.col, fr.col),
+        lwd: lerp_f64_inh(&a.lwd, &b.lwd, fr.size),
+        alpha: lerp_f64_inh(&a.alpha, &b.alpha, fr.alpha),
+        linemitre: lerp_f64_inh(&a.linemitre, &b.linemitre, fr.size),
         lty: base.lty.clone(),
         lineend: base.lineend,
         linejoin: base.linejoin,
@@ -138,8 +179,9 @@ fn lerp_gpar(a: &PartialGpar, b: &PartialGpar, t: f64) -> PartialGpar {
         crisp: base.crisp,
         // A stroke paint interpolates like a fill paint; the dash phase is a
         // continuous quantity, so it tweens (which is what animates marching ants).
-        col_paint: lerp_paint_inh(&a.col_paint, &b.col_paint, t),
-        dash_phase: lerp_f64_inh(&a.dash_phase, &b.dash_phase, t),
+        // The phase is a distance *along* the path, so it moves with position.
+        col_paint: lerp_paint_inh(&a.col_paint, &b.col_paint, fr.col),
+        dash_phase: lerp_f64_inh(&a.dash_phase, &b.dash_phase, fr.pos),
     }
 }
 
@@ -149,7 +191,13 @@ fn lerp_gpar(a: &PartialGpar, b: &PartialGpar, t: f64) -> PartialGpar {
 /// vectors and discrete fields are carried from `a` (identical across keyframes
 /// under the frozen-scale, stable-element-set scope); geometry values, per-element
 /// colours, and gpar interpolate. Structural nodes and any variant mismatch snap.
-fn lerp_node(a: &Node, b: &Node, t: f64) -> Node {
+///
+/// Coordinate geometry is the common case, so `t` below is bound to the
+/// positional fraction; the fields that belong to another class (radii and
+/// marker sizes on `size`, per-element colour vectors on `col`) name theirs
+/// explicitly, and `gp` splits four ways inside `lerp_gpar`.
+fn lerp_node(a: &Node, b: &Node, fr: &Fracs) -> Node {
+    let t = fr.pos;
     match (a, b) {
         (
             Node::Rect { x: ax, y: ay, w: aw, h: ah, xu, yu, wu, hu, gp: agp },
@@ -163,7 +211,7 @@ fn lerp_node(a: &Node, b: &Node, t: f64) -> Node {
             yu: *yu,
             wu: *wu,
             hu: *hu,
-            gp: lerp_gpar(agp, bgp, t),
+            gp: lerp_gpar(agp, bgp, fr),
         },
         (
             Node::RoundRect { x: ax, y: ay, w: aw, h: ah, r: ar, xu, yu, wu, hu, ru, sketch, key, gp: agp },
@@ -173,14 +221,14 @@ fn lerp_node(a: &Node, b: &Node, t: f64) -> Node {
             y: lerp(*ay, *by, t),
             w: lerp(*aw, *bw, t),
             h: lerp(*ah, *bh, t),
-            r: lerp(*ar, *br, t),
+            r: lerp(*ar, *br, fr.size),
             xu: *xu,
             yu: *yu,
             wu: *wu,
             hu: *hu,
             ru: *ru,
             sketch: sketch.clone(),
-            gp: lerp_gpar(agp, bgp, t),
+            gp: lerp_gpar(agp, bgp, fr),
             key: key.clone(),
         },
         (
@@ -189,12 +237,12 @@ fn lerp_node(a: &Node, b: &Node, t: f64) -> Node {
         ) => Node::Circle {
             x: lerp(*ax, *bx, t),
             y: lerp(*ay, *by, t),
-            r: lerp(*ar, *br, t),
+            r: lerp(*ar, *br, fr.size),
             xu: *xu,
             yu: *yu,
             ru: *ru,
             sketch: sketch.clone(),
-            gp: lerp_gpar(agp, bgp, t),
+            gp: lerp_gpar(agp, bgp, fr),
         },
         (
             Node::Lines { x: ax, y: ay, xu, yu, scap, ecap, off, arrow, sketch, gp: agp, key },
@@ -209,7 +257,7 @@ fn lerp_node(a: &Node, b: &Node, t: f64) -> Node {
             off: *off,
             arrow: arrow.clone(),
             sketch: sketch.clone(),
-            gp: lerp_gpar(agp, snap_node_gp(b, agp), t),
+            gp: lerp_gpar(agp, snap_node_gp(b, agp), fr),
             key: key.clone(),
         },
         (
@@ -221,7 +269,7 @@ fn lerp_node(a: &Node, b: &Node, t: f64) -> Node {
             xu: xu.clone(),
             yu: yu.clone(),
             sketch: sketch.clone(),
-            gp: lerp_gpar(agp, bgp, t),
+            gp: lerp_gpar(agp, bgp, fr),
             key: key.clone(),
         },
         (
@@ -237,7 +285,7 @@ fn lerp_node(a: &Node, b: &Node, t: f64) -> Node {
             wu: wu.clone(),
             hu: hu.clone(),
             sketch: sketch.clone(),
-            gp: lerp_gpar(agp, bgp, t),
+            gp: lerp_gpar(agp, bgp, fr),
             keys: keys.clone(),
         },
         (
@@ -246,12 +294,12 @@ fn lerp_node(a: &Node, b: &Node, t: f64) -> Node {
         ) => Node::Circles {
             x: lerp_vec(ax, bx, t),
             y: lerp_vec(ay, by, t),
-            r: lerp_vec(ar, br, t),
+            r: lerp_vec(ar, br, fr.size),
             xu: xu.clone(),
             yu: yu.clone(),
             ru: ru.clone(),
             sketch: sketch.clone(),
-            gp: lerp_gpar(agp, bgp, t),
+            gp: lerp_gpar(agp, bgp, fr),
             keys: keys.clone(),
         },
         (
@@ -260,13 +308,13 @@ fn lerp_node(a: &Node, b: &Node, t: f64) -> Node {
         ) => Node::Markers {
             x: lerp_vec(ax, bx, t),
             y: lerp_vec(ay, by, t),
-            size: lerp_vec(asz, bsz, t),
+            size: lerp_vec(asz, bsz, fr.size),
             xu: xu.clone(),
             yu: yu.clone(),
             su: su.clone(),
             shape: shape.clone(),
             sketch: sketch.clone(),
-            gp: lerp_gpar(agp, bgp, t),
+            gp: lerp_gpar(agp, bgp, fr),
             keys: keys.clone(),
         },
         (
@@ -275,17 +323,19 @@ fn lerp_node(a: &Node, b: &Node, t: f64) -> Node {
         ) => Node::Hexagons {
             x: lerp_vec(ax, bx, t),
             y: lerp_vec(ay, by, t),
-            size: lerp_vec(asz, bsz, t),
-            w: lerp_vec(aw, bw, t),
-            h: lerp_vec(ah, bh, t),
+            size: lerp_vec(asz, bsz, fr.size),
+            // A hexagon's w/h are its own corner-to-corner extent (the non-regular
+            // form of `size`), not a position in the panel -- so they size, not move.
+            w: lerp_vec(aw, bw, fr.size),
+            h: lerp_vec(ah, bh, fr.size),
             xu: xu.clone(),
             yu: yu.clone(),
             su: su.clone(),
             wu: wu.clone(),
             hu: hu.clone(),
-            fill: lerp_rgba_vec(afill, bfill, t),
+            fill: lerp_rgba_vec(afill, bfill, fr.col),
             flat: *flat,
-            gp: lerp_gpar(agp, bgp, t),
+            gp: lerp_gpar(agp, bgp, fr),
             keys: keys.clone(),
         },
         (
@@ -302,10 +352,10 @@ fn lerp_node(a: &Node, b: &Node, t: f64) -> Node {
             yu: yu.clone(),
             r0u: r0u.clone(),
             r1u: r1u.clone(),
-            fill: lerp_rgba_vec(afill, bfill, t),
+            fill: lerp_rgba_vec(afill, bfill, fr.col),
             arrow: arrow.clone(),
             sketch: sketch.clone(),
-            gp: lerp_gpar(agp, bgp, t),
+            gp: lerp_gpar(agp, bgp, fr),
             keys: keys.clone(),
         },
         (
@@ -332,7 +382,7 @@ fn lerp_node(a: &Node, b: &Node, t: f64) -> Node {
             offu: offu.clone(),
             arrow: arrow.clone(),
             sketch: sketch.clone(),
-            gp: lerp_gpar(agp, bgp, t),
+            gp: lerp_gpar(agp, bgp, fr),
             keys: keys.clone(),
         },
         (
@@ -343,14 +393,17 @@ fn lerp_node(a: &Node, b: &Node, t: f64) -> Node {
             y: lerp_vec(ay, by, t),
             xu: xu.clone(),
             yu: yu.clone(),
-            size: lerp_vec(asz, bsz, t),
+            size: lerp_vec(asz, bsz, fr.size),
             su: su.clone(),
-            foot: lerp_vec(af, bf, t),
+            // `foot` is the node radius the loop attaches at and `width` its
+            // lateral petal scale: both are extents of the loop, like `size`.
+            foot: lerp_vec(af, bf, fr.size),
             fu: fu.clone(),
+            // The bulge direction is an angle in the panel -- positional.
             angle: lerp_vec(aang, bang, t),
-            width: lerp_vec(aw, bw, t),
+            width: lerp_vec(aw, bw, fr.size),
             arrow: arrow.clone(),
-            gp: lerp_gpar(agp, bgp, t),
+            gp: lerp_gpar(agp, bgp, fr),
         },
         (
             Node::Path { x: ax, y: ay, xu, yu, nper, evenodd, sketch, gp: agp, key },
@@ -363,7 +416,7 @@ fn lerp_node(a: &Node, b: &Node, t: f64) -> Node {
             nper: nper.clone(),
             evenodd: *evenodd,
             sketch: sketch.clone(),
-            gp: lerp_gpar(agp, bgp, t),
+            gp: lerp_gpar(agp, bgp, fr),
             key: key.clone(),
         },
         (
@@ -399,7 +452,7 @@ fn lerp_node(a: &Node, b: &Node, t: f64) -> Node {
             // left keyframe's like the glyphs it positions.
             tpath: tpath.clone(),
             key: key.clone(),
-            gp: lerp_gpar(agp, bgp, t),
+            gp: lerp_gpar(agp, bgp, fr),
         },
         // Structural nodes (image/group/subraster/panel) and any variant mismatch
         // carry through unchanged from the near side.
@@ -474,37 +527,38 @@ fn gather<T: Clone>(v: &[T], idx: &[usize]) -> Vec<T> {
 /// Tween one node pair, splitting a keyed batch into matched (tweened),
 /// exiting (faded out), and entering (faded in) sub-batches. Non-batched or
 /// unkeyed nodes fall through to the single-node tween.
-fn tween_node_multi(a: &Node, b: &Node, t: f64) -> Vec<Node> {
+fn tween_node_multi(a: &Node, b: &Node, fr: &Fracs) -> Vec<Node> {
     match (a, b) {
-        (Node::Markers { .. }, Node::Markers { .. }) => ee_markers(a, b, t),
-        (Node::Circles { .. }, Node::Circles { .. }) => ee_circles(a, b, t),
-        (Node::Rects { .. }, Node::Rects { .. }) => ee_rects(a, b, t),
-        _ => vec![lerp_node(a, b, t)],
+        (Node::Markers { .. }, Node::Markers { .. }) => ee_markers(a, b, fr),
+        (Node::Circles { .. }, Node::Circles { .. }) => ee_circles(a, b, fr),
+        (Node::Rects { .. }, Node::Rects { .. }) => ee_rects(a, b, fr),
+        _ => vec![lerp_node(a, b, fr)],
     }
 }
 
-fn ee_markers(a: &Node, b: &Node, t: f64) -> Vec<Node> {
+fn ee_markers(a: &Node, b: &Node, fr: &Fracs) -> Vec<Node> {
+    let t = fr.pos;
     let (
         Node::Markers { x: xa, y: ya, size: sa, xu, yu, su, shape: sha, sketch, keys: ka, gp: gpa },
         Node::Markers { x: xb, y: yb, size: sb, xu: xub, yu: yub, su: sub, shape: shb, keys: kb, gp: gpb, .. },
     ) = (a, b)
     else {
-        return vec![lerp_node(a, b, t)];
+        return vec![lerp_node(a, b, fr)];
     };
-    let Some(m) = match_keys(ka, kb) else { return vec![lerp_node(a, b, t)] };
+    let Some(m) = match_keys(ka, kb) else { return vec![lerp_node(a, b, fr)] };
     let mut out = Vec::new();
     if !m.matched.is_empty() {
         let ia: Vec<usize> = m.matched.iter().map(|p| p.0).collect();
         out.push(Node::Markers {
             x: m.matched.iter().map(|(i, j)| lerp(xa[*i], xb[*j], t)).collect(),
             y: m.matched.iter().map(|(i, j)| lerp(ya[*i], yb[*j], t)).collect(),
-            size: m.matched.iter().map(|(i, j)| lerp(sa[*i], sb[*j], t)).collect(),
+            size: m.matched.iter().map(|(i, j)| lerp(sa[*i], sb[*j], fr.size)).collect(),
             xu: gather(xu, &ia),
             yu: gather(yu, &ia),
             su: gather(su, &ia),
             shape: gather(sha, &ia),
             sketch: sketch.clone(),
-            gp: lerp_gpar(gpa, gpb, t),
+            gp: lerp_gpar(gpa, gpb, fr),
             keys: gather(ka, &ia),
         });
     }
@@ -518,7 +572,7 @@ fn ee_markers(a: &Node, b: &Node, t: f64) -> Vec<Node> {
             su: gather(su, &m.a_only),
             shape: gather(sha, &m.a_only),
             sketch: sketch.clone(),
-            gp: fade_gp(gpa, 1.0 - t),
+            gp: fade_gp(gpa, 1.0 - fr.alpha),
             keys: gather(ka, &m.a_only),
         });
     }
@@ -532,34 +586,35 @@ fn ee_markers(a: &Node, b: &Node, t: f64) -> Vec<Node> {
             su: gather(sub, &m.b_only),
             shape: gather(shb, &m.b_only),
             sketch: sketch.clone(),
-            gp: fade_gp(gpb, t),
+            gp: fade_gp(gpb, fr.alpha),
             keys: gather(kb, &m.b_only),
         });
     }
     out
 }
 
-fn ee_circles(a: &Node, b: &Node, t: f64) -> Vec<Node> {
+fn ee_circles(a: &Node, b: &Node, fr: &Fracs) -> Vec<Node> {
+    let t = fr.pos;
     let (
         Node::Circles { x: xa, y: ya, r: ra, xu, yu, ru, sketch, keys: ka, gp: gpa },
         Node::Circles { x: xb, y: yb, r: rb, xu: xub, yu: yub, ru: rub, keys: kb, gp: gpb, .. },
     ) = (a, b)
     else {
-        return vec![lerp_node(a, b, t)];
+        return vec![lerp_node(a, b, fr)];
     };
-    let Some(m) = match_keys(ka, kb) else { return vec![lerp_node(a, b, t)] };
+    let Some(m) = match_keys(ka, kb) else { return vec![lerp_node(a, b, fr)] };
     let mut out = Vec::new();
     if !m.matched.is_empty() {
         let ia: Vec<usize> = m.matched.iter().map(|p| p.0).collect();
         out.push(Node::Circles {
             x: m.matched.iter().map(|(i, j)| lerp(xa[*i], xb[*j], t)).collect(),
             y: m.matched.iter().map(|(i, j)| lerp(ya[*i], yb[*j], t)).collect(),
-            r: m.matched.iter().map(|(i, j)| lerp(ra[*i], rb[*j], t)).collect(),
+            r: m.matched.iter().map(|(i, j)| lerp(ra[*i], rb[*j], fr.size)).collect(),
             xu: gather(xu, &ia),
             yu: gather(yu, &ia),
             ru: gather(ru, &ia),
             sketch: sketch.clone(),
-            gp: lerp_gpar(gpa, gpb, t),
+            gp: lerp_gpar(gpa, gpb, fr),
             keys: gather(ka, &ia),
         });
     }
@@ -572,7 +627,7 @@ fn ee_circles(a: &Node, b: &Node, t: f64) -> Vec<Node> {
             yu: gather(yu, &m.a_only),
             ru: gather(ru, &m.a_only),
             sketch: sketch.clone(),
-            gp: fade_gp(gpa, 1.0 - t),
+            gp: fade_gp(gpa, 1.0 - fr.alpha),
             keys: gather(ka, &m.a_only),
         });
     }
@@ -585,22 +640,23 @@ fn ee_circles(a: &Node, b: &Node, t: f64) -> Vec<Node> {
             yu: gather(yub, &m.b_only),
             ru: gather(rub, &m.b_only),
             sketch: sketch.clone(),
-            gp: fade_gp(gpb, t),
+            gp: fade_gp(gpb, fr.alpha),
             keys: gather(kb, &m.b_only),
         });
     }
     out
 }
 
-fn ee_rects(a: &Node, b: &Node, t: f64) -> Vec<Node> {
+fn ee_rects(a: &Node, b: &Node, fr: &Fracs) -> Vec<Node> {
+    let t = fr.pos;
     let (
         Node::Rects { x: xa, y: ya, w: wa, h: ha, xu, yu, wu, hu, sketch, keys: ka, gp: gpa },
         Node::Rects { x: xb, y: yb, w: wb, h: hb, xu: xub, yu: yub, wu: wub, hu: hub, keys: kb, gp: gpb, .. },
     ) = (a, b)
     else {
-        return vec![lerp_node(a, b, t)];
+        return vec![lerp_node(a, b, fr)];
     };
-    let Some(m) = match_keys(ka, kb) else { return vec![lerp_node(a, b, t)] };
+    let Some(m) = match_keys(ka, kb) else { return vec![lerp_node(a, b, fr)] };
     let mut out = Vec::new();
     if !m.matched.is_empty() {
         let ia: Vec<usize> = m.matched.iter().map(|p| p.0).collect();
@@ -614,7 +670,7 @@ fn ee_rects(a: &Node, b: &Node, t: f64) -> Vec<Node> {
             wu: gather(wu, &ia),
             hu: gather(hu, &ia),
             sketch: sketch.clone(),
-            gp: lerp_gpar(gpa, gpb, t),
+            gp: lerp_gpar(gpa, gpb, fr),
             keys: gather(ka, &ia),
         });
     }
@@ -629,7 +685,7 @@ fn ee_rects(a: &Node, b: &Node, t: f64) -> Vec<Node> {
             wu: gather(wu, &m.a_only),
             hu: gather(hu, &m.a_only),
             sketch: sketch.clone(),
-            gp: fade_gp(gpa, 1.0 - t),
+            gp: fade_gp(gpa, 1.0 - fr.alpha),
             keys: gather(ka, &m.a_only),
         });
     }
@@ -644,7 +700,7 @@ fn ee_rects(a: &Node, b: &Node, t: f64) -> Vec<Node> {
             wu: gather(wub, &m.b_only),
             hu: gather(hub, &m.b_only),
             sketch: sketch.clone(),
-            gp: fade_gp(gpb, t),
+            gp: fade_gp(gpb, fr.alpha),
             keys: gather(kb, &m.b_only),
         });
     }
@@ -657,7 +713,7 @@ fn ee_rects(a: &Node, b: &Node, t: f64) -> Vec<Node> {
 /// geometry attached to a viewport; interpolating them lets a `transition_reveal`
 /// grow a clip rectangle so the plot wipes into view. Structurally parallel masks
 /// (same count, same node counts) tween element-wise; anything else keeps `a`'s.
-fn tween_masks(a: &[MaskDef], b: &[MaskDef], t: f64) -> Vec<MaskDef> {
+fn tween_masks(a: &[MaskDef], b: &[MaskDef], fr: &Fracs) -> Vec<MaskDef> {
     if a.len() != b.len() {
         return a.to_vec();
     }
@@ -668,7 +724,7 @@ fn tween_masks(a: &[MaskDef], b: &[MaskDef], t: f64) -> Vec<MaskDef> {
                 ma.nodes
                     .iter()
                     .zip(mb.nodes.iter())
-                    .map(|((vp, na), (_, nb))| (*vp, lerp_node(na, nb, t)))
+                    .map(|((vp, na), (_, nb))| (*vp, lerp_node(na, nb, fr)))
                     .collect()
             } else {
                 ma.nodes.clone()
@@ -682,13 +738,13 @@ fn tween_masks(a: &[MaskDef], b: &[MaskDef], t: f64) -> Vec<MaskDef> {
 /// (viewports, masks, meta — identical across keyframes under frozen scales) and
 /// replace its nodes with the interpolated ones. A different node count between
 /// keyframes (a structural change, out of P1 scope) falls back to `a`'s nodes.
-fn tween_scene(a: &Scene, b: &Scene, t: f64) -> Scene {
+fn tween_scene(a: &Scene, b: &Scene, fr: &Fracs) -> Scene {
     let nodes = if a.nodes.len() == b.nodes.len() {
         a.nodes
             .iter()
             .zip(b.nodes.iter())
             .flat_map(|((vp, na), (_, nb))| {
-                tween_node_multi(na, nb, t).into_iter().map(move |n| (*vp, n))
+                tween_node_multi(na, nb, fr).into_iter().map(move |n| (*vp, n))
             })
             .collect()
     } else {
@@ -702,7 +758,7 @@ fn tween_scene(a: &Scene, b: &Scene, t: f64) -> Scene {
         viewports: a.viewports.clone(),
         current: a.current,
         nodes,
-        masks: tween_masks(&a.masks, &b.masks, t),
+        masks: tween_masks(&a.masks, &b.masks, fr),
         mask_target: a.mask_target.clone(),
         picks: a.picks.clone(),
         cur_pick: a.cur_pick,
@@ -739,7 +795,7 @@ fn tween_scene(a: &Scene, b: &Scene, t: f64) -> Scene {
 /// So it wins on line art -- an explanatory animation of a few moving marks --
 /// and loses on dense scatter, where a raster format is the right answer. It is
 /// resolution-independent either way, which no raster format is.
-fn animated_svg(kf: &[Scene], seg: &[i32], frac: &[f64], delay_num: i32, delay_den: i32) -> String {
+fn animated_svg(kf: &[Scene], seg: &[i32], frac: &[Fracs], delay_num: i32, delay_den: i32) -> String {
     let n = seg.len();
     let dur = (delay_num.max(0) as f64 / delay_den.max(1) as f64) * n as f64;
     let (w, h) = (kf[0].w_px, kf[0].h_px);
@@ -750,7 +806,7 @@ fn animated_svg(kf: &[Scene], seg: &[i32], frac: &[f64], delay_num: i32, delay_d
     let bodies: Vec<String> = (0..n)
         .map(|frame| {
             let s = seg[frame] as usize;
-            let mut sc = tween_scene(&kf[s], &kf[s + 1], frac[frame]);
+            let mut sc = tween_scene(&kf[s], &kf[s + 1], &frac[frame]);
             // The title/desc belong to the document, not to each of its frames:
             // repeating them would have a screen reader announce the figure once
             // per frame.
@@ -1006,7 +1062,14 @@ fn open_gif(path: &str, w: u16, h: u16) -> EncResult<gif::Encoder<BufWriter<File
 /// * `keyframes` — a list of compiled `Scene` external pointers (the `K` states).
 /// * `seg` — per frame, the 0-based index of the frame's **left** keyframe (the
 ///   right one is `seg + 1`).
-/// * `frac` — per frame, the eased interpolation fraction in `[0, 1]`.
+/// * `frac` — per frame, the eased interpolation fraction in `[0, 1]`, applied to
+///   **positional** geometry (and to every discrete `t >= 0.5` snap).
+/// * `frac_col`, `frac_size`, `frac_alpha` — the same schedule for the colour,
+///   size and opacity classes, each the same length as `frac`. Pass `frac` for
+///   all three to ease everything on one curve (the default, and byte-identical
+///   to a single-fraction tween); pass a differently-eased vector to have, say,
+///   position arrive on a cubic curve while colour crossfades linearly. The
+///   alpha schedule also drives the enter/exit fade of keyed elements.
 /// * `format` — `"frames"` (a PNG per frame into directory `path`), `"apng"` (a
 ///   single animated PNG at `path`), or `"gif"` (a looping animated GIF).
 /// * `delay_num`/`delay_den` — per-frame delay as a fraction of a second (e.g.
@@ -1029,6 +1092,9 @@ fn render_animation(
     delay_den: i32,
     gif_speed: i32,
     gif_dither: bool,
+    frac_col: &[f64],
+    frac_size: &[f64],
+    frac_alpha: &[f64],
 ) -> Vec<String> {
     let k = keyframes.len();
     if k < 2 {
@@ -1041,6 +1107,22 @@ fn render_animation(
     if n == 0 {
         throw_r_error("render_animation(): no frames scheduled");
     }
+    // The three per-aesthetic schedules are parallel to `frac` (the positional
+    // one). The R wrapper defaults each to `frac`, so a single-curve animation
+    // sends four identical vectors and every class lerps on the same `t` --
+    // byte-identical to the pre-split behaviour.
+    for (name, v) in [("frac_col", frac_col), ("frac_size", frac_size), ("frac_alpha", frac_alpha)] {
+        if v.len() != n {
+            throw_r_error(&format!(
+                "render_animation(): {name} must have the same length as frac ({n}), got {}",
+                v.len()
+            ));
+        }
+    }
+    let frac: Vec<Fracs> = (0..n)
+        .map(|i| Fracs { pos: frac[i], col: frac_col[i], size: frac_size[i], alpha: frac_alpha[i] })
+        .collect();
+    let frac = &frac[..];
 
     // Own the keyframe scenes (clone out of the external pointers) so the tween
     // can read them freely and they outlive the R call cleanly.
@@ -1120,7 +1202,7 @@ fn render_animation(
         let scenes: Vec<Scene> = (start..end)
             .map(|frame| {
                 let s = seg[frame] as usize;
-                tween_scene(&kf[s], &kf[s + 1], frac[frame])
+                tween_scene(&kf[s], &kf[s + 1], &frac[frame])
             })
             .collect();
         let pixmaps: Vec<Pixmap> = scenes.into_par_iter().map(|s| render_frame(&s)).collect();

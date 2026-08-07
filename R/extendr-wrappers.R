@@ -169,7 +169,14 @@ rs_pdf_pages_raw <- function(scenes) .Call(wrap__rs_pdf_pages_raw, scenes)
 #' * `keyframes` — a list of compiled `Scene` external pointers (the `K` states).
 #' * `seg` — per frame, the 0-based index of the frame's **left** keyframe (the
 #'   right one is `seg + 1`).
-#' * `frac` — per frame, the eased interpolation fraction in `[0, 1]`.
+#' * `frac` — per frame, the eased interpolation fraction in `[0, 1]`, applied to
+#'   **positional** geometry (and to every discrete `t >= 0.5` snap).
+#' * `frac_col`, `frac_size`, `frac_alpha` — the same schedule for the colour,
+#'   size and opacity classes, each the same length as `frac`. Pass `frac` for
+#'   all three to ease everything on one curve (the default, and byte-identical
+#'   to a single-fraction tween); pass a differently-eased vector to have, say,
+#'   position arrive on a cubic curve while colour crossfades linearly. The
+#'   alpha schedule also drives the enter/exit fade of keyed elements.
 #' * `format` — `"frames"` (a PNG per frame into directory `path`), `"apng"` (a
 #'   single animated PNG at `path`), or `"gif"` (a looping animated GIF).
 #' * `delay_num`/`delay_den` — per-frame delay as a fraction of a second (e.g.
@@ -181,7 +188,7 @@ rs_pdf_pages_raw <- function(scenes) .Call(wrap__rs_pdf_pages_raw, scenes)
 #' Returns any renderer degradation warnings (currently none for the raster path).
 #'
 #' @keywords internal
-render_animation <- function(keyframes, seg, frac, format, path, delay_num, delay_den, gif_speed, gif_dither) .Call(wrap__render_animation, keyframes, seg, frac, format, path, delay_num, delay_den, gif_speed, gif_dither)
+render_animation <- function(keyframes, seg, frac, format, path, delay_num, delay_den, gif_speed, gif_dither, frac_col, frac_size, frac_alpha) .Call(wrap__render_animation, keyframes, seg, frac, format, path, delay_num, delay_den, gif_speed, gif_dither, frac_col, frac_size, frac_alpha)
 
 rs_aggregate_2d <- function(x, y, w, nx, ny, x0, x1, y0, y1) .Call(wrap__rs_aggregate_2d, x, y, w, nx, ny, x0, x1, y0, y1)
 
