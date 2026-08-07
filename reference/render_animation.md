@@ -6,7 +6,17 @@
 - `seg` — per frame, the 0-based index of the frame's **left** keyframe
   (the right one is `seg + 1`).
 
-- `frac` — per frame, the eased interpolation fraction in `[0, 1]`.
+- `frac` — per frame, the eased interpolation fraction in `[0, 1]`,
+  applied to **positional** geometry (and to every discrete `t >= 0.5`
+  snap).
+
+- `frac_col`, `frac_size`, `frac_alpha` — the same schedule for the
+  colour, size and opacity classes, each the same length as `frac`. Pass
+  `frac` for all three to ease everything on one curve (the default, and
+  byte-identical to a single-fraction tween); pass a differently-eased
+  vector to have, say, position arrive on a cubic curve while colour
+  crossfades linearly. The alpha schedule also drives the enter/exit
+  fade of keyed elements.
 
 - `format` — `"frames"` (a PNG per frame into directory `path`),
   `"apng"` (a single animated PNG at `path`), or `"gif"` (a looping
@@ -32,7 +42,10 @@ render_animation(
   delay_num,
   delay_den,
   gif_speed,
-  gif_dither
+  gif_dither,
+  frac_col,
+  frac_size,
+  frac_alpha
 )
 ```
 

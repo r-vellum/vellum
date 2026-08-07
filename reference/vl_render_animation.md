@@ -19,7 +19,10 @@ vl_render_animation(
   format = c("gif", "apng", "svg", "frames"),
   fps = 25,
   gif_speed = 1,
-  gif_dither = TRUE
+  gif_dither = TRUE,
+  frac_col = NULL,
+  frac_size = NULL,
+  frac_alpha = NULL
 )
 ```
 
@@ -43,7 +46,8 @@ vl_render_animation(
 
   Numeric vector, one per output frame: the eased interpolation fraction
   in `[0, 1]` (0 = the left keyframe, 1 = the right one). Same length as
-  `seg`.
+  `seg`. This is the schedule for **positional** geometry, and for every
+  discrete attribute that snaps at the halfway point.
 
 - path:
 
@@ -72,6 +76,16 @@ vl_render_animation(
   greatly reduces the banding a 256-colour palette leaves on gradients
   and antialiased edges. A frame that already fits in 256 colours is
   kept exact.
+
+- frac_col, frac_size, frac_alpha:
+
+  Optional per-aesthetic schedules, each a numeric vector the same
+  length as `frac`, for the colour, size and opacity classes
+  respectively. `NULL` (the default) uses `frac`, so one easing curve
+  shapes the whole scene. Supplying a differently-eased vector lets each
+  aesthetic travel on its own curve — position arriving on
+  `cubic-in-out` while colour crossfades `linear`, say. See
+  *Per-aesthetic easing* below.
 
 ## Value
 
@@ -115,6 +129,30 @@ larger again.
 
 It also honours `prefers-reduced-motion`: a reader who has asked their
 system not to animate gets the first frame, held.
+
+## Per-aesthetic easing
+
+`frac` and its three companions carry one eased fraction per **property
+class**, so a single frame can interpolate different properties at
+different points along their transitions. Every drawn property belongs
+to exactly one class:
+
+|  |  |
+|----|----|
+| schedule | drives |
+| `frac` | x/y and all coordinate geometry, widths and heights, angles, path vertices, text rotation, dash phase — **and every discrete attribute's halfway snap** (`lty`, `lineend`, labels, a variant mismatch) |
+| `frac_col` | `fill`, `col`, the stroke paint, and per-element colour vectors (hexagon and sector fills) |
+| `frac_size` | `lwd`, marker size, circle and corner radius, hexagon extent, `linemitre` |
+| `frac_alpha` | `alpha`, **including the enter/exit fade** — a keyed element appearing or leaving fades on this curve |
+
+Two consequences worth knowing. Easing `alpha` retimes entrances and
+exits, not just explicit opacity changes. And because a discrete
+attribute flips when its fraction crosses `0.5`, and an eased curve
+reaches `0.5` at a different *frame* than a linear one, `frac` decides
+which frame those snaps land on.
+
+Passing all four identical (the default) reproduces single-curve easing
+exactly — the output is byte-identical to omitting them.
 
 ## See also
 

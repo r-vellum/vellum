@@ -13,7 +13,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">vellum</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.6.8</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.6.8.9000</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -69,6 +69,17 @@
       <small>Source: <a href="https://github.com/r-vellum/vellum/blob/main/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.6.8.9000" id="vellum-0689000-development-version">vellum 0.6.8.9000 (development version)<a class="anchor" aria-label="anchor" href="#vellum-0689000-development-version"></a></h2>
+<div class="section level3">
+<h3 id="animation-0-6-8-9000">Animation<a class="anchor" aria-label="anchor" href="#animation-0-6-8-9000"></a></h3>
+<ul><li>
+<p><strong>The tween carries one eased fraction per property class, not one for the whole scene.</strong> <code><a href="../reference/vl_render_animation.html">vl_render_animation()</a></code> gains <code>frac_col</code>, <code>frac_size</code> and <code>frac_alpha</code> alongside <code>frac</code>, each an optional per-frame schedule for one class of drawn property. This is what lets a grammar layer offer per-aesthetic easing — position arriving on a cubic curve while colour crossfades linearly.</p>
+<p><code>frac</code> drives coordinate geometry and every discrete attribute’s halfway snap; <code>frac_col</code> drives paints and per-element colour vectors; <code>frac_size</code> drives <code>lwd</code>, marker size, radii and <code>linemitre</code>; <code>frac_alpha</code> drives opacity <strong>and the enter/exit fade of keyed elements</strong>.</p>
+<p>All three default to <code>frac</code>, and passing four identical schedules is byte-identical to the previous single-fraction tween, so existing animations are unchanged.</p>
+</li>
+</ul></div>
+</div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.6.8" id="vellum-068">vellum 0.6.8<a class="anchor" aria-label="anchor" href="#vellum-068"></a></h2>
 <div class="section level3">

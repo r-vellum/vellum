@@ -10,7 +10,14 @@
 keyframes — a list of compiled Scene external pointers (the K states).
 seg — per frame, the 0-based index of the frame's left keyframe (the
 right one is seg + 1).
-frac — per frame, the eased interpolation fraction in [0, 1].
+frac — per frame, the eased interpolation fraction in [0, 1], applied to
+positional geometry (and to every discrete t &amp;gt;= 0.5 snap).
+frac_col, frac_size, frac_alpha — the same schedule for the colour,
+size and opacity classes, each the same length as frac. Pass frac for
+all three to ease everything on one curve (the default, and byte-identical
+to a single-fraction tween); pass a differently-eased vector to have, say,
+position arrive on a cubic curve while colour crossfades linearly. The
+alpha schedule also drives the enter/exit fade of keyed elements.
 format — &quot;frames&quot; (a PNG per frame into directory path), &quot;apng&quot; (a
 single animated PNG at path), or &quot;gif&quot; (a looping animated GIF).
 delay_num/delay_den — per-frame delay as a fraction of a second (e.g.
@@ -24,7 +31,14 @@ gif_dither — GIF only: apply Floyd–Steinberg dithering.
 keyframes — a list of compiled Scene external pointers (the K states).
 seg — per frame, the 0-based index of the frame's left keyframe (the
 right one is seg + 1).
-frac — per frame, the eased interpolation fraction in [0, 1].
+frac — per frame, the eased interpolation fraction in [0, 1], applied to
+positional geometry (and to every discrete t &amp;gt;= 0.5 snap).
+frac_col, frac_size, frac_alpha — the same schedule for the colour,
+size and opacity classes, each the same length as frac. Pass frac for
+all three to ease everything on one curve (the default, and byte-identical
+to a single-fraction tween); pass a differently-eased vector to have, say,
+position arrive on a cubic curve while colour crossfades linearly. The
+alpha schedule also drives the enter/exit fade of keyed elements.
 format — &quot;frames&quot; (a PNG per frame into directory path), &quot;apng&quot; (a
 single animated PNG at path), or &quot;gif&quot; (a looping animated GIF).
 delay_num/delay_den — per-frame delay as a fraction of a second (e.g.
@@ -41,7 +55,7 @@ gif_dither — GIF only: apply Floyd–Steinberg dithering.
 
     <a class="navbar-brand me-2" href="../index.html">vellum</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.6.8</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.6.8.9000</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -103,7 +117,14 @@ gif_dither — GIF only: apply Floyd–Steinberg dithering.
 <ul><li><p><code>keyframes</code> — a list of compiled <code>Scene</code> external pointers (the <code>K</code> states).</p></li>
 <li><p><code>seg</code> — per frame, the 0-based index of the frame's <strong>left</strong> keyframe (the
 right one is <code>seg + 1</code>).</p></li>
-<li><p><code>frac</code> — per frame, the eased interpolation fraction in <code>[0, 1]</code>.</p></li>
+<li><p><code>frac</code> — per frame, the eased interpolation fraction in <code>[0, 1]</code>, applied to
+<strong>positional</strong> geometry (and to every discrete <code>t &gt;= 0.5</code> snap).</p></li>
+<li><p><code>frac_col</code>, <code>frac_size</code>, <code>frac_alpha</code> — the same schedule for the colour,
+size and opacity classes, each the same length as <code>frac</code>. Pass <code>frac</code> for
+all three to ease everything on one curve (the default, and byte-identical
+to a single-fraction tween); pass a differently-eased vector to have, say,
+position arrive on a cubic curve while colour crossfades linearly. The
+alpha schedule also drives the enter/exit fade of keyed elements.</p></li>
 <li><p><code>format</code> — <code>"frames"</code> (a PNG per frame into directory <code>path</code>), <code>"apng"</code> (a
 single animated PNG at <code>path</code>), or <code>"gif"</code> (a looping animated GIF).</p></li>
 <li><p><code>delay_num</code>/<code>delay_den</code> — per-frame delay as a fraction of a second (e.g.
@@ -124,7 +145,10 @@ single animated PNG at <code>path</code>), or <code>"gif"</code> (a looping anim
 <span>  <span class="va">delay_num</span>,</span>
 <span>  <span class="va">delay_den</span>,</span>
 <span>  <span class="va">gif_speed</span>,</span>
-<span>  <span class="va">gif_dither</span></span>
+<span>  <span class="va">gif_dither</span>,</span>
+<span>  <span class="va">frac_col</span>,</span>
+<span>  <span class="va">frac_size</span>,</span>
+<span>  <span class="va">frac_alpha</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
 
