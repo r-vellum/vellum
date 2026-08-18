@@ -110,14 +110,14 @@
 <!-- badges: start -->
 
 <p><strong>vellum draws nothing until it knows exactly what it is drawing.</strong></p>
-<p>Text is measured, layout is solved and every mark’s position is resolved <em>before</em> anything reaches a canvas — in process, with no device open. That one property is where everything below comes from: a scene you can interrogate, wrap text inside, move labels around in, lint, hash, diff and render three ways from a single solve.</p>
-<p>It is a low-level graphics framework in the spirit of <strong>grid</strong> — units, viewports, grobs, layout — and it is the foundation layer a grammar of graphics builds on, not a plotting package itself. That grammar is <a href="https://github.com/r-vellum/vellumplot" class="external-link">vellumplot</a>.</p>
+<p>Text is measured, layout is solved and every mark’s position is resolved <em>before</em> anything reaches a canvas, in process, with no device open. Everything below follows from that: a scene you can interrogate, wrap text inside, move labels around in, lint, hash, diff and render three ways from a single solve.</p>
+<p>It is a low-level graphics framework in the spirit of <strong>grid</strong> (units, viewports, grobs, layout), and the foundation layer a grammar of graphics builds on. That grammar is <a href="https://github.com/r-vellum/vellumplot" class="external-link">vellumplot</a>.</p>
 <p><img src="reference/figures/README-hello.png"></p>
 <div class="section level2">
 <h2 id="things-a-graphics-engine-usually-cannot-do">Things a graphics engine usually cannot do<a class="anchor" aria-label="anchor" href="#things-a-graphics-engine-usually-cannot-do"></a>
 </h2>
 <p>Each of these needs the geometry to exist <em>before</em> the draw. In a device-driven stack it does not, which is why these are hard or impossible on top of grid.</p>
-<p><strong>Ask the scene where everything landed.</strong> One row per element — data key, mark, panel, device-pixel box — with no device open and nothing drawn.</p>
+<p><strong>Ask the scene where everything landed.</strong> One row per element (data key, mark, panel, device-pixel box), with no device open and nothing drawn.</p>
 <div class="sourceCode" id="cb1"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">plot</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/vl_scene.html">vl_scene</a></span><span class="op">(</span><span class="fl">4</span>, <span class="fl">2</span>, bg <span class="op">=</span> <span class="st">"white"</span><span class="op">)</span> <span class="op">|&gt;</span></span>
 <span>  <span class="fu"><a href="reference/vl_scene.html">push</a></span><span class="op">(</span><span class="fu"><a href="reference/vl_viewport.html">vl_viewport</a></span><span class="op">(</span>name <span class="op">=</span> <span class="st">"panel"</span>, xscale <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0</span>, <span class="fl">10</span><span class="op">)</span>, yscale <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0</span>, <span class="fl">10</span><span class="op">)</span><span class="op">)</span><span class="op">)</span> <span class="op">|&gt;</span></span>
@@ -130,7 +130,7 @@
 <span><span class="co">#&gt; 1 site-1 point panel  69.24094 126.84094  84.35906 141.95906</span></span>
 <span><span class="co">#&gt; 2 site-2 point panel 184.44094  50.04094 199.55906  65.15906</span></span>
 <span><span class="co">#&gt; 3 site-3 point panel 299.64094 107.64094 314.75906 122.75906</span></span></code></pre></div>
-<p><strong>Fit text to a box.</strong> Wrap to a measure, justify it, and shrink the font until the block fits — each probe re-wraps, because the line breaks depend on the size.</p>
+<p><strong>Fit text to a box.</strong> Wrap to a measure, justify it, and shrink the font until the block fits. Each probe re-wraps, because the line breaks depend on the size.</p>
 <div class="sourceCode" id="cb2"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="reference/grob.html">text_grob</a></span><span class="op">(</span><span class="va">caption</span>, width <span class="op">=</span> <span class="fu"><a href="reference/vl_unit.html">vl_unit</a></span><span class="op">(</span><span class="fl">60</span>, <span class="st">"mm"</span><span class="op">)</span>, height <span class="op">=</span> <span class="fu"><a href="reference/vl_unit.html">vl_unit</a></span><span class="op">(</span><span class="fl">20</span>, <span class="st">"mm"</span><span class="op">)</span>,</span>
 <span>          align <span class="op">=</span> <span class="st">"justify"</span>, fit <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span></code></pre></div>
@@ -155,7 +155,7 @@
 <div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="reference/scene_hash.html">scene_hash</a></span><span class="op">(</span><span class="va">a</span><span class="op">)</span> <span class="op">==</span> <span class="fu"><a href="reference/scene_hash.html">scene_hash</a></span><span class="op">(</span><span class="va">b</span><span class="op">)</span></span>
 <span><span class="fu"><a href="reference/scene_diff.html">scene_diff</a></span><span class="op">(</span><span class="va">a</span>, <span class="va">b</span><span class="op">)</span>                    <span class="co"># what changed, not which pixels</span></span></code></pre></div>
-<p><strong>Ship output that is actually accessible.</strong> Simulate colour-vision deficiency in the render, encode redundantly with real hatch <em>geometry</em>, and emit a <strong>tagged PDF</strong> whose structure tree a screen reader can navigate — from the same <code>role</code>/<code>name</code> metadata that drives the SVG.</p>
+<p><strong>Ship accessible output.</strong> Simulate colour-vision deficiency in the render, encode redundantly with real hatch <em>geometry</em>, and emit a <strong>tagged PDF</strong> whose structure tree a screen reader can navigate, built from the same <code>role</code>/<code>name</code> metadata that drives the SVG.</p>
 <div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="reference/vl_scene.html">render</a></span><span class="op">(</span><span class="va">plot</span>, <span class="st">"check.png"</span>, cvd <span class="op">=</span> <span class="st">"deuteranopia"</span><span class="op">)</span></span>
 <span><span class="fu"><a href="reference/vl_scene.html">render</a></span><span class="op">(</span><span class="va">plot</span>, <span class="st">"report.pdf"</span><span class="op">)</span>          <span class="co"># tagged, if the marks carry role/name</span></span></code></pre></div>
@@ -185,13 +185,13 @@
 <li>
 <strong>Layout is solved once, not once per device.</strong> The <em>same</em> solved scene is walked for each backend, so <code>render(scene, "plot.png" | "plot.svg" | "plot.pdf")</code> agree on geometry rather than each re-solving it against their own font metrics. Output is byte-stable, so figures are snapshot-testable. Where a backend cannot honour something it <strong>says so</strong> rather than silently dropping it.</li>
 <li>
-<strong>Text that matches the rest of R.</strong> Shaping runs through <a href="https://github.com/r-lib/textshaping" class="external-link">textshaping</a> on <a href="https://github.com/r-lib/systemfonts" class="external-link">systemfonts</a> — the stack ragg and svglite use — with per-glyph fallback, OpenType features (<code>tnum</code>, <code>smcp</code>, <code>onum</code>), haloed text, and Markdown-style rich labels (<code><a href="reference/md.html">md()</a></code>). <code><a href="reference/vl_strwidth.html">vl_strwidth()</a></code> measures without opening a device.</li>
+<strong>Text that matches the rest of R.</strong> Shaping runs through <a href="https://github.com/r-lib/textshaping" class="external-link">textshaping</a> on <a href="https://github.com/r-lib/systemfonts" class="external-link">systemfonts</a>, the stack ragg and svglite use, with per-glyph fallback, OpenType features (<code>tnum</code>, <code>smcp</code>, <code>onum</code>), haloed text, and Markdown-style rich labels (<code><a href="reference/md.html">md()</a></code>). <code><a href="reference/vl_strwidth.html">vl_strwidth()</a></code> measures without opening a device.</li>
 <li>
 <strong>A modern paint model, everywhere.</strong> Linear and radial <strong>gradients</strong> (on strokes too), tiling <strong>patterns</strong>, real hatch <strong>geometry</strong>, alpha and luminance <strong>masks</strong>, group opacity, blur, drop shadow and glow.</li>
 <li>
-<strong>Named, editable nodes.</strong> <code><a href="reference/node_names.html">node_names()</a></code> / <code><a href="reference/node_names.html">get_node()</a></code> / <code><a href="reference/node_names.html">edit_node()</a></code> work much as <code>grid.ls()</code> / <code>getGrob()</code> / <code>editGrob()</code> do — the difference is that the tree is a value you hold rather than device state you recover, so an edit returns a new scene and nothing has to be undrawn.</li>
+<strong>Named, editable nodes.</strong> <code><a href="reference/node_names.html">node_names()</a></code> / <code><a href="reference/node_names.html">get_node()</a></code> / <code><a href="reference/node_names.html">edit_node()</a></code> work much as <code>grid.ls()</code> / <code>getGrob()</code> / <code>editGrob()</code> do. The difference is that the tree is a value you hold rather than device state you recover, so an edit returns a new scene and nothing has to be undrawn.</li>
 <li>
-<strong>Big data without the blob.</strong> <code><a href="reference/datashade.html">datashade()</a></code> bins millions of points into a density raster in one pass — cost scales with output pixels, not row count — and rasterises line segments with Wu antialiasing rather than binning endpoints.</li>
+<strong>Big data without the blob.</strong> <code><a href="reference/datashade.html">datashade()</a></code> bins millions of points into a density raster in one pass, at a cost that scales with output pixels rather than row count, and rasterises line segments with Wu antialiasing rather than binning endpoints.</li>
 <li>
 <strong>Geometry services.</strong> Boolean path ops, convex and concave hulls, buffering, contours, path simplification, stroke-to-outline, and true-geometry hit-testing (<code><a href="reference/vl_nearest.html">vl_nearest()</a></code>), because a diagonal’s bounding box is a poor description of it.</li>
 <li>
@@ -199,7 +199,7 @@
 <li>
 <strong>Grid interop.</strong> <code><a href="reference/as_vellum.html">as_vellum()</a></code> / <code><a href="reference/as_vellum.html">render_grid()</a></code> render an existing grid grob tree, including <strong>ggplot2</strong> and <strong>lattice</strong>, through the vellum backend.</li>
 </ul>
-<p>The engine (<a href="https://github.com/linebender/tiny-skia" class="external-link">tiny-skia</a> for raster, an SVG writer, <a href="https://github.com/LaurenzV/krilla" class="external-link">krilla</a> for PDF) is written in <strong>Rust</strong> because owning the measuring and rasterising stack is what all of the above requires — not as a performance claim. That is also why installing from source needs <code>cargo</code>.</p>
+<p>The engine (<a href="https://github.com/linebender/tiny-skia" class="external-link">tiny-skia</a> for raster, an SVG writer, <a href="https://github.com/LaurenzV/krilla" class="external-link">krilla</a> for PDF) is written in <strong>Rust</strong> because all of the above requires owning the measuring and rasterising stack. It is not a performance claim. That is also why installing from source needs <code>cargo</code>.</p>
 </div>
 <div class="section level2">
 <h2 id="installation">Installation<a class="anchor" aria-label="anchor" href="#installation"></a>
@@ -222,13 +222,13 @@
 <div class="section level3">
 <h3 id="labels-that-move-themselves-out-of-the-way">Labels that move themselves out of the way<a class="anchor" aria-label="anchor" href="#labels-that-move-themselves-out-of-the-way"></a>
 </h3>
-<p><code><a href="reference/vl_place.html">vl_repel()</a></code> solves collisions over the <em>resolved</em> geometry — every panel at once, in one pass. Left: as authored. Right: repelled.</p>
+<p><code><a href="reference/vl_place.html">vl_repel()</a></code> solves collisions over the <em>resolved</em> geometry, every panel at once, in one pass. Left: as authored. Right: repelled.</p>
 <p><img src="reference/figures/README-repel-before.png" width="49%"><img src="reference/figures/README-repel-after.png" width="49%"></p>
 </div>
 <div class="section level3">
 <h3 id="accessible-by-construction">Accessible by construction<a class="anchor" aria-label="anchor" href="#accessible-by-construction"></a>
 </h3>
-<p>A palette checked against colour-vision deficiency in the render, and the same categories re-encoded with hatch <em>geometry</em> — crisp at any zoom, correct in print, and readable in greyscale.</p>
+<p>A palette checked against colour-vision deficiency in the render, and the same categories re-encoded with hatch <em>geometry</em>, which stays crisp at any zoom and survives both print and greyscale.</p>
 <p><img src="reference/figures/README-a11y-colour.png" width="32%"><img src="reference/figures/README-a11y-cvd.png" width="32%"><img src="reference/figures/README-a11y-hatch.png" width="32%"></p>
 <p><em>As authored · as a deuteranopic reader sees it · re-encoded with hatching.</em></p>
 </div>
@@ -308,7 +308,7 @@
 <div class="section level2">
 <h2 id="relationship-to-grid-and-ggplot2">Relationship to grid and ggplot2<a class="anchor" aria-label="anchor" href="#relationship-to-grid-and-ggplot2"></a>
 </h2>
-<p>vellum sits at grid’s level of the stack: units, viewports, grobs, layout, and rendering. What it adds is device-independent measurement (so layout is solved once, not once per output format), geometry read-back (<code><a href="reference/scene_model.html">scene_model()</a></code>, <code><a href="reference/hit_test.html">hit_test()</a></code>), a modern paint model, and built-in aggregation for large data. It is <strong>not</strong> a grammar of graphics (no scales, stats, geoms, or facets) — that is <a href="https://github.com/r-vellum/vellumplot" class="external-link">vellumplot</a>, which compiles a plot spec into a vellum scene. To render <em>existing</em> grid / ggplot2 / lattice output through the vellum backend, use <code><a href="reference/as_vellum.html">as_vellum()</a></code> / <code><a href="reference/as_vellum.html">render_grid()</a></code>.</p>
+<p>vellum sits at grid’s level of the stack: units, viewports, grobs, layout, and rendering. What it adds is device-independent measurement (so layout is solved once, not once per output format), geometry read-back (<code><a href="reference/scene_model.html">scene_model()</a></code>, <code><a href="reference/hit_test.html">hit_test()</a></code>), a modern paint model, and built-in aggregation for large data. It is <strong>not</strong> a grammar of graphics (no scales, stats, geoms, or facets); that is <a href="https://github.com/r-vellum/vellumplot" class="external-link">vellumplot</a>, which compiles a plot spec into a vellum scene. To render <em>existing</em> grid / ggplot2 / lattice output through the vellum backend, use <code><a href="reference/as_vellum.html">as_vellum()</a></code> / <code><a href="reference/as_vellum.html">render_grid()</a></code>.</p>
 </div>
 <div class="section level2">
 <h2 id="the-vellum-ecosystem">The vellum ecosystem<a class="anchor" aria-label="anchor" href="#the-vellum-ecosystem"></a>
@@ -316,13 +316,13 @@
 <p>Four packages sharing one scene model. The seam between them is the scene itself: a value each layer can pass on, query, or annotate.</p>
 <ul>
 <li>
-<strong><a href="https://github.com/r-vellum/vellum" class="external-link">vellum</a></strong> — <em>the parchment.</em> The low-level graphics engine (this package).</li>
+<strong><a href="https://github.com/r-vellum/vellum" class="external-link">vellum</a></strong>, <em>the parchment:</em> the low-level graphics engine (this package).</li>
 <li>
-<strong><a href="https://github.com/r-vellum/vellumplot" class="external-link">vellumplot</a></strong> — <em>the pen.</em> A pipe-first grammar of graphics that compiles a plot spec into a vellum scene.</li>
+<strong><a href="https://github.com/r-vellum/vellumplot" class="external-link">vellumplot</a></strong>, <em>the pen:</em> a pipe-first grammar of graphics that compiles a plot spec into a vellum scene.</li>
 <li>
-<strong><a href="https://github.com/r-vellum/vellumwidget" class="external-link">vellumwidget</a></strong> — <em>the annotation.</em> Interactive HTML widgets, built entirely client-side on <code><a href="reference/scene_model.html">scene_model()</a></code>’s geometry — hover, brush, lasso, linked zoom, and crosstalk, with no server round trip.</li>
+<strong><a href="https://github.com/r-vellum/vellumwidget" class="external-link">vellumwidget</a></strong>, <em>the annotation:</em> interactive HTML widgets built entirely client-side on <code><a href="reference/scene_model.html">scene_model()</a></code>’s geometry, giving hover, brush, lasso, linked zoom and crosstalk with no server round trip.</li>
 <li>
-<strong><a href="https://github.com/r-vellum/vellumverse" class="external-link">vellumverse</a></strong> — installs and loads the whole ecosystem in one step.</li>
+<strong><a href="https://github.com/r-vellum/vellumverse" class="external-link">vellumverse</a></strong> installs and loads the whole ecosystem in one step.</li>
 </ul>
 <p><code>vellumwidget</code> is a good illustration of what the read-back buys: it adds no drawing code at all. It renders the scene’s SVG, reads the element table, and attaches behaviour.</p>
 </div>
