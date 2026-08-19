@@ -74,12 +74,20 @@ pub fn path_op(
     let clip = to_rings(bx, by, bnper);
     let fill = if even_odd { FillRule::EvenOdd } else { FillRule::NonZero };
     let shapes = subj.overlay(&clip, op.rule(), fill);
+    flatten_shapes(shapes)
+}
 
+/// Flatten an `i_overlay` result into the flat `(x, y, nper)` a path grob wants.
+///
+/// `shapes` is a list of shapes, each a list of contours (outer then holes).
+/// Both flatten into one ring list -- the winding already distinguishes holes,
+/// which is why the result must be drawn with the non-zero rule regardless of
+/// what the inputs used. Contours with fewer than 3 points cannot bound an area
+/// and are dropped.
+pub(crate) fn flatten_shapes(
+    shapes: Vec<Vec<Vec<[f64; 2]>>>,
+) -> (Vec<f64>, Vec<f64>, Vec<i32>) {
     let (mut x, mut y, mut nper) = (Vec::new(), Vec::new(), Vec::new());
-    // `shapes` is a list of shapes, each a list of contours (outer then holes).
-    // Both flatten into the ring list a path grob wants -- the winding already
-    // distinguishes holes, which is why the result must be drawn with the
-    // non-zero rule regardless of what the inputs used.
     for shape in shapes {
         for contour in shape {
             if contour.len() < 3 {

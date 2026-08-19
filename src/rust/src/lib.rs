@@ -11,6 +11,7 @@ mod oklab;
 mod pick;
 mod place;
 mod render;
+mod ribbon;
 mod scene;
 mod sketch;
 mod svgpath;
@@ -243,6 +244,46 @@ fn rs_stroke_to_path(
 }
 
 /// Flatten a quadratic segment into line segments at roughly pixel accuracy.
+/// Expand a stroke whose width varies along it into a fillable outline.
+///
+/// Input and output are device pixels, and the return uses the same flat
+/// encoding as [`rs_stroke_to_path`]: `c(n_subpaths, len1, len2, ..., x..., y...)`.
+///
+/// `hw` is the **half**-width at each vertex, parallel to `x`/`y`, so the caller
+/// owns every question about how a width profile is positioned along the line.
+/// `arc <= 0` means "auto" (about one point per pixel of arc).
+///
+/// This is a separate entry point rather than a flag on `rs_stroke_to_path`
+/// because the two are genuinely different generators -- tiny-skia's stroker
+/// versus our own offsetter (see `ribbon.rs`). Keeping them apart means a scene
+/// with no width profile takes byte-for-byte the path it always took.
+///
+/// @keywords internal
+#[extendr]
+fn rs_stroke_to_path_var(
+    x: &[f64], y: &[f64], nper: &[i32], closed: bool,
+    hw: &[f64], cap: i32, join: i32, miter: f64, arc: i32,
+) -> Vec<f64> {
+    let nib = crate::ribbon::Nib {
+        cap: crate::ribbon::Cap::from_code(cap),
+        join: crate::ribbon::Join::from_code(join),
+        miter: if miter.is_finite() && miter > 0.0 { miter } else { 10.0 },
+        arc: if arc > 0 { arc as usize } else { 0 },
+    };
+    let (ox, oy, onper) = crate::ribbon::variable_stroke(x, y, nper, hw, closed, &nib);
+    if onper.is_empty() {
+        return Vec::new();
+    }
+    let mut out = Vec::with_capacity(1 + onper.len() + ox.len() + oy.len());
+    out.push(onper.len() as f64);
+    for &len in &onper {
+        out.push(len as f64);
+    }
+    out.extend_from_slice(&ox);
+    out.extend_from_slice(&oy);
+    out
+}
+
 fn flatten_quad(out: &mut Vec<(f64, f64)>, c: tiny_skia::Point, p: tiny_skia::Point) {
     let a = *out.last().unwrap_or(&(c.x as f64, c.y as f64));
     let steps = curve_steps(a, (p.x as f64, p.y as f64));
@@ -471,6 +512,7 @@ extendr_module! {
     fn rs_cvd_oklab;
     fn rs_set_simplify_tol;
     fn rs_stroke_to_path;
+    fn rs_stroke_to_path_var;
     fn rs_set_profiling;
     fn rs_take_node_times;
     fn rs_largest_empty_rect;
