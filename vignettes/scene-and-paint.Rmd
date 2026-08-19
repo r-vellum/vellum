@@ -333,10 +333,10 @@ display(
 )
 ```
 
-The expansion uses the same stroker the rasterizer uses, so the outline is
-exactly the region that would have been inked rather than an approximation of
-it. The same conversion is what you want for a cutting plotter or a CNC tool,
-which need a closed shape rather than a centreline.
+At constant width the expansion uses the same stroker the rasterizer uses, so
+the outline is exactly the region that would have been inked rather than an
+approximation of it. The same conversion is what you want for a cutting plotter
+or a CNC tool, which need a closed shape rather than a centreline.
 
 One consequence is worth being explicit about: **the result is baked at one
 size.** A stroke width is a device quantity, so its outline only exists once a
@@ -344,6 +344,60 @@ page size and resolution are chosen — they are arguments to `stroke_to_path()`
 and the returned coordinates are absolute millimetres. The outline will not
 rescale with the page the way the original stroke would. That is inherent: an
 outline is a shape, not a stroke.
+
+### A width that varies
+
+Once a stroke is a region rather than a colour along a path, its width no longer
+has to be constant. `lwd_profile` takes multipliers of `lwd` and varies the
+width along the line:
+
+```{r}
+#| fig.height: 2.2
+# The two bands come from the polylines' own coordinates: an outline is absolute
+# mm baked at one page size, so a shorter viewport would offset it, not scale it.
+zig_at <- function(lo, hi) {
+  lines_grob(
+    c(0.08, 0.3, 0.52, 0.74, 0.94),
+    c(lo, hi, lo, hi, lo),
+    gp = vl_gpar(col = "steelblue", lwd = 16)
+  )
+}
+prof <- function(band, p) {
+  S7::set_props(
+    stroke_to_path(band, width = 6, height = 2.2, lwd_profile = p),
+    gp = vl_gpar(fill = "#3B6EA5", col = NA)
+  )
+}
+
+display(
+  vl_scene(6, 2.2) |>
+    draw(prof(zig_at(0.60, 0.92), c(1, 0))) |>
+    draw(prof(zig_at(0.10, 0.42), c(0.15, 1, 0.15)))
+)
+```
+
+Above, a taper to a point; below, a leaf that swells in the middle. A zero is a
+legal width — tapering to nothing is the usual reason to want this — and only an
+all-zero profile is an error.
+
+By default the values are spread evenly along the *drawn length* of the stroke
+and interpolated, so the profile does not care how densely the polyline happens
+to be sampled and any profile length works. `along = "vertex"` instead reads one
+value per vertex, which is what you want when the widths come from data attached
+to the vertices — a weight per observation, a pressure trace from a tablet. The
+two agree only when the vertices are evenly spaced, which is why choosing is
+your job rather than something inferred from the vector's length.
+
+`segments_grob(lwd = )`, from the section above, also varies width — but per
+*element*, so the width steps between segments and the joins show. This is the
+join-free alternative, at the cost of being baked at one size.
+
+One caveat worth stating, since the paragraph above makes an unconditional
+promise that variable width cannot keep: no rasterizer can stroke a line at a
+changing width, so there is no "same stroker" to defer to here. vellum builds
+the region a round nib of varying radius sweeps. It agrees with the constant-width
+expansion as a picture, but not to the last bit — and width varies linearly
+between vertices, so a taper is only as smooth as the polyline under it.
 
 ## A note on dense paths
 
@@ -372,8 +426,9 @@ real: paths under 1000 points are never touched, and stay byte-identical.
   hatches, and
   `vl_viewport()` accepts masks, group opacity, and blend modes, all consistent
   across backends.
-- `stroke_to_path()` turns a stroke into a fillable region, so a line can carry
-  a gradient; dense paths are simplified at render resolution automatically.
+- `stroke_to_path()` turns a stroke into a fillable region, at a width that can
+  vary along the line, so a line can carry a gradient; dense paths are simplified
+  at render resolution automatically.
 
 Next, see `vignette("retained-mode")` for what a finished scene can tell you
 about itself.

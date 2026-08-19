@@ -383,7 +383,11 @@ Reach for these instead of building one grob per segment: varying width or
 colour that way costs an R-side grob each, which is the dominant expense on
 scenes made of many small marks. Note that no backend can stroke segments
 differently in a single call, so each segment is stroked on its own here —
-the saving is in R, not in the output size.}
+the saving is in R, not in the output size.
+
+These vary width \emph{per element}, so the width steps between segments and the
+joins show. For width varying smoothly \emph{along} one line, with no joins to
+give it away, see \code{lwd_profile} in \code{\link[=stroke_to_path]{stroke_to_path()}}.}
 
 \item{rule}{Fill rule: \code{"winding"} (non-zero, default) or \code{"evenodd"}.}
 

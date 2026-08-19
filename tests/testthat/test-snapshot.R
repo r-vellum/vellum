@@ -153,6 +153,20 @@ test_that("stroke outlines are byte-stable", {
       )),
     "stroke-outline.png"
   )
+
+  snap(
+    vl_scene(3, 1.4, dpi = 90, bg = "white") |>
+      draw(S7::set_props(
+        stroke_to_path(
+          zig,
+          width = 3,
+          height = 1.4,
+          lwd_profile = c(0.15, 1, 0.15)
+        ),
+        gp = fill
+      )),
+    "stroke-taper.png"
+  )
 })
 
 test_that("drawn text width matches the shaped (textshaping) width", {
