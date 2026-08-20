@@ -2,6 +2,65 @@
 
 ## vellum 0.6.8.9000 (development version)
 
+### Geometry
+
+- **[`stroke_to_path()`](https://r-vellum.github.io/vellum/reference/stroke_to_path.md)
+  can vary the stroke width along the line.** The new `lwd_profile`
+  argument takes a numeric vector of multipliers of `lwd` and returns an
+  outline whose width follows it: `c(1, 0.2)` is a ribbon tapering to a
+  fifth of its width, `c(0, 1, 0)` a leaf, `c(1, 0, 1)` a stroke pinched
+  to nothing in the middle. A zero is a legal width — tapering to a
+  point is the main thing people want this for — and only an all-zero
+  profile is an error.
+
+  `along` chooses how the values are positioned. The default
+  `"arclength"` spreads them evenly along the drawn length of the stroke
+  and interpolates, so the profile is independent of how densely the
+  polyline happens to be sampled and any profile length works.
+  `along = "vertex"` reads one value per vertex instead, which is what
+  you want when the widths come from data attached to the vertices — a
+  per-observation weight, a pressure trace from a tablet. The two
+  parameterisations coincide only when the vertices are evenly spaced,
+  which is why they are separate options rather than one argument that
+  guesses from length. On a closed
+  [`polygon_grob()`](https://r-vellum.github.io/vellum/reference/grob.md)
+  or
+  [`path_grob()`](https://r-vellum.github.io/vellum/reference/grob.md)
+  the profile is cyclic: a ring has no first vertex a reader can see, so
+  wrapping is the only reading that does not put a width step wherever
+  the input happened to start.
+
+  `segments_grob(lwd = )` has varied width per *element* for some time,
+  but it strokes each segment separately, so the width steps and the
+  joins show. Variable-width
+  [`stroke_to_path()`](https://r-vellum.github.io/vellum/reference/stroke_to_path.md)
+  is the higher-fidelity alternative: one continuous filled outline with
+  nothing to give away where the width changed. The tradeoff is the one
+  that has always applied here — an outline is baked at one page size
+  and comes back in absolute millimetres.
+
+  Two honest notes. The first is a correction to what the documentation
+  used to promise unconditionally: a plain expansion still uses
+  tiny-skia’s own stroker, the one the rasterizer uses, so the outline
+  is exactly the region that would have been inked. A varying width has
+  no such reference, because no rasterizer can stroke a line at a
+  changing width; vellum offsets the polyline itself in that case,
+  building the region a round nib of varying radius sweeps. The second
+  is that width varies linearly *between vertices*, so a taper is only
+  as smooth as the polyline under it — raise `n` on
+  [`bezier_grob()`](https://r-vellum.github.io/vellum/reference/grob.md)/[`spline_grob()`](https://r-vellum.github.io/vellum/reference/grob.md),
+  whose flattening happens before
+  [`stroke_to_path()`](https://r-vellum.github.io/vellum/reference/stroke_to_path.md)
+  ever sees the curve.
+
+  With `lwd_profile = NULL` — every call written before this release —
+  the function takes exactly the code path it always took, and the
+  outline is byte-identical to 0.6.8, which a test and a PNG baseline
+  both assert. A *constant* profile such as `lwd_profile = 1`
+  deliberately does not make that promise: it goes through the new
+  offsetter, so it matches the old expansion as a picture but not to the
+  last bit.
+
 ### Animation
 
 - **The tween carries one eased fraction per property class, not one for

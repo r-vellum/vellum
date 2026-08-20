@@ -467,6 +467,11 @@ text_grob(
   segment is stroked on its own here — the saving is in R, not in the
   output size.
 
+  These vary width *per element*, so the width steps between segments
+  and the joins show. For width varying smoothly *along* one line, with
+  no joins to give it away, see `lwd_profile` in
+  [`stroke_to_path()`](https://r-vellum.github.io/vellum/reference/stroke_to_path.md).
+
 - rule:
 
   Fill rule: `"winding"` (non-zero, default) or `"evenodd"`.
