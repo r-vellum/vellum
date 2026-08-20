@@ -4,7 +4,15 @@
 \alias{stroke_to_path}
 \title{Freeze a stroke into a fillable outline}
 \usage{
-stroke_to_path(grob, width = 6, height = 4, dpi = 96, gp = NULL)
+stroke_to_path(
+  grob,
+  width = 6,
+  height = 4,
+  dpi = 96,
+  gp = NULL,
+  lwd_profile = NULL,
+  along = c("arclength", "vertex")
+)
 }
 \arguments{
 \item{grob}{A \code{\link[=lines_grob]{lines_grob()}}, \code{\link[=polygon_grob]{polygon_grob()}}, or \code{\link[=path_grob]{path_grob()}}. Its
@@ -18,6 +26,22 @@ bare numeric means).}
 
 \item{gp}{Optional \code{\link[=vl_gpar]{vl_gpar()}} overriding the grob's own for the stroke
 parameters (\code{lwd}, \code{lineend}, \code{linejoin}, \code{linemitre}).}
+
+\item{lwd_profile}{Optional numeric vector of multipliers of \code{lwd}, describing
+how the width varies along the line: \code{c(1, 0.2)} tapers a ribbon to a fifth
+of its width, \code{c(0, 1, 0)} is a leaf, \code{c(1, 0, 1)} is pinched to nothing in
+the middle. Values must be finite and \verb{>= 0}, and at least one must be
+positive; a zero is a legal width, not an error. A single value simply
+scales the width. \code{NULL} (default) is a constant width, and takes exactly
+the expansion this function has always performed.}
+
+\item{along}{How \code{lwd_profile} is positioned. \code{"arclength"} (default) spreads
+its values evenly along the \emph{drawn length} of the stroke and interpolates
+between them, so the profile is independent of how the polyline happens to
+be sampled and any profile length works. \code{"vertex"} reads one value per
+vertex, in point order, which is what you want when the widths come from
+data attached to the vertices — a per-observation weight, a pressure trace.
+The two coincide only when the vertices are evenly spaced.}
 }
 \value{
 A \code{\link[=path_grob]{path_grob()}} in \code{mm} units, with \code{rule = "winding"}, whose fill is
@@ -33,9 +57,12 @@ pattern, to send it to a cutting plotter or CNC tool, or to do geometry with
 it.
 }
 \details{
-The expansion uses the same stroker the rasterizer uses, so the outline is
-exactly the region that would have been inked, not a reimplementation that
-could drift from it.
+At constant width the expansion uses the same stroker the rasterizer uses, so
+the outline is exactly the region that would have been inked, not a
+reimplementation that could drift from it. A \emph{varying} width has no such
+reference — no rasterizer can stroke a line at a changing width — so
+\code{lwd_profile} is served by vellum's own offsetter instead. See
+\verb{Variable width} below.
 
 \strong{The result is baked at one size.} A stroke width is a device quantity, so
 its outline only exists once a page size and resolution are chosen. Those are
@@ -43,10 +70,39 @@ arguments here, and the returned coordinates are absolute (mm) — the outline
 will \emph{not} rescale with the page the way the original stroke would. That is
 inherent: an outline is a shape, not a stroke.
 }
+\section{Variable width}{
+
+
+The region swept by a round nib of varying radius is the union of the convex
+hulls of successive pairs of end discs, so \code{lwd_profile} builds that union
+rather than offsetting each vertex along its normal. The distinction matters
+at a taper: an offset boundary would cut \emph{into} the end disc and the tip would
+come out waisted rather than pointed.
+
+Three consequences worth knowing:
+\itemize{
+\item Width varies linearly \strong{between vertices}, so a profile is only as smooth
+as the polyline under it. \code{bezier_grob()} and \code{spline_grob()} flatten to a
+polyline before this function sees them, so a profile rides the flattened
+points — prefer \code{along = "arclength"} there, and raise their \code{n} if a taper
+looks faceted.
+\item On a closed \code{polygon_grob()} or \code{path_grob()} the profile is \strong{cyclic}: a
+ring has no first vertex a reader can see, so the values wrap. \code{c(1, 0)} on
+a ring is therefore two tapers, not one.
+\item \code{lwd_profile = NULL} is byte-identical to previous versions. A \emph{constant}
+profile such as \code{lwd_profile = 1} is not — it goes through the offsetter, so
+it agrees with tiny-skia's stroker as a picture but not to the last bit.
+\code{lineend} and \code{linejoin} are honoured, but only on the outer silhouette; the
+inner side of a join is the natural overlap either way.
+}
+}
+
 \examples{
 zig <- lines_grob(c(0.1, 0.35, 0.6, 0.9), c(0.2, 0.8, 0.2, 0.8),
                   gp = vl_gpar(col = "steelblue", lwd = 12))
 outline <- stroke_to_path(zig, width = 3, height = 2)
+# A width that varies along the line: thick in the middle, tapered at both ends.
+leaf <- stroke_to_path(zig, width = 3, height = 2, lwd_profile = c(0.15, 1, 0.15))
 # Now fillable: a gradient across the ribbon the line traced.
 vl_scene(3, 2) |>
   draw(S7::set_props(outline, gp = vl_gpar(
@@ -54,5 +110,5 @@ vl_scene(3, 2) |>
   )))
 }
 \seealso{
-\code{\link[=path_grob]{path_grob()}}, \link{grob}
+\code{\link[=path_grob]{path_grob()}}, \link{grob}, \code{\link[=segments_grob]{segments_grob()}} for per-\emph{element} widths
 }

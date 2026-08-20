@@ -81,6 +81,24 @@ rs_set_simplify_tol <- function(tol) .Call(wrap__rs_set_simplify_tol, tol)
 #' @keywords internal
 rs_stroke_to_path <- function(x, y, nper, closed, width, cap, join, miter) .Call(wrap__rs_stroke_to_path, x, y, nper, closed, width, cap, join, miter)
 
+#' Flatten a quadratic segment into line segments at roughly pixel accuracy.
+#' Expand a stroke whose width varies along it into a fillable outline.
+#'
+#' Input and output are device pixels, and the return uses the same flat
+#' encoding as [`rs_stroke_to_path`]: `c(n_subpaths, len1, len2, ..., x..., y...)`.
+#'
+#' `hw` is the **half**-width at each vertex, parallel to `x`/`y`, so the caller
+#' owns every question about how a width profile is positioned along the line.
+#' `arc <= 0` means "auto" (about one point per pixel of arc).
+#'
+#' This is a separate entry point rather than a flag on `rs_stroke_to_path`
+#' because the two are genuinely different generators -- tiny-skia's stroker
+#' versus our own offsetter (see `ribbon.rs`). Keeping them apart means a scene
+#' with no width profile takes byte-for-byte the path it always took.
+#'
+#' @keywords internal
+rs_stroke_to_path_var <- function(x, y, nper, closed, hw, cap, join, miter, arc) .Call(wrap__rs_stroke_to_path_var, x, y, nper, closed, hw, cap, join, miter, arc)
+
 #' Arm or disarm per-node render timing on this thread.
 #' @param on Logical.
 #' @keywords internal

@@ -132,6 +132,43 @@ test_that("shape rendering is byte-stable", {
   )
 })
 
+test_that("stroke outlines are byte-stable", {
+  skip_on_cran()
+
+  # The baseline for the plain (constant-width) expansion is the byte-identity
+  # gate for `stroke_to_path()`: it was accepted before variable width existed,
+  # so it fails if the no-profile path ever shifts.
+  zig <- lines_grob(
+    c(0.08, 0.3, 0.52, 0.74, 0.94),
+    c(0.30, 0.78, 0.28, 0.76, 0.34),
+    gp = vl_gpar(col = "steelblue", lwd = 16)
+  )
+  fill <- vl_gpar(fill = "steelblue", col = NA)
+
+  snap(
+    vl_scene(3, 1.4, dpi = 90, bg = "white") |>
+      draw(S7::set_props(
+        stroke_to_path(zig, width = 3, height = 1.4),
+        gp = fill
+      )),
+    "stroke-outline.png"
+  )
+
+  snap(
+    vl_scene(3, 1.4, dpi = 90, bg = "white") |>
+      draw(S7::set_props(
+        stroke_to_path(
+          zig,
+          width = 3,
+          height = 1.4,
+          lwd_profile = c(0.15, 1, 0.15)
+        ),
+        gp = fill
+      )),
+    "stroke-taper.png"
+  )
+})
+
 test_that("drawn text width matches the shaped (textshaping) width", {
   # Determinism check for text that doesn't depend on exact glyph pixels: the
   # rendered ink's horizontal extent should match the shaped advance width.
