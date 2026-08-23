@@ -1,4 +1,4 @@
-# vellum 0.6.8.9000 (development version)
+# vellum 0.6.9
 
 ## Geometry
 
@@ -62,8 +62,6 @@
   byte-identical to the previous single-fraction tween, so existing animations
   are unchanged.
 
-# vellum 0.6.8
-
 ## Accessibility
 
 * **Fix: an all-decorative described scene lost its tagged Figure.** When every
@@ -76,6 +74,8 @@
   `describe()` text, with the marks as its artifact content. This is what lets a
   charting frontend tag its marks `role = "presentation"` to get one clean figure
   description instead of a screen reader announcing every mark's internal id.
+
+# vellum 0.6.8
 
 ## Linting
 
