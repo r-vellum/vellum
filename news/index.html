@@ -13,7 +13,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">vellum</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.6.8.9000</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.6.9</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -70,9 +70,9 @@
     </div>
 
     <div class="section level2">
-<h2 class="pkg-version" data-toc-text="0.6.8.9000" id="vellum-0689000-development-version">vellum 0.6.8.9000 (development version)<a class="anchor" aria-label="anchor" href="#vellum-0689000-development-version"></a></h2>
+<h2 class="pkg-version" data-toc-text="0.6.9" id="vellum-069">vellum 0.6.9<a class="anchor" aria-label="anchor" href="#vellum-069"></a></h2>
 <div class="section level3">
-<h3 id="geometry-0-6-8-9000">Geometry<a class="anchor" aria-label="anchor" href="#geometry-0-6-8-9000"></a></h3>
+<h3 id="geometry-0-6-9">Geometry<a class="anchor" aria-label="anchor" href="#geometry-0-6-9"></a></h3>
 <ul><li>
 <p><strong><code><a href="../reference/stroke_to_path.html">stroke_to_path()</a></code> can vary the stroke width along the line.</strong> The new <code>lwd_profile</code> argument takes a numeric vector of multipliers of <code>lwd</code> and returns an outline whose width follows it: <code>c(1, 0.2)</code> is a ribbon tapering to a fifth of its width, <code>c(0, 1, 0)</code> a leaf, <code>c(1, 0, 1)</code> a stroke pinched to nothing in the middle. A zero is a legal width — tapering to a point is the main thing people want this for — and only an all-zero profile is an error.</p>
 <p><code>along</code> chooses how the values are positioned. The default <code>"arclength"</code> spreads them evenly along the drawn length of the stroke and interpolates, so the profile is independent of how densely the polyline happens to be sampled and any profile length works. <code>along = "vertex"</code> reads one value per vertex instead, which is what you want when the widths come from data attached to the vertices — a per-observation weight, a pressure trace from a tablet. The two parameterisations coincide only when the vertices are evenly spaced, which is why they are separate options rather than one argument that guesses from length. On a closed <code><a href="../reference/grob.html">polygon_grob()</a></code> or <code><a href="../reference/grob.html">path_grob()</a></code> the profile is cyclic: a ring has no first vertex a reader can see, so wrapping is the only reading that does not put a width step wherever the input happened to start.</p>
@@ -82,21 +82,21 @@
 </li>
 </ul></div>
 <div class="section level3">
-<h3 id="animation-0-6-8-9000">Animation<a class="anchor" aria-label="anchor" href="#animation-0-6-8-9000"></a></h3>
+<h3 id="animation-0-6-9">Animation<a class="anchor" aria-label="anchor" href="#animation-0-6-9"></a></h3>
 <ul><li>
 <p><strong>The tween carries one eased fraction per property class, not one for the whole scene.</strong> <code><a href="../reference/vl_render_animation.html">vl_render_animation()</a></code> gains <code>frac_col</code>, <code>frac_size</code> and <code>frac_alpha</code> alongside <code>frac</code>, each an optional per-frame schedule for one class of drawn property. This is what lets a grammar layer offer per-aesthetic easing — position arriving on a cubic curve while colour crossfades linearly.</p>
 <p><code>frac</code> drives coordinate geometry and every discrete attribute’s halfway snap; <code>frac_col</code> drives paints and per-element colour vectors; <code>frac_size</code> drives <code>lwd</code>, marker size, radii and <code>linemitre</code>; <code>frac_alpha</code> drives opacity <strong>and the enter/exit fade of keyed elements</strong>.</p>
 <p>All three default to <code>frac</code>, and passing four identical schedules is byte-identical to the previous single-fraction tween, so existing animations are unchanged.</p>
 </li>
 </ul></div>
-</div>
-    <div class="section level2">
-<h2 class="pkg-version" data-toc-text="0.6.8" id="vellum-068">vellum 0.6.8<a class="anchor" aria-label="anchor" href="#vellum-068"></a></h2>
 <div class="section level3">
-<h3 id="accessibility-0-6-8">Accessibility<a class="anchor" aria-label="anchor" href="#accessibility-0-6-8"></a></h3>
+<h3 id="accessibility-0-6-9">Accessibility<a class="anchor" aria-label="anchor" href="#accessibility-0-6-9"></a></h3>
 <ul><li>
 <strong>Fix: an all-decorative described scene lost its tagged Figure.</strong> When every drawn node was decorative (<code>role = "presentation"</code>, <code>"grid"</code>, …) but still carried metadata such as a provenance <code>id</code>, the per-mark tagging path fired on that metadata alone — suppressing the single whole-content span — and then, since decorative nodes are artifacts rather than structure entries, the tagged PDF was left with no <code>Figure</code> and no <code>Alt</code> at all. Decorative metadata no longer counts as per-mark metadata: such a scene keeps its single <code>Figure</code> carrying the <code><a href="../reference/describe.html">describe()</a></code> text, with the marks as its artifact content. This is what lets a charting frontend tag its marks <code>role = "presentation"</code> to get one clean figure description instead of a screen reader announcing every mark’s internal id.</li>
 </ul></div>
+</div>
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.6.8" id="vellum-068">vellum 0.6.8<a class="anchor" aria-label="anchor" href="#vellum-068"></a></h2>
 <div class="section level3">
 <h3 id="linting-0-6-8">Linting<a class="anchor" aria-label="anchor" href="#linting-0-6-8"></a></h3>
 <ul><li>
