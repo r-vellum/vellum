@@ -366,11 +366,56 @@ pub fn ribbon_contours(
                     // grid: it bridges the pieces with a zero-width spur instead
                     // of merging them. Reaching back inside both guarantees a
                     // positive-area overlap.
+                    //
+                    // How far back it must reach is set by the chords themselves.
+                    // Each trapezoid ends on a tangent CHORD of this vertex's
+                    // disc, and when the width varies that chord is TILTED --
+                    // displaced from the vertex along the centreline by
+                    // `h * sin(alpha)`, where `sin(alpha)` is the width gradient
+                    // along the segment. Reaching back less than that lands
+                    // between the chords, i.e. in the gap rather than inside the
+                    // piece, so the tilt is a floor on `back`.
+                    let tilt_prev = ((p[i][0] - a.bp[0]) * ux0 + (p[i][1] - a.bp[1]) * uy0).abs();
+                    let tilt_next = ((b.ap[0] - p[i][0]) * ux1 + (b.ap[1] - p[i][1]) * uy1).abs();
+                    let tilt = tilt_prev.max(tilt_next);
                     let back = (0.25 * h[i])
-                        .min(0.25 * seg_len(&p, i, n))
+                        .max(1.5 * tilt)
+                        .min(0.45 * seg_len(&p, i, n))
                         .max(EPS_H);
                     let cprev = [p[i][0] - back * ux0, p[i][1] - back * uy0];
                     let cnext = [p[i][0] + back * ux1, p[i][1] + back * uy1];
+
+                    // Between the two tilted chords lies a lens containing the
+                    // vertex that NEITHER trapezoid covers. The wedges below fill
+                    // it on the convex side; on the concave side the old code
+                    // relied on the two inner edges crossing, which they only do
+                    // when the width is near constant. With a peaked profile --
+                    // a wide corner between narrow neighbours -- the lens survives
+                    // the union as a small hole at the apex (#49): a ~4px white
+                    // pinhole in a 62px stroke, invisible to the area and spur
+                    // assertions and obvious in a render.
+                    //
+                    // So fill the core explicitly when the chords are actually
+                    // tilted: a quad straddling the centreline, reaching `back`
+                    // into each trapezoid and out to 0.6 * h[i] either side. Near
+                    // the vertex the stroke's own half-width is h[i], so 0.6 of it
+                    // cannot bulge past the join on either side, and reaching
+                    // `back` in gives a positive-area overlap with both pieces
+                    // rather than edge-on contact. Skipped entirely at constant
+                    // width, where the chords are perpendicular, the lens has no
+                    // area, and the old output must stay byte-for-byte identical.
+                    if tilt > EPS_PT {
+                        let r = 0.6 * h[i];
+                        push_ccw(
+                            &mut out,
+                            vec![
+                                [cprev[0] - r * uy0, cprev[1] + r * ux0],
+                                [cnext[0] - r * uy1, cnext[1] + r * ux1],
+                                [cnext[0] + r * uy1, cnext[1] - r * ux1],
+                                [cprev[0] + r * uy0, cprev[1] - r * ux0],
+                            ],
+                        );
+                    }
 
                     for &(a0, a1, b0, b1) in sides {
                         // The bevel: closes the notch between the two
@@ -842,6 +887,31 @@ mod tests {
                     "{join:?}: duplicated boundary vertex"
                 );
             }
+        }
+    }
+
+    #[test]
+    fn a_peaked_taper_leaves_no_pinhole_at_the_join() {
+        // Regression (#49): the wedge reaches back `0.25 * h[i]` along the
+        // CENTRELINE, scaled by the half-width at the vertex. With a peaked
+        // profile -- wide at the corner, narrow on both sides -- the trapezoid
+        // end chords are strongly tilted, and that reach-back landed outside the
+        // narrow neighbours, so the wedge failed to overlap them and the union
+        // left a small unfilled island at the apex. A ~4px white pinhole in a
+        // 62px stroke; invisible to area and spur assertions, obvious in a render.
+        //
+        // A hole shows up as a second contour, which is the cheap oracle here.
+        for join in [Join::Bevel, Join::Miter] {
+            let nib = Nib { cap: Cap::Butt, join, miter: 10.0, arc: 0 };
+            let px = [90.0, 450.0, 810.0];
+            let py = [450.0, 120.0, 450.0];
+            let hw = [9.4, 43.7, 9.4]; // the lwd 20 / profile .3,1.4,.3 case
+            let (_x, _y, nper) = variable_stroke(&px, &py, &[3], &hw, false, &nib);
+            assert_eq!(
+                nper.len(), 1,
+                "{join:?}: {} contours -- an extra one is a hole at the join",
+                nper.len()
+            );
         }
     }
 

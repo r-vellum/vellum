@@ -2,6 +2,27 @@
 
 ## Geometry
 
+* **Fix: a mitre or bevel join on a strongly tapered stroke left a pinhole at the
+  apex.** With a peaked width profile -- a wide corner between narrow neighbours --
+  a small unfilled island survived the ribbon's self-union right at the join,
+  reading as a speck of dust on the corner of a thick tapered line (about 4 px in
+  a 62 px stroke). Round joins and constant widths were never affected.
+
+  Each segment's sweep ends on a tangent *chord* of the vertex's disc, and when
+  the width varies that chord is tilted -- displaced from the vertex along the
+  centreline in proportion to the width gradient. Between the two chords lies a
+  lens containing the vertex that neither sweep covers. The convex side was
+  already stitched; the concave side relied on the two inner edges crossing, which
+  they only do when the width is near constant. That lens is now filled
+  explicitly, and the wedge's reach-back takes the chord tilt as a floor rather
+  than scaling off the vertex half-width alone.
+
+  Affects both entry points, since they share the generator: `stroke_to_path()`'s
+  outlines and the new `lines_grob(lwd_profile =)`. A constant-width stroke is
+  byte-for-byte unchanged -- the new fill is skipped when the chords are not
+  tilted -- so the only output that moves is a tapered mitre/bevel join, which is
+  the bug.
+
 * **`lines_grob()` takes a `lwd_profile`: a stroke whose width varies along the
   line, resolved at render.** `stroke_to_path(lwd_profile =)` in 0.6.9 solved the
   geometry of a variable-width stroke but bakes it at a page size you supply and
