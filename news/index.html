@@ -13,7 +13,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">vellum</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.6.9.9000</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.7.0.9000</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -70,9 +70,12 @@
     </div>
 
     <div class="section level2">
-<h2 class="pkg-version" data-toc-text="0.6.9.9000" id="vellum-0699000-development-version">vellum 0.6.9.9000 (development version)<a class="anchor" aria-label="anchor" href="#vellum-0699000-development-version"></a></h2>
+<h2 class="pkg-version" data-toc-text="0.7.0.9000" id="vellum-0709000-development-version">vellum 0.7.0.9000 (development version)<a class="anchor" aria-label="anchor" href="#vellum-0709000-development-version"></a></h2>
+</div>
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.7.0" id="vellum-070">vellum 0.7.0<a class="anchor" aria-label="anchor" href="#vellum-070"></a></h2>
 <div class="section level3">
-<h3 id="geometry-0-6-9-9000">Geometry<a class="anchor" aria-label="anchor" href="#geometry-0-6-9-9000"></a></h3>
+<h3 id="geometry-0-7-0">Geometry<a class="anchor" aria-label="anchor" href="#geometry-0-7-0"></a></h3>
 <ul><li>
 <p><strong>Fix: a mitre or bevel join on a strongly tapered stroke left a pinhole at the apex.</strong> With a peaked width profile – a wide corner between narrow neighbours – a small unfilled island survived the ribbon’s self-union right at the join, reading as a speck of dust on the corner of a thick tapered line (about 4 px in a 62 px stroke). Round joins and constant widths were never affected.</p>
 <p>Each segment’s sweep ends on a tangent <em>chord</em> of the vertex’s disc, and when the width varies that chord is tilted – displaced from the vertex along the centreline in proportion to the width gradient. Between the two chords lies a lens containing the vertex that neither sweep covers. The convex side was already stitched; the concave side relied on the two inner edges crossing, which they only do when the width is near constant. That lens is now filled explicitly, and the wedge’s reach-back takes the chord tilt as a floor rather than scaling off the vertex half-width alone.</p>
@@ -91,7 +94,7 @@
 </li>
 </ul></div>
 <div class="section level3">
-<h3 id="hit-testing-0-6-9-9000">Hit-testing<a class="anchor" aria-label="anchor" href="#hit-testing-0-6-9-9000"></a></h3>
+<h3 id="hit-testing-0-7-0">Hit-testing<a class="anchor" aria-label="anchor" href="#hit-testing-0-7-0"></a></h3>
 <ul><li>
 <p><strong><code><a href="../reference/element_geometry.html">element_geometry()</a></code> gains a <code>ring</code> column, so a multi-ring path’s boundaries survive the trip to R.</strong> A <code>path</code> element reports all its rings’ vertices concatenated, which on its own is lossy: a host had no way to tell where one ring ended, and joining the whole run invents a phantom edge from each ring’s last vertex to the next ring’s first. For a single-ring path (a plain polygon, the common case) that was exact; for a polygon with a hole or a multipart feature it was an approximation.</p>
 <p><code>ring</code> is 1-based within the element, so <code><a href="https://rdrr.io/r/base/split.html" class="external-link">split()</a></code> on it recovers exactly the rings the engine measured against – <code>pick_table()</code> had <code>nper</code> in hand and was throwing it away at the point of emitting. Every other kind is a single ring, so <code>ring</code> is <code>1</code> throughout and nothing else changes.</p>
