@@ -294,15 +294,36 @@ vertices to rank them.
 ``` r
 
 element_geometry(demo)
-#>        key    kind vertex      x      y
-#> 1 diagonal segment      1  46.08 253.44
-#> 2 diagonal segment      2 337.92  34.56
-#> 3   corner   point      1 314.88 236.16
+#>        key    kind vertex ring      x      y
+#> 1 diagonal segment      1    1  46.08 253.44
+#> 2 diagonal segment      2    1 337.92  34.56
+#> 3   corner   point      1    1 314.88 236.16
 ```
 
 Two endpoints for the segment and one centre for the point — not four
 box corners. That is the difference that lets a client hit-test a
 diagonal at all.
+
+A `path` reports every ring’s vertices concatenated, with `ring` saying
+which ring each belongs to, so a polygon with a hole (or a multipart
+feature) can be reconstructed as the rings the engine actually measured
+— without it, joining the whole run invents a phantom edge from each
+ring’s end to the next ring’s start. Split on `ring` and test the rings
+separately; the engine’s own rule is that being inside **any** ring is a
+hit, so a point in a hole is at distance zero.
+
+``` r
+
+holed <- vl_scene(3, 2, dpi = 96, bg = "white") |>
+  draw(path_grob(
+    x = c(0.1, 0.9, 0.9, 0.1, 0.4, 0.6, 0.6, 0.4),
+    y = c(0.1, 0.1, 0.9, 0.9, 0.4, 0.4, 0.6, 0.6),
+    id = rep(1:2, each = 4), rule = "evenodd",
+    gp = vl_gpar(fill = "steelblue"), key = "holed"
+  ))
+element_geometry(holed)$ring
+#> [1] 1 1 1 1 2 2 2 2
+```
 
 ## Why this matters
 

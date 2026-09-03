@@ -1,5 +1,33 @@
 # Changelog
 
+## vellum 0.6.9.9000 (development version)
+
+### Hit-testing
+
+- **[`element_geometry()`](https://r-vellum.github.io/vellum/reference/element_geometry.md)
+  gains a `ring` column, so a multi-ring path’s boundaries survive the
+  trip to R.** A `path` element reports all its rings’ vertices
+  concatenated, which on its own is lossy: a host had no way to tell
+  where one ring ended, and joining the whole run invents a phantom edge
+  from each ring’s last vertex to the next ring’s first. For a
+  single-ring path (a plain polygon, the common case) that was exact;
+  for a polygon with a hole or a multipart feature it was an
+  approximation.
+
+  `ring` is 1-based within the element, so
+  [`split()`](https://rdrr.io/r/base/split.html) on it recovers exactly
+  the rings the engine measured against – `pick_table()` had `nper` in
+  hand and was throwing it away at the point of emitting. Every other
+  kind is a single ring, so `ring` is `1` throughout and nothing else
+  changes.
+
+  Worth knowing when reproducing the engine’s own answer: a path’s
+  distance is the minimum over its rings, each measured as filled, so
+  **inside any ring counts as a hit** and the path’s fill `rule` does
+  not enter into it – a point in a hole is at distance zero. That is the
+  behaviour to match locally, and the `ring` column is what makes
+  matching it possible.
+
 ## vellum 0.6.9
 
 ### Geometry

@@ -333,6 +333,8 @@
 <div class="sourceCode" id="cb13"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu">rextendr</span><span class="fu">::</span><span class="fu">document</span><span class="op">(</span><span class="op">)</span> <span class="co"># compile the Rust backend + regenerate R wrappers</span></span>
 <span><span class="fu">devtools</span><span class="fu">::</span><span class="fu">test</span><span class="op">(</span><span class="op">)</span>     <span class="co"># run the test suite</span></span></code></pre></div>
+<p>Most changes should not move the rendered output. <code>tools/byte-gate.R</code> proves it: it builds the working tree and a baseline ref side by side, renders a fixed set of scenes to PNG/SVG/PDF plus a raw raster, and compares them byte for byte.</p>
+<div class="sourceCode" id="cb14"><pre class="sourceCode sh"><code class="sourceCode bash"><span id="cb14-1"><a href="#cb14-1" tabindex="-1"></a><span class="ex">Rscript</span> tools/byte-gate.R        <span class="co"># working tree vs main; non-zero exit on a diff</span></span></code></pre></div>
 </div>
 </div>
   </main><aside class="col-md-3"><div class="the-ecosystem">

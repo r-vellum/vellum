@@ -96,7 +96,8 @@ round mark, the opposite corners of a rect.</p>
     <div class="section level2">
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
     <p>A data frame of <code>key</code>, <code>kind</code>, <code>vertex</code> (1-based within the element),
-<code>x</code> and <code>y</code>. Zero rows if the scene has no keyed elements.</p>
+<code>ring</code> (1-based within the element), <code>x</code> and <code>y</code>. Zero rows if the scene has
+no keyed elements.</p>
     </div>
     <div class="section level2">
     <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
@@ -111,8 +112,14 @@ locally at whatever rate it likes.</p>
 
 
 <p>One row per vertex, grouped by <code>key</code>. What the vertices mean depends on
-<code>kind</code>:</p><table class="table table"><tr><td><code>kind</code></td><td>rows</td><td>meaning</td></tr><tr><td><code>segment</code></td><td>2</td><td>the endpoints</td></tr><tr><td><code>line</code>, <code>polygon</code></td><td><em>k</em></td><td>the vertices, in order; <code>polygon</code> is closed</td></tr><tr><td><code>path</code></td><td><em>k</em></td><td>all rings' vertices concatenated</td></tr><tr><td><code>point</code></td><td>1</td><td>the centre</td></tr><tr><td><code>rect</code></td><td>2</td><td>opposite corners</td></tr><tr><td><code>text</code>, <code>roundrect</code></td><td>2</td><td>the bounding box's corners</td></tr></table><p>Coordinates are device pixels with y growing <strong>down</strong>, matching
+<code>kind</code>:</p><table class="table table"><tr><td><code>kind</code></td><td>rows</td><td>meaning</td></tr><tr><td><code>segment</code></td><td>2</td><td>the endpoints</td></tr><tr><td><code>line</code>, <code>polygon</code></td><td><em>k</em></td><td>the vertices, in order; <code>polygon</code> is closed</td></tr><tr><td><code>path</code></td><td><em>k</em></td><td>all rings' vertices concatenated; <code>ring</code> separates them</td></tr><tr><td><code>point</code></td><td>1</td><td>the centre</td></tr><tr><td><code>rect</code></td><td>2</td><td>opposite corners</td></tr><tr><td><code>text</code>, <code>roundrect</code></td><td>2</td><td>the bounding box's corners</td></tr></table><p>Coordinates are device pixels with y growing <strong>down</strong>, matching
 <code><a href="scene_model.html">scene_model()</a></code>'s boxes and the rendered SVG's coordinate system.</p>
+<p><code>ring</code> groups the vertices of a multi-ring <code>path</code> – a polygon with a hole, or
+a multipart feature – so a host can hit-test it the way the engine does.
+Without it the concatenated vertices are lossy: treating them as one closed
+ring invents a phantom edge from each ring's last vertex to the next ring's
+first. Split on <code>ring</code> and test the rings separately. Every other kind is a
+single ring, so <code>ring</code> is <code>1</code> throughout.</p>
     </div>
     <div class="section level2">
     <h2 id="see-also">See also<a class="anchor" aria-label="anchor" href="#see-also"></a></h2>
@@ -124,9 +131,9 @@ locally at whatever rate it likes.</p>
     <div class="sourceCode"><pre class="sourceCode r"><code><span class="r-in"><span><span class="va">s</span> <span class="op">&lt;-</span> <span class="fu"><a href="vl_scene.html">vl_scene</a></span><span class="op">(</span><span class="fl">4</span>, <span class="fl">3</span>, dpi <span class="op">=</span> <span class="fl">96</span>, bg <span class="op">=</span> <span class="st">"white"</span><span class="op">)</span> <span class="op">|&gt;</span></span></span>
 <span class="r-in"><span>  <span class="fu"><a href="vl_scene.html">draw</a></span><span class="op">(</span><span class="fu"><a href="grob.html">segments_grob</a></span><span class="op">(</span><span class="fl">0.1</span>, <span class="fl">0.1</span>, <span class="fl">0.9</span>, <span class="fl">0.9</span>, key <span class="op">=</span> <span class="st">"diagonal"</span><span class="op">)</span><span class="op">)</span></span></span>
 <span class="r-in"><span><span class="fu">element_geometry</span><span class="op">(</span><span class="va">s</span><span class="op">)</span></span></span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>        key    kind vertex     x     y</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 1 diagonal segment      1  38.4 259.2</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 2 diagonal segment      2 345.6  28.8</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>        key    kind vertex ring     x     y</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 1 diagonal segment      1    1  38.4 259.2</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 2 diagonal segment      2    1 345.6  28.8</span>
 </code></pre></div>
     </div>
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>

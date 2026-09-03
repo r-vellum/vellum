@@ -23,7 +23,8 @@ element_geometry(scene)
 ## Value
 
 A data frame of `key`, `kind`, `vertex` (1-based within the element),
-`x` and `y`. Zero rows if the scene has no keyed elements.
+`ring` (1-based within the element), `x` and `y`. Zero rows if the scene
+has no keyed elements.
 
 ## Details
 
@@ -40,19 +41,27 @@ at whatever rate it likes.
 One row per vertex, grouped by `key`. What the vertices mean depends on
 `kind`:
 
-|                     |      |                                             |
-|---------------------|------|---------------------------------------------|
-| `kind`              | rows | meaning                                     |
-| `segment`           | 2    | the endpoints                               |
-| `line`, `polygon`   | *k*  | the vertices, in order; `polygon` is closed |
-| `path`              | *k*  | all rings' vertices concatenated            |
-| `point`             | 1    | the centre                                  |
-| `rect`              | 2    | opposite corners                            |
-| `text`, `roundrect` | 2    | the bounding box's corners                  |
+|  |  |  |
+|----|----|----|
+| `kind` | rows | meaning |
+| `segment` | 2 | the endpoints |
+| `line`, `polygon` | *k* | the vertices, in order; `polygon` is closed |
+| `path` | *k* | all rings' vertices concatenated; `ring` separates them |
+| `point` | 1 | the centre |
+| `rect` | 2 | opposite corners |
+| `text`, `roundrect` | 2 | the bounding box's corners |
 
 Coordinates are device pixels with y growing **down**, matching
 [`scene_model()`](https://r-vellum.github.io/vellum/reference/scene_model.md)'s
 boxes and the rendered SVG's coordinate system.
+
+`ring` groups the vertices of a multi-ring `path` – a polygon with a
+hole, or a multipart feature – so a host can hit-test it the way the
+engine does. Without it the concatenated vertices are lossy: treating
+them as one closed ring invents a phantom edge from each ring's last
+vertex to the next ring's first. Split on `ring` and test the rings
+separately. Every other kind is a single ring, so `ring` is `1`
+throughout.
 
 ## See also
 
@@ -65,7 +74,7 @@ boxes and the rendered SVG's coordinate system.
 s <- vl_scene(4, 3, dpi = 96, bg = "white") |>
   draw(segments_grob(0.1, 0.1, 0.9, 0.9, key = "diagonal"))
 element_geometry(s)
-#>        key    kind vertex     x     y
-#> 1 diagonal segment      1  38.4 259.2
-#> 2 diagonal segment      2 345.6  28.8
+#>        key    kind vertex ring     x     y
+#> 1 diagonal segment      1    1  38.4 259.2
+#> 2 diagonal segment      2    1 345.6  28.8
 ```
