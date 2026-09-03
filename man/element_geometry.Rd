@@ -11,7 +11,8 @@ element_geometry(scene)
 }
 \value{
 A data frame of \code{key}, \code{kind}, \code{vertex} (1-based within the element),
-\code{x} and \code{y}. Zero rows if the scene has no keyed elements.
+\code{ring} (1-based within the element), \code{x} and \code{y}. Zero rows if the scene has
+no keyed elements.
 }
 \description{
 Returns the resolved device-pixel geometry of every \strong{keyed} element: the two
@@ -32,7 +33,7 @@ One row per vertex, grouped by \code{key}. What the vertices mean depends on
    \code{kind} \tab rows \tab meaning \cr
    \code{segment} \tab 2 \tab the endpoints \cr
    \code{line}, \code{polygon} \tab \emph{k} \tab the vertices, in order; \code{polygon} is closed \cr
-   \code{path} \tab \emph{k} \tab all rings' vertices concatenated \cr
+   \code{path} \tab \emph{k} \tab all rings' vertices concatenated; \code{ring} separates them \cr
    \code{point} \tab 1 \tab the centre \cr
    \code{rect} \tab 2 \tab opposite corners \cr
    \code{text}, \code{roundrect} \tab 2 \tab the bounding box's corners \cr
@@ -41,6 +42,13 @@ One row per vertex, grouped by \code{key}. What the vertices mean depends on
 
 Coordinates are device pixels with y growing \strong{down}, matching
 \code{\link[=scene_model]{scene_model()}}'s boxes and the rendered SVG's coordinate system.
+
+\code{ring} groups the vertices of a multi-ring \code{path} -- a polygon with a hole, or
+a multipart feature -- so a host can hit-test it the way the engine does.
+Without it the concatenated vertices are lossy: treating them as one closed
+ring invents a phantom edge from each ring's last vertex to the next ring's
+first. Split on \code{ring} and test the rings separately. Every other kind is a
+single ring, so \code{ring} is \code{1} throughout.
 }
 
 \examples{

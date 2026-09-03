@@ -2205,6 +2205,12 @@ impl Scene {
         let (mut key, mut kind) = (Vec::new(), Vec::new());
         let (mut dist, mut gn) = (Vec::new(), Vec::new());
         let (mut gx, mut gy) = (Vec::new(), Vec::new());
+        // Per-vertex ring index (1-based within the element). Only a path has
+        // more than one; every other kind is a single ring, so this is all 1s
+        // for them. Without it the concatenated `gx`/`gy` are lossy: a client
+        // cannot tell where one ring ends, and joining the runs invents a
+        // phantom edge from each ring's last vertex to the next ring's first.
+        let mut gring: Vec<i32> = Vec::new();
 
         for (vp_id, node) in self.nodes.iter() {
             let vp = &resolved[*vp_id].vp;
@@ -2217,14 +2223,17 @@ impl Scene {
             let dev = |pts: Vec<(f64, f64)>| -> Vec<(f64, f64)> {
                 pts.into_iter().map(|(x, y)| dev_pt(vp, x, y)).collect()
             };
-            let mut emit = |k: &str, knd: &str, d: f64, pts: &[(f64, f64)]| {
+            // `rings` is the per-vertex ring index; pass `&[]` for the usual
+            // single-ring element, and every vertex is then ring 1.
+            let mut emit = |k: &str, knd: &str, d: f64, pts: &[(f64, f64)], rings: &[i32]| {
                 key.push(k.to_string());
                 kind.push(knd.to_string());
                 dist.push(d);
                 gn.push(pts.len() as i32);
-                for &(x, y) in pts {
+                for (i, &(x, y)) in pts.iter().enumerate() {
                     gx.push(x);
                     gy.push(y);
+                    gring.push(rings.get(i).copied().unwrap_or(1));
                 }
             };
             match node {
@@ -2239,20 +2248,20 @@ impl Scene {
                         ]);
                         let (a, b) = (ab[0], ab[1]);
                         let d = poly_dist(px, py, &[a.0, b.0], &[a.1, b.1], false);
-                        emit(k, "segment", d, &[a, b]);
+                        emit(k, "segment", d, &[a, b], &[]);
                     }
                 }
                 Node::Lines { x, y, xu, yu, key: k, .. } => {
                     let Some(k) = k.as_deref() else { continue };
                     let pts = dev(resolve_pts(vp, x, y, xu, yu));
                     let (xs, ys): (Vec<f64>, Vec<f64>) = pts.iter().copied().unzip();
-                    emit(k, "line", poly_dist(px, py, &xs, &ys, false), &pts);
+                    emit(k, "line", poly_dist(px, py, &xs, &ys, false), &pts, &[]);
                 }
                 Node::Polygon { x, y, xu, yu, key: k, .. } => {
                     let Some(k) = k.as_deref() else { continue };
                     let pts = dev(resolve_pts(vp, x, y, xu, yu));
                     let (xs, ys): (Vec<f64>, Vec<f64>) = pts.iter().copied().unzip();
-                    emit(k, "polygon", poly_dist(px, py, &xs, &ys, true), &pts);
+                    emit(k, "polygon", poly_dist(px, py, &xs, &ys, true), &pts, &[]);
                 }
                 Node::Path { x, y, xu, yu, nper, key: k, .. } => {
                     let Some(k) = k.as_deref() else { continue };
@@ -2261,16 +2270,29 @@ impl Scene {
                     // ring counts as a hit.
                     let mut best = f64::INFINITY;
                     let mut at = 0usize;
+                    // Ring index per vertex, assigned by the same walk that
+                    // measures each ring, so what R is told matches what was
+                    // measured against.
+                    let mut rings: Vec<i32> = Vec::with_capacity(pts.len());
                     for len in nper {
                         let len = (*len).max(0) as usize;
                         let hi = (at + len).min(pts.len());
                         if hi > at {
                             let (xs, ys): (Vec<f64>, Vec<f64>) = pts[at..hi].iter().copied().unzip();
                             best = best.min(poly_dist(px, py, &xs, &ys, true));
+                            let r = rings.last().copied().unwrap_or(0) + 1;
+                            rings.resize(hi, r);
                         }
                         at = hi;
                     }
-                    emit(k, "path", best, &pts);
+                    // Defensive: vertices past the last `nper` run were never
+                    // measured, so they are their own trailing ring rather than
+                    // silently folded into the previous one.
+                    if rings.len() < pts.len() {
+                        let r = rings.last().copied().unwrap_or(0) + 1;
+                        rings.resize(pts.len(), r);
+                    }
+                    emit(k, "path", best, &pts, &rings);
                 }
                 // Round marks: distance to the disc, not to the bounding square.
                 Node::Circles { x, y, r, xu, yu, ru, keys, .. }
@@ -2282,7 +2304,7 @@ impl Scene {
                         // The radius is a length, so it takes the transform's
                         // scale rather than its translation.
                         let rr = vp.r_len(r[i], ru[i]) * dev_scale(vp);
-                        emit(k, "point", circle_dist(px, py, cx, cy, rr), &[(cx, cy)]);
+                        emit(k, "point", circle_dist(px, py, cx, cy, rr), &[(cx, cy)], &[]);
                     }
                 }
                 Node::Rects { x, y, w, h, xu, yu, wu, hu, keys, .. } => {
@@ -2300,7 +2322,7 @@ impl Scene {
                             vp, cx - pw / 2.0, cy - ph / 2.0, cx + pw / 2.0, cy + ph / 2.0,
                         );
                         let (a, b) = ((dx0, dy0), (dx1, dy1));
-                        emit(k, "rect", rect_dist(px, py, a.0, a.1, b.0, b.1), &[a, b]);
+                        emit(k, "rect", rect_dist(px, py, a.0, a.1, b.0, b.1), &[a, b], &[]);
                     }
                 }
                 // Everything else falls back to its bounding box, which for a
@@ -2313,11 +2335,11 @@ impl Scene {
                     let Some(k) = k else { continue };
                     let Some((x0, y0, x1, y1)) = node_bbox(other, vp) else { continue };
                     emit(k, node_kind(other), rect_dist(px, py, x0, y0, x1, y1),
-                         &[(x0, y0), (x1, y1)]);
+                         &[(x0, y0), (x1, y1)], &[]);
                 }
             }
         }
-        list!(key = key, kind = kind, dist = dist, n = gn, x = gx, y = gy)
+        list!(key = key, kind = kind, dist = dist, n = gn, x = gx, y = gy, ring = gring)
     }
 
     /// The font files this scene's text actually resolved to.

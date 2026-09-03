@@ -120,7 +120,7 @@ vl_nearest <- function(
 #' |---|---|---|
 #' | `segment` | 2 | the endpoints |
 #' | `line`, `polygon` | *k* | the vertices, in order; `polygon` is closed |
-#' | `path` | *k* | all rings' vertices concatenated |
+#' | `path` | *k* | all rings' vertices concatenated; `ring` separates them |
 #' | `point` | 1 | the centre |
 #' | `rect` | 2 | opposite corners |
 #' | `text`, `roundrect` | 2 | the bounding box's corners |
@@ -128,9 +128,17 @@ vl_nearest <- function(
 #' Coordinates are device pixels with y growing **down**, matching
 #' [scene_model()]'s boxes and the rendered SVG's coordinate system.
 #'
+#' `ring` groups the vertices of a multi-ring `path` -- a polygon with a hole, or
+#' a multipart feature -- so a host can hit-test it the way the engine does.
+#' Without it the concatenated vertices are lossy: treating them as one closed
+#' ring invents a phantom edge from each ring's last vertex to the next ring's
+#' first. Split on `ring` and test the rings separately. Every other kind is a
+#' single ring, so `ring` is `1` throughout.
+#'
 #' @inheritParams vl_nearest
 #' @return A data frame of `key`, `kind`, `vertex` (1-based within the element),
-#'   `x` and `y`. Zero rows if the scene has no keyed elements.
+#'   `ring` (1-based within the element), `x` and `y`. Zero rows if the scene has
+#'   no keyed elements.
 #' @seealso [vl_nearest()], [scene_model()]
 #' @examples
 #' s <- vl_scene(4, 3, dpi = 96, bg = "white") |>
@@ -146,6 +154,7 @@ element_geometry <- function(scene) {
     key = character(0),
     kind = character(0),
     vertex = integer(0),
+    ring = integer(0),
     x = numeric(0),
     y = numeric(0),
     stringsAsFactors = FALSE
@@ -158,6 +167,7 @@ element_geometry <- function(scene) {
     key = rep(t$key, n),
     kind = rep(t$kind, n),
     vertex = unlist(lapply(n, seq_len), use.names = FALSE),
+    ring = as.integer(t$ring),
     x = t$x,
     y = t$y,
     stringsAsFactors = FALSE
