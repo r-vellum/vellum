@@ -245,8 +245,8 @@ fn lerp_node(a: &Node, b: &Node, fr: &Fracs) -> Node {
             gp: lerp_gpar(agp, bgp, fr),
         },
         (
-            Node::Lines { x: ax, y: ay, xu, yu, scap, ecap, off, arrow, sketch, gp: agp, key },
-            Node::Lines { x: bx, y: by, .. },
+            Node::Lines { x: ax, y: ay, xu, yu, scap, ecap, off, arrow, sketch, hw: ahw, gp: agp, key },
+            Node::Lines { x: bx, y: by, hw: bhw, .. },
         ) => Node::Lines {
             x: lerp_vec(ax, bx, t),
             y: lerp_vec(ay, by, t),
@@ -257,6 +257,14 @@ fn lerp_node(a: &Node, b: &Node, fr: &Fracs) -> Node {
             off: *off,
             arrow: arrow.clone(),
             sketch: sketch.clone(),
+            // A stroke width is a size, so the profile rides `frac_size` rather
+            // than the position fraction (#45). Tweening between a profiled and
+            // an unprofiled frame would change the KIND of mark mid-flight, so
+            // that case snaps to the start frame rather than inventing a ribbon.
+            hw: match (ahw, bhw) {
+                (Some(a2), Some(b2)) => Some(lerp_vec(a2, b2, fr.size)),
+                _ => ahw.clone(),
+            },
             gp: lerp_gpar(agp, snap_node_gp(b, agp), fr),
             key: key.clone(),
         },

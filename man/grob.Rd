@@ -58,6 +58,7 @@ lines_grob(
   end_cap = NULL,
   offset = NULL,
   sketch = NULL,
+  lwd_profile = NULL,
   gp = vl_gpar(),
   name = NULL,
   vp = NULL,
@@ -334,6 +335,25 @@ node sizes at any figure size; for \code{\link[=lines_grob]{lines_grob()}} a sin
 rigidly translates the whole polyline along the perpendicular of its overall
 direction. Applied \strong{before} \code{start_cap}/\code{end_cap} and the arrowhead (offset,
 then cap, then head). \code{NULL}/\code{0} (default) leaves the geometry untouched.}
+
+\item{lwd_profile}{For \code{\link[=lines_grob]{lines_grob()}}, an optional numeric vector of \strong{one
+width multiplier per vertex}, turning the polyline into a variable-width
+stroke that tapers smoothly between vertices. Each value scales the resolved
+\code{lwd}, so \code{c(1, 2, 0)} runs from the nominal width, through double, to a
+point. Resolved \strong{at render}, inside the grob's viewport, so the taper is
+correct at any figure size and moves with a panel that is laid out later --
+which is the difference from \code{\link[=stroke_to_path]{stroke_to_path()}}, whose outline is baked at a
+page size you supply. \code{NULL} (default) draws an ordinary uniform stroke, and
+is byte-for-byte the output you got before this argument existed.
+
+A varying-width stroke is generated as an outline and \strong{filled} (no backend
+can stroke one path at several widths), so PNG, SVG and PDF all get the same
+geometry -- it degrades nowhere. Two consequences: the stroke colour paints
+the ribbon while \code{lty} and dashing do not apply, and each ribbon is unique
+geometry, so it opts out of the batching fast paths -- fine for the low
+element counts this is meant for, not for a million points. Cannot be
+combined with \code{sketch}. For a profile spread by \strong{arc length} rather than
+per vertex, see \code{\link[=stroke_to_path]{stroke_to_path()}}'s \code{along} argument.}
 
 \item{n}{Number of points to sample the curve at (flattened to a polyline).}
 

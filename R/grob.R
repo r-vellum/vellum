@@ -96,7 +96,8 @@ grob_lines <- S7::new_class(
     start_cap = S7::new_property(S7::class_any, default = NULL),
     end_cap = S7::new_property(S7::class_any, default = NULL),
     offset = S7::new_property(S7::class_any, default = NULL),
-    sketch = S7::new_property(S7::class_any, default = NULL)
+    sketch = S7::new_property(S7::class_any, default = NULL),
+    lwd_profile = S7::new_property(S7::class_any, default = NULL)
   )
 )
 grob_polygon <- S7::new_class(
@@ -483,6 +484,24 @@ roundrect_grob <- function(
 #'   direction. Applied **before** `start_cap`/`end_cap` and the arrowhead (offset,
 #'   then cap, then head). `NULL`/`0` (default) leaves the geometry untouched.
 #' @param sketch Optional [sketch()] spec for a hand-drawn look; `NULL` = crisp.
+#' @param lwd_profile For [lines_grob()], an optional numeric vector of **one
+#'   width multiplier per vertex**, turning the polyline into a variable-width
+#'   stroke that tapers smoothly between vertices. Each value scales the resolved
+#'   `lwd`, so `c(1, 2, 0)` runs from the nominal width, through double, to a
+#'   point. Resolved **at render**, inside the grob's viewport, so the taper is
+#'   correct at any figure size and moves with a panel that is laid out later --
+#'   which is the difference from [stroke_to_path()], whose outline is baked at a
+#'   page size you supply. `NULL` (default) draws an ordinary uniform stroke, and
+#'   is byte-for-byte the output you got before this argument existed.
+#'
+#'   A varying-width stroke is generated as an outline and **filled** (no backend
+#'   can stroke one path at several widths), so PNG, SVG and PDF all get the same
+#'   geometry -- it degrades nowhere. Two consequences: the stroke colour paints
+#'   the ribbon while `lty` and dashing do not apply, and each ribbon is unique
+#'   geometry, so it opts out of the batching fast paths -- fine for the low
+#'   element counts this is meant for, not for a million points. Cannot be
+#'   combined with `sketch`. For a profile spread by **arc length** rather than
+#'   per vertex, see [stroke_to_path()]'s `along` argument.
 #' @export
 lines_grob <- function(
   x,
@@ -492,6 +511,7 @@ lines_grob <- function(
   end_cap = NULL,
   offset = NULL,
   sketch = NULL,
+  lwd_profile = NULL,
   gp = vl_gpar(),
   name = NULL,
   vp = NULL,
@@ -515,6 +535,7 @@ lines_grob <- function(
   start_cap <- .check_cap(start_cap, "start_cap", scalar = TRUE)
   end_cap <- .check_cap(end_cap, "end_cap", scalar = TRUE)
   offset <- .check_cap(offset, "offset", scalar = TRUE, nonneg = FALSE)
+  lwd_profile <- .check_vertex_profile(lwd_profile, n, sketch)
   grob_lines(
     x = vctrs::vec_recycle(as_unit(x, "native"), n),
     y = vctrs::vec_recycle(as_unit(y, "native"), n),
@@ -523,6 +544,7 @@ lines_grob <- function(
     end_cap = end_cap,
     offset = offset,
     sketch = sketch,
+    lwd_profile = lwd_profile,
     gp = gp,
     name = name,
     vp = vp,
@@ -531,6 +553,39 @@ lines_grob <- function(
     keys = .recycle_keys(key, 1L),
     meta = .recycle_meta(meta, 1L)
   )
+}
+
+# Validate a render-time per-vertex `lwd_profile` for `lines_grob()`. The value
+# checks (numeric, finite, non-negative, not all zero) are the SHARED ones from
+# `.check_lwd_profile()`, so the two entry points cannot drift; only the two
+# render-time-specific rules live here.
+#
+# `sketch` is refused alongside a profile. A sketched variable-width stroke is
+# two different pictures -- a wobbly pen versus a wobbly silhouette -- and
+# neither is obviously the one meant, so this asks rather than guesses.
+.check_vertex_profile <- function(profile, n, sketch) {
+  if (is.null(profile)) {
+    return(NULL)
+  }
+  if (!is.null(sketch)) {
+    cli::cli_abort(c(
+      "{.arg sketch} and {.arg lwd_profile} cannot be combined.",
+      i = "A sketched ribbon would jitter the stroke's outline, not the pen that drew it -- a wobbly silhouette rather than a hand-drawn line.",
+      i = "Draw the sketch and the tapered stroke as separate grobs if you want both."
+    ))
+  }
+  .check_lwd_profile(profile)
+  # No arc-length option here: spreading a profile along the drawn length needs
+  # resolved device px, which a grob does not have when it is constructed. That
+  # mode stays with `stroke_to_path()`, which resolves at a page size you give it.
+  if (length(profile) != 1L && length(profile) != n) {
+    cli::cli_abort(c(
+      "{.arg lwd_profile} must have one value per vertex.",
+      x = "Got {length(profile)} value{?s} for {n} vertex/vertices.",
+      i = 'For a profile spread evenly ALONG the line, use {.fn stroke_to_path} with {.code along = "arclength"}.'
+    ))
+  }
+  rep_len(as.numeric(profile), n)
 }
 
 # Validate a cap/offset argument: NULL passes through; otherwise it must resolve
