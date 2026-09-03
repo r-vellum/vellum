@@ -19,3 +19,4 @@
 ^docs$
 ^vignettes/figure$
 ^[.]?air[.]toml$
+^tools/byte-gate\.R$
