@@ -45,8 +45,8 @@ A `vellum_arrow` object.
 ``` r
 lines_grob(c(0.1, 0.9), c(0.1, 0.9), arrow = vl_arrow(type = "closed"))
 #> <vellum::grob_lines>
-#>  @ name     : NULL
-#>  @ gp       : <vellum::vl_gpar>
+#>  @ name       : NULL
+#>  @ gp         : <vellum::vl_gpar>
 #>  .. @ col       : NULL
 #>  .. @ fill      : NULL
 #>  .. @ lwd       : NULL
@@ -66,21 +66,22 @@ lines_grob(c(0.1, 0.9), c(0.1, 0.9), arrow = vl_arrow(type = "closed"))
 #>  .. @ antialias : NULL
 #>  .. @ crisp     : NULL
 #>  .. @ dash_phase: NULL
-#>  @ vp       : NULL
-#>  @ id       : NULL
-#>  @ role     : NULL
-#>  @ keys     : NULL
-#>  @ meta     : NULL
-#>  @ x        : unit [1:2] 0.1native, 0.9native
-#>  @ y        : unit [1:2] 0.1native, 0.9native
-#>  @ arrow    :List of 4
+#>  @ vp         : NULL
+#>  @ id         : NULL
+#>  @ role       : NULL
+#>  @ keys       : NULL
+#>  @ meta       : NULL
+#>  @ x          : unit [1:2] 0.1native, 0.9native
+#>  @ y          : unit [1:2] 0.1native, 0.9native
+#>  @ arrow      :List of 4
 #>  .. $ angle : num 30
 #>  .. $ length: unit [1:1] 0.25in
 #>  .. $ ends  : chr "last"
 #>  .. $ type  : chr "closed"
 #>  .. - attr(*, "class")= chr "vellum_arrow"
-#>  @ start_cap: NULL
-#>  @ end_cap  : NULL
-#>  @ offset   : NULL
-#>  @ sketch   : NULL
+#>  @ start_cap  : NULL
+#>  @ end_cap    : NULL
+#>  @ offset     : NULL
+#>  @ sketch     : NULL
+#>  @ lwd_profile: NULL
 ```

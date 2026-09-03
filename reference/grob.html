@@ -124,6 +124,7 @@ with <code><a href="vl_scene.html">render()</a></code>. Coordinates accept a <co
 <span>  end_cap <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  offset <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  sketch <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  lwd_profile <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  gp <span class="op">=</span> <span class="fu"><a href="vl_gpar.html">vl_gpar</a></span><span class="op">(</span><span class="op">)</span>,</span>
 <span>  name <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  vp <span class="op">=</span> <span class="cn">NULL</span>,</span>
@@ -430,6 +431,26 @@ node sizes at any figure size; for <code>lines_grob()</code> a single (scalar) o
 rigidly translates the whole polyline along the perpendicular of its overall
 direction. Applied <strong>before</strong> <code>start_cap</code>/<code>end_cap</code> and the arrowhead (offset,
 then cap, then head). <code>NULL</code>/<code>0</code> (default) leaves the geometry untouched.</p></dd>
+
+
+<dt id="arg-lwd-profile">lwd_profile<a class="anchor" aria-label="anchor" href="#arg-lwd-profile"></a></dt>
+<dd><p>For <code>lines_grob()</code>, an optional numeric vector of <strong>one
+width multiplier per vertex</strong>, turning the polyline into a variable-width
+stroke that tapers smoothly between vertices. Each value scales the resolved
+<code>lwd</code>, so <code>c(1, 2, 0)</code> runs from the nominal width, through double, to a
+point. Resolved <strong>at render</strong>, inside the grob's viewport, so the taper is
+correct at any figure size and moves with a panel that is laid out later –
+which is the difference from <code><a href="stroke_to_path.html">stroke_to_path()</a></code>, whose outline is baked at a
+page size you supply. <code>NULL</code> (default) draws an ordinary uniform stroke, and
+is byte-for-byte the output you got before this argument existed.</p>
+<p>A varying-width stroke is generated as an outline and <strong>filled</strong> (no backend
+can stroke one path at several widths), so PNG, SVG and PDF all get the same
+geometry – it degrades nowhere. Two consequences: the stroke colour paints
+the ribbon while <code>lty</code> and dashing do not apply, and each ribbon is unique
+geometry, so it opts out of the batching fast paths – fine for the low
+element counts this is meant for, not for a million points. Cannot be
+combined with <code>sketch</code>. For a profile spread by <strong>arc length</strong> rather than
+per vertex, see <code><a href="stroke_to_path.html">stroke_to_path()</a></code>'s <code>along</code> argument.</p></dd>
 
 
 <dt id="arg-n">n<a class="anchor" aria-label="anchor" href="#arg-n"></a></dt>

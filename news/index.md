@@ -2,6 +2,57 @@
 
 ## vellum 0.6.9.9000 (development version)
 
+### Geometry
+
+- **[`lines_grob()`](https://r-vellum.github.io/vellum/reference/grob.md)
+  takes a `lwd_profile`: a stroke whose width varies along the line,
+  resolved at render.** `stroke_to_path(lwd_profile =)` in 0.6.9 solved
+  the geometry of a variable-width stroke but bakes it at a page size
+  you supply and hands back absolute mm. That is right for a shape, and
+  no use to anything whose rect is measured later – a mark heading into
+  a panel laid out after axes, strips and legends. This carries the
+  profile into the scene instead and builds the ribbon inside the grob’s
+  viewport at render.
+
+  ``` r
+
+  lines_grob(x, y, gp = vl_gpar(col = "steelblue", lwd = 12),
+             lwd_profile = c(1, 1.6, 0.8, 0))
+  ```
+
+  One multiplier per vertex, scaling the `lwd` that is **resolved** at
+  render – so an `lwd` inherited from an enclosing viewport is what the
+  profile multiplies, which is why the vector crosses into the engine as
+  multipliers rather than as finished widths. Because nothing is baked,
+  the same grob tapers correctly at any figure size: doubling the page
+  doubles the ribbon’s length and leaves its physical width alone, and
+  doubling the dpi scales both.
+
+  The geometry is the one that shipped with
+  [`stroke_to_path()`](https://r-vellum.github.io/vellum/reference/stroke_to_path.md)
+  – external common tangents, so a taper reaches its point instead of
+  waisting, and one non-zero self-union to resolve tight bends and the
+  inner side of each join. Nothing in `ribbon.rs` changed; this is the
+  plumbing that was missing.
+
+  A varying-width stroke is generated as an outline and **filled**,
+  since no backend can stroke one path at several widths – so PNG, SVG
+  and PDF all get identical geometry and it degrades nowhere, unlike the
+  group effects. Two consequences worth knowing: the stroke colour
+  paints the ribbon (a gradient `col` ramps along it) while `lty` and
+  dashing do not apply, and every ribbon is unique geometry, so it opts
+  out of the batching fast paths – sized for the low element counts this
+  is for, not for a million points.
+
+  `sketch` and `lwd_profile` together are an error rather than a guess:
+  jittering a ribbon’s outline gives a wobbly silhouette, not a wobbly
+  pen, and those are different pictures. Arc-length spreading
+  (`along = "arclength"`) stays with
+  [`stroke_to_path()`](https://r-vellum.github.io/vellum/reference/stroke_to_path.md),
+  which has the resolved device px that measuring it needs.
+
+  A scene with no profile is byte-for-byte unchanged.
+
 ### Hit-testing
 
 - **[`element_geometry()`](https://r-vellum.github.io/vellum/reference/element_geometry.md)

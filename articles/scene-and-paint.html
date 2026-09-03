@@ -475,8 +475,46 @@ choosing is your job rather than something inferred from the vector’s
 length.</p>
 <p><code>segments_grob(lwd = )</code>, from the section above, also
 varies width — but per <em>element</em>, so the width steps between
-segments and the joins show. This is the join-free alternative, at the
-cost of being baked at one size.</p>
+segments and the joins show. This is the join-free alternative.</p>
+</div>
+<div class="section level3">
+<h3 id="the-same-taper-resolved-at-render">The same taper, resolved at render<a class="anchor" aria-label="anchor" href="#the-same-taper-resolved-at-render"></a>
+</h3>
+<p>Everything above bakes the outline at a page size you supply, which
+is fine when you know it. If you don’t — a grob heading into a panel
+whose rect is measured later, after axes and legends —
+<code>lines_grob(lwd_profile = )</code> carries the profile into the
+scene instead and generates the ribbon at render, inside the
+viewport:</p>
+<div class="sourceCode" id="cb14"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">taper</span> <span class="op">&lt;-</span> <span class="kw">function</span><span class="op">(</span><span class="va">lo</span>, <span class="va">hi</span>, <span class="va">p</span><span class="op">)</span> <span class="op">{</span></span>
+<span>  <span class="fu"><a href="../reference/grob.html">lines_grob</a></span><span class="op">(</span></span>
+<span>    <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.08</span>, <span class="fl">0.3</span>, <span class="fl">0.52</span>, <span class="fl">0.74</span>, <span class="fl">0.94</span><span class="op">)</span>,</span>
+<span>    <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="va">lo</span>, <span class="va">hi</span>, <span class="va">lo</span>, <span class="va">hi</span>, <span class="va">lo</span><span class="op">)</span>,</span>
+<span>    gp <span class="op">=</span> <span class="fu"><a href="../reference/vl_gpar.html">vl_gpar</a></span><span class="op">(</span>col <span class="op">=</span> <span class="st">"seagreen"</span>, lwd <span class="op">=</span> <span class="fl">16</span><span class="op">)</span>,</span>
+<span>    lwd_profile <span class="op">=</span> <span class="va">p</span></span>
+<span>  <span class="op">)</span></span>
+<span><span class="op">}</span></span>
+<span><span class="fu"><a href="../reference/display.html">display</a></span><span class="op">(</span></span>
+<span>  <span class="fu"><a href="../reference/vl_scene.html">vl_scene</a></span><span class="op">(</span><span class="fl">6</span>, <span class="fl">2.2</span><span class="op">)</span> <span class="op">|&gt;</span></span>
+<span>    <span class="fu"><a href="../reference/vl_scene.html">draw</a></span><span class="op">(</span><span class="fu">taper</span><span class="op">(</span><span class="fl">0.60</span>, <span class="fl">0.92</span>, <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">1</span>, <span class="fl">0.7</span>, <span class="fl">0.4</span>, <span class="fl">0.2</span>, <span class="fl">0</span><span class="op">)</span><span class="op">)</span><span class="op">)</span> <span class="op">|&gt;</span></span>
+<span>    <span class="fu"><a href="../reference/vl_scene.html">draw</a></span><span class="op">(</span><span class="fu">taper</span><span class="op">(</span><span class="fl">0.10</span>, <span class="fl">0.42</span>, <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.15</span>, <span class="fl">0.6</span>, <span class="fl">1</span>, <span class="fl">0.6</span>, <span class="fl">0.15</span><span class="op">)</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="op">)</span></span></code></pre></div>
+<p><img src="scene-and-paint_files/figure-html/unnamed-chunk-8-1.png" class="r-plt" alt="" width="576"></p>
+<p>One value per vertex, and the width scales the <code>lwd</code> that
+is <em>resolved</em> at render — so an inherited <code>lwd</code> from
+an enclosing viewport is what the profile multiplies. Because nothing is
+baked, the same grob tapers correctly at any figure size and moves with
+a panel laid out around it.</p>
+<p>The trade is which question each answers.
+<code><a href="../reference/stroke_to_path.html">stroke_to_path()</a></code> hands back a shape, so it composes: fill
+it with a gradient, subtract it from something, hatch it.
+<code>lines_grob(lwd_profile = )</code> stays a stroke that happens to
+be drawn as a fill, so it takes the stroke colour and nothing else — no
+<code>lty</code>, no dashing — but needs no page size and survives being
+laid out. Arc-length spreading is <code><a href="../reference/stroke_to_path.html">stroke_to_path()</a></code>’s alone
+for now: measuring it needs resolved device px, which is exactly what a
+render-time profile does not have when it is constructed.</p>
 <p>One caveat worth stating, since the paragraph above makes an
 unconditional promise that variable width cannot keep: no rasterizer can
 stroke a line at a changing width, so there is no “same stroker” to

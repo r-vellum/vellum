@@ -52,6 +52,7 @@ lines_grob(
   end_cap = NULL,
   offset = NULL,
   sketch = NULL,
+  lwd_profile = NULL,
   gp = vl_gpar(),
   name = NULL,
   vp = NULL,
@@ -382,6 +383,31 @@ text_grob(
   of its overall direction. Applied **before** `start_cap`/`end_cap` and
   the arrowhead (offset, then cap, then head). `NULL`/`0` (default)
   leaves the geometry untouched.
+
+- lwd_profile:
+
+  For `lines_grob()`, an optional numeric vector of **one width
+  multiplier per vertex**, turning the polyline into a variable-width
+  stroke that tapers smoothly between vertices. Each value scales the
+  resolved `lwd`, so `c(1, 2, 0)` runs from the nominal width, through
+  double, to a point. Resolved **at render**, inside the grob's
+  viewport, so the taper is correct at any figure size and moves with a
+  panel that is laid out later – which is the difference from
+  [`stroke_to_path()`](https://r-vellum.github.io/vellum/reference/stroke_to_path.md),
+  whose outline is baked at a page size you supply. `NULL` (default)
+  draws an ordinary uniform stroke, and is byte-for-byte the output you
+  got before this argument existed.
+
+  A varying-width stroke is generated as an outline and **filled** (no
+  backend can stroke one path at several widths), so PNG, SVG and PDF
+  all get the same geometry – it degrades nowhere. Two consequences: the
+  stroke colour paints the ribbon while `lty` and dashing do not apply,
+  and each ribbon is unique geometry, so it opts out of the batching
+  fast paths – fine for the low element counts this is meant for, not
+  for a million points. Cannot be combined with `sketch`. For a profile
+  spread by **arc length** rather than per vertex, see
+  [`stroke_to_path()`](https://r-vellum.github.io/vellum/reference/stroke_to_path.md)'s
+  `along` argument.
 
 - n:
 
