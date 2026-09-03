@@ -365,6 +365,17 @@ enum Node {
         arrow: Option<Arrow>,
         /// Optional hand-drawn (sketch) rendering; `None` = crisp. See `sketch.rs`.
         sketch: Option<crate::sketch::SketchOpts>,
+        /// Optional per-vertex width MULTIPLIER of the resolved `lwd`, one per
+        /// vertex. `None` = a uniform stroke (the byte-identical path). `Some`
+        /// makes this a variable-width stroke: the draw arm builds the ribbon
+        /// with `ribbon::variable_stroke` and FILLS it, because no backend can
+        /// stroke one path at several widths. Mutually exclusive with `sketch`
+        /// (rejected in R).
+        ///
+        /// A multiplier rather than an absolute half-width because `lwd` may be
+        /// INHERITED from the enclosing gpar stack: only the resolved `Gpar` in
+        /// the draw arm knows the width this profile is scaling.
+        hw: Option<Vec<f64>>,
         gp: PartialGpar,
         /// Optional data key for this single element (interactivity): emitted as
         /// `data-key` in SVG. `None` = none. See `Rects.keys` for the batched form.
@@ -1210,6 +1221,7 @@ impl Scene {
         sroughness: f64, sbowing: f64, sfill_style: i32, sfill_weight: f64,
         shachure_angle: f64, shachure_gap: f64, scurve_tightness: f64,
         sdisable_multi: bool, spreserve: bool, sseed: f64,
+        hw: &[f64],
         key: String,
     ) {
         let gp = PartialGpar::from_robj(&rnull(), &col, &lwd, &alpha, &stroke);
@@ -1217,11 +1229,14 @@ impl Scene {
             sroughness, sbowing, sfill_style, sfill_weight, shachure_angle,
             shachure_gap, scurve_tightness, sdisable_multi, spreserve, sseed,
         );
+        // An empty `hw` is the "no profile" sentinel, so a scene that never asks
+        // for a variable width encodes and renders exactly as it did before.
+        let hw = if hw.is_empty() { None } else { Some(hw.to_vec()) };
         self.emit_node(Node::Lines {
             x: x.to_vec(), y: y.to_vec(), xu: codes_off(xu, xoff), yu: codes_off(yu, yoff),
             scap: cap_scalar(scap, scapu), ecap: cap_scalar(ecap, ecapu),
             off: cap_scalar(off, offu),
-            arrow: arrow_from(aangle, alen, aends, aclosed), sketch, gp,
+            arrow: arrow_from(aangle, alen, aends, aclosed), sketch, hw, gp,
             key: opt_key(key),
         });
     }
@@ -3121,10 +3136,17 @@ impl Scene {
                         fill_then_stroke(b, &path, &gp, t, &clip, vp, FillRule::Winding);
                     }
                 }
-                Node::Lines { x, y, xu, yu, scap, ecap, off, arrow, sketch, key, .. } => {
+                Node::Lines { x, y, xu, yu, scap, ecap, off, arrow, sketch, hw, key, .. } => {
                     b.set_element_key(key.as_deref());
                     if let Some(sk) = sketch {
                         draw_sketch_polyline(b, x, y, xu, yu, &gp, sk, t, &clip, vp);
+                    } else if let Some(hw) = hw {
+                        // A variable-width stroke is a FILLED ribbon: no backend
+                        // can stroke one path at several widths, so the generator
+                        // builds the outline and we fill it with the stroke
+                        // colour. Non-zero rule, matching `variable_stroke`'s own
+                        // self-union.
+                        draw_var_stroke(b, x, y, xu, yu, hw, &gp, t, &clip, vp);
                     } else if let Some(col) = gp.col {
                         let n = x.len().min(y.len()).min(xu.len()).min(yu.len());
                         if n >= 2 {
@@ -4235,6 +4257,86 @@ fn paint_sketch<B: RenderBackend>(
 /// Draw a hand-drawn (sketch) polyline (open path) in `col`/`lwd`. SK1: ignores
 /// per-line offset/caps/arrows (documented) — the wobble is the whole point.
 #[allow(clippy::too_many_arguments)]
+/// Draw a variable-width stroke: build the ribbon outline for a per-vertex
+/// half-width profile and FILL it.
+///
+/// A stroke whose width varies along its length is not something any backend can
+/// stroke -- raster, SVG and PDF alike take one width per path -- so it is
+/// generated as an outline and filled. The upside is that it degrades nowhere:
+/// all three backends get the same geometry, unlike the group effects.
+///
+/// The geometry is `ribbon.rs`'s, unchanged: external common tangents (not
+/// perpendicular offsets, which waist a taper), every contour wound CCW, and one
+/// non-zero self-union to resolve tight bends and the inner side of each join.
+fn draw_var_stroke<B: RenderBackend>(
+    b: &mut B, x: &[f64], y: &[f64], xu: &[Unit], yu: &[Unit], hw: &[f64],
+    gp: &Gpar, t: Transform, clip: &Clip, vp: &Vp,
+) {
+    // Painted with the STROKE colour: this is a stroke that happens to be drawn
+    // as a fill, so a gradient/pattern `col` paints the ribbon the way it would
+    // ramp along the stroke.
+    let paint = match (&gp.col_paint, gp.col) {
+        (Some(p), _) => resolve_paint(p, vp),
+        (None, Some(c)) => ResolvedPaint::Solid(c),
+        (None, None) => return,
+    };
+    let n = x.len().min(y.len()).min(xu.len()).min(yu.len()).min(hw.len());
+    if n < 2 {
+        return;
+    }
+    let half = gp.lwd_px(vp.dpi) as f64 * 0.5;
+    let (mut px, mut py, mut phw) = (Vec::with_capacity(n), Vec::with_capacity(n), Vec::with_capacity(n));
+    for i in 0..n {
+        let (a, c) = (vp.x_pos(x[i], xu[i]), vp.y_pos(y[i], yu[i]));
+        if !a.is_finite() || !c.is_finite() || !hw[i].is_finite() {
+            continue;
+        }
+        px.push(a);
+        py.push(c);
+        // `hw` is a multiplier of the RESOLVED lwd (which may be inherited), and
+        // `lwd_px` already carries the `dpi / 96` convention. Half, because the
+        // generator offsets each side by a half-width.
+        phw.push((half * hw[i]).max(0.0));
+    }
+    if px.len() < 2 {
+        return;
+    }
+    let nib = crate::ribbon::Nib {
+        cap: match gp.lineend {
+            crate::color::LineCap::Butt => crate::ribbon::Cap::Butt,
+            crate::color::LineCap::Square => crate::ribbon::Cap::Square,
+            _ => crate::ribbon::Cap::Round,
+        },
+        join: match gp.linejoin {
+            crate::color::LineJoin::Mitre => crate::ribbon::Join::Miter,
+            crate::color::LineJoin::Bevel => crate::ribbon::Join::Bevel,
+            _ => crate::ribbon::Join::Round,
+        },
+        miter: gp.linemitre,
+        arc: 0,
+    };
+    // `Node::Lines` is an open polyline; a closed ring comes through `Polygon`.
+    let (ox, oy, onper) =
+        crate::ribbon::variable_stroke(&px, &py, &[px.len() as i32], &phw, false, &nib);
+    let mut pb = PathBuilder::new();
+    let mut at = 0usize;
+    for &cnt in &onper {
+        let cnt = cnt.max(0) as usize;
+        if cnt >= 3 && at + cnt <= ox.len() {
+            pb.move_to(ox[at] as f32, oy[at] as f32);
+            for j in 1..cnt {
+                pb.line_to(ox[at + j] as f32, oy[at + j] as f32);
+            }
+            pb.close();
+        }
+        at += cnt;
+    }
+    if let Some(path) = pb.finish() {
+        // Non-zero: what `variable_stroke` already unioned the contours under.
+        fill_or_hatch(b, &path, t, &paint, FillRule::Winding, clip);
+    }
+}
+
 fn draw_sketch_polyline<B: RenderBackend>(
     b: &mut B, x: &[f64], y: &[f64], xu: &[Unit], yu: &[Unit], gp: &Gpar,
     sk: &crate::sketch::SketchOpts, t: Transform, clip: &Clip, vp: &Vp,

@@ -390,7 +390,44 @@ your job rather than something inferred from the vector's length.
 
 `segments_grob(lwd = )`, from the section above, also varies width — but per
 *element*, so the width steps between segments and the joins show. This is the
-join-free alternative, at the cost of being baked at one size.
+join-free alternative.
+
+### The same taper, resolved at render
+
+Everything above bakes the outline at a page size you supply, which is fine when
+you know it. If you don't — a grob heading into a panel whose rect is measured
+later, after axes and legends — `lines_grob(lwd_profile = )` carries the profile
+into the scene instead and generates the ribbon at render, inside the viewport:
+
+```{r}
+#| fig.height: 2.2
+taper <- function(lo, hi, p) {
+  lines_grob(
+    c(0.08, 0.3, 0.52, 0.74, 0.94),
+    c(lo, hi, lo, hi, lo),
+    gp = vl_gpar(col = "seagreen", lwd = 16),
+    lwd_profile = p
+  )
+}
+display(
+  vl_scene(6, 2.2) |>
+    draw(taper(0.60, 0.92, c(1, 0.7, 0.4, 0.2, 0))) |>
+    draw(taper(0.10, 0.42, c(0.15, 0.6, 1, 0.6, 0.15)))
+)
+```
+
+One value per vertex, and the width scales the `lwd` that is *resolved* at render
+— so an inherited `lwd` from an enclosing viewport is what the profile multiplies.
+Because nothing is baked, the same grob tapers correctly at any figure size and
+moves with a panel laid out around it.
+
+The trade is which question each answers. `stroke_to_path()` hands back a shape,
+so it composes: fill it with a gradient, subtract it from something, hatch it.
+`lines_grob(lwd_profile = )` stays a stroke that happens to be drawn as a fill,
+so it takes the stroke colour and nothing else — no `lty`, no dashing — but needs
+no page size and survives being laid out. Arc-length spreading is
+`stroke_to_path()`'s alone for now: measuring it needs resolved device px, which
+is exactly what a render-time profile does not have when it is constructed.
 
 One caveat worth stating, since the paragraph above makes an unconditional
 promise that variable width cannot keep: no rasterizer can stroke a line at a

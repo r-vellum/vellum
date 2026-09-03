@@ -1180,6 +1180,9 @@ S7::method(compile, grob_lines) <- function(node, scene) {
       sk$disable_multi,
       sk$preserve,
       sk$seed,
+      # Per-vertex width multipliers, or numeric(0) -- the "no profile" sentinel
+      # that keeps an ordinary polyline byte-for-byte unchanged.
+      as.numeric(node@lwd_profile %||% numeric(0)),
       .key1(node)
     )
   })
