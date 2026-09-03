@@ -312,3 +312,93 @@ test_that("geometry covers every keyed mark family", {
   )
   expect_equal(sum(g$key == "ln"), 3L) # all three vertices, not a box
 })
+
+# --- ring boundaries on a multi-ring path ------------------------------------
+#
+# `path` concatenates every ring's vertices, which on its own is lossy: a host
+# that joins the whole run treats a polygon-with-a-hole as one closed ring and
+# invents a phantom edge from each ring's end to the next ring's start. `ring`
+# is what lets it reconstruct exactly what the engine measured against.
+
+# A square with a square hole: ring 1 is the 4-vertex outer boundary, ring 2 the
+# 4-vertex inner one, in one keyed path_grob.
+holed_scene <- function() {
+  vl_scene(4, 3, dpi = 100, bg = "white") |>
+    draw(path_grob(
+      x = c(0.1, 0.9, 0.9, 0.1, 0.4, 0.6, 0.6, 0.4),
+      y = c(0.1, 0.1, 0.9, 0.9, 0.4, 0.4, 0.6, 0.6),
+      id = rep(1:2, each = 4),
+      rule = "evenodd",
+      key = "holed"
+    ))
+}
+
+test_that("element_geometry separates a path's rings", {
+  g <- element_geometry(holed_scene())
+  p <- g[g$key == "holed", ]
+  expect_equal(nrow(p), 8L)
+  expect_equal(p$ring, rep(1:2, each = 4))
+  # `vertex` stays 1-based within the ELEMENT (unchanged); `ring` is the new
+  # grouping, so the two together locate a vertex without ambiguity.
+  expect_equal(p$vertex, 1:8)
+})
+
+test_that("splitting on ring recovers the rings the engine measured", {
+  g <- element_geometry(holed_scene())
+  p <- g[g$key == "holed", ]
+  rings <- split(p[c("x", "y")], p$ring)
+  expect_length(rings, 2L)
+  # Ring 1 spans the outer square, ring 2 only the inner one -- which is exactly
+  # what a phantom-edge-joined single ring would blur together.
+  expect_equal(range(rings[["1"]]$x), c(0.1, 0.9) * 400, tolerance = 1e-6)
+  expect_equal(range(rings[["2"]]$x), c(0.4, 0.6) * 400, tolerance = 1e-6)
+})
+
+test_that("a single-ring element reports ring 1 throughout", {
+  g <- element_geometry(diag_scene())
+  expect_true(all(g$ring == 1L))
+  o <- element_geometry(offset_scene())
+  expect_true(all(o$ring == 1L))
+  expect_type(o$ring, "integer")
+})
+
+test_that("the ring column is present on an empty result", {
+  s <- vl_scene(2, 1, dpi = 96, bg = "white")
+  g <- element_geometry(s)
+  expect_equal(nrow(g), 0L)
+  expect_true("ring" %in% names(g))
+  expect_type(g$ring, "integer")
+})
+
+test_that("a client can reproduce the engine's path distance from the rings", {
+  # The issue this closes: hit-testing a multi-ring path locally, exactly.
+  # Note the engine's rule -- inside ANY ring counts as a hit (each ring is
+  # measured as filled and the minimum taken), so it does not apply `evenodd`
+  # across rings and a point in the hole is at distance 0. Reproducing that
+  # needs the ring boundaries; a single phantom-edge ring gives a different
+  # answer near the hole.
+  s <- holed_scene()
+  p <- element_geometry(s)
+  p <- p[p$key == "holed", ]
+  rings <- split(p[c("x", "y")], p$ring)
+  inside <- function(r, px, py) {
+    n <- nrow(r)
+    j <- c(n, seq_len(n - 1L))
+    sum(
+      (r$y > py) != (r$y[j] > py) &
+        px < (r$x[j] - r$x) * (py - r$y) / (r$y[j] - r$y) + r$x
+    ) %%
+      2 ==
+      1
+  }
+  hit_any <- function(px, py) any(vapply(rings, inside, logical(1), px, py))
+  # centre of the hole, a point in the annulus, and a point outside the square
+  probes <- list(c(0.5, 0.5), c(0.2, 0.5), c(0.95, 0.95))
+  for (q in probes) {
+    engine_zero <- vl_nearest(s, q[1], q[2])$dist == 0
+    local_zero <- hit_any(q[1] * 400, (1 - q[2]) * 300)
+    expect_identical(local_zero, engine_zero)
+  }
+  # and the hole really is a hit under that rule, unlike plain even-odd
+  expect_equal(vl_nearest(s, 0.5, 0.5)$dist, 0)
+})

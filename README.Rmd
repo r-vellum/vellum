@@ -416,3 +416,11 @@ builds).
 rextendr::document() # compile the Rust backend + regenerate R wrappers
 devtools::test()     # run the test suite
 ```
+
+Most changes should not move the rendered output. `tools/byte-gate.R` proves it:
+it builds the working tree and a baseline ref side by side, renders a fixed set
+of scenes to PNG/SVG/PDF plus a raw raster, and compares them byte for byte.
+
+```sh
+Rscript tools/byte-gate.R        # working tree vs main; non-zero exit on a diff
+```
