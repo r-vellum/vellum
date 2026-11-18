@@ -773,6 +773,7 @@ fn tween_scene(a: &Scene, b: &Scene, fr: &Fracs) -> Scene {
         meta: a.meta.clone(),
         cur_meta: a.cur_meta.clone(),
         raster_cache: RefCell::new(None),
+        geom_cache: RefCell::new(None),
         text_glyphs: a.text_glyphs,
         a11y_title: a.a11y_title.clone(),
         a11y_desc: a.a11y_desc.clone(),
