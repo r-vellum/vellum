@@ -38,26 +38,108 @@ grob <- S7::new_class(
 )
 
 # Recycle a per-element `key` vector to `n` (coerced to character); NULL -> NULL
-# so an absent key emits no `data-key` and costs nothing.
-.recycle_keys <- function(key, n) {
+# so an absent key emits no `data-key` and costs nothing. Only length 1 (one key
+# for every element) or exactly `n` is accepted: anything else would be silently
+# truncated or wrapped by `rep_len()`, pairing elements with the wrong data.
+.recycle_keys <- function(key, n, call = parent.frame()) {
   if (is.null(key)) {
     return(NULL)
   }
+  .check_elem_len(key, n, "key", call)
   rep_len(as.character(key), n)
 }
 
 # Recycle a per-element `meta` list to `n`. `meta` is a list of records (one per
 # element); a length-1 list is recycled to every element. NULL -> NULL.
-.recycle_meta <- function(meta, n) {
+.recycle_meta <- function(meta, n, call = parent.frame()) {
   if (is.null(meta)) {
     return(NULL)
   }
   if (!is.list(meta)) {
     cli::cli_abort(
-      "{.arg meta} must be a list, one entry (record) per element."
+      "{.arg meta} must be a list, one entry (record) per element.",
+      call = call
     )
   }
+  .check_elem_len(meta, n, "meta", call)
   rep_len(meta, n)
+}
+
+.check_elem_len <- function(v, n, arg, call) {
+  len <- length(v)
+  if (len != 1L && len != n) {
+    cli::cli_abort(
+      c(
+        "{.arg {arg}} must have length 1 or {n} (one per element), not {len}.",
+        i = "This grob draws {n} element{?s}."
+      ),
+      call = call
+    )
+  }
+}
+
+# Element count of a batched grob: the common size of its per-element vectors
+# under length-1 recycling (vctrs rules, so a zero-length vector gives n = 0).
+# `vals` is a named list; NULLs (absent optional vectors) do not count. This is the single definition of "n" for a batch: the constructor
+# recycles `key`/`meta` to it, `compile()` hands the backend that many elements,
+# and `scene_model()` expects that many rows -- see `.batch_n()`.
+.elem_n <- function(vals, call = parent.frame()) {
+  vals <- vals[!vapply(vals, is.null, logical(1))]
+  sizes <- vapply(vals, .vsize, integer(1))
+  big <- unique(sizes[sizes != 1L])
+  if (length(big) > 1L) {
+    nms <- names(sizes)
+    cli::cli_abort(
+      c(
+        "{.arg {nms}} must have compatible lengths.",
+        i = "Each must be length 1 or a common length.",
+        x = "{.arg {nms}} have lengths {sizes}."
+      ),
+      call = call
+    )
+  }
+  if (length(big)) big else 1L
+}
+
+# The per-element properties of each batched grob class, in the order their
+# constructor arguments appear. Per-element *style* vectors (hexagon/sector
+# `fill`, segment `col`/`lwd`) are not listed: like a `gp` colour vector they
+# cycle over the elements rather than define how many there are.
+.batch_props <- list(
+  grob_rect = c("x", "y", "width", "height"),
+  grob_roundrect = c("x", "y", "width", "height", "r"),
+  grob_circle = c("x", "y", "r"),
+  grob_points = c("x", "y", "size", "shape"),
+  grob_hexagon = c("x", "y", "size", "width", "height"),
+  grob_sector = c("x", "y", "r0", "r1", "theta0", "theta1"),
+  grob_segments = c(
+    "x0",
+    "y0",
+    "x1",
+    "y1",
+    "start_cap",
+    "end_cap",
+    "offset"
+  ),
+  grob_loop = c("x", "y", "size", "foot", "angle", "width")
+)
+
+# Element count of a built batched grob (see `.elem_n()`). Text has its own rule
+# (a rich label does not count towards n), so it goes through `.text_n()`.
+.batch_n <- function(node, call = parent.frame()) {
+  if (S7::S7_inherits(node, grob_text)) {
+    return(.text_n(node@label, node@x, node@y, call = call))
+  }
+  props <- .batch_props[[attr(S7::S7_class(node), "name")]]
+  if (is.null(props)) {
+    cli::cli_abort(
+      "Internal error: {.cls {class(node)[1]}} is not a batched grob.",
+      .internal = TRUE
+    )
+  }
+  vals <- lapply(props, function(p) S7::prop(node, p))
+  names(vals) <- props
+  .elem_n(vals, call = call)
 }
 
 grob_rect <- S7::new_class(
@@ -236,23 +318,11 @@ S7::method(.text_labels, vellum_md_label) <- function(label) label@text
 # `x`/`y`). It matches what `compile()` hands the backend, one text node per
 # element, so per-element `key`/`meta` recycle to the same n R-side.
 .text_n <- function(label, x, y, call = parent.frame()) {
-  sizes <- c(x = .vsize(x), y = .vsize(y))
+  vals <- list(x = x, y = y)
   if (!.is_rich_label(label)) {
-    sizes <- c(label = length(.text_labels(label)), sizes)
+    vals <- c(list(label = .text_labels(label)), vals)
   }
-  big <- unique(sizes[sizes != 1L])
-  if (length(big) > 1L) {
-    nms <- names(sizes)
-    cli::cli_abort(
-      c(
-        "{.arg {nms}} must have compatible lengths.",
-        i = "Each must be length 1 or a common length.",
-        x = "{.arg {nms}} have lengths {sizes}."
-      ),
-      call = call
-    )
-  }
-  if (length(big)) big else 1L
+  .elem_n(vals, call = call)
 }
 
 grob_text <- S7::new_class(
@@ -407,7 +477,7 @@ rect_grob <- function(
   h <- as_unit(height)
   .check_extent(w, "width")
   .check_extent(h, "height")
-  n <- .common_n(x, y, w, h)
+  n <- .elem_n(list(x = x, y = y, width = w, height = h))
   grob_rect(
     x = as_unit(x),
     y = as_unit(y),
@@ -453,7 +523,7 @@ roundrect_grob <- function(
   # A roundrect grob is a *batch*: one box per (x, y, w, h, r) element, like
   # `rect_grob()`. Recycle keys/meta to that element count (not to 1, which
   # silently dropped every key past the first on a multi-box grob).
-  n <- .common_n(x, y, w, h, rr)
+  n <- .elem_n(list(x = x, y = y, width = w, height = h, r = rr))
   grob_roundrect(
     x = as_unit(x),
     y = as_unit(y),
@@ -1006,7 +1076,7 @@ circle_grob <- function(
   key = NULL,
   meta = NULL
 ) {
-  n <- .common_n(x, y, r)
+  n <- .elem_n(list(x = x, y = y, r = r))
   ru <- as_unit(r)
   .check_extent(ru, "r")
   grob_circle(
@@ -1046,10 +1116,10 @@ points_grob <- function(
   key = NULL,
   meta = NULL
 ) {
-  n <- .coord_n(x, y)
   sz <- as_unit(size, "mm")
   .check_extent(sz, "size")
   shape <- as.character(shape)
+  n <- .elem_n(list(x = x, y = y, size = sz, shape = shape))
   bad <- setdiff(unique(shape), names(.marker_codes))
   if (length(bad)) {
     cli::cli_abort(
@@ -1097,12 +1167,18 @@ hexagon_grob <- function(
   meta = NULL
 ) {
   orientation <- match.arg(orientation)
-  n <- .coord_n(x, y)
   sz <- as_unit(size, "mm")
   .check_extent(sz, "size")
   if (is.null(width) != is.null(height)) {
     cli::cli_abort("{.arg width} and {.arg height} must be supplied together.")
   }
+  n <- .elem_n(list(
+    x = x,
+    y = y,
+    size = sz,
+    width = width,
+    height = height
+  ))
   if (!is.null(width)) {
     width <- as_unit(width, "native")
     height <- as_unit(height, "native")
@@ -1111,7 +1187,7 @@ hexagon_grob <- function(
     width <- vctrs::vec_recycle(width, n)
     height <- vctrs::vec_recycle(height, n)
   }
-  if (!is.null(fill)) {
+  if (!is.null(fill) && !.is_paint(fill)) {
     fill <- rep_len(fill, n)
   }
   grob_hexagon(
@@ -1169,10 +1245,17 @@ sector_grob <- function(
   key = NULL,
   meta = NULL
 ) {
-  n <- .common_n(x, y, r0, r1, theta0, theta1)
+  n <- .elem_n(list(
+    x = x,
+    y = y,
+    r0 = r0,
+    r1 = r1,
+    theta0 = theta0,
+    theta1 = theta1
+  ))
   .check_finite_num(theta0, "theta0")
   .check_finite_num(theta1, "theta1")
-  if (!is.null(fill)) {
+  if (!is.null(fill) && !.is_paint(fill)) {
     fill <- rep_len(fill, n)
   }
   grob_sector(
@@ -1229,7 +1312,14 @@ loop_grob <- function(
   id = NULL,
   role = NULL
 ) {
-  n <- .common_n(x, y, size, foot, angle, width)
+  n <- .elem_n(list(
+    x = x,
+    y = y,
+    size = size,
+    foot = foot,
+    angle = angle,
+    width = width
+  ))
   .check_finite_num(angle, "angle")
   sz <- .check_cap(as_unit(size, "mm"), "size")
   ft <- .check_cap(as_unit(foot, "mm"), "foot")
@@ -1272,7 +1362,15 @@ segments_grob <- function(
   col = NULL,
   lwd = NULL
 ) {
-  n <- .common_n(x0, y0, x1, y1)
+  n <- .elem_n(list(
+    x0 = x0,
+    y0 = y0,
+    x1 = x1,
+    y1 = y1,
+    start_cap = start_cap,
+    end_cap = end_cap,
+    offset = offset
+  ))
   start_cap <- .check_cap(start_cap, "start_cap")
   end_cap <- .check_cap(end_cap, "end_cap")
   offset <- .check_cap(offset, "offset", nonneg = FALSE)
@@ -1794,16 +1892,6 @@ grobheight <- function(grob, mult = 1) vl_unit(mult, "grobheight", data = grob)
     (bb[3] - bb[1] + 1) / .MEASURE_DPI * 25.4,
     (bb[4] - bb[2] + 1) / .MEASURE_DPI * 25.4
   )
-}
-
-# Common length across several coordinate args, allowing length-1 recycling.
-.common_n <- function(...) {
-  sizes <- vapply(list(...), .vsize, integer(1))
-  n <- max(sizes)
-  if (!all(sizes %in% c(1L, n))) {
-    stop("coordinates must have compatible lengths", call. = FALSE)
-  }
-  n
 }
 
 #' Freeze a stroke into a fillable outline

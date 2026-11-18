@@ -1043,7 +1043,7 @@ compile <- S7::new_generic("compile", "node", function(node, scene) {
 
 S7::method(compile, grob_rect) <- function(node, scene) {
   .with_vp(node, scene, {
-    n <- vctrs::vec_size_common(node@x, node@y, node@width, node@height)
+    n <- .batch_n(node)
     ex <- .coord(node@x, "npc", n)
     ey <- .coord(node@y, "npc", n)
     ew <- .coord(node@width, "npc", n)
@@ -1086,7 +1086,7 @@ S7::method(compile, grob_rect) <- function(node, scene) {
 
 S7::method(compile, grob_roundrect) <- function(node, scene) {
   .with_vp(node, scene, {
-    n <- vctrs::vec_size_common(node@x, node@y, node@width, node@height, node@r)
+    n <- .batch_n(node)
     ex <- .coord(node@x, "npc", n)
     ey <- .coord(node@y, "npc", n)
     ew <- .coord(node@width, "npc", n)
@@ -1225,7 +1225,7 @@ S7::method(compile, grob_polygon) <- function(node, scene) {
 # only in where the radius comes from and its default unit (npc vs mm).
 .compile_circles <- function(node, scene, radius, rdefault, sketch = NULL) {
   .with_vp(node, scene, {
-    n <- vctrs::vec_size_common(node@x, node@y, radius)
+    n <- .batch_n(node)
     ex <- .coord(node@x, "npc", n)
     ey <- .coord(node@y, "npc", n)
     er <- .coord(radius, rdefault, n)
@@ -1273,7 +1273,7 @@ S7::method(compile, grob_points) <- function(node, scene) {
     .compile_circles(node, scene, node@size, "mm", node@sketch)
   } else {
     .with_vp(node, scene, {
-      n <- vctrs::vec_size_common(node@x, node@y, node@size)
+      n <- .batch_n(node)
       ex <- .coord(node@x, "npc", n)
       ey <- .coord(node@y, "npc", n)
       es <- .coord(node@size, "mm", n)
@@ -1313,7 +1313,7 @@ S7::method(compile, grob_points) <- function(node, scene) {
 
 S7::method(compile, grob_hexagon) <- function(node, scene) {
   .with_vp(node, scene, {
-    n <- vctrs::vec_size_common(node@x, node@y, node@size)
+    n <- .batch_n(node)
     ex <- .coord(node@x, "npc", n)
     ey <- .coord(node@y, "npc", n)
     es <- .coord(node@size, "mm", n)
@@ -1385,7 +1385,7 @@ S7::method(compile, grob_hexagon) <- function(node, scene) {
 
 S7::method(compile, grob_sector) <- function(node, scene) {
   .with_vp(node, scene, {
-    n <- vctrs::vec_size_common(node@x, node@y, node@r0, node@r1)
+    n <- .batch_n(node)
     ex <- .coord(node@x, "npc", n)
     ey <- .coord(node@y, "npc", n)
     er0 <- .coord(node@r0, "native", n)
@@ -1463,7 +1463,7 @@ S7::method(compile, grob_sector) <- function(node, scene) {
 
 S7::method(compile, grob_loop) <- function(node, scene) {
   .with_vp(node, scene, {
-    n <- vctrs::vec_size_common(node@x, node@y, node@size, node@foot)
+    n <- .batch_n(node)
     ex <- .coord(node@x, "npc", n)
     ey <- .coord(node@y, "npc", n)
     es <- .coord(node@size, "mm", n)
@@ -1501,7 +1501,7 @@ S7::method(compile, grob_loop) <- function(node, scene) {
 
 S7::method(compile, grob_segments) <- function(node, scene) {
   .with_vp(node, scene, {
-    n <- vctrs::vec_size_common(node@x0, node@y0, node@x1, node@y1)
+    n <- .batch_n(node)
     e0x <- .coord(node@x0, "native", n)
     e0y <- .coord(node@y0, "native", n)
     e1x <- .coord(node@x1, "native", n)
@@ -1629,7 +1629,7 @@ S7::method(compile, grob_text) <- function(node, scene) {
     # drawn at every position) or a list of them (one per datum). Plain character
     # labels keep the fast single-style batch path.
     rich <- .is_rich_label(node@label)
-    n <- .text_n(node@label, node@x, node@y)
+    n <- .batch_n(node)
     if (rich) {
       if (n == 0L) {
         return(invisible())

@@ -54,16 +54,11 @@
 .SM_SINGLE <- c("path", "line", "polygon")
 .SM_KEYED_BATCH <- c("text", "roundrect")
 
-# Element count of a batched keyable grob (its recycled common length).
-.sm_n <- function(node) {
-  if (S7::S7_inherits(node, grob_segments)) {
-    .vsize(node@x0)
-  } else if (S7::S7_inherits(node, grob_text)) {
-    .text_n(node@label, node@x, node@y)
-  } else {
-    .vsize(node@x)
-  }
-}
+# Element count of a batched keyable grob: the same `.batch_n()` that its
+# constructor recycles `key`/`meta` to and that `compile()` draws, so the walk
+# and the backend's element table cannot disagree on n. (Reading `.vsize(x)`
+# here undercounted a rect with scalar `x` and vector `y`.)
+.sm_n <- function(node) .batch_n(node)
 
 # The single data key of a single-shape grob (first key), or NA when unkeyed.
 .sm_key1 <- function(node) {
