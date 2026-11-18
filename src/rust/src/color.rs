@@ -85,7 +85,14 @@ pub struct PatternFill {
     pub w: f64,
     pub h: f64,
     pub unit: Unit,
+    /// Always `Repeat` after parsing: SVG and PDF tiling patterns can only
+    /// repeat, so `reflect` is baked into a mirrored tile (see `mirrored`) and
+    /// `pad` (rejected in R) falls back to repeat, identically on every backend.
     pub extend: Extend,
+    /// The tile is a 2x2 mirrored copy of the R tile, standing in for
+    /// `extend = "reflect"`; it covers two cells each way from the cell's
+    /// top-left corner.
+    pub mirrored: bool,
     /// Multiplicative opacity from the gpar `alpha` fold (kept separate so the
     /// shared tile `Rc` is never cloned just to fade it).
     pub opacity: f64,
@@ -183,7 +190,12 @@ fn parse_pattern(obj: &Robj) -> Option<Paint> {
     }
     let unit = Unit::parse(obj.dollar("units").ok().and_then(|u| u.as_str().map(String::from)).as_deref().unwrap_or("npc"));
     let extend = Extend::parse(obj.dollar("extend").ok().and_then(|e| e.as_str().map(String::from)).as_deref().unwrap_or("repeat"));
-    let tile: Vec<u8> = tile_i.iter().map(|v| (*v).clamp(0, 255) as u8).collect();
+    let mut tile: Vec<u8> = tile_i.iter().map(|v| (*v).clamp(0, 255) as u8).collect();
+    let (mut tw, mut th) = (tw, th);
+    let mirrored = matches!(extend, Extend::Reflect);
+    if mirrored {
+        (tile, tw, th) = mirror_tile(&tile, tw, th)?;
+    }
     Some(Paint::Pattern(PatternFill {
         tile: Arc::new(tile),
         tw,
@@ -193,9 +205,28 @@ fn parse_pattern(obj: &Robj) -> Option<Paint> {
         w: coords[2],
         h: coords[3],
         unit,
-        extend,
+        extend: Extend::Repeat,
+        mirrored,
         opacity: 1.0,
     }))
+}
+
+/// A `2tw x 2th` tile holding `tile` and its mirror images (right: flipped
+/// horizontally, below: vertically, diagonal: both). Repeating it reproduces a
+/// reflect-extended pattern exactly, in a form every backend can tile.
+fn mirror_tile(tile: &[u8], tw: u32, th: u32) -> Option<(Vec<u8>, u32, u32)> {
+    let (w, h) = (tw as usize, th as usize);
+    let (w2, h2) = (w.checked_mul(2)?, h.checked_mul(2)?);
+    let mut out = vec![0u8; w2.checked_mul(h2)?.checked_mul(4)?];
+    for y in 0..h2 {
+        let sy = if y < h { y } else { h2 - 1 - y };
+        for x in 0..w2 {
+            let sx = if x < w { x } else { w2 - 1 - x };
+            let (d, s) = (4 * (y * w2 + x), 4 * (sy * w + sx));
+            out[d..d + 4].copy_from_slice(&tile[s..s + 4]);
+        }
+    }
+    Some((out, u32::try_from(w2).ok()?, u32::try_from(h2).ok()?))
 }
 
 fn parse_gradient(obj: &Robj, kind: &str) -> Option<Paint> {
@@ -654,6 +685,7 @@ fn hash_paint(p: &Paint, h: &mut impl std::hash::Hasher) {
             }
             hash_unit(&pf.unit, h);
             std::mem::discriminant(&pf.extend).hash(h);
+            pf.mirrored.hash(h);
             pf.opacity.to_bits().hash(h);
         }
         Paint::Hatch { angle, spacing, width, col, bg } => {
