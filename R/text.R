@@ -217,7 +217,14 @@ vl_strheight <- function(
   if (inherits(features, "font_feature")) {
     return(features)
   }
-  do.call(systemfonts::font_feature, as.list(features))
+  # Pass systemfonts' own named formals explicitly (as NULL) so a tag is never
+  # partial-matched onto one: `liga` would otherwise bind to `ligatures`, and
+  # `lett`/`numb` to `letters`/`numbers`, and systemfonts would read the setting
+  # as a ligature/letter/number *name*.
+  do.call(
+    systemfonts::font_feature,
+    c(list(ligatures = NULL, letters = NULL, numbers = NULL), as.list(features))
+  )
 }
 
 # Line spacing as a multiple of the font size (baseline-to-baseline), matching
