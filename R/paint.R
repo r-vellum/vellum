@@ -388,7 +388,14 @@ print.vellum_mask <- function(x, ...) {
       }
       return(if (is.na(nm)) numeric(0) else .lty_patterns[[nm]])
     }
-    return(as.double(lty)) # explicit on/off lengths
+    v <- as.double(lty) # explicit on/off lengths
+    bad <- !is.na(v) & (!is.finite(v) | v < 0)
+    if (any(bad)) {
+      cli::cli_abort(
+        "{.arg lty} dash lengths must be finite and non-negative."
+      )
+    }
+    return(v)
   }
   if (is.character(lty)) {
     nm <- lty[1]

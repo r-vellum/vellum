@@ -7,6 +7,7 @@ mod contour;
 mod cvd;
 mod color;
 mod font;
+mod geom;
 mod oklab;
 mod pick;
 mod place;

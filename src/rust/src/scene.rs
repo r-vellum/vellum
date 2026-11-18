@@ -11,9 +11,10 @@
 
 use std::cell::{Ref, RefCell};
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use extendr_api::prelude::*;
-use tiny_skia::{Color, FillRule, Mask, PathBuilder, Pixmap, Stroke, Transform};
+use tiny_skia::{FillRule, Mask, PathBuilder, Pixmap, Transform};
 
 use crate::render::{
     hexagon_path, hexagon_path_xy, rect_path, roundrect_path, sector_path, xml_escape, BlendKind, Clip, ClipShape, GroupEffect, MaskKind, MaskLayer, PdfBackend, RasterBackend, RenderBackend,
@@ -22,6 +23,7 @@ use crate::render::{
 
 use crate::color::{opt_color, Gpar, GparAcc, Lty, Paint, PartialGpar, Rgba};
 use crate::cache::TwoGenCache;
+use crate::geom::{parts_bbox, parts_cover, parts_dist, parts_rule, parts_runs, union_bbox, RecordBackend, Recording};
 
 // Non-reactive keyframe animation: interpolate between compiled scenes and render
 // the tweened frames in parallel. A child module, so it can reach this module's
@@ -305,7 +307,8 @@ fn halo_of(col: &Robj, width_px: f64) -> Option<(Rgba, f64)> {
 ///
 /// Local, not device: the renderer draws with the viewport's transform already
 /// on the canvas, so local is what it wants. Anything that *reports* coordinates
-/// to R must push them through `dev_pt()` (or `dev_bbox()`) first.
+/// to R must push them through the viewport transform first (`dev_bbox()`, or
+/// the geometry recorder in `geom.rs`).
 fn resolve_pts(vp: &Vp, x: &[f64], y: &[f64], xu: &[Unit], yu: &[Unit]) -> Vec<(f64, f64)> {
     let n = x.len().min(y.len());
     (0..n)
@@ -690,6 +693,11 @@ pub struct Scene {
     /// method that mutates `nodes`/`viewports`/`masks` after compilation without
     /// clearing this cache first.
     raster_cache: RefCell<Option<Pixmap>>,
+    /// Lazy memo of the recorded element geometry every query reads (see
+    /// `recording` and `geom.rs`). Same invariant as `raster_cache`, and
+    /// additionally dropped by `emit_node`, so a scene drawn into after a query
+    /// is re-recorded rather than answering from stale geometry.
+    geom_cache: RefCell<Option<Arc<Recording>>>,
     /// Total glyphs across all text nodes, accumulated at compile. Drives the
     /// glyph-bitmap fast path's per-render threshold (see `cached_pixmap`/`render_png`).
     text_glyphs: usize,
@@ -1017,6 +1025,7 @@ impl Scene {
             meta: Vec::new(),
             cur_meta: NodeMeta::default(),
             raster_cache: RefCell::new(None),
+            geom_cache: RefCell::new(None),
             text_glyphs: 0,
             a11y_title: String::new(),
             a11y_desc: String::new(),
@@ -2075,6 +2084,7 @@ impl Scene {
     /// used, rather than re-deriving geometry and drifting from it.
     fn lint_table(&self) -> List {
         let resolved = self.resolve_all();
+        let rec = self.recording();
         let n = self.nodes.len();
         let (mut kind, mut name, mut id) = (Vec::with_capacity(n), Vec::with_capacity(n), Vec::with_capacity(n));
         // The node's position in the draw order. Stable within one compile, and
@@ -2111,7 +2121,8 @@ impl Scene {
                 None => rv.gp_acc.clone(),
             };
             let gp = acc.resolve();
-            let bb = match node_bbox(node, vp) {
+            // The union of the node's recorded element geometry.
+            let bb = match rec.get(i).and_then(|els| els.iter().map(|p| parts_bbox(p)).fold(None, union_bbox)) {
                 Some(b) => b,
                 None => continue, // nothing measurable (e.g. an empty batch)
             };
@@ -2215,146 +2226,59 @@ impl Scene {
     /// Filled shapes contain their interior — a point inside a polygon is at
     /// distance zero, so clicking the middle of a choropleth region hits it.
     fn pick_table(&self, px: f64, py: f64) -> List {
-        use crate::pick::{circle_dist, poly_dist, rect_dist};
-        let resolved = self.resolve_all();
+        let rec = self.recording();
         let (mut key, mut kind) = (Vec::new(), Vec::new());
         let (mut dist, mut gn) = (Vec::new(), Vec::new());
         let (mut gx, mut gy) = (Vec::new(), Vec::new());
-        // Per-vertex ring index (1-based within the element). Only a path has
-        // more than one; every other kind is a single ring, so this is all 1s
-        // for them. Without it the concatenated `gx`/`gy` are lossy: a client
-        // cannot tell where one ring ends, and joining the runs invents a
-        // phantom edge from each ring's last vertex to the next ring's first.
+        // Per-vertex ring index (1-based within the element): one per recorded
+        // ring or polyline. Without it the concatenated `gx`/`gy` are lossy: a
+        // client cannot tell where one ring ends, and joining the runs invents
+        // a phantom edge from each ring's last vertex to the next ring's first.
         let mut gring: Vec<i32> = Vec::new();
+        // Per element: the fill rule its rings are filled (and picked) under,
+        // "evenodd" or "nonzero"; "" for geometry with no interior (a stroke,
+        // a round mark's centre). A client needs it to test containment across
+        // a path's rings the way this does.
+        let mut rule: Vec<String> = Vec::new();
 
-        for (vp_id, node) in self.nodes.iter() {
-            let vp = &resolved[*vp_id].vp;
-            // `vp.x_pos()`/`y_pos()` answer in the viewport's own frame. Both the
-            // geometry reported to R and the distance to the probe point (which
-            // arrives in device px) must be in DEVICE px, so every resolved point
-            // goes through the viewport transform first. Getting this wrong is
-            // invisible in a test drawn at the page origin, where the transform
-            // is the identity -- the same trap that hid the `lint_table()` bug.
-            let dev = |pts: Vec<(f64, f64)>| -> Vec<(f64, f64)> {
-                pts.into_iter().map(|(x, y)| dev_pt(vp, x, y)).collect()
-            };
-            // `rings` is the per-vertex ring index; pass `&[]` for the usual
-            // single-ring element, and every vertex is then ring 1.
-            let mut emit = |k: &str, knd: &str, d: f64, pts: &[(f64, f64)], rings: &[i32]| {
+        for (ni, (_, node)) in self.nodes.iter().enumerate() {
+            let knd = pick_kind(node);
+            if knd.is_empty() {
+                continue;
+            }
+            for ei in 0..elem_count(node) {
+                let Some(k) = elem_key(node, ei) else { continue };
+                let parts = rec.get(ni).and_then(|e| e.get(ei)).map_or(&[][..], |p| &p[..]);
+                // Nothing drawn (an `NA` position, a segment its caps consumed):
+                // nothing to point at.
+                if parts.is_empty() {
+                    continue;
+                }
+                // How the geometry is reported depends on the kind: a rect (or
+                // rounded rect) as two opposite corners of its box, a round mark
+                // as its centre, everything else as its rings / polylines.
+                let runs = match knd {
+                    "rect" | "roundrect" => match parts_bbox(parts) {
+                        Some((x0, y0, x1, y1)) => vec![vec![(x0, y0), (x1, y1)]],
+                        None => continue,
+                    },
+                    _ => parts_runs(parts),
+                };
                 key.push(k.to_string());
                 kind.push(knd.to_string());
-                dist.push(d);
-                gn.push(pts.len() as i32);
-                for (i, &(x, y)) in pts.iter().enumerate() {
-                    gx.push(x);
-                    gy.push(y);
-                    gring.push(rings.get(i).copied().unwrap_or(1));
-                }
-            };
-            match node {
-                // The case this exists for: a real point-to-segment distance.
-                Node::Segments { x0, y0, x1, y1, x0u, y0u, x1u, y1u, keys, .. } => {
-                    let n = [x0.len(), y0.len(), x1.len(), y1.len()].into_iter().min().unwrap_or(0);
-                    for i in 0..n {
-                        let Some(k) = key_at(keys, i) else { continue };
-                        let ab = dev(vec![
-                            (vp.x_pos(x0[i], x0u[i]), vp.y_pos(y0[i], y0u[i])),
-                            (vp.x_pos(x1[i], x1u[i]), vp.y_pos(y1[i], y1u[i])),
-                        ]);
-                        let (a, b) = (ab[0], ab[1]);
-                        let d = poly_dist(px, py, &[a.0, b.0], &[a.1, b.1], false);
-                        emit(k, "segment", d, &[a, b], &[]);
+                dist.push(parts_dist(parts, px, py));
+                rule.push(parts_rule(parts).unwrap_or_default().to_string());
+                gn.push(runs.iter().map(Vec::len).sum::<usize>() as i32);
+                for (r, run) in runs.iter().enumerate() {
+                    for &(x, y) in run {
+                        gx.push(x);
+                        gy.push(y);
+                        gring.push(r as i32 + 1);
                     }
-                }
-                Node::Lines { x, y, xu, yu, key: k, .. } => {
-                    let Some(k) = k.as_deref() else { continue };
-                    let pts = dev(resolve_pts(vp, x, y, xu, yu));
-                    let (xs, ys): (Vec<f64>, Vec<f64>) = pts.iter().copied().unzip();
-                    emit(k, "line", poly_dist(px, py, &xs, &ys, false), &pts, &[]);
-                }
-                Node::Polygon { x, y, xu, yu, key: k, .. } => {
-                    let Some(k) = k.as_deref() else { continue };
-                    let pts = dev(resolve_pts(vp, x, y, xu, yu));
-                    let (xs, ys): (Vec<f64>, Vec<f64>) = pts.iter().copied().unzip();
-                    emit(k, "polygon", poly_dist(px, py, &xs, &ys, true), &pts, &[]);
-                }
-                Node::Path { x, y, xu, yu, nper, key: k, .. } => {
-                    let Some(k) = k.as_deref() else { continue };
-                    let pts = dev(resolve_pts(vp, x, y, xu, yu));
-                    // A path is rings: nearest over all of them, and inside any
-                    // ring counts as a hit.
-                    let mut best = f64::INFINITY;
-                    let mut at = 0usize;
-                    // Ring index per vertex, assigned by the same walk that
-                    // measures each ring, so what R is told matches what was
-                    // measured against.
-                    let mut rings: Vec<i32> = Vec::with_capacity(pts.len());
-                    for len in nper {
-                        let len = (*len).max(0) as usize;
-                        let hi = (at + len).min(pts.len());
-                        if hi > at {
-                            let (xs, ys): (Vec<f64>, Vec<f64>) = pts[at..hi].iter().copied().unzip();
-                            best = best.min(poly_dist(px, py, &xs, &ys, true));
-                            let r = rings.last().copied().unwrap_or(0) + 1;
-                            rings.resize(hi, r);
-                        }
-                        at = hi;
-                    }
-                    // Defensive: vertices past the last `nper` run were never
-                    // measured, so they are their own trailing ring rather than
-                    // silently folded into the previous one.
-                    if rings.len() < pts.len() {
-                        let r = rings.last().copied().unwrap_or(0) + 1;
-                        rings.resize(pts.len(), r);
-                    }
-                    emit(k, "path", best, &pts, &rings);
-                }
-                // Round marks: distance to the disc, not to the bounding square.
-                Node::Circles { x, y, r, xu, yu, ru, keys, .. }
-                | Node::Markers { x, y, size: r, xu, yu, su: ru, keys, .. } => {
-                    let n = [x.len(), y.len(), r.len()].into_iter().min().unwrap_or(0);
-                    for i in 0..n {
-                        let Some(k) = key_at(keys, i) else { continue };
-                        let (cx, cy) = dev_pt(vp, vp.x_pos(x[i], xu[i]), vp.y_pos(y[i], yu[i]));
-                        // The radius is a length, so it takes the transform's
-                        // scale rather than its translation.
-                        let rr = vp.r_len(r[i], ru[i]) * dev_scale(vp);
-                        emit(k, "point", circle_dist(px, py, cx, cy, rr), &[(cx, cy)], &[]);
-                    }
-                }
-                Node::Rects { x, y, w, h, xu, yu, wu, hu, keys, .. } => {
-                    let n = [x.len(), y.len(), w.len(), h.len()].into_iter().min().unwrap_or(0);
-                    for i in 0..n {
-                        let Some(k) = key_at(keys, i) else { continue };
-                        let (cx, cy) = (vp.x_pos(x[i], xu[i]), vp.y_pos(y[i], yu[i]));
-                        let (pw, ph) = (vp.x_len(w[i], wu[i]), vp.y_len(h[i], hu[i]));
-                        // Through `dev_bbox` rather than `dev_pt` on each corner:
-                        // `rect` reports two opposite corners of an axis-aligned
-                        // box, so a rotated viewport's rect is reported as the
-                        // device box that contains it (what `scene_model()` says
-                        // for the same node).
-                        let (dx0, dy0, dx1, dy1) = dev_bbox(
-                            vp, cx - pw / 2.0, cy - ph / 2.0, cx + pw / 2.0, cy + ph / 2.0,
-                        );
-                        let (a, b) = ((dx0, dy0), (dx1, dy1));
-                        emit(k, "rect", rect_dist(px, py, a.0, a.1, b.0, b.1), &[a, b], &[]);
-                    }
-                }
-                // Everything else falls back to its bounding box, which for a
-                // label or a hexagon is a fair description of the target.
-                other => {
-                    let k = match other {
-                        Node::Text { key, .. } | Node::RoundRect { key, .. } => key.as_deref(),
-                        _ => None,
-                    };
-                    let Some(k) = k else { continue };
-                    let Some((x0, y0, x1, y1)) = node_bbox(other, vp) else { continue };
-                    emit(k, node_kind(other), rect_dist(px, py, x0, y0, x1, y1),
-                         &[(x0, y0), (x1, y1)], &[]);
                 }
             }
         }
-        list!(key = key, kind = kind, dist = dist, n = gn, x = gx, y = gy, ring = gring)
+        list!(key = key, kind = kind, dist = dist, n = gn, x = gx, y = gy, ring = gring, rule = rule)
     }
 
     /// The font files this scene's text actually resolved to.
@@ -2385,7 +2309,7 @@ impl Scene {
     }
 
     fn element_table(&self) -> List {
-        let resolved = self.resolve_all();
+        let rec = self.recording();
         let mut key: Vec<String> = Vec::new();
         let mut panel: Vec<String> = Vec::new();
         // Grob name and kind per element, so a caller can select elements by the
@@ -2400,118 +2324,37 @@ impl Scene {
         let mut x1: Vec<f64> = Vec::new();
         let mut y1: Vec<f64> = Vec::new();
         let mut panel_stack: Vec<String> = Vec::new();
-        for (ni, (vp_id, node)) in self.nodes.iter().enumerate() {
+        for (ni, (_, node)) in self.nodes.iter().enumerate() {
             match node {
                 Node::PanelStart { name: pn, .. } => { panel_stack.push(pn.clone()); continue; }
                 Node::PanelEnd => { panel_stack.pop(); continue; }
                 _ => {}
             }
-            let vp = &resolved[*vp_id].vp;
+            // Rows come from the node's structure, never from what happened to
+            // be drawn: a batched mark has one row per element, always, and a
+            // single-shape mark one row when keyed. `scene_model()` zips these
+            // against the R grob tree by position, so the count is the contract.
+            // The box is the recorded geometry's; NA when the element drew
+            // nothing (an `NA` position, a segment its caps consumed).
+            let cnt = elem_count(node);
+            if cnt == 0 {
+                continue;
+            }
             let cur_panel = panel_stack.last().cloned().unwrap_or_default();
             let cur_name = self.meta.get(ni).map(|m| m.name.clone()).unwrap_or_default();
             let cur_kind = node_kind(node).to_string();
-            let cur_node = ni as i32;
-            // Emit one row per drawn element (batched marks: one per element;
-            // single-shape marks: one per grob).
-            let mut emit = |k: Option<&str>, lx0: f64, ly0: f64, lx1: f64, ly1: f64| {
-                let bb = dev_bbox(vp, lx0, ly0, lx1, ly1);
-                key.push(k.unwrap_or("").to_string());
+            let els = rec.get(ni);
+            for ei in 0..cnt {
+                let bb = els
+                    .and_then(|e| e.get(ei))
+                    .and_then(|p| parts_bbox(p))
+                    .unwrap_or((f64::NAN, f64::NAN, f64::NAN, f64::NAN));
+                key.push(elem_key(node, ei).unwrap_or("").to_string());
                 panel.push(cur_panel.clone());
                 name.push(cur_name.clone());
                 kind.push(cur_kind.clone());
-                node_ix.push(cur_node);
+                node_ix.push(ni as i32);
                 x0.push(bb.0); y0.push(bb.1); x1.push(bb.2); y1.push(bb.3);
-            };
-            match node {
-                Node::Rects { x, y, w, h, xu, yu, wu, hu, keys, .. } => {
-                    let n = [x.len(), y.len(), w.len(), h.len()].into_iter().min().unwrap_or(0);
-                    for i in 0..n {
-                        let cx = vp.x_pos(x[i], xu[i]); let cy = vp.y_pos(y[i], yu[i]);
-                        let pw = vp.x_len(w[i], wu[i]); let ph = vp.y_len(h[i], hu[i]);
-                        emit(key_at(keys, i), cx - pw / 2.0, cy - ph / 2.0, cx + pw / 2.0, cy + ph / 2.0);
-                    }
-                }
-                Node::Circles { x, y, r, xu, yu, ru, keys, .. } => {
-                    let n = [x.len(), y.len(), r.len()].into_iter().min().unwrap_or(0);
-                    for i in 0..n {
-                        let cx = vp.x_pos(x[i], xu[i]); let cy = vp.y_pos(y[i], yu[i]);
-                        let rr = vp.r_len(r[i], ru[i]);
-                        emit(key_at(keys, i), cx - rr, cy - rr, cx + rr, cy + rr);
-                    }
-                }
-                Node::Markers { x, y, size, xu, yu, su, keys, .. } => {
-                    let n = [x.len(), y.len(), size.len()].into_iter().min().unwrap_or(0);
-                    for i in 0..n {
-                        let cx = vp.x_pos(x[i], xu[i]); let cy = vp.y_pos(y[i], yu[i]);
-                        let rr = vp.r_len(size[i], su[i]);
-                        emit(key_at(keys, i), cx - rr, cy - rr, cx + rr, cy + rr);
-                    }
-                }
-                Node::Hexagons { x, y, size, w, h, xu, yu, su, wu, hu, keys, .. } => {
-                    let n = [x.len(), y.len()].into_iter().min().unwrap_or(0);
-                    let nonreg = !w.is_empty();
-                    for i in 0..n {
-                        let cx = vp.x_pos(x[i], xu[i]); let cy = vp.y_pos(y[i], yu[i]);
-                        let (hw, hh) = if nonreg {
-                            (vp.x_len(w[i], wu[i]) * 0.5, vp.y_len(h[i], hu[i]) * 0.5)
-                        } else {
-                            let rr = vp.r_len(size[i], su[i]);
-                            (rr, rr)
-                        };
-                        emit(key_at(keys, i), cx - hw, cy - hh, cx + hw, cy + hh);
-                    }
-                }
-                Node::Sectors { x, y, r0, r1, xu, yu, r0u, r1u, keys, .. } => {
-                    let n = [x.len(), y.len(), r0.len(), r1.len()].into_iter().min().unwrap_or(0);
-                    for i in 0..n {
-                        let cx = vp.x_pos(x[i], xu[i]); let cy = vp.y_pos(y[i], yu[i]);
-                        let rr = vp.r_len(r1[i], r1u[i]).max(vp.r_len(r0[i], r0u[i]));
-                        emit(key_at(keys, i), cx - rr, cy - rr, cx + rr, cy + rr);
-                    }
-                }
-                Node::Segments { x0: sx0, y0: sy0, x1: sx1, y1: sy1, x0u, y0u, x1u, y1u, keys, .. } => {
-                    let n = [sx0.len(), sy0.len(), sx1.len(), sy1.len()].into_iter().min().unwrap_or(0);
-                    for i in 0..n {
-                        let ax = vp.x_pos(sx0[i], x0u[i]); let ay = vp.y_pos(sy0[i], y0u[i]);
-                        let bx = vp.x_pos(sx1[i], x1u[i]); let by = vp.y_pos(sy1[i], y1u[i]);
-                        emit(key_at(keys, i), ax.min(bx), ay.min(by), ax.max(bx), ay.max(by));
-                    }
-                }
-                // Single-shape keyable marks (one row per grob): a Path (e.g. one
-                // sf polygon feature, holes and all), a Polygon, or a Lines poly.
-                // Emit only when keyed; bbox = the extent of all its vertices.
-                Node::Text { x, y, xu, yu, w, h, hjust, vjust, key, .. } if key.is_some() => {
-                    // Same anchor arithmetic the renderer uses, so the reported
-                    // box is where the label actually lands.
-                    let ax = vp.x_pos(*x, *xu);
-                    let ay = vp.y_pos(*y, *yu);
-                    let x0 = ax - hjust * w;
-                    let y0 = ay - (1.0 - vjust) * h;
-                    emit(key.as_deref(), x0, y0, x0 + w, y0 + h);
-                }
-                Node::RoundRect { x, y, w, h, xu, yu, wu, hu, key, .. } if key.is_some() => {
-                    let cx = vp.x_pos(*x, *xu);
-                    let cy = vp.y_pos(*y, *yu);
-                    let pw = vp.x_len(*w, *wu);
-                    let ph = vp.y_len(*h, *hu);
-                    emit(key.as_deref(), cx - pw / 2.0, cy - ph / 2.0, cx + pw / 2.0, cy + ph / 2.0);
-                }
-                Node::Path { x, y, xu, yu, key, .. } if key.is_some() => {
-                    if let Some(bb) = vertex_bbox(vp, x, y, xu, yu) {
-                        emit(key.as_deref(), bb.0, bb.1, bb.2, bb.3);
-                    }
-                }
-                Node::Polygon { x, y, xu, yu, key, .. } if key.is_some() => {
-                    if let Some(bb) = vertex_bbox(vp, x, y, xu, yu) {
-                        emit(key.as_deref(), bb.0, bb.1, bb.2, bb.3);
-                    }
-                }
-                Node::Lines { x, y, xu, yu, key, .. } if key.is_some() => {
-                    if let Some(bb) = vertex_bbox(vp, x, y, xu, yu) {
-                        emit(key.as_deref(), bb.0, bb.1, bb.2, bb.3);
-                    }
-                }
-                _ => {}
             }
         }
         list!(key = key, panel = panel, name = name, kind = kind, node = node_ix,
@@ -2534,192 +2377,42 @@ impl Scene {
     }
 
     /// Hit-test: return the pick id of the topmost primitive covering device pixel
-    /// `(x, y)`, or -1 if none. Implemented as a colour pick-buffer — each node is
-    /// drawn opaque (AA off) in a colour encoding its pick id, respecting clips and
-    /// paint order, then the pixel is decoded — so it is geometry/clip/overlap
-    /// exact. Markers and text use a bounding box; lines/segments a pick band.
+    /// `(x, y)`, or -1 if none. Reads the recorded geometry (see `recording`):
+    /// nodes are tested topmost-first, a fill by its fill rule, a round mark by
+    /// its disc, a text label by its (rotated) box, and a line or segment by a
+    /// band of half its stroke width (at least 2 px, so a hairline stays
+    /// clickable). A candidate counts only if the pixel survives its viewport's
+    /// clip, tested with the same aliased clip mask the renderer builds.
     fn hit_test(&self, x: i32, y: i32) -> i32 {
         if x < 0 || y < 0 || x as u32 >= self.w_px || y as u32 >= self.h_px {
             return -1;
         }
-        let resolved = self.resolve_all();
-        let mut pm = Pixmap::new(self.w_px, self.h_px).expect("pick pixmap");
-        pm.fill(Color::WHITE); // 0xFFFFFF = "no hit"
-        // Clip masks are page-sized; build one per viewport, not per node.
+        let rec = self.recording();
+        // The pixel's centre: what an aliased fill samples.
+        let (px, py) = (x as f64 + 0.5, y as f64 + 0.5);
+        let mut resolved: Option<Vec<ResolvedVp>> = None;
         let mut mask_cache: HashMap<usize, Option<Mask>> = HashMap::new();
-        for (i, (vp_id, node)) in self.nodes.iter().enumerate() {
-            let id = self.picks[i];
-            if id < 0 || id > 0x00FF_FFFE {
-                continue; // unpickable / would collide with the no-hit colour
+        for (i, (vp_id, _)) in self.nodes.iter().enumerate().rev() {
+            let id = self.picks.get(i).copied().unwrap_or(-1);
+            if !(0..=0x00FF_FFFE).contains(&id) {
+                continue; // unpickable
             }
-            let rv = &resolved[*vp_id];
-            let vp = &rv.vp;
-            let t = vp.transform;
-            let mask = &*mask_cache
+            let Some(els) = rec.get(i) else { continue };
+            if !els.iter().any(|p| parts_cover(p, px, py, 2.0)) {
+                continue;
+            }
+            let rv = &resolved.get_or_insert_with(|| self.resolve_all())[*vp_id];
+            let mask = mask_cache
                 .entry(*vp_id)
                 .or_insert_with(|| build_clip_mask(self.w_px, self.h_px, &rv.clip_chain));
-            let mut paint = tiny_skia::Paint::default();
-            paint.set_color(Color::from_rgba8(
-                ((id >> 16) & 255) as u8, ((id >> 8) & 255) as u8, (id & 255) as u8, 255,
-            ));
-            paint.anti_alias = false;
-            let fill = |pm: &mut Pixmap, path: &tiny_skia::Path, rule: FillRule| {
-                pm.fill_path(path, &paint, rule, t, mask.as_ref());
-            };
-            match node {
-                Node::Rect { x, y, w, h, xu, yu, wu, hu, .. } => {
-                    let (cx, cy) = (vp.x_pos(*x, *xu), vp.y_pos(*y, *yu));
-                    let (pw, ph) = (vp.x_len(*w, *wu), vp.y_len(*h, *hu));
-                    if let Some(p) = rect_path(cx - pw / 2.0, cy - ph / 2.0, pw, ph) {
-                        fill(&mut pm, &p, FillRule::Winding);
-                    }
-                }
-                Node::RoundRect { x, y, w, h, r, xu, yu, wu, hu, ru, .. } => {
-                    let (cx, cy) = (vp.x_pos(*x, *xu), vp.y_pos(*y, *yu));
-                    let (pw, ph) = (vp.x_len(*w, *wu), vp.y_len(*h, *hu));
-                    if let Some(p) = roundrect_path(cx - pw / 2.0, cy - ph / 2.0, pw, ph, vp.r_len(*r, *ru)) {
-                        fill(&mut pm, &p, FillRule::Winding);
-                    }
-                }
-                Node::Rects { x, y, w, h, xu, yu, wu, hu, .. } => {
-                    let n = [x.len(), y.len(), w.len(), h.len(), xu.len(), yu.len(), wu.len(), hu.len()]
-                        .into_iter().min().unwrap_or(0);
-                    for k in 0..n {
-                        let (cx, cy) = (vp.x_pos(x[k], xu[k]), vp.y_pos(y[k], yu[k]));
-                        let (pw, ph) = (vp.x_len(w[k], wu[k]), vp.y_len(h[k], hu[k]));
-                        if let Some(p) = rect_path(cx - pw / 2.0, cy - ph / 2.0, pw, ph) {
-                            fill(&mut pm, &p, FillRule::Winding);
-                        }
-                    }
-                }
-                Node::Circle { x, y, r, xu, yu, ru, .. } => {
-                    let mut pb = PathBuilder::new();
-                    pb.push_circle(vp.x_pos(*x, *xu) as f32, vp.y_pos(*y, *yu) as f32, vp.r_len(*r, *ru) as f32);
-                    if let Some(p) = pb.finish() {
-                        fill(&mut pm, &p, FillRule::Winding);
-                    }
-                }
-                Node::Circles { x, y, r, xu, yu, ru, .. } => {
-                    let n = [x.len(), y.len(), r.len(), xu.len(), yu.len(), ru.len()].into_iter().min().unwrap_or(0);
-                    for k in 0..n {
-                        let mut pb = PathBuilder::new();
-                        pb.push_circle(vp.x_pos(x[k], xu[k]) as f32, vp.y_pos(y[k], yu[k]) as f32, vp.r_len(r[k], ru[k]) as f32);
-                        if let Some(p) = pb.finish() {
-                            fill(&mut pm, &p, FillRule::Winding);
-                        }
-                    }
-                }
-                Node::Markers { x, y, size, xu, yu, su, .. } => {
-                    let n = [x.len(), y.len(), size.len(), xu.len(), yu.len(), su.len()].into_iter().min().unwrap_or(0);
-                    for k in 0..n {
-                        let (cx, cy) = (vp.x_pos(x[k], xu[k]), vp.y_pos(y[k], yu[k]));
-                        let rr = vp.r_len(size[k], su[k]);
-                        if let Some(p) = rect_path(cx - rr, cy - rr, 2.0 * rr, 2.0 * rr) {
-                            fill(&mut pm, &p, FillRule::Winding); // bounding box covers any shape
-                        }
-                    }
-                }
-                Node::Hexagons { x, y, size, w, h, xu, yu, su, wu, hu, flat, .. } => {
-                    // n excludes w/h: they are empty for the regular (size-driven) path.
-                    let n = [x.len(), y.len(), xu.len(), yu.len()].into_iter().min().unwrap_or(0);
-                    let nonreg = !w.is_empty();
-                    for k in 0..n {
-                        let (cx, cy) = (vp.x_pos(x[k], xu[k]), vp.y_pos(y[k], yu[k]));
-                        let p = if nonreg {
-                            hexagon_path_xy(cx, cy, vp.x_len(w[k], wu[k]) * 0.5,
-                                            vp.y_len(h[k], hu[k]) * 0.5, *flat)
-                        } else {
-                            hexagon_path(cx, cy, vp.r_len(size[k], su[k]), *flat)
-                        };
-                        if let Some(p) = p {
-                            fill(&mut pm, &p, FillRule::Winding);
-                        }
-                    }
-                }
-                Node::Sectors { x, y, r0, r1, theta0, theta1, xu, yu, r0u, r1u, .. } => {
-                    let n = [x.len(), y.len(), r0.len(), r1.len(), theta0.len(), theta1.len(),
-                             xu.len(), yu.len(), r0u.len(), r1u.len()].into_iter().min().unwrap_or(0);
-                    for k in 0..n {
-                        let (cx, cy) = (vp.x_pos(x[k], xu[k]), vp.y_pos(y[k], yu[k]));
-                        if let Some(p) = sector_path(cx, cy, vp.r_len(r0[k], r0u[k]),
-                                                     vp.r_len(r1[k], r1u[k]), theta0[k], theta1[k]) {
-                            fill(&mut pm, &p, FillRule::Winding);
-                        }
-                    }
-                }
-                Node::Polygon { x, y, xu, yu, .. } => {
-                    if let Some(p) = build_poly(x, y, xu, yu, vp, true) {
-                        fill(&mut pm, &p, FillRule::Winding);
-                    }
-                }
-                Node::Path { x, y, xu, yu, nper, evenodd, .. } => {
-                    if let Some(p) = build_subpaths(x, y, xu, yu, nper, vp) {
-                        fill(&mut pm, &p, if *evenodd { FillRule::EvenOdd } else { FillRule::Winding });
-                    }
-                }
-                Node::Image { x, y, w, h, xu, yu, wu, hu, .. } => {
-                    let (cx, cy) = (vp.x_pos(*x, *xu), vp.y_pos(*y, *yu));
-                    let (pw, ph) = (vp.x_len(*w, *wu), vp.y_len(*h, *hu));
-                    if let Some(p) = rect_path(cx - pw / 2.0, cy - ph / 2.0, pw, ph) {
-                        fill(&mut pm, &p, FillRule::Winding);
-                    }
-                }
-                Node::Text { x, y, xu, yu, w, h, hjust, vjust, .. } => {
-                    let (ax, ay) = (vp.x_pos(*x, *xu), vp.y_pos(*y, *yu));
-                    if let Some(p) = rect_path(ax - *hjust * *w, ay - (1.0 - *vjust) * *h, *w, *h) {
-                        fill(&mut pm, &p, FillRule::Winding); // bounding box (rotation ignored)
-                    }
-                }
-                Node::Lines { x, y, xu, yu, .. } => {
-                    if let Some(p) = build_poly(x, y, xu, yu, vp, false) {
-                        let st = Stroke { width: 4.0, ..Stroke::default() };
-                        pm.stroke_path(&p, &paint, &st, t, mask.as_ref());
-                    }
-                }
-                Node::Segments { x0, y0, x1, y1, x0u, y0u, x1u, y1u, .. } => {
-                    let n = [x0.len(), y0.len(), x1.len(), y1.len(), x0u.len(), y0u.len(), x1u.len(), y1u.len()]
-                        .into_iter().min().unwrap_or(0);
-                    let mut pb = PathBuilder::new();
-                    for k in 0..n {
-                        pb.move_to(vp.x_pos(x0[k], x0u[k]) as f32, vp.y_pos(y0[k], y0u[k]) as f32);
-                        pb.line_to(vp.x_pos(x1[k], x1u[k]) as f32, vp.y_pos(y1[k], y1u[k]) as f32);
-                    }
-                    if let Some(p) = pb.finish() {
-                        let st = Stroke { width: 4.0, ..Stroke::default() };
-                        pm.stroke_path(&p, &paint, &st, t, mask.as_ref());
-                    }
-                }
-                Node::Loop { x, y, xu, yu, size, su, foot, fu, angle, width, .. } => {
-                    let n = [x.len(), y.len(), xu.len(), yu.len(), size.len(), su.len(),
-                             foot.len(), fu.len(), angle.len(), width.len()].into_iter().min().unwrap_or(0);
-                    let mut pb = PathBuilder::new();
-                    for k in 0..n {
-                        let (cx, cy) = (vp.x_pos(x[k], xu[k]), vp.y_pos(y[k], yu[k]));
-                        let cp = loop_control_points(cx, cy, vp.x_len(size[k], su[k]), vp.x_len(foot[k], fu[k]), angle[k], width[k]);
-                        pb.move_to(cp[0].0, cp[0].1);
-                        pb.cubic_to(cp[1].0, cp[1].1, cp[2].0, cp[2].1, cp[3].0, cp[3].1);
-                    }
-                    if let Some(p) = pb.finish() {
-                        let st = Stroke { width: 4.0, ..Stroke::default() };
-                        pm.stroke_path(&p, &paint, &st, t, mask.as_ref());
-                    }
-                }
-                Node::GroupStart { .. } | Node::GroupEnd
-                | Node::SubrasterStart { .. } | Node::SubrasterEnd
-                | Node::PanelStart { .. } | Node::PanelEnd => {}
-            }
-        }
-        match pm.pixel(x as u32, y as u32) {
-            Some(px) => {
-                let c = px.demultiply();
-                if c.red() == 255 && c.green() == 255 && c.blue() == 255 {
-                    -1
-                } else {
-                    ((c.red() as i32) << 16) | ((c.green() as i32) << 8) | (c.blue() as i32)
+            if let Some(m) = mask {
+                if m.data()[y as usize * self.w_px as usize + x as usize] == 0 {
+                    continue; // clipped away here
                 }
             }
-            None => -1,
+            return id;
         }
+        -1
     }
 }
 
@@ -2797,6 +2490,7 @@ impl Scene {
     /// Append a primitive to the current draw target: the mask being filled (if
     /// any), else the drawn scene. Tagged with the current viewport.
     fn emit_node(&mut self, node: Node) {
+        *self.geom_cache.get_mut() = None;
         let vp = self.current;
         match self.mask_target.last() {
             Some(&mi) => self.masks[mi].nodes.push((vp, node)),
@@ -2969,6 +2663,20 @@ impl Scene {
         Ref::map(self.raster_cache.borrow(), |o| o.as_ref().unwrap())
     }
 
+    /// The geometry of every drawn element, recorded once from the render walk
+    /// through a painting-free backend and memoised. Every query reads this, so
+    /// they all agree with each other and with what is drawn.
+    fn recording(&self) -> Arc<Recording> {
+        if let Some(r) = self.geom_cache.borrow().as_ref() {
+            return Arc::clone(r);
+        }
+        let mut b = RecordBackend::new(self.nodes.len());
+        self.render_to(&mut b);
+        let r = Arc::new(b.sink.finish());
+        *self.geom_cache.borrow_mut() = Some(Arc::clone(&r));
+        r
+    }
+
     /// Walk the resolved scene in paint order, emitting each primitive through a
     /// [`RenderBackend`]. Geometry resolution (transform, clip, gpar, path) is
     /// shared; only the per-primitive draw calls are backend-specific.
@@ -3000,6 +2708,11 @@ impl Scene {
                 }
                 continue;
             }
+            // A recording walk (queries) learns which node the following
+            // geometry belongs to, and in which viewport frame it arrives.
+            if let Some(g) = b.geom_sink() {
+                g.begin(i, resolved[*vp_id].vp.transform);
+            }
             // begin_node/end_node are consumed only by the SVG backend (they are
             // no-ops on raster/PDF), so build the attribute string — two `format!`s
             // in `svg_attrs` — only when the backend actually emits it. Empty attrs
@@ -3007,7 +2720,7 @@ impl Scene {
             // Profiling: time this node. Only the top-level walk is measured --
             // `meta` is `None` for the nested walks that rasterise mask content,
             // whose node indices would otherwise collide with the page's.
-            let _timer = if meta.is_some() && NODE_TIMES.with(|t| t.borrow().is_some()) {
+            let _timer = if meta.is_some() && b.geom_sink().is_none() && NODE_TIMES.with(|t| t.borrow().is_some()) {
                 Some(NodeTimer { idx: i, start: std::time::Instant::now() })
             } else {
                 None
@@ -3053,6 +2766,11 @@ impl Scene {
                     continue;
                 }
                 Node::GroupStart { mask, alpha, blend, effect } => {
+                    // Recording geometry paints nothing, so a mask need not be
+                    // rasterised for it.
+                    if b.geom_sink().is_some() {
+                        continue;
+                    }
                     let ml = mask.and_then(|m| self.masks.get(m)).map(|md| {
                         let mut mb = RasterBackend::new(self.w_px, self.h_px, Rgba { r: 0, g: 0, b: 0, a: 0 });
                         self.render_nodes(&mut mb, resolved, &md.nodes, None);
@@ -3082,6 +2800,9 @@ impl Scene {
                     let cy = vp.y_pos(*y, *yu);
                     let pw = vp.x_len(*w, *wu);
                     let ph = vp.y_len(*h, *hu);
+                    if let Some(g) = b.geom_sink() {
+                        g.rect(0, cx - pw / 2.0, cy - ph / 2.0, pw, ph);
+                    }
                     if has_meta { b.begin_node(&attrs); }
                     b.draw_image(rgba, *iw, *ih, cx, cy, pw, ph, *interpolate, vp.transform, &clip);
                     if has_meta { b.end_node(); }
@@ -3116,6 +2837,9 @@ impl Scene {
                     let cy = vp.y_pos(*y, *yu);
                     let pw = vp.x_len(*w, *wu);
                     let ph = vp.y_len(*h, *hu);
+                    if let Some(g) = b.geom_sink() {
+                        g.rect(0, cx - pw / 2.0, cy - ph / 2.0, pw, ph);
+                    }
                     if let Some(path) = rect_path(cx - pw / 2.0, cy - ph / 2.0, pw, ph) {
                         fill_then_stroke(b, &path, &gp, t, &clip, vp, FillRule::Winding);
                     }
@@ -3127,6 +2851,11 @@ impl Scene {
                     let pw = vp.x_len(*w, *wu);
                     let ph = vp.y_len(*h, *hu);
                     let pr = vp.r_len(*r, *ru); // isotropic radius (npc -> min side)
+                    if let Some(g) = b.geom_sink() {
+                        // The crisp outline, also for a sketched one: the wobble
+                        // is decoration, not where the mark is.
+                        g.ring(0, &roundrect_ring(cx - pw / 2.0, cy - ph / 2.0, pw, ph, pr));
+                    }
                     if let Some(sk) = sketch {
                         let ring = roundrect_ring(cx - pw / 2.0, cy - ph / 2.0, pw, ph, pr);
                         let o = resolve_sketch(sk, &gp, vp.dpi);
@@ -3138,6 +2867,20 @@ impl Scene {
                 }
                 Node::Lines { x, y, xu, yu, scap, ecap, off, arrow, sketch, hw, key, .. } => {
                     b.set_element_key(key.as_deref());
+                    let lwd = gp.lwd_px(vp.dpi) as f64;
+                    if sketch.is_some() || hw.is_some() {
+                        // Sketched and variable-width strokes follow the raw
+                        // vertices (neither takes an offset or caps): record that
+                        // centre-line, at the widest width a profile reaches.
+                        if let Some(g) = b.geom_sink() {
+                            let n = x.len().min(y.len()).min(xu.len()).min(yu.len());
+                            let pts: Vec<(f32, f32)> = (0..n)
+                                .map(|i| (vp.x_pos(x[i], xu[i]) as f32, vp.y_pos(y[i], yu[i]) as f32))
+                                .collect();
+                            let k = hw.as_ref().map_or(1.0, |h| h.iter().copied().filter(|v| v.is_finite()).fold(0.0, f64::max));
+                            g.stroke(0, &pts, lwd * k);
+                        }
+                    }
                     if let Some(sk) = sketch {
                         draw_sketch_polyline(b, x, y, xu, yu, &gp, sk, t, &clip, vp);
                     } else if let Some(hw) = hw {
@@ -3147,7 +2890,7 @@ impl Scene {
                         // colour. Non-zero rule, matching `variable_stroke`'s own
                         // self-union.
                         draw_var_stroke(b, x, y, xu, yu, hw, &gp, t, &clip, vp);
-                    } else if let Some(col) = gp.col {
+                    } else {
                         let n = x.len().min(y.len()).min(xu.len()).min(yu.len());
                         if n >= 2 {
                             // Resolve to local px, rigidly translate the whole polyline by
@@ -3165,6 +2908,16 @@ impl Scene {
                             if sc > 0.0 || ec > 0.0 {
                                 trim_poly_ends(&mut pts, sc, ec);
                             }
+                            // The centre-line as drawn: offset, then trimmed.
+                            if let Some(g) = b.geom_sink() {
+                                g.stroke(0, &pts, lwd);
+                            }
+                            // Geometry above is recorded even when nothing is
+                            // painted; painting needs a colour.
+                            let Some(col) = gp.col else {
+                                if has_meta { b.end_node(); }
+                                continue;
+                            };
                             let style = stroke_style(&gp, vp);
                             if let Some(path) = build_poly_px(&pts, false) {
                                 if style.width > 0.0 {
@@ -3199,6 +2952,11 @@ impl Scene {
                 }
                 Node::Polygon { x, y, xu, yu, sketch, key, .. } => {
                     b.set_element_key(key.as_deref());
+                    if let Some(g) = b.geom_sink() {
+                        // The vertices as given (before any display
+                        // simplification), one closed ring.
+                        g.ring(0, &resolve_pts(vp, x, y, xu, yu));
+                    }
                     if let Some(sk) = sketch {
                         let n = x.len().min(y.len()).min(xu.len()).min(yu.len());
                         let ring: Vec<(f64, f64)> = (0..n)
@@ -3216,6 +2974,9 @@ impl Scene {
                     let cx = vp.x_pos(*x, *xu);
                     let cy = vp.y_pos(*y, *yu);
                     let rr = vp.r_len(*r, *ru);
+                    if let Some(g) = b.geom_sink() {
+                        g.disc(0, cx, cy, rr);
+                    }
                     if let Some(sk) = sketch {
                         let o = resolve_sketch(sk, &gp, vp.dpi);
                         let s = crate::sketch::ellipse(cx, cy, rr * 2.0, rr * 2.0, &o, gp.fill.is_some());
@@ -3231,6 +2992,16 @@ impl Scene {
                 Node::Rects { x, y, w, h, xu, yu, wu, hu, sketch, keys, .. } => {
                     let n = [x.len(), y.len(), w.len(), h.len(), xu.len(), yu.len(), wu.len(), hu.len()]
                         .into_iter().min().unwrap_or(0);
+                    // Recorded per element up front: the paint paths below split
+                    // three ways (sketch / unit-rect fast path / per-rect), and
+                    // all three place each rect at exactly this box.
+                    if let Some(g) = b.geom_sink() {
+                        for i in 0..n {
+                            let (cx, cy) = (vp.x_pos(x[i], xu[i]), vp.y_pos(y[i], yu[i]));
+                            let (pw, ph) = (vp.x_len(w[i], wu[i]), vp.y_len(h[i], hu[i]));
+                            g.rect(i, cx - pw / 2.0, cy - ph / 2.0, pw, ph);
+                        }
+                    }
                     if let Some(sk) = sketch {
                         // Per-element sketch (the batched fast paths don't apply —
                         // every rect is unique wobbly geometry). See DESIGN §4 ex.5.
@@ -3298,6 +3069,13 @@ impl Scene {
                 Node::Circles { x, y, r, xu, yu, ru, sketch, keys, .. } => {
                     let n = [x.len(), y.len(), r.len(), xu.len(), yu.len(), ru.len()]
                         .into_iter().min().unwrap_or(0);
+                    // Up front, for the same reason as Rects: the batched fast
+                    // path never visits elements one by one.
+                    if let Some(g) = b.geom_sink() {
+                        for i in 0..n {
+                            g.disc(i, vp.x_pos(x[i], xu[i]), vp.y_pos(y[i], yu[i]), vp.r_len(r[i], ru[i]));
+                        }
+                    }
                     if let Some(sk) = sketch {
                         // Per-element sketch (batched fast paths don't apply); vary the
                         // seed per element so many circles don't look mechanically cloned.
@@ -3371,6 +3149,18 @@ impl Scene {
                 Node::Markers { x, y, size, xu, yu, su, shape, sketch, keys, .. } => {
                     let n = [x.len(), y.len(), size.len(), xu.len(), yu.len(), su.len(), shape.len()]
                         .into_iter().min().unwrap_or(0);
+                    // A marker is picked as the disc of its radius, whatever its
+                    // glyph: the target a reader aims at, and one point of
+                    // geometry for a client to measure against.
+                    if let Some(g) = b.geom_sink() {
+                        for i in 0..n {
+                            let (cx, cy) = (vp.x_pos(x[i], xu[i]), vp.y_pos(y[i], yu[i]));
+                            let rr = vp.r_len(size[i], su[i]);
+                            if rr > 0.0 && cx.is_finite() && cy.is_finite() {
+                                g.disc(i, cx, cy, rr);
+                            }
+                        }
+                    }
                     if let Some(sk) = sketch {
                         // Per-marker hand-drawn geometry: circle -> rough ellipse;
                         // square/triangle/diamond -> rough polygon; plus/cross ->
@@ -3557,6 +3347,9 @@ impl Scene {
                         } else {
                             hexagon_path(cx, cy, vp.r_len(size[i], su[i]), *flat)
                         };
+                        if let (Some(g), Some(p)) = (b.geom_sink(), path.as_ref()) {
+                            g.path(i, p, FillRule::Winding);
+                        }
                         if let Some(path) = path {
                             // Per-element fill (the binned-count colour); uniform stroke.
                             // Per-element colour when given; otherwise the shared `gp` paint, which
@@ -3592,6 +3385,11 @@ impl Scene {
                             let rr0 = vp.r_len(r0[i], r0u[i]);
                             let rr1 = vp.r_len(r1[i], r1u[i]);
                             let (lo, hi) = (rr0.min(rr1), rr0.max(rr1));
+                            if let Some(g) = b.geom_sink() {
+                                if let Some(p) = sector_path(cx, cy, rr0, rr1, theta0[i], theta1[i]) {
+                                    g.path(i, &p, FillRule::Winding);
+                                }
+                            }
                             let ring = wedge_ring(cx, cy, lo, hi, theta0[i], theta1[i]);
                             if ring.len() < 3 {
                                 continue;
@@ -3622,6 +3420,9 @@ impl Scene {
                         let rr0 = vp.r_len(r0[i], r0u[i]);
                         let rr1 = vp.r_len(r1[i], r1u[i]);
                         if let Some(path) = sector_path(cx, cy, rr0, rr1, theta0[i], theta1[i]) {
+                            if let Some(g) = b.geom_sink() {
+                                g.path(i, &path, FillRule::Winding);
+                            }
                             // Per-element fill; uniform stroke (matches hexagons).
                             // Per-element colour when given; otherwise the shared `gp` paint, which
                             // is how a gradient/pattern/hatch reaches a batched mark at all.
@@ -3678,6 +3479,9 @@ impl Scene {
                     let color = match gp.col {
                         Some(c) => c,
                         None if !gcol.is_empty() => Rgba { r: 0, g: 0, b: 0, a: 255 },
+                        // A recording walk still wants the label's box: the
+                        // recorder takes it from `draw_text` and paints nothing.
+                        None if b.geom_sink().is_some() => Rgba { r: 0, g: 0, b: 0, a: 0 },
                         // Nothing to draw, but a metadata node was already opened at
                         // the top of the loop; close it before skipping so the SVG
                         // backend's node buffer stays balanced (else all following
@@ -3726,6 +3530,18 @@ impl Scene {
                     if let Some(sk) = sketch {
                         // Hand-drawn: rough each segment (ignores offset/caps/arrow —
                         // §4 exception 4). Per-segment seed so they don't look cloned.
+                        if let Some(g) = b.geom_sink() {
+                            let n = [x0.len(), y0.len(), x1.len(), y1.len(), x0u.len(), y0u.len(), x1u.len(), y1u.len()]
+                                .into_iter().min().unwrap_or(0);
+                            let lwd = gp.lwd_px(vp.dpi) as f64;
+                            for i in 0..n {
+                                let a = (vp.x_pos(x0[i], x0u[i]) as f32, vp.y_pos(y0[i], y0u[i]) as f32);
+                                let e = (vp.x_pos(x1[i], x1u[i]) as f32, vp.y_pos(y1[i], y1u[i]) as f32);
+                                if a.0.is_finite() && a.1.is_finite() && e.0.is_finite() && e.1.is_finite() {
+                                    g.stroke(i, &[a, e], lwds.get(i).map_or(lwd, |w| w * vp.dpi / 96.0));
+                                }
+                            }
+                        }
                         if let Some(col) = gp.col {
                             let style = stroke_style(&gp, vp);
                             if style.width > 0.0 {
@@ -3752,7 +3568,7 @@ impl Scene {
                         if has_meta { b.end_node(); }
                         continue;
                     }
-                    if let Some(col) = gp.col {
+                    {
                         let style = stroke_style(&gp, vp);
                         let n = [x0.len(), y0.len(), x1.len(), y1.len(), x0u.len(), y0u.len(), x1u.len(), y1u.len()]
                             .into_iter().min().unwrap_or(0);
@@ -3789,6 +3605,19 @@ impl Scene {
                                 segs.push((sx, sy, ex, ey, i));
                             }
                         }
+                        // Each segment as drawn -- offset, then capped -- is the
+                        // element's geometry, recorded whether or not it is
+                        // painted.
+                        if let Some(g) = b.geom_sink() {
+                            let lwd = gp.lwd_px(vp.dpi) as f64;
+                            for &(sx, sy, ex, ey, gi) in &segs {
+                                g.stroke(gi, &[(sx, sy), (ex, ey)], lwds.get(gi).map_or(lwd, |w| w * vp.dpi / 96.0));
+                            }
+                        }
+                        let Some(col) = gp.col else {
+                            if has_meta { b.end_node(); }
+                            continue;
+                        };
                         // Per-element stroke style forces one stroke per segment --
                         // there is no "stroke each differently in one call" anywhere,
                         // so this is inherent, not a missed optimisation. The win is
@@ -3864,6 +3693,24 @@ impl Scene {
                     }
                 }
                 Node::Loop { x, y, xu, yu, size, su, foot, fu, angle, width, arrow, .. } => {
+                    if let Some(g) = b.geom_sink() {
+                        let n = [x.len(), y.len(), xu.len(), yu.len(), size.len(), su.len(),
+                                 foot.len(), fu.len(), angle.len(), width.len()].into_iter().min().unwrap_or(0);
+                        let lwd = gp.lwd_px(vp.dpi) as f64;
+                        for i in 0..n {
+                            let (cx, cy) = (vp.x_pos(x[i], xu[i]), vp.y_pos(y[i], yu[i]));
+                            if !cx.is_finite() || !cy.is_finite() {
+                                continue;
+                            }
+                            let cp = loop_control_points(cx, cy, vp.x_len(size[i], su[i]), vp.x_len(foot[i], fu[i]), angle[i], width[i]);
+                            let mut pb = PathBuilder::new();
+                            pb.move_to(cp[0].0, cp[0].1);
+                            pb.cubic_to(cp[1].0, cp[1].1, cp[2].0, cp[2].1, cp[3].0, cp[3].1);
+                            if let Some(p) = pb.finish() {
+                                g.stroke_path(i, &p, lwd);
+                            }
+                        }
+                    }
                     if let Some(col) = gp.col {
                         let style = stroke_style(&gp, vp);
                         let n = [x.len(), y.len(), xu.len(), yu.len(), size.len(), su.len(),
@@ -3910,6 +3757,12 @@ impl Scene {
                 }
                 Node::Path { x, y, xu, yu, nper, evenodd, sketch, key, .. } => {
                     b.set_element_key(key.as_deref());
+                    if let Some(g) = b.geom_sink() {
+                        // Every ring, filled together under the path's own rule.
+                        if let Some(p) = build_subpaths(x, y, xu, yu, nper, vp) {
+                            g.path(0, &p, if *evenodd { FillRule::EvenOdd } else { FillRule::Winding });
+                        }
+                    }
                     if let Some(sk) = sketch {
                         // Resolve each sub-path to a ring of local-px points.
                         let mut rings: Vec<Vec<(f64, f64)>> = Vec::new();
@@ -4055,7 +3908,10 @@ fn stroke_style(gp: &Gpar, vp: &Vp) -> StrokeStyle {
     let (width, dash) = match &gp.lty {
         Lty::Blank => (0.0, Vec::new()),
         Lty::Solid => (width, Vec::new()),
-        Lty::Dash(nibs) => (width, nibs.iter().map(|n| n * width).collect()),
+        Lty::Dash(nibs) => {
+            let px: Vec<f32> = nibs.iter().map(|n| n * width).collect();
+            (width, crate::render::normalize_dash(&px))
+        }
     };
     // A gradient/pattern stroke resolves its geometry against the viewport exactly
     // as a fill does, so the two cannot disagree about where the ramp sits.
@@ -4069,7 +3925,10 @@ fn stroke_style(gp: &Gpar, vp: &Vp) -> StrokeStyle {
     StrokeStyle {
         width, dash, cap: gp.lineend, join: gp.linejoin,
         miter: gp.linemitre as f32, crisp: gp.crisp, paint,
-        phase: gp.dash_phase as f32 * gp.lwd_px(vp.dpi),
+        phase: {
+            let ph = gp.dash_phase as f32 * gp.lwd_px(vp.dpi);
+            if ph.is_finite() { ph } else { 0.0 }
+        },
     }
 }
 
@@ -5008,35 +4867,6 @@ fn opt_key(key: String) -> Option<String> {
     }
 }
 
-/// Device-px bbox of a vertex list resolved through a viewport (min/max over the
-/// finite points; NA/NaN vertices — e.g. sf line separators — are skipped).
-/// `None` when there are no finite vertices.
-fn vertex_bbox(vp: &Vp, x: &[f64], y: &[f64], xu: &[Unit], yu: &[Unit]) -> Option<(f64, f64, f64, f64)> {
-    let n = [x.len(), y.len(), xu.len(), yu.len()].into_iter().min().unwrap_or(0);
-    let mut x0 = f64::INFINITY;
-    let mut y0 = f64::INFINITY;
-    let mut x1 = f64::NEG_INFINITY;
-    let mut y1 = f64::NEG_INFINITY;
-    let mut any = false;
-    for i in 0..n {
-        let px = vp.x_pos(x[i], xu[i]);
-        let py = vp.y_pos(y[i], yu[i]);
-        if !px.is_finite() || !py.is_finite() {
-            continue;
-        }
-        any = true;
-        x0 = x0.min(px);
-        y0 = y0.min(py);
-        x1 = x1.max(px);
-        y1 = y1.max(py);
-    }
-    if any {
-        Some((x0, y0, x1, y1))
-    } else {
-        None
-    }
-}
-
 /// Map a local-pixel axis-aligned bbox through a viewport's affine transform to a
 /// device-pixel bbox (the min/max of the four mapped corners; handles rotation).
 /// A short, stable name for a node kind, used by the linter and by
@@ -5078,110 +4908,62 @@ fn node_count(node: &Node) -> usize {
     }
 }
 
-/// A node's device-px bounding box. Built from the same per-element geometry the
-/// element table uses, unioned over the batch; `None` when there is nothing to
-/// measure.
-fn node_bbox(node: &Node, vp: &Vp) -> Option<(f64, f64, f64, f64)> {
-    let mut acc: Option<(f64, f64, f64, f64)> = None;
-    let mut add = |b: (f64, f64, f64, f64)| {
-        acc = Some(match acc {
-            None => b,
-            Some(a) => (a.0.min(b.0), a.1.min(b.1), a.2.max(b.2), a.3.max(b.3)),
-        });
-    };
+/// How many elements a node contributes to the element table and the pick
+/// table: a batched mark one per element (over the columns that define an
+/// element), a single-shape keyable mark one when keyed, anything else none.
+/// Element `i` here is element `i` of the recording.
+fn elem_count(node: &Node) -> usize {
+    let min = |v: &[usize]| v.iter().copied().min().unwrap_or(0);
     match node {
-        Node::Rect { x, y, w, h, xu, yu, wu, hu, .. }
-        | Node::RoundRect { x, y, w, h, xu, yu, wu, hu, .. } => {
-            let (cx, cy) = (vp.x_pos(*x, *xu), vp.y_pos(*y, *yu));
-            let (pw, ph) = (vp.x_len(*w, *wu), vp.y_len(*h, *hu));
-            add((cx - pw / 2.0, cy - ph / 2.0, cx + pw / 2.0, cy + ph / 2.0));
-        }
-        Node::Circle { x, y, r, xu, yu, ru, .. } => {
-            let (cx, cy) = (vp.x_pos(*x, *xu), vp.y_pos(*y, *yu));
-            let rr = vp.r_len(*r, *ru);
-            add((cx - rr, cy - rr, cx + rr, cy + rr));
-        }
-        Node::Rects { x, y, w, h, xu, yu, wu, hu, .. } => {
-            let n = [x.len(), y.len(), w.len(), h.len()].into_iter().min().unwrap_or(0);
-            for i in 0..n {
-                let (cx, cy) = (vp.x_pos(x[i], xu[i]), vp.y_pos(y[i], yu[i]));
-                let (pw, ph) = (vp.x_len(w[i], wu[i]), vp.y_len(h[i], hu[i]));
-                add((cx - pw / 2.0, cy - ph / 2.0, cx + pw / 2.0, cy + ph / 2.0));
-            }
-        }
-        Node::Circles { x, y, r, xu, yu, ru, .. } => {
-            let n = [x.len(), y.len(), r.len()].into_iter().min().unwrap_or(0);
-            for i in 0..n {
-                let (cx, cy) = (vp.x_pos(x[i], xu[i]), vp.y_pos(y[i], yu[i]));
-                let rr = vp.r_len(r[i], ru[i]);
-                add((cx - rr, cy - rr, cx + rr, cy + rr));
-            }
-        }
-        Node::Markers { x, y, size, xu, yu, su, .. }
-        | Node::Loop { x, y, size, xu, yu, su, .. } => {
-            let n = [x.len(), y.len(), size.len()].into_iter().min().unwrap_or(0);
-            for i in 0..n {
-                let (cx, cy) = (vp.x_pos(x[i], xu[i]), vp.y_pos(y[i], yu[i]));
-                let rr = vp.r_len(size[i], su[i]);
-                add((cx - rr, cy - rr, cx + rr, cy + rr));
-            }
-        }
-        Node::Hexagons { x, y, size, xu, yu, su, .. } => {
-            let n = [x.len(), y.len()].into_iter().min().unwrap_or(0);
-            for i in 0..n {
-                let (cx, cy) = (vp.x_pos(x[i], xu[i]), vp.y_pos(y[i], yu[i]));
-                let rr = vp.r_len(*size.get(i).unwrap_or(&0.0), su[i.min(su.len().saturating_sub(1))]);
-                add((cx - rr, cy - rr, cx + rr, cy + rr));
-            }
-        }
-        Node::Sectors { x, y, r1, xu, yu, r1u, .. } => {
-            let n = [x.len(), y.len(), r1.len()].into_iter().min().unwrap_or(0);
-            for i in 0..n {
-                let (cx, cy) = (vp.x_pos(x[i], xu[i]), vp.y_pos(y[i], yu[i]));
-                let rr = vp.r_len(r1[i], r1u[i]);
-                add((cx - rr, cy - rr, cx + rr, cy + rr));
-            }
-        }
-        Node::Segments { x0, y0, x1, y1, x0u, y0u, x1u, y1u, .. } => {
-            let n = [x0.len(), y0.len(), x1.len(), y1.len()].into_iter().min().unwrap_or(0);
-            for i in 0..n {
-                let (ax, ay) = (vp.x_pos(x0[i], x0u[i]), vp.y_pos(y0[i], y0u[i]));
-                let (bx, by) = (vp.x_pos(x1[i], x1u[i]), vp.y_pos(y1[i], y1u[i]));
-                add((ax.min(bx), ay.min(by), ax.max(bx), ay.max(by)));
-            }
-        }
-        Node::Lines { x, y, xu, yu, .. }
-        | Node::Polygon { x, y, xu, yu, .. }
-        | Node::Path { x, y, xu, yu, .. } => {
-            let n = x.len().min(y.len());
-            for i in 0..n {
-                let (px, py) = (vp.x_pos(x[i], xu[i]), vp.y_pos(y[i], yu[i]));
-                add((px, py, px, py));
-            }
-        }
-        Node::Text { x, y, xu, yu, w, h, hjust, vjust, .. } => {
-            let (ax, ay) = (vp.x_pos(*x, *xu), vp.y_pos(*y, *yu));
-            let (lx, ty) = (ax - hjust * w, ay - (1.0 - vjust) * h);
-            add((lx, ty, lx + w, ty + h));
-        }
-        Node::Image { x, y, w, h, xu, yu, wu, hu, .. } => {
-            let (cx, cy) = (vp.x_pos(*x, *xu), vp.y_pos(*y, *yu));
-            let (pw, ph) = (vp.x_len(*w, *wu), vp.y_len(*h, *hu));
-            add((cx - pw / 2.0, cy - ph / 2.0, cx + pw / 2.0, cy + ph / 2.0));
-        }
-        _ => return None,
+        Node::Rects { x, y, w, h, .. } => min(&[x.len(), y.len(), w.len(), h.len()]),
+        Node::Circles { x, y, r, .. } => min(&[x.len(), y.len(), r.len()]),
+        Node::Markers { x, y, size, .. } => min(&[x.len(), y.len(), size.len()]),
+        Node::Hexagons { x, y, .. } => min(&[x.len(), y.len()]),
+        Node::Sectors { x, y, r0, r1, .. } => min(&[x.len(), y.len(), r0.len(), r1.len()]),
+        Node::Segments { x0, y0, x1, y1, .. } => min(&[x0.len(), y0.len(), x1.len(), y1.len()]),
+        Node::Text { key, .. }
+        | Node::RoundRect { key, .. }
+        | Node::Path { key, .. }
+        | Node::Polygon { key, .. }
+        | Node::Lines { key, .. } => usize::from(key.is_some()),
+        _ => 0,
     }
-    // Every arm above resolves through `vp.x_pos`/`x_len`, which are
-    // viewport-LOCAL pixels. The viewport's own placement lives in
-    // `vp.transform`, so the box has to go through it to be a device box like
-    // everything else reports.
-    //
-    // Omitting this was a real bug: `lint_table()` returned local coordinates
-    // while `element_table()` returned device ones, so for any viewport not at
-    // the page origin the two disagreed by the viewport's offset. It was
-    // invisible in tests because they draw into the default full-page viewport,
-    // where the transform is the identity and local == device.
-    acc.map(|(x0, y0, x1, y1)| dev_bbox(vp, x0, y0, x1, y1))
+}
+
+/// The data key of element `i` of a node, if it has one.
+fn elem_key(node: &Node, i: usize) -> Option<&str> {
+    match node {
+        Node::Rects { keys, .. }
+        | Node::Circles { keys, .. }
+        | Node::Markers { keys, .. }
+        | Node::Hexagons { keys, .. }
+        | Node::Sectors { keys, .. }
+        | Node::Segments { keys, .. } => key_at(keys, i),
+        Node::Text { key, .. }
+        | Node::RoundRect { key, .. }
+        | Node::Path { key, .. }
+        | Node::Polygon { key, .. }
+        | Node::Lines { key, .. } => key.as_deref(),
+        _ => None,
+    }
+}
+
+/// The `kind` the pick table (`vl_nearest()`, `element_geometry()`) reports
+/// for a keyable node; empty for a node that is never picked.
+fn pick_kind(node: &Node) -> &'static str {
+    match node {
+        Node::Segments { .. } => "segment",
+        Node::Lines { .. } => "line",
+        Node::Polygon { .. } => "polygon",
+        Node::Path { .. } => "path",
+        Node::Circles { .. } | Node::Markers { .. } => "point",
+        Node::Rects { .. } => "rect",
+        Node::Hexagons { .. } => "hexagon",
+        Node::Sectors { .. } => "sector",
+        Node::Text { .. } => "text",
+        Node::RoundRect { .. } => "roundrect",
+        _ => "",
+    }
 }
 
 /// The device-px bounds of a clip shape (a path clip is reduced to its bbox --
@@ -5198,31 +4980,6 @@ fn clip_bbox(c: &ClipShape) -> Option<(f64, f64, f64, f64)> {
             Some(dev_bbox(&vpx, b.left() as f64, b.top() as f64, b.right() as f64, b.bottom() as f64))
         }
     }
-}
-
-/// One viewport-local point through the viewport's placement, to device px.
-///
-/// The point counterpart of `dev_bbox()`. `vp.x_pos()`/`y_pos()` answer in the
-/// viewport's own frame; the viewport's position on the page (and its rotation)
-/// live in `vp.transform`, so a coordinate reported to R has to go through it.
-fn dev_pt(vp: &Vp, lx: f64, ly: f64) -> (f64, f64) {
-    let t = vp.transform;
-    let (sx, ky, kx, sy, tx, ty) =
-        (t.sx as f64, t.ky as f64, t.kx as f64, t.sy as f64, t.tx as f64, t.ty as f64);
-    (sx * lx + kx * ly + tx, ky * lx + sy * ly + ty)
-}
-
-/// The device-px scale factor a viewport's transform applies to a radius.
-///
-/// `sqrt(|det|)` — the uniform-scale equivalent. A viewport with a non-uniform
-/// scale would turn a disc into an ellipse, which the pick table has no way to
-/// describe; the geometric mean is the honest single number for that case, and
-/// it is exact for the translation / rotation / uniform-scale transforms a
-/// viewport actually gets.
-fn dev_scale(vp: &Vp) -> f64 {
-    let t = vp.transform;
-    let det = (t.sx as f64) * (t.sy as f64) - (t.kx as f64) * (t.ky as f64);
-    det.abs().sqrt()
 }
 
 fn dev_bbox(vp: &Vp, lx0: f64, ly0: f64, lx1: f64, ly1: f64) -> (f64, f64, f64, f64) {

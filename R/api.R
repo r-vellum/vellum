@@ -1827,13 +1827,14 @@ S7::method(compile, gtree) <- function(node, scene) {
 
 #' Hit-test a scene
 #'
-#' Find the topmost node drawn under a point. The scene is compiled into a colour
-#' pick-buffer (each grob drawn in a colour encoding its id, respecting clipping
-#' and paint order) using the same code path that renders it, so the result is
-#' geometry-, clip- and overlap-exact by construction. Markers and text are
-#' matched by their bounding box; lines and segments by a small pick band. grid
-#' ships no equivalent: `grid.locator()` waits for one interactive click and
-#' returns coordinates rather than a node.
+#' Find the topmost node drawn under a point. The geometry is recorded by the
+#' same walk that renders the scene, so offsets, caps and rotation are where they
+#' are drawn; grobs are tested in reverse paint order against that geometry and
+#' their viewport's clip, so the result is clip- and overlap-exact. A filled
+#' shape is matched by its fill rule, a marker by its disc, text by its (rotated)
+#' box, and lines and segments by a band of half their stroke width (at least
+#' 2 px). grid ships no equivalent: `grid.locator()` waits for one interactive
+#' click and returns coordinates rather than a node.
 #'
 #' @param scene A [vl_scene()].
 #' @param x,y Query point, in `units`: `"npc"` (default; the page, `0..1` with y

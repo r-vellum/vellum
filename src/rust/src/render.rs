@@ -39,6 +39,28 @@ pub struct StrokeStyle {
     pub phase: f32,
 }
 
+/// Normalise a dash array (device px) to the one form every backend draws the
+/// same way. Returns an empty vector for "solid".
+///
+/// SVG and PDF repeat an odd-length list to make it even, but tiny-skia rejects
+/// it (and the PNG would silently draw solid), so an odd list is doubled here,
+/// once, for all three. A list with a negative or non-finite entry, or one that
+/// sums to zero, has no dashes to draw and becomes solid on every backend.
+pub fn normalize_dash(dash: &[f32]) -> Vec<f32> {
+    if dash.is_empty() || dash.iter().any(|d| !d.is_finite() || *d < 0.0) {
+        return Vec::new();
+    }
+    let sum: f32 = dash.iter().sum();
+    if !(sum > 0.0 && sum.is_finite()) {
+        return Vec::new();
+    }
+    let mut out = dash.to_vec();
+    if out.len() % 2 == 1 {
+        out.extend_from_slice(dash);
+    }
+    out
+}
+
 thread_local! {
     /// Anti-aliasing for the primitive currently being drawn, set by the scene
     /// walk from the folded gpar. A thread-local rather than a parameter on every
@@ -598,6 +620,14 @@ pub trait RenderBackend {
     /// scene carries interactivity keys.
     fn wants_element_keys(&self) -> bool {
         false
+    }
+
+    /// Where the walk records each element's resolved geometry for the queries
+    /// (`element_geometry()`, picking, hit-testing, boxes). `None` for every
+    /// painting backend, so a render pays nothing; `geom::RecordBackend`
+    /// returns its sink. See `geom.rs`.
+    fn geom_sink(&mut self) -> Option<&mut crate::geom::GeomSink> {
+        None
     }
 }
 

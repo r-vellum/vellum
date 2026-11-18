@@ -130,7 +130,9 @@ test_that("a diagonal is ranked by its geometry, not its bounding box", {
 test_that("a point on a segment is at distance zero", {
   near <- vl_nearest(diag_scene(), 0.5, 0.5, n = 1)
   expect_equal(near$key, "diagonal")
-  expect_lt(near$dist, 1e-6)
+  # The geometry is what the renderer drew, in its single-precision device
+  # coordinates, so "zero" is zero to well under a thousandth of a pixel.
+  expect_lt(near$dist, 1e-3)
 })
 
 test_that("a filled polygon contains its interior", {
@@ -371,34 +373,246 @@ test_that("the ring column is present on an empty result", {
 })
 
 test_that("a client can reproduce the engine's path distance from the rings", {
-  # The issue this closes: hit-testing a multi-ring path locally, exactly.
-  # Note the engine's rule -- inside ANY ring counts as a hit (each ring is
-  # measured as filled and the minimum taken), so it does not apply `evenodd`
-  # across rings and a point in the hole is at distance 0. Reproducing that
-  # needs the ring boundaries; a single phantom-edge ring gives a different
-  # answer near the hole.
+  # Hit-testing a multi-ring path locally, exactly: containment is decided once
+  # across all the rings under the element's `rule` (even-odd parity here), so
+  # the hole is outside. That needs the ring boundaries -- a single
+  # phantom-edge ring gives a different answer near the hole -- and the rule.
   s <- holed_scene()
   p <- element_geometry(s)
   p <- p[p$key == "holed", ]
+  expect_identical(unique(p$rule), "evenodd")
   rings <- split(p[c("x", "y")], p$ring)
-  inside <- function(r, px, py) {
+  crossings <- function(r, px, py) {
     n <- nrow(r)
     j <- c(n, seq_len(n - 1L))
     sum(
       (r$y > py) != (r$y[j] > py) &
         px < (r$x[j] - r$x) * (py - r$y) / (r$y[j] - r$y) + r$x
-    ) %%
-      2 ==
-      1
+    )
   }
-  hit_any <- function(px, py) any(vapply(rings, inside, logical(1), px, py))
+  inside <- function(px, py) {
+    sum(vapply(rings, crossings, numeric(1), px, py)) %% 2 == 1
+  }
   # centre of the hole, a point in the annulus, and a point outside the square
   probes <- list(c(0.5, 0.5), c(0.2, 0.5), c(0.95, 0.95))
   for (q in probes) {
     engine_zero <- vl_nearest(s, q[1], q[2])$dist == 0
-    local_zero <- hit_any(q[1] * 400, (1 - q[2]) * 300)
+    local_zero <- inside(q[1] * 400, (1 - q[2]) * 300)
     expect_identical(local_zero, engine_zero)
   }
-  # and the hole really is a hit under that rule, unlike plain even-odd
-  expect_equal(vl_nearest(s, 0.5, 0.5)$dist, 0)
+})
+
+# --- picking follows the fill rule --------------------------------------------
+
+test_that("the centre of an even-odd donut's hole is not a hit", {
+  s <- holed_scene()
+  near <- vl_nearest(s, 0.5, 0.5)
+  # The hole spans 0.4..0.6 of a 400 x 300 px page: its centre is 0.1 * 300 px
+  # from the nearest inner edge (top/bottom), and the outer ring is further.
+  expect_gt(near$dist, 0)
+  expect_equal(near$dist, 0.1 * 300, tolerance = 1e-4)
+  # The annulus is still filled, so a hit.
+  expect_equal(vl_nearest(s, 0.2, 0.5)$dist, 0)
+  # hit_test agrees: the hole is empty.
+  named <- vl_scene(4, 3, dpi = 100) |>
+    draw(path_grob(
+      x = c(0.1, 0.9, 0.9, 0.1, 0.4, 0.6, 0.6, 0.4),
+      y = c(0.1, 0.1, 0.9, 0.9, 0.4, 0.4, 0.6, 0.6),
+      id = rep(1:2, each = 4),
+      rule = "evenodd",
+      name = "donut"
+    ))
+  expect_null(hit_test(named, 0.5, 0.5))
+  expect_equal(hit_test(named, 0.2, 0.5), "donut")
+})
+
+test_that("a winding path is a hole only where its rings cancel", {
+  ix <- c(0.4, 0.6, 0.6, 0.4)
+  iy <- c(0.4, 0.4, 0.6, 0.6)
+  donut <- function(inner_x, inner_y) {
+    vl_scene(4, 3, dpi = 100) |>
+      draw(path_grob(
+        x = c(0.1, 0.9, 0.9, 0.1, inner_x),
+        y = c(0.1, 0.1, 0.9, 0.9, inner_y),
+        id = rep(1:2, each = 4),
+        rule = "winding",
+        key = "w"
+      ))
+  }
+  # Inner ring in the same direction as the outer: winding 2, filled.
+  same <- donut(ix, iy)
+  expect_equal(vl_nearest(same, 0.5, 0.5)$dist, 0)
+  expect_identical(unique(element_geometry(same)$rule), "nonzero")
+  # Inner ring reversed: winding 0, a hole.
+  opp <- donut(rev(ix), rev(iy))
+  expect_equal(vl_nearest(opp, 0.5, 0.5)$dist, 0.1 * 300, tolerance = 1e-4)
+  expect_equal(vl_nearest(opp, 0.2, 0.5)$dist, 0)
+})
+
+test_that("a plain polygon picks as before, and open marks carry no rule", {
+  s <- diag_scene()
+  expect_equal(vl_nearest(s, 0.25, 0.68)$dist, 0) # inside the triangle
+  g <- element_geometry(s)
+  expect_identical(unique(g$rule[g$kind == "polygon"]), "nonzero")
+  expect_true(all(is.na(g$rule[g$kind %in% c("segment", "point")])))
+  expect_type(g$rule, "character")
+})
+
+# --- one geometry source: every query agrees with what is drawn ----------------
+
+test_that("a segment's offset and caps reach its geometry and its distance (VR-1)", {
+  s <- vl_scene(4, 3, dpi = 96, bg = "white") |>
+    draw(segments_grob(
+      0.1,
+      0.5,
+      0.9,
+      0.5,
+      offset = vl_unit(10, "mm"),
+      start_cap = vl_unit(20, "mm"),
+      key = "e"
+    ))
+  px_mm <- 96 / 25.4
+  g <- element_geometry(s)
+  expect_equal(nrow(g), 2L)
+  # Offset 10 mm along the segment's normal: the whole segment moves 10 mm
+  # off the line it was given.
+  expect_equal(abs(g$y - 0.5 * 288), rep(10 * px_mm, 2), tolerance = 1e-4)
+  # The start is capped 20 mm inward; the end is untouched.
+  expect_equal(g$x, c(0.1 * 384 + 20 * px_mm, 0.9 * 384), tolerance = 1e-4)
+
+  # On the un-offset line, at its old start: ~38 px from the ink, not zero.
+  near <- vl_nearest(s, 0.1, 0.5, units = "npc")
+  expect_gt(near$dist, 30)
+  # On the drawn segment: a hit.
+  on <- vl_nearest(s, mean(g$x), g$y[1], units = "px")
+  expect_lt(on$dist, 1e-3)
+  # The element box is the drawn segment's too.
+  el <- scene_model(s)$elements
+  expect_equal(
+    c(el$x0, el$y0, el$x1, el$y1),
+    c(min(g$x), g$y[1], max(g$x), g$y[1]),
+    tolerance = 1e-4
+  )
+})
+
+test_that("a line's offset and caps reach its geometry (VR-1)", {
+  keyed <- function(g, k) {
+    g@keys <- k
+    g
+  }
+  plain <- vl_scene(4, 3, dpi = 96) |>
+    draw(keyed(lines_grob(c(0.1, 0.5, 0.9), c(0.5, 0.6, 0.5)), "l"))
+  capped <- vl_scene(4, 3, dpi = 96) |>
+    draw(keyed(
+      lines_grob(
+        c(0.1, 0.5, 0.9),
+        c(0.5, 0.6, 0.5),
+        start_cap = vl_unit(10, "mm"),
+        end_cap = vl_unit(10, "mm")
+      ),
+      "l"
+    ))
+  a <- element_geometry(plain)
+  b <- element_geometry(capped)
+  expect_equal(nrow(b), 3L)
+  # Ends pulled inward; the interior vertex untouched.
+  expect_gt(b$x[1], a$x[1] + 30)
+  expect_lt(b$x[3], a$x[3] - 30)
+  expect_equal(b[2, c("x", "y")], a[2, c("x", "y")], ignore_attr = TRUE)
+})
+
+test_that("keyed hexagons and sectors are pickable and have geometry (VR-2)", {
+  s <- vl_scene(4, 3, dpi = 96, bg = "white") |>
+    draw(hexagon_grob(0.25, 0.5, size = vl_unit(8, "mm"), key = "hex")) |>
+    draw(sector_grob(
+      0.75,
+      0.5,
+      r0 = 0,
+      r1 = vl_unit(15, "mm"),
+      theta0 = 0,
+      theta1 = pi / 2,
+      key = "pie"
+    ))
+  g <- element_geometry(s)
+  expect_setequal(unique(g$key), c("hex", "pie"))
+  expect_equal(sum(g$key == "hex"), 6L) # the six corners
+  expect_identical(unique(g$kind[g$key == "hex"]), "hexagon")
+  expect_identical(unique(g$kind[g$key == "pie"]), "sector")
+
+  # The hexagon's centre is inside it; the sector picks by its wedge, not its
+  # disc: the quadrant opposite the wedge is outside it.
+  expect_equal(vl_nearest(s, 0.25, 0.5)$key, "hex")
+  expect_equal(vl_nearest(s, 0.25, 0.5)$dist, 0)
+  r <- 15 * 96 / 25.4
+  inside <- vl_nearest(s, 0.75 * 384 + r / 3, 0.5 * 288 - r / 3, units = "px")
+  expect_equal(inside$key, "pie")
+  expect_equal(inside$dist, 0)
+  outside <- vl_nearest(
+    s,
+    0.75 * 384 - r / 2,
+    0.5 * 288 + r / 2,
+    units = "px",
+    n = 2
+  )
+  expect_gt(outside$dist[outside$key == "pie"], 0)
+})
+
+test_that("rotated text has a rotated box everywhere (VR-4)", {
+  s <- vl_scene(4, 4, dpi = 96, bg = "white") |>
+    draw(text_grob("A fairly long label", rot = 90, key = "t", name = "t"))
+  el <- scene_model(s)$elements
+  # Turned on end: taller than wide.
+  expect_gt(el$h, el$w * 3)
+  lt <- vellum:::.scene_to_backend(s)$lint_table()
+  expect_equal(c(lt$x0, lt$y0, lt$x1, lt$y1), c(el$x0, el$y0, el$x1, el$y1))
+  # The geometry is the turned quad.
+  g <- element_geometry(s)
+  expect_equal(nrow(g), 4L)
+  expect_equal(diff(range(g$y)), el$h)
+  # Where the unrotated box would have been, beside the label, nothing is hit.
+  probe_x <- el$x1 + (el$h - el$w) / 4 # inside the old horizontal box only
+  expect_gt(vl_nearest(s, probe_x, 0.5 * 384, units = "px")$dist, 0)
+  expect_null(hit_test(s, probe_x, 0.5 * 384, units = "px"))
+  expect_equal(hit_test(s, 0.5, 0.5), "t")
+  expect_equal(hit_test(s, 0.5, 0.5 + 0.1), "t") # along the turned label
+})
+
+test_that("a non-regular hexagon's width/height reach the lint box (VR-5)", {
+  s <- vl_scene(4, 4, dpi = 96, bg = "white") |>
+    draw(hexagon_grob(
+      0.5,
+      0.5,
+      width = vl_unit(40, "mm"),
+      height = vl_unit(10, "mm"),
+      key = "h"
+    ))
+  el <- scene_model(s)$elements
+  lt <- vellum:::.scene_to_backend(s)$lint_table()
+  expect_equal(c(lt$x0, lt$y0, lt$x1, lt$y1), c(el$x0, el$y0, el$x1, el$y1))
+  expect_equal(lt$x1 - lt$x0, 40 * 96 / 25.4, tolerance = 1e-3)
+  expect_equal(lt$y1 - lt$y0, 10 * 96 / 25.4, tolerance = 1e-3)
+})
+
+test_that("an invisible mark keeps its geometry (an unpainted hover target)", {
+  s <- vl_scene(4, 3, dpi = 96) |>
+    draw(segments_grob(
+      0.1,
+      0.5,
+      0.9,
+      0.5,
+      gp = vl_gpar(col = NA),
+      key = "ghost"
+    )) |>
+    draw(rect_grob(
+      0.5,
+      0.2,
+      0.2,
+      0.1,
+      gp = vl_gpar(col = NA, fill = NA),
+      key = "box"
+    ))
+  expect_setequal(unique(element_geometry(s)$key), c("ghost", "box"))
+  expect_lt(vl_nearest(s, 0.5, 0.5)$dist, 1e-3)
+  el <- scene_model(s)$elements
+  expect_true(all(is.finite(c(el$x0, el$y0, el$x1, el$y1))))
 })

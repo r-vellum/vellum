@@ -38,12 +38,19 @@ rank them wrongly.
 
 Distances are: to the disc for round marks (zero inside), to the rectangle for
 rects (zero inside), perpendicular to the segment for segments, to the nearest
-edge for open polylines, and \strong{zero anywhere inside} a closed polygon or
-path — so clicking the middle of a choropleth region hits that region.
+edge for open polylines, and \strong{zero anywhere inside} a closed polygon, path,
+hexagon or sector — so clicking the middle of a choropleth region hits that
+region. A label is measured to its box, turned with the label when it is
+rotated.
 
-Marks vellum cannot describe more precisely than a box — labels, rounded rects
-— fall back to their box, which for a label is a fair description of the
-target anyway.
+"Inside" follows the shape's fill rule, the one it is painted with: a point
+in a polygon's hole is \strong{not} inside (an \code{"evenodd"} path, or a
+\code{"winding"} one whose inner ring runs the other way), and its distance is to
+the nearest edge, the hole's own boundary.
+
+The geometry is the one the renderer draws: a segment or line drawn with an
+\code{offset} or end caps is measured where it lands, not where its coordinates
+would put it. Distances are to a stroke's centre-line.
 }
 
 \section{For a client-side host}{
