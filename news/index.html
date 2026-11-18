@@ -13,7 +13,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">vellum</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.7.1.9000</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.7.2.9000</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -70,9 +70,12 @@
     </div>
 
     <div class="section level2">
-<h2 class="pkg-version" data-toc-text="0.7.1.9000" id="vellum-0719000-development-version">vellum 0.7.1.9000 (development version)<a class="anchor" aria-label="anchor" href="#vellum-0719000-development-version"></a></h2>
+<h2 class="pkg-version" data-toc-text="0.7.2.9000" id="vellum-0729000-development-version">vellum 0.7.2.9000 (development version)<a class="anchor" aria-label="anchor" href="#vellum-0729000-development-version"></a></h2>
+</div>
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.7.2" id="vellum-072">vellum 0.7.2<a class="anchor" aria-label="anchor" href="#vellum-072"></a></h2>
 <div class="section level3">
-<h3 id="strokes-0-7-1-9000">Strokes<a class="anchor" aria-label="anchor" href="#strokes-0-7-1-9000"></a></h3>
+<h3 id="strokes-0-7-2">Strokes<a class="anchor" aria-label="anchor" href="#strokes-0-7-2"></a></h3>
 <ul><li>
 <p><strong>Fix: an odd-length dash pattern draws the same on every backend.</strong> <code>vl_gpar(lty = c(4, 2, 1))</code> (or a one-digit hex string like <code>"4"</code>) drew a solid line in PNG, because the raster backend rejects an odd dash array, while SVG and PDF repeated the list and drew dashes.</p>
 <p>The engine now normalises the dash array once for all three backends: an odd-length list is doubled (the SVG and PDF rule), and a list that sums to zero draws solid. Negative or infinite dash lengths are rejected with an error.</p>
@@ -83,7 +86,7 @@
 </li>
 </ul></div>
 <div class="section level3">
-<h3 id="paint-0-7-1-9000">Paint<a class="anchor" aria-label="anchor" href="#paint-0-7-1-9000"></a></h3>
+<h3 id="paint-0-7-2">Paint<a class="anchor" aria-label="anchor" href="#paint-0-7-2"></a></h3>
 <ul><li>
 <p><strong>Fix: pattern strokes and reflected patterns draw the same on every backend.</strong> A <code><a href="../reference/vl_pattern.html">vl_pattern()</a></code> given to <code>col</code> stroked with the pattern in SVG but fell back to plain black in PNG and PDF. All three backends now stroke with the pattern, and a faded pattern stroke keeps its opacity in SVG.</p>
 <p><code>vl_pattern(extend = "reflect")</code> mirrored every other cell in PNG but repeated the tile in SVG and PDF. A reflected pattern is now drawn from a 2x2 mirrored tile, which every backend tiles identically. <code>extend = "pad"</code> is now an error for patterns, because SVG and PDF tiling patterns cannot clamp a tile’s edges outwards (it already drew as <code>"repeat"</code> there).</p>
@@ -91,14 +94,14 @@
 </li>
 </ul></div>
 <div class="section level3">
-<h3 id="scenes-0-7-1-9000">Scenes<a class="anchor" aria-label="anchor" href="#scenes-0-7-1-9000"></a></h3>
+<h3 id="scenes-0-7-2">Scenes<a class="anchor" aria-label="anchor" href="#scenes-0-7-2"></a></h3>
 <ul><li>
 <p><strong>Fix: a written scene keeps the names on its vectors.</strong> <code><a href="../reference/scene_write.html">scene_write()</a></code> stored doubles and strings without their names (or any other attribute), so a scene drawn with <code>vl_gpar(features = c(tnum = 1))</code> read back from <code>.rds</code> or <code>.json</code> failed to render with “<code>features</code> must be a named vector”. Named per-element <code>meta</code> silently lost its names, a JSON round-trip turned a named logical into an integer, and a systemfonts <code>font_feature()</code> object lost its class.</p>
 <p>Atomic vectors now carry their names, and atomic vectors and lists carry their other attributes, through the scene spec, and a read restores them. Specs written by earlier versions have no such fields and read as before, and the spec of a scene without named or classed values is unchanged, so its <code><a href="../reference/scene_hash.html">scene_hash()</a></code> does not move.</p>
 </li>
 </ul></div>
 <div class="section level3">
-<h3 id="hit-testing-0-7-1-9000">Hit-testing<a class="anchor" aria-label="anchor" href="#hit-testing-0-7-1-9000"></a></h3>
+<h3 id="hit-testing-0-7-2">Hit-testing<a class="anchor" aria-label="anchor" href="#hit-testing-0-7-2"></a></h3>
 <ul><li>
 <p><strong>Fix: keyed batched marks with a scalar <code>x</code> and a vector <code>y</code> no longer break <code><a href="../reference/scene_model.html">scene_model()</a></code>.</strong> <code><a href="../reference/scene_model.html">scene_model()</a></code> counted a batch by the length of <code>x</code>, so <code>rect_grob(x = 0.5, y = c(0.2, 0.5, 0.8), key = c("a", "b", "c"))</code> gave one element from the grob walk against three from the backend, and aborted with an element-count mismatch. <code><a href="../reference/grob.html">roundrect_grob()</a></code> had the same problem.</p>
 <p>Every batched grob (rect, roundrect, circle, points, hexagon, sector, segments, loop and text) now has one definition of its element count: the common length of all its per-element vectors (<code>x</code>, <code>y</code>, <code>width</code>, <code>height</code>, <code>r</code>, <code>size</code>, <code>shape</code>, angles, caps, …). The constructor recycles <code>key</code> and <code>meta</code> to it, <code>compile()</code> draws that many elements, and <code><a href="../reference/scene_model.html">scene_model()</a></code> expects that many rows. Incompatible lengths fail in the constructor, with an error that names the arguments. <code>key</code> and <code>meta</code> must now have length 1 or n. Before, <code><a href="https://rdrr.io/r/base/rep.html" class="external-link">rep_len()</a></code> silently truncated or wrapped them, so elements could be paired with the wrong data.</p>
@@ -111,6 +114,11 @@
 <p><strong>Behaviour change: a point in a polygon’s hole no longer counts as a hit.</strong> <code><a href="../reference/vl_nearest.html">vl_nearest()</a></code> measured a multi-ring path as the minimum over its rings, each treated as filled, so a point inside any ring, including a hole, was at distance 0. Containment is now decided once across all of an element’s rings under the rule the shape is painted with: even-odd parity, or nonzero winding. A point in an <code>"evenodd"</code> path’s hole (or in a <code>"winding"</code> path’s reversed inner ring) is outside, and its distance is to the nearest edge, which is the hole’s own boundary. A plain polygon picks as before.</p>
 <p><code><a href="../reference/element_geometry.html">element_geometry()</a></code> gains a <code>rule</code> column (<code>"nonzero"</code>, <code>"evenodd"</code>, or <code>NA</code> for segments, lines and points), one value per element, so a client-side host can decide containment the same way. The column is appended, so no existing column moves. The scene-contract article now documents <code><a href="../reference/element_geometry.html">element_geometry()</a></code> and its containment rule.</p>
 </li>
+</ul></div>
+<div class="section level3">
+<h3 id="other-changes-0-7-2">Other changes<a class="anchor" aria-label="anchor" href="#other-changes-0-7-2"></a></h3>
+<ul><li>
+<strong>Backend parity is now tested on rendered pixels.</strong> A new test suite renders the same scenes to PNG, SVG and PDF, rasterises the SVG and PDF back to pixels, and checks that the ink lands in the same places and colours (at a 1-px antialiasing tolerance). The fixtures cover lines and polygons, outlined text, even and odd dash patterns, gradients, pattern fills and strokes, and clipping. The suite uses the rsvg and pdftools packages (now in Suggests), falling back to magick and poppler’s <code>pdftoppm</code>, and skips when no rasteriser is available.</li>
 </ul></div>
 </div>
     <div class="section level2">
