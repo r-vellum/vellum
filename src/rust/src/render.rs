@@ -1073,13 +1073,20 @@ impl RenderBackend for RasterBackend {
             return;
         }
         // Fast path for grid's default line style: opaque, solid (no dash), round
-        // cap + round join. Stroke each segment independently. When opaque, drawing
-        // overlaps twice is idempotent, and a round cap covers the same disc as a
-        // round join — so the result matches the combined stroke pixel-for-pixel,
-        // but each tiny fill touches only its own few scanlines. The combined
-        // winding-fill instead pays O(active_edges x height): for a self-
-        // intersecting polyline (many outline edges crossing every scanline) or a
-        // page-spanning batch of disjoint segments that is the dominant cost.
+        // cap + round join. Stroke each subpath on its own, in runs of at most
+        // `RUN` segments. The combined winding-fill pays O(active_edges x height):
+        // for a self-intersecting polyline (many outline edges crossing every
+        // scanline) or a page-spanning batch of disjoint segments that is the
+        // dominant cost, and a short run touches only its own few scanlines.
+        //
+        // Runs rather than single segments: drawing an overlap twice is only
+        // idempotent where coverage is full. An antialiased edge pixel blended
+        // twice comes out darker, so stroking every segment separately put a dark
+        // bead on each vertex, and a densely sampled thin line (a contour, a
+        // smooth curve) looked stippled next to the same line in SVG or PDF. A
+        // run is one stroke, so its interior vertices match the combined stroke
+        // exactly; only the rare joints between runs of a very long polyline are
+        // drawn twice.
         let fast = color.a == 255
             && stroke.paint.is_none() // a shader must see the whole path at once
             && stroke.dash.is_empty()
@@ -1093,37 +1100,61 @@ impl RenderBackend for RasterBackend {
         let sk = skia_stroke(stroke);
         let paint = stroke_paint_or(stroke, color);
         let target = self.targets.last_mut().expect("at least the page target");
+        // Long enough that a contour or a typical line is a single run (and so
+        // identical to the combined stroke), short enough that a run of a
+        // page-spanning scribble stays local.
+        const RUN: usize = 256;
         use tiny_skia::PathSegment;
+        let mut pb = PathBuilder::new();
+        let mut run_len = 0usize;
         let mut prev: Option<(f32, f32)> = None;
+        let mut flush = |pb: &mut PathBuilder| {
+            if let Some(sp) = std::mem::take(pb).finish() {
+                target.stroke_path(&sp, &paint, &sk, transform, mask.as_deref());
+            }
+        };
         for seg in path.segments() {
             match seg {
-                PathSegment::MoveTo(p) => prev = Some((p.x, p.y)),
+                PathSegment::MoveTo(p) => {
+                    flush(&mut pb);
+                    run_len = 0;
+                    prev = Some((p.x, p.y));
+                }
                 PathSegment::LineTo(p) => {
-                    if let Some((ax, ay)) = prev {
-                        let mut pb = PathBuilder::new();
+                    let Some((ax, ay)) = prev else {
+                        prev = Some((p.x, p.y));
+                        continue;
+                    };
+                    if stroke.crisp {
                         // Crisp mode: a horizontal or vertical run gets its
                         // constant coordinate snapped so the stroke lands on whole
                         // pixels. Diagonals are left alone -- there is no pixel
-                        // grid to snap them to.
-                        let (ax, ay, bx, by) = if stroke.crisp {
-                            let dev_w = stroke.width * transform.sx.abs().max(transform.sy.abs());
-                            if (ay - p.y).abs() < 1e-6 {
-                                let sy = (snap_coord(transform.ty + ay * transform.sy, dev_w) - transform.ty) / transform.sy;
-                                (ax, sy, p.x, sy)
-                            } else if (ax - p.x).abs() < 1e-6 {
-                                let sx = (snap_coord(transform.tx + ax * transform.sx, dev_w) - transform.tx) / transform.sx;
-                                (sx, ay, sx, p.y)
-                            } else {
-                                (ax, ay, p.x, p.y)
-                            }
+                        // grid to snap them to. Snapping moves each segment's ends
+                        // independently, so crisp segments stay separate strokes.
+                        let dev_w = stroke.width * transform.sx.abs().max(transform.sy.abs());
+                        let (ax, ay, bx, by) = if (ay - p.y).abs() < 1e-6 {
+                            let sy = (snap_coord(transform.ty + ay * transform.sy, dev_w) - transform.ty) / transform.sy;
+                            (ax, sy, p.x, sy)
+                        } else if (ax - p.x).abs() < 1e-6 {
+                            let sx = (snap_coord(transform.tx + ax * transform.sx, dev_w) - transform.tx) / transform.sx;
+                            (sx, ay, sx, p.y)
                         } else {
                             (ax, ay, p.x, p.y)
                         };
-                        pb.move_to(ax, ay);
-                        pb.line_to(bx, by);
-                        if let Some(sp) = pb.finish() {
-                            target.stroke_path(&sp, &paint, &sk, transform, mask.as_deref());
+                        let mut one = PathBuilder::new();
+                        one.move_to(ax, ay);
+                        one.line_to(bx, by);
+                        flush(&mut one);
+                    } else {
+                        if run_len == RUN {
+                            flush(&mut pb);
+                            run_len = 0;
                         }
+                        if run_len == 0 {
+                            pb.move_to(ax, ay);
+                        }
+                        pb.line_to(p.x, p.y);
+                        run_len += 1;
                     }
                     prev = Some((p.x, p.y));
                 }
@@ -1133,6 +1164,7 @@ impl RenderBackend for RasterBackend {
                 PathSegment::Close => {}
             }
         }
+        flush(&mut pb);
     }
 
     fn draw_text(&mut self, run: &TextRun, transform: Transform, clip: &Clip) {

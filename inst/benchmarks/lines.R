@@ -1,9 +1,10 @@
 #!/usr/bin/env Rscript
 # Benchmark: a long self-intersecting polyline — the worst case for a naive
 # stroke-to-fill backend, because the stroked outline overlaps itself and a
-# winding fill then pays O(active_edges x height). vellum's per-segment stroke
-# (for the opaque, solid, round-cap/join default) sidesteps that: each tiny
-# segment fill touches only its own scanlines, so cost is O(n).
+# winding fill then pays O(active_edges x height). vellum's run-wise stroke
+# (for the opaque, solid, round-cap/join default) sidesteps that: the line is
+# stroked in short runs of consecutive segments, each touching only its own
+# scanlines, so cost stays O(n).
 #
 # Run:  Rscript inst/benchmarks/lines.R [N] [out_dir]
 #   N        number of vertices (default 1e5)
