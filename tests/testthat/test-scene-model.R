@@ -93,12 +93,20 @@ test_that("scene_model() yields a geometry table even without keys/meta", {
 })
 
 test_that("scene_model() includes keyed single-shape marks (path) but not unkeyed ones", {
-  keyed <- path_grob(c(0.2, 0.8, 0.8), c(0.2, 0.2, 0.8), gp = vl_gpar(fill = "red"))
+  keyed <- path_grob(
+    c(0.2, 0.8, 0.8),
+    c(0.2, 0.2, 0.8),
+    gp = vl_gpar(fill = "red")
+  )
   keyed@keys <- "county-a"
   keyed@meta <- list(list(tooltip = "County A"))
   sc <- vl_scene(2, 2, dpi = 100) |>
     draw(keyed) |>
-    draw(path_grob(c(0.1, 0.3, 0.3), c(0.1, 0.1, 0.3), gp = vl_gpar(fill = "blue"))) # unkeyed
+    draw(path_grob(
+      c(0.1, 0.3, 0.3),
+      c(0.1, 0.1, 0.3),
+      gp = vl_gpar(fill = "blue")
+    )) # unkeyed
   m <- scene_model(sc)
   kr <- m$elements[!is.na(m$elements$key), ]
   expect_equal(nrow(kr), 1L)
@@ -200,4 +208,90 @@ test_that("incompatible label/x/y lengths fail with a clear error", {
     "must have compatible lengths"
   )
   expect_snapshot(text_grob(c("a", "b", "c"), x = c(0.1, 0.2)), error = TRUE)
+})
+
+# Batched marks with a scalar coordinate and a vector one: `.sm_n()` used to read
+# `length(x)` for every batch but segments and text, so a rect with scalar `x`
+# and three `y`s counted one element against the backend's three and aborted.
+# The constructor, `compile()` and `scene_model()` now share `.batch_n()`.
+
+batched_cases <- list(
+  rect = function(x, y, key) {
+    rect_grob(x = x, y = y, width = 0.05, height = 0.05, key = key)
+  },
+  roundrect = function(x, y, key) {
+    roundrect_grob(x = x, y = y, width = 0.05, height = 0.05, key = key)
+  },
+  circle = function(x, y, key) circle_grob(x = x, y = y, r = 0.03, key = key),
+  point = function(x, y, key) points_grob(x = x, y = y, key = key),
+  hexagon = function(x, y, key) hexagon_grob(x = x, y = y, key = key),
+  sector = function(x, y, key) {
+    sector_grob(x = x, y = y, r1 = vl_unit(1, "mm"), key = key)
+  },
+  segment = function(x, y, key) {
+    segments_grob(x, y, vl_unit(x, "npc") + vl_unit(1, "mm"), y, key = key)
+  }
+)
+
+test_that("scalar x + vector y with keys gives one keyed row per element", {
+  for (mark in names(batched_cases)) {
+    g <- batched_cases[[mark]](0.5, c(0.2, 0.5, 0.8), c("a", "b", "c"))
+    expect_identical(g@keys, c("a", "b", "c"), label = mark)
+    el <- scene_model(vl_scene(2, 2) |> draw(g))$elements
+    expect_identical(el$mark, rep(mark, 3L), label = mark)
+    expect_identical(el$key, c("a", "b", "c"), label = mark)
+    # npc y up is device y down: keys follow the elements, in order.
+    expect_true(all(diff(el$y) < 0), label = mark)
+  }
+})
+
+test_that("vector x + scalar y with keys gives one keyed row per element", {
+  for (mark in names(batched_cases)) {
+    g <- batched_cases[[mark]](c(0.2, 0.5, 0.8), 0.5, c("a", "b", "c"))
+    el <- scene_model(vl_scene(2, 2) |> draw(g))$elements
+    expect_identical(el$key, c("a", "b", "c"), label = mark)
+    expect_true(all(diff(el$x) > 0), label = mark)
+  }
+})
+
+test_that("a scalar key recycles to every element", {
+  for (mark in names(batched_cases)) {
+    g <- batched_cases[[mark]](0.5, c(0.2, 0.5, 0.8), "k")
+    el <- scene_model(vl_scene(2, 2) |> draw(g))$elements
+    expect_identical(el$key, rep("k", 3L), label = mark)
+  }
+})
+
+test_that("a key or meta of the wrong length is an error, not truncated", {
+  for (mark in names(batched_cases)) {
+    expect_error(
+      batched_cases[[mark]](0.5, c(0.2, 0.5, 0.8), c("a", "b")),
+      "`key` must have length 1 or 3",
+      label = mark
+    )
+    expect_error(
+      batched_cases[[mark]](0.5, c(0.2, 0.5, 0.8), letters[1:4]),
+      "`key` must have length 1 or 3",
+      label = mark
+    )
+  }
+  expect_error(
+    rect_grob(y = c(0.2, 0.8), meta = list(1, 2, 3)),
+    "`meta` must have length 1 or 2"
+  )
+  expect_error(text_grob(c("a", "b"), key = letters[1:3]), "`key`")
+  expect_error(lines_grob(1:2, 1:2, key = c("a", "b")), "`key`")
+  expect_snapshot(rect_grob(y = c(0.2, 0.8), key = letters[1:3]), error = TRUE)
+})
+
+test_that("incompatible per-element lengths fail up front, naming the args", {
+  expect_error(
+    rect_grob(x = c(0.1, 0.2), y = c(0.1, 0.2, 0.3)),
+    "`x`, `y`, `width`, and `height` must have compatible lengths"
+  )
+  expect_error(
+    points_grob(0.5, 0.5, size = 1:2, shape = rep("circle", 3)),
+    "compatible"
+  )
+  expect_error(hexagon_grob(0.5, c(0.2, 0.8), size = 1:3), "compatible")
 })
