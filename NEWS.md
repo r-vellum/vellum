@@ -1,4 +1,4 @@
-# vellum 0.7.0.9000 (development version)
+# vellum 0.7.1
 
 ## Text
 
