@@ -2,6 +2,24 @@
 
 ## vellum 0.7.0.9000 (development version)
 
+### Text
+
+- **Fix: `vl_gpar(features = c(liga = 0))` no longer errors on every
+  backend.** The feature vector was handed to
+  [`systemfonts::font_feature()`](https://systemfonts.r-lib.org/reference/font_feature.html)
+  through [`do.call()`](https://rdrr.io/r/base/do.call.html), and R
+  partial-matched the tag `liga` onto that function’s `ligatures`
+  argument, so systemfonts read `0` as a ligature name and stopped with
+  “No ligature setting called ‘0’”. Any tag that prefixes `letters` or
+  `numbers` (`lett`, `numb`, …) hit the same trap. `c(liga = 0)` is the
+  example in the
+  [`vl_gpar()`](https://r-vellum.github.io/vellum/reference/vl_gpar.md)
+  docs.
+
+  systemfonts’ own arguments are now passed explicitly as `NULL`, so
+  every tag reaches it verbatim, and `c(liga = 0)` really does switch
+  the fi ligature off.
+
 ## vellum 0.7.0
 
 ### Geometry
