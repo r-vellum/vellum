@@ -150,3 +150,54 @@ test_that("scene_model() of an empty scene has zero elements and panels", {
   expect_equal(nrow(m$elements), 0L)
   expect_equal(nrow(m$panels), 0L)
 })
+
+# Multi-label text_grob(): keys/meta used to be recycled to length(x), so a
+# scalar x with three labels kept one key, and scene_model() aborted with an
+# element-count mismatch (1 from the walk, 3 from the backend).
+
+test_that("scalar x + 3 labels + 3 keys gives 3 keyed text elements", {
+  sc <- vl_scene(2, 2) |>
+    draw(text_grob(c("a", "b", "c"), key = c("k1", "k2", "k3")))
+  m <- scene_model(sc)
+  el <- m$elements[m$elements$mark == "text", ]
+  expect_identical(el$key, c("k1", "k2", "k3"))
+})
+
+test_that("vector y + scalar x recycles keys to the y length", {
+  sc <- vl_scene(2, 2) |>
+    draw(text_grob("a", y = c(0.2, 0.5, 0.8), key = c("k1", "k2", "k3")))
+  el <- scene_model(sc)$elements
+  el <- el[el$mark == "text", ]
+  expect_identical(el$key, c("k1", "k2", "k3"))
+  # y = 0.2 is lowest on the page, so largest in device px
+  expect_true(all(diff(el$y) < 0))
+})
+
+test_that("text meta and a scalar key recycle to the label count", {
+  g <- text_grob(
+    c("a", "b", "c"),
+    key = "k",
+    meta = list(list(v = 1))
+  )
+  expect_identical(g@keys, rep("k", 3L))
+  expect_length(g@meta, 3L)
+  el <- scene_model(vl_scene(2, 2) |> draw(g))$elements
+  el <- el[el$mark == "text", ]
+  expect_identical(el$key, rep("k", 3L))
+  expect_identical(el$meta, rep(list(list(v = 1)), 3L))
+  g2 <- text_grob(
+    c("a", "b"),
+    key = c("p", "q"),
+    meta = list(list(v = 1), list(v = 2))
+  )
+  el <- scene_model(vl_scene(2, 2) |> draw(g2))$elements
+  expect_identical(el$meta, list(list(v = 1), list(v = 2)))
+})
+
+test_that("incompatible label/x/y lengths fail with a clear error", {
+  expect_error(
+    text_grob(c("a", "b", "c"), x = c(0.1, 0.2)),
+    "must have compatible lengths"
+  )
+  expect_snapshot(text_grob(c("a", "b", "c"), x = c(0.1, 0.2)), error = TRUE)
+})

@@ -13,6 +13,18 @@
   systemfonts' own arguments are now passed explicitly as `NULL`, so every tag
   reaches it verbatim, and `c(liga = 0)` really does switch the fi ligature off.
 
+* **Fix: a multi-label `text_grob()` with keys no longer breaks
+  `scene_model()`.** `key` and `meta` were recycled to the length of `x`, not to
+  the number of labels, so `text_grob(c("a", "b", "c"), key = c("k1", "k2", "k3"))`
+  -- scalar `x`, three labels -- kept one key. `scene_model()` then saw one element
+  from the grob walk and three from the backend, and aborted with an element-count
+  mismatch.
+
+  The element count is now the common length of `label`, `x` and `y`, the same n
+  the backend draws, and `key`/`meta` recycle to it. Incompatible lengths fail up
+  front with an error that names `label`, `x` and `y`, instead of a vctrs
+  recycling message from deep inside the render.
+
 # vellum 0.7.0
 
 ## Geometry
