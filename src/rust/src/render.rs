@@ -599,6 +599,14 @@ pub trait RenderBackend {
     fn wants_element_keys(&self) -> bool {
         false
     }
+
+    /// Where the walk records each element's resolved geometry for the queries
+    /// (`element_geometry()`, picking, hit-testing, boxes). `None` for every
+    /// painting backend, so a render pays nothing; `geom::RecordBackend`
+    /// returns its sink. See `geom.rs`.
+    fn geom_sink(&mut self) -> Option<&mut crate::geom::GeomSink> {
+        None
+    }
 }
 
 /// One unit circle (origin, radius 1) reused with a per-element affine transform.
