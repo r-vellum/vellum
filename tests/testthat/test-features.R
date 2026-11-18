@@ -128,3 +128,63 @@ test_that("features apply to rich md() labels too", {
   render(mk(c(kern = 0)), b)
   expect_false(identical(tools::md5sum(a)[[1]], tools::md5sum(b)[[1]]))
 })
+
+# A tag that is a prefix of one of systemfonts::font_feature()'s named formals
+# (`ligatures`, `letters`, `numbers`) used to be partial-matched onto it by
+# do.call(): `c(liga = 0)` reached systemfonts as `ligatures = 0` and errored on
+# every backend. That is the example in the vl_gpar() docs.
+
+test_that("prefix-of-a-formal tags build a feature set, never partial-matched", {
+  f <- .as_font_feature(c(liga = 0))
+  expect_s3_class(f, "font_feature")
+  expect_identical(f[[1]], "liga")
+  expect_identical(f[[2]], c(liga = 0L))
+  f <- .as_font_feature(c(numb = 1, lett = 0, kern = 0))
+  expect_identical(sort(f[[1]]), c("kern", "lett", "numb"))
+  expect_identical(unname(f[[2]][f[[1]] == "numb"]), 1L)
+  expect_identical(unname(f[[2]][f[[1]] == "lett"]), 0L)
+})
+
+test_that("features = c(liga = 0) renders on every backend", {
+  sc <- vl_scene(2, 2) |>
+    draw(text_grob("fi", gp = vl_gpar(fontsize = 30, features = c(liga = 0))))
+  expect_type(scene_svg(sc), "character")
+  expect_type(scene_svg(sc, text = "outline"), "character")
+  expect_type(scene_png(sc), "raw")
+  expect_type(scene_pdf(sc), "raw")
+  sc2 <- vl_scene(2, 2) |>
+    draw(text_grob("12", gp = vl_gpar(fontsize = 30, features = c(numb = 1))))
+  expect_type(scene_svg(sc2), "character")
+})
+
+test_that("features = c(liga = 0) actually switches the fi ligature off", {
+  fams <- c("", "Helvetica", "Palatino", "DejaVu Sans", "Liberation Serif")
+  has_lig <- vapply(
+    fams,
+    function(fam) {
+      sh <- textshaping::shape_text("fi", family = fam, size = 40)$shape
+      nrow(sh) == 1L
+    },
+    logical(1)
+  )
+  skip_if_not(any(has_lig), "no probe font with an fi ligature")
+  fam <- fams[has_lig][[1]]
+  n_off <- nrow(textshaping::shape_text(
+    "fi",
+    family = fam,
+    size = 40,
+    features = .as_font_feature(c(liga = 0))
+  )$shape)
+  expect_identical(n_off, 2L)
+  mk <- function(f) {
+    vl_scene(2, 2) |>
+      draw(text_grob(
+        "fi",
+        gp = vl_gpar(fontfamily = fam, fontsize = 40, features = f)
+      ))
+  }
+  expect_false(identical(
+    scene_svg(mk(NULL), text = "outline"),
+    scene_svg(mk(c(liga = 0)), text = "outline")
+  ))
+})

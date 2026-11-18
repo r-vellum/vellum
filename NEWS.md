@@ -2,6 +2,17 @@
 
 ## Text
 
+* **Fix: `vl_gpar(features = c(liga = 0))` no longer errors on every backend.**
+  The feature vector was handed to `systemfonts::font_feature()` through
+  `do.call()`, and R partial-matched the tag `liga` onto that function's
+  `ligatures` argument, so systemfonts read `0` as a ligature name and stopped
+  with "No ligature setting called '0'". Any tag that prefixes `letters` or
+  `numbers` (`lett`, `numb`, ...) hit the same trap. `c(liga = 0)` is the example
+  in the `vl_gpar()` docs.
+
+  systemfonts' own arguments are now passed explicitly as `NULL`, so every tag
+  reaches it verbatim, and `c(liga = 0)` really does switch the fi ligature off.
+
 * **Fix: a multi-label `text_grob()` with keys no longer breaks
   `scene_model()`.** `key` and `meta` were recycled to the length of `x`, not to
   the number of labels, so `text_grob(c("a", "b", "c"), key = c("k1", "k2", "k3"))`
