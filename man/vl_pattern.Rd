@@ -24,11 +24,14 @@ coordinates map to the tile, painted in order).}
 
 \item{units}{Coordinate system for the geometry; see \code{\link[=linear_gradient]{linear_gradient()}}.}
 
-\item{extend}{Tiling mode: \code{"repeat"} (default), \code{"reflect"}, or \code{"pad"}.
-(SVG renders all modes as \code{repeat}.)}
+\item{extend}{Tiling mode: \code{"repeat"} (default) or \code{"reflect"} (every other
+cell mirrored). Both draw the same on every backend. \code{"pad"} is not
+supported for patterns: SVG and PDF tiling patterns cannot clamp a tile's
+edge pixels outwards.}
 }
 \value{
-A \code{vellum_pattern} object, suitable for \code{vl_gpar(fill = ...)}.
+A \code{vellum_pattern} object, suitable for \code{vl_gpar(fill = ...)} or
+\code{vl_gpar(col = ...)}.
 }
 \description{
 Create a pattern that fills a shape by tiling a grob. The grob is drawn once

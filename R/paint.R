@@ -216,9 +216,12 @@ print.vellum_gradient <- function(x, ...) {
 #' @param width,height Size of one tile cell (default `0.1` npc).
 #' @param x,y Cell centre (default centred).
 #' @param units Coordinate system for the geometry; see [linear_gradient()].
-#' @param extend Tiling mode: `"repeat"` (default), `"reflect"`, or `"pad"`.
-#'   (SVG renders all modes as `repeat`.)
-#' @return A `vellum_pattern` object, suitable for `vl_gpar(fill = ...)`.
+#' @param extend Tiling mode: `"repeat"` (default) or `"reflect"` (every other
+#'   cell mirrored). Both draw the same on every backend. `"pad"` is not
+#'   supported for patterns: SVG and PDF tiling patterns cannot clamp a tile's
+#'   edge pixels outwards.
+#' @return A `vellum_pattern` object, suitable for `vl_gpar(fill = ...)` or
+#'   `vl_gpar(col = ...)`.
 #' @examples
 #' dots <- circle_grob(r = 0.25, gp = vl_gpar(fill = "white", col = NA))
 #' vl_pattern(dots, width = 0.08, height = 0.08)
@@ -234,6 +237,12 @@ vl_pattern <- function(
 ) {
   units <- match.arg(units, .coord_units)
   extend <- match.arg(extend, .gradient_extend)
+  if (extend == "pad") {
+    cli::cli_abort(c(
+      '{.code extend = "pad"} is not supported for {.fn vl_pattern}.',
+      i = 'Use {.val repeat} or {.val reflect}; SVG and PDF can only tile a pattern.'
+    ))
+  }
   if (!all(is.finite(c(width, height, x, y)))) {
     cli::cli_abort("Pattern geometry must be finite.")
   }
@@ -432,6 +441,13 @@ print.vellum_mask <- function(x, ...) {
   crisp <- .encode_flag(gp@crisp, "crisp")
   # A gradient handed to `col` strokes with that gradient. It rides the stroke
   # record so it inherits like every other stroke property.
+  if (inherits(gp@col, "vellum_hatch")) {
+    cli::cli_abort(c(
+      "{.arg col} cannot be a {.fn vl_hatch}.",
+      i = "A hatch fills a shape; use it for {.arg fill}.",
+      i = "To stroke with a texture use {.fn vl_pattern} or a gradient."
+    ))
+  }
   paint <- if (.is_paint(gp@col)) .encode_paint(gp@col, scene) else NULL
   phase <- if (is.null(gp@dash_phase)) NULL else as.double(gp@dash_phase)
   if (

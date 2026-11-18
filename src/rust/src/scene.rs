@@ -4059,7 +4059,13 @@ fn stroke_style(gp: &Gpar, vp: &Vp) -> StrokeStyle {
     };
     // A gradient/pattern stroke resolves its geometry against the viewport exactly
     // as a fill does, so the two cannot disagree about where the ramp sits.
-    let paint = gp.col_paint.as_ref().map(|p| resolve_paint(p, vp));
+    // A hatch is fill geometry with no stroke meaning (R rejects it for `col`);
+    // one arriving from an older scene spec strokes in its rule colour, the same
+    // on every backend.
+    let paint = gp.col_paint.as_ref().map(|p| match resolve_paint(p, vp) {
+        ResolvedPaint::Hatch { col, .. } => ResolvedPaint::Solid(col),
+        rp => rp,
+    });
     StrokeStyle {
         width, dash, cap: gp.lineend, join: gp.linejoin,
         miter: gp.linemitre as f32, crisp: gp.crisp, paint,
@@ -4131,17 +4137,26 @@ fn resolve_paint(paint: &Paint, vp: &Vp) -> ResolvedPaint {
             stops: stops.clone(),
             extend: *extend,
         },
-        Paint::Pattern(p) => ResolvedPaint::Pattern {
-            tile: p.tile.clone(),
-            tw: p.tw,
-            th: p.th,
-            x: vp.x_pos(p.x, p.unit),
-            y: vp.y_pos(p.y, p.unit),
-            w: vp.x_len(p.w, p.unit),
-            h: vp.y_len(p.h, p.unit),
-            extend: p.extend,
-            opacity: p.opacity as f32,
-        },
+        Paint::Pattern(p) => {
+            let (mut x, mut y) = (vp.x_pos(p.x, p.unit), vp.y_pos(p.y, p.unit));
+            let (mut w, mut h) = (vp.x_len(p.w, p.unit), vp.y_len(p.h, p.unit));
+            // A reflected pattern was turned into a 2x2 mirrored tile at parse
+            // time: the tile now spans two cells each way from the same top-left.
+            if p.mirrored {
+                x += w / 2.0;
+                y += h / 2.0;
+                w *= 2.0;
+                h *= 2.0;
+            }
+            ResolvedPaint::Pattern {
+                tile: p.tile.clone(),
+                tw: p.tw,
+                th: p.th,
+                x, y, w, h,
+                extend: p.extend,
+                opacity: p.opacity as f32,
+            }
+        }
     }
 }
 
