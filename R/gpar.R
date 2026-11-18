@@ -5,10 +5,11 @@
 #' the viewport tree. A colour value sets it; `NA` means "no paint".
 #'
 #' @param col Stroke/text colour, or a gradient from [linear_gradient()] /
-#'   [radial_gradient()] to **stroke with a gradient** — the same paint model as
-#'   `fill`, applied to the stroked region instead of the enclosed one. A
-#'   gradient here affects stroked paths; text and markers fall back to its first
-#'   stop, since a glyph run has no path to run a ramp along.
+#'   [radial_gradient()] or a [vl_pattern()] to **stroke with a gradient or
+#'   pattern** — the same paint model as `fill`, applied to the stroked region
+#'   instead of the enclosed one. A gradient here affects stroked paths; text
+#'   and markers fall back to its first stop, since a glyph run has no path to
+#'   run a ramp along. A [vl_hatch()] is fill-only and is an error here.
 #' @param fill Fill colour, or a gradient from [linear_gradient()] /
 #'   [radial_gradient()].
 #' @param lwd Line width (1 == 1/96 inch).

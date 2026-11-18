@@ -28,10 +28,11 @@ vl_gpar(
 }
 \arguments{
 \item{col}{Stroke/text colour, or a gradient from \code{\link[=linear_gradient]{linear_gradient()}} /
-\code{\link[=radial_gradient]{radial_gradient()}} to \strong{stroke with a gradient} — the same paint model as
-\code{fill}, applied to the stroked region instead of the enclosed one. A
-gradient here affects stroked paths; text and markers fall back to its first
-stop, since a glyph run has no path to run a ramp along.}
+\code{\link[=radial_gradient]{radial_gradient()}} or a \code{\link[=vl_pattern]{vl_pattern()}} to \strong{stroke with a gradient or
+pattern} — the same paint model as \code{fill}, applied to the stroked region
+instead of the enclosed one. A gradient here affects stroked paths; text
+and markers fall back to its first stop, since a glyph run has no path to
+run a ramp along. A \code{\link[=vl_hatch]{vl_hatch()}} is fill-only and is an error here.}
 
 \item{fill}{Fill colour, or a gradient from \code{\link[=linear_gradient]{linear_gradient()}} /
 \code{\link[=radial_gradient]{radial_gradient()}}.}
