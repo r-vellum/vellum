@@ -264,3 +264,53 @@ test_that("negative or infinite dash lengths are rejected", {
   expect_error(.encode_lty(c(4, -2)), "non-negative")
   expect_error(.encode_lty(c(4, Inf)), "finite")
 })
+
+# VR-10: the opaque round-cap fast path stroked every segment on its own, so the
+# antialiased pixels around each vertex were blended twice and a densely sampled
+# thin line (a contour) came out beaded. It must match the combined stroke,
+# which a 254/255-alpha colour forces.
+test_that("a densely sampled thin line has no beads at its vertices", {
+  g <- outer(
+    seq(-3, 3, length.out = 80),
+    seq(-3, 3, length.out = 80),
+    function(x, y) exp(-(x^2 + y^2) / 2)
+  )
+  cn <- vl_contour(g, levels = c(0.2, 0.5, 0.8), xlim = c(-3, 3), ylim = c(-3, 3))
+  mk <- function(col) {
+    vl_scene(3, 3, dpi = 72, bg = "white") |>
+      push(vl_viewport(xscale = c(-3, 3), yscale = c(-3, 3))) |>
+      draw(contour_grob(cn, gp = vl_gpar(col = col, lwd = 1))) |>
+      pop()
+  }
+  fast <- scene_raster(mk("#000000"))[1, , ]
+  combined <- scene_raster(mk("#000000FE"))[1, , ]
+  expect_lte(max(abs(fast - combined)), 3)
+
+  # The same for a straight line through many collinear vertices.
+  line <- function(col) {
+    n <- 200
+    vl_scene(3, 1, dpi = 72, bg = "white") |>
+      draw(lines_grob(
+        seq(0.05, 0.95, length.out = n),
+        rep(0.503, n),
+        gp = vl_gpar(col = col, lwd = 1)
+      ))
+  }
+  expect_lte(
+    max(abs(scene_raster(line("black")) - scene_raster(line("#000000FE")))),
+    3
+  )
+})
+
+test_that("a polyline longer than one stroke run still draws continuously", {
+  # More vertices than the fast path strokes at once; no gap at the joints.
+  n <- 2000
+  s <- vl_scene(4, 1, dpi = 100, bg = "white") |>
+    draw(lines_grob(
+      seq(0.02, 0.98, length.out = n),
+      rep(0.5, n),
+      gp = vl_gpar(col = "black", lwd = 3)
+    ))
+  row <- vapply(10:390, function(x) px(s, x, 50)[1] < 128L, logical(1))
+  expect_true(all(row))
+})

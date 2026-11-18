@@ -12,6 +12,18 @@
   zero draws solid. Negative or infinite dash lengths are rejected with an
   error.
 
+* **Fix: thin, densely sampled lines no longer look stippled in PNG.** For the
+  default line style (opaque, solid, round caps and joins) the raster backend
+  stroked every segment of a line on its own. The antialiased pixels around
+  each vertex were then blended twice, so contours, curves and other lines with
+  many short segments got a dark bead at every vertex. At 72-100 dpi that read
+  as a dotted line, and a contour plot carried about 20% more ink than in SVG
+  or PDF.
+
+  The fast path now strokes a line in runs of up to 256 consecutive segments.
+  Within a run the result is identical to a single stroke, and a long
+  self-intersecting polyline renders as fast as before.
+
 ## Paint
 
 * **Fix: pattern strokes and reflected patterns draw the same on every
