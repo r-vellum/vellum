@@ -38,12 +38,14 @@
 #'
 #' Distances are: to the disc for round marks (zero inside), to the rectangle for
 #' rects (zero inside), perpendicular to the segment for segments, to the nearest
-#' edge for open polylines, and **zero anywhere inside** a closed polygon or
-#' path — so clicking the middle of a choropleth region hits that region.
+#' edge for open polylines, and **zero anywhere inside** a closed polygon, path,
+#' hexagon or sector — so clicking the middle of a choropleth region hits that
+#' region. A label is measured to its box, turned with the label when it is
+#' rotated.
 #'
-#' Marks vellum cannot describe more precisely than a box — labels, rounded rects
-#' — fall back to their box, which for a label is a fair description of the
-#' target anyway.
+#' The geometry is the one the renderer draws: a segment or line drawn with an
+#' `offset` or end caps is measured where it lands, not where its coordinates
+#' would put it. Distances are to a stroke's centre-line.
 #'
 #' @section For a client-side host:
 #' A browser cannot call back into R on every mouse move. Use
@@ -104,7 +106,9 @@ vl_nearest <- function(
 #'
 #' Returns the resolved device-pixel geometry of every **keyed** element: the two
 #' endpoints of a segment, the vertices of a line or polygon, the centre of a
-#' round mark, the opposite corners of a rect.
+#' round mark, the opposite corners of a rect. It is recorded from the render
+#' itself, so a segment or line drawn with an `offset` or end caps is reported
+#' where it is drawn.
 #'
 #' This is what a host needs to hit-test *exactly* without asking the engine per
 #' event. [scene_model()] gives bounding boxes, which are right for a brush and
@@ -121,9 +125,10 @@ vl_nearest <- function(
 #' | `segment` | 2 | the endpoints |
 #' | `line`, `polygon` | *k* | the vertices, in order; `polygon` is closed |
 #' | `path` | *k* | all rings' vertices concatenated; `ring` separates them |
+#' | `hexagon`, `sector` | *k* | the outline, one closed ring |
 #' | `point` | 1 | the centre |
-#' | `rect` | 2 | opposite corners |
-#' | `text`, `roundrect` | 2 | the bounding box's corners |
+#' | `rect`, `roundrect` | 2 | the bounding box's opposite corners |
+#' | `text` | 4 | the label's box, as a closed ring (turned with a rotated label) |
 #'
 #' Coordinates are device pixels with y growing **down**, matching
 #' [scene_model()]'s boxes and the rendered SVG's coordinate system.
@@ -132,8 +137,9 @@ vl_nearest <- function(
 #' a multipart feature -- so a host can hit-test it the way the engine does.
 #' Without it the concatenated vertices are lossy: treating them as one closed
 #' ring invents a phantom edge from each ring's last vertex to the next ring's
-#' first. Split on `ring` and test the rings separately. Every other kind is a
-#' single ring, so `ring` is `1` throughout.
+#' first. Split on `ring` and test the rings separately. A label set along a path
+#' has one ring per glyph box; every other kind is a single ring, so `ring` is
+#' `1` throughout.
 #'
 #' @inheritParams vl_nearest
 #' @return A data frame of `key`, `kind`, `vertex` (1-based within the element),

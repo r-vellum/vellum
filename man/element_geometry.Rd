@@ -17,7 +17,9 @@ no keyed elements.
 \description{
 Returns the resolved device-pixel geometry of every \strong{keyed} element: the two
 endpoints of a segment, the vertices of a line or polygon, the centre of a
-round mark, the opposite corners of a rect.
+round mark, the opposite corners of a rect. It is recorded from the render
+itself, so a segment or line drawn with an \code{offset} or end caps is reported
+where it is drawn.
 }
 \details{
 This is what a host needs to hit-test \emph{exactly} without asking the engine per
@@ -34,9 +36,10 @@ One row per vertex, grouped by \code{key}. What the vertices mean depends on
    \code{segment} \tab 2 \tab the endpoints \cr
    \code{line}, \code{polygon} \tab \emph{k} \tab the vertices, in order; \code{polygon} is closed \cr
    \code{path} \tab \emph{k} \tab all rings' vertices concatenated; \code{ring} separates them \cr
+   \code{hexagon}, \code{sector} \tab \emph{k} \tab the outline, one closed ring \cr
    \code{point} \tab 1 \tab the centre \cr
-   \code{rect} \tab 2 \tab opposite corners \cr
-   \code{text}, \code{roundrect} \tab 2 \tab the bounding box's corners \cr
+   \code{rect}, \code{roundrect} \tab 2 \tab the bounding box's opposite corners \cr
+   \code{text} \tab 4 \tab the label's box, as a closed ring (turned with a rotated label) \cr
 }
 
 
@@ -47,8 +50,9 @@ Coordinates are device pixels with y growing \strong{down}, matching
 a multipart feature -- so a host can hit-test it the way the engine does.
 Without it the concatenated vertices are lossy: treating them as one closed
 ring invents a phantom edge from each ring's last vertex to the next ring's
-first. Split on \code{ring} and test the rings separately. Every other kind is a
-single ring, so \code{ring} is \code{1} throughout.
+first. Split on \code{ring} and test the rings separately. A label set along a path
+has one ring per glyph box; every other kind is a single ring, so \code{ring} is
+\code{1} throughout.
 }
 
 \examples{
