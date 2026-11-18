@@ -12,6 +12,18 @@
   zero draws solid. Negative or infinite dash lengths are rejected with an
   error.
 
+* **Fix: thin, densely sampled lines no longer look stippled in PNG.** For the
+  default line style (opaque, solid, round caps and joins) the raster backend
+  stroked every segment of a line on its own. The antialiased pixels around
+  each vertex were then blended twice, so contours, curves and other lines with
+  many short segments got a dark bead at every vertex. At 72-100 dpi that read
+  as a dotted line, and a contour plot carried about 20% more ink than in SVG
+  or PDF.
+
+  The fast path now strokes a line in runs of up to 256 consecutive segments.
+  Within a run the result is identical to a single stroke, and a long
+  self-intersecting polyline renders as fast as before.
+
 ## Paint
 
 * **Fix: pattern strokes and reflected patterns draw the same on every
@@ -61,6 +73,42 @@
   error that names the arguments. `key` and `meta` must now have length 1 or n.
   Before, `rep_len()` silently truncated or wrapped them, so elements could be
   paired with the wrong data.
+
+* **Fix: every geometry query now reports what is drawn.** `element_geometry()`,
+  `vl_nearest()`, `hit_test()`, the `scene_model()` boxes and the linter's node
+  boxes each had their own copy of every mark's geometry, and the copies had
+  drifted from the renderer. A segment drawn with `offset =` or
+  `start_cap =`/`end_cap =` was reported (and picked) where it would have been
+  without them, so `vl_nearest()` could return distance 0 at a point 38 px from
+  the ink. Keyed hexagons and sectors were in `scene_model()` but absent from
+  `vl_nearest()` and `element_geometry()`. Rotated text kept an unrotated box,
+  and the linter ignored a non-regular hexagon's `width`/`height`.
+
+  The render walk now records each element's geometry as it resolves it (after
+  offsets, caps and trims; text rotated about its anchor), and all five queries
+  read that one recording. Results change where the old copies were wrong:
+  offset/capped segments and lines, rotated text (whose `element_geometry()` is
+  now its four corners), non-regular hexagons, and sectors, whose box is now the
+  wedge rather than the whole circle. Hexagons and sectors join `vl_nearest()`
+  and `element_geometry()` as kinds `"hexagon"` and `"sector"` (their outline as
+  one ring). `hit_test()` no longer rasterises the scene on every call: it tests
+  the recorded shapes topmost-first against the viewport clip, picks a stroke
+  by half its width (at least 2 px) and a marker by its disc.
+
+* **Behaviour change: a point in a polygon's hole no longer counts as a hit.**
+  `vl_nearest()` measured a multi-ring path as the minimum over its rings, each
+  treated as filled, so a point inside any ring, including a hole, was at
+  distance 0. Containment is now decided once across all of an element's rings
+  under the rule the shape is painted with: even-odd parity, or nonzero
+  winding. A point in an `"evenodd"` path's hole (or in a `"winding"` path's
+  reversed inner ring) is outside, and its distance is to the nearest edge,
+  which is the hole's own boundary. A plain polygon picks as before.
+
+  `element_geometry()` gains a `rule` column (`"nonzero"`, `"evenodd"`, or `NA`
+  for segments, lines and points), one value per element, so a client-side
+  host can decide containment the same way. The column is appended, so no
+  existing column moves. The scene-contract article now documents
+  `element_geometry()` and its containment rule.
 
 ## Other changes
 

@@ -38,12 +38,19 @@
 #'
 #' Distances are: to the disc for round marks (zero inside), to the rectangle for
 #' rects (zero inside), perpendicular to the segment for segments, to the nearest
-#' edge for open polylines, and **zero anywhere inside** a closed polygon or
-#' path — so clicking the middle of a choropleth region hits that region.
+#' edge for open polylines, and **zero anywhere inside** a closed polygon, path,
+#' hexagon or sector — so clicking the middle of a choropleth region hits that
+#' region. A label is measured to its box, turned with the label when it is
+#' rotated.
 #'
-#' Marks vellum cannot describe more precisely than a box — labels, rounded rects
-#' — fall back to their box, which for a label is a fair description of the
-#' target anyway.
+#' "Inside" follows the shape's fill rule, the one it is painted with: a point
+#' in a polygon's hole is **not** inside (an `"evenodd"` path, or a
+#' `"winding"` one whose inner ring runs the other way), and its distance is to
+#' the nearest edge, the hole's own boundary.
+#'
+#' The geometry is the one the renderer draws: a segment or line drawn with an
+#' `offset` or end caps is measured where it lands, not where its coordinates
+#' would put it. Distances are to a stroke's centre-line.
 #'
 #' @section For a client-side host:
 #' A browser cannot call back into R on every mouse move. Use
@@ -104,7 +111,9 @@ vl_nearest <- function(
 #'
 #' Returns the resolved device-pixel geometry of every **keyed** element: the two
 #' endpoints of a segment, the vertices of a line or polygon, the centre of a
-#' round mark, the opposite corners of a rect.
+#' round mark, the opposite corners of a rect. It is recorded from the render
+#' itself, so a segment or line drawn with an `offset` or end caps is reported
+#' where it is drawn.
 #'
 #' This is what a host needs to hit-test *exactly* without asking the engine per
 #' event. [scene_model()] gives bounding boxes, which are right for a brush and
@@ -121,9 +130,10 @@ vl_nearest <- function(
 #' | `segment` | 2 | the endpoints |
 #' | `line`, `polygon` | *k* | the vertices, in order; `polygon` is closed |
 #' | `path` | *k* | all rings' vertices concatenated; `ring` separates them |
+#' | `hexagon`, `sector` | *k* | the outline, one closed ring |
 #' | `point` | 1 | the centre |
-#' | `rect` | 2 | opposite corners |
-#' | `text`, `roundrect` | 2 | the bounding box's corners |
+#' | `rect`, `roundrect` | 2 | the bounding box's opposite corners |
+#' | `text` | 4 | the label's box, as a closed ring (turned with a rotated label) |
 #'
 #' Coordinates are device pixels with y growing **down**, matching
 #' [scene_model()]'s boxes and the rendered SVG's coordinate system.
@@ -132,13 +142,22 @@ vl_nearest <- function(
 #' a multipart feature -- so a host can hit-test it the way the engine does.
 #' Without it the concatenated vertices are lossy: treating them as one closed
 #' ring invents a phantom edge from each ring's last vertex to the next ring's
-#' first. Split on `ring` and test the rings separately. Every other kind is a
-#' single ring, so `ring` is `1` throughout.
+#' first. Split on `ring` for the edges. A label set along a path has one ring
+#' per glyph box; every other kind is a single ring, so `ring` is `1`
+#' throughout.
+#'
+#' `rule` is the fill rule an element's rings are filled under, one value per
+#' element repeated on each of its rows: `"nonzero"` or `"evenodd"` for a shape
+#' with an interior, `NA` for one without (a `segment`, a `line`, a `point`).
+#' Containment is decided once across **all** of an element's rings under that
+#' rule -- even-odd parity of the crossings, or a nonzero sum of winding numbers
+#' -- so a point in a hole is outside. That is how [vl_nearest()] decides it,
+#' and how the shape is painted.
 #'
 #' @inheritParams vl_nearest
 #' @return A data frame of `key`, `kind`, `vertex` (1-based within the element),
-#'   `ring` (1-based within the element), `x` and `y`. Zero rows if the scene has
-#'   no keyed elements.
+#'   `ring` (1-based within the element), `x`, `y` and `rule`. Zero rows if the
+#'   scene has no keyed elements.
 #' @seealso [vl_nearest()], [scene_model()]
 #' @examples
 #' s <- vl_scene(4, 3, dpi = 96, bg = "white") |>
@@ -157,6 +176,7 @@ element_geometry <- function(scene) {
     ring = integer(0),
     x = numeric(0),
     y = numeric(0),
+    rule = character(0),
     stringsAsFactors = FALSE
   )
   if (!length(t$key) || !length(t$x)) {
@@ -170,6 +190,7 @@ element_geometry <- function(scene) {
     ring = as.integer(t$ring),
     x = t$x,
     y = t$y,
+    rule = rep(ifelse(nzchar(t$rule), t$rule, NA_character_), n),
     stringsAsFactors = FALSE
   )
 }

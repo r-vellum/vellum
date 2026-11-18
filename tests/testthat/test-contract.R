@@ -278,3 +278,53 @@ test_that("additivity: a scene with no keys/meta emits no data-key (byte-stable)
   expect_equal(nrow(m$elements), 2L)
   expect_true(all(is.na(m$elements$key)))
 })
+
+test_that("element_geometry() returns the documented columns and rule vocabulary", {
+  keyed <- function(g, k) {
+    g@keys <- k
+    g
+  }
+  sc <- vl_scene(3, 2, dpi = 100) |>
+    draw(segments_grob(0.1, 0.1, 0.4, 0.4, key = "seg")) |>
+    draw(points_grob(0.5, 0.5, key = "pt")) |>
+    draw(keyed(
+      polygon_grob(c(0.6, 0.8, 0.7), c(0.1, 0.1, 0.3)),
+      "poly"
+    )) |>
+    draw(path_grob(
+      x = c(0.1, 0.4, 0.4, 0.1, 0.2, 0.3, 0.3, 0.2),
+      y = c(0.6, 0.6, 0.9, 0.9, 0.7, 0.7, 0.8, 0.8),
+      id = rep(1:2, each = 4),
+      rule = "evenodd",
+      key = "holed"
+    ))
+  g <- element_geometry(sc)
+  # Additive only: `rule` was appended after `x`/`y`, nothing renamed or moved.
+  expect_identical(
+    names(g),
+    c("key", "kind", "vertex", "ring", "x", "y", "rule")
+  )
+  expect_type(g$rule, "character")
+  expect_true(all(g$rule %in% c("nonzero", "evenodd", NA)))
+  # One value per element, repeated on each of its rows.
+  rule_of <- tapply(g$rule, g$key, function(r) unique(r))
+  expect_true(all(lengths(rule_of) == 1L))
+  expect_identical(rule_of[["holed"]], "evenodd")
+  expect_identical(rule_of[["poly"]], "nonzero")
+  expect_true(is.na(rule_of[["seg"]]) && is.na(rule_of[["pt"]]))
+  # The empty result has the same columns.
+  expect_identical(names(element_geometry(vl_scene(1, 1))), names(g))
+})
+
+test_that("a point in a hole is not a hit (containment follows the fill rule)", {
+  sc <- vl_scene(4, 3, dpi = 100) |>
+    draw(path_grob(
+      x = c(0.1, 0.9, 0.9, 0.1, 0.4, 0.6, 0.6, 0.4),
+      y = c(0.1, 0.1, 0.9, 0.9, 0.4, 0.4, 0.6, 0.6),
+      id = rep(1:2, each = 4),
+      rule = "evenodd",
+      key = "donut"
+    ))
+  expect_gt(vl_nearest(sc, 0.5, 0.5)$dist, 0)
+  expect_equal(vl_nearest(sc, 0.2, 0.5)$dist, 0)
+})
