@@ -1,5 +1,21 @@
 # vellum 0.7.1.9000 (development version)
 
+## Scenes
+
+* **Fix: a written scene keeps the names on its vectors.** `scene_write()`
+  stored doubles and strings without their names (or any other attribute), so a
+  scene drawn with `vl_gpar(features = c(tnum = 1))` read back from `.rds` or
+  `.json` failed to render with "`features` must be a named vector". Named
+  per-element `meta` silently lost its names, a JSON round-trip turned a named
+  logical into an integer, and a systemfonts `font_feature()` object lost its
+  class.
+
+  Atomic vectors now carry their names, and atomic vectors and lists carry their
+  other attributes, through the scene spec, and a read restores them. Specs
+  written by earlier versions have no such fields and read as before, and the
+  spec of a scene without named or classed values is unchanged, so its
+  `scene_hash()` does not move.
+
 # vellum 0.7.1
 
 ## Text

@@ -216,3 +216,102 @@ test_that("a composed scene serializes like any other", {
     as_scene_spec(comp)
   )
 })
+
+# --- attributes on atomic vectors ---------------------------------------------
+
+# Every `vl_gpar()` field set to a non-default value, plus the shapes of value
+# that used to lose their attributes on the way through a spec: named numerics
+# (`features`), a numeric dash vector (`lty`), a classed list (a systemfonts
+# `font_feature()`), named per-element `meta`, and compound units.
+gpar_scene <- function() {
+  gp_all <- list(
+    col = "#336699",
+    fill = c(a = "#ffcc00"),
+    lwd = 2,
+    alpha = 0.8,
+    lty = c(dash = 4, gap = 2),
+    lineend = "butt",
+    linejoin = "mitre",
+    linemitre = 4,
+    fontfamily = "sans",
+    fontface = "bold",
+    fontsize = 13,
+    cex = 1.1,
+    lineheight = 1.3,
+    halo_col = "white",
+    halo_width = 1,
+    features = c(tnum = 1, liga = 0),
+    antialias = FALSE,
+    crisp = TRUE,
+    dash_phase = 1.5
+  )
+  expect_setequal(names(gp_all), names(vl_gpar@properties))
+  gp <- do.call(vl_gpar, gp_all)
+  vl_scene(3, 2) |>
+    draw(text_grob(c("10", "11"), y = c(0.3, 0.6), key = c("a", "b"), gp = gp)) |>
+    draw(text_grob(
+      "fi",
+      x = vl_unit(0.5, "npc") + vl_unit(2, "mm"),
+      gp = vl_gpar(features = systemfonts::font_feature(ligatures = "standard"))
+    )) |>
+    draw(rect_grob(
+      x = vl_unit(0.2, "npc") - vl_unit(1, "mm"),
+      width = 0.1,
+      height = 0.1,
+      key = "r",
+      meta = list(c(min = 1, max = 2, flag = NA)),
+      gp = gp
+    )) |>
+    draw(segments_grob(0.1, 0.1, 0.9, 0.9, gp = gp))
+}
+
+test_that("named and classed values survive a file round-trip", {
+  s <- gpar_scene()
+  svg <- scene_svg(s)
+  for (ext in c("rds", "json")) {
+    if (ext == "json") {
+      skip_if_not_installed("jsonlite")
+    }
+    f <- withr::local_tempfile(fileext = paste0(".", ext))
+    scene_write(s, f)
+    r <- scene_read(f)
+    expect_identical(scene_svg(r), svg, label = ext)
+    expect_identical(as_scene_spec(r), as_scene_spec(s), label = ext)
+    m <- scene_model(r)$elements
+    expect_identical(
+      m$meta[[match("r", m$key)]],
+      c(min = 1, max = 2, flag = NA),
+      label = ext
+    )
+  }
+})
+
+test_that("integer and logical vectors keep their names too", {
+  s <- vl_scene(2, 2) |>
+    draw(rect_grob(key = "k", meta = list(list(n = c(a = 1L), b = c(x = TRUE)))))
+  for (ext in c("rds", "json")) {
+    if (ext == "json") {
+      skip_if_not_installed("jsonlite")
+    }
+    f <- withr::local_tempfile(fileext = paste0(".", ext))
+    scene_write(s, f)
+    m <- scene_model(scene_read(f))$elements
+    expect_identical(m$meta[[1]], list(n = c(a = 1L), b = c(x = TRUE)))
+  }
+})
+
+test_that("a spec from the old encoder (no names field) still reads", {
+  spec <- as_scene_spec(vl_scene(2, 2) |> draw(circle_grob(r = 0.3)))
+  strip <- function(x) {
+    if (is.list(x)) {
+      x$names <- if (identical(x[["_t"]], "list")) x$names else NULL
+      x$attrs <- NULL
+      x[] <- lapply(x, strip)
+    }
+    x
+  }
+  expect_identical(
+    as_scene_spec(from_scene_spec(strip(spec))),
+    as_scene_spec(from_scene_spec(spec))
+  )
+})

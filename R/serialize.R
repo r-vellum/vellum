@@ -156,11 +156,16 @@ from_scene_spec <- function(spec) {
     # Positional elements go in their own `items` array rather than alongside
     # `_t`: a JSON object with one named and several unnamed keys is not
     # representable, and jsonlite invents names for them on the way back.
-    return(list(
-      `_t` = "list",
-      named = !is.null(names(x)),
-      names = names(x) %||% character(),
-      items = unname(lapply(x, .spec_encode))
+    # Any further attributes -- the class of a systemfonts `font_feature()`, say
+    # -- ride along in `attrs` so the list comes back as the same object.
+    return(.spec_with_attrs(
+      list(
+        `_t` = "list",
+        named = !is.null(names(x)),
+        names = names(x) %||% character(),
+        items = unname(lapply(x, .spec_encode))
+      ),
+      x
     ))
   }
   if (is.function(x) || is.environment(x)) {
@@ -174,15 +179,54 @@ from_scene_spec <- function(spec) {
   # rejects it. RDS would not need this, but one encoding for both formats is
   # worth more than a smaller JSON file.
   if (is.double(x)) {
-    return(list(`_t` = "dbl", v = x))
+    return(.spec_atomic("dbl", x))
   }
   # Character too, for the same reason plus one more: JSON writes `NA` as null,
   # and a null read back into an untyped slot becomes a *logical* NA, silently
   # changing the type of an absent string.
   if (is.character(x)) {
-    return(list(`_t` = "chr", v = x))
+    return(.spec_atomic("chr", x))
+  }
+  # Integers and logicals round-trip through both formats as bare vectors, so
+  # they are tagged only when they carry names or other attributes, which a bare
+  # JSON array cannot hold. Leaving the plain ones bare keeps the spec (and
+  # therefore `scene_hash()`) of an attribute-free scene unchanged.
+  if (.spec_has_attrs(x) && (is.integer(x) || is.logical(x))) {
+    return(.spec_atomic(if (is.integer(x)) "int" else "lgl", x))
   }
   x
+}
+
+# A tagged atomic vector. `names` and any other attributes (`dim`, a class, ...)
+# are written only when present, so an unnamed vector encodes exactly as it did
+# before they were carried, and a spec without them decodes to a bare vector.
+# Names matter: `vl_gpar(features = c(tnum = 1))` is unusable without them.
+.spec_atomic <- function(tag, x) {
+  out <- list(`_t` = tag, v = unname(as.vector(x)))
+  if (!is.null(names(x))) {
+    out$names <- names(x)
+  }
+  .spec_with_attrs(out, x)
+}
+
+.spec_has_attrs <- function(x) length(attributes(x)) > 0L
+
+# Append `x`'s attributes other than `names` (which each node type stores in its
+# own way) as an `attrs` object. Each value is force-tagged so a JSON reader
+# cannot simplify an array of bare integers (a `dim`, say) into a matrix.
+.spec_with_attrs <- function(out, x) {
+  a <- attributes(x)
+  a$names <- NULL
+  if (length(a)) {
+    out$attrs <- lapply(a, function(v) {
+      if (is.integer(v) || is.logical(v)) {
+        .spec_atomic(if (is.integer(v)) "int" else "lgl", v)
+      } else {
+        .spec_encode(v)
+      }
+    })
+  }
+  out
 }
 
 # --- decoding ----------------------------------------------------------------
@@ -199,10 +243,12 @@ from_scene_spec <- function(spec) {
     nm <- rep("", length(x))
   }
   body <- x[!nm %in% c("_t", "class")]
-  switch(
+  out <- switch(
     tag,
-    dbl = as.double(unlist(x$v)),
-    chr = as.character(unlist(x$v)),
+    dbl = .spec_decode_atomic(x, as.double),
+    chr = .spec_decode_atomic(x, as.character),
+    int = .spec_decode_atomic(x, as.integer),
+    lgl = .spec_decode_atomic(x, as.logical),
     unit = new_unit(
       as.double(.spec_decode(x$value)),
       as.integer(.spec_decode(x$unit)),
@@ -233,6 +279,22 @@ from_scene_spec <- function(spec) {
     },
     cli::cli_abort("Unknown spec node type {.val {tag}}.")
   )
+  # Extra attributes (written by `.spec_with_attrs()`) on an atomic or list
+  # node. Absent in specs from older encoders, which therefore decode as before.
+  if (tag %in% c("dbl", "chr", "int", "lgl", "list") && !is.null(x$attrs)) {
+    a <- lapply(x$attrs, .spec_decode)
+    attributes(out) <- c(attributes(out), a)
+  }
+  out
+}
+
+# An atomic node's values, with names restored when the spec carries them.
+.spec_decode_atomic <- function(x, as) {
+  v <- as(unlist(x$v))
+  if (!is.null(x$names)) {
+    names(v) <- as.character(unlist(x$names))
+  }
+  v
 }
 
 # --- files -------------------------------------------------------------------
@@ -472,7 +534,7 @@ scene_diff <- function(a, b, max_depth = 40L) {
 }
 
 .diff_is_leaf <- function(x) {
-  is.list(x) && !is.null(x[["_t"]]) && x[["_t"]] %in% c("unit", "dbl", "chr")
+  is.list(x) && !is.null(x[["_t"]]) && x[["_t"]] %in% c("unit", "dbl", "chr", "int", "lgl")
 }
 
 # Render a leaf spec node as the value a caller wrote, not as its encoding.
@@ -486,7 +548,9 @@ scene_diff <- function(a, b, max_depth = 40L) {
   switch(
     x[["_t"]],
     dbl = ,
-    chr = .diff_val(unlist(x$v)),
+    chr = ,
+    int = ,
+    lgl = .diff_val(unlist(x$v)),
     unit = .diff_val(format(.spec_decode(x))),
     .diff_val(x)
   )
