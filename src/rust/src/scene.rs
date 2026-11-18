@@ -23,7 +23,7 @@ use crate::render::{
 
 use crate::color::{opt_color, Gpar, GparAcc, Lty, Paint, PartialGpar, Rgba};
 use crate::cache::TwoGenCache;
-use crate::geom::{parts_bbox, parts_cover, parts_dist, parts_runs, union_bbox, RecordBackend, Recording};
+use crate::geom::{parts_bbox, parts_cover, parts_dist, parts_rule, parts_runs, union_bbox, RecordBackend, Recording};
 
 // Non-reactive keyframe animation: interpolate between compiled scenes and render
 // the tweened frames in parallel. A child module, so it can reach this module's
@@ -2235,6 +2235,11 @@ impl Scene {
         // client cannot tell where one ring ends, and joining the runs invents
         // a phantom edge from each ring's last vertex to the next ring's first.
         let mut gring: Vec<i32> = Vec::new();
+        // Per element: the fill rule its rings are filled (and picked) under,
+        // "evenodd" or "nonzero"; "" for geometry with no interior (a stroke,
+        // a round mark's centre). A client needs it to test containment across
+        // a path's rings the way this does.
+        let mut rule: Vec<String> = Vec::new();
 
         for (ni, (_, node)) in self.nodes.iter().enumerate() {
             let knd = pick_kind(node);
@@ -2262,6 +2267,7 @@ impl Scene {
                 key.push(k.to_string());
                 kind.push(knd.to_string());
                 dist.push(parts_dist(parts, px, py));
+                rule.push(parts_rule(parts).unwrap_or_default().to_string());
                 gn.push(runs.iter().map(Vec::len).sum::<usize>() as i32);
                 for (r, run) in runs.iter().enumerate() {
                     for &(x, y) in run {
@@ -2272,7 +2278,7 @@ impl Scene {
                 }
             }
         }
-        list!(key = key, kind = kind, dist = dist, n = gn, x = gx, y = gy, ring = gring)
+        list!(key = key, kind = kind, dist = dist, n = gn, x = gx, y = gy, ring = gring, rule = rule)
     }
 
     /// The font files this scene's text actually resolved to.

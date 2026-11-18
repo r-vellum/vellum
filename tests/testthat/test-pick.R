@@ -373,36 +373,89 @@ test_that("the ring column is present on an empty result", {
 })
 
 test_that("a client can reproduce the engine's path distance from the rings", {
-  # The issue this closes: hit-testing a multi-ring path locally, exactly.
-  # Note the engine's rule -- inside ANY ring counts as a hit (each ring is
-  # measured as filled and the minimum taken), so it does not apply `evenodd`
-  # across rings and a point in the hole is at distance 0. Reproducing that
-  # needs the ring boundaries; a single phantom-edge ring gives a different
-  # answer near the hole.
+  # Hit-testing a multi-ring path locally, exactly: containment is decided once
+  # across all the rings under the element's `rule` (even-odd parity here), so
+  # the hole is outside. That needs the ring boundaries -- a single
+  # phantom-edge ring gives a different answer near the hole -- and the rule.
   s <- holed_scene()
   p <- element_geometry(s)
   p <- p[p$key == "holed", ]
+  expect_identical(unique(p$rule), "evenodd")
   rings <- split(p[c("x", "y")], p$ring)
-  inside <- function(r, px, py) {
+  crossings <- function(r, px, py) {
     n <- nrow(r)
     j <- c(n, seq_len(n - 1L))
     sum(
       (r$y > py) != (r$y[j] > py) &
         px < (r$x[j] - r$x) * (py - r$y) / (r$y[j] - r$y) + r$x
-    ) %%
-      2 ==
-      1
+    )
   }
-  hit_any <- function(px, py) any(vapply(rings, inside, logical(1), px, py))
+  inside <- function(px, py) {
+    sum(vapply(rings, crossings, numeric(1), px, py)) %% 2 == 1
+  }
   # centre of the hole, a point in the annulus, and a point outside the square
   probes <- list(c(0.5, 0.5), c(0.2, 0.5), c(0.95, 0.95))
   for (q in probes) {
     engine_zero <- vl_nearest(s, q[1], q[2])$dist == 0
-    local_zero <- hit_any(q[1] * 400, (1 - q[2]) * 300)
+    local_zero <- inside(q[1] * 400, (1 - q[2]) * 300)
     expect_identical(local_zero, engine_zero)
   }
-  # and the hole really is a hit under that rule, unlike plain even-odd
-  expect_equal(vl_nearest(s, 0.5, 0.5)$dist, 0)
+})
+
+# --- picking follows the fill rule --------------------------------------------
+
+test_that("the centre of an even-odd donut's hole is not a hit", {
+  s <- holed_scene()
+  near <- vl_nearest(s, 0.5, 0.5)
+  # The hole spans 0.4..0.6 of a 400 x 300 px page: its centre is 0.1 * 300 px
+  # from the nearest inner edge (top/bottom), and the outer ring is further.
+  expect_gt(near$dist, 0)
+  expect_equal(near$dist, 0.1 * 300, tolerance = 1e-4)
+  # The annulus is still filled, so a hit.
+  expect_equal(vl_nearest(s, 0.2, 0.5)$dist, 0)
+  # hit_test agrees: the hole is empty.
+  named <- vl_scene(4, 3, dpi = 100) |>
+    draw(path_grob(
+      x = c(0.1, 0.9, 0.9, 0.1, 0.4, 0.6, 0.6, 0.4),
+      y = c(0.1, 0.1, 0.9, 0.9, 0.4, 0.4, 0.6, 0.6),
+      id = rep(1:2, each = 4),
+      rule = "evenodd",
+      name = "donut"
+    ))
+  expect_null(hit_test(named, 0.5, 0.5))
+  expect_equal(hit_test(named, 0.2, 0.5), "donut")
+})
+
+test_that("a winding path is a hole only where its rings cancel", {
+  ix <- c(0.4, 0.6, 0.6, 0.4)
+  iy <- c(0.4, 0.4, 0.6, 0.6)
+  donut <- function(inner_x, inner_y) {
+    vl_scene(4, 3, dpi = 100) |>
+      draw(path_grob(
+        x = c(0.1, 0.9, 0.9, 0.1, inner_x),
+        y = c(0.1, 0.1, 0.9, 0.9, inner_y),
+        id = rep(1:2, each = 4),
+        rule = "winding",
+        key = "w"
+      ))
+  }
+  # Inner ring in the same direction as the outer: winding 2, filled.
+  same <- donut(ix, iy)
+  expect_equal(vl_nearest(same, 0.5, 0.5)$dist, 0)
+  expect_identical(unique(element_geometry(same)$rule), "nonzero")
+  # Inner ring reversed: winding 0, a hole.
+  opp <- donut(rev(ix), rev(iy))
+  expect_equal(vl_nearest(opp, 0.5, 0.5)$dist, 0.1 * 300, tolerance = 1e-4)
+  expect_equal(vl_nearest(opp, 0.2, 0.5)$dist, 0)
+})
+
+test_that("a plain polygon picks as before, and open marks carry no rule", {
+  s <- diag_scene()
+  expect_equal(vl_nearest(s, 0.25, 0.68)$dist, 0) # inside the triangle
+  g <- element_geometry(s)
+  expect_identical(unique(g$rule[g$kind == "polygon"]), "nonzero")
+  expect_true(all(is.na(g$rule[g$kind %in% c("segment", "point")])))
+  expect_type(g$rule, "character")
 })
 
 # --- one geometry source: every query agrees with what is drawn ----------------

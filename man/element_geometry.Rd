@@ -11,8 +11,8 @@ element_geometry(scene)
 }
 \value{
 A data frame of \code{key}, \code{kind}, \code{vertex} (1-based within the element),
-\code{ring} (1-based within the element), \code{x} and \code{y}. Zero rows if the scene has
-no keyed elements.
+\code{ring} (1-based within the element), \code{x}, \code{y} and \code{rule}. Zero rows if the
+scene has no keyed elements.
 }
 \description{
 Returns the resolved device-pixel geometry of every \strong{keyed} element: the two
@@ -50,9 +50,17 @@ Coordinates are device pixels with y growing \strong{down}, matching
 a multipart feature -- so a host can hit-test it the way the engine does.
 Without it the concatenated vertices are lossy: treating them as one closed
 ring invents a phantom edge from each ring's last vertex to the next ring's
-first. Split on \code{ring} and test the rings separately. A label set along a path
-has one ring per glyph box; every other kind is a single ring, so \code{ring} is
-\code{1} throughout.
+first. Split on \code{ring} for the edges. A label set along a path has one ring
+per glyph box; every other kind is a single ring, so \code{ring} is \code{1}
+throughout.
+
+\code{rule} is the fill rule an element's rings are filled under, one value per
+element repeated on each of its rows: \code{"nonzero"} or \code{"evenodd"} for a shape
+with an interior, \code{NA} for one without (a \code{segment}, a \code{line}, a \code{point}).
+Containment is decided once across \strong{all} of an element's rings under that
+rule -- even-odd parity of the crossings, or a nonzero sum of winding numbers
+-- so a point in a hole is outside. That is how \code{\link[=vl_nearest]{vl_nearest()}} decides it,
+and how the shape is painted.
 }
 
 \examples{

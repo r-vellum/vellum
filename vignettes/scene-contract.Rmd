@@ -188,6 +188,53 @@ they are not enforced by vellum.
 
 If you add a convention, add it here.
 
+## `element_geometry()`: the hit-test geometry
+
+`scene_model()` gives boxes, which suit a rectangular brush and mislead for
+anything diagonal, thin or holed. A host that hit-tests on the client (a browser
+cannot call back into R on every mouse move) reads `element_geometry()` once
+instead: the device-pixel geometry of every **keyed** element, recorded by the
+same walk that renders the scene, so a segment drawn with an `offset` or end
+caps is reported where it lands. `vl_nearest()` measures against exactly this
+geometry, so a client that follows the rules below reproduces it.
+
+```{r}
+#| label: geometry
+holed <- vl_scene(4, 3, dpi = 100) |>
+  draw(path_grob(
+    x = c(0.1, 0.9, 0.9, 0.1, 0.4, 0.6, 0.6, 0.4),
+    y = c(0.1, 0.1, 0.9, 0.9, 0.4, 0.4, 0.6, 0.6),
+    id = rep(1:2, each = 4),
+    rule = "evenodd",
+    key = "donut"
+  ))
+element_geometry(holed)
+```
+
+One row per vertex. The columns are the contract:
+
+| column | type | meaning |
+|---|---|---|
+| `key` | character | the element's data key (repeated on each of its vertices) |
+| `kind` | character | `segment`, `line`, `polygon`, `path`, `hexagon`, `sector`, `point`, `rect`, `roundrect`, `text` |
+| `vertex` | integer | 1-based within the element; restarts at 1 for the next element |
+| `ring` | integer | 1-based ring (or polyline) within the element |
+| `x, y` | numeric | device px, y down |
+| `rule` | character | the fill rule, per element: `"nonzero"`, `"evenodd"`, or `NA` for a kind with no interior (`segment`, `line`, `point`) |
+
+The rules a client applies, which are the ones `vl_nearest()` applies:
+
+- `segment` and `line` are open centre-lines: the distance is to the nearest
+  edge, and an `NA` vertex is a break.
+- `point` is a single centre; its radius is half the smaller side of its
+  `scene_model()` box.
+- `rect` and `roundrect` are two opposite box corners.
+- Everything else is closed rings. **Containment is decided once, across all
+  of an element's rings, under its `rule`**: even-odd parity of the edge
+  crossings, or a nonzero sum of the rings' winding numbers. Inside is distance
+  zero. Outside -- and a point in a hole is outside -- the distance is to the
+  nearest edge of any ring. Rings are never joined: each closes on itself.
+
 ## `scene_svg()`: the emitted attributes
 
 `scene_svg()` returns the same scene as an SVG string. Interactivity rides on SVG
@@ -271,6 +318,8 @@ If you change any of the following, update this article and the contract tests
 in the same commit, and expect to co-release vellumplot and vellumwidget:
 
 - the `elements`/`panels` column set or types,
+- the `element_geometry()` column set, its `kind` and `rule` vocabularies, or
+  the containment rule above,
 - the `mark` vocabulary,
 - which marks are keyable, or the batched-vs-single-shape rule,
 - the SVG attribute names, or when they are emitted,
