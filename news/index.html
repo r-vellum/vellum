@@ -71,6 +71,13 @@
 
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.7.1.9000" id="vellum-0719000-development-version">vellum 0.7.1.9000 (development version)<a class="anchor" aria-label="anchor" href="#vellum-0719000-development-version"></a></h2>
+<div class="section level3">
+<h3 id="scenes-0-7-1-9000">Scenes<a class="anchor" aria-label="anchor" href="#scenes-0-7-1-9000"></a></h3>
+<ul><li>
+<p><strong>Fix: a written scene keeps the names on its vectors.</strong> <code><a href="../reference/scene_write.html">scene_write()</a></code> stored doubles and strings without their names (or any other attribute), so a scene drawn with <code>vl_gpar(features = c(tnum = 1))</code> read back from <code>.rds</code> or <code>.json</code> failed to render with “<code>features</code> must be a named vector”. Named per-element <code>meta</code> silently lost its names, a JSON round-trip turned a named logical into an integer, and a systemfonts <code>font_feature()</code> object lost its class.</p>
+<p>Atomic vectors now carry their names, and atomic vectors and lists carry their other attributes, through the scene spec, and a read restores them. Specs written by earlier versions have no such fields and read as before, and the spec of a scene without named or classed values is unchanged, so its <code><a href="../reference/scene_hash.html">scene_hash()</a></code> does not move.</p>
+</li>
+</ul></div>
 </div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.7.1" id="vellum-071">vellum 0.7.1<a class="anchor" aria-label="anchor" href="#vellum-071"></a></h2>
