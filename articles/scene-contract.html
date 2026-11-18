@@ -463,13 +463,119 @@ layers in step; they are not enforced by vellum.</p>
 </div>
 </div>
 <div class="section level2">
+<h2 id="element_geometry-the-hit-test-geometry">
+<code>element_geometry()</code>: the hit-test geometry<a class="anchor" aria-label="anchor" href="#element_geometry-the-hit-test-geometry"></a>
+</h2>
+<p><code><a href="../reference/scene_model.html">scene_model()</a></code> gives boxes, which suit a rectangular
+brush and mislead for anything diagonal, thin or holed. A host that
+hit-tests on the client (a browser cannot call back into R on every
+mouse move) reads <code><a href="../reference/element_geometry.html">element_geometry()</a></code> once instead: the
+device-pixel geometry of every <strong>keyed</strong> element, recorded
+by the same walk that renders the scene, so a segment drawn with an
+<code>offset</code> or end caps is reported where it lands.
+<code><a href="../reference/vl_nearest.html">vl_nearest()</a></code> measures against exactly this geometry, so a
+client that follows the rules below reproduces it.</p>
+<div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">holed</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/vl_scene.html">vl_scene</a></span><span class="op">(</span><span class="fl">4</span>, <span class="fl">3</span>, dpi <span class="op">=</span> <span class="fl">100</span><span class="op">)</span> <span class="op">|&gt;</span></span>
+<span>  <span class="fu"><a href="../reference/vl_scene.html">draw</a></span><span class="op">(</span><span class="fu"><a href="../reference/grob.html">path_grob</a></span><span class="op">(</span></span>
+<span>    x <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.1</span>, <span class="fl">0.9</span>, <span class="fl">0.9</span>, <span class="fl">0.1</span>, <span class="fl">0.4</span>, <span class="fl">0.6</span>, <span class="fl">0.6</span>, <span class="fl">0.4</span><span class="op">)</span>,</span>
+<span>    y <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.1</span>, <span class="fl">0.1</span>, <span class="fl">0.9</span>, <span class="fl">0.9</span>, <span class="fl">0.4</span>, <span class="fl">0.4</span>, <span class="fl">0.6</span>, <span class="fl">0.6</span><span class="op">)</span>,</span>
+<span>    id <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/rep.html" class="external-link">rep</a></span><span class="op">(</span><span class="fl">1</span><span class="op">:</span><span class="fl">2</span>, each <span class="op">=</span> <span class="fl">4</span><span class="op">)</span>,</span>
+<span>    rule <span class="op">=</span> <span class="st">"evenodd"</span>,</span>
+<span>    key <span class="op">=</span> <span class="st">"donut"</span></span>
+<span>  <span class="op">)</span><span class="op">)</span></span>
+<span><span class="fu"><a href="../reference/element_geometry.html">element_geometry</a></span><span class="op">(</span><span class="va">holed</span><span class="op">)</span></span>
+<span><span class="co">#&gt;     key kind vertex ring   x   y    rule</span></span>
+<span><span class="co">#&gt; 1 donut path      1    1  40 270 evenodd</span></span>
+<span><span class="co">#&gt; 2 donut path      2    1 360 270 evenodd</span></span>
+<span><span class="co">#&gt; 3 donut path      3    1 360  30 evenodd</span></span>
+<span><span class="co">#&gt; 4 donut path      4    1  40  30 evenodd</span></span>
+<span><span class="co">#&gt; 5 donut path      5    2 160 180 evenodd</span></span>
+<span><span class="co">#&gt; 6 donut path      6    2 240 180 evenodd</span></span>
+<span><span class="co">#&gt; 7 donut path      7    2 240 120 evenodd</span></span>
+<span><span class="co">#&gt; 8 donut path      8    2 160 120 evenodd</span></span></code></pre></div>
+<p>One row per vertex. The columns are the contract:</p>
+<table class="table">
+<colgroup>
+<col width="33%">
+<col width="33%">
+<col width="33%">
+</colgroup>
+<thead><tr class="header">
+<th>column</th>
+<th>type</th>
+<th>meaning</th>
+</tr></thead>
+<tbody>
+<tr class="odd">
+<td><code>key</code></td>
+<td>character</td>
+<td>the element’s data key (repeated on each of its vertices)</td>
+</tr>
+<tr class="even">
+<td><code>kind</code></td>
+<td>character</td>
+<td>
+<code>segment</code>, <code>line</code>, <code>polygon</code>,
+<code>path</code>, <code>hexagon</code>, <code>sector</code>,
+<code>point</code>, <code>rect</code>, <code>roundrect</code>,
+<code>text</code>
+</td>
+</tr>
+<tr class="odd">
+<td><code>vertex</code></td>
+<td>integer</td>
+<td>1-based within the element; restarts at 1 for the next element</td>
+</tr>
+<tr class="even">
+<td><code>ring</code></td>
+<td>integer</td>
+<td>1-based ring (or polyline) within the element</td>
+</tr>
+<tr class="odd">
+<td><code>x, y</code></td>
+<td>numeric</td>
+<td>device px, y down</td>
+</tr>
+<tr class="even">
+<td><code>rule</code></td>
+<td>character</td>
+<td>the fill rule, per element: <code>"nonzero"</code>,
+<code>"evenodd"</code>, or <code>NA</code> for a kind with no interior
+(<code>segment</code>, <code>line</code>, <code>point</code>)</td>
+</tr>
+</tbody>
+</table>
+<p>The rules a client applies, which are the ones
+<code><a href="../reference/vl_nearest.html">vl_nearest()</a></code> applies:</p>
+<ul>
+<li>
+<code>segment</code> and <code>line</code> are open centre-lines:
+the distance is to the nearest edge, and an <code>NA</code> vertex is a
+break.</li>
+<li>
+<code>point</code> is a single centre; its radius is half the
+smaller side of its <code><a href="../reference/scene_model.html">scene_model()</a></code> box.</li>
+<li>
+<code>rect</code> and <code>roundrect</code> are two opposite box
+corners.</li>
+<li>Everything else is closed rings. <strong>Containment is decided
+once, across all of an element’s rings, under its
+<code>rule</code></strong>: even-odd parity of the edge crossings, or a
+nonzero sum of the rings’ winding numbers. Inside is distance zero.
+Outside – and a point in a hole is outside – the distance is to the
+nearest edge of any ring. Rings are never joined: each closes on
+itself.</li>
+</ul>
+</div>
+<div class="section level2">
 <h2 id="scene_svg-the-emitted-attributes">
 <code>scene_svg()</code>: the emitted attributes<a class="anchor" aria-label="anchor" href="#scene_svg-the-emitted-attributes"></a>
 </h2>
 <p><code><a href="../reference/scene_svg.html">scene_svg()</a></code> returns the same scene as an SVG string.
 Interactivity rides on SVG attributes; the raster and PDF backends
 ignore all of them.</p>
-<div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">svg</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/scene_svg.html">scene_svg</a></span><span class="op">(</span><span class="va">s</span><span class="op">)</span></span>
 <span><span class="co"># the data-key attributes on the three points:</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/base/regmatches.html" class="external-link">regmatches</a></span><span class="op">(</span><span class="va">svg</span>, <span class="fu"><a href="https://rdrr.io/r/base/grep.html" class="external-link">gregexpr</a></span><span class="op">(</span><span class="st">'data-key="[^"]*"'</span>, <span class="va">svg</span><span class="op">)</span><span class="op">)</span><span class="op">[[</span><span class="fl">1</span><span class="op">]</span><span class="op">]</span></span>
@@ -619,6 +725,9 @@ and vellumwidget:</p>
 <ul>
 <li>the <code>elements</code>/<code>panels</code> column set or
 types,</li>
+<li>the <code><a href="../reference/element_geometry.html">element_geometry()</a></code> column set, its
+<code>kind</code> and <code>rule</code> vocabularies, or the containment
+rule above,</li>
 <li>the <code>mark</code> vocabulary,</li>
 <li>which marks are keyable, or the batched-vs-single-shape rule,</li>
 <li>the SVG attribute names, or when they are emitted,</li>

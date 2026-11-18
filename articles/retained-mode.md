@@ -294,10 +294,10 @@ vertices to rank them.
 ``` r
 
 element_geometry(demo)
-#>        key    kind vertex ring      x      y
-#> 1 diagonal segment      1    1  46.08 253.44
-#> 2 diagonal segment      2    1 337.92  34.56
-#> 3   corner   point      1    1 314.88 236.16
+#>        key    kind vertex ring      x      y rule
+#> 1 diagonal segment      1    1  46.08 253.44 <NA>
+#> 2 diagonal segment      2    1 337.92  34.56 <NA>
+#> 3   corner   point      1    1 314.88 236.16 <NA>
 ```
 
 Two endpoints for the segment and one centre for the point — not four

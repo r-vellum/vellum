@@ -350,10 +350,10 @@ whatever rate it likes — typically an R-tree over the boxes to shortlist
 candidates, then an exact test against these vertices to rank them.</p>
 <div class="sourceCode" id="cb12"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/element_geometry.html">element_geometry</a></span><span class="op">(</span><span class="va">demo</span><span class="op">)</span></span>
-<span><span class="co">#&gt;        key    kind vertex ring      x      y</span></span>
-<span><span class="co">#&gt; 1 diagonal segment      1    1  46.08 253.44</span></span>
-<span><span class="co">#&gt; 2 diagonal segment      2    1 337.92  34.56</span></span>
-<span><span class="co">#&gt; 3   corner   point      1    1 314.88 236.16</span></span></code></pre></div>
+<span><span class="co">#&gt;        key    kind vertex ring      x      y rule</span></span>
+<span><span class="co">#&gt; 1 diagonal segment      1    1  46.08 253.44 &lt;NA&gt;</span></span>
+<span><span class="co">#&gt; 2 diagonal segment      2    1 337.92  34.56 &lt;NA&gt;</span></span>
+<span><span class="co">#&gt; 3   corner   point      1    1 314.88 236.16 &lt;NA&gt;</span></span></code></pre></div>
 <p>Two endpoints for the segment and one centre for the point — not four
 box corners. That is the difference that lets a client hit-test a
 diagonal at all.</p>

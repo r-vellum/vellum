@@ -86,6 +86,26 @@
   shapes topmost-first against the viewport clip, picks a stroke by half
   its width (at least 2 px) and a marker by its disc.
 
+- **Behaviour change: a point in a polygon’s hole no longer counts as a
+  hit.**
+  [`vl_nearest()`](https://r-vellum.github.io/vellum/reference/vl_nearest.md)
+  measured a multi-ring path as the minimum over its rings, each treated
+  as filled, so a point inside any ring, including a hole, was at
+  distance 0. Containment is now decided once across all of an element’s
+  rings under the rule the shape is painted with: even-odd parity, or
+  nonzero winding. A point in an `"evenodd"` path’s hole (or in a
+  `"winding"` path’s reversed inner ring) is outside, and its distance
+  is to the nearest edge, which is the hole’s own boundary. A plain
+  polygon picks as before.
+
+  [`element_geometry()`](https://r-vellum.github.io/vellum/reference/element_geometry.md)
+  gains a `rule` column (`"nonzero"`, `"evenodd"`, or `NA` for segments,
+  lines and points), one value per element, so a client-side host can
+  decide containment the same way. The column is appended, so no
+  existing column moves. The scene-contract article now documents
+  [`element_geometry()`](https://r-vellum.github.io/vellum/reference/element_geometry.md)
+  and its containment rule.
+
 ## vellum 0.7.1
 
 ### Text

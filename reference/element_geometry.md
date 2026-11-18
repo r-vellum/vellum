@@ -25,8 +25,8 @@ element_geometry(scene)
 ## Value
 
 A data frame of `key`, `kind`, `vertex` (1-based within the element),
-`ring` (1-based within the element), `x` and `y`. Zero rows if the scene
-has no keyed elements.
+`ring` (1-based within the element), `x`, `y` and `rule`. Zero rows if
+the scene has no keyed elements.
 
 ## Details
 
@@ -62,9 +62,18 @@ boxes and the rendered SVG's coordinate system.
 hole, or a multipart feature – so a host can hit-test it the way the
 engine does. Without it the concatenated vertices are lossy: treating
 them as one closed ring invents a phantom edge from each ring's last
-vertex to the next ring's first. Split on `ring` and test the rings
-separately. A label set along a path has one ring per glyph box; every
-other kind is a single ring, so `ring` is `1` throughout.
+vertex to the next ring's first. Split on `ring` for the edges. A label
+set along a path has one ring per glyph box; every other kind is a
+single ring, so `ring` is `1` throughout.
+
+`rule` is the fill rule an element's rings are filled under, one value
+per element repeated on each of its rows: `"nonzero"` or `"evenodd"` for
+a shape with an interior, `NA` for one without (a `segment`, a `line`, a
+`point`). Containment is decided once across **all** of an element's
+rings under that rule – even-odd parity of the crossings, or a nonzero
+sum of winding numbers – so a point in a hole is outside. That is how
+[`vl_nearest()`](https://r-vellum.github.io/vellum/reference/vl_nearest.md)
+decides it, and how the shape is painted.
 
 ## See also
 
@@ -77,7 +86,7 @@ other kind is a single ring, so `ring` is `1` throughout.
 s <- vl_scene(4, 3, dpi = 96, bg = "white") |>
   draw(segments_grob(0.1, 0.1, 0.9, 0.9, key = "diagonal"))
 element_geometry(s)
-#>        key    kind vertex ring     x     y
-#> 1 diagonal segment      1    1  38.4 259.2
-#> 2 diagonal segment      2    1 345.6  28.8
+#>        key    kind vertex ring     x     y rule
+#> 1 diagonal segment      1    1  38.4 259.2 <NA>
+#> 2 diagonal segment      2    1 345.6  28.8 <NA>
 ```
