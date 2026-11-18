@@ -62,6 +62,17 @@
   Before, `rep_len()` silently truncated or wrapped them, so elements could be
   paired with the wrong data.
 
+## Other changes
+
+* **Backend parity is now tested on rendered pixels.** A new test suite renders
+  the same scenes to PNG, SVG and PDF, rasterises the SVG and PDF back to
+  pixels, and checks that the ink lands in the same places and colours (at a
+  1-px antialiasing tolerance). The fixtures cover lines and polygons, outlined
+  text, even and odd dash patterns, gradients, pattern fills and strokes, and
+  clipping. The suite uses the rsvg and pdftools packages (now in Suggests),
+  falling back to magick and poppler's `pdftoppm`, and skips when no
+  rasteriser is available.
+
 # vellum 0.7.1
 
 ## Text

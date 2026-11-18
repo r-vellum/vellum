@@ -31,7 +31,9 @@ Suggests:
     base64enc,
     rmarkdown,
     xml2,
-    magick
+    magick,
+    pdftools,
+    rsvg
 VignetteBuilder: knitr
 Config/testthat/edition: 3
 Imports:
