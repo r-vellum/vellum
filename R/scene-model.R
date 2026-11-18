@@ -56,7 +56,13 @@
 
 # Element count of a batched keyable grob (its recycled common length).
 .sm_n <- function(node) {
-  if (S7::S7_inherits(node, grob_segments)) .vsize(node@x0) else .vsize(node@x)
+  if (S7::S7_inherits(node, grob_segments)) {
+    .vsize(node@x0)
+  } else if (S7::S7_inherits(node, grob_text)) {
+    .text_n(node@label, node@x, node@y)
+  } else {
+    .vsize(node@x)
+  }
 }
 
 # The single data key of a single-shape grob (first key), or NA when unkeyed.

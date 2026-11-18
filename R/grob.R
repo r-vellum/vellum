@@ -217,6 +217,44 @@ S7::method(.text_labels, S7::class_character) <- function(label) label
 S7::method(.text_labels, S7::class_any) <- function(label) as.character(label)
 S7::method(.text_labels, vellum_md_label) <- function(label) label@text
 
+# Is `label` rich (a single `vellum_label`, or a non-empty list of them -- one
+# per datum)? Rich labels are drawn at every position, so they don't count
+# towards the element count.
+.is_rich_label <- function(label) {
+  S7::S7_inherits(label, vellum_label) ||
+    (is.list(label) &&
+      length(label) > 0L &&
+      all(vapply(
+        label,
+        function(l) S7::S7_inherits(l, vellum_label),
+        logical(1)
+      )))
+}
+
+# Element count of a text grob: the common length of `label`, `x` and `y` under
+# length-1 recycling (rich labels recycle to the positions and so count only
+# `x`/`y`). It matches what `compile()` hands the backend, one text node per
+# element, so per-element `key`/`meta` recycle to the same n R-side.
+.text_n <- function(label, x, y, call = parent.frame()) {
+  sizes <- c(x = .vsize(x), y = .vsize(y))
+  if (!.is_rich_label(label)) {
+    sizes <- c(label = length(.text_labels(label)), sizes)
+  }
+  big <- unique(sizes[sizes != 1L])
+  if (length(big) > 1L) {
+    nms <- names(sizes)
+    cli::cli_abort(
+      c(
+        "{.arg {nms}} must have compatible lengths.",
+        i = "Each must be length 1 or a common length.",
+        x = "{.arg {nms}} have lengths {sizes}."
+      ),
+      call = call
+    )
+  }
+  if (length(big)) big else 1L
+}
+
 grob_text <- S7::new_class(
   "grob_text",
   parent = grob,
@@ -1515,10 +1553,13 @@ text_grob <- function(
   if (!isFALSE(fit) && is.null(width)) {
     cli::cli_abort("{.arg fit} needs a {.arg width} to fit into.")
   }
+  x <- as_unit(x)
+  y <- as_unit(y)
+  n <- .text_n(label, x, y)
   grob_text(
     label = label,
-    x = as_unit(x),
-    y = as_unit(y),
+    x = x,
+    y = y,
     just = as.character(just),
     rot = as.numeric(rot),
     width = .abs_mm(width, "width"),
@@ -1536,8 +1577,8 @@ text_grob <- function(
     vp = vp,
     id = id,
     role = role,
-    keys = .recycle_keys(key, .vsize(as_unit(x))),
-    meta = .recycle_meta(meta, .vsize(as_unit(x)))
+    keys = .recycle_keys(key, n),
+    meta = .recycle_meta(meta, n)
   )
 }
 

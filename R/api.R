@@ -1628,16 +1628,9 @@ S7::method(compile, grob_text) <- function(node, scene) {
     # Rich labels take the multi-run path: a single `vellum_label` (composed once,
     # drawn at every position) or a list of them (one per datum). Plain character
     # labels keep the fast single-style batch path.
-    rich <- S7::S7_inherits(node@label, vellum_label) ||
-      (is.list(node@label) &&
-        length(node@label) > 0L &&
-        all(vapply(
-          node@label,
-          function(l) S7::S7_inherits(l, vellum_label),
-          logical(1)
-        )))
+    rich <- .is_rich_label(node@label)
+    n <- .text_n(node@label, node@x, node@y)
     if (rich) {
-      n <- vctrs::vec_size_common(node@x, node@y)
       if (n == 0L) {
         return(invisible())
       }
@@ -1664,7 +1657,6 @@ S7::method(compile, grob_text) <- function(node, scene) {
       return(invisible())
     }
     labels <- .text_labels(node@label) # seam: rich labels -> strings (plain = identity)
-    n <- vctrs::vec_size_common(labels, node@x, node@y)
     if (n == 0L) {
       return(invisible())
     }
