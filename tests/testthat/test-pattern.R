@@ -87,3 +87,96 @@ test_that("PDF renders a pattern fill (average-colour fallback)", {
 test_that("a pattern used outside a render context errors clearly", {
   expect_error(.encode_paint(vl_pattern(circle_grob())), "scene")
 })
+
+# VR-7: pattern paint resolves the same on every backend -- as a stroke, and
+# with `extend = "reflect"` (SVG/PDF tiling patterns can only repeat, so a
+# reflected pattern is a 2x2 mirrored tile everywhere).
+pdf_pixel <- function(s, x, y, dpi = 100) {
+  skip_if(unname(Sys.which("pdftoppm")) == "", "pdftoppm not available")
+  f <- withr::local_tempfile(fileext = ".pdf")
+  render(s, f)
+  stem <- withr::local_tempfile()
+  system2(
+    "pdftoppm",
+    c("-png", "-singlefile", "-r", dpi, shQuote(f), shQuote(stem))
+  )
+  img <- png::readPNG(paste0(stem, ".png"))
+  round(img[y + 1L, x + 1L, 1:3] * 255)
+}
+halves <- function() {
+  list(
+    rect_grob(x = 0.25, width = 0.5, gp = vl_gpar(fill = "red", col = NA)),
+    rect_grob(x = 0.75, width = 0.5, gp = vl_gpar(fill = "blue", col = NA))
+  )
+}
+halves_scene <- function(extend) {
+  vl_scene(1, 1, dpi = 100, bg = "white") |>
+    draw(rect_grob(
+      gp = vl_gpar(
+        col = NA,
+        fill = vl_pattern(halves(), width = 0.2, height = 0.2, extend = extend)
+      )
+    ))
+}
+
+test_that("a reflected pattern mirrors every other cell on every backend", {
+  # Cell is 20 px from x = 40: red [40, 50), blue [50, 60). The next cell
+  # repeats (red at 65) or mirrors (blue at 65); the one before repeats
+  # (blue at 35) or mirrors (red at 35).
+  rep_s <- halves_scene("repeat")
+  ref_s <- halves_scene("reflect")
+  expect_equal(px(rep_s, 65, 50)[1:3], c(255L, 0L, 0L))
+  expect_equal(px(ref_s, 65, 50)[1:3], c(0L, 0L, 255L))
+  expect_equal(px(rep_s, 35, 50)[1:3], c(0L, 0L, 255L))
+  expect_equal(px(ref_s, 35, 50)[1:3], c(255L, 0L, 0L))
+  # SVG tiles a mirrored tile spanning two cells from the same corner
+  svg <- scene_svg(ref_s)
+  expect_match(svg, 'x="40" y="40" width="40" height="40"', fixed = TRUE)
+  expect_equal(pdf_pixel(ref_s, 65, 50), c(0, 0, 255))
+  expect_equal(pdf_pixel(ref_s, 35, 50), c(255, 0, 0))
+})
+
+test_that('extend = "pad" is rejected for patterns', {
+  expect_error(vl_pattern(circle_grob(), extend = "pad"), "pad")
+})
+
+stroke_scene <- function(col) {
+  vl_scene(2, 1, dpi = 100, bg = "white") |>
+    draw(segments_grob(0.1, 0.5, 0.9, 0.5, gp = vl_gpar(col = col, lwd = 20)))
+}
+red_tile <- function() {
+  vl_pattern(
+    rect_grob(gp = vl_gpar(fill = "red", col = NA)),
+    width = 0.2,
+    height = 0.2
+  )
+}
+
+test_that("a pattern in col strokes with the pattern on every backend", {
+  s <- stroke_scene(red_tile())
+  expect_equal(px(s, 100, 50)[1:3], c(255L, 0L, 0L)) # not the black fallback
+  expect_equal(px(s, 100, 20)[1:3], c(255L, 255L, 255L)) # still only the stroke
+  expect_match(scene_svg(s), 'stroke="url(#', fixed = TRUE)
+  expect_equal(pdf_pixel(s, 100, 50), c(255, 0, 0))
+})
+
+test_that("a faded pattern stroke carries its opacity into SVG", {
+  s <- vl_scene(2, 1, dpi = 100, bg = "white") |>
+    draw(segments_grob(
+      0.1,
+      0.5,
+      0.9,
+      0.5,
+      gp = vl_gpar(col = red_tile(), lwd = 20, alpha = 0.5)
+    ))
+  expect_match(scene_svg(s), 'stroke-opacity="0.5"', fixed = TRUE)
+  p <- px(s, 100, 50)
+  expect_true(p[1] > 240L && abs(p[2] - 127L) < 12L)
+})
+
+test_that("a hatch in col is rejected", {
+  expect_error(
+    .scene_to_backend(stroke_scene(vl_hatch(col = "red"))),
+    "vl_hatch"
+  )
+})

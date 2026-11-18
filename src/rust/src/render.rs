@@ -39,6 +39,28 @@ pub struct StrokeStyle {
     pub phase: f32,
 }
 
+/// Normalise a dash array (device px) to the one form every backend draws the
+/// same way. Returns an empty vector for "solid".
+///
+/// SVG and PDF repeat an odd-length list to make it even, but tiny-skia rejects
+/// it (and the PNG would silently draw solid), so an odd list is doubled here,
+/// once, for all three. A list with a negative or non-finite entry, or one that
+/// sums to zero, has no dashes to draw and becomes solid on every backend.
+pub fn normalize_dash(dash: &[f32]) -> Vec<f32> {
+    if dash.is_empty() || dash.iter().any(|d| !d.is_finite() || *d < 0.0) {
+        return Vec::new();
+    }
+    let sum: f32 = dash.iter().sum();
+    if !(sum > 0.0 && sum.is_finite()) {
+        return Vec::new();
+    }
+    let mut out = dash.to_vec();
+    if out.len() % 2 == 1 {
+        out.extend_from_slice(dash);
+    }
+    out
+}
+
 thread_local! {
     /// Anti-aliasing for the primitive currently being drawn, set by the scene
     /// walk from the folded gpar. A thread-local rather than a parameter on every
@@ -599,6 +621,14 @@ pub trait RenderBackend {
     fn wants_element_keys(&self) -> bool {
         false
     }
+
+    /// Where the walk records each element's resolved geometry for the queries
+    /// (`element_geometry()`, picking, hit-testing, boxes). `None` for every
+    /// painting backend, so a render pays nothing; `geom::RecordBackend`
+    /// returns its sink. See `geom.rs`.
+    fn geom_sink(&mut self) -> Option<&mut crate::geom::GeomSink> {
+        None
+    }
 }
 
 /// One unit circle (origin, radius 1) reused with a per-element affine transform.
@@ -989,16 +1019,19 @@ fn skia_stops(stops: &[Stop]) -> Vec<tiny_skia::GradientStop> {
 
 /// Build a tiny-skia paint for a resolved fill. Gradient geometry is in local px
 /// with an identity gradient transform; `fill_path`'s ctm maps it like the path.
-/// The paint to stroke with: the style's gradient/pattern shader when it has
-/// one, otherwise the plain colour the walk resolved. A pattern stroke has no
-/// shader here (patterns borrow a pixmap and are handled inline for fills), so it
-/// falls back to the colour rather than vanishing.
-fn stroke_paint_or(stroke: &StrokeStyle, color: Rgba) -> Paint<'static> {
-    stroke
-        .paint
-        .as_ref()
-        .and_then(paint_for)
-        .unwrap_or_else(|| solid_paint(color))
+/// Run `f` with the tiny-skia paint for `paint`, including a tiled pattern,
+/// whose shader borrows a tile `Pixmap` and so cannot come out of `paint_for`.
+/// `None` when the paint has nothing to draw (a hatch, a degenerate tile).
+fn with_paint<R>(paint: &ResolvedPaint, f: impl FnOnce(&Paint) -> R) -> Option<R> {
+    if let ResolvedPaint::Pattern { tile, tw, th, x, y, w, h, extend, opacity } = paint {
+        let pm = pixmap_from_straight(tile, *tw, *th)?;
+        let t = pattern_transform(*tw, *th, *x, *y, *w, *h);
+        let mut p = Paint::default();
+        p.shader = tiny_skia::Pattern::new(pm.as_ref(), skia_spread(*extend), FilterQuality::Bilinear, *opacity, t);
+        p.anti_alias = antialias();
+        return Some(f(&p));
+    }
+    paint_for(paint).map(|p| f(&p))
 }
 
 fn paint_for(paint: &ResolvedPaint) -> Option<Paint<'static>> {
@@ -1037,23 +1070,7 @@ fn paint_for(paint: &ResolvedPaint) -> Option<Paint<'static>> {
 impl RenderBackend for RasterBackend {
     fn fill_path(&mut self, path: &Path, transform: Transform, paint: &ResolvedPaint, rule: FillRule, clip: &Clip) {
         let mask = self.mask_for(clip);
-        if let ResolvedPaint::Pattern { tile, tw, th, x, y, w, h, extend, opacity } = paint {
-            // The tile Pixmap must outlive the Pattern shader (it borrows it), so
-            // build both here rather than via paint_for's `'static` return.
-            let pm = match pixmap_from_straight(tile, *tw, *th) {
-                Some(pm) => pm,
-                None => return,
-            };
-            let t = pattern_transform(*tw, *th, *x, *y, *w, *h);
-            let mut p = Paint::default();
-            p.shader = tiny_skia::Pattern::new(pm.as_ref(), skia_spread(*extend), FilterQuality::Bilinear, *opacity, t);
-            p.anti_alias = antialias();
-            self.target().fill_path(path, &p, rule, transform, mask.as_deref());
-            return;
-        }
-        if let Some(p) = paint_for(paint) {
-            self.target().fill_path(path, &p, rule, transform, mask.as_deref());
-        }
+        with_paint(paint, |p| self.target().fill_path(path, p, rule, transform, mask.as_deref()));
     }
 
     fn stroke_path(&mut self, path: &Path, transform: Transform, color: Rgba, stroke: &StrokeStyle, clip: &Clip) {
@@ -1064,8 +1081,15 @@ impl RenderBackend for RasterBackend {
         let sk = skia_stroke(stroke);
         // A gradient/pattern stroke is the same shader a fill would use, applied
         // to the stroked region instead of the enclosed one.
-        let p = stroke_paint_or(stroke, color);
-        self.target().stroke_path(path, &p, &sk, transform, mask.as_deref());
+        match &stroke.paint {
+            Some(paint) => {
+                with_paint(paint, |p| self.target().stroke_path(path, p, &sk, transform, mask.as_deref()));
+            }
+            None => {
+                let p = solid_paint(color);
+                self.target().stroke_path(path, &p, &sk, transform, mask.as_deref());
+            }
+        }
     }
 
     fn stroke_lines(&mut self, path: &Path, transform: Transform, color: Rgba, stroke: &StrokeStyle, clip: &Clip) {
@@ -1098,7 +1122,7 @@ impl RenderBackend for RasterBackend {
         }
         let mask = self.mask_for(clip);
         let sk = skia_stroke(stroke);
-        let paint = stroke_paint_or(stroke, color);
+        let paint = solid_paint(color); // fast path: no stroke paint
         let target = self.targets.last_mut().expect("at least the page target");
         // Long enough that a contour or a typical line is a single run (and so
         // identical to the combined stroke), short enough that a run of a
@@ -1826,10 +1850,14 @@ impl RenderBackend for SvgBackend {
             };
             format!(" stroke-dasharray=\"{}\"{off}", arr.join(","))
         };
-        // A gradient stroke reuses the fill machinery: `svg_fill` already emits the
-        // <defs> entry and returns `fill="url(#id)"`, so rewrite the attribute name.
+        // A gradient/pattern stroke reuses the fill machinery: `svg_fill` already
+        // emits the <defs> entry and returns `fill="url(#id)"` (plus a pattern's
+        // `fill-opacity`), so rewrite the attribute names.
         let stroke_attr = match &stroke.paint {
-            Some(p) => self.svg_fill(p).replace("fill=", "stroke="),
+            Some(p) => self
+                .svg_fill(p)
+                .replace("fill-opacity=", "stroke-opacity=")
+                .replace("fill=", "stroke="),
             None => format!("stroke=\"{}\" stroke-opacity=\"{}\"", rgb_hex(color), opacity(color)),
         };
         let element = format!(
@@ -2441,6 +2469,78 @@ impl<'a, 'b> PdfBackend<'a, 'b> {
         self.outer_tagged = on;
     }
 
+    /// The krilla paint and opacity for a resolved paint, shared by fills and
+    /// strokes so a gradient or tiled pattern draws the same either way. `None`
+    /// for a hatch (expanded to spans by the walk) or a degenerate tile.
+    fn pdf_paint(&mut self, paint: &ResolvedPaint) -> Option<(KPaint, NormalizedF32)> {
+        Some(match paint {
+            // Expanded to stroked spans by the walk before it reaches a backend.
+            ResolvedPaint::Hatch { .. } => return None,
+            ResolvedPaint::Solid(c) => (rgb::Color::new(c.r, c.g, c.b).into(), norm(c.a)),
+            ResolvedPaint::Linear { x1, y1, x2, y2, stops, extend } => (
+                KPaint::from(KLinear {
+                    x1: *x1 as f32,
+                    y1: *y1 as f32,
+                    x2: *x2 as f32,
+                    y2: *y2 as f32,
+                    transform: KTransform::identity(),
+                    spread_method: krilla_spread(*extend),
+                    stops: krilla_stops(stops),
+                    anti_alias: true,
+                }),
+                NormalizedF32::ONE,
+            ),
+            ResolvedPaint::Radial { cx, cy, r, fx, fy, fr, stops, extend } => (
+                KPaint::from(KRadial {
+                    fx: *fx as f32,
+                    fy: *fy as f32,
+                    fr: *fr as f32,
+                    cx: *cx as f32,
+                    cy: *cy as f32,
+                    cr: *r as f32,
+                    transform: KTransform::identity(),
+                    spread_method: krilla_spread(*extend),
+                    stops: krilla_stops(stops),
+                    anti_alias: true,
+                }),
+                NormalizedF32::ONE,
+            ),
+            // A real tiling pattern: draw the tile image into a stream sized to the
+            // cell, anchored at the cell's top-left (matching raster/SVG).
+            ResolvedPaint::Pattern { tile, tw, th, x, y, w, h, opacity, .. } => {
+                // Overflow-checked tile byte count (parity with pixmap_from_straight).
+                let need = (*tw as usize)
+                    .checked_mul(*th as usize)
+                    .and_then(|p| p.checked_mul(4));
+                match (KSize::from_wh(*w as f32, *h as f32), need) {
+                    // `>=` for parity with the raster/SVG tile checks (which accept a
+                    // buffer at least the required size, not exactly it).
+                    (Some(cell), Some(n)) if tile.len() >= n => {
+                        let img = KImage::from_rgba8(tile[..n].to_vec(), *tw, *th);
+                        let stream = {
+                            let mut sb = self.surface.stream_builder();
+                            let mut surf = sb.surface();
+                            surf.draw_image(img, cell);
+                            surf.finish();
+                            sb.finish()
+                        };
+                        let pat = KPattern {
+                            stream,
+                            transform: KTransform::from_translate((x - w / 2.0) as f32, (y - h / 2.0) as f32),
+                            width: *w as f32,
+                            height: *h as f32,
+                        };
+                        (KPaint::from(pat), NormalizedF32::new(opacity.clamp(0.0, 1.0)).unwrap_or(NormalizedF32::ONE))
+                    }
+                    _ => {
+                        self.warn("a tiling-pattern fill could not be rendered to PDF (degenerate tile or cell size); the shape was left unfilled");
+                        return None;
+                    }
+                }
+            }
+        })
+    }
+
     /// Record a degradation, de-duplicated (the same gap usually recurs across
     /// many primitives; the user needs to hear it once).
     fn warn(&mut self, msg: impl Into<String>) {
@@ -2505,37 +2605,6 @@ impl<'a, 'b> PdfBackend<'a, 'b> {
             .and_then(|bytes| Font::new(krilla::Data::from(bytes), index));
         self.fonts.insert(key, font.clone());
         font
-    }
-}
-
-/// The krilla paint for a gradient stroke. Gradients only: a pattern needs a
-/// tile stream built against the fill's cell geometry, which a stroke has no
-/// equivalent of, so it falls back to the plain colour.
-fn krilla_paint(paint: &ResolvedPaint) -> Option<KPaint> {
-    match paint {
-        ResolvedPaint::Linear { x1, y1, x2, y2, stops, extend } => Some(KPaint::from(KLinear {
-            x1: *x1 as f32,
-            y1: *y1 as f32,
-            x2: *x2 as f32,
-            y2: *y2 as f32,
-            transform: KTransform::identity(),
-            spread_method: krilla_spread(*extend),
-            stops: krilla_stops(stops),
-            anti_alias: true,
-        })),
-        ResolvedPaint::Radial { cx, cy, r, fx, fy, fr, stops, extend } => Some(KPaint::from(KRadial {
-            fx: *fx as f32,
-            fy: *fy as f32,
-            fr: *fr as f32,
-            cx: *cx as f32,
-            cy: *cy as f32,
-            cr: *r as f32,
-            transform: KTransform::identity(),
-            spread_method: krilla_spread(*extend),
-            stops: krilla_stops(stops),
-            anti_alias: true,
-        })),
-        ResolvedPaint::Solid(_) | ResolvedPaint::Pattern { .. } | ResolvedPaint::Hatch { .. } => None,
     }
 }
 
@@ -2630,71 +2699,9 @@ impl RenderBackend for PdfBackend<'_, '_> {
         };
         // Gradient geometry is local px (identity gradient transform); the
         // primitive `transform` pushed below maps it to device, like the path.
-        let (kpaint, opacity) = match paint {
-            // Expanded to stroked spans by the walk before it reaches a backend.
-            ResolvedPaint::Hatch { .. } => return,
-            ResolvedPaint::Solid(c) => (rgb::Color::new(c.r, c.g, c.b).into(), norm(c.a)),
-            ResolvedPaint::Linear { x1, y1, x2, y2, stops, extend } => (
-                KPaint::from(KLinear {
-                    x1: *x1 as f32,
-                    y1: *y1 as f32,
-                    x2: *x2 as f32,
-                    y2: *y2 as f32,
-                    transform: KTransform::identity(),
-                    spread_method: krilla_spread(*extend),
-                    stops: krilla_stops(stops),
-                    anti_alias: true,
-                }),
-                NormalizedF32::ONE,
-            ),
-            ResolvedPaint::Radial { cx, cy, r, fx, fy, fr, stops, extend } => (
-                KPaint::from(KRadial {
-                    fx: *fx as f32,
-                    fy: *fy as f32,
-                    fr: *fr as f32,
-                    cx: *cx as f32,
-                    cy: *cy as f32,
-                    cr: *r as f32,
-                    transform: KTransform::identity(),
-                    spread_method: krilla_spread(*extend),
-                    stops: krilla_stops(stops),
-                    anti_alias: true,
-                }),
-                NormalizedF32::ONE,
-            ),
-            // A real tiling pattern: draw the tile image into a stream sized to the
-            // cell, anchored at the cell's top-left (matching raster/SVG).
-            ResolvedPaint::Pattern { tile, tw, th, x, y, w, h, opacity, .. } => {
-                // Overflow-checked tile byte count (parity with pixmap_from_straight).
-                let need = (*tw as usize)
-                    .checked_mul(*th as usize)
-                    .and_then(|p| p.checked_mul(4));
-                match (KSize::from_wh(*w as f32, *h as f32), need) {
-                    // `>=` for parity with the raster/SVG tile checks (which accept a
-                    // buffer at least the required size, not exactly it).
-                    (Some(cell), Some(n)) if tile.len() >= n => {
-                        let img = KImage::from_rgba8(tile[..n].to_vec(), *tw, *th);
-                        let stream = {
-                            let mut sb = self.surface.stream_builder();
-                            let mut surf = sb.surface();
-                            surf.draw_image(img, cell);
-                            surf.finish();
-                            sb.finish()
-                        };
-                        let pat = KPattern {
-                            stream,
-                            transform: KTransform::from_translate((x - w / 2.0) as f32, (y - h / 2.0) as f32),
-                            width: *w as f32,
-                            height: *h as f32,
-                        };
-                        (KPaint::from(pat), NormalizedF32::new(opacity.clamp(0.0, 1.0)).unwrap_or(NormalizedF32::ONE))
-                    }
-                    _ => {
-                        self.warn("a tiling-pattern fill could not be rendered to PDF (degenerate tile or cell size); the shape was left unfilled");
-                        return;
-                    }
-                }
-            }
+        let (kpaint, opacity) = match self.pdf_paint(paint) {
+            Some(p) => p,
+            None => return,
         };
         let krule = match rule {
             FillRule::EvenOdd => KFillRule::EvenOdd,
@@ -2715,14 +2722,16 @@ impl RenderBackend for PdfBackend<'_, '_> {
             Some(p) => p,
             None => return,
         };
-        let n = self.push_state(transform, clip);
-        self.surface.set_fill(None);
-        // A gradient stroke uses the same krilla paint a fill would; `krilla_paint`
-        // returns `None` for a pattern, which falls back to the plain colour.
-        let (kpaint, kopacity) = match stroke.paint.as_ref().and_then(krilla_paint) {
-            Some(p) => (p, NormalizedF32::ONE),
+        // A gradient/pattern stroke uses the same krilla paint a fill would.
+        let (kpaint, kopacity) = match &stroke.paint {
+            Some(p) => match self.pdf_paint(p) {
+                Some(kp) => kp,
+                None => return,
+            },
             None => (rgb::Color::new(color.r, color.g, color.b).into(), norm(color.a)),
         };
+        let n = self.push_state(transform, clip);
+        self.surface.set_fill(None);
         self.surface.set_stroke(Some(KStroke {
             paint: kpaint,
             width: stroke.width,

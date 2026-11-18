@@ -42,6 +42,57 @@ pub fn point_in_ring(px: f64, py: f64, xs: &[f64], ys: &[f64]) -> bool {
     inside
 }
 
+/// Signed winding number of a closed ring around a point (nonzero rule). The
+/// sign depends on the ring's direction; only zero vs non-zero matters.
+pub fn winding_number(px: f64, py: f64, xs: &[f64], ys: &[f64]) -> i32 {
+    let n = xs.len().min(ys.len());
+    if n < 3 {
+        return 0;
+    }
+    let mut wn = 0;
+    let mut j = n - 1;
+    for i in 0..n {
+        let (x0, y0, x1, y1) = (xs[j], ys[j], xs[i], ys[i]);
+        // Which side of the edge (x0,y0)->(x1,y1) the point is on.
+        let side = (x1 - x0) * (py - y0) - (px - x0) * (y1 - y0);
+        if y0 <= py {
+            if y1 > py && side > 0.0 {
+                wn += 1;
+            }
+        } else if y1 <= py && side < 0.0 {
+            wn -= 1;
+        }
+        j = i;
+    }
+    wn
+}
+
+/// Is a point inside a set of rings filled together under one rule? Even-odd
+/// counts crossings over every ring (so a hole is outside); nonzero sums the
+/// rings' winding numbers (so a same-direction inner ring is still inside).
+pub fn inside_rings(px: f64, py: f64, rings: &[Vec<(f64, f64)>], evenodd: bool) -> bool {
+    if evenodd {
+        rings
+            .iter()
+            .filter(|r| {
+                let (xs, ys): (Vec<f64>, Vec<f64>) = r.iter().copied().unzip();
+                point_in_ring(px, py, &xs, &ys)
+            })
+            .count()
+            % 2
+            == 1
+    } else {
+        rings
+            .iter()
+            .map(|r| {
+                let (xs, ys): (Vec<f64>, Vec<f64>) = r.iter().copied().unzip();
+                winding_number(px, py, &xs, &ys)
+            })
+            .sum::<i32>()
+            != 0
+    }
+}
+
 /// Distance from a point to a polyline or ring, in the same units as the
 /// coordinates.
 ///
@@ -70,7 +121,9 @@ pub fn poly_dist(px: f64, py: f64, xs: &[f64], ys: &[f64], closed: bool) -> f64 
     best.sqrt()
 }
 
-/// Distance from a point to an axis-aligned rectangle; zero inside.
+/// Distance from a point to an axis-aligned rectangle; zero inside. Kept for
+/// the tests' bbox-vs-geometry comparison: a recorded rect is a filled ring.
+#[cfg(test)]
 pub fn rect_dist(px: f64, py: f64, x0: f64, y0: f64, x1: f64, y1: f64) -> f64 {
     let (lo_x, hi_x) = (x0.min(x1), x0.max(x1));
     let (lo_y, hi_y) = (y0.min(y1), y0.max(y1));
@@ -140,6 +193,24 @@ mod tests {
     fn rect_distance_is_zero_inside_and_euclidean_outside() {
         assert_eq!(rect_dist(5.0, 5.0, 0.0, 0.0, 10.0, 10.0), 0.0);
         assert!((rect_dist(13.0, 14.0, 0.0, 0.0, 10.0, 10.0) - 5.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn fill_rules_differ_on_a_hole() {
+        let outer = vec![(0.0, 0.0), (10.0, 0.0), (10.0, 10.0), (0.0, 10.0)];
+        let same = vec![(3.0, 3.0), (7.0, 3.0), (7.0, 7.0), (3.0, 7.0)];
+        let rev: Vec<(f64, f64)> = same.iter().rev().copied().collect();
+        let rings_same = vec![outer.clone(), same];
+        let rings_rev = vec![outer, rev];
+        // Even-odd: the hole is outside, whatever the inner ring's direction.
+        assert!(!inside_rings(5.0, 5.0, &rings_same, true));
+        assert!(!inside_rings(5.0, 5.0, &rings_rev, true));
+        assert!(inside_rings(1.0, 1.0, &rings_same, true));
+        // Nonzero: a same-direction inner ring winds twice (inside), an opposite
+        // one cancels (a hole).
+        assert!(inside_rings(5.0, 5.0, &rings_same, false));
+        assert!(!inside_rings(5.0, 5.0, &rings_rev, false));
+        assert!(inside_rings(1.0, 1.0, &rings_rev, false));
     }
 
     #[test]

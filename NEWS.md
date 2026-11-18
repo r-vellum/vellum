@@ -2,6 +2,16 @@
 
 ## Strokes
 
+* **Fix: an odd-length dash pattern draws the same on every backend.**
+  `vl_gpar(lty = c(4, 2, 1))` (or a one-digit hex string like `"4"`) drew a
+  solid line in PNG, because the raster backend rejects an odd dash array, while
+  SVG and PDF repeated the list and drew dashes.
+
+  The engine now normalises the dash array once for all three backends: an
+  odd-length list is doubled (the SVG and PDF rule), and a list that sums to
+  zero draws solid. Negative or infinite dash lengths are rejected with an
+  error.
+
 * **Fix: thin, densely sampled lines no longer look stippled in PNG.** For the
   default line style (opaque, solid, round caps and joins) the raster backend
   stroked every segment of a line on its own. The antialiased pixels around
@@ -13,6 +23,22 @@
   The fast path now strokes a line in runs of up to 256 consecutive segments.
   Within a run the result is identical to a single stroke, and a long
   self-intersecting polyline renders as fast as before.
+
+## Paint
+
+* **Fix: pattern strokes and reflected patterns draw the same on every
+  backend.** A `vl_pattern()` given to `col` stroked with the pattern in SVG
+  but fell back to plain black in PNG and PDF. All three backends now stroke
+  with the pattern, and a faded pattern stroke keeps its opacity in SVG.
+
+  `vl_pattern(extend = "reflect")` mirrored every other cell in PNG but repeated
+  the tile in SVG and PDF. A reflected pattern is now drawn from a 2x2 mirrored
+  tile, which every backend tiles identically. `extend = "pad"` is now an error
+  for patterns, because SVG and PDF tiling patterns cannot clamp a tile's edges
+  outwards (it already drew as `"repeat"` there).
+
+  A `vl_hatch()` in `col` is now an error. It drew nothing in SVG and a black
+  line in PNG; a hatch fills a shape and has no meaning as a stroke.
 
 ## Scenes
 
@@ -47,6 +73,42 @@
   error that names the arguments. `key` and `meta` must now have length 1 or n.
   Before, `rep_len()` silently truncated or wrapped them, so elements could be
   paired with the wrong data.
+
+* **Fix: every geometry query now reports what is drawn.** `element_geometry()`,
+  `vl_nearest()`, `hit_test()`, the `scene_model()` boxes and the linter's node
+  boxes each had their own copy of every mark's geometry, and the copies had
+  drifted from the renderer. A segment drawn with `offset =` or
+  `start_cap =`/`end_cap =` was reported (and picked) where it would have been
+  without them, so `vl_nearest()` could return distance 0 at a point 38 px from
+  the ink. Keyed hexagons and sectors were in `scene_model()` but absent from
+  `vl_nearest()` and `element_geometry()`. Rotated text kept an unrotated box,
+  and the linter ignored a non-regular hexagon's `width`/`height`.
+
+  The render walk now records each element's geometry as it resolves it (after
+  offsets, caps and trims; text rotated about its anchor), and all five queries
+  read that one recording. Results change where the old copies were wrong:
+  offset/capped segments and lines, rotated text (whose `element_geometry()` is
+  now its four corners), non-regular hexagons, and sectors, whose box is now the
+  wedge rather than the whole circle. Hexagons and sectors join `vl_nearest()`
+  and `element_geometry()` as kinds `"hexagon"` and `"sector"` (their outline as
+  one ring). `hit_test()` no longer rasterises the scene on every call: it tests
+  the recorded shapes topmost-first against the viewport clip, picks a stroke
+  by half its width (at least 2 px) and a marker by its disc.
+
+* **Behaviour change: a point in a polygon's hole no longer counts as a hit.**
+  `vl_nearest()` measured a multi-ring path as the minimum over its rings, each
+  treated as filled, so a point inside any ring, including a hole, was at
+  distance 0. Containment is now decided once across all of an element's rings
+  under the rule the shape is painted with: even-odd parity, or nonzero
+  winding. A point in an `"evenodd"` path's hole (or in a `"winding"` path's
+  reversed inner ring) is outside, and its distance is to the nearest edge,
+  which is the hole's own boundary. A plain polygon picks as before.
+
+  `element_geometry()` gains a `rule` column (`"nonzero"`, `"evenodd"`, or `NA`
+  for segments, lines and points), one value per element, so a client-side
+  host can decide containment the same way. The column is appended, so no
+  existing column moves. The scene-contract article now documents
+  `element_geometry()` and its containment rule.
 
 # vellum 0.7.1
 

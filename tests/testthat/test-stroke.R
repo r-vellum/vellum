@@ -185,6 +185,86 @@ test_that('lty = "blank"/0 suppresses the line but keeps the fill', {
   expect_equal(.encode_lty(0), .encode_lty("blank")) # code 0 == "blank"
 })
 
+# VR-6: an odd-length dash list must draw the same dashes on every backend.
+# tiny-skia rejects an odd array (the PNG drew solid) while SVG and PDF repeat
+# it, so the engine doubles it once for all three.
+pdf_content <- function(path) {
+  r <- readBin(path, "raw", file.size(path))
+  ends <- grepRaw("endstream", r, fixed = TRUE, all = TRUE)
+  starts <- setdiff(grepRaw("stream", r, fixed = TRUE, all = TRUE), ends + 3L)
+  txt <- vapply(
+    starts,
+    function(s) {
+      b <- s + 6L
+      if (r[b] == as.raw(13L)) {
+        b <- b + 1L
+      }
+      if (r[b] == as.raw(10L)) {
+        b <- b + 1L
+      }
+      e <- ends[ends > b][1] - 1L
+      tryCatch(
+        rawToChar(memDecompress(r[b:e], "gzip")),
+        error = function(e) NA_character_
+      )
+    },
+    character(1)
+  )
+  paste(txt[!is.na(txt)], collapse = "\n")
+}
+svg_dash <- function(s) {
+  f <- withr::local_tempfile(fileext = ".svg")
+  render(s, f)
+  svg <- paste(readLines(f, warn = FALSE), collapse = "\n")
+  m <- regmatches(svg, regexpr('stroke-dasharray="[^"]*"', svg))
+  if (length(m) == 0L) {
+    return(numeric(0))
+  }
+  as.numeric(strsplit(sub('.*="([^"]*)"', "\\1", m), ",")[[1]])
+}
+pdf_dash <- function(s) {
+  f <- withr::local_tempfile(fileext = ".pdf")
+  render(s, f)
+  m <- regmatches(
+    pdf_content(f),
+    regexpr("\\[[0-9. ]*\\] *[0-9.]+ d", pdf_content(f))
+  )
+  if (length(m) == 0L) {
+    return(numeric(0))
+  }
+  as.numeric(strsplit(trimws(sub("\\[([^]]*)\\].*", "\\1", m)), " +")[[1]])
+}
+ink_runs <- function(s) {
+  ink <- vapply(2:198, function(x) px(s, x, 50)[1] < 128L, logical(1))
+  r <- rle(ink)
+  sum(r$values)
+}
+
+test_that("an odd-length dash list dashes the PNG and matches SVG/PDF", {
+  s <- hline(vl_gpar(col = "black", lwd = 3, lty = c(4, 2, 1)))
+  # 3.125 device px per lwd unit at 100 dpi; the list is doubled to even length
+  w <- 3 * 100 / 96
+  want <- rep(c(4, 2, 1) * w, 2)
+  expect_gt(ink_runs(s), 4L) # dashed, not one solid run
+  expect_equal(svg_dash(s), want, tolerance = 1e-4)
+  expect_equal(pdf_dash(s), want, tolerance = 1e-4)
+  # a single-entry hex string is odd too
+  expect_gt(ink_runs(hline(vl_gpar(col = "black", lwd = 3, lty = "4"))), 4L)
+})
+
+test_that("an all-zero dash list is solid on every backend", {
+  s <- hline(vl_gpar(col = "black", lwd = 3, lty = c(0, 0)))
+  expect_equal(ink_runs(s), 1L)
+  expect_lt(white(s), 5L)
+  expect_length(svg_dash(s), 0L)
+  expect_length(pdf_dash(s), 0L)
+})
+
+test_that("negative or infinite dash lengths are rejected", {
+  expect_error(.encode_lty(c(4, -2)), "non-negative")
+  expect_error(.encode_lty(c(4, Inf)), "finite")
+})
+
 # VR-10: the opaque round-cap fast path stroked every segment on its own, so the
 # antialiased pixels around each vertex were blended twice and a densely sampled
 # thin line (a contour) came out beaded. It must match the combined stroke,
