@@ -2,7 +2,9 @@
 
 Returns the resolved device-pixel geometry of every **keyed** element:
 the two endpoints of a segment, the vertices of a line or polygon, the
-centre of a round mark, the opposite corners of a rect.
+centre of a round mark, the opposite corners of a rect. It is recorded
+from the render itself, so a segment or line drawn with an `offset` or
+end caps is reported where it is drawn.
 
 ## Usage
 
@@ -47,9 +49,10 @@ One row per vertex, grouped by `key`. What the vertices mean depends on
 | `segment` | 2 | the endpoints |
 | `line`, `polygon` | *k* | the vertices, in order; `polygon` is closed |
 | `path` | *k* | all rings' vertices concatenated; `ring` separates them |
+| `hexagon`, `sector` | *k* | the outline, one closed ring |
 | `point` | 1 | the centre |
-| `rect` | 2 | opposite corners |
-| `text`, `roundrect` | 2 | the bounding box's corners |
+| `rect`, `roundrect` | 2 | the bounding box's opposite corners |
+| `text` | 4 | the label's box, as a closed ring (turned with a rotated label) |
 
 Coordinates are device pixels with y growing **down**, matching
 [`scene_model()`](https://r-vellum.github.io/vellum/reference/scene_model.md)'s
@@ -60,8 +63,8 @@ hole, or a multipart feature – so a host can hit-test it the way the
 engine does. Without it the concatenated vertices are lossy: treating
 them as one closed ring invents a phantom edge from each ring's last
 vertex to the next ring's first. Split on `ring` and test the rings
-separately. Every other kind is a single ring, so `ring` is `1`
-throughout.
+separately. A label set along a path has one ring per glyph box; every
+other kind is a single ring, so `ring` is `1` throughout.
 
 ## See also
 

@@ -433,10 +433,12 @@ glyphs came from that face).</p>
 <div class="section">
 <h3 id="method-hit-test">Method <code>hit_test</code><a class="anchor" aria-label="anchor" href="#method-hit-test"></a></h3>
 <p>Hit-test: return the pick id of the topmost primitive covering device pixel
-<code>(x, y)</code>, or -1 if none. Implemented as a colour pick-buffer — each node is
-drawn opaque (AA off) in a colour encoding its pick id, respecting clips and
-paint order, then the pixel is decoded — so it is geometry/clip/overlap
-exact. Markers and text use a bounding box; lines/segments a pick band.</p>
+<code>(x, y)</code>, or -1 if none. Reads the recorded geometry (see <code>recording</code>):
+nodes are tested topmost-first, a fill by its fill rule, a round mark by
+its disc, a text label by its (rotated) box, and a line or segment by a
+band of half its stroke width (at least 2 px, so a hairline stays
+clickable). A candidate counts only if the pixel survives its viewport's
+clip, tested with the same aliased clip mask the renderer builds.</p>
 </div>
 
     </div>

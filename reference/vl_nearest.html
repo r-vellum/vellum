@@ -125,11 +125,13 @@ a host holding only boxes has to exclude such marks from hover rather than
 rank them wrongly.</p>
 <p>Distances are: to the disc for round marks (zero inside), to the rectangle for
 rects (zero inside), perpendicular to the segment for segments, to the nearest
-edge for open polylines, and <strong>zero anywhere inside</strong> a closed polygon or
-path — so clicking the middle of a choropleth region hits that region.</p>
-<p>Marks vellum cannot describe more precisely than a box — labels, rounded rects
-— fall back to their box, which for a label is a fair description of the
-target anyway.</p>
+edge for open polylines, and <strong>zero anywhere inside</strong> a closed polygon, path,
+hexagon or sector — so clicking the middle of a choropleth region hits that
+region. A label is measured to its box, turned with the label when it is
+rotated.</p>
+<p>The geometry is the one the renderer draws: a segment or line drawn with an
+<code>offset</code> or end caps is measured where it lands, not where its coordinates
+would put it. Distances are to a stroke's centre-line.</p>
     </div>
     <div class="section level2">
     <h2 id="for-a-client-side-host">For a client-side host<a class="anchor" aria-label="anchor" href="#for-a-client-side-host"></a></h2>

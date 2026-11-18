@@ -47,6 +47,45 @@
   silently truncated or wrapped them, so elements could be paired with
   the wrong data.
 
+- **Fix: every geometry query now reports what is drawn.**
+  [`element_geometry()`](https://r-vellum.github.io/vellum/reference/element_geometry.md),
+  [`vl_nearest()`](https://r-vellum.github.io/vellum/reference/vl_nearest.md),
+  [`hit_test()`](https://r-vellum.github.io/vellum/reference/hit_test.md),
+  the
+  [`scene_model()`](https://r-vellum.github.io/vellum/reference/scene_model.md)
+  boxes and the linter’s node boxes each had their own copy of every
+  mark’s geometry, and the copies had drifted from the renderer. A
+  segment drawn with `offset =` or `start_cap =`/`end_cap =` was
+  reported (and picked) where it would have been without them, so
+  [`vl_nearest()`](https://r-vellum.github.io/vellum/reference/vl_nearest.md)
+  could return distance 0 at a point 38 px from the ink. Keyed hexagons
+  and sectors were in
+  [`scene_model()`](https://r-vellum.github.io/vellum/reference/scene_model.md)
+  but absent from
+  [`vl_nearest()`](https://r-vellum.github.io/vellum/reference/vl_nearest.md)
+  and
+  [`element_geometry()`](https://r-vellum.github.io/vellum/reference/element_geometry.md).
+  Rotated text kept an unrotated box, and the linter ignored a
+  non-regular hexagon’s `width`/`height`.
+
+  The render walk now records each element’s geometry as it resolves it
+  (after offsets, caps and trims; text rotated about its anchor), and
+  all five queries read that one recording. Results change where the old
+  copies were wrong: offset/capped segments and lines, rotated text
+  (whose
+  [`element_geometry()`](https://r-vellum.github.io/vellum/reference/element_geometry.md)
+  is now its four corners), non-regular hexagons, and sectors, whose box
+  is now the wedge rather than the whole circle. Hexagons and sectors
+  join
+  [`vl_nearest()`](https://r-vellum.github.io/vellum/reference/vl_nearest.md)
+  and
+  [`element_geometry()`](https://r-vellum.github.io/vellum/reference/element_geometry.md)
+  as kinds `"hexagon"` and `"sector"` (their outline as one ring).
+  [`hit_test()`](https://r-vellum.github.io/vellum/reference/hit_test.md)
+  no longer rasterises the scene on every call: it tests the recorded
+  shapes topmost-first against the viewport clip, picks a stroke by half
+  its width (at least 2 px) and a marker by its disc.
+
 ## vellum 0.7.1
 
 ### Text

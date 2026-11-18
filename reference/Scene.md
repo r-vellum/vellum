@@ -338,8 +338,10 @@ Render and return the RGBA of device pixel `(x, y)` as `c(r, g, b, a)`.
 ### Method `hit_test`
 
 Hit-test: return the pick id of the topmost primitive covering device
-pixel `(x, y)`, or -1 if none. Implemented as a colour pick-buffer —
-each node is drawn opaque (AA off) in a colour encoding its pick id,
-respecting clips and paint order, then the pixel is decoded — so it is
-geometry/clip/overlap exact. Markers and text use a bounding box;
-lines/segments a pick band.
+pixel `(x, y)`, or -1 if none. Reads the recorded geometry (see
+`recording`): nodes are tested topmost-first, a fill by its fill rule, a
+round mark by its disc, a text label by its (rotated) box, and a line or
+segment by a band of half its stroke width (at least 2 px, so a hairline
+stays clickable). A candidate counts only if the pixel survives its
+viewport's clip, tested with the same aliased clip mask the renderer
+builds.

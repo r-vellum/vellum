@@ -7,9 +7,13 @@
   };
 </script><script src="../deps/jquery-3.6.0/jquery-3.6.0.min.js"></script><meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no"><link href="../deps/bootstrap-5.3.8/bootstrap.min.css" rel="stylesheet"><script src="../deps/bootstrap-5.3.8/bootstrap.bundle.min.js"></script><link href="../deps/Spectral-0.4.10/font.css" rel="stylesheet"><link href="../deps/JetBrains_Mono-0.4.10/font.css" rel="stylesheet"><link href="../deps/Spectral_SC-0.4.10/font.css" rel="stylesheet"><link href="../deps/font-awesome-6.5.2/css/all.min.css" rel="stylesheet"><link href="../deps/font-awesome-6.5.2/css/v4-shims.min.css" rel="stylesheet"><script src="../deps/headroom-0.11.0/headroom.min.js"></script><script src="../deps/headroom-0.11.0/jQuery.headroom.min.js"></script><script src="../deps/bootstrap-toc-1.0.1/bootstrap-toc.min.js"></script><script src="../deps/clipboard.js-2.0.11/clipboard.min.js"></script><script src="../deps/search-1.0.0/autocomplete.jquery.min.js"></script><script src="../deps/search-1.0.0/fuse.min.js"></script><script src="../deps/search-1.0.0/mark.min.js"></script><!-- pkgdown --><script src="../pkgdown.js"></script><link href="../extra.css" rel="stylesheet"><meta property="og:title" content="The true geometry of a scene's addressable elements — element_geometry"><meta name="description" content="Returns the resolved device-pixel geometry of every keyed element: the two
 endpoints of a segment, the vertices of a line or polygon, the centre of a
-round mark, the opposite corners of a rect."><meta property="og:description" content="Returns the resolved device-pixel geometry of every keyed element: the two
+round mark, the opposite corners of a rect. It is recorded from the render
+itself, so a segment or line drawn with an offset or end caps is reported
+where it is drawn."><meta property="og:description" content="Returns the resolved device-pixel geometry of every keyed element: the two
 endpoints of a segment, the vertices of a line or polygon, the centre of a
-round mark, the opposite corners of a rect."><meta property="og:image" content="https://r-vellum.github.io/vellum/logo.png"><meta name="twitter:card" content="summary_large_image"><meta name="twitter:creator" content="@schochastics"><meta name="twitter:site" content="@schochastics"><meta name="theme-color" content="#efe6d2"></head><body>
+round mark, the opposite corners of a rect. It is recorded from the render
+itself, so a segment or line drawn with an offset or end caps is reported
+where it is drawn."><meta property="og:image" content="https://r-vellum.github.io/vellum/logo.png"><meta name="twitter:card" content="summary_large_image"><meta name="twitter:creator" content="@schochastics"><meta name="twitter:site" content="@schochastics"><meta name="theme-color" content="#efe6d2"></head><body>
     <a href="#main" class="visually-hidden-focusable">Skip to contents</a>
 
 
@@ -77,7 +81,9 @@ round mark, the opposite corners of a rect."><meta property="og:image" content="
     <div class="ref-description section level2">
     <p>Returns the resolved device-pixel geometry of every <strong>keyed</strong> element: the two
 endpoints of a segment, the vertices of a line or polygon, the centre of a
-round mark, the opposite corners of a rect.</p>
+round mark, the opposite corners of a rect. It is recorded from the render
+itself, so a segment or line drawn with an <code>offset</code> or end caps is reported
+where it is drawn.</p>
     </div>
 
     <div class="section level2">
@@ -112,14 +118,15 @@ locally at whatever rate it likes.</p>
 
 
 <p>One row per vertex, grouped by <code>key</code>. What the vertices mean depends on
-<code>kind</code>:</p><table class="table table"><tr><td><code>kind</code></td><td>rows</td><td>meaning</td></tr><tr><td><code>segment</code></td><td>2</td><td>the endpoints</td></tr><tr><td><code>line</code>, <code>polygon</code></td><td><em>k</em></td><td>the vertices, in order; <code>polygon</code> is closed</td></tr><tr><td><code>path</code></td><td><em>k</em></td><td>all rings' vertices concatenated; <code>ring</code> separates them</td></tr><tr><td><code>point</code></td><td>1</td><td>the centre</td></tr><tr><td><code>rect</code></td><td>2</td><td>opposite corners</td></tr><tr><td><code>text</code>, <code>roundrect</code></td><td>2</td><td>the bounding box's corners</td></tr></table><p>Coordinates are device pixels with y growing <strong>down</strong>, matching
+<code>kind</code>:</p><table class="table table"><tr><td><code>kind</code></td><td>rows</td><td>meaning</td></tr><tr><td><code>segment</code></td><td>2</td><td>the endpoints</td></tr><tr><td><code>line</code>, <code>polygon</code></td><td><em>k</em></td><td>the vertices, in order; <code>polygon</code> is closed</td></tr><tr><td><code>path</code></td><td><em>k</em></td><td>all rings' vertices concatenated; <code>ring</code> separates them</td></tr><tr><td><code>hexagon</code>, <code>sector</code></td><td><em>k</em></td><td>the outline, one closed ring</td></tr><tr><td><code>point</code></td><td>1</td><td>the centre</td></tr><tr><td><code>rect</code>, <code>roundrect</code></td><td>2</td><td>the bounding box's opposite corners</td></tr><tr><td><code>text</code></td><td>4</td><td>the label's box, as a closed ring (turned with a rotated label)</td></tr></table><p>Coordinates are device pixels with y growing <strong>down</strong>, matching
 <code><a href="scene_model.html">scene_model()</a></code>'s boxes and the rendered SVG's coordinate system.</p>
 <p><code>ring</code> groups the vertices of a multi-ring <code>path</code> – a polygon with a hole, or
 a multipart feature – so a host can hit-test it the way the engine does.
 Without it the concatenated vertices are lossy: treating them as one closed
 ring invents a phantom edge from each ring's last vertex to the next ring's
-first. Split on <code>ring</code> and test the rings separately. Every other kind is a
-single ring, so <code>ring</code> is <code>1</code> throughout.</p>
+first. Split on <code>ring</code> and test the rings separately. A label set along a path
+has one ring per glyph box; every other kind is a single ring, so <code>ring</code> is
+<code>1</code> throughout.</p>
     </div>
     <div class="section level2">
     <h2 id="see-also">See also<a class="anchor" aria-label="anchor" href="#see-also"></a></h2>
