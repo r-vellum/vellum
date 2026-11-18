@@ -118,10 +118,11 @@ be passed anywhere a <code>gp</code> is accepted.</p>
 
 <dl><dt id="arg-col">col<a class="anchor" aria-label="anchor" href="#arg-col"></a></dt>
 <dd><p>Stroke/text colour, or a gradient from <code><a href="gradients.html">linear_gradient()</a></code> /
-<code><a href="gradients.html">radial_gradient()</a></code> to <strong>stroke with a gradient</strong> — the same paint model as
-<code>fill</code>, applied to the stroked region instead of the enclosed one. A
-gradient here affects stroked paths; text and markers fall back to its first
-stop, since a glyph run has no path to run a ramp along.</p></dd>
+<code><a href="gradients.html">radial_gradient()</a></code> or a <code><a href="vl_pattern.html">vl_pattern()</a></code> to <strong>stroke with a gradient or
+pattern</strong> — the same paint model as <code>fill</code>, applied to the stroked region
+instead of the enclosed one. A gradient here affects stroked paths; text
+and markers fall back to its first stop, since a glyph run has no path to
+run a ramp along. A <code><a href="vl_hatch.html">vl_hatch()</a></code> is fill-only and is an error here.</p></dd>
 
 
 <dt id="arg-fill">fill<a class="anchor" aria-label="anchor" href="#arg-fill"></a></dt>

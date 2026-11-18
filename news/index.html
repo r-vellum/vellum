@@ -77,6 +77,18 @@
 <p><strong>Fix: an odd-length dash pattern draws the same on every backend.</strong> <code>vl_gpar(lty = c(4, 2, 1))</code> (or a one-digit hex string like <code>"4"</code>) drew a solid line in PNG, because the raster backend rejects an odd dash array, while SVG and PDF repeated the list and drew dashes.</p>
 <p>The engine now normalises the dash array once for all three backends: an odd-length list is doubled (the SVG and PDF rule), and a list that sums to zero draws solid. Negative or infinite dash lengths are rejected with an error.</p>
 </li>
+<li>
+<p><strong>Fix: thin, densely sampled lines no longer look stippled in PNG.</strong> For the default line style (opaque, solid, round caps and joins) the raster backend stroked every segment of a line on its own. The antialiased pixels around each vertex were then blended twice, so contours, curves and other lines with many short segments got a dark bead at every vertex. At 72-100 dpi that read as a dotted line, and a contour plot carried about 20% more ink than in SVG or PDF.</p>
+<p>The fast path now strokes a line in runs of up to 256 consecutive segments. Within a run the result is identical to a single stroke, and a long self-intersecting polyline renders as fast as before.</p>
+</li>
+</ul></div>
+<div class="section level3">
+<h3 id="paint-0-7-1-9000">Paint<a class="anchor" aria-label="anchor" href="#paint-0-7-1-9000"></a></h3>
+<ul><li>
+<p><strong>Fix: pattern strokes and reflected patterns draw the same on every backend.</strong> A <code><a href="../reference/vl_pattern.html">vl_pattern()</a></code> given to <code>col</code> stroked with the pattern in SVG but fell back to plain black in PNG and PDF. All three backends now stroke with the pattern, and a faded pattern stroke keeps its opacity in SVG.</p>
+<p><code>vl_pattern(extend = "reflect")</code> mirrored every other cell in PNG but repeated the tile in SVG and PDF. A reflected pattern is now drawn from a 2x2 mirrored tile, which every backend tiles identically. <code>extend = "pad"</code> is now an error for patterns, because SVG and PDF tiling patterns cannot clamp a tile’s edges outwards (it already drew as <code>"repeat"</code> there).</p>
+<p>A <code><a href="../reference/vl_hatch.html">vl_hatch()</a></code> in <code>col</code> is now an error. It drew nothing in SVG and a black line in PNG; a hatch fills a shape and has no meaning as a stroke.</p>
+</li>
 </ul></div>
 <div class="section level3">
 <h3 id="scenes-0-7-1-9000">Scenes<a class="anchor" aria-label="anchor" href="#scenes-0-7-1-9000"></a></h3>

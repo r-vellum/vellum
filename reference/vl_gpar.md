@@ -39,10 +39,14 @@ vl_gpar(
   [`linear_gradient()`](https://r-vellum.github.io/vellum/reference/gradients.md)
   /
   [`radial_gradient()`](https://r-vellum.github.io/vellum/reference/gradients.md)
-  to **stroke with a gradient** — the same paint model as `fill`,
-  applied to the stroked region instead of the enclosed one. A gradient
-  here affects stroked paths; text and markers fall back to its first
-  stop, since a glyph run has no path to run a ramp along.
+  or a
+  [`vl_pattern()`](https://r-vellum.github.io/vellum/reference/vl_pattern.md)
+  to **stroke with a gradient or pattern** — the same paint model as
+  `fill`, applied to the stroked region instead of the enclosed one. A
+  gradient here affects stroked paths; text and markers fall back to its
+  first stop, since a glyph run has no path to run a ramp along. A
+  [`vl_hatch()`](https://r-vellum.github.io/vellum/reference/vl_hatch.md)
+  is fill-only and is an error here.
 
 - fill:
 

@@ -118,13 +118,16 @@ coordinates map to the tile, painted in order).</p></dd>
 
 
 <dt id="arg-extend">extend<a class="anchor" aria-label="anchor" href="#arg-extend"></a></dt>
-<dd><p>Tiling mode: <code>"repeat"</code> (default), <code>"reflect"</code>, or <code>"pad"</code>.
-(SVG renders all modes as <code>repeat</code>.)</p></dd>
+<dd><p>Tiling mode: <code>"repeat"</code> (default) or <code>"reflect"</code> (every other
+cell mirrored). Both draw the same on every backend. <code>"pad"</code> is not
+supported for patterns: SVG and PDF tiling patterns cannot clamp a tile's
+edge pixels outwards.</p></dd>
 
 </dl></div>
     <div class="section level2">
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
-    <p>A <code>vellum_pattern</code> object, suitable for <code>vl_gpar(fill = ...)</code>.</p>
+    <p>A <code>vellum_pattern</code> object, suitable for <code>vl_gpar(fill = ...)</code> or
+<code>vl_gpar(col = ...)</code>.</p>
     </div>
     <div class="section level2">
     <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>

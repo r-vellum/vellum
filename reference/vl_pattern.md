@@ -42,12 +42,15 @@ vl_pattern(
 
 - extend:
 
-  Tiling mode: `"repeat"` (default), `"reflect"`, or `"pad"`. (SVG
-  renders all modes as `repeat`.)
+  Tiling mode: `"repeat"` (default) or `"reflect"` (every other cell
+  mirrored). Both draw the same on every backend. `"pad"` is not
+  supported for patterns: SVG and PDF tiling patterns cannot clamp a
+  tile's edge pixels outwards.
 
 ## Value
 
-A `vellum_pattern` object, suitable for `vl_gpar(fill = ...)`.
+A `vellum_pattern` object, suitable for `vl_gpar(fill = ...)` or
+`vl_gpar(col = ...)`.
 
 ## Details
 

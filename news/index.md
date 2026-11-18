@@ -14,6 +14,39 @@
   sums to zero draws solid. Negative or infinite dash lengths are
   rejected with an error.
 
+- **Fix: thin, densely sampled lines no longer look stippled in PNG.**
+  For the default line style (opaque, solid, round caps and joins) the
+  raster backend stroked every segment of a line on its own. The
+  antialiased pixels around each vertex were then blended twice, so
+  contours, curves and other lines with many short segments got a dark
+  bead at every vertex. At 72-100 dpi that read as a dotted line, and a
+  contour plot carried about 20% more ink than in SVG or PDF.
+
+  The fast path now strokes a line in runs of up to 256 consecutive
+  segments. Within a run the result is identical to a single stroke, and
+  a long self-intersecting polyline renders as fast as before.
+
+### Paint
+
+- **Fix: pattern strokes and reflected patterns draw the same on every
+  backend.** A
+  [`vl_pattern()`](https://r-vellum.github.io/vellum/reference/vl_pattern.md)
+  given to `col` stroked with the pattern in SVG but fell back to plain
+  black in PNG and PDF. All three backends now stroke with the pattern,
+  and a faded pattern stroke keeps its opacity in SVG.
+
+  `vl_pattern(extend = "reflect")` mirrored every other cell in PNG but
+  repeated the tile in SVG and PDF. A reflected pattern is now drawn
+  from a 2x2 mirrored tile, which every backend tiles identically.
+  `extend = "pad"` is now an error for patterns, because SVG and PDF
+  tiling patterns cannot clamp a tile’s edges outwards (it already drew
+  as `"repeat"` there).
+
+  A
+  [`vl_hatch()`](https://r-vellum.github.io/vellum/reference/vl_hatch.md)
+  in `col` is now an error. It drew nothing in SVG and a black line in
+  PNG; a hatch fills a shape and has no meaning as a stroke.
+
 ### Scenes
 
 - **Fix: a written scene keeps the names on its vectors.**
