@@ -220,18 +220,31 @@ fn unzip(pts: &[(f64, f64)]) -> (Vec<f64>, Vec<f64>) {
 
 /// Distance from a device-px point to an element: zero inside a filled shape or
 /// a disc, perpendicular distance to a stroke's centre-line, the minimum over
-/// parts. A path is the minimum over its rings, each measured as filled.
+/// parts.
+///
+/// A filled shape's inside is decided once, across all its rings, by the rule
+/// it is painted with -- even-odd parity or nonzero winding -- so a point in a
+/// polygon's hole is outside, exactly as the renderer leaves it unpainted.
+/// Outside, the distance is to the nearest edge of any ring (for a point in a
+/// hole, the hole's own boundary).
 pub fn parts_dist(parts: &[Part], px: f64, py: f64) -> f64 {
     let mut best = f64::INFINITY;
     for p in parts {
         let d = match p {
-            Part::Fill { rings, .. } => rings
-                .iter()
-                .map(|r| {
-                    let (xs, ys) = unzip(r);
-                    poly_dist(px, py, &xs, &ys, true)
-                })
-                .fold(f64::INFINITY, f64::min),
+            Part::Fill { rings, evenodd } => {
+                if inside_rings(px, py, rings, *evenodd) {
+                    0.0
+                } else {
+                    rings
+                        .iter()
+                        .map(|r| {
+                            let (xs, ys) = unzip(r);
+                            // Edges only: containment was settled above.
+                            poly_dist(px, py, &xs, &ys, false).min(closing_edge(px, py, r))
+                        })
+                        .fold(f64::INFINITY, f64::min)
+                }
+            }
             Part::Stroke { pts, .. } => {
                 let (xs, ys) = unzip(pts);
                 poly_dist(px, py, &xs, &ys, false)
@@ -241,6 +254,30 @@ pub fn parts_dist(parts: &[Part], px: f64, py: f64) -> f64 {
         best = best.min(d);
     }
     best
+}
+
+/// Distance to a ring's closing edge (last vertex back to the first).
+fn closing_edge(px: f64, py: f64, r: &[(f64, f64)]) -> f64 {
+    match (r.first(), r.last()) {
+        (Some(a), Some(z)) if r.len() > 2 => seg_dist2(px, py, z.0, z.1, a.0, a.1).sqrt(),
+        _ => f64::INFINITY,
+    }
+}
+
+/// The fill rule an element is hit-tested (and painted) under, for
+/// `element_geometry()`'s `rule` column: `"evenodd"` or `"nonzero"` for a
+/// filled shape, `None` for one with no interior (a stroke, a disc).
+pub fn parts_rule(parts: &[Part]) -> Option<&'static str> {
+    let mut rule = None;
+    for p in parts {
+        if let Part::Fill { evenodd, .. } = p {
+            if *evenodd {
+                return Some("evenodd");
+            }
+            rule = Some("nonzero");
+        }
+    }
+    rule
 }
 
 /// Does an element cover a device-px point, the way the rasteriser would fill
