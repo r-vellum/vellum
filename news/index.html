@@ -13,7 +13,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">vellum</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.7.0.9000</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.7.1</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -70,9 +70,9 @@
     </div>
 
     <div class="section level2">
-<h2 class="pkg-version" data-toc-text="0.7.0.9000" id="vellum-0709000-development-version">vellum 0.7.0.9000 (development version)<a class="anchor" aria-label="anchor" href="#vellum-0709000-development-version"></a></h2>
+<h2 class="pkg-version" data-toc-text="0.7.1" id="vellum-071">vellum 0.7.1<a class="anchor" aria-label="anchor" href="#vellum-071"></a></h2>
 <div class="section level3">
-<h3 id="text-0-7-0-9000">Text<a class="anchor" aria-label="anchor" href="#text-0-7-0-9000"></a></h3>
+<h3 id="text-0-7-1">Text<a class="anchor" aria-label="anchor" href="#text-0-7-1"></a></h3>
 <ul><li>
 <p><strong>Fix: <code>vl_gpar(features = c(liga = 0))</code> no longer errors on every backend.</strong> The feature vector was handed to <code><a href="https://systemfonts.r-lib.org/reference/font_feature.html" class="external-link">systemfonts::font_feature()</a></code> through <code><a href="https://rdrr.io/r/base/do.call.html" class="external-link">do.call()</a></code>, and R partial-matched the tag <code>liga</code> onto that function’s <code>ligatures</code> argument, so systemfonts read <code>0</code> as a ligature name and stopped with “No ligature setting called ‘0’”. Any tag that prefixes <code>letters</code> or <code>numbers</code> (<code>lett</code>, <code>numb</code>, …) hit the same trap. <code>c(liga = 0)</code> is the example in the <code><a href="../reference/vl_gpar.html">vl_gpar()</a></code> docs.</p>
 <p>systemfonts’ own arguments are now passed explicitly as <code>NULL</code>, so every tag reaches it verbatim, and <code>c(liga = 0)</code> really does switch the fi ligature off.</p>
