@@ -4055,7 +4055,10 @@ fn stroke_style(gp: &Gpar, vp: &Vp) -> StrokeStyle {
     let (width, dash) = match &gp.lty {
         Lty::Blank => (0.0, Vec::new()),
         Lty::Solid => (width, Vec::new()),
-        Lty::Dash(nibs) => (width, nibs.iter().map(|n| n * width).collect()),
+        Lty::Dash(nibs) => {
+            let px: Vec<f32> = nibs.iter().map(|n| n * width).collect();
+            (width, crate::render::normalize_dash(&px))
+        }
     };
     // A gradient/pattern stroke resolves its geometry against the viewport exactly
     // as a fill does, so the two cannot disagree about where the ramp sits.
@@ -4063,7 +4066,10 @@ fn stroke_style(gp: &Gpar, vp: &Vp) -> StrokeStyle {
     StrokeStyle {
         width, dash, cap: gp.lineend, join: gp.linejoin,
         miter: gp.linemitre as f32, crisp: gp.crisp, paint,
-        phase: gp.dash_phase as f32 * gp.lwd_px(vp.dpi),
+        phase: {
+            let ph = gp.dash_phase as f32 * gp.lwd_px(vp.dpi);
+            if ph.is_finite() { ph } else { 0.0 }
+        },
     }
 }
 
