@@ -78,6 +78,13 @@
 <p>Atomic vectors now carry their names, and atomic vectors and lists carry their other attributes, through the scene spec, and a read restores them. Specs written by earlier versions have no such fields and read as before, and the spec of a scene without named or classed values is unchanged, so its <code><a href="../reference/scene_hash.html">scene_hash()</a></code> does not move.</p>
 </li>
 </ul></div>
+<div class="section level3">
+<h3 id="hit-testing-0-7-1-9000">Hit-testing<a class="anchor" aria-label="anchor" href="#hit-testing-0-7-1-9000"></a></h3>
+<ul><li>
+<p><strong>Fix: keyed batched marks with a scalar <code>x</code> and a vector <code>y</code> no longer break <code><a href="../reference/scene_model.html">scene_model()</a></code>.</strong> <code><a href="../reference/scene_model.html">scene_model()</a></code> counted a batch by the length of <code>x</code>, so <code>rect_grob(x = 0.5, y = c(0.2, 0.5, 0.8), key = c("a", "b", "c"))</code> gave one element from the grob walk against three from the backend, and aborted with an element-count mismatch. <code><a href="../reference/grob.html">roundrect_grob()</a></code> had the same problem.</p>
+<p>Every batched grob (rect, roundrect, circle, points, hexagon, sector, segments, loop and text) now has one definition of its element count: the common length of all its per-element vectors (<code>x</code>, <code>y</code>, <code>width</code>, <code>height</code>, <code>r</code>, <code>size</code>, <code>shape</code>, angles, caps, …). The constructor recycles <code>key</code> and <code>meta</code> to it, <code>compile()</code> draws that many elements, and <code><a href="../reference/scene_model.html">scene_model()</a></code> expects that many rows. Incompatible lengths fail in the constructor, with an error that names the arguments. <code>key</code> and <code>meta</code> must now have length 1 or n. Before, <code><a href="https://rdrr.io/r/base/rep.html" class="external-link">rep_len()</a></code> silently truncated or wrapped them, so elements could be paired with the wrong data.</p>
+</li>
+</ul></div>
 </div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.7.1" id="vellum-071">vellum 0.7.1<a class="anchor" aria-label="anchor" href="#vellum-071"></a></h2>

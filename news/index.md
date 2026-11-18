@@ -21,6 +21,32 @@
   [`scene_hash()`](https://r-vellum.github.io/vellum/reference/scene_hash.md)
   does not move.
 
+### Hit-testing
+
+- **Fix: keyed batched marks with a scalar `x` and a vector `y` no
+  longer break
+  [`scene_model()`](https://r-vellum.github.io/vellum/reference/scene_model.md).**
+  [`scene_model()`](https://r-vellum.github.io/vellum/reference/scene_model.md)
+  counted a batch by the length of `x`, so
+  `rect_grob(x = 0.5, y = c(0.2, 0.5, 0.8), key = c("a", "b", "c"))`
+  gave one element from the grob walk against three from the backend,
+  and aborted with an element-count mismatch.
+  [`roundrect_grob()`](https://r-vellum.github.io/vellum/reference/grob.md)
+  had the same problem.
+
+  Every batched grob (rect, roundrect, circle, points, hexagon, sector,
+  segments, loop and text) now has one definition of its element count:
+  the common length of all its per-element vectors (`x`, `y`, `width`,
+  `height`, `r`, `size`, `shape`, angles, caps, …). The constructor
+  recycles `key` and `meta` to it, `compile()` draws that many elements,
+  and
+  [`scene_model()`](https://r-vellum.github.io/vellum/reference/scene_model.md)
+  expects that many rows. Incompatible lengths fail in the constructor,
+  with an error that names the arguments. `key` and `meta` must now have
+  length 1 or n. Before, [`rep_len()`](https://rdrr.io/r/base/rep.html)
+  silently truncated or wrapped them, so elements could be paired with
+  the wrong data.
+
 ## vellum 0.7.1
 
 ### Text
