@@ -2,6 +2,18 @@
 
 ## vellum 0.7.1.9000 (development version)
 
+### Strokes
+
+- **Fix: an odd-length dash pattern draws the same on every backend.**
+  `vl_gpar(lty = c(4, 2, 1))` (or a one-digit hex string like `"4"`)
+  drew a solid line in PNG, because the raster backend rejects an odd
+  dash array, while SVG and PDF repeated the list and drew dashes.
+
+  The engine now normalises the dash array once for all three backends:
+  an odd-length list is doubled (the SVG and PDF rule), and a list that
+  sums to zero draws solid. Negative or infinite dash lengths are
+  rejected with an error.
+
 ### Scenes
 
 - **Fix: a written scene keeps the names on its vectors.**

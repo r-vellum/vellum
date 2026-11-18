@@ -72,6 +72,13 @@
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.7.1.9000" id="vellum-0719000-development-version">vellum 0.7.1.9000 (development version)<a class="anchor" aria-label="anchor" href="#vellum-0719000-development-version"></a></h2>
 <div class="section level3">
+<h3 id="strokes-0-7-1-9000">Strokes<a class="anchor" aria-label="anchor" href="#strokes-0-7-1-9000"></a></h3>
+<ul><li>
+<p><strong>Fix: an odd-length dash pattern draws the same on every backend.</strong> <code>vl_gpar(lty = c(4, 2, 1))</code> (or a one-digit hex string like <code>"4"</code>) drew a solid line in PNG, because the raster backend rejects an odd dash array, while SVG and PDF repeated the list and drew dashes.</p>
+<p>The engine now normalises the dash array once for all three backends: an odd-length list is doubled (the SVG and PDF rule), and a list that sums to zero draws solid. Negative or infinite dash lengths are rejected with an error.</p>
+</li>
+</ul></div>
+<div class="section level3">
 <h3 id="scenes-0-7-1-9000">Scenes<a class="anchor" aria-label="anchor" href="#scenes-0-7-1-9000"></a></h3>
 <ul><li>
 <p><strong>Fix: a written scene keeps the names on its vectors.</strong> <code><a href="../reference/scene_write.html">scene_write()</a></code> stored doubles and strings without their names (or any other attribute), so a scene drawn with <code>vl_gpar(features = c(tnum = 1))</code> read back from <code>.rds</code> or <code>.json</code> failed to render with “<code>features</code> must be a named vector”. Named per-element <code>meta</code> silently lost its names, a JSON round-trip turned a named logical into an integer, and a systemfonts <code>font_feature()</code> object lost its class.</p>
