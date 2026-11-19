@@ -7,7 +7,7 @@
 hit_test(scene, x, y, units = c("npc", "px"))
 }
 \arguments{
-\item{scene}{A \code{\link[=vl_scene]{vl_scene()}}.}
+\item{scene}{A \code{\link[=vl_scene]{vl_scene()}} (or anything with an \code{\link[=as_vellum_scene]{as_vellum_scene()}} method).}
 
 \item{x, y}{Query point, in \code{units}: \code{"npc"} (default; the page, \verb{0..1} with y
 up) or \code{"px"} (device pixels, top-left origin, y down).}

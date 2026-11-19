@@ -13,7 +13,7 @@ get_node(scene, name)
 edit_node(scene, name, ...)
 }
 \arguments{
-\item{scene}{A \code{\link[=vl_scene]{vl_scene()}}.}
+\item{scene}{A \code{\link[=vl_scene]{vl_scene()}} (or anything with an \code{\link[=as_vellum_scene]{as_vellum_scene()}} method).}
 
 \item{name}{A node name (set via the \code{name} argument of a grob/viewport).}
 
