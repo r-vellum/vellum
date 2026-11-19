@@ -268,7 +268,11 @@ pub fn box_blur(pm: &mut Pixmap, radius: f32) {
         return;
     }
     // Three box passes of this width approximate a Gaussian of `radius` sigma.
-    let r = ((radius * 3.0 * (std::f32::consts::TAU / 4.0).sqrt() / 4.0 + 0.5) as usize).max(1);
+    // A window wider than the image only averages the clamped edge pixels, so cap
+    // the radius there: an unbounded one (`blur = 1e9`) loops for hours, and
+    // `blur = Inf` saturates to usize::MAX and overflows the window arithmetic.
+    let r = ((radius * 3.0 * (std::f32::consts::TAU / 4.0).sqrt() / 4.0 + 0.5) as usize)
+        .clamp(1, w.max(h));
     let mut buf: Vec<u8> = pm.data().to_vec();
     let mut tmp: Vec<u8> = vec![0; buf.len()];
     for _ in 0..3 {

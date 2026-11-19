@@ -152,7 +152,9 @@ fn sector_arc_pts(cx: f64, cy: f64, r: f64, t0: f64, t1: f64, n: usize) -> Vec<(
 /// The closed outline of an annular sector as a point ring (local px): outer arc
 /// forward, then the inner arc back — or the centre for a pie slice (`r0 == 0`).
 pub(super) fn wedge_ring(cx: f64, cy: f64, r0: f64, r1: f64, t0: f64, t1: f64) -> Vec<(f64, f64)> {
-    // Sample density scales with the arc span (≥ ~8 points, ~1 per 6°).
+    // At most one turn (see `clamp_sweep`); sample density scales with the arc
+    // span (≥ ~8 points, ~1 per 6°).
+    let t1 = t0 + crate::render::clamp_sweep(t1 - t0);
     let span = (t1 - t0).abs();
     let n = ((span / (std::f64::consts::PI / 30.0)).ceil() as usize).clamp(8, 180);
     let mut ring = sector_arc_pts(cx, cy, r1, t0, t1, n);
