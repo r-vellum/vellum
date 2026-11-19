@@ -92,8 +92,13 @@ impl<'a, 'b> PdfBackend<'a, 'b> {
 
     /// The krilla paint and opacity for a resolved paint, shared by fills and
     /// strokes so a gradient or tiled pattern draws the same either way. `None`
-    /// for a hatch (expanded to spans by the walk) or a degenerate tile.
-    fn pdf_paint(&mut self, paint: &ResolvedPaint) -> Option<(KPaint, NormalizedF32)> {
+    /// for a hatch (expanded to spans by the walk) or a degenerate tile. `role`
+    /// names what the paint is for, so a degradation warning says which.
+    fn pdf_paint(
+        &mut self,
+        paint: &ResolvedPaint,
+        role: PaintRole,
+    ) -> Option<(KPaint, NormalizedF32)> {
         Some(match paint {
             // Expanded to stroked spans by the walk before it reaches a backend.
             ResolvedPaint::Hatch { .. } => return None,
@@ -187,7 +192,13 @@ impl<'a, 'b> PdfBackend<'a, 'b> {
                         )
                     }
                     _ => {
-                        self.warn("a tiling-pattern fill could not be rendered to PDF (degenerate tile or cell size); the shape was left unfilled");
+                        let (what, left) = match role {
+                            PaintRole::Fill => ("fill", "unfilled"),
+                            PaintRole::Stroke => ("stroke", "unstroked"),
+                        };
+                        self.warn(format!(
+                            "a tiling-pattern {what} could not be rendered to PDF (degenerate tile or cell size); the shape was left {left}"
+                        ));
                         return None;
                     }
                 }
@@ -335,6 +346,13 @@ pub(crate) fn is_decorative(meta: &NodeMeta) -> bool {
     )
 }
 
+/// What a paint is applied to, for wording degradation warnings.
+#[derive(Clone, Copy)]
+enum PaintRole {
+    Fill,
+    Stroke,
+}
+
 impl RenderBackend for PdfBackend<'_, '_> {
     fn wants_node_meta(&self) -> bool {
         true
@@ -393,7 +411,7 @@ impl RenderBackend for PdfBackend<'_, '_> {
         };
         // Gradient geometry is local px (identity gradient transform); the
         // primitive `transform` pushed below maps it to device, like the path.
-        let (kpaint, opacity) = match self.pdf_paint(paint) {
+        let (kpaint, opacity) = match self.pdf_paint(paint, PaintRole::Fill) {
             Some(p) => p,
             None => return,
         };
@@ -429,7 +447,7 @@ impl RenderBackend for PdfBackend<'_, '_> {
         };
         // A gradient/pattern stroke uses the same krilla paint a fill would.
         let (kpaint, kopacity) = match &stroke.paint {
-            Some(p) => match self.pdf_paint(p) {
+            Some(p) => match self.pdf_paint(p, PaintRole::Stroke) {
                 Some(kp) => kp,
                 None => return,
             },

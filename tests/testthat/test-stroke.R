@@ -314,3 +314,49 @@ test_that("a polyline longer than one stroke run still draws continuously", {
   row <- vapply(10:390, function(x) px(s, x, 50)[1] < 128L, logical(1))
   expect_true(all(row))
 })
+
+# VR-11: where two stroke runs of a long polyline meet, both drew a round cap on
+# the shared vertex, so the cap's antialiased rim was blended twice: a faint
+# bead at every 256th vertex. The joints are now redrawn from one stroke.
+test_that("a polyline longer than one stroke run has no bead at the run joints", {
+  wave <- function(col, lwd, dpi) {
+    n <- 600 # joints at vertices 257 and 513
+    x <- seq(0.02, 0.98, length.out = n + 1)
+    vl_scene(3, 1.5, dpi = dpi, bg = "white") |>
+      draw(lines_grob(
+        x,
+        0.5 + 0.3 * sin(x * 6 * pi),
+        gp = vl_gpar(col = col, lwd = lwd)
+      ))
+  }
+  for (lwd in c(0.5, 1, 4)) {
+    for (dpi in c(36, 72)) {
+      fast <- scene_raster(wave("black", lwd, dpi))[1, , ]
+      combined <- scene_raster(wave("#000000FE", lwd, dpi))[1, , ]
+      expect_lte(max(abs(fast - combined)), 4) # was up to 63 levels darker
+    }
+  }
+})
+
+test_that("joint repair respects the clip and a polyline crossing the joint", {
+  # A clip through a joint, and a self-crossing scribble whose far segments run
+  # through joint boxes: both must still match the combined stroke.
+  set.seed(3)
+  n <- 1500
+  x <- cumsum(rnorm(n, sd = 0.01)) + 0.5
+  y <- cumsum(rnorm(n, sd = 0.01)) + 0.5
+  mk <- function(col) {
+    vl_scene(2, 2, dpi = 72, bg = "white") |>
+      push(vl_viewport(width = 0.6, height = 0.6, clip = TRUE)) |>
+      draw(lines_grob(x, y, gp = vl_gpar(col = col, lwd = 1))) |>
+      pop()
+  }
+  fast <- scene_raster(mk("black"))[1, , ]
+  combined <- scene_raster(mk("#000000FE"))[1, , ]
+  # Self-crossings between runs are still drawn twice (as before), so allow a
+  # darker crossing, but nothing inked outside the stroke or the clip, and no
+  # crossing erased by restoring a joint box.
+  expect_gte(min(fast[combined == 255]), 251)
+  expect_false(any(combined < 60 & fast > 200))
+  expect_true(all(fast[c(1:10, 135:144), ] == 255)) # clipped margins stay blank
+})

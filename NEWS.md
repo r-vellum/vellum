@@ -1,5 +1,15 @@
 # vellum 0.7.2.9000 (development version)
 
+* **Fix: no faint bead where the PNG stroke runs of a long line meet.** The
+  raster fast path strokes a line in runs of up to 256 segments, and both runs
+  drew a round cap on the shared vertex, darkening its antialiased rim by up
+  to 25% at low resolution. Each joint is now redrawn once from a single
+  stroke, so a line of any length matches the combined stroke. Lines of up to
+  256 segments are unchanged.
+
+* The PDF warning for a pattern that cannot be rendered now says whether it
+  was a fill or a stroke. A pattern stroke used to be reported as a "fill" that
+  "was left unfilled".
 
 # vellum 0.7.2
 
