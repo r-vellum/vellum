@@ -1,5 +1,24 @@
 # Changelog
 
+## vellum 0.8.1.9000 (development version)
+
+### Performance
+
+- A filled, outlined shape is one SVG element instead of two (VW-12).
+  When the fill is a solid colour and the outline a solid, undashed
+  stroke, the shape is written once with both `fill` and `stroke`, not
+  as a fill element followed by a `fill="none"` stroke twin. SVG paints
+  the fill and then the stroke on one element, so what renders is
+  unchanged. A `<circle>` also drops `stroke-linecap`, `stroke-linejoin`
+  and `stroke-miterlimit`, which cannot change a shape with no ends or
+  corners. A 5,000-point keyed scatter goes from 224 to 107 bytes per
+  point (1.1 MB to 0.54 MB) and from 10,000 to 5,000 `<circle>` nodes.
+  Every element still carries its datum’s `data-key`. Gradient or
+  pattern paint, dashed outlines and non-uniform scales keep the
+  two-element form. vellumwidget’s selection, hover and focus rings need
+  vellumwidget 0.11.0.9000 or later to show in full on the single
+  element; older widgets still work but draw half the ring.
+
 ## vellum 0.8.1
 
 ### Bug fixes

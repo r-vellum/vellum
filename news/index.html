@@ -13,7 +13,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">vellum</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.8.1</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.8.1.9000</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -66,9 +66,16 @@
 <div class="row">
   <main id="main" class="col-md-9"><div class="page-header">
       <img src="../logo.png" class="logo" alt=""><h1>Changelog</h1>
-      <small>Source: <a href="https://github.com/r-vellum/vellum/blob/v0.8.1/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
+      <small>Source: <a href="https://github.com/r-vellum/vellum/blob/main/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.8.1.9000" id="vellum-0819000-development-version">vellum 0.8.1.9000 (development version)<a class="anchor" aria-label="anchor" href="#vellum-0819000-development-version"></a></h2>
+<div class="section level3">
+<h3 id="performance-0-8-1-9000">Performance<a class="anchor" aria-label="anchor" href="#performance-0-8-1-9000"></a></h3>
+<ul><li>A filled, outlined shape is one SVG element instead of two (VW-12). When the fill is a solid colour and the outline a solid, undashed stroke, the shape is written once with both <code>fill</code> and <code>stroke</code>, not as a fill element followed by a <code>fill="none"</code> stroke twin. SVG paints the fill and then the stroke on one element, so what renders is unchanged. A <code>&lt;circle&gt;</code> also drops <code>stroke-linecap</code>, <code>stroke-linejoin</code> and <code>stroke-miterlimit</code>, which cannot change a shape with no ends or corners. A 5,000-point keyed scatter goes from 224 to 107 bytes per point (1.1 MB to 0.54 MB) and from 10,000 to 5,000 <code>&lt;circle&gt;</code> nodes. Every element still carries its datum’s <code>data-key</code>. Gradient or pattern paint, dashed outlines and non-uniform scales keep the two-element form. vellumwidget’s selection, hover and focus rings need vellumwidget 0.11.0.9000 or later to show in full on the single element; older widgets still work but draw half the ring.</li>
+</ul></div>
+</div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.8.1" id="vellum-081">vellum 0.8.1<a class="anchor" aria-label="anchor" href="#vellum-081"></a></h2>
 <div class="section level3">
