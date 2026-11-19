@@ -208,7 +208,7 @@ element_geometry <- function(scene) {
 #' 2 px). grid ships no equivalent: `grid.locator()` waits for one interactive
 #' click and returns coordinates rather than a node.
 #'
-#' @param scene A [vl_scene()].
+#' @param scene A [vl_scene()] (or anything with an [as_vellum_scene()] method).
 #' @param x,y Query point, in `units`: `"npc"` (default; the page, `0..1` with y
 #'   up) or `"px"` (device pixels, top-left origin, y down).
 #' @param units `"npc"` or `"px"`.
@@ -217,17 +217,9 @@ element_geometry <- function(scene) {
 #' @export
 hit_test <- function(scene, x, y, units = c("npc", "px")) {
   units <- match.arg(units)
-  s <- Scene$new(
-    .to_inches(scene@width),
-    .to_inches(scene@height),
-    scene@dpi,
-    .rs_col(scene@bg) %||% c(255L, 255L, 255L, 0L)
-  )
-  reg <- new.env(parent = emptyenv())
-  reg$n <- 0L
-  reg$names <- list()
-  .compile_pick(s, .materialize(scene), reg)
-  d <- s$dim()
+  scene <- as_vellum_scene(scene)
+  pk <- .pick_backend(scene)
+  d <- pk$scene$dim()
   if (units == "npc") {
     px <- x * d[1]
     py <- (1 - y) * d[2] # npc y is up; device y is down
@@ -235,11 +227,60 @@ hit_test <- function(scene, x, y, units = c("npc", "px")) {
     px <- x
     py <- y
   }
-  id <- s$hit_test(as.integer(round(px)), as.integer(round(py)))
+  id <- pk$scene$hit_test(as.integer(round(px)), as.integer(round(py)))
   if (id < 0L) {
     return(NULL)
   }
-  reg$names[[id + 1L]] # name, or NA_character_ for an unnamed grob
+  pk$names[[id + 1L]] # name, or NA_character_ for an unnamed grob
+}
+
+# The pick-compiled backend for a scene plus its id -> name map, memoised like
+# the render cache (`.scene_to_backend()`): keyed on the scene's content id and
+# device size, so N `hit_test()` calls on one scene cost one compile, and the
+# backend's own memoised pick recording is reused across them. An edit gives the
+# scene a new content id, so it misses; a scene with no id (foreign-built / raw
+# `set_props`) or `options(vellum.cache = FALSE)` compiles fresh every time.
+# Kept apart from `.render_cache` because the pick compile differs from the
+# render compile (pick ids, no masks), so the two can never share an entry.
+.pick_backend <- function(scene) {
+  cid <- .scene_cid(scene)
+  bg <- .rs_col(scene@bg) %||% c(255L, 255L, 255L, 0L)
+  cacheable <- !is.null(cid) && isTRUE(getOption("vellum.cache", TRUE))
+  if (cacheable) {
+    key <- .render_key(
+      cid,
+      .to_inches(scene@width),
+      .to_inches(scene@height),
+      scene@dpi,
+      bg
+    )
+    hit <- .pick_cache[[key]]
+    if (!is.null(hit)) {
+      .pick_cache$.order <- c(setdiff(.pick_cache$.order, key), key)
+      return(hit)
+    }
+  }
+  s <- Scene$new(
+    .to_inches(scene@width),
+    .to_inches(scene@height),
+    scene@dpi,
+    bg
+  )
+  reg <- new.env(parent = emptyenv())
+  reg$n <- 0L
+  reg$names <- list()
+  .compile_pick(s, .materialize_cached(scene, if (cacheable) cid), reg)
+  out <- list(scene = s, names = reg$names)
+  if (cacheable) {
+    ord <- setdiff(.pick_cache$.order, key)
+    while (length(ord) >= .render_cache_cap()) {
+      rm(list = ord[[1L]], envir = .pick_cache)
+      ord <- ord[-1L]
+    }
+    assign(key, out, envir = .pick_cache)
+    .pick_cache$.order <- c(ord, key)
+  }
+  out
 }
 
 # Compile for picking: like the render compile, but assign each leaf grob a

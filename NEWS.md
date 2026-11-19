@@ -1,5 +1,16 @@
 # vellum 0.7.2.9000 (development version)
 
+* **`hit_test()` is ~1000x faster when called repeatedly on one scene.** Each
+  call compiled the scene into a fresh backend, so 1000 hit tests on a
+  ~270-grob scene took 111 s. The compiled pick backend is now memoised like
+  the render cache, keyed on the scene's content and device size, so the same
+  1000 calls take 0.12 s. An edit, a resize or `vl_clear_render_cache()` starts
+  afresh, and `options(vellum.cache = FALSE)` turns the memo off.
+
+* `hit_test()`, `node_names()`, `get_node()` and `edit_node()` now coerce their
+  `scene` through `as_vellum_scene()`, like `render()` and the other scene
+  functions, so they accept any object with an `as_vellum_scene()` method.
+
 * **Fix: no faint bead where the PNG stroke runs of a long line meet.** The
   raster fast path strokes a line in runs of up to 256 segments, and both runs
   drew a round cap on the shared vertex, darkening its antialiased rim by up
