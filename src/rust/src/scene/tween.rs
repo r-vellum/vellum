@@ -857,7 +857,8 @@ fn animated_svg(kf: &[Scene], seg: &[i32], frac: &[Fracs], delay_num: i32, delay
         out.push_str(&format!("<g class=\"vf\" style=\"animation-delay:{delay:.4}s\">{body}</g>"));
     }
     out.push_str("</svg>");
-    out
+    // One id prefix for the whole document (the frames left the token in place).
+    crate::render::resolve_ids(out, &kf[0].a11y_prefix)
 }
 
 /// The inner content of an SVG document -- everything between the opening `<svg …>`

@@ -82,12 +82,16 @@ NULL
     scene@dpi,
     .rs_col(scene@bg) %||% c(255L, 255L, 255L, 0L)
   )
-  # Scene-level accessibility (name/description), emitted by the SVG/PDF backends.
-  if (!is.null(scene@title) || !is.null(scene@desc)) {
+  # Scene-level accessibility (name/description), emitted by the SVG/PDF
+  # backends, and an explicit SVG id prefix if the scene carries one (otherwise
+  # the SVG backend derives the prefix from the document's content).
+  if (
+    !is.null(scene@title) || !is.null(scene@desc) || !is.null(scene@a11y_prefix)
+  ) {
     s$set_a11y(
       scene@title %||% "",
       scene@desc %||% "",
-      scene@a11y_prefix %||% "vl"
+      scene@a11y_prefix %||% ""
     )
   }
   # Compile the root as a gtree so the root viewport's gp / scales / clip / layout

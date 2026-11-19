@@ -152,7 +152,7 @@ test_that("SVG emits gradient defs referenced by the fill", {
   expect_match(svg, "<radialGradient")
   expect_match(svg, 'gradientUnits="userSpaceOnUse"')
   expect_match(svg, "<stop ")
-  expect_match(svg, 'fill="url\\(#g0\\)"')
+  expect_match(svg, 'fill="url\\(#vl[0-9a-f]{8}-g0\\)"')
 })
 
 test_that("identical gradient fills share a single SVG def", {

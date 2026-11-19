@@ -14,8 +14,8 @@ test_that("a titled scene emits role=img + aria-labelledby + <title>/<desc>", {
   svg <- scene_svg(s)
   expect_match(svg, 'role="img"', fixed = TRUE)
   expect_match(svg, "aria-labelledby=")
-  expect_match(svg, '<title id="vl[0-9]+-t">Two dots</title>')
-  expect_match(svg, '<desc id="vl[0-9]+-d">Two red points.</desc>')
+  expect_match(svg, '<title id="vl[0-9a-f]{8}-t">Two dots</title>')
+  expect_match(svg, '<desc id="vl[0-9a-f]{8}-d">Two red points.</desc>')
   # the aria-labelledby ids reference the emitted title + desc
   ids <- sub('.*aria-labelledby="([^"]*)".*', "\\1", svg)
   expect_length(strsplit(ids, " ")[[1]], 2L)
