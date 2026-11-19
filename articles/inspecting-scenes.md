@@ -338,8 +338,8 @@ profile_render(heavy, reps = 1)
 #> • raster 0.161 s (drawing)
 #> 
 #> Slowest marks (raster time):
-#> • circle points 20000 elem 0.1029 s 76.8%
-#> • segments edges 2000 elem 0.0289 s 21.5%
+#> • circle points 20000 elem 0.1027 s 76.8%
+#> • segments edges 2000 elem 0.0288 s 21.5%
 #> • text labels 200 elem 0.0022 s 1.6%
 ```
 
