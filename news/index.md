@@ -75,6 +75,8 @@
   [`as_vellum_scene()`](https://r-vellum.github.io/vellum/reference/as_vellum_scene.md)
   method.
 
+### Rendering fixes
+
 - **Fix: inputs that crashed or hung the renderer now draw or fail with
   a clear error.**
 
@@ -113,6 +115,17 @@
   [`raster_grob()`](https://r-vellum.github.io/vellum/reference/grob.md)
   keep their colours when they use a palette or fewer than 8 bits per
   sample.** They came back as grey palette indices or packed bytes.
+
+- **Fix: no faint bead where the PNG stroke runs of a long line meet.**
+  The raster fast path strokes a line in runs of up to 256 segments, and
+  both runs drew a round cap on the shared vertex, darkening its
+  antialiased rim by up to 25% at low resolution. Each joint is now
+  redrawn once from a single stroke, so a line of any length matches the
+  combined stroke. Lines of up to 256 segments are unchanged.
+
+- The PDF warning for a pattern that cannot be rendered now says whether
+  it was a fill or a stroke. A pattern stroke used to be reported as a
+  “fill” that “was left unfilled”.
 
 ### Input validation
 
