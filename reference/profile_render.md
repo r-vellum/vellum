@@ -65,6 +65,6 @@ profile_render(s)
 #> • raster 0.023 s (drawing)
 #> 
 #> Slowest marks (raster time):
-#> • circle - 2000 elem 0.0045 s 99.5%
-#> • text - 1 elem 0.0000 s 0.5%
+#> • circle - 2000 elem 0.0046 s 99.6%
+#> • text - 1 elem 0.0000 s 0.4%
 ```
