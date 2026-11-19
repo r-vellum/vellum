@@ -171,7 +171,11 @@ impl SvgBackend {
                         return s.clone();
                     }
                 }
-                let s = format!("fill=\"{}\" fill-opacity=\"{}\"", rgb_hex(*c), opacity(*c));
+                let s = format!(
+                    "fill=\"{}\"{}",
+                    rgb_hex(*c),
+                    opacity_attr("fill-opacity", *c)
+                );
                 self.last_solid_fill = Some((*c, s.clone()));
                 s
             }
@@ -399,11 +403,26 @@ impl RenderBackend for SvgBackend {
             FillRule::EvenOdd => " fill-rule=\"evenodd\"",
             FillRule::Winding => "",
         };
-        let element = format!(
-            "<path d=\"{}\" {fill}{rule_attr}{}/>",
-            path_to_d(path),
-            transform_attr(transform),
-        );
+        // A solid fill looks the same however the geometry reaches device space,
+        // so its transform is baked into the coordinates (no per-element
+        // `transform`), and a circle is written as a `<circle>`. A gradient or
+        // pattern is laid out in local px, so it keeps local geometry and the
+        // element's own `transform`.
+        let element = if matches!(paint, ResolvedPaint::Solid(_)) {
+            match circle_of(path).and_then(|c| bake_circle(c, transform)) {
+                Some((cx, cy, r)) => format!("<circle {} {fill}/>", circle_attrs(cx, cy, r)),
+                None => format!(
+                    "<path d=\"{}\" {fill}{rule_attr}/>",
+                    path_to_d(path, Some(transform), Some(COORD_DECIMALS)),
+                ),
+            }
+        } else {
+            format!(
+                "<path d=\"{}\" {fill}{rule_attr}{}/>",
+                path_to_d(path, None, Some(coord_decimals(transform))),
+                transform_attr(transform),
+            )
+        };
         self.emit(&element, clip);
     }
 
@@ -418,12 +437,33 @@ impl RenderBackend for SvgBackend {
         if stroke.width <= 0.0 {
             return;
         }
+        // A solid stroke under a similarity transform (uniform scale, rotation,
+        // translation) is baked into device coordinates, with the width and dash
+        // scaled by the same factor: the outline it strokes is the same. Anything
+        // else (a gradient/pattern stroke laid out in local px, or a non-uniform
+        // scale that would stretch the pen) keeps local geometry + `transform`.
+        let bake = match &stroke.paint {
+            None => similarity_scale(transform),
+            Some(_) => None,
+        };
+        // Lengths in the element's own units: scaled (and rounded) when baked,
+        // otherwise written exactly as before.
+        let len = |v: f32| -> String {
+            match bake {
+                Some(k) if k != 1.0 => {
+                    let mut o = String::new();
+                    push_num(&mut o, v as f64 * k, 3);
+                    o
+                }
+                _ => v.to_string(),
+            }
+        };
         let dash = if stroke.dash.is_empty() {
             String::new()
         } else {
-            let arr: Vec<String> = stroke.dash.iter().map(|d| d.to_string()).collect();
+            let arr: Vec<String> = stroke.dash.iter().map(|d| len(*d)).collect();
             let off = if stroke.phase != 0.0 {
-                format!(" stroke-dashoffset=\"{}\"", stroke.phase)
+                format!(" stroke-dashoffset=\"{}\"", len(stroke.phase))
             } else {
                 String::new()
             };
@@ -438,23 +478,47 @@ impl RenderBackend for SvgBackend {
                 .replace("fill-opacity=", "stroke-opacity=")
                 .replace("fill=", "stroke="),
             None => format!(
-                "stroke=\"{}\" stroke-opacity=\"{}\"",
+                "stroke=\"{}\"{}",
                 rgb_hex(color),
-                opacity(color)
+                opacity_attr("stroke-opacity", color)
             ),
         };
-        let element = format!(
-            "<path d=\"{}\" fill=\"none\" {} stroke-width=\"{}\" \
-             stroke-linecap=\"{}\" stroke-linejoin=\"{}\" stroke-miterlimit=\"{}\"{}{}/>",
-            path_to_d(path),
+        // The miter limit only shapes miter joins; a round join ignores it.
+        let miter = match stroke.join {
+            LineJoin::Round => String::new(),
+            _ => format!(" stroke-miterlimit=\"{}\"", stroke.miter),
+        };
+        let paint = format!(
+            "fill=\"none\" {} stroke-width=\"{}\" stroke-linecap=\"{}\" stroke-linejoin=\"{}\"{miter}{dash}",
             stroke_attr,
-            stroke.width,
+            len(stroke.width),
             svg_cap(stroke.cap),
             svg_join(stroke.join),
-            stroke.miter,
-            dash,
-            transform_attr(transform),
         );
+        let element = match bake {
+            Some(_) => {
+                // An undashed circle becomes a `<circle>`: it starts at the same
+                // east point and runs the same way, but a dash would expose the
+                // tiny length difference from the quadratic approximation.
+                let circle = if stroke.dash.is_empty() {
+                    circle_of(path).and_then(|c| bake_circle(c, transform))
+                } else {
+                    None
+                };
+                match circle {
+                    Some((cx, cy, r)) => format!("<circle {} {paint}/>", circle_attrs(cx, cy, r)),
+                    None => format!(
+                        "<path d=\"{}\" {paint}/>",
+                        path_to_d(path, Some(transform), Some(COORD_DECIMALS)),
+                    ),
+                }
+            }
+            None => format!(
+                "<path d=\"{}\" {paint}{}/>",
+                path_to_d(path, None, Some(coord_decimals(transform))),
+                transform_attr(transform),
+            ),
+        };
         self.emit(&element, clip);
     }
 
@@ -516,7 +580,7 @@ impl RenderBackend for SvgBackend {
                     paths.push_str(&format!(
                         "<path d=\"{}\" fill=\"none\" stroke=\"{}\" stroke-opacity=\"{}\" \
                          stroke-width=\"{}\" stroke-linejoin=\"round\" stroke-linecap=\"round\"{}/>",
-                        path_to_d(outline.as_ref()), rgb_hex(hcol), opacity(hcol), hw * 2.0,
+                        path_to_d(outline.as_ref(), None, None), rgb_hex(hcol), opacity(hcol), hw * 2.0,
                         transform_attr(place)
                     ));
                 }
@@ -543,7 +607,7 @@ impl RenderBackend for SvgBackend {
                 };
                 paths.push_str(&format!(
                     "<path d=\"{}\"{}{}/>",
-                    path_to_d(outline.as_ref()),
+                    path_to_d(outline.as_ref(), None, None),
                     fill_attr,
                     transform_attr(place)
                 ));
@@ -941,31 +1005,212 @@ fn transform_attr(t: Transform) -> String {
     }
 }
 
-fn path_to_d(path: &Path) -> String {
+/// Coordinate precision for geometry already in device px (SVG user units):
+/// half a hundredth of a pixel at most, far below what any rasteriser resolves.
+const COORD_DECIMALS: u32 = 2;
+
+/// Decimal places for local coordinates drawn under `t`: enough that the
+/// rounding error stays at [`COORD_DECIMALS`] once `t` scales it up (a unit
+/// circle placed by `matrix(r 0 0 r …)` needs more digits than device px do).
+fn coord_decimals(t: Transform) -> u32 {
+    let s = (t.sx as f64)
+        .hypot(t.ky as f64)
+        .max((t.kx as f64).hypot(t.sy as f64));
+    if !s.is_finite() || s <= 1.0 {
+        return COORD_DECIMALS;
+    }
+    (COORD_DECIMALS as f64 + s.log10().ceil()).min(9.0) as u32
+}
+
+/// Append `v` rounded to `dec` decimal places, with trailing zeros (and a bare
+/// `.`) dropped and `-0` written as `0`. Non-finite or huge values fall back to
+/// the plain shortest form.
+fn push_num(out: &mut String, v: f64, dec: u32) {
+    use std::fmt::Write;
+    let p = 10u64.pow(dec);
+    let m = (v * p as f64).round();
+    if !m.is_finite() || m.abs() >= 9.0e15 {
+        let _ = write!(out, "{v}");
+        return;
+    }
+    let m = m as i64;
+    if m < 0 {
+        out.push('-');
+    }
+    let a = m.unsigned_abs();
+    let (ip, mut fp) = (a / p, a % p);
+    let _ = write!(out, "{ip}");
+    if fp != 0 {
+        let mut d = dec as usize;
+        while fp % 10 == 0 {
+            fp /= 10;
+            d -= 1;
+        }
+        let _ = write!(out, ".{fp:0d$}");
+    }
+}
+
+/// ` name="a"` for a colour's alpha, or nothing when it is opaque (SVG's
+/// default opacity is 1).
+fn opacity_attr(name: &str, c: Rgba) -> String {
+    if c.a == 255 {
+        String::new()
+    } else {
+        format!(" {name}=\"{}\"", opacity(c))
+    }
+}
+
+/// The scale factor of `t` when it is a similarity without reflection (uniform
+/// scale, rotation, translation), so a stroke drawn under it can be baked into
+/// device coordinates with its width scaled by that factor.
+fn similarity_scale(t: Transform) -> Option<f64> {
+    let (sx, ky, kx, sy) = (t.sx as f64, t.ky as f64, t.kx as f64, t.sy as f64);
+    let s = sx.hypot(ky);
+    let tol = 1e-6 * s;
+    if s > 0.0 && s.is_finite() && (sx - sy).abs() <= tol && (kx + ky).abs() <= tol {
+        Some(s)
+    } else {
+        None
+    }
+}
+
+/// `(cx, cy, r)` when `path` is exactly the circle tiny-skia's `push_circle`
+/// builds: a move to the east point, eight quadratic arcs running clockwise (in
+/// y-down device space) through every 45 degrees, and a close. Checking every
+/// on- and off-curve point keeps an arbitrary eight-quad path from passing.
+fn circle_of(path: &Path) -> Option<(f64, f64, f64)> {
+    use tiny_skia::PathSegment;
+    let mut segs = path.segments();
+    let start = match segs.next()? {
+        PathSegment::MoveTo(p) => p,
+        _ => return None,
+    };
+    let mut quads = [(start, start); 8];
+    for q in quads.iter_mut() {
+        match segs.next()? {
+            PathSegment::QuadTo(c, p) => *q = (c, p),
+            _ => return None,
+        }
+    }
+    if !matches!(segs.next(), Some(PathSegment::Close)) || segs.next().is_some() {
+        return None;
+    }
+    // The west point (after four arcs) and the east start fix the centre/radius.
+    let west = quads[3].1;
+    let (cx, cy) = (
+        (start.x as f64 + west.x as f64) / 2.0,
+        (start.y as f64 + west.y as f64) / 2.0,
+    );
+    let r = (start.x as f64 - west.x as f64) / 2.0;
+    if !r.is_finite() || r <= 0.0 || !cx.is_finite() || !cy.is_finite() {
+        return None;
+    }
+    let tol = r * 1e-4 + 1e-5;
+    let near = |p: tiny_skia::Point, ang: f64, rad: f64| {
+        (p.x as f64 - (cx + rad * ang.cos())).abs() <= tol
+            && (p.y as f64 - (cy + rad * ang.sin())).abs() <= tol
+    };
+    let step = std::f64::consts::FRAC_PI_4;
+    let rc = r / (step / 2.0).cos(); // control points sit on the tangents' crossing
+    if !near(start, 0.0, r) {
+        return None;
+    }
+    for (k, (c, p)) in quads.iter().enumerate() {
+        let k = k as f64;
+        if !near(*c, (k + 0.5) * step, rc) || !near(*p, (k + 1.0) * step, r) {
+            return None;
+        }
+    }
+    Some((cx, cy, r))
+}
+
+/// Map a local circle to device space when `t` is a similarity (else `None`:
+/// a non-uniform scale would make it an ellipse).
+fn bake_circle((cx, cy, r): (f64, f64, f64), t: Transform) -> Option<(f64, f64, f64)> {
+    let s = similarity_scale(t)?;
+    let (sx, ky, kx, sy) = (t.sx as f64, t.ky as f64, t.kx as f64, t.sy as f64);
+    Some((
+        sx * cx + kx * cy + t.tx as f64,
+        ky * cx + sy * cy + t.ty as f64,
+        r * s,
+    ))
+}
+
+/// `cx="…" cy="…" r="…"` in device px.
+fn circle_attrs(cx: f64, cy: f64, r: f64) -> String {
+    let mut o = String::with_capacity(40);
+    o.push_str("cx=\"");
+    push_num(&mut o, cx, COORD_DECIMALS);
+    o.push_str("\" cy=\"");
+    push_num(&mut o, cy, COORD_DECIMALS);
+    o.push_str("\" r=\"");
+    push_num(&mut o, r, COORD_DECIMALS);
+    o.push('"');
+    o
+}
+
+/// A path's `d`. `map` bakes a transform into the coordinates; `dec` rounds them
+/// to that many decimals (`None` keeps the shortest exact `f32` form, which the
+/// glyph outlines and clip paths still use).
+fn path_to_d(path: &Path, map: Option<Transform>, dec: Option<u32>) -> String {
     use std::fmt::Write;
     use tiny_skia::PathSegment;
-    let mut d = String::new();
-    // Write directly into the buffer (no throwaway String per segment). Writing to
-    // a String is infallible, so the Result is discarded.
+    let mut d = String::with_capacity(path.len() * 14);
+    let pt = |d: &mut String, p: tiny_skia::Point| {
+        let (x, y) = match map {
+            Some(t) => {
+                let (x, y) = (p.x as f64, p.y as f64);
+                (
+                    t.sx as f64 * x + t.kx as f64 * y + t.tx as f64,
+                    t.ky as f64 * x + t.sy as f64 * y + t.ty as f64,
+                )
+            }
+            None => (p.x as f64, p.y as f64),
+        };
+        match dec {
+            Some(n) => {
+                push_num(d, x, n);
+                d.push(' ');
+                push_num(d, y, n);
+            }
+            // Unrounded: the shortest exact `f32` form, as before.
+            None => {
+                let _ = write!(d, "{} {}", x as f32, y as f32);
+            }
+        }
+    };
+    // Each non-close segment leaves exactly one trailing space; dropped below.
     for seg in path.segments() {
         match seg {
             PathSegment::MoveTo(p) => {
-                let _ = write!(d, "M{} {} ", p.x, p.y);
+                d.push('M');
+                pt(&mut d, p);
+                d.push(' ');
             }
             PathSegment::LineTo(p) => {
-                let _ = write!(d, "L{} {} ", p.x, p.y);
+                d.push('L');
+                pt(&mut d, p);
+                d.push(' ');
             }
             PathSegment::QuadTo(c, p) => {
-                let _ = write!(d, "Q{} {} {} {} ", c.x, c.y, p.x, p.y);
+                d.push('Q');
+                pt(&mut d, c);
+                d.push(' ');
+                pt(&mut d, p);
+                d.push(' ');
             }
             PathSegment::CubicTo(c1, c2, p) => {
-                let _ = write!(d, "C{} {} {} {} {} {} ", c1.x, c1.y, c2.x, c2.y, p.x, p.y);
+                d.push('C');
+                pt(&mut d, c1);
+                d.push(' ');
+                pt(&mut d, c2);
+                d.push(' ');
+                pt(&mut d, p);
+                d.push(' ');
             }
             PathSegment::Close => d.push('Z'),
         }
     }
-    // Each non-close segment leaves exactly one trailing space; drop it (a `Z`
-    // leaves none). Equivalent to the previous trim_end without a second alloc.
     if d.ends_with(' ') {
         d.pop();
     }
@@ -982,7 +1227,7 @@ pub(super) fn clip_shape_d(shape: &ClipShape) -> String {
         ClipShape::Path {
             path, transform, ..
         } => match path.clone().transform(*transform) {
-            Some(p) => path_to_d(&p),
+            Some(p) => path_to_d(&p, None, None),
             None => String::new(),
         },
     }
@@ -1010,3 +1255,60 @@ pub(crate) fn xml_escape(s: &str) -> Cow<'_, str> {
 }
 
 // --- PDF backend (krilla) ---------------------------------------------------
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn num(v: f64, dec: u32) -> String {
+        let mut s = String::new();
+        push_num(&mut s, v, dec);
+        s
+    }
+
+    #[test]
+    fn push_num_rounds_and_trims() {
+        assert_eq!(num(57.530643, 2), "57.53");
+        assert_eq!(num(1.0, 2), "1");
+        assert_eq!(num(0.5, 2), "0.5");
+        assert_eq!(num(0.0049, 2), "0");
+        assert_eq!(num(-0.0049, 2), "0");
+        assert_eq!(num(-3.456, 2), "-3.46");
+        assert_eq!(num(0.04, 2), "0.04");
+        assert_eq!(num(12.3, 0), "12");
+        assert_eq!(num(f64::NAN, 2), "NaN");
+    }
+
+    #[test]
+    fn coord_decimals_follow_the_scale() {
+        assert_eq!(coord_decimals(Transform::identity()), 2);
+        assert_eq!(coord_decimals(Transform::from_translate(5.0, 7.0)), 2);
+        assert_eq!(coord_decimals(Transform::from_scale(3.78, 3.78)), 3);
+        assert_eq!(coord_decimals(Transform::from_scale(250.0, 1.0)), 5);
+    }
+
+    #[test]
+    fn circle_of_recognises_push_circle_only() {
+        let mut pb = PathBuilder::new();
+        pb.push_circle(53.75, 285.9, 3.78);
+        let c = circle_of(&pb.finish().unwrap()).unwrap();
+        assert!((c.0 - 53.75).abs() < 1e-4 && (c.1 - 285.9).abs() < 1e-4);
+        assert!((c.2 - 3.78).abs() < 1e-4);
+        // an ellipse, a rect and a polygon are not circles
+        let mut pb = PathBuilder::new();
+        pb.push_oval(tiny_skia::Rect::from_xywh(0.0, 0.0, 10.0, 6.0).unwrap());
+        assert!(circle_of(&pb.finish().unwrap()).is_none());
+        let mut pb = PathBuilder::new();
+        pb.push_rect(tiny_skia::Rect::from_xywh(0.0, 0.0, 4.0, 4.0).unwrap());
+        assert!(circle_of(&pb.finish().unwrap()).is_none());
+    }
+
+    #[test]
+    fn circles_bake_only_under_similarities() {
+        let c = (0.0, 0.0, 1.0);
+        let t = Transform::from_row(3.0, 0.0, 0.0, 3.0, 10.0, 20.0);
+        assert_eq!(bake_circle(c, t), Some((10.0, 20.0, 3.0)));
+        assert!(bake_circle(c, Transform::from_scale(3.0, 2.0)).is_none());
+        assert!(bake_circle(c, Transform::from_scale(-1.0, 1.0)).is_none());
+    }
+}

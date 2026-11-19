@@ -188,11 +188,77 @@ test_that("clipped viewports emit a clipPath and reference it", {
   expect_match(svg, 'clip-path="url\\(#')
 })
 
-test_that("a nested viewport's transform appears as a matrix", {
+test_that("a nested viewport's transform places solid geometry in device px", {
   s <- vl_scene(1, 1, dpi = 100) |>
     push(vl_viewport(x = 0.7, y = 0.3, width = 0.4, height = 0.4)) |>
     draw(rect_grob(gp = vl_gpar(fill = "red", col = NA)))
-  expect_match(svg_of(s), "matrix\\(") # viewport offset -> translate matrix
+  # A solid fill is transform-invariant, so the viewport offset is baked into
+  # the coordinates rather than carried as a per-element matrix.
+  svg <- svg_of(s)
+  expect_match(svg, 'd="M50 50 L90 50 L90 90 L50 90 Z"', fixed = TRUE)
+  expect_no_match(svg, "matrix(", fixed = TRUE)
+})
+
+test_that("a gradient fill keeps local geometry and the element's matrix", {
+  # The gradient is laid out in local px (userSpaceOnUse), so baking the
+  # transform into the path would move the shape off its ramp.
+  g <- linear_gradient(c("red", "blue"), x1 = 0, x2 = 1)
+  s <- vl_scene(1, 1, dpi = 100) |>
+    push(vl_viewport(x = 0.7, y = 0.3, width = 0.4, height = 0.4)) |>
+    draw(rect_grob(gp = vl_gpar(fill = g, col = NA)))
+  svg <- svg_of(s)
+  expect_match(svg, 'fill="url(#', fixed = TRUE)
+  expect_match(svg, "transform=\"matrix(", fixed = TRUE)
+})
+
+test_that("points are compact <circle>s that keep the per-key fill/stroke twins", {
+  # vellumwidget's DOM contract: every drawn element of a keyed datum carries
+  # its own data-key, and a filled + stroked point is a fill element followed
+  # by a fill="none" stroke element.
+  s <- vl_scene(2, 2, dpi = 100) |>
+    draw(points_grob(
+      x = c(0.25, 0.5, 0.75),
+      y = c(0.25, 0.5, 0.75),
+      key = c("a", "b", "c"),
+      gp = vl_gpar(fill = "#336699", col = "#336699", lwd = 1)
+    ))
+  svg <- scene_svg(s)
+  circles <- regmatches(svg, gregexpr("<circle[^>]*>", svg))[[1]]
+  expect_length(circles, 6L)
+  keys <- sub('.*data-key="([^"]*)".*', "\\1", circles)
+  expect_identical(keys, rep(c("a", "b", "c"), each = 2L))
+  fills <- circles[c(1L, 3L, 5L)]
+  strokes <- circles[c(2L, 4L, 6L)]
+  expect_true(all(grepl('fill="#336699"', fills, fixed = TRUE)))
+  expect_true(all(grepl('fill="none" stroke="#336699"', strokes, fixed = TRUE)))
+  # identical geometry on both twins, in device px (no per-element transform)
+  geom <- sub('.*(cx="[^"]*" cy="[^"]*" r="[^"]*").*', "\\1", circles)
+  expect_identical(geom[c(1L, 3L, 5L)], geom[c(2L, 4L, 6L)])
+  expect_no_match(svg, "<circle[^>]*transform=")
+  # coordinates are rounded to 2 decimals; opaque paint omits its opacity
+  nums <- regmatches(geom, gregexpr("[0-9.]+", geom))
+  expect_false(any(grepl("\\.[0-9]{3}", unlist(nums))))
+  expect_no_match(paste(circles, collapse = ""), "fill-opacity|stroke-opacity")
+})
+
+test_that("an unkeyed point batch is drawn as circles too", {
+  s <- vl_scene(2, 2, dpi = 100) |>
+    draw(points_grob(
+      x = c(0.25, 0.75),
+      y = c(0.25, 0.75),
+      gp = vl_gpar(fill = "black", col = "black", lwd = 1)
+    ))
+  svg <- scene_svg(s)
+  expect_length(regmatches(svg, gregexpr("<circle", svg))[[1]], 4L)
+  expect_no_match(svg, "<path", fixed = TRUE)
+})
+
+test_that("translucent paint still writes its opacity", {
+  s <- vl_scene(1, 1, dpi = 100) |>
+    draw(rect_grob(gp = vl_gpar(fill = "#FF000080", col = "#0000FF80", lwd = 2)))
+  svg <- scene_svg(s)
+  expect_match(svg, 'fill-opacity="0.5', fixed = TRUE)
+  expect_match(svg, 'stroke-opacity="0.5', fixed = TRUE)
 })
 
 test_that("clip on an offset viewport wraps a <g> (clip space stays in device coords)", {
