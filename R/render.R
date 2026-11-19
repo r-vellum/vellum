@@ -375,6 +375,9 @@ rm(print, plot)
 .render_cache$.hits <- 0L
 .render_cache$.misses <- 0L
 .mtl_cache <- new.env(parent = emptyenv())
+# Pick-compiled backends for `hit_test()` (see `.pick_backend()`), same LRU cap.
+.pick_cache <- new.env(parent = emptyenv())
+.pick_cache$.order <- character(0)
 .mtl_count <- new.env(parent = emptyenv()) # `.materialize` call counter (tests)
 .mtl_count$n <- 0L
 
@@ -452,6 +455,8 @@ rm(print, plot)
 .render_cache_reset <- function() {
   rm(list = ls(.render_cache, all.names = TRUE), envir = .render_cache)
   rm(list = ls(.mtl_cache, all.names = TRUE), envir = .mtl_cache)
+  rm(list = ls(.pick_cache, all.names = TRUE), envir = .pick_cache)
+  .pick_cache$.order <- character(0)
   .render_cache$.order <- character(0)
   .render_cache$.hits <- 0L
   .render_cache$.misses <- 0L

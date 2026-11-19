@@ -92,3 +92,49 @@ test_that("hit_test accepts device-pixel coordinates", {
   expect_equal(hit_test(s, 50, 50, units = "px"), "L") # device (50,50)
   expect_null(hit_test(s, 150, 50, units = "px"))
 })
+
+test_that("hit_test reuses one pick compile per scene and misses after an edit", {
+  vl_clear_render_cache()
+  withr::defer(vl_clear_render_cache())
+  s <- vl_scene(2, 2, dpi = 72, bg = "white") |>
+    draw(rect_grob(name = "bg", gp = vl_gpar(fill = "white", col = NA))) |>
+    draw(points_grob(
+      0.5,
+      0.5,
+      size = vl_unit(20, "pt"),
+      name = "dot",
+      gp = vl_gpar(fill = "red", col = NA)
+    ))
+  pk1 <- .pick_backend(s)
+  pk2 <- .pick_backend(s)
+  expect_identical(pk1, pk2) # cache hit: the same compiled backend
+  expect_equal(length(.pick_cache$.order), 1L)
+  expect_equal(hit_test(s, 0.5, 0.5), "dot")
+  expect_equal(length(.pick_cache$.order), 1L)
+
+  # An edit is new content: a fresh compile, and the answer follows the edit.
+  s2 <- edit_node(s, "dot", x = vl_unit(0.1, "npc"))
+  expect_false(identical(.pick_backend(s2)$scene, pk1$scene))
+  expect_equal(hit_test(s2, 0.1, 0.5), "dot")
+  expect_equal(hit_test(s2, 0.5, 0.5), "bg")
+  expect_equal(hit_test(s, 0.5, 0.5), "dot") # the original is untouched
+
+  # A device-size change keeps the content id but must not reuse the backend.
+  s3 <- S7::set_props(s, width = vl_unit(4, "in"))
+  expect_false(identical(.pick_backend(s3)$scene, pk1$scene))
+  expect_equal(hit_test(s3, 0.5, 0.5), "dot")
+
+  # The LRU is bounded by the render-cache cap.
+  withr::local_options(vellum.cache_size = 2L)
+  for (i in 1:4) {
+    hit_test(draw(s, points_grob(0.2, 0.2, name = paste0("p", i))), 0.5, 0.5)
+  }
+  expect_lte(length(.pick_cache$.order), 2L)
+
+  # vl_clear_render_cache() empties it, and vellum.cache = FALSE bypasses it.
+  vl_clear_render_cache()
+  expect_equal(length(.pick_cache$.order), 0L)
+  withr::local_options(vellum.cache = FALSE)
+  expect_equal(hit_test(s, 0.5, 0.5), "dot")
+  expect_equal(length(.pick_cache$.order), 0L)
+})
