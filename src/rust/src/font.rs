@@ -21,7 +21,7 @@ use tiny_skia::{FillRule, Paint, PathBuilder, Pixmap, Transform};
 /// Sub-pixel phase counts for the glyph-bitmap (sprite) cache: a sprite is cached
 /// per quantised sub-pixel pen offset, so worst-case placement error is
 /// `1/(2*PHASE)` px per axis (≈ 1/16 px here → ≈ 16/255 coverage at a glyph
-/// edge). MUST match the fast-path phase computation in `render.rs`.
+/// edge). MUST match the fast-path phase computation in `render/raster.rs`.
 pub const PHASE_X: u32 = 8;
 pub const PHASE_Y: u32 = 8;
 
