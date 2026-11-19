@@ -171,7 +171,7 @@ stroke_to_path <- function(
   val <- vctrs::field(u, "value")
   off <- vctrs::field(u, "offset") # always mm
   # `native` is resolved against the root viewport's default 0..1 scale, where it
-  # coincides with `npc` -- which is what a bare numeric in `lines_grob()` means.
+  # coincides with `npc` -- which is what a bare numeric in `lines_grob()` is.
   # A grob destined for a viewport with a different scale must be resolved there
   # first; there is no viewport here to ask.
   rel <- unname(.unit_codes[c("npc", "native")])

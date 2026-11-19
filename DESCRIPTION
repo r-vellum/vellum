@@ -76,6 +76,7 @@ Collate:
     'style.R'
     'text.R'
     'unit.R'
+    'validate.R'
     'vellum-package.R'
     'zzz.R'
 RoxygenNote: 8.0.0.9000
