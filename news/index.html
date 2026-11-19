@@ -13,7 +13,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">vellum</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.8.0.9000</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.8.1</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -66,17 +66,17 @@
 <div class="row">
   <main id="main" class="col-md-9"><div class="page-header">
       <img src="../logo.png" class="logo" alt=""><h1>Changelog</h1>
-      <small>Source: <a href="https://github.com/r-vellum/vellum/blob/main/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
+      <small>Source: <a href="https://github.com/r-vellum/vellum/blob/v0.8.1/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
     </div>
 
     <div class="section level2">
-<h2 class="pkg-version" data-toc-text="0.8.0.9000" id="vellum-0809000-development-version">vellum 0.8.0.9000 (development version)<a class="anchor" aria-label="anchor" href="#vellum-0809000-development-version"></a></h2>
+<h2 class="pkg-version" data-toc-text="0.8.1" id="vellum-081">vellum 0.8.1<a class="anchor" aria-label="anchor" href="#vellum-081"></a></h2>
 <div class="section level3">
-<h3 id="bug-fixes-0-8-0-9000">Bug fixes<a class="anchor" aria-label="anchor" href="#bug-fixes-0-8-0-9000"></a></h3>
+<h3 id="bug-fixes-0-8-1">Bug fixes<a class="anchor" aria-label="anchor" href="#bug-fixes-0-8-1"></a></h3>
 <ul><li>The same scene now renders to byte-identical SVG every time, so SVG output can be diffed and snapshot-tested (VP-24). The <code>&lt;title&gt;</code>/<code>&lt;desc&gt;</code> ids used to take a prefix from a session counter, stamped when the scene was built, so two builds of one scene differed (<code>vl2-d</code> against <code>vl208-d</code>). Every id in the document (title, desc, and each clip path, gradient, pattern, mask and filter) now starts with one prefix, <code>vl</code> plus a hash of the document’s own content, followed by a counter that restarts at 0 in every render (<code>vl3f9a01c2-c0</code>). Different scenes embedded in one HTML page therefore still get distinct ids. Clip-path and gradient ids used to have no prefix at all, so two SVGs on one page could resolve each other’s <code>url(#c0)</code>. A scene’s <code>a11y_prefix</code>, when set, is used as the prefix instead.</li>
 </ul></div>
 <div class="section level3">
-<h3 id="performance-0-8-0-9000">Performance<a class="anchor" aria-label="anchor" href="#performance-0-8-0-9000"></a></h3>
+<h3 id="performance-0-8-1">Performance<a class="anchor" aria-label="anchor" href="#performance-0-8-1"></a></h3>
 <ul><li>SVG output is about 4.5x smaller per mark and renders about 4x faster (VW-8). A circular point is now a <code>&lt;circle&gt;</code> rather than an eight-segment path; a solid fill or stroke has its transform baked into device coordinates instead of carrying a per-element <code><a href="https://rdrr.io/r/base/matrix.html" class="external-link">matrix()</a></code>; path coordinates are rounded to 0.01 px (more digits under a scaling transform); and <code>fill-opacity</code>/<code>stroke-opacity</code> of 1 and the miter limit of a round join are left out. A 5,000-point keyed scatter drops from 5.0 MB to 1.1 MB. What renders is unchanged, and so is the structure vellumwidget relies on: every keyed element keeps its <code>data-key</code>, and a filled, stroked point is still a fill element followed by its <code>fill="none"</code> stroke twin. Gradient and pattern paint keep local geometry and the element’s <code>transform</code>.</li>
 </ul></div>
 </div>
