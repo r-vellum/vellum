@@ -656,6 +656,77 @@ impl Scene {
         )
     }
 
+    /// The spatial index over the keyed elements, built on first use from the
+    /// recording and memoised until the scene is drawn into again. Items are
+    /// exactly the pick table's rows, in the same (paint) order.
+    pub(super) fn spatial(&self) -> Arc<SpatialIndex> {
+        if let Some(s) = self.spatial_cache.borrow().as_ref() {
+            return Arc::clone(s);
+        }
+        let rec = self.recording();
+        let mut items = Vec::new();
+        for (ni, (_, node)) in self.nodes.iter().enumerate() {
+            if pick_kind(node).is_empty() {
+                continue;
+            }
+            for ei in 0..elem_count(node) {
+                if elem_key(node, ei).is_none() {
+                    continue;
+                }
+                let parts = rec.get(ni).and_then(|e| e.get(ei)).map_or(&[][..], |p| &p[..]);
+                if parts.is_empty() {
+                    continue;
+                }
+                items.push(SpatialItem { node: ni, elem: ei, bbox: parts_bbox(parts) });
+            }
+        }
+        let s = Arc::new(SpatialIndex::build(rec, items));
+        *self.spatial_cache.borrow_mut() = Some(Arc::clone(&s));
+        s
+    }
+
+    /// `key` and `kind` columns for a list of spatial-index items.
+    fn spatial_rows(&self, idx: &SpatialIndex, hits: impl Iterator<Item = usize>) -> (Vec<String>, Vec<String>) {
+        let (mut key, mut kind) = (Vec::new(), Vec::new());
+        for i in hits {
+            let it = &idx.items()[i];
+            let node = &self.nodes[it.node].1;
+            key.push(elem_key(node, it.elem).unwrap_or_default().to_string());
+            kind.push(pick_kind(node).to_string());
+        }
+        (key, kind)
+    }
+
+    /// Body of the `nearest_table` R method: the `n` keyed elements nearest
+    /// device px `(px, py)` within `max_dist`, nearest first (ties in paint
+    /// order) -- the pick table's rows sorted by `dist`, without building it.
+    pub(super) fn build_nearest_table(&self, px: f64, py: f64, n: usize, max_dist: f64) -> List {
+        let idx = self.spatial();
+        let hits = idx.nearest(px, py, n, max_dist);
+        let (key, kind) = self.spatial_rows(&idx, hits.iter().map(|h| h.0));
+        let dist: Vec<f64> = hits.iter().map(|h| h.1).collect();
+        list!(key = key, kind = kind, dist = dist)
+    }
+
+    /// Body of the `brush_table` / `lasso_table` R methods: the keyed elements
+    /// meeting a rectangle (`xs`/`ys` its two corners) or a polygon, in paint
+    /// order.
+    pub(super) fn build_region_table(&self, xs: &[f64], ys: &[f64], rect: bool, mode: Region) -> List {
+        let idx = self.spatial();
+        let hits = if rect {
+            if xs.len() < 2 || ys.len() < 2 {
+                Vec::new()
+            } else {
+                idx.brush(xs[0], ys[0], xs[1], ys[1], mode)
+            }
+        } else {
+            let poly: Vec<(f64, f64)> = xs.iter().copied().zip(ys.iter().copied()).collect();
+            idx.lasso(&poly, mode)
+        };
+        let (key, kind) = self.spatial_rows(&idx, hits.into_iter());
+        list!(key = key, kind = kind)
+    }
+
     /// Body of the `font_table` R method (see the `#[extendr]` impl in `ffi.rs`).
     pub(super) fn build_font_table(&self) -> List {
         use std::collections::BTreeMap;

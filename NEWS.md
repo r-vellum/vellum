@@ -1,6 +1,27 @@
 # vellum 0.8.1.9000 (development version)
 
+## New features
+
+* `vl_brush()` and `vl_lasso()` return the keyed elements that meet a
+  rectangle or a free-form polygon, measured against their true geometry
+  (F-6). A diagonal line is selected only where the line itself enters the
+  region, not because its bounding box does, and a region inside a polygon's
+  hole does not select the polygon. `mode = "intersect"` (the default)
+  selects anything the region touches, `"contain"` only what lies wholly
+  inside it, and `"centre"` whatever has its box centre inside, the rule
+  vellumwidget's lasso uses in the browser. They are for server-side
+  brushing and lasso selection in Shiny, and return `key` and `kind` in paint
+  order.
+
 ## Performance
+
+* `vl_nearest()` answers from a spatial index cached on the scene instead of
+  measuring every keyed element on each call (F-6). The first query on a
+  scene builds a uniform grid over its elements; later `vl_nearest()`,
+  `vl_brush()` and `vl_lasso()` calls visit only the cells near the query.
+  On a 20,000-point scatter a warm `vl_nearest()` call drops from about 6 ms
+  to 0.25 ms, fast enough for hover-rate use. The results, ties included,
+  are the same as before. Editing a scene gives it a new index.
 
 * A filled, outlined shape is one SVG element instead of two (VW-12). When
   the fill is a solid colour and the outline a solid, undashed stroke, the

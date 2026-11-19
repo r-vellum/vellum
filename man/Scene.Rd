@@ -263,15 +263,6 @@ R joins this with the viewport names it recorded during compilation.
 }
 
 \subsection{Method \code{lint_table}}{
-Per-element device-px bounding boxes for the batched mark nodes (the ones
-that can carry data keys): rects, circles, points/markers, hexagons,
-sectors, segments. Rows are emitted in paint order (the compiler's DFS),
-one per drawn element — the same order and count the R grammar enumerates,
-so \code{scene_model()} zips this with R-side semantics positionally (and
-cross-checks the \code{key} column). Columns: \code{key} ("" = none), enclosing
-\code{panel} ("" = none), and device-px bbox \verb{x0,y0,x1,y1} (y-down). Sector boxes
-use the outer-radius disk and hexagon boxes the circumscribed extent — safe
-over-approximations sufficient for a spatial index.
 Per-node facts a linter needs, in paint order: one row per drawn node
 (not per element -- the rules that matter are about a whole mark).
 
@@ -301,6 +292,25 @@ Filled shapes contain their interior — a point inside a polygon is at
 distance zero, so clicking the middle of a choropleth region hits it.
 }
 
+\subsection{Method \code{nearest_table}}{
+The \code{n} keyed elements nearest device px \verb{(px, py)} within \code{max_dist}
+px: \code{key}, \code{kind}, \code{dist}, nearest first, ties in paint order. Answers
+from a uniform-grid spatial index built once per scene (and dropped when
+it is drawn into), so a hover-rate caller does not rebuild the pick
+table per probe. Same rows as \code{pick_table()} sorted by \code{dist}.
+}
+
+\subsection{Method \code{brush_table}}{
+The keyed elements meeting the device-px rectangle with corners
+\verb{(x0, y0)}, \verb{(x1, y1)}: \code{key}, \code{kind}, in paint order. \code{mode} is
+\code{"intersect"}, \code{"contain"} or \code{"centre"} (see \code{spatial::Region}).
+}
+
+\subsection{Method \code{lasso_table}}{
+The keyed elements meeting the device-px polygon \verb{(xs, ys)} (closed
+implicitly, even-odd rule): \code{key}, \code{kind}, in paint order.
+}
+
 \subsection{Method \code{font_table}}{
 The font files this scene's text actually resolved to.
 
@@ -308,6 +318,18 @@ Read off the shaped glyphs rather than re-resolved from family names, so
 it reports what was \emph{used}, not what would be picked if asked again.
 Returns \code{path}, \code{index} (face within a collection) and \code{glyphs} (how many
 glyphs came from that face).
+}
+
+\subsection{Method \code{element_table}}{
+Per-element device-px bounding boxes for the batched mark nodes (the ones
+that can carry data keys): rects, circles, points/markers, hexagons,
+sectors, segments. Rows are emitted in paint order (the compiler's DFS),
+one per drawn element — the same order and count the R grammar enumerates,
+so \code{scene_model()} zips this with R-side semantics positionally (and
+cross-checks the \code{key} column). Columns: \code{key} ("" = none), enclosing
+\code{panel} ("" = none), and device-px bbox \verb{x0,y0,x1,y1} (y-down). Each box is
+the extent of the element's recorded outline, so a sector's box is its
+wedge (centre included for a pie slice), not the outer-radius disc.
 }
 
 \subsection{Method \code{pixel}}{

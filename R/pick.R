@@ -24,12 +24,6 @@
   invisible()
 }
 
-# npc/px -> device px, sharing `hit_test()`'s convention (npc y is up).
-.probe_px <- function(scene, x, y, units) {
-  d <- .scene_to_backend(as_vellum_scene(scene))$dim()
-  if (identical(units, "npc")) c(x * d[1], (1 - y) * d[2]) else c(x, y)
-}
-
 #' Find the marks nearest a point, by true geometry
 #'
 #' Ranks a scene's keyed elements by their distance to a point — measuring to the
@@ -98,24 +92,148 @@ vl_nearest <- function(
   .check_number(n, "n", min = 0)
   .check_scalar(n, "n", "integer")
   .check_number(max_dist, "max_dist", min = 0, allow_inf = TRUE)
-  p <- .probe_px(scene, x, y, units)
-  t <- .pick_table(scene, p[1], p[2])
-  if (!length(t$key)) {
-    return(data.frame(
-      key = character(0),
-      kind = character(0),
-      dist = numeric(0)
-    ))
-  }
-  out <- data.frame(
+  b <- .scene_to_backend(as_vellum_scene(scene))
+  p <- unlist(.to_px(b$dim(), x, y, units))
+  # Answered from the scene's cached spatial index (built on the first query,
+  # reused until the scene changes): only the grid cells near the probe are
+  # measured, instead of the whole pick table per call.
+  t <- b$nearest_table(
+    p[1],
+    p[2],
+    as.integer(min(n, .Machine$integer.max)),
+    max_dist
+  )
+  data.frame(
     key = t$key,
     kind = t$kind,
     dist = t$dist,
     stringsAsFactors = FALSE
   )
-  out <- out[out$dist <= max_dist, , drop = FALSE]
-  out <- out[order(out$dist), , drop = FALSE]
-  utils::head(out, max(0L, as.integer(n)))
+}
+
+# npc/px -> device px for a vector of coordinates (npc y is up).
+.to_px <- function(dim, x, y, units) {
+  if (identical(units, "npc")) {
+    list(x * dim[1], (1 - y) * dim[2])
+  } else {
+    list(x, y)
+  }
+}
+
+# A region query's result: `key`, `kind`, one row per element, paint order.
+.region_frame <- function(t) {
+  data.frame(key = t$key, kind = t$kind, stringsAsFactors = FALSE)
+}
+
+#' Select the marks in a rectangle or a lasso, by true geometry
+#'
+#' `vl_brush()` returns the keyed elements of a scene that meet an
+#' axis-aligned rectangle; `vl_lasso()` those that meet a free-form polygon.
+#' Both test the elements' **actual geometry** -- the same recorded shapes
+#' [vl_nearest()] measures -- so a diagonal segment is selected only if the
+#' line itself enters the region, not because its bounding box does. They are
+#' meant for server-side brushing and lasso selection (a Shiny app receiving a
+#' brush or lasso from the client) and share one cached spatial index with
+#' [vl_nearest()].
+#'
+#' @section Which elements are selected:
+#' `mode` decides how an element must meet the region:
+#'
+#' * `"intersect"` (default): any part of the element touches the region -- a
+#'   point whose disc overlaps it, a line that passes through it, a polygon
+#'   that overlaps it (including a region wholly inside the polygon). A polygon
+#'   with a hole does not meet a region that lies entirely in the hole.
+#' * `"contain"`: all of the element lies inside the region -- the whole disc
+#'   of a point, every vertex of a line or polygon (and, for a lasso, no edge
+#'   leaving it).
+#' * `"centre"`: the centre of the element's bounding box lies inside the
+#'   region. This is the rule vellumwidget's client-side lasso uses, so a
+#'   server can reproduce a client selection exactly.
+#'
+#' Lines and segments are tested along their centre-line, as in
+#' [vl_nearest()]; the stroke width is not added. Elements with nothing drawn
+#' (an `NA` position) are never selected. The lasso polygon is closed
+#' implicitly and filled with the even-odd rule, so a self-crossing lasso
+#' selects what a client's ray-casting test would.
+#'
+#' @section Performance:
+#' The first query on a scene builds a uniform grid over its keyed elements;
+#' every later [vl_nearest()], `vl_brush()` or `vl_lasso()` on the same scene
+#' visits only the cells the query touches. The index lives with the compiled
+#' scene, so an edited scene (a new object) gets a fresh one.
+#'
+#' @inheritParams vl_nearest
+#' @param xmin,xmax,ymin,ymax The rectangle's edges, in `units`. Their order
+#'   does not matter.
+#' @param x,y For `vl_lasso()`, the polygon's vertices, in `units` (at least
+#'   three; the last joins the first).
+#' @param mode `"intersect"` (default), `"contain"` or `"centre"`; see below.
+#' @return A data frame of `key` and `kind`, one row per selected element, in
+#'   paint order. A datum drawn as several elements (an error bar's segments)
+#'   contributes several rows; use `unique(res$key)` for the selected keys. Only
+#'   keyed elements are considered.
+#' @seealso [vl_nearest()] for the nearest marks to a point,
+#'   [element_geometry()] for the geometry itself.
+#' @examples
+#' s <- vl_scene(4, 3, dpi = 96, bg = "white") |>
+#'   draw(segments_grob(0.1, 0.1, 0.9, 0.9, key = "diagonal")) |>
+#'   draw(points_grob(c(0.2, 0.8), c(0.8, 0.2), key = c("tl", "br")))
+#'
+#' # The diagonal's bounding box covers this corner, but the line does not.
+#' vl_brush(s, 0.7, 0.9, 0.1, 0.3)
+#' vl_brush(s, 0.4, 0.6, 0.4, 0.6)
+#'
+#' # A triangle around the top-left point
+#' vl_lasso(s, c(0.05, 0.4, 0.05), c(0.6, 0.95, 0.95))
+#' @name vl_brush
+NULL
+
+#' @rdname vl_brush
+#' @export
+vl_brush <- function(
+  scene,
+  xmin,
+  xmax,
+  ymin,
+  ymax,
+  units = c("npc", "px"),
+  mode = c("intersect", "contain", "centre")
+) {
+  units <- .check_choice(units, c("npc", "px"), "units")
+  mode <- .check_choice(mode, c("intersect", "contain", "centre"), "mode")
+  .check_number(xmin, "xmin")
+  .check_number(xmax, "xmax")
+  .check_number(ymin, "ymin")
+  .check_number(ymax, "ymax")
+  b <- .scene_to_backend(as_vellum_scene(scene))
+  p <- .to_px(b$dim(), c(xmin, xmax), c(ymin, ymax), units)
+  .region_frame(b$brush_table(p[[1]][1], p[[2]][1], p[[1]][2], p[[2]][2], mode))
+}
+
+#' @rdname vl_brush
+#' @export
+vl_lasso <- function(
+  scene,
+  x,
+  y,
+  units = c("npc", "px"),
+  mode = c("intersect", "contain", "centre")
+) {
+  units <- .check_choice(units, c("npc", "px"), "units")
+  mode <- .check_choice(mode, c("intersect", "contain", "centre"), "mode")
+  if (!is.numeric(x) || !is.numeric(y) || length(x) != length(y)) {
+    cli::cli_abort(
+      "{.arg x} and {.arg y} must be numeric vectors of the same length."
+    )
+  }
+  if (length(x) < 3L || anyNA(x) || anyNA(y) || !all(is.finite(c(x, y)))) {
+    cli::cli_abort(
+      "{.arg x} and {.arg y} must give at least three finite vertices."
+    )
+  }
+  b <- .scene_to_backend(as_vellum_scene(scene))
+  p <- .to_px(b$dim(), as.double(x), as.double(y), units)
+  .region_frame(b$lasso_table(p[[1]], p[[2]], mode))
 }
 
 #' The true geometry of a scene's addressable elements
