@@ -1,5 +1,23 @@
 # Changelog
 
+## vellum 0.8.0.9000 (development version)
+
+### Performance
+
+- SVG output is about 4.5x smaller per mark and renders about 4x faster
+  (VW-8). A circular point is now a `<circle>` rather than an
+  eight-segment path; a solid fill or stroke has its transform baked
+  into device coordinates instead of carrying a per-element
+  [`matrix()`](https://rdrr.io/r/base/matrix.html); path coordinates are
+  rounded to 0.01 px (more digits under a scaling transform); and
+  `fill-opacity`/`stroke-opacity` of 1 and the miter limit of a round
+  join are left out. A 5,000-point keyed scatter drops from 5.0 MB to
+  1.1 MB. What renders is unchanged, and so is the structure
+  vellumwidget relies on: every keyed element keeps its `data-key`, and
+  a filled, stroked point is still a fill element followed by its
+  `fill="none"` stroke twin. Gradient and pattern paint keep local
+  geometry and the element’s `transform`.
+
 ## vellum 0.8.0
 
 ### Breaking changes

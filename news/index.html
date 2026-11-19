@@ -13,7 +13,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">vellum</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.8.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.8.0.9000</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -66,9 +66,16 @@
 <div class="row">
   <main id="main" class="col-md-9"><div class="page-header">
       <img src="../logo.png" class="logo" alt=""><h1>Changelog</h1>
-      <small>Source: <a href="https://github.com/r-vellum/vellum/blob/v0.8.0/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
+      <small>Source: <a href="https://github.com/r-vellum/vellum/blob/main/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.8.0.9000" id="vellum-0809000-development-version">vellum 0.8.0.9000 (development version)<a class="anchor" aria-label="anchor" href="#vellum-0809000-development-version"></a></h2>
+<div class="section level3">
+<h3 id="performance-0-8-0-9000">Performance<a class="anchor" aria-label="anchor" href="#performance-0-8-0-9000"></a></h3>
+<ul><li>SVG output is about 4.5x smaller per mark and renders about 4x faster (VW-8). A circular point is now a <code>&lt;circle&gt;</code> rather than an eight-segment path; a solid fill or stroke has its transform baked into device coordinates instead of carrying a per-element <code><a href="https://rdrr.io/r/base/matrix.html" class="external-link">matrix()</a></code>; path coordinates are rounded to 0.01 px (more digits under a scaling transform); and <code>fill-opacity</code>/<code>stroke-opacity</code> of 1 and the miter limit of a round join are left out. A 5,000-point keyed scatter drops from 5.0 MB to 1.1 MB. What renders is unchanged, and so is the structure vellumwidget relies on: every keyed element keeps its <code>data-key</code>, and a filled, stroked point is still a fill element followed by its <code>fill="none"</code> stroke twin. Gradient and pattern paint keep local geometry and the element’s <code>transform</code>.</li>
+</ul></div>
+</div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.8.0" id="vellum-080">vellum 0.8.0<a class="anchor" aria-label="anchor" href="#vellum-080"></a></h2>
 <div class="section level3">
