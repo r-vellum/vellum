@@ -6,14 +6,14 @@
 #' with a given name. `edit_node()` returns a new scene with that node's
 #' properties updated (copy-on-modify).
 #'
-#' @param scene A [vl_scene()].
+#' @param scene A [vl_scene()] (or anything with an [as_vellum_scene()] method).
 #' @param name A node name (set via the `name` argument of a grob/viewport).
 #' @param ... Properties to set, e.g. `gp = vl_gpar(col = "red")`.
 #' @return `node_names()`: character. `get_node()`: a node. `edit_node()`: a
 #'   `vellum_scene`.
 #' @export
 node_names <- function(scene) {
-  root <- .materialize(scene)
+  root <- .materialize(as_vellum_scene(scene))
   # Recurse returning each subtree's names, concatenated — avoids growing a
   # vector one element at a time via `<<-` (that is O(n^2) over the tree).
   walk <- function(node) {
@@ -29,7 +29,7 @@ node_names <- function(scene) {
 #' @rdname node_names
 #' @export
 get_node <- function(scene, name) {
-  root <- .materialize(scene)
+  root <- .materialize(as_vellum_scene(scene))
   p <- .find_path(root, name)
   if (is.null(p)) {
     cli::cli_abort("No node named {.val {name}}.")
@@ -40,6 +40,7 @@ get_node <- function(scene, name) {
 #' @rdname node_names
 #' @export
 edit_node <- function(scene, name, ...) {
+  scene <- as_vellum_scene(scene)
   # Reuse the memoised materialised tree (same gtree objects, so unchanged
   # subtrees keep their `nid` across the edit -> repaint-boundary cache hits).
   root <- .materialize_cached(scene, .scene_cid(scene))
