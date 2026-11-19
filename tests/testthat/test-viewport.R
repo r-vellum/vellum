@@ -135,18 +135,34 @@ test_that("a single pushed viewport with native scales draws correctly", {
 })
 
 test_that("vl_viewport() rejects non-positive row/col", {
-  expect_error(vl_viewport(row = 0), "positive integer")
-  expect_error(vl_viewport(col = -1), "positive integer")
-  expect_error(vl_viewport(row = NA_integer_), "positive integer")
+  expect_error(vl_viewport(row = 0), "positive whole number")
+  expect_error(vl_viewport(col = -1), "positive whole number")
+  expect_error(vl_viewport(row = NA_integer_), "positive whole number")
+  expect_error(vl_viewport(row = 1.5), "positive whole number")
+  expect_error(vl_viewport(rowspan = NA), "`rowspan`")
   expect_silent(vl_viewport(row = 1, col = 2))
   expect_silent(vl_viewport()) # NULL row/col is fine
+})
+
+test_that("vl_viewport() rejects a non-finite or malformed native scale", {
+  expect_error(vl_viewport(yscale = c(NA, 1)), "`yscale` must be finite")
+  expect_error(vl_viewport(xscale = c(0, Inf)), "`xscale` must be finite")
+  expect_error(vl_viewport(xscale = 1), "length 2")
+  expect_error(vl_viewport(xscale = "a"), "length 2")
+  expect_error(vl_scene(yscale = c(2, NA)), "`yscale` must be finite")
+  expect_silent(vl_viewport(xscale = c(10, 0))) # reversed is fine
+  # Zero width is legitimate (an empty discrete axis); it falls back at render.
+  expect_silent(vl_viewport(xscale = c(0.5, 0.5)))
 })
 
 test_that("a degenerate or non-finite native scale falls back instead of vanishing", {
   # zero-span x scale + non-finite y scale would yield NaN native coords (which
   # tiny-skia silently drops); the resolver falls back to (0, 1) so npc still draws.
+  # The constructor refuses a non-finite scale, so force that in afterwards.
+  vp <- vl_viewport(xscale = c(0, 0))
+  vp@yscale <- c(NA_real_, 1)
   s <- vl_scene(1, 1, dpi = 100, bg = "white") |>
-    push(vl_viewport(xscale = c(0, 0), yscale = c(NA, 1))) |>
+    push(vp) |>
     draw(rect_grob(gp = vl_gpar(fill = "red", col = NA))) |>
     pop()
   expect_equal(px(s, 50, 50)[1:3], c(255L, 0L, 0L))

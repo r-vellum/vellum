@@ -136,7 +136,7 @@ NULL
 .capture_geometry <- function(scene) {
   s <- Scene$new(
     .to_inches(scene@width),
-    .to_inches(scene@height),
+    .to_inches(scene@height, "height"),
     scene@dpi,
     .rs_col(scene@bg) %||% c(255L, 255L, 255L, 0L)
   )

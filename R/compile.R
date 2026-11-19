@@ -60,7 +60,7 @@ NULL
   key <- .render_key(
     cid,
     .to_inches(scene@width),
-    .to_inches(scene@height),
+    .to_inches(scene@height, "height"),
     scene@dpi,
     .rs_col(scene@bg) %||% c(255L, 255L, 255L, 0L),
     scene@title,
@@ -78,7 +78,7 @@ NULL
 .compile_backend <- function(scene, debug = FALSE, cid = NULL) {
   s <- Scene$new(
     .to_inches(scene@width),
-    .to_inches(scene@height),
+    .to_inches(scene@height, "height"),
     scene@dpi,
     .rs_col(scene@bg) %||% c(255L, 255L, 255L, 0L)
   )
@@ -429,7 +429,9 @@ S7::method(compile, grob_hexagon) <- function(node, scene) {
       }
       frgba <- as.integer(m)
     }
-    g <- .gp4(node@gp, scene)
+    # The per-element fill above carries the colour; keep a (possibly vector)
+    # `gp$fill` out of the shared paint, which takes a single value.
+    g <- .gp4(if (paint_fill) node@gp else .gp_without_fill(node@gp), scene)
     scene$hexagons(
       ex$value,
       ey$value,
@@ -493,7 +495,9 @@ S7::method(compile, grob_sector) <- function(node, scene) {
       }
       frgba <- as.integer(m)
     }
-    g <- .gp4(node@gp, scene)
+    # The per-element fill above carries the colour; keep a (possibly vector)
+    # `gp$fill` out of the shared paint, which takes a single value.
+    g <- .gp4(if (paint_fill) node@gp else .gp_without_fill(node@gp), scene)
     a <- .encode_arrow(node@arrow)
     sk <- .encode_sketch(node@sketch)
     scene$sectors(
