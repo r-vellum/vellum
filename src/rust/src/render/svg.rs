@@ -20,14 +20,19 @@ pub struct SvgBackend {
     def_ids: HashMap<String, String>,
     next_clip: u32,
     next_grad: u32,
-    /// Prepended to every generated `<defs>` id (`c0`, `g0`, `fx0`). Empty for a
-    /// standalone document, where the counters are already unique. The animated-SVG
-    /// builder sets a per-frame prefix: all its frames live in ONE document, so
-    /// without it every frame would define `id="c0"` and all 48 `url(#c0)`
-    /// references would resolve to the first — which sits inside a
+    /// Prepended to every generated `<defs>` id (`c0`, `g0`, `fx0`): the
+    /// document-id token ([`ID_TOKEN`]) and a dash, so a standalone document's ids
+    /// read `vl1a2b3c4d-c0` once [`resolve_ids`] fills the token in. The
+    /// animated-SVG builder adds a per-frame part (`f3-`): all its frames live in
+    /// ONE document, so without it every frame would define the same `c0` and all
+    /// 48 `url(#…c0)` references would resolve to the first — which sits inside a
     /// `visibility:hidden` group, and a hidden `<clipPath>` child contributes no
     /// geometry, so the clip empties and the panel disappears.
     id_prefix: String,
+    /// Whether `into_string` resolves the document-id token itself (a standalone
+    /// document) or leaves it for the caller that splices this render into a
+    /// larger document (an animation frame; see `set_id_prefix`).
+    resolve_ids: bool,
     /// When true, text is emitted as filled glyph `<path>` outlines (pixel-faithful,
     /// matching raster/PDF) instead of selectable `<text>` (renderer-shaped).
     outline_text: bool,
@@ -57,8 +62,9 @@ pub struct SvgBackend {
     last_solid_fill: Option<(Rgba, String)>,
     /// Scene-level accessible name / long description (a11y). When either is set,
     /// the root `<svg>` gains `role="img"` + `aria-labelledby` and emits
-    /// `<title>`/`<desc>` children. `a11y_prefix` uniquifies their ids so several
-    /// SVGs on one page don't collide. Empty prefix + both None = unchanged output.
+    /// `<title>`/`<desc>` children. `a11y_prefix`, when non-empty, is the
+    /// document's id prefix (for the title/desc and every `<defs>` id); empty, the
+    /// prefix is derived from the document's content (see [`resolve_ids`]).
     a11y_title: Option<String>,
     a11y_desc: Option<String>,
     a11y_prefix: String,
@@ -88,7 +94,8 @@ impl SvgBackend {
             def_ids: HashMap::new(),
             next_clip: 0,
             next_grad: 0,
-            id_prefix: String::new(),
+            id_prefix: format!("{ID_TOKEN}-"),
+            resolve_ids: true,
             outline_text,
             node_stack: Vec::new(),
             node_open: Vec::new(),
@@ -105,8 +112,8 @@ impl SvgBackend {
     }
 
     /// Set the scene-level accessible name (`title`) and long description
-    /// (`desc`), with an id `prefix` to uniquify their element ids. Empty strings
-    /// are treated as absent.
+    /// (`desc`), and an explicit document id `prefix`. Empty strings are treated
+    /// as absent (an empty prefix is derived from the content).
     pub fn set_a11y(&mut self, title: &str, desc: &str, prefix: &str) {
         self.a11y_title = if title.is_empty() {
             None
@@ -122,9 +129,12 @@ impl SvgBackend {
     }
 
     /// Namespace this backend's generated `<defs>` ids, for when its output is
-    /// spliced into a document alongside other renders (animation frames).
+    /// spliced into a document alongside other renders (animation frames). The
+    /// document-id token is then left in place: the caller resolves it once, over
+    /// the whole document, with [`resolve_ids`].
     pub fn set_id_prefix(&mut self, prefix: &str) {
-        self.id_prefix = prefix.to_string();
+        self.id_prefix = format!("{ID_TOKEN}-{prefix}");
+        self.resolve_ids = false;
     }
 
     /// Return the id of a `<defs>` entry with signature `key`, emitting it via
@@ -282,10 +292,8 @@ impl SvgBackend {
         let mut svg_attrs = String::new();
         let mut a11y_head = String::new();
         if self.a11y_title.is_some() || self.a11y_desc.is_some() {
-            // Escape the prefix: it is interpolated into `id`/`aria-labelledby`
-            // attribute values, so a `"`/`<`/`&` would otherwise break the markup.
-            let p = xml_escape(&self.a11y_prefix);
-            let p = &p;
+            // The document-id token; `resolve_ids` replaces it with the prefix.
+            let p = ID_TOKEN;
             let mut ids: Vec<String> = Vec::new();
             if let Some(t) = &self.a11y_title {
                 ids.push(format!("{p}-t"));
@@ -297,7 +305,7 @@ impl SvgBackend {
             }
             svg_attrs = format!(" role=\"img\" aria-labelledby=\"{}\"", ids.join(" "));
         }
-        format!(
+        let doc = format!(
             "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n\
              <svg xmlns=\"http://www.w3.org/2000/svg\" width=\"{w}\" height=\"{h}\" \
              viewBox=\"0 0 {w} {h}\"{a}>{head}<defs>{defs}</defs>{body}</svg>\n",
@@ -307,7 +315,12 @@ impl SvgBackend {
             head = a11y_head,
             defs = self.defs,
             body = self.body
-        )
+        );
+        if self.resolve_ids {
+            resolve_ids(doc, &self.a11y_prefix)
+        } else {
+            doc
+        }
     }
 
     /// Append `element`, wrapped in a clipping `<g>` when a clip applies. The
@@ -1235,6 +1248,40 @@ pub(super) fn clip_shape_d(shape: &ClipShape) -> String {
 
 // Escape a string for XML text or a double-quoted attribute value. Shared with
 // the scene (`NodeMeta::svg_attrs`, the SVG identity attributes) so the two can't drift.
+/// Stands in for the document's id prefix while the document is written. R
+/// strings cannot hold NUL, so no user text (labels, keys, metadata) contains it.
+pub(crate) const ID_TOKEN: char = '\0';
+
+/// Replace the document-id token in a finished SVG document with its id prefix:
+/// `prefix` when given, else `vl` + a hash of the document itself. Rendering the
+/// same scene twice therefore gives byte-identical SVG (ids no longer come from
+/// a session counter), while different scenes embedded in one HTML page still
+/// get distinct ids. The id counters (`c0`, `g1`, ...) restart at 0 in every
+/// render.
+pub(crate) fn resolve_ids(doc: String, prefix: &str) -> String {
+    if !doc.contains(ID_TOKEN) {
+        return doc;
+    }
+    let p = if prefix.is_empty() {
+        format!("vl{:08x}", content_hash(doc.as_bytes()))
+    } else {
+        // Interpolated into `id`/`url(#…)`/`aria-labelledby` values.
+        xml_escape(prefix).into_owned()
+    };
+    doc.replace(ID_TOKEN, &p)
+}
+
+/// FNV-1a (64-bit) folded to 32 bits: a stable, platform-independent content
+/// hash for the id prefix (not cryptographic).
+fn content_hash(bytes: &[u8]) -> u32 {
+    let mut h: u64 = 0xcbf2_9ce4_8422_2325;
+    for &b in bytes {
+        h ^= u64::from(b);
+        h = h.wrapping_mul(0x0000_0100_0000_01b3);
+    }
+    (h ^ (h >> 32)) as u32
+}
+
 pub(crate) fn xml_escape(s: &str) -> Cow<'_, str> {
     // Fast path: the overwhelming majority of keys / ids / labels contain none of
     // the XML metacharacters, so return the input untouched (no allocation).

@@ -64,7 +64,7 @@ test_that("SVG emits a <pattern> with an embedded image", {
   expect_match(svg, 'patternUnits="userSpaceOnUse"')
   expect_match(svg, "<image ")
   expect_match(svg, "data:image/png;base64,")
-  expect_match(svg, 'fill="url\\(#g0\\)"')
+  expect_match(svg, 'fill="url\\(#vl[0-9a-f]{8}-g0\\)"')
 })
 
 test_that("PDF renders a pattern fill (average-colour fallback)", {

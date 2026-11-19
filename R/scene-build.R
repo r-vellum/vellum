@@ -62,18 +62,16 @@ vellum_scene <- S7::new_class(
     cid = S7::new_property(S7::class_any, default = NULL),
     # Accessibility: an accessible name (`title`) and long description (`desc`).
     # When set, the SVG backend emits `role="img"` + `<title>`/`<desc>` and the PDF
-    # backend tags the page as a Figure with Alt text. `a11y_prefix` uniquifies the
-    # SVG title/desc ids across a page. `NULL`/`""` -> no a11y markup (unchanged).
+    # backend tags the page as a Figure with Alt text. `NULL`/`""` -> no a11y
+    # markup. `a11y_prefix` is an explicit prefix for the SVG's ids (title/desc
+    # and every `<defs>` entry); `NULL` (the default) derives it from the SVG's
+    # own content, so the same scene renders to byte-identical SVG every time
+    # while different scenes on one HTML page keep distinct ids.
     title = S7::new_property(S7::class_any, default = NULL),
     desc = S7::new_property(S7::class_any, default = NULL),
     a11y_prefix = S7::new_property(S7::class_any, default = NULL)
   )
 )
-
-# A per-scene id prefix so `aria-labelledby` title/desc ids don't collide when
-# several vellum SVGs share one HTML page. Stable for a given scene object
-# (stored once at construction), unique across scenes (monotonic counter).
-.new_a11y_prefix <- function() paste0("vl", .new_scene_id())
 
 # --- content-identity token (object-identity render cache) -------------------
 # A strictly-monotonic per-content-version id, stamped into the *content carrier*
@@ -326,8 +324,7 @@ vl_scene <- function(
     root = NULL,
     bstate = .bstate_new(root, list(root), 0L, 0),
     title = title,
-    desc = desc,
-    a11y_prefix = .new_a11y_prefix()
+    desc = desc
   )
 }
 
@@ -357,7 +354,6 @@ describe <- function(scene, title = NULL, desc = NULL) {
     scene,
     title = title,
     desc = desc,
-    a11y_prefix = scene@a11y_prefix %||% .new_a11y_prefix(),
     cid = .new_scene_id()
   )
 }

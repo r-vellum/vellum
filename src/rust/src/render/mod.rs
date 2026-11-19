@@ -32,7 +32,7 @@ pub use paths::*;
 pub(crate) use pdf::is_decorative;
 pub use pdf::{pdf_tag, PdfBackend};
 pub use raster::RasterBackend;
-pub(crate) use svg::xml_escape;
+pub(crate) use svg::{resolve_ids, xml_escape};
 pub use svg::SvgBackend;
 
 /// Resolved stroke style handed to `stroke_path`: width + dash (device px, on/off,
