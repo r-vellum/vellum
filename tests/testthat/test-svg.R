@@ -211,34 +211,82 @@ test_that("a gradient fill keeps local geometry and the element's matrix", {
   expect_match(svg, "transform=\"matrix(", fixed = TRUE)
 })
 
-test_that("points are compact <circle>s that keep the per-key fill/stroke twins", {
+test_that("a filled + stroked point is one keyed <circle> carrying both paints (VW-12)", {
   # vellumwidget's DOM contract: every drawn element of a keyed datum carries
-  # its own data-key, and a filled + stroked point is a fill element followed
-  # by a fill="none" stroke element.
+  # its own data-key. A solid fill with an undashed solid stroke is one element
+  # (SVG paints fill, then stroke: what the fill + fill="none" twin drew).
   s <- vl_scene(2, 2, dpi = 100) |>
     draw(points_grob(
       x = c(0.25, 0.5, 0.75),
       y = c(0.25, 0.5, 0.75),
       key = c("a", "b", "c"),
-      gp = vl_gpar(fill = "#336699", col = "#336699", lwd = 1)
+      gp = vl_gpar(fill = "#336699", col = "#112233", lwd = 1)
     ))
   svg <- scene_svg(s)
   circles <- regmatches(svg, gregexpr("<circle[^>]*>", svg))[[1]]
-  expect_length(circles, 6L)
+  expect_length(circles, 3L)
   keys <- sub('.*data-key="([^"]*)".*', "\\1", circles)
-  expect_identical(keys, rep(c("a", "b", "c"), each = 2L))
-  fills <- circles[c(1L, 3L, 5L)]
-  strokes <- circles[c(2L, 4L, 6L)]
-  expect_true(all(grepl('fill="#336699"', fills, fixed = TRUE)))
-  expect_true(all(grepl('fill="none" stroke="#336699"', strokes, fixed = TRUE)))
-  # identical geometry on both twins, in device px (no per-element transform)
-  geom <- sub('.*(cx="[^"]*" cy="[^"]*" r="[^"]*").*', "\\1", circles)
-  expect_identical(geom[c(1L, 3L, 5L)], geom[c(2L, 4L, 6L)])
+  expect_identical(keys, c("a", "b", "c"))
+  expect_true(all(grepl(
+    'fill="#336699" stroke="#112233" stroke-width="',
+    circles,
+    fixed = TRUE
+  )))
+  expect_no_match(svg, 'fill="none"', fixed = TRUE)
+  # a circle has no ends or corners: no cap/join/miter attributes
+  expect_no_match(svg, "stroke-line|stroke-miter")
   expect_no_match(svg, "<circle[^>]*transform=")
   # coordinates are rounded to 2 decimals; opaque paint omits its opacity
+  geom <- sub('.*(cx="[^"]*" cy="[^"]*" r="[^"]*").*', "\\1", circles)
   nums <- regmatches(geom, gregexpr("[0-9.]+", geom))
   expect_false(any(grepl("\\.[0-9]{3}", unlist(nums))))
   expect_no_match(paste(circles, collapse = ""), "fill-opacity|stroke-opacity")
+})
+
+test_that("a dashed or gradient-stroked point keeps the fill + stroke twin (VW-12)", {
+  pts <- function(gp) {
+    vl_scene(2, 2, dpi = 100) |>
+      draw(points_grob(
+        x = c(0.25, 0.75),
+        y = c(0.25, 0.75),
+        key = c("a", "b"),
+        gp = gp
+      )) |>
+      scene_svg()
+  }
+  twin <- function(svg) {
+    els <- regmatches(svg, gregexpr("<(circle|path)[^>]*data-key[^>]*>", svg))[[1]]
+    keys <- sub('.*data-key="([^"]*)".*', "\\1", els)
+    expect_identical(keys, rep(c("a", "b"), each = 2L))
+    expect_true(all(grepl('fill="none"', els[c(2L, 4L)], fixed = TRUE)))
+    expect_false(any(grepl("stroke=", els[c(1L, 3L)], fixed = TRUE)))
+  }
+  twin(pts(vl_gpar(fill = "#336699", col = "black", lwd = 2, lty = "dashed")))
+  twin(pts(vl_gpar(
+    fill = "#336699",
+    col = linear_gradient(c("red", "blue")),
+    lwd = 2
+  )))
+  twin(pts(vl_gpar(
+    fill = linear_gradient(c("red", "blue")),
+    col = "black",
+    lwd = 2
+  )))
+})
+
+test_that("a filled + stroked rect is one element too (VW-12)", {
+  svg <- vl_scene(1, 1, dpi = 100) |>
+    draw(rect_grob(
+      width = 0.5,
+      height = 0.5,
+      gp = vl_gpar(fill = "red", col = "blue", lwd = 2)
+    )) |>
+    scene_svg()
+  els <- regmatches(svg, gregexpr("<path[^>]*>", svg))[[1]]
+  expect_length(els, 1L)
+  expect_match(els, 'fill="#ff0000" stroke="#0000ff"', fixed = TRUE)
+  # a path keeps its cap and join
+  expect_match(els, "stroke-linejoin=", fixed = TRUE)
 })
 
 test_that("an unkeyed point batch is drawn as circles too", {
@@ -249,7 +297,7 @@ test_that("an unkeyed point batch is drawn as circles too", {
       gp = vl_gpar(fill = "black", col = "black", lwd = 1)
     ))
   svg <- scene_svg(s)
-  expect_length(regmatches(svg, gregexpr("<circle", svg))[[1]], 4L)
+  expect_length(regmatches(svg, gregexpr("<circle", svg))[[1]], 2L)
   expect_no_match(svg, "<path", fixed = TRUE)
 })
 

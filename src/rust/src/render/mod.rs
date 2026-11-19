@@ -464,6 +464,25 @@ pub trait RenderBackend {
         stroke: &StrokeStyle,
         clip: &Clip,
     );
+    /// Fill `path` with `paint`, then stroke it with `color` / `stroke` -- the
+    /// pair every filled-and-outlined shape draws. The default is exactly the two
+    /// calls; the SVG backend overrides it to write one element carrying both
+    /// paints when it can (solid fill, undashed solid stroke). Callers pass a
+    /// stroke with `width > 0` and a non-hatch fill (a hatch is expanded first).
+    #[allow(clippy::too_many_arguments)]
+    fn fill_and_stroke_path(
+        &mut self,
+        path: &Path,
+        transform: Transform,
+        paint: &ResolvedPaint,
+        rule: FillRule,
+        color: Rgba,
+        stroke: &StrokeStyle,
+        clip: &Clip,
+    ) {
+        self.fill_path(path, transform, paint, rule, clip);
+        self.stroke_path(path, transform, color, stroke, clip);
+    }
     fn draw_text(&mut self, run: &TextRun, transform: Transform, clip: &Clip);
     fn begin_group(
         &mut self,
@@ -628,10 +647,7 @@ fn circles_by_path<B: RenderBackend>(
             cx[i] as f32,
             cy[i] as f32,
         ));
-        if let Some(f) = fill {
-            b.fill_path(&unit, tr, f, FillRule::Winding, clip);
-        }
-        if let Some((c, st)) = stroke {
+        let scaled = stroke.map(|(c, st)| {
             let scaled = StrokeStyle {
                 width: st.width / rr as f32,
                 dash: st.dash.iter().map(|d| d / rr as f32).collect(),
@@ -642,7 +658,20 @@ fn circles_by_path<B: RenderBackend>(
                 paint: st.paint.clone(),
                 phase: st.phase / rr as f32,
             };
-            b.stroke_path(&unit, tr, *c, &scaled, clip);
+            (*c, scaled)
+        });
+        match (fill, scaled) {
+            (Some(f), Some((c, st))) if st.width > 0.0 && !matches!(f, ResolvedPaint::Hatch { .. }) => {
+                b.fill_and_stroke_path(&unit, tr, f, FillRule::Winding, c, &st, clip);
+            }
+            (f, st) => {
+                if let Some(f) = f {
+                    b.fill_path(&unit, tr, f, FillRule::Winding, clip);
+                }
+                if let Some((c, st)) = st {
+                    b.stroke_path(&unit, tr, c, &st, clip);
+                }
+            }
         }
     }
 }
