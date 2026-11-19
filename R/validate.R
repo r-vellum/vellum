@@ -93,6 +93,58 @@
   invisible(u)
 }
 
+# Resolve an absolute length (mm/cm/in/pt; a bare numeric is read in
+# `default_units`) to millimetres. Relative units (npc/native, or a compound
+# `base + mm`) have no size until render and are refused, as are non-finite and
+# (when `nonneg`) negative values. `scalar = TRUE` insists on exactly one value,
+# so a vector is an error rather than silently using its first element. `NULL`
+# returns `NULL` when `allow_null`. `why` is an optional extra hint line.
+.abs_length_mm <- function(
+  u,
+  arg,
+  default_units = "mm",
+  scalar = TRUE,
+  nonneg = TRUE,
+  allow_null = FALSE,
+  why = NULL,
+  call = parent.frame()
+) {
+  u <- .as_unit_arg(u, arg, default_units, allow_null = allow_null, call = call)
+  if (is.null(u)) {
+    return(NULL)
+  }
+  n <- vctrs::vec_size(u)
+  if (scalar && n != 1L) {
+    cli::cli_abort(
+      "{.arg {arg}} must be a single length, not a vector of length {n}.",
+      call = call
+    )
+  }
+  v <- vctrs::field(u, "value")
+  code <- vctrs::field(u, "unit")
+  off <- vctrs::field(u, "offset")
+  abs_codes <- unname(.unit_codes[c("mm", "in", "pt")])
+  if (!all(code %in% abs_codes) || any(off != 0, na.rm = TRUE)) {
+    cli::cli_abort(
+      c(
+        "{.arg {arg}} must be an absolute unit ({.val mm}/{.val cm}/{.val in}/{.val pt}).",
+        i = why
+      ),
+      call = call
+    )
+  }
+  if (length(v) && !all(is.finite(v))) {
+    cli::cli_abort(
+      "{.arg {arg}} must be finite (no {.val NA}/{.val NaN}/{.val Inf}).",
+      call = call
+    )
+  }
+  if (nonneg && any(v < 0)) {
+    cli::cli_abort("{.arg {arg}} must be non-negative.", call = call)
+  }
+  .abs_to_mm(v, code)
+}
+
 # --- plain values -----------------------------------------------------------
 
 # A single value of one type: "numeric", "integer" (whole numbers, any numeric
@@ -214,6 +266,15 @@
       call = call
     )
   }
+  if (length(x) == 0L) {
+    cli::cli_abort(
+      c(
+        "{.arg {arg}} must not be empty.",
+        i = "Use {.val NA} for no paint or {.code NULL} to inherit."
+      ),
+      call = call
+    )
+  }
   if (!allow_na && anyNA(x)) {
     cli::cli_abort("{.arg {arg}} must not contain {.val NA}.", call = call)
   }
@@ -221,7 +282,8 @@
   bad <- cand[vapply(
     cand,
     function(cl) {
-      inherits(try(grDevices::col2rgb(cl), silent = TRUE), "try-error")
+      # `.col2rgba()` memoises the parse, so re-checking a palette is cheap.
+      inherits(try(.col2rgba(cl), silent = TRUE), "try-error")
     },
     logical(1)
   )]
@@ -248,6 +310,75 @@
     )
   }
   x
+}
+
+# A single number >= `min` (or > `min` when `!inclusive`), allowing `Inf` when
+# `allow_inf` -- for limits such as `max_dist = Inf` that `.check_range()`
+# (finite only) refuses.
+.check_number <- function(
+  x,
+  arg,
+  min = -Inf,
+  inclusive = TRUE,
+  allow_inf = FALSE,
+  allow_null = FALSE,
+  call = parent.frame()
+) {
+  if (is.null(x) && allow_null) {
+    return(x)
+  }
+  .check_scalar(x, arg, "numeric", call = call)
+  if (!allow_inf && !is.finite(x)) {
+    cli::cli_abort("{.arg {arg}} must be finite.", call = call)
+  }
+  ok <- if (inclusive) x >= min else x > min
+  if (!ok) {
+    cli::cli_abort(
+      "{.arg {arg}} must be {if (inclusive) '>=' else '>'} {min}, not {x}.",
+      call = call
+    )
+  }
+  x
+}
+
+# A single string or `NULL` (titles, descriptions, names).
+.check_string <- function(x, arg, allow_null = TRUE, call = parent.frame()) {
+  if (is.null(x) && allow_null) {
+    return(x)
+  }
+  .check_scalar(x, arg, "character", call = call)
+}
+
+# A native scale: two finite numbers. A zero-width scale (`c(a, a)`) is
+# allowed: a grammar layer emits one for an empty discrete axis, and the
+# resolver falls back to (0, 1) for it rather than dividing by zero.
+.check_scale <- function(x, arg, call = parent.frame()) {
+  if (!is.numeric(x) || length(x) != 2L) {
+    cli::cli_abort(
+      "{.arg {arg}} must be a numeric vector of length 2, not {.obj_type_friendly {x}}.",
+      call = call
+    )
+  }
+  if (!all(is.finite(x))) {
+    cli::cli_abort(
+      "{.arg {arg}} must be finite (no {.val NA}/{.val NaN}/{.val Inf}).",
+      call = call
+    )
+  }
+  as.double(x)
+}
+
+# A vector that is recycled per element must have length 1 or `n`; anything
+# else would be wrapped by `rep_len()`, pairing values with the wrong elements.
+.check_len1n <- function(x, n, arg, call = parent.frame()) {
+  len <- length(x)
+  if (len != 1L && len != n) {
+    cli::cli_abort(
+      "{.arg {arg}} must have length 1 or {n} (one per element), not {len}.",
+      call = call
+    )
+  }
+  invisible(x)
 }
 
 # --- recycling --------------------------------------------------------------

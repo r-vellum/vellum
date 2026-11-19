@@ -295,6 +295,20 @@ vl_scene <- function(
   title = NULL,
   desc = NULL
 ) {
+  width <- .as_size(width)
+  height <- .as_size(height)
+  .check_page_size(width, "width")
+  .check_page_size(height, "height")
+  .check_number(dpi, "dpi", min = 0, inclusive = FALSE)
+  .check_colour(bg, "bg", allow_null = TRUE)
+  if (length(bg) > 1L) {
+    cli::cli_abort("{.arg bg} must be a single colour.")
+  }
+  xscale <- .check_scale(xscale, "xscale")
+  yscale <- .check_scale(yscale, "yscale")
+  .check_scalar(clip, "clip", "logical")
+  .check_string(title, "title")
+  .check_string(desc, "desc")
   root <- .bnode(
     vp = vl_viewport(
       name = "root",
@@ -305,9 +319,9 @@ vl_scene <- function(
     )
   )
   vellum_scene(
-    width = .as_size(width),
-    height = .as_size(height),
-    dpi = dpi,
+    width = width,
+    height = height,
+    dpi = as.double(dpi),
     bg = bg,
     root = NULL,
     bstate = .bstate_new(root, list(root), 0L, 0),
@@ -336,6 +350,8 @@ vl_scene <- function(
 #' @export
 describe <- function(scene, title = NULL, desc = NULL) {
   scene <- as_vellum_scene(scene)
+  .check_string(title, "title")
+  .check_string(desc, "desc")
   # A new content-identity so the render cache recompiles with the new metadata.
   S7::set_props(
     scene,
@@ -388,6 +404,7 @@ draw <- function(scene, grob) {
   # child that nothing can compile, which fails later and further away.
   # (`S7_inherits(x)` with no class asks "is this any S7 object" — naming the
   # `grob` class here would resolve to this function's argument.)
+  .check_drawable(grob)
   if (is.list(grob) && !S7::S7_inherits(grob)) {
     for (g in grob) {
       .bnode_add(cur, g)
@@ -398,6 +415,43 @@ draw <- function(scene, grob) {
   bs$ocount[k] <- cur$n
   scene@bstate <- .bstate_claim(bs)
   scene
+}
+
+# `draw()` takes a grob (a gtree is one) or a plain list of grobs. Anything else
+# would be appended and only fail at render with an S7 dispatch error far from
+# the call that caused it.
+.check_drawable <- function(x, arg = "grob", call = parent.frame()) {
+  is_g <- function(g) S7::S7_inherits(g, grob)
+  if (is_g(x)) {
+    return(invisible(x))
+  }
+  if (is.list(x) && !S7::S7_inherits(x)) {
+    ok <- vapply(x, is_g, logical(1))
+    if (all(ok)) {
+      return(invisible(x))
+    }
+    bad <- which(!ok)[1]
+    cli::cli_abort(
+      c(
+        "{.arg {arg}} must be a grob or a list of grobs.",
+        x = "Element {bad} is {.obj_type_friendly {x[[bad]]}}."
+      ),
+      call = call
+    )
+  }
+  cli::cli_abort(
+    "{.arg {arg}} must be a grob, a gtree or a list of grobs, not {.obj_type_friendly {x}}.",
+    call = call
+  )
+}
+
+# A page dimension: a single positive absolute length.
+.check_page_size <- function(u, arg, call = parent.frame()) {
+  mm <- .abs_length_mm(u, arg, default_units = "in", call = call)
+  if (mm <= 0) {
+    cli::cli_abort("{.arg {arg}} must be positive.", call = call)
+  }
+  invisible(u)
 }
 
 #' @rdname vl_scene

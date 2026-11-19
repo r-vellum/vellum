@@ -17,6 +17,13 @@
   .scene_to_backend(scene)$pick_table(px, py)
 }
 
+# A probe point is one finite number per axis.
+.check_probe <- function(x, y, call = parent.frame()) {
+  .check_number(x, "x", call = call)
+  .check_number(y, "y", call = call)
+  invisible()
+}
+
 # npc/px -> device px, sharing `hit_test()`'s convention (npc y is up).
 .probe_px <- function(scene, x, y, units) {
   d <- .scene_to_backend(as_vellum_scene(scene))$dim()
@@ -86,7 +93,11 @@ vl_nearest <- function(
   n = 1L,
   max_dist = Inf
 ) {
-  units <- match.arg(units)
+  units <- .check_choice(units, c("npc", "px"), "units")
+  .check_probe(x, y)
+  .check_number(n, "n", min = 0)
+  .check_scalar(n, "n", "integer")
+  .check_number(max_dist, "max_dist", min = 0, allow_inf = TRUE)
   p <- .probe_px(scene, x, y, units)
   t <- .pick_table(scene, p[1], p[2])
   if (!length(t$key)) {
@@ -216,7 +227,8 @@ element_geometry <- function(scene) {
 #'   there is unnamed; or `NULL` if nothing is drawn at the point.
 #' @export
 hit_test <- function(scene, x, y, units = c("npc", "px")) {
-  units <- match.arg(units)
+  units <- .check_choice(units, c("npc", "px"), "units")
+  .check_probe(x, y)
   scene <- as_vellum_scene(scene)
   pk <- .pick_backend(scene)
   d <- pk$scene$dim()
@@ -250,7 +262,7 @@ hit_test <- function(scene, x, y, units = c("npc", "px")) {
     key <- .render_key(
       cid,
       .to_inches(scene@width),
-      .to_inches(scene@height),
+      .to_inches(scene@height, "height"),
       scene@dpi,
       bg
     )
@@ -262,7 +274,7 @@ hit_test <- function(scene, x, y, units = c("npc", "px")) {
   }
   s <- Scene$new(
     .to_inches(scene@width),
-    .to_inches(scene@height),
+    .to_inches(scene@height, "height"),
     scene@dpi,
     bg
   )

@@ -8,7 +8,9 @@
 #'
 #' @param x,y Centre of the viewport ([vl_unit()] or numeric, in the parent).
 #' @param width,height Size ([vl_unit()] or numeric, in the parent).
-#' @param xscale,yscale Length-2 native coordinate ranges.
+#' @param xscale,yscale Length-2 native coordinate ranges of finite numbers
+#'   (the ends may be reversed to flip an axis). A zero-width range such as
+#'   `c(1, 1)` has no native extent; it resolves as `c(0, 1)`.
 #' @param angle Rotation in degrees, counter-clockwise about the centre.
 #' @param clip Clip drawing to this viewport: `TRUE`/`FALSE` for the viewport
 #'   rectangle, or a [polygon_grob()]/[path_grob()] (in this viewport's
@@ -101,28 +103,36 @@ vl_viewport <- function(
   default_units = "npc"
 ) {
   du <- .check_default_units(default_units)
-  .check_cell <- function(v, arg) {
-    if (!is.null(v) && (length(v) != 1L || is.na(v) || v < 1)) {
-      cli::cli_abort(
-        "{.arg {arg}} must be a single positive integer (1-based) or NULL."
-      )
-    }
-  }
   .check_cell(row, "row")
   .check_cell(col, "col")
+  .check_cell(rowspan, "rowspan", allow_null = FALSE)
+  .check_cell(colspan, "colspan", allow_null = FALSE)
   if (
     !is.null(alpha) &&
-      (length(alpha) != 1L || is.na(alpha) || alpha < 0 || alpha > 1)
+      (!is.numeric(alpha) ||
+        length(alpha) != 1L ||
+        is.na(alpha) ||
+        alpha < 0 ||
+        alpha > 1)
   ) {
     cli::cli_abort(
       "{.arg alpha} must be a single number in {.val {c(0, 1)}} or NULL."
     )
   }
   if (!is.null(blend)) {
-    blend <- match.arg(as.character(blend), names(.blend_codes))
+    blend <- .check_choice(blend, names(.blend_codes), "blend")
   }
-  if (length(cache) != 1L || is.na(cache) || !is.logical(cache)) {
-    cli::cli_abort("{.arg cache} must be a single {.cls logical}.")
+  .check_scalar(cache, "cache", "logical")
+  .check_scalar(pannable, "pannable", "logical")
+  .check_scalar(angle, "angle", "numeric")
+  .check_range(angle, "angle")
+  xscale <- .check_scale(xscale, "xscale")
+  yscale <- .check_scale(yscale, "yscale")
+  .check_number(blur, "blur", min = 0, allow_inf = TRUE, allow_null = TRUE)
+  if (!isTRUE(clip) && !isFALSE(clip) && !S7::S7_inherits(clip, grob)) {
+    cli::cli_abort(
+      "{.arg clip} must be {.code TRUE}, {.code FALSE} or a path-like grob, not {.obj_type_friendly {clip}}."
+    )
   }
   class_viewport(
     x = .as_unit_arg(x, "x", du),
@@ -149,6 +159,21 @@ vl_viewport <- function(
     pannable = as.logical(pannable),
     cache = cache
   )
+}
+
+# A layout cell index or span: a single whole number >= 1 (or NULL when
+# `allow_null`).
+.check_cell <- function(v, arg, allow_null = TRUE, call = parent.frame()) {
+  if (is.null(v) && allow_null) {
+    return(invisible())
+  }
+  if (!is.numeric(v) || length(v) != 1L || is.na(v) || v < 1 || v != round(v)) {
+    cli::cli_abort(
+      "{.arg {arg}} must be a single positive whole number (1-based){if (allow_null) ' or NULL' else ''}.",
+      call = call
+    )
+  }
+  invisible()
 }
 
 # Blend-mode codes. Part of the R<->Rust ABI: MUST match `BlendKind::from_code`

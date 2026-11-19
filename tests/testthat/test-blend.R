@@ -21,7 +21,7 @@ test_that("default (normal) blend just draws the top layer over the backdrop", {
 })
 
 test_that("blend is validated", {
-  expect_error(vl_viewport(blend = "bogus"), "should be one of|arg")
+  expect_error(vl_viewport(blend = "bogus"), "must be one of")
 })
 
 test_that("SVG emits mix-blend-mode for a blended group", {

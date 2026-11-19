@@ -399,8 +399,8 @@ numeric is \code{mm}), resolved to a device length \strong{at render} so the loo
 a node's mm size at any page size/dpi. Nested loops on one vertex pass growing
 \code{size} (same \code{x}/\code{y}/\code{angle}) for concentric teardrops. Recycled per loop.}
 
-\item{fill}{Per-element fill colour(s), recycled to the number of sectors. \code{NULL}
-falls back to \code{gp$fill}.}
+\item{fill}{Per-element fill colour(s), length 1 or the number of sectors.
+\code{NULL} falls back to \code{gp$fill}, which may likewise be a per-sector vector.}
 
 \item{orientation}{Hexagon orientation: \code{"flat"} (default, flat top/bottom edge)
 or \code{"pointy"} (vertex at top). \code{size} is the circumradius (centre to vertex).}
@@ -479,7 +479,8 @@ with \code{\link[=render]{render()}}. Coordinates accept a \code{\link[=vl_unit]
 }
 \details{
 \code{sector_grob()} draws a batch of annular sectors (pie / donut / rose wedges) in a
-single call. \code{gp$fill} recycles per sector; \code{gp$col}/\code{lwd} give a uniform stroke.
+single call. \code{fill} (or a colour vector in \code{gp$fill}) recycles per sector;
+\code{gp$col}/\code{lwd} give a uniform stroke. \code{r0} must not exceed \code{r1}.
 
 Passing \code{r0 == r1} gives an \strong{open arc} (stroke only). Combined with an
 absolute (\code{mm}) radius at a \code{"native"} centre and an \code{\link[=vl_arrow]{vl_arrow()}}, the radius is

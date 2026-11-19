@@ -43,7 +43,9 @@ grid_layout(
 
 \item{width, height}{Size (\code{\link[=vl_unit]{vl_unit()}} or numeric, in the parent).}
 
-\item{xscale, yscale}{Length-2 native coordinate ranges.}
+\item{xscale, yscale}{Length-2 native coordinate ranges of finite numbers
+(the ends may be reversed to flip an axis). A zero-width range such as
+\code{c(1, 1)} has no native extent; it resolves as \code{c(0, 1)}.}
 
 \item{angle}{Rotation in degrees, counter-clockwise about the centre.}
 

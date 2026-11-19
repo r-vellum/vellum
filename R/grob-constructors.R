@@ -301,8 +301,10 @@ lines_grob <- function(
 #' Describe arrowheads to draw on the ends of a [lines_grob()] or
 #' [segments_grob()] (pass as their `arrow =` argument).
 #'
-#' @param angle Half-angle of the head at the tip, in degrees (default 30).
-#' @param length Head length as an absolute [vl_unit()] (default `vl_unit(0.25, "in")`).
+#' @param angle Half-angle of the head at the tip, in degrees, strictly between
+#'   0 and 180 (default 30).
+#' @param length Head length as a single, non-negative absolute [vl_unit()]
+#'   (`mm`/`cm`/`in`/`pt`; a bare number is inches). Default `vl_unit(0.25, "in")`.
 #' @param ends Which ends get a head: `"last"` (default), `"first"`, or `"both"`.
 #' @param type `"open"` (a two-barb V) or `"closed"` (a filled triangle).
 #' @return A `vellum_arrow` object.
@@ -315,11 +317,21 @@ vl_arrow <- function(
   ends = c("last", "first", "both"),
   type = c("open", "closed")
 ) {
-  ends <- match.arg(ends)
-  type <- match.arg(type)
+  ends <- .check_choice(ends, c("last", "first", "both"), "ends")
+  type <- .check_choice(type, c("open", "closed"), "type")
+  .check_scalar(angle, "angle", "numeric")
+  .check_range(angle, "angle", min = 0, max = 180, inclusive = c(FALSE, FALSE))
+  # The head is sized in device space at render, so only an absolute length
+  # works; check it here rather than failing when the scene is rendered.
+  .abs_length_mm(
+    length,
+    "length",
+    default_units = "in",
+    why = "Arrowheads are sized in device space at render, so a {.val npc}/{.val native} length is not allowed."
+  )
   len <- as_unit(length, "in")
   structure(
-    list(angle = as.numeric(angle)[1], length = len, ends = ends, type = type),
+    list(angle = as.numeric(angle), length = len, ends = ends, type = type),
     class = "vellum_arrow"
   )
 }
@@ -331,7 +343,7 @@ vl_arrow <- function(
   }
   list(
     angle = a$angle,
-    len = .to_inches(a$length),
+    len = .to_inches(a$length, "length"),
     ends = switch(a$ends, first = 1L, last = 2L, both = 3L),
     closed = identical(a$type, "closed")
   )
@@ -724,9 +736,7 @@ hexagon_grob <- function(
   )
   n <- .elem_n(v)
   v <- .recycle_elems(v, n)
-  if (!is.null(fill) && !.is_paint(fill)) {
-    fill <- rep_len(fill, n)
-  }
+  fill <- .elem_fill(fill, gp, n)
   grob_hexagon(
     x = v$x,
     y = v$y,
@@ -745,6 +755,48 @@ hexagon_grob <- function(
   )
 }
 
+# Per-element fill for the batched marks (hexagon, sector): an explicit `fill`
+# wins, else a colour *vector* in `gp$fill`, recycled per element. Either must
+# have length 1 or `n`. A gradient/pattern stays on `gp` (the shared paint),
+# and a scalar `gp$fill` is left there too, so the stored grob is unchanged for
+# the common case.
+.elem_fill <- function(fill, gp, n, call = parent.frame()) {
+  if (!is.null(fill)) {
+    if (.is_paint(fill)) {
+      return(fill)
+    }
+    .check_colour(fill, "fill", call = call)
+    .check_len1n(fill, n, "fill", call = call)
+    return(rep_len(fill, n))
+  }
+  gf <- gp@fill
+  if (!is.null(gf) && !.is_paint(gf) && length(gf) > 1L) {
+    .check_len1n(gf, n, "gp$fill", call = call)
+    return(rep_len(gf, n))
+  }
+  NULL
+}
+
+# An annular sector needs `r0 <= r1`. Only elements whose two radii share a
+# unit (and offset) are comparable before render; mixed units resolve later.
+.check_radii <- function(r0, r1, call = parent.frame()) {
+  .check_extent(r0, "r0", call = call)
+  .check_extent(r1, "r1", call = call)
+  same <- vctrs::field(r0, "unit") == vctrs::field(r1, "unit") &
+    vctrs::field(r0, "offset") == vctrs::field(r1, "offset")
+  bad <- which(same & vctrs::field(r0, "value") > vctrs::field(r1, "value"))
+  if (length(bad)) {
+    cli::cli_abort(
+      c(
+        "{.arg r0} must not exceed {.arg r1} (the inner radius is inside the outer one).",
+        x = "{cli::qty(length(bad))}Element{?s} {bad} ha{?s/ve} {.arg r0} > {.arg r1}."
+      ),
+      call = call
+    )
+  }
+  invisible()
+}
+
 #' @rdname grob
 #' @param r0,r1 Inner and outer radius of each sector ([vl_unit()] or numeric,
 #'   read in `default_units`; an `"npc"` radius is a fraction of the viewport's
@@ -752,11 +804,12 @@ hexagon_grob <- function(
 #'   gives an arc outline (stroke only, no fill).
 #' @param theta0,theta1 Start and end angle of each sector, in **radians**, with 0
 #'   at 3 o'clock and increasing counter-clockwise.
-#' @param fill Per-element fill colour(s), recycled to the number of sectors. `NULL`
-#'   falls back to `gp$fill`.
+#' @param fill Per-element fill colour(s), length 1 or the number of sectors.
+#'   `NULL` falls back to `gp$fill`, which may likewise be a per-sector vector.
 #' @details
 #' `sector_grob()` draws a batch of annular sectors (pie / donut / rose wedges) in a
-#' single call. `gp$fill` recycles per sector; `gp$col`/`lwd` give a uniform stroke.
+#' single call. `fill` (or a colour vector in `gp$fill`) recycles per sector;
+#' `gp$col`/`lwd` give a uniform stroke. `r0` must not exceed `r1`.
 #'
 #' Passing `r0 == r1` gives an **open arc** (stroke only). Combined with an
 #' absolute (`mm`) radius at a `"native"` centre and an [vl_arrow()], the radius is
@@ -795,9 +848,8 @@ sector_grob <- function(
   )
   n <- .elem_n(v)
   v <- .recycle_elems(v, n)
-  if (!is.null(fill) && !.is_paint(fill)) {
-    fill <- rep_len(fill, n)
-  }
+  .check_radii(v$r0, v$r1)
+  fill <- .elem_fill(fill, gp, n)
   grob_sector(
     x = v$x,
     y = v$y,
@@ -861,7 +913,7 @@ loop_grob <- function(
     size = .check_cap(size, "size"),
     foot = .check_cap(foot, "foot"),
     angle = .check_finite_num(angle, "angle"),
-    width = as.numeric(width)
+    width = .check_range(width, "width", min = 0)
   )
   n <- .elem_n(v)
   v <- .recycle_elems(v, n)
@@ -1222,19 +1274,18 @@ text_path_grob <- function(
   )
 }
 
-# Resolve a text-box dimension to millimetres, insisting it be absolute. NULL
-# stays NA (unset).
-.abs_mm <- function(u, arg) {
+# Resolve a text-box dimension to millimetres, insisting it be a single
+# absolute length. NULL stays NA (unset). The box is one per grob (wrapping is
+# done per label against the same width), so a vector is an error rather than
+# silently using its first element.
+.abs_mm <- function(u, arg, call = parent.frame()) {
   if (is.null(u)) {
     return(NA_real_)
   }
-  u <- as_unit(u)
-  mm <- try(.to_inches(u) * 25.4, silent = TRUE)
-  if (inherits(mm, "try-error") || !is.finite(mm)) {
-    cli::cli_abort(c(
-      "{.arg {arg}} must be an absolute unit ({.val mm}/{.val cm}/{.val in}/{.val pt}).",
-      i = "Text is wrapped when the grob is built, and {.val npc}/{.val native} have no size until render time."
-    ))
-  }
-  mm
+  .abs_length_mm(
+    u,
+    arg,
+    why = "Text is wrapped when the grob is built, and {.val npc}/{.val native} have no size until render time.",
+    call = call
+  )
 }

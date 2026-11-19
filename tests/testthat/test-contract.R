@@ -111,6 +111,19 @@ test_that("scene_model() warms the render cache so a following render need not r
   expect_false(is.null(.render_cache_get(key)))
 })
 
+test_that("panels list named viewports that enclose elements, innermost first", {
+  sc <- vl_scene(2, 2, dpi = 100) |>
+    push(vl_viewport(name = "empty")) |>
+    pop() |>
+    push(vl_viewport(name = "outer")) |>
+    push(vl_viewport(name = "inner", width = 0.5)) |>
+    draw(points_grob(0.5, 0.5, key = "a")) |>
+    pop(2)
+  m <- scene_model(sc)
+  expect_identical(m$panels$name, "inner")
+  expect_identical(m$elements$panel, "inner")
+})
+
 test_that("a panel whose viewport carries no meta yields NULL meta (no delete gotcha)", {
   sc <- vl_scene(2, 2, dpi = 100) |>
     push(vl_viewport(name = "panel-1-1")) |>
@@ -121,15 +134,10 @@ test_that("a panel whose viewport carries no meta yields NULL meta (no delete go
   expect_null(p$meta[[1]])
 })
 
-test_that("the `mark` vocabulary is the documented closed set, in paint order", {
-  # The batched kinds take a `key` argument and always emit a row. The
-  # single-shape kinds (path/line/polygon) surface only when keyed, and are
-  # keyed via the `@keys` slot the grammar sets on the grob (their constructors
-  # do not expose a `key` argument).
-  keyed <- function(g, k) {
-    g@keys <- k
-    g
-  }
+test_that("the `mark` vocabulary is the documented set, in paint order", {
+  # Every keyable constructor takes `key`. Batched kinds always emit a row;
+  # roundrect/text emit one per keyed element; path/line/polygon emit one row
+  # per grob when keyed.
   sc <- vl_scene(2, 2, dpi = 100) |>
     draw(rect_grob(0.2, 0.2, width = 0.1, height = 0.1, key = "rect")) |>
     draw(points_grob(0.3, 0.3, gp = vl_gpar(fill = "red"), key = "point")) |>
@@ -152,25 +160,31 @@ test_that("the `mark` vocabulary is the documented closed set, in paint order", 
       gp = vl_gpar(col = "black"),
       key = "segment"
     )) |>
-    draw(keyed(
-      path_grob(
-        c(0.7, 0.8, 0.75),
-        c(0.7, 0.7, 0.8),
-        gp = vl_gpar(fill = "grey")
-      ),
-      "path"
+    draw(roundrect_grob(
+      0.3,
+      0.9,
+      width = 0.1,
+      height = 0.05,
+      key = "roundrect"
     )) |>
-    draw(keyed(
-      lines_grob(c(0.1, 0.2), c(0.8, 0.9), gp = vl_gpar(col = "blue")),
-      "line"
+    draw(text_grob("t", 0.5, 0.9, key = "text")) |>
+    draw(path_grob(
+      c(0.7, 0.8, 0.75),
+      c(0.7, 0.7, 0.8),
+      gp = vl_gpar(fill = "grey"),
+      key = "path"
     )) |>
-    draw(keyed(
-      polygon_grob(
-        c(0.85, 0.95, 0.9),
-        c(0.1, 0.1, 0.2),
-        gp = vl_gpar(fill = "green")
-      ),
-      "polygon"
+    draw(lines_grob(
+      c(0.1, 0.2),
+      c(0.8, 0.9),
+      gp = vl_gpar(col = "blue"),
+      key = "line"
+    )) |>
+    draw(polygon_grob(
+      c(0.85, 0.95, 0.9),
+      c(0.1, 0.1, 0.2),
+      gp = vl_gpar(fill = "green"),
+      key = "polygon"
     ))
   marks <- scene_model(sc)$elements$mark
 
@@ -181,6 +195,8 @@ test_that("the `mark` vocabulary is the documented closed set, in paint order", 
     "hexagon",
     "sector",
     "segment",
+    "roundrect",
+    "text",
     "path",
     "line",
     "polygon"
@@ -188,6 +204,69 @@ test_that("the `mark` vocabulary is the documented closed set, in paint order", 
   expect_true(all(marks %in% vocab))
   # paint order: the marks come out in the order drawn.
   expect_identical(marks, vocab)
+  # Setting the `@keys` slot is equivalent to the `key` argument.
+  g <- lines_grob(c(0.1, 0.2), c(0.8, 0.9))
+  g@keys <- "slot"
+  expect_identical(
+    scene_model(vl_scene(1, 1) |> draw(g))$elements$key,
+    "slot"
+  )
+})
+
+test_that("keyed-only and single-shape marks contribute rows only when keyed", {
+  unkeyed <- vl_scene(2, 2, dpi = 100) |>
+    draw(text_grob(c("a", "b"), c(0.3, 0.7), 0.5)) |>
+    draw(roundrect_grob(0.5, 0.2, width = 0.2, height = 0.1)) |>
+    draw(lines_grob(c(0.1, 0.9), c(0.1, 0.9))) |>
+    draw(polygon_grob(c(0.1, 0.2, 0.15), c(0.8, 0.8, 0.9))) |>
+    draw(path_grob(c(0.7, 0.8, 0.75), c(0.7, 0.7, 0.8)))
+  expect_equal(nrow(scene_model(unkeyed)$elements), 0L)
+  # Within a keyed text grob, an NA key is skipped.
+  part <- vl_scene(2, 2, dpi = 100) |>
+    draw(text_grob(
+      c("a", "b", "c"),
+      c(0.2, 0.5, 0.8),
+      0.5,
+      key = c("a", NA, "c")
+    ))
+  expect_identical(scene_model(part)$elements$key, c("a", "c"))
+  # A batched mark always emits, keys NA when unkeyed.
+  batch <- vl_scene(2, 2, dpi = 100) |> draw(rect_grob(c(0.3, 0.7), 0.5))
+  expect_identical(scene_model(batch)$elements$key, c(NA_character_, NA))
+})
+
+test_that("key and meta must have length 1 or the element count", {
+  expect_error(
+    points_grob(c(0.2, 0.8), 0.5, key = c("a", "b", "c")),
+    "`key` must have length 1 or 2"
+  )
+  expect_error(
+    rect_grob(c(0.2, 0.8), 0.5, meta = list(1, 2, 3)),
+    "`meta` must have length 1 or 2"
+  )
+  expect_error(lines_grob(c(0, 1), c(0, 1), key = c("a", "b")), "`key`")
+  shared <- points_grob(c(0.2, 0.8), 0.5, key = "k", meta = list(list(t = 1)))
+  m <- scene_model(vl_scene(1, 1) |> draw(shared))$elements
+  expect_identical(m$key, c("k", "k"))
+  expect_identical(m$meta[[2]]$t, 1)
+})
+
+test_that("bare numbers are npc in every keyable constructor (default_units)", {
+  # Inside a scaled panel, a bare 5 is half-way (npc), not native 5 of 0..100.
+  at <- function(default_units) {
+    sc <- vl_scene(2, 2, dpi = 100) |>
+      push(vl_viewport(xscale = c(0, 100), yscale = c(0, 100))) |>
+      draw(points_grob(
+        0.5,
+        0.5,
+        key = "p",
+        default_units = default_units
+      )) |>
+      pop()
+    scene_model(sc)$elements$x
+  }
+  expect_equal(at("npc"), 100, tolerance = 1)
+  expect_lt(at("native"), 5)
 })
 
 test_that("keyed elements carry their key to the SVG `data-key` attribute", {
@@ -242,7 +321,8 @@ test_that("a pannable clipped panel emits outer(clip) > inner(data-vellum-pan) w
       c(3, 7),
       5,
       gp = vl_gpar(fill = "red"),
-      key = c("a", "b")
+      key = c("a", "b"),
+      default_units = "native"
     )) |>
     pop()
   svg <- scene_svg(sc)
@@ -257,8 +337,8 @@ test_that("a non-pannable panel is unchanged (no pan group; per-element clips)",
   sc <- vl_scene(3, 2, dpi = 100) |>
     push(vl_viewport(name = "p", clip = TRUE)) |>
     draw(points_grob(
-      c(3, 7),
-      5,
+      c(0.3, 0.7),
+      0.5,
       gp = vl_gpar(fill = "red"),
       key = c("a", "b")
     )) |>
@@ -316,6 +396,26 @@ test_that("element_geometry() returns the documented columns and rule vocabulary
   expect_identical(names(element_geometry(vl_scene(1, 1))), names(g))
 })
 
+test_that("element_geometry() kinds: boxes are nonzero, a circle reports as point", {
+  sc <- vl_scene(3, 2, dpi = 100) |>
+    draw(rect_grob(0.2, 0.2, width = 0.1, height = 0.1, key = "r")) |>
+    draw(roundrect_grob(0.5, 0.2, width = 0.1, height = 0.1, key = "rr")) |>
+    draw(text_grob("t", 0.8, 0.2, key = "t")) |>
+    draw(circle_grob(0.5, 0.7, r = vl_unit(2, "mm"), key = "c"))
+  g <- element_geometry(sc)
+  first <- g[!duplicated(g$key), ]
+  kinds <- stats::setNames(first$kind, first$key)
+  rules <- stats::setNames(first$rule, first$key)
+  expect_identical(
+    unname(kinds[c("r", "rr", "t", "c")]),
+    c("rect", "roundrect", "text", "point")
+  )
+  expect_identical(unname(rules[c("r", "rr", "t")]), rep("nonzero", 3))
+  expect_true(is.na(rules[["c"]]))
+  expect_equal(sum(g$key == "r"), 2L) # two opposite corners
+  expect_equal(sum(g$key == "t"), 4L) # the label box
+})
+
 test_that("a point in a hole is not a hit (containment follows the fill rule)", {
   sc <- vl_scene(4, 3, dpi = 100) |>
     draw(path_grob(
@@ -327,4 +427,7 @@ test_that("a point in a hole is not a hit (containment follows the fill rule)", 
     ))
   expect_gt(vl_nearest(sc, 0.5, 0.5)$dist, 0)
   expect_equal(vl_nearest(sc, 0.2, 0.5)$dist, 0)
+  # hit_test() follows the same rule: nothing under the hole, the path on the ring.
+  expect_null(hit_test(sc, 0.5, 0.5))
+  expect_false(is.null(hit_test(sc, 0.2, 0.5)))
 })

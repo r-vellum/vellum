@@ -15,22 +15,27 @@ A list with two data frames:
 \item \code{elements} — one row per element: \code{key}, \code{mark}, \code{id}, \code{name}, \code{panel}, the
 device-px bbox \verb{x0,y0,x1,y1}, its centre/size \verb{x,y,w,h}, and a \code{meta}
 list-column.
-\item \code{panels} — one row per named panel: \code{name} and its elements' bounding box
-\verb{x0,y0,x1,y1}.
+\item \code{panels} — one row per named panel that encloses at least one element:
+\code{name}, its elements' bounding box \verb{x0,y0,x1,y1}, the panel viewport's
+device-px rectangle \verb{px0,py0,px1,py1}, its native ranges
+\verb{xscale_lo,xscale_hi,yscale_lo,yscale_hi}, and a \code{meta} list-column.
 }
 }
 \description{
 \code{scene_model()} walks a rendered scene and returns one row per drawn element of
-the \emph{keyable} marks (points, circles, rects, hexagons, sectors, segments),
-pairing each element's grammar-supplied identity — its data \code{key}, free-form
+the \emph{keyable} marks, pairing each element's grammar-supplied identity — its data \code{key}, free-form
 \code{meta}, grob \code{id}/\code{name}, and enclosing \code{panel} — with its resolved device-pixel
 bounding box. It is the host-agnostic bridge underlying interactivity: a host
 renders the SVG (each element tagged with \code{data-key}, see \code{\link[=scene_svg]{scene_svg()}}) and
 uses this table to map an event back to the originating datum.
 }
 \details{
-Elements are returned in paint order. \code{key}/\code{meta} are \code{NA}/\code{NULL} for marks
-drawn without them, so a plain scene still yields a geometry table.
+Elements are returned in paint order. Batched marks (points, circles, rects,
+hexagons, sectors, segments) always emit one row per element, with
+\code{key}/\code{meta} \code{NA}/\code{NULL} when drawn without them, so a plain scene still
+yields a geometry table. Round rects and text emit a row only for keyed
+elements, and paths, lines and polygons one row per grob only when keyed.
+\code{vignette("scene-contract")} is the full contract.
 }
 \seealso{
 \code{\link[=scene_svg]{scene_svg()}}

@@ -90,6 +90,62 @@
   was a fill or a stroke. A pattern stroke used to be reported as a "fill" that
   "was left unfilled".
 
+## Input validation
+
+* **Bad inputs fail where they are passed, with an error that names the
+  argument and the function.** Before, many reached the Rust backend and came
+  back as bare extendr messages ("Must not be NA.", "Expected Scalar, got
+  Integers", "Expected Strings got Doubles") at render time.
+  - `hit_test()` and `vl_nearest()` check `x`, `y`, `units`, `n` and
+    `max_dist`.
+  - `vl_scene()` checks the page size (a single positive absolute length),
+    `dpi`, `bg`, `xscale`/`yscale`, `clip`, `title` and `desc`; `describe()`
+    checks `title`/`desc`.
+  - `vl_viewport()` checks `angle`, `xscale`/`yscale` (finite, length 2),
+    `row`/`col`/`rowspan`/`colspan` (whole numbers >= 1), `blur`, `clip`,
+    `pannable` and `blend` (no longer partially matched).
+  - `vl_arrow()` checks `angle` (strictly between 0 and 180), `ends` and
+    `type`, and rejects an `npc`/`native`, negative or vector `length` when it
+    is built rather than when the scene renders.
+  - `vl_gpar()` rejects a negative `lwd` (`0` is still fine), a `fontsize` that
+    is not positive, an unknown `fontface` such as `"heavy"`, and an empty or
+    invalid colour vector, which was silently drawn as transparent. A numeric
+    `fontface` (grid's `1:4`) is now accepted and converted to its name.
+  - `sector_grob()` rejects `r0 > r1` (where both radii share a unit) and
+    negative radii; `loop_grob()` rejects a negative `width`.
+  - `draw()` accepts only a grob (a gtree is one) or a list of grobs.
+    `draw(scene, 1)` used to succeed and then fail at render with "Can't find
+    method for compile(<double>)".
+
+* **Fix: `text_grob(width =)` and `height =` take one length.** A vector such
+  as `vl_unit(c(10, 50), "mm")` silently used its first element; it is now an
+  error. The internal page-size reader behind it validates the same way.
+
+* **Fix: `sector_grob()` and `hexagon_grob()` take a per-element `gp$fill`
+  vector**, as documented, instead of failing at render. Like `fill =`, it must
+  have length 1 or the element count.
+
+* **Fix: unary minus negates a compound unit's offset.**
+  `-(vl_unit(1, "native") + vl_unit(2, "mm"))` is now `-1native-2mm`; it was
+  `-1native+2mm`.
+
+* **Fix: `strwidth`/`strheight` units take a vector label.**
+  `vl_unit(1:2, "strwidth", data = list(label = c("a", "bb")))` measures each
+  label; it failed with "values must be length 1". The label must have length
+  1 or the length of `values`.
+
+## Documentation
+
+* `vignette("scene-contract")` matches the code again. The `mark` vocabulary
+  has eleven values, including `roundrect` and `text` (rows only for keyed
+  elements). `lines_grob()`, `polygon_grob()` and `path_grob()` take `key`.
+  `key`/`meta` must have length 1 or the element count. Bare numbers are npc
+  in every constructor. A `circle_grob()` element reports as `point` in
+  `element_geometry()`. `hit_test()` follows the fill rule as `vl_nearest()`
+  does. A panel row appears only for a named viewport that encloses an
+  element. `test-contract.R` pins each of these, and the `scene_model()`
+  help page no longer lists only the batched marks.
+
 # vellum 0.7.2
 
 ## Strokes

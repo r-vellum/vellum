@@ -19,10 +19,15 @@ test_that("primitive input is validated with helpful errors", {
 })
 
 test_that("scene dimensions must be finite and positive", {
-  expect_error(.scene_to_backend(vl_scene(width = NaN)), "finite and positive")
-  expect_error(.scene_to_backend(vl_scene(width = -1)), "finite and positive")
-  expect_error(.scene_to_backend(vl_scene(height = Inf)), "finite and positive")
-  expect_error(.scene_to_backend(vl_scene(dpi = 0)), "finite and positive")
+  # Rejected at construction, naming the argument and `vl_scene()`.
+  expect_error(vl_scene(width = NaN), "`width` must be finite")
+  expect_error(vl_scene(width = -1), "`width` must be non-negative")
+  expect_error(vl_scene(width = 0), "`width` must be positive")
+  expect_error(vl_scene(height = Inf), "`height` must be finite")
+  expect_error(vl_scene(dpi = 0), "`dpi` must be > 0")
+  # The backend still refuses a bad size set after construction.
+  s <- S7::set_props(vl_scene(), dpi = 0)
+  expect_error(.scene_to_backend(s), "finite and positive")
 })
 
 test_that("col = NA paints nothing; col = NULL inherits from the viewport", {
