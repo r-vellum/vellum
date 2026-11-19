@@ -238,6 +238,7 @@ reference:
   - hit_test
   - scene_model
   - vl_nearest
+  - vl_brush
   - element_geometry
 
 - title: Grid & ggplot2 interop

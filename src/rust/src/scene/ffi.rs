@@ -76,6 +76,7 @@ impl Scene {
             cur_meta: NodeMeta::default(),
             raster_cache: RefCell::new(None),
             geom_cache: RefCell::new(None),
+            spatial_cache: RefCell::new(None),
             text_glyphs: 0,
             a11y_title: String::new(),
             a11y_desc: String::new(),
@@ -1678,6 +1679,30 @@ impl Scene {
     /// distance zero, so clicking the middle of a choropleth region hits it.
     fn pick_table(&self, px: f64, py: f64) -> List {
         self.build_pick_table(px, py)
+    }
+
+    /// The `n` keyed elements nearest device px `(px, py)` within `max_dist`
+    /// px: `key`, `kind`, `dist`, nearest first, ties in paint order. Answers
+    /// from a uniform-grid spatial index built once per scene (and dropped when
+    /// it is drawn into), so a hover-rate caller does not rebuild the pick
+    /// table per probe. Same rows as `pick_table()` sorted by `dist`.
+    fn nearest_table(&self, px: f64, py: f64, n: i32, max_dist: f64) -> List {
+        self.build_nearest_table(px, py, n.max(0) as usize, max_dist)
+    }
+
+    /// The keyed elements meeting the device-px rectangle with corners
+    /// `(x0, y0)`, `(x1, y1)`: `key`, `kind`, in paint order. `mode` is
+    /// `"intersect"`, `"contain"` or `"centre"` (see `spatial::Region`).
+    fn brush_table(&self, x0: f64, y0: f64, x1: f64, y1: f64, mode: &str) -> List {
+        let m = Region::parse(mode).unwrap_or_else(|| throw_r_error("unknown region mode"));
+        self.build_region_table(&[x0, x1], &[y0, y1], true, m)
+    }
+
+    /// The keyed elements meeting the device-px polygon `(xs, ys)` (closed
+    /// implicitly, even-odd rule): `key`, `kind`, in paint order.
+    fn lasso_table(&self, xs: Vec<f64>, ys: Vec<f64>, mode: &str) -> List {
+        let m = Region::parse(mode).unwrap_or_else(|| throw_r_error("unknown region mode"));
+        self.build_region_table(&xs, &ys, false, m)
     }
 
     /// The font files this scene's text actually resolved to.

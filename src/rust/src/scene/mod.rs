@@ -27,6 +27,7 @@ use crate::geom::{
     parts_bbox, parts_cover, parts_dist, parts_rule, parts_runs, union_bbox, RecordBackend,
     Recording,
 };
+use crate::spatial::{Item as SpatialItem, Region, SpatialIndex};
 use crate::units::{rotation_about, Unit, UnitKind, Vp};
 
 mod draw;
@@ -96,6 +97,10 @@ pub struct Scene {
     /// additionally dropped by `emit_node`, so a scene drawn into after a query
     /// is re-recorded rather than answering from stale geometry.
     geom_cache: RefCell<Option<Arc<Recording>>>,
+    /// Lazy memo of the uniform-grid spatial index over the keyed elements
+    /// (`spatial.rs`), built from `geom_cache`'s recording for `vl_nearest()`,
+    /// `vl_brush()` and `vl_lasso()`. Dropped with it, by `emit_node`.
+    spatial_cache: RefCell<Option<Arc<crate::spatial::SpatialIndex>>>,
     /// Total glyphs across all text nodes, accumulated at compile. Drives the
     /// glyph-bitmap fast path's per-render threshold (see `cached_pixmap`/`render_png`).
     text_glyphs: usize,
@@ -338,6 +343,7 @@ impl Scene {
     /// any), else the drawn scene. Tagged with the current viewport.
     fn emit_node(&mut self, node: Node) {
         *self.geom_cache.get_mut() = None;
+        *self.spatial_cache.get_mut() = None;
         let vp = self.current;
         match self.mask_target.last() {
             Some(&mi) => self.masks[mi].nodes.push((vp, node)),

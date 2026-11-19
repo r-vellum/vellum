@@ -502,6 +502,25 @@ rs_attractor <- function(kind, n, a, b, c, d, x0, y0) .Call(wrap__rs_attractor, 
 #'distance zero, so clicking the middle of a choropleth region hits it.
 #'}
 #'
+#'\subsection{Method `nearest_table`}{
+#'The `n` keyed elements nearest device px `(px, py)` within `max_dist`
+#'px: `key`, `kind`, `dist`, nearest first, ties in paint order. Answers
+#'from a uniform-grid spatial index built once per scene (and dropped when
+#'it is drawn into), so a hover-rate caller does not rebuild the pick
+#'table per probe. Same rows as `pick_table()` sorted by `dist`.
+#'}
+#'
+#'\subsection{Method `brush_table`}{
+#'The keyed elements meeting the device-px rectangle with corners
+#'`(x0, y0)`, `(x1, y1)`: `key`, `kind`, in paint order. `mode` is
+#'`"intersect"`, `"contain"` or `"centre"` (see `spatial::Region`).
+#'}
+#'
+#'\subsection{Method `lasso_table`}{
+#'The keyed elements meeting the device-px polygon `(xs, ys)` (closed
+#'implicitly, even-odd rule): `key`, `kind`, in paint order.
+#'}
+#'
 #'\subsection{Method `font_table`}{
 #'The font files this scene's text actually resolved to.
 #'
@@ -640,6 +659,12 @@ Scene$lint_table <- function() .Call(wrap__Scene__lint_table, self)
 Scene$node_index <- function() .Call(wrap__Scene__node_index, self)
 
 Scene$pick_table <- function(px, py) .Call(wrap__Scene__pick_table, self, px, py)
+
+Scene$nearest_table <- function(px, py, n, max_dist) .Call(wrap__Scene__nearest_table, self, px, py, n, max_dist)
+
+Scene$brush_table <- function(x0, y0, x1, y1, mode) .Call(wrap__Scene__brush_table, self, x0, y0, x1, y1, mode)
+
+Scene$lasso_table <- function(xs, ys, mode) .Call(wrap__Scene__lasso_table, self, xs, ys, mode)
 
 Scene$font_table <- function() .Call(wrap__Scene__font_table, self)
 

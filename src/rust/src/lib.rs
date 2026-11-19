@@ -15,6 +15,7 @@ mod render;
 mod ribbon;
 mod scene;
 mod sketch;
+mod spatial;
 mod svgpath;
 mod units;
 
