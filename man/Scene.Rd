@@ -263,6 +263,15 @@ R joins this with the viewport names it recorded during compilation.
 }
 
 \subsection{Method \code{lint_table}}{
+Per-element device-px bounding boxes for the batched mark nodes (the ones
+that can carry data keys): rects, circles, points/markers, hexagons,
+sectors, segments. Rows are emitted in paint order (the compiler's DFS),
+one per drawn element — the same order and count the R grammar enumerates,
+so \code{scene_model()} zips this with R-side semantics positionally (and
+cross-checks the \code{key} column). Columns: \code{key} ("" = none), enclosing
+\code{panel} ("" = none), and device-px bbox \verb{x0,y0,x1,y1} (y-down). Sector boxes
+use the outer-radius disk and hexagon boxes the circumscribed extent — safe
+over-approximations sufficient for a spatial index.
 Per-node facts a linter needs, in paint order: one row per drawn node
 (not per element -- the rules that matter are about a whole mark).
 
@@ -299,18 +308,6 @@ Read off the shaped glyphs rather than re-resolved from family names, so
 it reports what was \emph{used}, not what would be picked if asked again.
 Returns \code{path}, \code{index} (face within a collection) and \code{glyphs} (how many
 glyphs came from that face).
-}
-
-\subsection{Method \code{element_table}}{
-Per-element device-px bounding boxes for the batched mark nodes (the ones
-that can carry data keys): rects, circles, points/markers, hexagons,
-sectors, segments. Rows are emitted in paint order (the compiler's DFS),
-one per drawn element — the same order and count the R grammar enumerates,
-so \code{scene_model()} zips this with R-side semantics positionally (and
-cross-checks the \code{key} column). Columns: \code{key} ("" = none), enclosing
-\code{panel} ("" = none), and device-px bbox \verb{x0,y0,x1,y1} (y-down). Each box is
-the extent of the element's recorded outline, so a sector's box is its
-wedge (centre included for a pie slice), not the outer-radius disc.
 }
 
 \subsection{Method \code{pixel}}{
