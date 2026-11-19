@@ -236,6 +236,20 @@ pub fn hexagon_path_xy(cx: f64, cy: f64, hx: f64, hy: f64, flat: bool) -> Option
     pb.finish()
 }
 
+/// A sector's signed angular sweep, limited to one full turn. Anything past a
+/// turn retraces the same ring, and sampling a sweep of thousands of turns with a
+/// capped segment count joined points hundreds of radians apart: a star polygon
+/// whose outline (and so the recorded box `scene_model()` reports) bore no
+/// relation to the disc.
+pub fn clamp_sweep(dtheta: f64) -> f64 {
+    let tau = std::f64::consts::TAU;
+    if dtheta.abs() > tau {
+        tau.copysign(dtheta)
+    } else {
+        dtheta
+    }
+}
+
 /// An annular sector centred at `(cx, cy)` spanning `theta0..theta1` (radians, CCW,
 /// 0 at 3 o'clock) between inner radius `r0` and outer radius `r1`. The arc is
 /// densified into line segments (~4° each). `r0 <= 0` collapses the inner edge to
@@ -244,10 +258,11 @@ pub fn hexagon_path_xy(cx: f64, cy: f64, hx: f64, hy: f64, flat: bool) -> Option
 pub fn sector_path(cx: f64, cy: f64, r0: f64, r1: f64, theta0: f64, theta1: f64) -> Option<Path> {
     let r_out = r1.max(0.0);
     let r_in = r0.max(0.0);
-    let dtheta = theta1 - theta0;
+    let dtheta = clamp_sweep(theta1 - theta0);
     if r_out <= 0.0 || dtheta == 0.0 || !dtheta.is_finite() || !cx.is_finite() || !cy.is_finite() {
         return None;
     }
+    let theta1 = theta0 + dtheta;
     // ~4 degrees per segment, at least 2 segments across the span. Cap the count so
     // an extreme span (should already be rejected R-side as non-finite/huge, but be
     // defensive) can't blow up the allocation / loop.

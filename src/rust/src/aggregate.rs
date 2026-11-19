@@ -16,10 +16,21 @@ use extendr_api::prelude::*;
 // overflow on absurd resolutions (which would wrap to a tiny alloc and then
 // panic on index). `extra` is the per-cell multiplier (1, or `ncat`). Fails
 // loudly with an R error instead. (BUGFIX1 Phase 2.)
+// Also caps the size: the grid is `f64`, and an allocation that fails aborts the
+// R session instead of erroring, so `datashade(width = 1e5, height = 1e5)` (80 GB)
+// must be refused here. 2^27 cells is 1 GiB.
 fn grid_len(nx: usize, ny: usize, extra: usize) -> usize {
+    const MAX_CELLS: usize = 1 << 27;
     match nx.checked_mul(ny).and_then(|c| c.checked_mul(extra)) {
-        Some(v) => v,
-        None => throw_r_error("datashade grid dimensions too large"),
+        Some(v) if v <= MAX_CELLS => v,
+        _ => throw_r_error(format!(
+            "datashade grid too large: {nx} x {ny}{} cells exceeds the {MAX_CELLS} cell limit",
+            if extra > 1 {
+                format!(" x {extra} categories")
+            } else {
+                String::new()
+            }
+        )),
     }
 }
 

@@ -336,11 +336,25 @@ fn rs_read_png(path: &str) -> Vec<i32> {
         Ok(f) => f,
         Err(e) => throw_r_error(format!("cannot open '{path}': {e}")),
     };
-    let decoder = png::Decoder::new(std::io::BufReader::new(file));
+    let mut decoder = png::Decoder::new(std::io::BufReader::new(file));
+    // Expand palette and sub-byte images to 8-bit samples (and a tRNS chunk to
+    // alpha), and drop 16-bit to 8. Without it an indexed PNG came back as grey
+    // palette indices and a 1-, 2- or 4-bit one as packed bytes.
+    decoder.set_transformations(png::Transformations::EXPAND | png::Transformations::STRIP_16);
     let mut reader = match decoder.read_info() {
         Ok(r) => r,
         Err(e) => throw_r_error(format!("not a readable PNG: {e}")),
     };
+    // The RGBA result is 16 bytes a pixel (four i32s), sized from the header
+    // before any pixel is decoded, so a small file declaring a vast image would
+    // ask for gigabytes. Refuse it before allocating.
+    const MAX_PNG_PX: u64 = 1 << 27;
+    let (hw, hh) = (reader.info().width, reader.info().height);
+    if hw as u64 * hh as u64 > MAX_PNG_PX {
+        throw_r_error(format!(
+            "PNG too large: {hw} x {hh} px exceeds the {MAX_PNG_PX} px limit"
+        ));
+    }
     let mut buf = vec![0u8; reader.output_buffer_size().unwrap_or(0)];
     let info = match reader.next_frame(&mut buf) {
         Ok(i) => i,
@@ -349,8 +363,8 @@ fn rs_read_png(path: &str) -> Vec<i32> {
 
     let (w, h) = (info.width as usize, info.height as usize);
     let src = &buf[..info.buffer_size()];
-    // Normalise whatever the file stored (gray / gray+alpha / RGB / RGBA, 8- or
-    // 16-bit) to straight 8-bit RGBA. 16-bit samples take the high byte.
+    // Normalise what the decoder produced (gray / gray+alpha / RGB / RGBA; the
+    // transformations above make it 8-bit) to straight 8-bit RGBA.
     let step = match info.bit_depth {
         png::BitDepth::Sixteen => 2usize,
         _ => 1usize,
@@ -392,7 +406,16 @@ fn rs_largest_empty_rect(boxes: &[f64], region: &[f64], nx: i32, ny: i32) -> Vec
         return vec![0.0; 4];
     }
     let r = [region[0], region[1], region[2], region[3]];
-    place::largest_empty_rect(boxes, r, nx.max(1) as usize, ny.max(1) as usize).to_vec()
+    let (nx, ny) = (nx.max(1) as usize, ny.max(1) as usize);
+    // The search allocates an `nx * ny` occupancy grid; `vl_empty_region(grid =)`
+    // passes the resolution through, so a huge grid would abort the session.
+    const MAX_CELLS: usize = 1 << 24;
+    if nx.saturating_mul(ny) > MAX_CELLS {
+        throw_r_error(format!(
+            "empty-region grid too large: {nx} x {ny} cells exceeds the {MAX_CELLS} cell limit"
+        ));
+    }
+    place::largest_empty_rect(boxes, r, nx, ny).to_vec()
 }
 
 /// Every overlapping pair among `boxes`, as flat 1-based index pairs.

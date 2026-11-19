@@ -468,14 +468,31 @@ fn hachure_segments(input: &[Vec<Pt>], angle_deg: f64, gap: f64) -> Vec<(Pt, Pt)
             edges.push((a, b));
         }
     }
-    if !ymin.is_finite() || gap <= 0.0 {
+    if !ymin.is_finite() || !ymax.is_finite() || gap <= 0.0 {
         return Vec::new();
     }
+    // The gap floor bounds the line count only relative to the shape: a huge
+    // shape (`r = 1e20`) still asked for ~1e21 lines, and past 2^53 gaps `y += gap`
+    // stopped advancing at all, so the loop never ended while `out` grew. Widen
+    // the gap to stay under the cap (the same one the crisp hatch uses) and step
+    // on an integer counter.
+    let lines = ((ymax - ymin) / gap).ceil();
+    if !lines.is_finite() {
+        return Vec::new();
+    }
+    let (lines, gap) = if lines > MAX_HACHURE_LINES as f64 {
+        (MAX_HACHURE_LINES, (ymax - ymin) / MAX_HACHURE_LINES as f64)
+    } else {
+        (lines as usize, gap)
+    };
 
     let mut out = Vec::new();
-    // Start half a gap in so the first line isn't flush with the edge.
-    let mut y = ymin + gap * 0.5;
-    while y < ymax {
+    for k in 0..lines {
+        // Start half a gap in so the first line isn't flush with the edge.
+        let y = ymin + gap * (k as f64 + 0.5);
+        if y >= ymax {
+            break;
+        }
         let mut xs: Vec<f64> = Vec::new();
         for &(a, b) in &edges {
             let (y0, y1) = (a.1, b.1);
@@ -496,9 +513,20 @@ fn hachure_segments(input: &[Vec<Pt>], angle_deg: f64, gap: f64) -> Vec<(Pt, Pt)
             out.push((p0, p1));
             i += 2;
         }
-        y += gap;
     }
     out
+}
+
+/// Most scanlines one hachure fill may draw; matches the crisp hatch's cap.
+const MAX_HACHURE_LINES: usize = 20_000;
+/// Most zigzag teeth or dots one fill may draw, across all its spans.
+const MAX_FILL_STEPS: f64 = 200_000.0;
+
+/// Total length of a set of spans, for spreading [`MAX_FILL_STEPS`] across them.
+fn spans_len(segs: &[(Pt, Pt)]) -> f64 {
+    segs.iter()
+        .map(|(a, b)| ((b.0 - a.0).powi(2) + (b.1 - a.1).powi(2)).sqrt())
+        .sum()
 }
 
 /// Hachure fill as rough (single-pass) lines. `zigzag` connects consecutive
@@ -524,7 +552,8 @@ fn hachure_paths(
         // Zig along each span: amplitude ~half the gap, one zig every ~2 gaps so
         // the teeth stay legible rather than collapsing into a solid band.
         let zz = gap * 0.5;
-        let stride = (gap * 2.0).max(2.0);
+        // Widen the stride when the spans are long enough to exceed the step cap.
+        let stride = (gap * 2.0).max(2.0).max(spans_len(&segs) / MAX_FILL_STEPS);
         for (a, b) in segs {
             let dx = b.0 - a.0;
             let dy = b.1 - a.1;
@@ -557,12 +586,14 @@ fn dot_paths(input: &[Vec<Pt>], o: &SketchOpts, rng: &mut Rng) -> Vec<Path> {
     let (weight, gap) = fill_params(o);
     let segs = hachure_segments(input, o.hachure_angle, gap);
     let radius = (weight * 0.5).max(0.5);
+    // Space the dots further apart when the spans would exceed the dot cap.
+    let step = gap.max(spans_len(&segs) / MAX_FILL_STEPS);
     let mut pb = PathBuilder::new();
     for (a, b) in segs {
         let dx = b.0 - a.0;
         let dy = b.1 - a.1;
         let len = (dx * dx + dy * dy).sqrt();
-        let n = (len / gap).floor().max(0.0) as usize;
+        let n = (len / step).floor().max(0.0) as usize;
         for k in 0..=n {
             let t = if n == 0 { 0.0 } else { k as f64 / n as f64 };
             let jx = rng.offset_sym(gap * 0.15, o.roughness, 1.0);
