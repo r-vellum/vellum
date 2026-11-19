@@ -31,7 +31,8 @@ rect_grob(
   id = NULL,
   role = NULL,
   key = NULL,
-  meta = NULL
+  meta = NULL,
+  default_units = "npc"
 )
 
 roundrect_grob(
@@ -47,7 +48,8 @@ roundrect_grob(
   id = NULL,
   role = NULL,
   key = NULL,
-  meta = NULL
+  meta = NULL,
+  default_units = "npc"
 )
 
 lines_grob(
@@ -65,7 +67,8 @@ lines_grob(
   id = NULL,
   role = NULL,
   key = NULL,
-  meta = NULL
+  meta = NULL,
+  default_units = "npc"
 )
 
 polygon_grob(
@@ -78,7 +81,8 @@ polygon_grob(
   id = NULL,
   role = NULL,
   key = NULL,
-  meta = NULL
+  meta = NULL,
+  default_units = "npc"
 )
 
 bezier_grob(
@@ -89,7 +93,8 @@ bezier_grob(
   name = NULL,
   vp = NULL,
   id = NULL,
-  role = NULL
+  role = NULL,
+  default_units = "npc"
 )
 
 spline_grob(
@@ -102,7 +107,8 @@ spline_grob(
   name = NULL,
   vp = NULL,
   id = NULL,
-  role = NULL
+  role = NULL,
+  default_units = "npc"
 )
 
 circle_grob(
@@ -116,7 +122,8 @@ circle_grob(
   id = NULL,
   role = NULL,
   key = NULL,
-  meta = NULL
+  meta = NULL,
+  default_units = "npc"
 )
 
 points_grob(
@@ -131,7 +138,8 @@ points_grob(
   id = NULL,
   role = NULL,
   key = NULL,
-  meta = NULL
+  meta = NULL,
+  default_units = "npc"
 )
 
 hexagon_grob(
@@ -148,7 +156,8 @@ hexagon_grob(
   id = NULL,
   role = NULL,
   key = NULL,
-  meta = NULL
+  meta = NULL,
+  default_units = "npc"
 )
 
 sector_grob(
@@ -167,7 +176,8 @@ sector_grob(
   id = NULL,
   role = NULL,
   key = NULL,
-  meta = NULL
+  meta = NULL,
+  default_units = "npc"
 )
 
 loop_grob(
@@ -182,7 +192,8 @@ loop_grob(
   name = NULL,
   vp = NULL,
   id = NULL,
-  role = NULL
+  role = NULL,
+  default_units = "npc"
 )
 
 segments_grob(
@@ -203,7 +214,8 @@ segments_grob(
   key = NULL,
   meta = NULL,
   col = NULL,
-  lwd = NULL
+  lwd = NULL,
+  default_units = "npc"
 )
 
 path_grob(
@@ -217,7 +229,8 @@ path_grob(
   vp = NULL,
   role = NULL,
   key = NULL,
-  meta = NULL
+  meta = NULL,
+  default_units = "npc"
 )
 
 raster_grob(
@@ -231,7 +244,8 @@ raster_grob(
   name = NULL,
   vp = NULL,
   id = NULL,
-  role = NULL
+  role = NULL,
+  default_units = "npc"
 )
 
 text_grob(
@@ -250,13 +264,15 @@ text_grob(
   align = "left",
   fit = FALSE,
   key = NULL,
-  meta = NULL
+  meta = NULL,
+  default_units = "npc"
 )
 }
 \arguments{
-\item{x, y}{Coordinates (\code{\link[=vl_unit]{vl_unit()}} or numeric).}
+\item{x, y}{Coordinates (\code{\link[=vl_unit]{vl_unit()}} or numeric, read in \code{default_units}).}
 
-\item{width, height}{Grob size (\code{\link[=vl_unit]{vl_unit()}} or numeric), recycled like \code{x}/\code{y}.
+\item{width, height}{Grob size (\code{\link[=vl_unit]{vl_unit()}} or numeric, read in
+\code{default_units}), recycled like \code{x}/\code{y}.
 For most grobs the drawn rectangle size. For \code{\link[=hexagon_grob]{hexagon_grob()}}, the optional
 per-hexagon \strong{full} corner-to-corner extent along x/y: when both are given
 they override \code{size} (resolved per-axis, so a hexagon can be \emph{non-regular}
@@ -306,7 +322,20 @@ list with one entry (record) per element (recycled), e.g. tooltip text or
 field values. It never reaches the backend (nothing drawn changes); it rides
 on the scene and is returned by \code{\link[=scene_model]{scene_model()}}. \code{NULL} (default) = none.}
 
-\item{r}{Radius (\code{\link[=vl_unit]{vl_unit()}} or numeric).}
+\item{default_units}{Unit a \strong{bare numeric} is read in, for the position
+and size arguments (\code{x}, \code{y}, \code{width}, \code{height}, \code{x0}..\code{y1}, \code{r},
+\code{r0}/\code{r1}), as grid's \code{default.units}. Defaults to \code{"npc"} in every
+constructor; pass \code{"native"} to read bare numbers on the viewport's
+\code{xscale}/\code{yscale}, or an absolute unit such as \code{"mm"}. A \code{\link[=vl_unit]{vl_unit()}} keeps
+its own unit. Arguments with a physical default of their own ignore it: a
+bare \code{size} on \code{\link[=points_grob]{points_grob()}}, \code{\link[=hexagon_grob]{hexagon_grob()}} and \code{\link[=loop_grob]{loop_grob()}}, and
+\code{foot}, \code{start_cap}, \code{end_cap} and \code{offset}, stay \code{"mm"}; an arrow
+\code{length} stays \code{"in"}. See \strong{Units} below for how a relative length
+resolves.}
+
+\item{r}{Radius (\code{\link[=vl_unit]{vl_unit()}} or numeric, read in \code{default_units}). An
+\code{"npc"} radius is a fraction of the viewport's shorter side, so the circle
+stays round.}
 
 \item{arrow}{An \code{\link[=vl_arrow]{vl_arrow()}} spec to draw heads on the line/segment ends, or
 \code{NULL} for none.}
@@ -376,8 +405,9 @@ falls back to \code{gp$fill}.}
 \item{orientation}{Hexagon orientation: \code{"flat"} (default, flat top/bottom edge)
 or \code{"pointy"} (vertex at top). \code{size} is the circumradius (centre to vertex).}
 
-\item{r0, r1}{Inner and outer radius of each sector (\code{\link[=vl_unit]{vl_unit()}} or numeric;
-numeric is treated as \code{"native"}). \code{r0 = 0} gives a pie slice; \code{r0 == r1}
+\item{r0, r1}{Inner and outer radius of each sector (\code{\link[=vl_unit]{vl_unit()}} or numeric,
+read in \code{default_units}; an \code{"npc"} radius is a fraction of the viewport's
+shorter side). \code{r0 = 0} gives a pie slice; \code{r0 == r1}
 gives an arc outline (stroke only, no fill).}
 
 \item{theta0, theta1}{Start and end angle of each sector, in \strong{radians}, with 0
@@ -392,7 +422,8 @@ the marker. Recycled per loop.}
 \item{angle}{Outward direction of the loop in \strong{radians} (which way the teardrop
 bulges away from the vertex, e.g. away from the layout centroid).}
 
-\item{x0, y0, x1, y1}{Segment start/end coordinates (\code{\link[=vl_unit]{vl_unit()}} or numeric).}
+\item{x0, y0, x1, y1}{Segment start/end coordinates (\code{\link[=vl_unit]{vl_unit()}} or numeric,
+read in \code{default_units}).}
 
 \item{col, lwd}{\strong{\code{segments_grob()} only} — per-segment stroke colour and
 width, recycled to the segment count, mirroring the per-element \code{fill} that
@@ -444,7 +475,7 @@ A grob object.
 Grobs are immutable value objects describing something to draw. Build them
 with the constructors below, add them to a scene with \code{\link[=draw]{draw()}}, and render
 with \code{\link[=render]{render()}}. Coordinates accept a \code{\link[=vl_unit]{vl_unit()}} vector or a bare numeric
-(interpreted in the \code{default_units}, usually \code{"npc"}).
+(interpreted in the \code{default_units}).
 }
 \details{
 \code{sector_grob()} draws a batch of annular sectors (pie / donut / rose wedges) in a
@@ -464,3 +495,31 @@ to the curve at the returning foot. \code{size} and \code{foot} are absolute and
 device px \strong{at render}, so the loop is a fixed physical size that scales with the
 mm node markers — no native-per-mm estimation, exact at any figure size/dpi.
 }
+\section{Units}{
+
+As in grid, a bare numeric position or size is interpreted in the
+constructor's \code{default_units}, which is \code{"npc"} in \strong{every} constructor: \code{0}
+is the left/bottom edge of the viewport and \code{1} the right/top. To place
+marks on a viewport's \code{xscale}/\code{yscale}, pass \code{default_units = "native"} or
+wrap the values in \code{vl_unit(x, "native")}. A \code{\link[=vl_unit]{vl_unit()}} always keeps its
+own unit, so one grob can mix units per element.
+
+A few arguments are absolute by nature and keep their own default whatever
+\code{default_units} says: a bare \code{size} on \code{\link[=points_grob]{points_grob()}}, \code{\link[=hexagon_grob]{hexagon_grob()}} and
+\code{\link[=loop_grob]{loop_grob()}}, and \code{foot}, \code{start_cap}, \code{end_cap} and \code{offset}, are
+millimetres; an arrow's \code{length} is inches.
+
+How a relative \strong{length} resolves depends on what it measures:
+\itemize{
+\item A \code{width} resolves against the viewport's width and a \code{height} against
+its height (rects, rasters, viewports, and the \code{width}/\code{height} of a
+hexagon -- so an \code{"npc"} or \code{"native"} hexagon follows the viewport's
+aspect, and can tile a non-square lattice).
+\item A radius is one length on both axes: circle and roundrect \code{r}, sector
+\code{r0}/\code{r1}, and a point or hexagon \code{size}. An \code{"npc"} radius is a fraction
+of the viewport's \strong{shorter} side (grid's \code{"snpc"}), so circles stay
+round in a non-square viewport; a \code{"native"} radius is measured on the x
+scale.
+}
+}
+

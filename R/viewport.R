@@ -66,6 +66,10 @@
 #'   subtree as vector (no fidelity loss). Ignored when the viewport also sets a
 #'   non-normal `blend` (a blend needs the live backdrop). See
 #'   [vl_clear_render_cache()].
+#' @param default_units Unit a bare numeric `x`, `y`, `width` or `height` is
+#'   read in, as grid's `default.units`. Defaults to `"npc"` (fractions of the
+#'   parent), as in every grob constructor. `width` resolves against the
+#'   parent's width and `height` against its height.
 #' @return A `viewport` object.
 #' @examples
 #' vl_viewport(xscale = c(0, 10), yscale = c(0, 100))
@@ -93,8 +97,10 @@ vl_viewport <- function(
   name = NULL,
   meta = NULL,
   pannable = FALSE,
-  cache = FALSE
+  cache = FALSE,
+  default_units = "npc"
 ) {
+  du <- .check_default_units(default_units)
   .check_cell <- function(v, arg) {
     if (!is.null(v) && (length(v) != 1L || is.na(v) || v < 1)) {
       cli::cli_abort(
@@ -119,10 +125,10 @@ vl_viewport <- function(
     cli::cli_abort("{.arg cache} must be a single {.cls logical}.")
   }
   class_viewport(
-    x = as_unit(x),
-    y = as_unit(y),
-    width = as_unit(width),
-    height = as_unit(height),
+    x = .as_unit_arg(x, "x", du),
+    y = .as_unit_arg(y, "y", du),
+    width = .as_unit_arg(width, "width", du),
+    height = .as_unit_arg(height, "height", du),
     xscale = as.numeric(xscale),
     yscale = as.numeric(yscale),
     angle = as.numeric(angle),

@@ -1,7 +1,8 @@
 # Decompose a curve coordinate into (values, single unit name). Flattening is a
 # linear combination of control-point values, so all coordinates on an axis must
-# share one unit (a numeric defaults to "native", like lines).
-.axis_unit <- function(a, default = "native") {
+# share one unit (a bare numeric is read in `default`, the constructor's
+# `default_units`).
+.axis_unit <- function(a, default = "npc") {
   if (!is_unit(a)) {
     return(list(value = as.numeric(a), unit = default))
   }

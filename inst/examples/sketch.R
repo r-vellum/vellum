@@ -107,7 +107,7 @@ elems <- elems |>
     x = 0.52,
     y = 0.76,
     r0 = 0,
-    r1 = 0.16,
+    r1 = 0.28, # npc: a fraction of the shorter (4 in) side
     theta0 = 0,
     theta1 = 1.4,
     fill = "tomato",
@@ -118,7 +118,7 @@ elems <- elems |>
     x = 0.52,
     y = 0.76,
     r0 = 0,
-    r1 = 0.16,
+    r1 = 0.28, # npc: a fraction of the shorter (4 in) side
     theta0 = 1.4,
     theta1 = 2 * pi,
     fill = "gold",

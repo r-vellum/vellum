@@ -18,17 +18,19 @@ svg_grob(
   name = NULL,
   vp = NULL,
   id = NULL,
-  role = NULL
+  role = NULL,
+  default_units = "npc"
 )
 }
 \arguments{
 \item{d}{A character string of SVG path data, or (for \code{svg_grob()}) a whole
 \verb{<svg>} element to read \verb{<path>} geometry and the \code{viewBox} from.}
 
-\item{x, y}{Centre of the drawn icon.}
+\item{x, y}{Centre of the drawn icon (\code{\link[=vl_unit]{vl_unit()}} or numeric).}
 
 \item{size}{Size of the reference box's longer side, as a \code{\link[=vl_unit]{vl_unit()}} — the
-viewBox when one is given, otherwise the path's own bounding box.}
+viewBox when one is given, otherwise the path's own bounding box. A bare
+numeric is read in \code{default_units}, like \code{x}/\code{y}.}
 
 \item{flip_y}{Flip the y axis to convert from SVG's convention. Leave \code{TRUE}
 unless your \code{d} is already in a y-up space.}
@@ -39,6 +41,9 @@ rather than the glyph's ink. \code{NULL} (default) uses a whole-\verb{<svg>}
 document's own viewBox if present, else the path's ink bounds.}
 
 \item{gp, name, vp, id, role}{Passed to the returned \code{\link[=path_grob]{path_grob()}}.}
+
+\item{default_units}{Unit a bare numeric \code{x}, \code{y} or \code{size} is read in.
+Defaults to \code{"npc"}, as in every constructor (see \link{grob}).}
 }
 \value{
 \code{vl_svg_path()}: a data frame of \code{x}, \code{y}, \code{id}, \code{closed}.

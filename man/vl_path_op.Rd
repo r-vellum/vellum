@@ -58,6 +58,9 @@ to their outer ring, which is how the returned \code{path_grob()} is set up.
 
 Operands must be in a single coordinate space — one unit, no offsets — since
 a boolean has to be computed somewhere, and mixed units have no common space.
+The result comes back in that space: in the unit of \code{a} (or of \code{b}, when \code{a}
+is bare numbers), and bare numbers in give \code{"npc"} out, as in every
+constructor.
 }
 
 \examples{
