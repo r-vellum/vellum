@@ -131,6 +131,169 @@ pub struct RasterBackend {
 /// Max page-sized clip masks kept resident at once (see `clip_cache`).
 const CLIP_CACHE_CAP: usize = 8;
 
+/// Most segments stroked as one path on the raster fast path. Long enough that a
+/// contour or a typical line is a single run (and so identical to the combined
+/// stroke), short enough that a run of a page-spanning scribble stays local.
+const STROKE_RUN: usize = 256;
+
+/// Stroke a polyline (user-space vertices) as one round-capped, round-joined
+/// path per [`STROKE_RUN`] segments.
+///
+/// Adjacent runs share a vertex, and each draws a round cap there. Inside the
+/// cap both are fully covered, which blends idempotently, but the antialiased
+/// pixels on the cap's rim are blended twice and come out darker: a faint bead at
+/// every joint. So before drawing, keep the pixels in a small box around each
+/// joint; after drawing, put them back and stroke every segment near the joint
+/// over them as one path, which is what the combined stroke draws there. Outside
+/// those boxes the result is exactly the runs; inside, exactly one stroke.
+fn stroke_polyline(
+    target: &mut Pixmap,
+    pts: &[(f32, f32)],
+    paint: &Paint,
+    sk: &Stroke,
+    transform: Transform,
+    mask: Option<&Mask>,
+) {
+    let nseg = pts.len().saturating_sub(1);
+    if nseg == 0 {
+        return;
+    }
+    let stroke_range = |target: &mut Pixmap, a: usize, b: usize| {
+        let mut pb = PathBuilder::new();
+        pb.move_to(pts[a].0, pts[a].1);
+        for &(x, y) in &pts[a + 1..=b] {
+            pb.line_to(x, y);
+        }
+        if let Some(p) = pb.finish() {
+            target.stroke_path(&p, paint, sk, transform, mask);
+        }
+    };
+    if nseg <= STROKE_RUN {
+        stroke_range(target, 0, nseg);
+        return;
+    }
+
+    // Device-space geometry: the vertices, and a half-width that bounds the
+    // stroke under any scale or skew in `transform`.
+    let dev: Vec<(f32, f32)> = pts
+        .iter()
+        .map(|&(x, y)| {
+            let mut p = tiny_skia::Point::from_xy(x, y);
+            transform.map_point(&mut p);
+            (p.x, p.y)
+        })
+        .collect();
+    let scale = (transform.sx.hypot(transform.ky)).max(transform.kx.hypot(transform.sy));
+    let half_w = sk.width * scale * 0.5;
+    // Every doubly blended pixel lies within a cap radius plus its antialiasing
+    // of the joint vertex.
+    let reach = half_w + 2.0;
+    let (pw, ph) = (target.width() as i32, target.height() as i32);
+    struct Joint {
+        v: (f32, f32),
+        x0: i32,
+        y0: i32,
+        w: u32,
+        h: u32,
+        saved: Vec<u8>,
+    }
+    let stride = pw as usize * 4;
+    let mut joints: Vec<Joint> = Vec::new();
+    let mut k = STROKE_RUN;
+    while k < nseg {
+        let v = dev[k];
+        let x0 = ((v.0 - reach).floor() as i32).max(0);
+        let y0 = ((v.1 - reach).floor() as i32).max(0);
+        let x1 = ((v.0 + reach).ceil() as i32).min(pw);
+        let y1 = ((v.1 + reach).ceil() as i32).min(ph);
+        if v.0.is_finite() && v.1.is_finite() && x1 > x0 && y1 > y0 {
+            let (w, h) = ((x1 - x0) as u32, (y1 - y0) as u32);
+            let mut saved = Vec::with_capacity(w as usize * h as usize * 4);
+            let data = target.data();
+            for row in y0..y1 {
+                let at = row as usize * stride + x0 as usize * 4;
+                saved.extend_from_slice(&data[at..at + w as usize * 4]);
+            }
+            joints.push(Joint {
+                v,
+                x0,
+                y0,
+                w,
+                h,
+                saved,
+            });
+        }
+        k += STROKE_RUN;
+    }
+
+    let mut a = 0;
+    while a < nseg {
+        let b = (a + STROKE_RUN).min(nseg);
+        stroke_range(target, a, b);
+        a = b;
+    }
+
+    // A segment can touch a joint's box if it passes within the box's corner
+    // radius plus the stroke's half-width (and a pixel of antialiasing).
+    let near = reach * std::f32::consts::SQRT_2 + half_w + 1.5;
+    for j in joints {
+        let Some(mut scratch) = Pixmap::new(j.w, j.h) else {
+            continue;
+        };
+        scratch.data_mut().copy_from_slice(&j.saved);
+        // Every segment near the joint, grouped into consecutive pieces. A far
+        // part of the polyline crossing the box is included too, so restoring
+        // the box cannot erase it.
+        let mut pb = PathBuilder::new();
+        let mut open = false;
+        for i in 0..nseg {
+            if seg_dist(j.v, dev[i], dev[i + 1]) <= near {
+                if !open {
+                    pb.move_to(pts[i].0, pts[i].1);
+                    open = true;
+                }
+                pb.line_to(pts[i + 1].0, pts[i + 1].1);
+            } else {
+                open = false;
+            }
+        }
+        let Some(local) = pb.finish() else {
+            continue;
+        };
+        let local_mask = mask.and_then(|m| {
+            let mut lm = Mask::new(j.w, j.h)?;
+            let mw = m.width() as usize;
+            for row in 0..j.h as usize {
+                let src = (j.y0 as usize + row) * mw + j.x0 as usize;
+                lm.data_mut()[row * j.w as usize..(row + 1) * j.w as usize]
+                    .copy_from_slice(&m.data()[src..src + j.w as usize]);
+            }
+            Some(lm)
+        });
+        let t = transform.post_translate(-(j.x0 as f32), -(j.y0 as f32));
+        scratch.stroke_path(&local, paint, sk, t, local_mask.as_ref());
+        let data = target.data_mut();
+        let row_len = j.w as usize * 4;
+        for row in 0..j.h as usize {
+            let at = (j.y0 as usize + row) * stride + j.x0 as usize * 4;
+            data[at..at + row_len]
+                .copy_from_slice(&scratch.data()[row * row_len..(row + 1) * row_len]);
+        }
+    }
+}
+
+/// Distance from `p` to the segment `a`-`b` (device px).
+fn seg_dist(p: (f32, f32), a: (f32, f32), b: (f32, f32)) -> f32 {
+    let (dx, dy) = (b.0 - a.0, b.1 - a.1);
+    let len2 = dx * dx + dy * dy;
+    let t = if len2 > 0.0 {
+        (((p.0 - a.0) * dx + (p.1 - a.1) * dy) / len2).clamp(0.0, 1.0)
+    } else {
+        0.0
+    };
+    (p.0 - a.0 - t * dx).hypot(p.1 - a.1 - t * dy)
+}
+
 impl RasterBackend {
     pub fn new(w: u32, h: u32, bg: Rgba) -> Self {
         // Clamp to >=1 so a 0-sized target can't panic here (page dimensions are
@@ -388,8 +551,9 @@ impl RenderBackend for RasterBackend {
         // bead on each vertex, and a densely sampled thin line (a contour, a
         // smooth curve) looked stippled next to the same line in SVG or PDF. A
         // run is one stroke, so its interior vertices match the combined stroke
-        // exactly; only the rare joints between runs of a very long polyline are
-        // drawn twice.
+        // exactly. Where two runs of a very long polyline meet, both draw a round
+        // cap on the shared vertex, which would bead the joint just the same; the
+        // joints are redrawn once from a combined stroke (see `stroke_polyline`).
         let fast = color.a == 255
             && stroke.paint.is_none() // a shader must see the whole path at once
             && stroke.dash.is_empty()
@@ -403,24 +567,15 @@ impl RenderBackend for RasterBackend {
         let sk = skia_stroke(stroke);
         let paint = solid_paint(color); // fast path: no stroke paint
         let target = self.targets.last_mut().expect("at least the page target");
-        // Long enough that a contour or a typical line is a single run (and so
-        // identical to the combined stroke), short enough that a run of a
-        // page-spanning scribble stays local.
-        const RUN: usize = 256;
         use tiny_skia::PathSegment;
-        let mut pb = PathBuilder::new();
-        let mut run_len = 0usize;
+        // The current subpath's vertices, stroked when the next one starts.
+        let mut pts: Vec<(f32, f32)> = Vec::new();
         let mut prev: Option<(f32, f32)> = None;
-        let mut flush = |pb: &mut PathBuilder| {
-            if let Some(sp) = std::mem::take(pb).finish() {
-                target.stroke_path(&sp, &paint, &sk, transform, mask.as_deref());
-            }
-        };
         for seg in path.segments() {
             match seg {
                 PathSegment::MoveTo(p) => {
-                    flush(&mut pb);
-                    run_len = 0;
+                    stroke_polyline(target, &pts, &paint, &sk, transform, mask.as_deref());
+                    pts.clear();
                     prev = Some((p.x, p.y));
                 }
                 PathSegment::LineTo(p) => {
@@ -448,20 +603,19 @@ impl RenderBackend for RasterBackend {
                         } else {
                             (ax, ay, p.x, p.y)
                         };
-                        let mut one = PathBuilder::new();
-                        one.move_to(ax, ay);
-                        one.line_to(bx, by);
-                        flush(&mut one);
+                        stroke_polyline(
+                            target,
+                            &[(ax, ay), (bx, by)],
+                            &paint,
+                            &sk,
+                            transform,
+                            mask.as_deref(),
+                        );
                     } else {
-                        if run_len == RUN {
-                            flush(&mut pb);
-                            run_len = 0;
+                        if pts.is_empty() {
+                            pts.push((ax, ay));
                         }
-                        if run_len == 0 {
-                            pb.move_to(ax, ay);
-                        }
-                        pb.line_to(p.x, p.y);
-                        run_len += 1;
+                        pts.push((p.x, p.y));
                     }
                     prev = Some((p.x, p.y));
                 }
@@ -473,7 +627,7 @@ impl RenderBackend for RasterBackend {
                 PathSegment::Close => {}
             }
         }
-        flush(&mut pb);
+        stroke_polyline(target, &pts, &paint, &sk, transform, mask.as_deref());
     }
 
     fn draw_text(&mut self, run: &TextRun, transform: Transform, clip: &Clip) {
