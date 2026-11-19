@@ -15,13 +15,37 @@ pub(super) fn fill_then_stroke<B: RenderBackend>(
     vp: &Vp,
     rule: FillRule,
 ) {
-    if let Some(fill) = &gp.fill {
-        fill_or_hatch(b, path, t, &resolve_paint(fill, vp), rule, clip);
-    }
-    if let Some(col) = gp.col {
-        let style = stroke_style(gp, vp);
-        if style.width > 0.0 {
-            b.stroke_path(path, t, col, &style, clip);
+    let fill = gp.fill.as_ref().map(|f| resolve_paint(f, vp));
+    let stroke = gp
+        .col
+        .map(|col| (col, stroke_style(gp, vp)))
+        .filter(|(_, style)| style.width > 0.0);
+    fill_paint_then_stroke(b, path, t, fill.as_ref(), stroke.as_ref(), rule, clip);
+}
+
+/// Fill (expanding a hatch) then stroke `path`. A non-hatch fill with a stroke
+/// goes through [`RenderBackend::fill_and_stroke_path`], so a backend can draw
+/// the pair as one element; `stroke` must have `width > 0`.
+pub(super) fn fill_paint_then_stroke<B: RenderBackend>(
+    b: &mut B,
+    path: &tiny_skia::Path,
+    t: Transform,
+    fill: Option<&ResolvedPaint>,
+    stroke: Option<&(Rgba, StrokeStyle)>,
+    rule: FillRule,
+    clip: &Clip,
+) {
+    match (fill, stroke) {
+        (Some(rp), Some((col, style))) if !matches!(rp, ResolvedPaint::Hatch { .. }) => {
+            b.fill_and_stroke_path(path, t, rp, rule, *col, style, clip);
+        }
+        (fill, stroke) => {
+            if let Some(rp) = fill {
+                fill_or_hatch(b, path, t, rp, rule, clip);
+            }
+            if let Some((col, style)) = stroke {
+                b.stroke_path(path, t, *col, style, clip);
+            }
         }
     }
 }

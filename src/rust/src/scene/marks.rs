@@ -381,6 +381,7 @@ pub(super) fn draw_rects<B: RenderBackend>(
             // Stroke (non-uniform scale would distort it) or a gradient
             // that must be resolved in local px: build each rect.
             let style = stroke_style(gp, vp);
+            let pen = stroke.map(|c| (c, style)).filter(|(_, s)| s.width > 0.0);
             for i in 0..n {
                 b.set_element_key(key_at(keys, i));
                 let cx = vp.x_pos(x[i], xu[i]);
@@ -388,12 +389,15 @@ pub(super) fn draw_rects<B: RenderBackend>(
                 let pw = vp.x_len(w[i], wu[i]);
                 let ph = vp.y_len(h[i], hu[i]);
                 if let Some(path) = rect_path(cx - pw / 2.0, cy - ph / 2.0, pw, ph) {
-                    if let Some(rp) = &rf {
-                        fill_or_hatch(b, &path, t, rp, FillRule::Winding, clip);
-                    }
-                    if let Some(c) = stroke {
-                        b.stroke_path(&path, t, c, &style, clip);
-                    }
+                    fill_paint_then_stroke(
+                        b,
+                        &path,
+                        t,
+                        rf.as_ref(),
+                        pen.as_ref(),
+                        FillRule::Winding,
+                        clip,
+                    );
                 }
             }
         }
@@ -498,6 +502,7 @@ pub(super) fn draw_circles<B: RenderBackend>(
         // local px, so position-dependent) or a keyed batch that needs a
         // `data-key` per circle.
         let style = stroke_style(gp, vp);
+        let pen = stroke.map(|c| (c, style)).filter(|(_, s)| s.width > 0.0);
         for i in 0..n {
             b.set_element_key(key_at(keys, i));
             let cx = vp.x_pos(x[i], xu[i]);
@@ -506,12 +511,15 @@ pub(super) fn draw_circles<B: RenderBackend>(
             let mut pb = PathBuilder::new();
             pb.push_circle(cx as f32, cy as f32, rr as f32);
             if let Some(path) = pb.finish() {
-                if let Some(rp) = &rf {
-                    fill_or_hatch(b, &path, t, rp, FillRule::Winding, clip);
-                }
-                if let Some(c) = stroke {
-                    b.stroke_path(&path, t, c, &style, clip);
-                }
+                fill_paint_then_stroke(
+                    b,
+                    &path,
+                    t,
+                    rf.as_ref(),
+                    pen.as_ref(),
+                    FillRule::Winding,
+                    clip,
+                );
             }
         }
     }
@@ -796,7 +804,7 @@ pub(super) fn draw_hexagons<B: RenderBackend>(
     }
     .unwrap_or(0);
     let style = stroke_style(gp, vp);
-    let stroke = gp.col.filter(|_| style.width > 0.0);
+    let pen = gp.col.filter(|_| style.width > 0.0).map(|c| (c, style));
     for i in 0..n {
         b.set_element_key(key_at(keys, i));
         let cx = vp.x_pos(x[i], xu[i]);
@@ -827,12 +835,15 @@ pub(super) fn draw_hexagons<B: RenderBackend>(
                 Some(c) => Some(ResolvedPaint::Solid(*c)),
                 None => gp.fill.as_ref().map(|p| resolve_paint(p, vp)),
             };
-            if let Some(rp) = rp {
-                fill_or_hatch(b, &path, t, &rp, FillRule::Winding, clip);
-            }
-            if let Some(c) = stroke {
-                b.stroke_path(&path, t, c, &style, clip);
-            }
+            fill_paint_then_stroke(
+                b,
+                &path,
+                t,
+                rp.as_ref(),
+                pen.as_ref(),
+                FillRule::Winding,
+                clip,
+            );
         }
     }
 }
@@ -919,7 +930,7 @@ pub(super) fn draw_sectors<B: RenderBackend>(
         return;
     }
     let style = stroke_style(gp, vp);
-    let stroke = gp.col.filter(|_| style.width > 0.0);
+    let pen = gp.col.filter(|_| style.width > 0.0).map(|c| (c, style.clone()));
     // Arrowheads (directed self-loops) accumulate across the batch and
     // are drawn once at the end, tangent to each outer arc's end(s).
     let mut ends: Vec<(f32, f32, f64, f64)> = Vec::new();
@@ -943,12 +954,15 @@ pub(super) fn draw_sectors<B: RenderBackend>(
                 Some(c) => Some(ResolvedPaint::Solid(*c)),
                 None => gp.fill.as_ref().map(|p| resolve_paint(p, vp)),
             };
-            if let Some(rp) = rp {
-                fill_or_hatch(b, &path, t, &rp, FillRule::Winding, clip);
-            }
-            if let Some(c) = stroke {
-                b.stroke_path(&path, t, c, &style, clip);
-            }
+            fill_paint_then_stroke(
+                b,
+                &path,
+                t,
+                rp.as_ref(),
+                pen.as_ref(),
+                FillRule::Winding,
+                clip,
+            );
         }
         if let Some(a) = arrow {
             // Endpoints and travel-tangent of the outer arc in local px.

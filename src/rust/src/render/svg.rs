@@ -371,6 +371,76 @@ impl SvgBackend {
         }
     }
 
+    /// The stroke attributes (`stroke=… stroke-width=… …`, no `fill`) of a
+    /// stroke. `bake` is the similarity scale when the geometry is baked into
+    /// device coordinates (lengths scale with it), `None` when the element keeps
+    /// its own `transform`. A `<circle>` (`circle`) has no ends and no corners,
+    /// so its cap, join and miter limit are left out: they cannot change it.
+    fn stroke_attrs(
+        &mut self,
+        color: Rgba,
+        stroke: &StrokeStyle,
+        bake: Option<f64>,
+        circle: bool,
+    ) -> String {
+        // Lengths in the element's own units: scaled (and rounded) when baked,
+        // otherwise written exactly as before.
+        let len = |v: f32| -> String {
+            match bake {
+                Some(k) if k != 1.0 => {
+                    let mut o = String::new();
+                    push_num(&mut o, v as f64 * k, 3);
+                    o
+                }
+                _ => v.to_string(),
+            }
+        };
+        let dash = if stroke.dash.is_empty() {
+            String::new()
+        } else {
+            let arr: Vec<String> = stroke.dash.iter().map(|d| len(*d)).collect();
+            let off = if stroke.phase != 0.0 {
+                format!(" stroke-dashoffset=\"{}\"", len(stroke.phase))
+            } else {
+                String::new()
+            };
+            format!(" stroke-dasharray=\"{}\"{off}", arr.join(","))
+        };
+        // A gradient/pattern stroke reuses the fill machinery: `svg_fill` already
+        // emits the <defs> entry and returns `fill="url(#id)"` (plus a pattern's
+        // `fill-opacity`), so rewrite the attribute names.
+        let stroke_attr = match &stroke.paint {
+            Some(p) => self
+                .svg_fill(p)
+                .replace("fill-opacity=", "stroke-opacity=")
+                .replace("fill=", "stroke="),
+            None => format!(
+                "stroke=\"{}\"{}",
+                rgb_hex(color),
+                opacity_attr("stroke-opacity", color)
+            ),
+        };
+        if circle {
+            return format!(
+                "{} stroke-width=\"{}\"{dash}",
+                stroke_attr,
+                len(stroke.width)
+            );
+        }
+        // The miter limit only shapes miter joins; a round join ignores it.
+        let miter = match stroke.join {
+            LineJoin::Round => String::new(),
+            _ => format!(" stroke-miterlimit=\"{}\"", stroke.miter),
+        };
+        format!(
+            "{} stroke-width=\"{}\" stroke-linecap=\"{}\" stroke-linejoin=\"{}\"{miter}{dash}",
+            stroke_attr,
+            len(stroke.width),
+            svg_cap(stroke.cap),
+            svg_join(stroke.join),
+        )
+    }
+
     /// A ` clip-path="url(#…)"` attribute for this clip (empty string = none).
     /// Nested `<clipPath>` elements (each referencing the previous) intersect.
     fn clip_attr(&mut self, clip: &Clip) -> String {
@@ -459,55 +529,6 @@ impl RenderBackend for SvgBackend {
             None => similarity_scale(transform),
             Some(_) => None,
         };
-        // Lengths in the element's own units: scaled (and rounded) when baked,
-        // otherwise written exactly as before.
-        let len = |v: f32| -> String {
-            match bake {
-                Some(k) if k != 1.0 => {
-                    let mut o = String::new();
-                    push_num(&mut o, v as f64 * k, 3);
-                    o
-                }
-                _ => v.to_string(),
-            }
-        };
-        let dash = if stroke.dash.is_empty() {
-            String::new()
-        } else {
-            let arr: Vec<String> = stroke.dash.iter().map(|d| len(*d)).collect();
-            let off = if stroke.phase != 0.0 {
-                format!(" stroke-dashoffset=\"{}\"", len(stroke.phase))
-            } else {
-                String::new()
-            };
-            format!(" stroke-dasharray=\"{}\"{off}", arr.join(","))
-        };
-        // A gradient/pattern stroke reuses the fill machinery: `svg_fill` already
-        // emits the <defs> entry and returns `fill="url(#id)"` (plus a pattern's
-        // `fill-opacity`), so rewrite the attribute names.
-        let stroke_attr = match &stroke.paint {
-            Some(p) => self
-                .svg_fill(p)
-                .replace("fill-opacity=", "stroke-opacity=")
-                .replace("fill=", "stroke="),
-            None => format!(
-                "stroke=\"{}\"{}",
-                rgb_hex(color),
-                opacity_attr("stroke-opacity", color)
-            ),
-        };
-        // The miter limit only shapes miter joins; a round join ignores it.
-        let miter = match stroke.join {
-            LineJoin::Round => String::new(),
-            _ => format!(" stroke-miterlimit=\"{}\"", stroke.miter),
-        };
-        let paint = format!(
-            "fill=\"none\" {} stroke-width=\"{}\" stroke-linecap=\"{}\" stroke-linejoin=\"{}\"{miter}{dash}",
-            stroke_attr,
-            len(stroke.width),
-            svg_cap(stroke.cap),
-            svg_join(stroke.join),
-        );
         let element = match bake {
             Some(_) => {
                 // An undashed circle becomes a `<circle>`: it starts at the same
@@ -519,18 +540,75 @@ impl RenderBackend for SvgBackend {
                     None
                 };
                 match circle {
-                    Some((cx, cy, r)) => format!("<circle {} {paint}/>", circle_attrs(cx, cy, r)),
-                    None => format!(
-                        "<path d=\"{}\" {paint}/>",
-                        path_to_d(path, Some(transform), Some(COORD_DECIMALS)),
-                    ),
+                    Some((cx, cy, r)) => {
+                        let paint = self.stroke_attrs(color, stroke, bake, true);
+                        format!("<circle {} fill=\"none\" {paint}/>", circle_attrs(cx, cy, r))
+                    }
+                    None => {
+                        let paint = self.stroke_attrs(color, stroke, bake, false);
+                        format!(
+                            "<path d=\"{}\" fill=\"none\" {paint}/>",
+                            path_to_d(path, Some(transform), Some(COORD_DECIMALS)),
+                        )
+                    }
                 }
             }
-            None => format!(
-                "<path d=\"{}\" {paint}{}/>",
-                path_to_d(path, None, Some(coord_decimals(transform))),
-                transform_attr(transform),
-            ),
+            None => {
+                let paint = self.stroke_attrs(color, stroke, bake, false);
+                format!(
+                    "<path d=\"{}\" fill=\"none\" {paint}{}/>",
+                    path_to_d(path, None, Some(coord_decimals(transform))),
+                    transform_attr(transform),
+                )
+            }
+        };
+        self.emit(&element, clip);
+    }
+
+    /// One element carrying both paints when the pair can be: a solid fill and
+    /// an undashed solid stroke under a similarity transform (so both bake into
+    /// the same device coordinates). SVG paints fill then stroke on one element
+    /// (`paint-order: normal`), exactly what the fill + `fill="none"` twin drew,
+    /// at about half the bytes and DOM nodes per keyed point. Anything else
+    /// (gradient/pattern paint, dashes, a non-uniform scale) keeps the twin.
+    fn fill_and_stroke_path(
+        &mut self,
+        path: &Path,
+        transform: Transform,
+        paint: &ResolvedPaint,
+        rule: FillRule,
+        color: Rgba,
+        stroke: &StrokeStyle,
+        clip: &Clip,
+    ) {
+        let bake = similarity_scale(transform);
+        let merge = matches!(paint, ResolvedPaint::Solid(_))
+            && stroke.paint.is_none()
+            && stroke.dash.is_empty()
+            && stroke.width > 0.0
+            && bake.is_some();
+        if !merge {
+            self.fill_path(path, transform, paint, rule, clip);
+            self.stroke_path(path, transform, color, stroke, clip);
+            return;
+        }
+        let fill = self.svg_fill(paint);
+        let element = match circle_of(path).and_then(|c| bake_circle(c, transform)) {
+            Some((cx, cy, r)) => {
+                let st = self.stroke_attrs(color, stroke, bake, true);
+                format!("<circle {} {fill} {st}/>", circle_attrs(cx, cy, r))
+            }
+            None => {
+                let st = self.stroke_attrs(color, stroke, bake, false);
+                let rule_attr = match rule {
+                    FillRule::EvenOdd => " fill-rule=\"evenodd\"",
+                    FillRule::Winding => "",
+                };
+                format!(
+                    "<path d=\"{}\" {fill}{rule_attr} {st}/>",
+                    path_to_d(path, Some(transform), Some(COORD_DECIMALS)),
+                )
+            }
         };
         self.emit(&element, clip);
     }
@@ -1348,6 +1426,50 @@ mod tests {
         let mut pb = PathBuilder::new();
         pb.push_rect(tiny_skia::Rect::from_xywh(0.0, 0.0, 4.0, 4.0).unwrap());
         assert!(circle_of(&pb.finish().unwrap()).is_none());
+    }
+
+    fn pen(dash: Vec<f32>) -> StrokeStyle {
+        StrokeStyle {
+            width: 1.0,
+            dash,
+            cap: LineCap::Round,
+            join: LineJoin::Round,
+            miter: 10.0,
+            crisp: false,
+            paint: None,
+            phase: 0.0,
+        }
+    }
+
+    fn pair_svg(transform: Transform, stroke: &StrokeStyle) -> String {
+        let mut b = SvgBackend::new(10, 10, Rgba::WHITE, false);
+        let mut pb = PathBuilder::new();
+        pb.push_circle(5.0, 5.0, 2.0);
+        let clip = Clip { id: 0, shapes: &[] };
+        let red = Rgba { r: 255, g: 0, b: 0, a: 255 };
+        b.fill_and_stroke_path(
+            &pb.finish().unwrap(),
+            transform,
+            &ResolvedPaint::Solid(red),
+            FillRule::Winding,
+            Rgba::BLACK,
+            stroke,
+            &clip,
+        );
+        b.into_string()
+    }
+
+    #[test]
+    fn solid_fill_and_stroke_merge_into_one_element() {
+        let svg = pair_svg(Transform::identity(), &pen(Vec::new()));
+        assert_eq!(svg.matches("<circle").count(), 1, "{svg}");
+        assert!(svg.contains("fill=\"#ff0000\" stroke=\"#000000\" stroke-width=\"1\"/>"));
+        assert!(!svg.contains("stroke-linecap"), "a circle drops cap/join: {svg}");
+        // a dash or a non-uniform scale keeps the fill + stroke twin
+        let dashed = pair_svg(Transform::identity(), &pen(vec![2.0, 1.0]));
+        assert_eq!(dashed.matches("fill=\"none\"").count(), 1, "{dashed}");
+        let squashed = pair_svg(Transform::from_scale(2.0, 1.0), &pen(Vec::new()));
+        assert_eq!(squashed.matches("fill=\"none\"").count(), 1, "{squashed}");
     }
 
     #[test]
