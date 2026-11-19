@@ -176,6 +176,28 @@
   each label; it failed with “values must be length 1”. The label must
   have length 1 or the length of `values`.
 
+### Documentation
+
+- [`vignette("scene-contract")`](https://r-vellum.github.io/vellum/articles/scene-contract.md)
+  matches the code again. The `mark` vocabulary has eleven values,
+  including `roundrect` and `text` (rows only for keyed elements).
+  [`lines_grob()`](https://r-vellum.github.io/vellum/reference/grob.md),
+  [`polygon_grob()`](https://r-vellum.github.io/vellum/reference/grob.md)
+  and
+  [`path_grob()`](https://r-vellum.github.io/vellum/reference/grob.md)
+  take `key`. `key`/`meta` must have length 1 or the element count. Bare
+  numbers are npc in every constructor. A
+  [`circle_grob()`](https://r-vellum.github.io/vellum/reference/grob.md)
+  element reports as `point` in
+  [`element_geometry()`](https://r-vellum.github.io/vellum/reference/element_geometry.md).
+  [`hit_test()`](https://r-vellum.github.io/vellum/reference/hit_test.md)
+  follows the fill rule as
+  [`vl_nearest()`](https://r-vellum.github.io/vellum/reference/vl_nearest.md)
+  does. A panel row appears only for a named viewport that encloses an
+  element. `test-contract.R` pins each of these, and the
+  [`scene_model()`](https://r-vellum.github.io/vellum/reference/scene_model.md)
+  help page no longer lists only the batched marks.
+
 ## vellum 0.7.2
 
 ### Strokes

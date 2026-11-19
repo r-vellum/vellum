@@ -6,14 +6,12 @@
     }
   };
 </script><script src="../deps/jquery-3.6.0/jquery-3.6.0.min.js"></script><meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no"><link href="../deps/bootstrap-5.3.8/bootstrap.min.css" rel="stylesheet"><script src="../deps/bootstrap-5.3.8/bootstrap.bundle.min.js"></script><link href="../deps/Spectral-0.4.10/font.css" rel="stylesheet"><link href="../deps/JetBrains_Mono-0.4.10/font.css" rel="stylesheet"><link href="../deps/Spectral_SC-0.4.10/font.css" rel="stylesheet"><link href="../deps/font-awesome-6.5.2/css/all.min.css" rel="stylesheet"><link href="../deps/font-awesome-6.5.2/css/v4-shims.min.css" rel="stylesheet"><script src="../deps/headroom-0.11.0/headroom.min.js"></script><script src="../deps/headroom-0.11.0/jQuery.headroom.min.js"></script><script src="../deps/bootstrap-toc-1.0.1/bootstrap-toc.min.js"></script><script src="../deps/clipboard.js-2.0.11/clipboard.min.js"></script><script src="../deps/search-1.0.0/autocomplete.jquery.min.js"></script><script src="../deps/search-1.0.0/fuse.min.js"></script><script src="../deps/search-1.0.0/mark.min.js"></script><!-- pkgdown --><script src="../pkgdown.js"></script><link href="../extra.css" rel="stylesheet"><meta property="og:title" content="A serializable, per-element model of a scene — scene_model"><meta name="description" content="scene_model() walks a rendered scene and returns one row per drawn element of
-the keyable marks (points, circles, rects, hexagons, sectors, segments),
-pairing each element's grammar-supplied identity — its data key, free-form
+the keyable marks, pairing each element's grammar-supplied identity — its data key, free-form
 meta, grob id/name, and enclosing panel — with its resolved device-pixel
 bounding box. It is the host-agnostic bridge underlying interactivity: a host
 renders the SVG (each element tagged with data-key, see scene_svg()) and
 uses this table to map an event back to the originating datum."><meta property="og:description" content="scene_model() walks a rendered scene and returns one row per drawn element of
-the keyable marks (points, circles, rects, hexagons, sectors, segments),
-pairing each element's grammar-supplied identity — its data key, free-form
+the keyable marks, pairing each element's grammar-supplied identity — its data key, free-form
 meta, grob id/name, and enclosing panel — with its resolved device-pixel
 bounding box. It is the host-agnostic bridge underlying interactivity: a host
 renders the SVG (each element tagged with data-key, see scene_svg()) and
@@ -84,8 +82,7 @@ uses this table to map an event back to the originating datum."><meta property="
 
     <div class="ref-description section level2">
     <p><code>scene_model()</code> walks a rendered scene and returns one row per drawn element of
-the <em>keyable</em> marks (points, circles, rects, hexagons, sectors, segments),
-pairing each element's grammar-supplied identity — its data <code>key</code>, free-form
+the <em>keyable</em> marks, pairing each element's grammar-supplied identity — its data <code>key</code>, free-form
 <code>meta</code>, grob <code>id</code>/<code>name</code>, and enclosing <code>panel</code> — with its resolved device-pixel
 bounding box. It is the host-agnostic bridge underlying interactivity: a host
 renders the SVG (each element tagged with <code>data-key</code>, see <code><a href="scene_svg.html">scene_svg()</a></code>) and
@@ -110,13 +107,19 @@ uses this table to map an event back to the originating datum.</p>
     <p>A list with two data frames:</p><ul><li><p><code>elements</code> — one row per element: <code>key</code>, <code>mark</code>, <code>id</code>, <code>name</code>, <code>panel</code>, the
 device-px bbox <code>x0,y0,x1,y1</code>, its centre/size <code>x,y,w,h</code>, and a <code>meta</code>
 list-column.</p></li>
-<li><p><code>panels</code> — one row per named panel: <code>name</code> and its elements' bounding box
-<code>x0,y0,x1,y1</code>.</p></li>
+<li><p><code>panels</code> — one row per named panel that encloses at least one element:
+<code>name</code>, its elements' bounding box <code>x0,y0,x1,y1</code>, the panel viewport's
+device-px rectangle <code>px0,py0,px1,py1</code>, its native ranges
+<code>xscale_lo,xscale_hi,yscale_lo,yscale_hi</code>, and a <code>meta</code> list-column.</p></li>
 </ul></div>
     <div class="section level2">
     <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
-    <p>Elements are returned in paint order. <code>key</code>/<code>meta</code> are <code>NA</code>/<code>NULL</code> for marks
-drawn without them, so a plain scene still yields a geometry table.</p>
+    <p>Elements are returned in paint order. Batched marks (points, circles, rects,
+hexagons, sectors, segments) always emit one row per element, with
+<code>key</code>/<code>meta</code> <code>NA</code>/<code>NULL</code> when drawn without them, so a plain scene still
+yields a geometry table. Round rects and text emit a row only for keyed
+elements, and paths, lines and polygons one row per grob only when keyed.
+<code><a href="../articles/scene-contract.html">vignette("scene-contract")</a></code> is the full contract.</p>
     </div>
     <div class="section level2">
     <h2 id="see-also">See also<a class="anchor" aria-label="anchor" href="#see-also"></a></h2>

@@ -128,6 +128,11 @@
 <li><p><strong>Fix: unary minus negates a compound unit’s offset.</strong> <code>-(vl_unit(1, "native") + vl_unit(2, "mm"))</code> is now <code>-1native-2mm</code>; it was <code>-1native+2mm</code>.</p></li>
 <li><p><strong>Fix: <code>strwidth</code>/<code>strheight</code> units take a vector label.</strong> <code>vl_unit(1:2, "strwidth", data = list(label = c("a", "bb")))</code> measures each label; it failed with “values must be length 1”. The label must have length 1 or the length of <code>values</code>.</p></li>
 </ul></div>
+<div class="section level3">
+<h3 id="documentation-0-7-2-9000">Documentation<a class="anchor" aria-label="anchor" href="#documentation-0-7-2-9000"></a></h3>
+<ul><li>
+<code><a href="../articles/scene-contract.html">vignette("scene-contract")</a></code> matches the code again. The <code>mark</code> vocabulary has eleven values, including <code>roundrect</code> and <code>text</code> (rows only for keyed elements). <code><a href="../reference/grob.html">lines_grob()</a></code>, <code><a href="../reference/grob.html">polygon_grob()</a></code> and <code><a href="../reference/grob.html">path_grob()</a></code> take <code>key</code>. <code>key</code>/<code>meta</code> must have length 1 or the element count. Bare numbers are npc in every constructor. A <code><a href="../reference/grob.html">circle_grob()</a></code> element reports as <code>point</code> in <code><a href="../reference/element_geometry.html">element_geometry()</a></code>. <code><a href="../reference/hit_test.html">hit_test()</a></code> follows the fill rule as <code><a href="../reference/vl_nearest.html">vl_nearest()</a></code> does. A panel row appears only for a named viewport that encloses an element. <code>test-contract.R</code> pins each of these, and the <code><a href="../reference/scene_model.html">scene_model()</a></code> help page no longer lists only the batched marks.</li>
+</ul></div>
 </div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.7.2" id="vellum-072">vellum 0.7.2<a class="anchor" aria-label="anchor" href="#vellum-072"></a></h2>

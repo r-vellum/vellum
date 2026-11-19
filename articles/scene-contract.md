@@ -39,23 +39,73 @@ here changes what is painted.
 
 ## Carrying identity on a grob
 
-The batched mark constructors
-([`points_grob()`](https://r-vellum.github.io/vellum/reference/grob.md),
+Eleven constructors take two optional identity arguments: the batched
+marks
+[`points_grob()`](https://r-vellum.github.io/vellum/reference/grob.md),
 [`circle_grob()`](https://r-vellum.github.io/vellum/reference/grob.md),
 [`rect_grob()`](https://r-vellum.github.io/vellum/reference/grob.md),
 [`segments_grob()`](https://r-vellum.github.io/vellum/reference/grob.md),
 [`hexagon_grob()`](https://r-vellum.github.io/vellum/reference/grob.md),
-[`sector_grob()`](https://r-vellum.github.io/vellum/reference/grob.md))
-take two optional per-element arguments:
+[`sector_grob()`](https://r-vellum.github.io/vellum/reference/grob.md),
+[`roundrect_grob()`](https://r-vellum.github.io/vellum/reference/grob.md)
+and
+[`text_grob()`](https://r-vellum.github.io/vellum/reference/grob.md),
+and the single-shape marks
+[`lines_grob()`](https://r-vellum.github.io/vellum/reference/grob.md),
+[`polygon_grob()`](https://r-vellum.github.io/vellum/reference/grob.md)
+and
+[`path_grob()`](https://r-vellum.github.io/vellum/reference/grob.md).
 
-- `key`: a character vector of **data keys**, one per element
-  (recycled). This is the join key a host uses to tie an on-screen
-  element back to a datum.
-- `meta`: a list of **free-form per-element records** (recycled), e.g. a
-  tooltip string or field values.
+- `key`: a character vector of **data keys**. This is the join key a
+  host uses to tie an on-screen element back to a datum.
+- `meta`: a list of **free-form per-element records**, e.g. a tooltip
+  string or field values.
+
+On a batched mark both are per element and must have **length 1**
+(shared by every element) **or exactly the element count**; any other
+length is an error naming the argument, never a silent truncation or
+wrap. A single-shape mark is one element, so it takes a single `key` and
+a single `meta` record.
 
 Every grob also takes `id` and `role` (a single value per grob) for
-semantic identity and accessibility.
+semantic identity and accessibility. The remaining constructors
+([`bezier_grob()`](https://r-vellum.github.io/vellum/reference/grob.md),
+[`spline_grob()`](https://r-vellum.github.io/vellum/reference/grob.md),
+[`loop_grob()`](https://r-vellum.github.io/vellum/reference/grob.md),
+[`raster_grob()`](https://r-vellum.github.io/vellum/reference/grob.md),
+[`svg_grob()`](https://r-vellum.github.io/vellum/reference/vl_svg_path.md),
+[`text_path_grob()`](https://r-vellum.github.io/vellum/reference/text_path_grob.md),
+[`contour_grob()`](https://r-vellum.github.io/vellum/reference/vl_contour.md))
+take no `key` and never appear in the tables below.
+
+### Coordinates: bare numbers are npc
+
+A bare number passed to any constructor’s position or size argument is
+read in `default_units`, which is `"npc"` (a fraction of the enclosing
+viewport) everywhere, as in grid. A grammar layer placing data values
+inside a panel viewport with an `xscale`/`yscale` must therefore say so,
+either with `vl_unit(x, "native")` or `default_units = "native"`:
+
+``` r
+
+panel <- vl_scene(3, 2, bg = "white") |>
+  push(vl_viewport(name = "panel", xscale = c(0, 10), yscale = c(0, 100))) |>
+  draw(points_grob(
+    x = c(2, 5, 8),
+    y = c(20, 80, 50),
+    default_units = "native",
+    key = c("a", "b", "c")
+  )) |>
+  pop()
+panel
+```
+
+![](scene-contract_files/figure-html/native-1.png)
+
+Arguments with a physical default keep it whatever `default_units` says:
+a bare point, hexagon or loop `size`, `foot`, `start_cap`, `end_cap` and
+`offset` are millimetres. Only the reading of *bare* numbers changes; a
+\[vl_unit()\] is never reinterpreted.
 
 ``` r
 
@@ -133,32 +183,40 @@ The columns are the contract:
 | `mark` | character | the mark kind (see vocabulary below) |
 | `id` | character | the grob `id` (`NA` if unset) |
 | `name` | character | the grob `name` (`NA` if unset) |
-| `panel` | character | the enclosing named panel (`NA` if none) |
+| `panel` | character | the innermost enclosing named viewport (`NA` if none) |
 | `x0, y0, x1, y1` | numeric | device-pixel bounding box |
 | `x, y` | numeric | element centre, `(x0+x1)/2, (y0+y1)/2` |
 | `w, h` | numeric | element size, `x1-x0, y1-y0` |
 | `meta` | list | the free-form per-element record (list-column) |
 
-The `mark` vocabulary is a closed set: `rect`, `point`, `circle`,
-`hexagon`, `sector`, `segment`, `path`, `line`, `polygon`.
+The `mark` vocabulary is these eleven values, and only these: `rect`,
+`point`, `circle`, `hexagon`, `sector`, `segment`, `roundrect`, `text`,
+`path`, `line`, `polygon`. Adding one is a contract change (see the end
+of this article).
 
-Two families produce these rows:
+Three families produce these rows:
 
 - **Batched marks** (`rect`, `point`, `circle`, `hexagon`, `sector`,
   `segment`) emit **one row per element, always**, even when unkeyed
   (then `key` is `NA`).
+- **Keyed-only batches** (`roundrect`, `text`) emit **one row per keyed
+  element**. A grob drawn without `key` contributes no rows at all, and
+  within a keyed grob an element whose key is `NA` or `""` is skipped.
+  This keeps a plot’s unkeyed axis labels and strip backgrounds out of
+  the table.
 - **Single-shape marks** (`path`, `line`, `polygon`) emit **one row per
   grob, and only when keyed**. An unkeyed path/line/polygon is
   geometry-only and does not appear in the table. (A single `sf`
-  feature, one polygon or linestring, is exactly one such element.)
-  These constructors do not take a `key` argument; the grammar keys them
-  by setting the grob’s `keys` slot, which is how a single sf feature
-  becomes addressable.
+  feature, one polygon or linestring, is exactly one such element.) Key
+  one with the constructor’s `key` argument (setting the grob’s `@keys`
+  slot is equivalent).
 
 ### `panels`
 
-One row per **named panel** (a named viewport becomes an addressable
-panel):
+One row per **named panel** that encloses at least one row of `elements`
+(a named viewport becomes an addressable panel; one with no elements in
+the table has no row). An element’s `panel` is its innermost enclosing
+named viewport.
 
 ``` r
 
@@ -266,7 +324,7 @@ One row per vertex. The columns are the contract:
 | column | type | meaning |
 |----|----|----|
 | `key` | character | the element’s data key (repeated on each of its vertices) |
-| `kind` | character | `segment`, `line`, `polygon`, `path`, `hexagon`, `sector`, `point`, `rect`, `roundrect`, `text` |
+| `kind` | character | `segment`, `line`, `polygon`, `path`, `hexagon`, `sector`, `point`, `rect`, `roundrect`, `text` (a [`circle_grob()`](https://r-vellum.github.io/vellum/reference/grob.md) element reports as `point`) |
 | `vertex` | integer | 1-based within the element; restarts at 1 for the next element |
 | `ring` | integer | 1-based ring (or polyline) within the element |
 | `x, y` | numeric | device px, y down |
@@ -281,13 +339,36 @@ applies:
 - `point` is a single centre; its radius is half the smaller side of its
   [`scene_model()`](https://r-vellum.github.io/vellum/reference/scene_model.md)
   box.
-- `rect` and `roundrect` are two opposite box corners.
-- Everything else is closed rings. **Containment is decided once, across
+- `rect` and `roundrect` are two opposite box corners, filled as
+  `"nonzero"`.
+- Everything else (`polygon`, `path`, `hexagon`, `sector`, and a `text`
+  label’s box) is closed rings. **Containment is decided once, across
   all of an element’s rings, under its `rule`**: even-odd parity of the
   edge crossings, or a nonzero sum of the rings’ winding numbers. Inside
   is distance zero. Outside – and a point in a hole is outside – the
   distance is to the nearest edge of any ring. Rings are never joined:
   each closes on itself.
+
+`rule` comes from the grob: `path_grob(rule = "evenodd")` reports
+`"evenodd"`, and `rule = "winding"` (the default) and every other filled
+kind report `"nonzero"`.
+[`vl_nearest()`](https://r-vellum.github.io/vellum/reference/vl_nearest.md)
+and
+[`hit_test()`](https://r-vellum.github.io/vellum/reference/hit_test.md)
+both decide containment by that rule, so a click in the hole of an
+even-odd path is outside it, and
+[`hit_test()`](https://r-vellum.github.io/vellum/reference/hit_test.md)
+falls through to whatever is drawn beneath:
+
+``` r
+
+vl_nearest(holed, 0.5, 0.5)$dist # in the hole: outside, so a positive distance
+#> [1] 30
+vl_nearest(holed, 0.2, 0.5)$dist # in the ring: inside
+#> [1] 0
+is.null(hit_test(holed, 0.5, 0.5)) # nothing under the hole
+#> [1] TRUE
+```
 
 ## `scene_svg()`: the emitted attributes
 
@@ -303,11 +384,11 @@ regmatches(svg, gregexpr('data-key="[^"]*"', svg))[[1]]
 #> [1] "data-key=\"a\"" "data-key=\"b\"" "data-key=\"c\""
 ```
 
-Four attribute mechanisms, each emitted only when its source is set:
+Six attributes, each emitted only when its source is set:
 
 | attribute | source | scope | set from |
 |----|----|----|----|
-| `data-key` | grob `key` | per element | `points_grob(key=)` etc. |
+| `data-key` | grob `key` | per element | `points_grob(key=)` etc. (every constructor that takes `key`) |
 | `data-vellum-id` | grob `id` | per grob/node | `*_grob(id=)` |
 | `data-vellum-name` | grob `name` | per grob/node | `*_grob(name=)` |
 | `role` | grob `role` | per grob/node | `*_grob(role=)` |
@@ -389,6 +470,9 @@ vellumwidget:
   column set, its `kind` and `rule` vocabularies, or the containment
   rule above,
 - the `mark` vocabulary,
-- which marks are keyable, or the batched-vs-single-shape rule,
+- which marks are keyable, or the batched / keyed-only / single-shape
+  rules,
+- the `key`/`meta` length rule (1 or the element count),
+- the default reading of bare numbers (`default_units = "npc"`),
 - the SVG attribute names, or when they are emitted,
 - the reserved `meta` key vocabulary. \`\`\`

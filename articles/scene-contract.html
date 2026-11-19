@@ -140,22 +140,64 @@ before. Nothing here changes what is painted.</p>
 <div class="section level2">
 <h2 id="carrying-identity-on-a-grob">Carrying identity on a grob<a class="anchor" aria-label="anchor" href="#carrying-identity-on-a-grob"></a>
 </h2>
-<p>The batched mark constructors (<code><a href="../reference/grob.html">points_grob()</a></code>,
-<code><a href="../reference/grob.html">circle_grob()</a></code>, <code><a href="../reference/grob.html">rect_grob()</a></code>,
-<code><a href="../reference/grob.html">segments_grob()</a></code>, <code><a href="../reference/grob.html">hexagon_grob()</a></code>,
-<code><a href="../reference/grob.html">sector_grob()</a></code>) take two optional per-element arguments:</p>
+<p>Eleven constructors take two optional identity arguments: the batched
+marks <code><a href="../reference/grob.html">points_grob()</a></code>, <code><a href="../reference/grob.html">circle_grob()</a></code>,
+<code><a href="../reference/grob.html">rect_grob()</a></code>, <code><a href="../reference/grob.html">segments_grob()</a></code>,
+<code><a href="../reference/grob.html">hexagon_grob()</a></code>, <code><a href="../reference/grob.html">sector_grob()</a></code>,
+<code><a href="../reference/grob.html">roundrect_grob()</a></code> and <code><a href="../reference/grob.html">text_grob()</a></code>, and the
+single-shape marks <code><a href="../reference/grob.html">lines_grob()</a></code>,
+<code><a href="../reference/grob.html">polygon_grob()</a></code> and <code><a href="../reference/grob.html">path_grob()</a></code>.</p>
 <ul>
 <li>
-<code>key</code>: a character vector of <strong>data keys</strong>,
-one per element (recycled). This is the join key a host uses to tie an
-on-screen element back to a datum.</li>
+<code>key</code>: a character vector of <strong>data keys</strong>.
+This is the join key a host uses to tie an on-screen element back to a
+datum.</li>
 <li>
 <code>meta</code>: a list of <strong>free-form per-element
-records</strong> (recycled), e.g. a tooltip string or field values.</li>
+records</strong>, e.g. a tooltip string or field values.</li>
 </ul>
+<p>On a batched mark both are per element and must have <strong>length
+1</strong> (shared by every element) <strong>or exactly the element
+count</strong>; any other length is an error naming the argument, never
+a silent truncation or wrap. A single-shape mark is one element, so it
+takes a single <code>key</code> and a single <code>meta</code>
+record.</p>
 <p>Every grob also takes <code>id</code> and <code>role</code> (a single
-value per grob) for semantic identity and accessibility.</p>
+value per grob) for semantic identity and accessibility. The remaining
+constructors (<code><a href="../reference/grob.html">bezier_grob()</a></code>, <code><a href="../reference/grob.html">spline_grob()</a></code>,
+<code><a href="../reference/grob.html">loop_grob()</a></code>, <code><a href="../reference/grob.html">raster_grob()</a></code>,
+<code><a href="../reference/vl_svg_path.html">svg_grob()</a></code>, <code><a href="../reference/text_path_grob.html">text_path_grob()</a></code>,
+<code><a href="../reference/vl_contour.html">contour_grob()</a></code>) take no <code>key</code> and never appear
+in the tables below.</p>
+<div class="section level3">
+<h3 id="coordinates-bare-numbers-are-npc">Coordinates: bare numbers are npc<a class="anchor" aria-label="anchor" href="#coordinates-bare-numbers-are-npc"></a>
+</h3>
+<p>A bare number passed to any constructor’s position or size argument
+is read in <code>default_units</code>, which is <code>"npc"</code> (a
+fraction of the enclosing viewport) everywhere, as in grid. A grammar
+layer placing data values inside a panel viewport with an
+<code>xscale</code>/<code>yscale</code> must therefore say so, either
+with <code>vl_unit(x, "native")</code> or
+<code>default_units = "native"</code>:</p>
 <div class="sourceCode" id="cb2"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">panel</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/vl_scene.html">vl_scene</a></span><span class="op">(</span><span class="fl">3</span>, <span class="fl">2</span>, bg <span class="op">=</span> <span class="st">"white"</span><span class="op">)</span> <span class="op">|&gt;</span></span>
+<span>  <span class="fu"><a href="../reference/vl_scene.html">push</a></span><span class="op">(</span><span class="fu"><a href="../reference/vl_viewport.html">vl_viewport</a></span><span class="op">(</span>name <span class="op">=</span> <span class="st">"panel"</span>, xscale <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0</span>, <span class="fl">10</span><span class="op">)</span>, yscale <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0</span>, <span class="fl">100</span><span class="op">)</span><span class="op">)</span><span class="op">)</span> <span class="op">|&gt;</span></span>
+<span>  <span class="fu"><a href="../reference/vl_scene.html">draw</a></span><span class="op">(</span><span class="fu"><a href="../reference/grob.html">points_grob</a></span><span class="op">(</span></span>
+<span>    x <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">2</span>, <span class="fl">5</span>, <span class="fl">8</span><span class="op">)</span>,</span>
+<span>    y <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">20</span>, <span class="fl">80</span>, <span class="fl">50</span><span class="op">)</span>,</span>
+<span>    default_units <span class="op">=</span> <span class="st">"native"</span>,</span>
+<span>    key <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"a"</span>, <span class="st">"b"</span>, <span class="st">"c"</span><span class="op">)</span></span>
+<span>  <span class="op">)</span><span class="op">)</span> <span class="op">|&gt;</span></span>
+<span>  <span class="fu"><a href="../reference/vl_scene.html">pop</a></span><span class="op">(</span><span class="op">)</span></span>
+<span><span class="va">panel</span></span></code></pre></div>
+<p><img src="scene-contract_files/figure-html/native-1.png" class="r-plt" alt="" width="480"></p>
+<p>Arguments with a physical default keep it whatever
+<code>default_units</code> says: a bare point, hexagon or loop
+<code>size</code>, <code>foot</code>, <code>start_cap</code>,
+<code>end_cap</code> and <code>offset</code> are millimetres. Only the
+reading of <em>bare</em> numbers changes; a [vl_unit()] is never
+reinterpreted.</p>
+<div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">s</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/vl_scene.html">vl_scene</a></span><span class="op">(</span><span class="fl">5</span>, <span class="fl">3</span>, bg <span class="op">=</span> <span class="st">"white"</span><span class="op">)</span> <span class="op">|&gt;</span></span>
 <span>  <span class="fu"><a href="../reference/vl_scene.html">draw</a></span><span class="op">(</span><span class="fu"><a href="../reference/grob.html">points_grob</a></span><span class="op">(</span></span>
 <span>    x    <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.25</span>, <span class="fl">0.5</span>, <span class="fl">0.75</span><span class="op">)</span>,</span>
@@ -177,13 +219,14 @@ colours is three <code><a href="../reference/grob.html">points_grob()</a></code>
 <code>key</code>/<code>meta</code> machinery is per element
 regardless.)</p>
 </div>
+</div>
 <div class="section level2">
 <h2 id="scene_model-the-per-element-table">
 <code>scene_model()</code>: the per-element table<a class="anchor" aria-label="anchor" href="#scene_model-the-per-element-table"></a>
 </h2>
 <p><code><a href="../reference/scene_model.html">scene_model()</a></code> walks the rendered scene and returns a
 list of <strong>two data frames</strong>.</p>
-<div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">m</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/scene_model.html">scene_model</a></span><span class="op">(</span><span class="va">s</span><span class="op">)</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/base/names.html" class="external-link">names</a></span><span class="op">(</span><span class="va">m</span><span class="op">)</span></span>
 <span><span class="co">#&gt; [1] "elements" "panels"</span></span></code></pre></div>
@@ -193,7 +236,7 @@ list of <strong>two data frames</strong>.</p>
 </h3>
 <p>One row per drawn element of the <em>keyable</em> marks, <strong>in
 paint order</strong>:</p>
-<div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/utils/str.html" class="external-link">str</a></span><span class="op">(</span><span class="va">m</span><span class="op">$</span><span class="va">elements</span><span class="op">)</span></span>
 <span><span class="co">#&gt; 'data.frame':    3 obs. of  14 variables:</span></span>
 <span><span class="co">#&gt;  $ key  : chr  "a" "b" "c"</span></span>
@@ -253,7 +296,8 @@ one)</td>
 <tr class="odd">
 <td><code>panel</code></td>
 <td>character</td>
-<td>the enclosing named panel (<code>NA</code> if none)</td>
+<td>the innermost enclosing named viewport (<code>NA</code> if
+none)</td>
 </tr>
 <tr class="even">
 <td><code>x0, y0, x1, y1</code></td>
@@ -279,11 +323,13 @@ one)</td>
 </tr>
 </tbody>
 </table>
-<p>The <code>mark</code> vocabulary is a closed set: <code>rect</code>,
-<code>point</code>, <code>circle</code>, <code>hexagon</code>,
-<code>sector</code>, <code>segment</code>, <code>path</code>,
-<code>line</code>, <code>polygon</code>.</p>
-<p>Two families produce these rows:</p>
+<p>The <code>mark</code> vocabulary is these eleven values, and only
+these: <code>rect</code>, <code>point</code>, <code>circle</code>,
+<code>hexagon</code>, <code>sector</code>, <code>segment</code>,
+<code>roundrect</code>, <code>text</code>, <code>path</code>,
+<code>line</code>, <code>polygon</code>. Adding one is a contract change
+(see the end of this article).</p>
+<p>Three families produce these rows:</p>
 <ul>
 <li>
 <strong>Batched marks</strong> (<code>rect</code>,
@@ -292,23 +338,31 @@ one)</td>
 element, always</strong>, even when unkeyed (then <code>key</code> is
 <code>NA</code>).</li>
 <li>
+<strong>Keyed-only batches</strong> (<code>roundrect</code>,
+<code>text</code>) emit <strong>one row per keyed element</strong>. A
+grob drawn without <code>key</code> contributes no rows at all, and
+within a keyed grob an element whose key is <code>NA</code> or
+<code>""</code> is skipped. This keeps a plot’s unkeyed axis labels and
+strip backgrounds out of the table.</li>
+<li>
 <strong>Single-shape marks</strong> (<code>path</code>,
 <code>line</code>, <code>polygon</code>) emit <strong>one row per grob,
 and only when keyed</strong>. An unkeyed path/line/polygon is
 geometry-only and does not appear in the table. (A single
 <code>sf</code> feature, one polygon or linestring, is exactly one such
-element.) These constructors do not take a <code>key</code> argument;
-the grammar keys them by setting the grob’s <code>keys</code> slot,
-which is how a single sf feature becomes addressable.</li>
+element.) Key one with the constructor’s <code>key</code> argument
+(setting the grob’s <code>@keys</code> slot is equivalent).</li>
 </ul>
 </div>
 <div class="section level3">
 <h3 id="panels">
 <code>panels</code><a class="anchor" aria-label="anchor" href="#panels"></a>
 </h3>
-<p>One row per <strong>named panel</strong> (a named viewport becomes an
-addressable panel):</p>
-<div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
+<p>One row per <strong>named panel</strong> that encloses at least one
+row of <code>elements</code> (a named viewport becomes an addressable
+panel; one with no elements in the table has no row). An element’s
+<code>panel</code> is its innermost enclosing named viewport.</p>
+<div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/utils/str.html" class="external-link">str</a></span><span class="op">(</span><span class="va">m</span><span class="op">$</span><span class="va">panels</span><span class="op">)</span></span>
 <span><span class="co">#&gt; 'data.frame':    0 obs. of  14 variables:</span></span>
 <span><span class="co">#&gt;  $ name     : chr </span></span>
@@ -475,7 +529,7 @@ by the same walk that renders the scene, so a segment drawn with an
 <code>offset</code> or end caps is reported where it lands.
 <code><a href="../reference/vl_nearest.html">vl_nearest()</a></code> measures against exactly this geometry, so a
 client that follows the rules below reproduces it.</p>
-<div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">holed</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/vl_scene.html">vl_scene</a></span><span class="op">(</span><span class="fl">4</span>, <span class="fl">3</span>, dpi <span class="op">=</span> <span class="fl">100</span><span class="op">)</span> <span class="op">|&gt;</span></span>
 <span>  <span class="fu"><a href="../reference/vl_scene.html">draw</a></span><span class="op">(</span><span class="fu"><a href="../reference/grob.html">path_grob</a></span><span class="op">(</span></span>
 <span>    x <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.1</span>, <span class="fl">0.9</span>, <span class="fl">0.9</span>, <span class="fl">0.1</span>, <span class="fl">0.4</span>, <span class="fl">0.6</span>, <span class="fl">0.6</span>, <span class="fl">0.4</span><span class="op">)</span>,</span>
@@ -519,8 +573,8 @@ client that follows the rules below reproduces it.</p>
 <code>segment</code>, <code>line</code>, <code>polygon</code>,
 <code>path</code>, <code>hexagon</code>, <code>sector</code>,
 <code>point</code>, <code>rect</code>, <code>roundrect</code>,
-<code>text</code>
-</td>
+<code>text</code> (a <code><a href="../reference/grob.html">circle_grob()</a></code> element reports as
+<code>point</code>)</td>
 </tr>
 <tr class="odd">
 <td><code>vertex</code></td>
@@ -558,15 +612,30 @@ break.</li>
 smaller side of its <code><a href="../reference/scene_model.html">scene_model()</a></code> box.</li>
 <li>
 <code>rect</code> and <code>roundrect</code> are two opposite box
-corners.</li>
-<li>Everything else is closed rings. <strong>Containment is decided
-once, across all of an element’s rings, under its
-<code>rule</code></strong>: even-odd parity of the edge crossings, or a
-nonzero sum of the rings’ winding numbers. Inside is distance zero.
-Outside – and a point in a hole is outside – the distance is to the
-nearest edge of any ring. Rings are never joined: each closes on
-itself.</li>
+corners, filled as <code>"nonzero"</code>.</li>
+<li>Everything else (<code>polygon</code>, <code>path</code>,
+<code>hexagon</code>, <code>sector</code>, and a <code>text</code>
+label’s box) is closed rings. <strong>Containment is decided once,
+across all of an element’s rings, under its <code>rule</code></strong>:
+even-odd parity of the edge crossings, or a nonzero sum of the rings’
+winding numbers. Inside is distance zero. Outside – and a point in a
+hole is outside – the distance is to the nearest edge of any ring. Rings
+are never joined: each closes on itself.</li>
 </ul>
+<p><code>rule</code> comes from the grob:
+<code>path_grob(rule = "evenodd")</code> reports <code>"evenodd"</code>,
+and <code>rule = "winding"</code> (the default) and every other filled
+kind report <code>"nonzero"</code>. <code><a href="../reference/vl_nearest.html">vl_nearest()</a></code> and
+<code><a href="../reference/hit_test.html">hit_test()</a></code> both decide containment by that rule, so a click
+in the hole of an even-odd path is outside it, and
+<code><a href="../reference/hit_test.html">hit_test()</a></code> falls through to whatever is drawn beneath:</p>
+<div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="../reference/vl_nearest.html">vl_nearest</a></span><span class="op">(</span><span class="va">holed</span>, <span class="fl">0.5</span>, <span class="fl">0.5</span><span class="op">)</span><span class="op">$</span><span class="va">dist</span> <span class="co"># in the hole: outside, so a positive distance</span></span>
+<span><span class="co">#&gt; [1] 30</span></span>
+<span><span class="fu"><a href="../reference/vl_nearest.html">vl_nearest</a></span><span class="op">(</span><span class="va">holed</span>, <span class="fl">0.2</span>, <span class="fl">0.5</span><span class="op">)</span><span class="op">$</span><span class="va">dist</span> <span class="co"># in the ring: inside</span></span>
+<span><span class="co">#&gt; [1] 0</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/base/NULL.html" class="external-link">is.null</a></span><span class="op">(</span><span class="fu"><a href="../reference/hit_test.html">hit_test</a></span><span class="op">(</span><span class="va">holed</span>, <span class="fl">0.5</span>, <span class="fl">0.5</span><span class="op">)</span><span class="op">)</span> <span class="co"># nothing under the hole</span></span>
+<span><span class="co">#&gt; [1] TRUE</span></span></code></pre></div>
 </div>
 <div class="section level2">
 <h2 id="scene_svg-the-emitted-attributes">
@@ -575,13 +644,12 @@ itself.</li>
 <p><code><a href="../reference/scene_svg.html">scene_svg()</a></code> returns the same scene as an SVG string.
 Interactivity rides on SVG attributes; the raster and PDF backends
 ignore all of them.</p>
-<div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">svg</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/scene_svg.html">scene_svg</a></span><span class="op">(</span><span class="va">s</span><span class="op">)</span></span>
 <span><span class="co"># the data-key attributes on the three points:</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/base/regmatches.html" class="external-link">regmatches</a></span><span class="op">(</span><span class="va">svg</span>, <span class="fu"><a href="https://rdrr.io/r/base/grep.html" class="external-link">gregexpr</a></span><span class="op">(</span><span class="st">'data-key="[^"]*"'</span>, <span class="va">svg</span><span class="op">)</span><span class="op">)</span><span class="op">[[</span><span class="fl">1</span><span class="op">]</span><span class="op">]</span></span>
 <span><span class="co">#&gt; [1] "data-key=\"a\"" "data-key=\"b\"" "data-key=\"c\""</span></span></code></pre></div>
-<p>Four attribute mechanisms, each emitted only when its source is
-set:</p>
+<p>Six attributes, each emitted only when its source is set:</p>
 <table class="table">
 <colgroup>
 <col width="25%">
@@ -602,7 +670,8 @@ set:</p>
 </td>
 <td>per element</td>
 <td>
-<code>points_grob(key=)</code> etc.</td>
+<code>points_grob(key=)</code> etc. (every constructor that takes
+<code>key</code>)</td>
 </tr>
 <tr class="even">
 <td><code>data-vellum-id</code></td>
@@ -729,7 +798,12 @@ types,</li>
 <code>kind</code> and <code>rule</code> vocabularies, or the containment
 rule above,</li>
 <li>the <code>mark</code> vocabulary,</li>
-<li>which marks are keyable, or the batched-vs-single-shape rule,</li>
+<li>which marks are keyable, or the batched / keyed-only / single-shape
+rules,</li>
+<li>the <code>key</code>/<code>meta</code> length rule (1 or the element
+count),</li>
+<li>the default reading of bare numbers
+(<code>default_units = "npc"</code>),</li>
 <li>the SVG attribute names, or when they are emitted,</li>
 <li>the reserved <code>meta</code> key vocabulary. ```</li>
 </ul>
