@@ -153,6 +153,18 @@ impl Scene {
         stroke: Robj,
     ) -> i32 {
         let placement = if lrow >= 0 && lcol >= 0 {
+            // Check the cell against the parent's layout here, on the R thread.
+            // Placement is resolved lazily at render time, which for an animation
+            // runs on worker threads where raising an R error is not safe.
+            match self.viewports[self.current].layout.as_ref() {
+                None => throw_r_error(
+                    "a viewport placed by row/col must be inside a viewport that has a layout",
+                ),
+                Some(l) if lrow as usize >= l.heights.len() || lcol as usize >= l.widths.len() => {
+                    throw_r_error("layout row/col is out of range for the parent layout's tracks")
+                }
+                Some(_) => {}
+            }
             Placement::Cell {
                 row: lrow as usize,
                 col: lcol as usize,
@@ -1520,6 +1532,7 @@ impl Scene {
             }
             return Vec::new();
         }
+        check_raster_area(self.w_px, self.h_px);
         let mut b = RasterBackend::new(self.w_px, self.h_px, self.bg);
         b.set_bitmap_text(self.want_bitmap_text());
         let warnings = self.render_to(&mut b);
@@ -1544,6 +1557,7 @@ impl Scene {
                 Vec::new(),
             )
         } else {
+            check_raster_area(self.w_px, self.h_px);
             let mut b = RasterBackend::new(self.w_px, self.h_px, self.bg);
             b.set_bitmap_text(self.want_bitmap_text());
             let warnings = self.render_to(&mut b);
@@ -1633,15 +1647,6 @@ impl Scene {
         self.build_resolved_geometry()
     }
 
-    /// Per-element device-px bounding boxes for the batched mark nodes (the ones
-    /// that can carry data keys): rects, circles, points/markers, hexagons,
-    /// sectors, segments. Rows are emitted in paint order (the compiler's DFS),
-    /// one per drawn element — the same order and count the R grammar enumerates,
-    /// so `scene_model()` zips this with R-side semantics positionally (and
-    /// cross-checks the `key` column). Columns: `key` ("" = none), enclosing
-    /// `panel` ("" = none), and device-px bbox `x0,y0,x1,y1` (y-down). Sector boxes
-    /// use the outer-radius disk and hexagon boxes the circumscribed extent — safe
-    /// over-approximations sufficient for a spatial index.
     /// Per-node facts a linter needs, in paint order: one row per drawn node
     /// (not per element -- the rules that matter are about a whole mark).
     ///
@@ -1685,6 +1690,15 @@ impl Scene {
         self.build_font_table()
     }
 
+    /// Per-element device-px bounding boxes for the batched mark nodes (the ones
+    /// that can carry data keys): rects, circles, points/markers, hexagons,
+    /// sectors, segments. Rows are emitted in paint order (the compiler's DFS),
+    /// one per drawn element — the same order and count the R grammar enumerates,
+    /// so `scene_model()` zips this with R-side semantics positionally (and
+    /// cross-checks the `key` column). Columns: `key` ("" = none), enclosing
+    /// `panel` ("" = none), and device-px bbox `x0,y0,x1,y1` (y-down). Each box is
+    /// the extent of the element's recorded outline, so a sector's box is its
+    /// wedge (centre included for a pie slice), not the outer-radius disc.
     fn element_table(&self) -> List {
         self.build_element_table()
     }
@@ -1823,6 +1837,25 @@ fn cap_scalar(value: &[f64], code: &[i32]) -> Option<(f64, Unit)> {
                 .unwrap_or(Unit::plain(UnitKind::Mm)),
         )
     })
+}
+
+/// Most pixels a raster render may hold: 2^28 (16384 x 16384), a 1 GiB RGBA
+/// page. `px_dim` caps each side at 30000 px, which still allows a 3.6 GB page,
+/// and every isolated group, mask or blur layer allocates another page-sized
+/// pixmap on top. An allocation that size can fail, and a failed allocation
+/// aborts the R session rather than raising an error, so refuse it up front.
+/// Vector output (SVG, PDF) allocates no page and is not limited.
+pub(super) const MAX_RASTER_PX: u64 = 1 << 28;
+
+/// Throw an R error when a `w` x `h` raster exceeds [`MAX_RASTER_PX`]. Call only
+/// on the R main thread (an FFI entry point), never from a render worker.
+pub(super) fn check_raster_area(w: u32, h: u32) {
+    if w as u64 * h as u64 > MAX_RASTER_PX {
+        throw_r_error(format!(
+            "raster too large: {w} x {h} px exceeds the {MAX_RASTER_PX} px limit; \
+             lower the dpi or size, or render to SVG/PDF"
+        ));
+    }
 }
 
 /// Convert a (finite, positive) dimension in pixels to a `u32`, at least 1 and

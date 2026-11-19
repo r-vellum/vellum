@@ -72,6 +72,7 @@ impl Scene {
 
     pub(super) fn cached_pixmap(&self) -> Ref<'_, Pixmap> {
         if self.raster_cache.borrow().is_none() {
+            super::ffi::check_raster_area(self.w_px, self.h_px);
             let mut b = RasterBackend::new(self.w_px, self.h_px, self.bg);
             b.set_bitmap_text(self.want_bitmap_text());
             self.render_to(&mut b);

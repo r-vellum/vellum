@@ -1,5 +1,30 @@
 # vellum 0.7.2.9000 (development version)
 
+* **Fix: inputs that crashed or hung the renderer now draw or fail with a clear
+  error.**
+  - A sketched `sector_grob()` with a gradient, pattern or hatch fill panicked
+    with "index out of bounds"; it now draws with that paint.
+  - Tweening a size-driven `hexagon_grob()` into a `width`/`height` one in
+    `vl_render_animation()` panicked; it now animates.
+  - A layout cell out of range (`vl_viewport(row = 5)` in a 2-row layout) is
+    rejected when the scene compiles. Before, the check ran at render time,
+    where for an animation it raised an R error from a worker thread and could
+    crash the session.
+  - `vl_render_animation()` refuses keyframes of different pixel sizes. Before,
+    a GIF panicked on frames of the wrong length.
+  - A sector sweeping more than a full turn is drawn, boxed and picked as the
+    full disc. Before, a sweep of thousands of turns became a star polygon.
+  - Raster renders over 2^28 pixels (16384 x 16384) error instead of
+    attempting multi-gigabyte allocations, which abort R when they fail. SVG
+    and PDF output is not limited.
+  - `datashade()` grids over 2^27 cells, `vl_empty_region()` grids over 2^24
+    cells, and PNG images over 2^27 pixels are refused for the same reason.
+  - A hachure, zigzag or dots sketch fill on a huge shape no longer hangs, and
+    a huge or infinite `blur` radius no longer hangs or overflows.
+
+* **Fix: PNG files read by `raster_grob()` keep their colours when they use a
+  palette or fewer than 8 bits per sample.** They came back as grey palette
+  indices or packed bytes.
 
 # vellum 0.7.2
 

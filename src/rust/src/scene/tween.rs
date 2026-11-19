@@ -1145,8 +1145,8 @@ fn render_animation(
         .collect();
 
     for (i, &s) in seg.iter().enumerate() {
-        let s = s as usize;
-        if s + 1 >= k {
+        // A negative i32 cast to usize wraps to usize::MAX, and `s + 1` back to 0.
+        if s < 0 || s as usize + 1 >= k {
             throw_r_error(&format!(
                 "render_animation(): frame {i} references keyframe pair ({s},{}) but only {k} keyframes were given",
                 s + 1
@@ -1155,6 +1155,26 @@ fn render_animation(
     }
 
     let (w, h) = (kf[0].w_px, kf[0].h_px);
+    // Every frame is drawn at its left keyframe's size, but the output is sized
+    // from the first: a later keyframe of another size fed the GIF encoder a frame
+    // of the wrong length (a panic in the dither and the frame builder).
+    if let Some((i, s)) = kf
+        .iter()
+        .enumerate()
+        .find(|(_, s)| (s.w_px, s.h_px) != (w, h))
+    {
+        throw_r_error(format!(
+            "render_animation(): all keyframes must have the same pixel size; keyframe 1 is \
+             {w} x {h} px but keyframe {} is {} x {} px",
+            i + 1,
+            s.w_px,
+            s.h_px
+        ));
+    }
+    if format != "svg" {
+        // Frames rasterise on worker threads, which must not raise an R error.
+        super::ffi::check_raster_area(w, h);
+    }
 
     // Animated SVG takes its own path: it needs the tweened *scenes*, not
     // rasterised pixmaps, so it cannot go through `Sink`.

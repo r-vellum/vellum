@@ -148,7 +148,22 @@ fn elem_count(node: &Node) -> usize {
         Node::Circles { x, y, r, .. } => min(&[x.len(), y.len(), r.len()]),
         Node::Markers { x, y, size, .. } => min(&[x.len(), y.len(), size.len()]),
         Node::Hexagons { x, y, .. } => min(&[x.len(), y.len()]),
-        Node::Sectors { x, y, r0, r1, .. } => min(&[x.len(), y.len(), r0.len(), r1.len()]),
+        Node::Sectors {
+            x,
+            y,
+            r0,
+            r1,
+            theta0,
+            theta1,
+            ..
+        } => min(&[
+            x.len(),
+            y.len(),
+            r0.len(),
+            r1.len(),
+            theta0.len(),
+            theta1.len(),
+        ]),
         Node::Segments { x0, y0, x1, y1, .. } => min(&[x0.len(), y0.len(), x1.len(), y1.len()]),
         Node::Text { key, .. }
         | Node::RoundRect { key, .. }

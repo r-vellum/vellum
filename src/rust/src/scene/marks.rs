@@ -781,11 +781,20 @@ pub(super) fn draw_hexagons<B: RenderBackend>(
     // `fill` is empty when the shared `gp` paint applies to every
     // element (a gradient/pattern/hatch), so it must not bound the
     // element count -- that would draw nothing at all.
-    let n = [x.len(), y.len(), xu.len(), yu.len()]
-        .into_iter()
-        .min()
-        .unwrap_or(0);
     let nonreg = !w.is_empty();
+    // Every array the loop indexes bounds it: the size-driven path reads
+    // `size`/`su`, the width/height path `w`/`h`/`wu`/`hu`. The R compiler
+    // recycles them all to one length, but a tween frame can mix keyframes
+    // (geometry and size snap on different easings), so they may disagree.
+    let lens = [x.len(), y.len(), xu.len(), yu.len()];
+    let n = if nonreg {
+        lens.into_iter()
+            .chain([w.len(), h.len(), wu.len(), hu.len()])
+            .min()
+    } else {
+        lens.into_iter().chain([size.len(), su.len()]).min()
+    }
+    .unwrap_or(0);
     let style = stroke_style(gp, vp);
     let stroke = gp.col.filter(|_| style.width > 0.0);
     for i in 0..n {
@@ -896,7 +905,11 @@ pub(super) fn draw_sectors<B: RenderBackend>(
                 continue;
             }
             let mut gp2 = gp.clone();
-            gp2.fill = Some(Paint::Solid(fill[i]));
+            // `fill` is empty when one shared gradient/pattern/hatch paints every
+            // wedge (see the crisp path below); fall back to that paint.
+            if let Some(c) = fill.get(i) {
+                gp2.fill = Some(Paint::Solid(*c));
+            }
             let want_fill = (hi - lo).abs() > 0.5;
             let mut oi = o.clone();
             oi.seed = o.seed.wrapping_add(i as u64);

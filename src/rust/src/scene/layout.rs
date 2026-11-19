@@ -282,31 +282,34 @@ impl Scene {
                 rowspan,
                 colspan,
             } => {
-                let layout = match self.viewports[node.parent.unwrap()].layout.as_ref() {
-                    Some(l) => l,
-                    None => throw_r_error(
-                        "a viewport placed by row/col must be inside a viewport that has a layout",
-                    ),
-                };
-                if row >= layout.heights.len() || col >= layout.widths.len() {
-                    throw_r_error("layout row/col is out of range for the parent layout's tracks");
+                // `push_viewport` rejects a cell with no layout or out of range,
+                // on the R thread. This runs at render time -- on rayon workers
+                // for an animation -- where an R error would longjmp across a
+                // foreign thread, so nothing here throws: a cell that still slips
+                // through (a raw FFI caller) with no layout is an empty box at the
+                // parent's origin, and one out of range clamps to the last track.
+                match self.viewports[node.parent.unwrap()].layout.as_ref() {
+                    None => (0.0, 0.0, 0.0, 0.0),
+                    Some(layout) => {
+                        // `respect` may shrink the null axis and center the grid (offsets).
+                        let (xe, xoff, ye, yoff) =
+                            solve_layout(layout, parent.vp.w, parent.vp.h, self.dpi);
+                        let cstart = col.min(xe.len().saturating_sub(1));
+                        let cend = (col + colspan).min(xe.len().saturating_sub(1));
+                        let rstart = row.min(ye.len().saturating_sub(1));
+                        let rend = (row + rowspan).min(ye.len().saturating_sub(1));
+                        let x_lo = xe.get(cstart).copied().unwrap_or(0.0);
+                        let x_hi = xe.get(cend).copied().unwrap_or(x_lo);
+                        let y_lo = ye.get(rstart).copied().unwrap_or(0.0);
+                        let y_hi = ye.get(rend).copied().unwrap_or(y_lo);
+                        (
+                            xoff + x_lo,
+                            yoff + y_lo,
+                            (x_hi - x_lo).max(0.0),
+                            (y_hi - y_lo).max(0.0),
+                        )
+                    }
                 }
-                // `respect` may shrink the null axis and center the grid (offsets).
-                let (xe, xoff, ye, yoff) = solve_layout(layout, parent.vp.w, parent.vp.h, self.dpi);
-                let cstart = col.min(xe.len().saturating_sub(1));
-                let cend = (col + colspan).min(xe.len().saturating_sub(1));
-                let rstart = row.min(ye.len().saturating_sub(1));
-                let rend = (row + rowspan).min(ye.len().saturating_sub(1));
-                let x_lo = xe.get(cstart).copied().unwrap_or(0.0);
-                let x_hi = xe.get(cend).copied().unwrap_or(x_lo);
-                let y_lo = ye.get(rstart).copied().unwrap_or(0.0);
-                let y_hi = ye.get(rend).copied().unwrap_or(y_lo);
-                (
-                    xoff + x_lo,
-                    yoff + y_lo,
-                    (x_hi - x_lo).max(0.0),
-                    (y_hi - y_lo).max(0.0),
-                )
             }
         };
 
