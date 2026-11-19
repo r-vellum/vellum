@@ -21,7 +21,10 @@ hit_test(scene, x, y, units = c("npc", "px"))
 - scene:
 
   A
-  [`vl_scene()`](https://r-vellum.github.io/vellum/reference/vl_scene.md).
+  [`vl_scene()`](https://r-vellum.github.io/vellum/reference/vl_scene.md)
+  (or anything with an
+  [`as_vellum_scene()`](https://r-vellum.github.io/vellum/reference/as_vellum_scene.md)
+  method).
 
 - x, y:
 

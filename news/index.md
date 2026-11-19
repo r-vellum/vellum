@@ -2,6 +2,19 @@
 
 ## vellum 0.7.2.9000 (development version)
 
+- [`hit_test()`](https://r-vellum.github.io/vellum/reference/hit_test.md),
+  [`node_names()`](https://r-vellum.github.io/vellum/reference/node_names.md),
+  [`get_node()`](https://r-vellum.github.io/vellum/reference/node_names.md)
+  and
+  [`edit_node()`](https://r-vellum.github.io/vellum/reference/node_names.md)
+  now coerce their `scene` through
+  [`as_vellum_scene()`](https://r-vellum.github.io/vellum/reference/as_vellum_scene.md),
+  like
+  [`render()`](https://r-vellum.github.io/vellum/reference/vl_scene.md)
+  and the other scene functions, so they accept any object with an
+  [`as_vellum_scene()`](https://r-vellum.github.io/vellum/reference/as_vellum_scene.md)
+  method.
+
 ## vellum 0.7.2
 
 ### Strokes
