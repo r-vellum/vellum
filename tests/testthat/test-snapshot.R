@@ -4,6 +4,10 @@
 # geometry check below and in test-text.R. Skipped on CRAN/CI since pixel-exact
 # PNG bytes aren't guaranteed across platforms/zlib — review locally with
 # testthat::snapshot_review().
+#
+# Each test announces its files before it skips. Otherwise testthat treats the
+# files of a skipped test as unused and deletes them, e.g. when the suite runs
+# with testthat::test_dir() against an installed build. Use devtools::test().
 
 snap <- function(scene, name) {
   path <- file.path(tempdir(), name)
@@ -11,7 +15,15 @@ snap <- function(scene, name) {
   expect_snapshot_file(path, name)
 }
 
+announce_snaps <- function(names) {
+  for (name in names) announce_snapshot_file(name = name)
+}
+
 test_that("shape rendering is byte-stable", {
+  announce_snaps(c(
+    "markers.png", "gradients.png", "gradients-oklab.png", "pattern.png",
+    "mask.png", "clip-polygon.png", "curves-arrows.png"
+  ))
   skip_on_cran()
 
   snap(
@@ -133,6 +145,7 @@ test_that("shape rendering is byte-stable", {
 })
 
 test_that("stroke outlines are byte-stable", {
+  announce_snaps(c("stroke-outline.png", "stroke-taper.png"))
   skip_on_cran()
 
   # The baseline for the plain (constant-width) expansion is the byte-identity
