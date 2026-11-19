@@ -227,6 +227,9 @@ and device-pixel boxes, picking by point, and editing by node name.
   : A serializable, per-element model of a scene
 - [`vl_nearest()`](https://r-vellum.github.io/vellum/reference/vl_nearest.md)
   : Find the marks nearest a point, by true geometry
+- [`vl_brush()`](https://r-vellum.github.io/vellum/reference/vl_brush.md)
+  [`vl_lasso()`](https://r-vellum.github.io/vellum/reference/vl_brush.md)
+  : Select the marks in a rectangle or a lasso, by true geometry
 - [`element_geometry()`](https://r-vellum.github.io/vellum/reference/element_geometry.md)
   : The true geometry of a scene's addressable elements
 

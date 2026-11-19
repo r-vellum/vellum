@@ -96,5 +96,5 @@ s <- vl_scene(4, 3, dpi = 96, bg = "white") |>
 # but its geometry is far away.
 vl_nearest(s, 0.8, 0.2)
 #>      key  kind dist
-#> 2 corner point    0
+#> 1 corner point    0
 ```

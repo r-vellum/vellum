@@ -379,16 +379,7 @@ R joins this with the viewport names it recorded during compilation.</p>
 
 <div class="section">
 <h3 id="method-lint-table">Method <code>lint_table</code><a class="anchor" aria-label="anchor" href="#method-lint-table"></a></h3>
-<p>Per-element device-px bounding boxes for the batched mark nodes (the ones
-that can carry data keys): rects, circles, points/markers, hexagons,
-sectors, segments. Rows are emitted in paint order (the compiler's DFS),
-one per drawn element — the same order and count the R grammar enumerates,
-so <code><a href="scene_model.html">scene_model()</a></code> zips this with R-side semantics positionally (and
-cross-checks the <code>key</code> column). Columns: <code>key</code> ("" = none), enclosing
-<code>panel</code> ("" = none), and device-px bbox <code>x0,y0,x1,y1</code> (y-down). Sector boxes
-use the outer-radius disk and hexagon boxes the circumscribed extent — safe
-over-approximations sufficient for a spatial index.
-Per-node facts a linter needs, in paint order: one row per drawn node
+<p>Per-node facts a linter needs, in paint order: one row per drawn node
 (not per element – the rules that matter are about a whole mark).</p>
 <p>Everything here is measured from the <em>resolved</em> scene, which is the point:
 a linter built on top of the drawing code can say "this text is 4 px tall"
@@ -417,12 +408,47 @@ distance zero, so clicking the middle of a choropleth region hits it.</p>
 </div>
 
 <div class="section">
+<h3 id="method-nearest-table">Method <code>nearest_table</code><a class="anchor" aria-label="anchor" href="#method-nearest-table"></a></h3>
+<p>The <code>n</code> keyed elements nearest device px <code>(px, py)</code> within <code>max_dist</code>
+px: <code>key</code>, <code>kind</code>, <code>dist</code>, nearest first, ties in paint order. Answers
+from a uniform-grid spatial index built once per scene (and dropped when
+it is drawn into), so a hover-rate caller does not rebuild the pick
+table per probe. Same rows as <code>pick_table()</code> sorted by <code>dist</code>.</p>
+</div>
+
+<div class="section">
+<h3 id="method-brush-table">Method <code>brush_table</code><a class="anchor" aria-label="anchor" href="#method-brush-table"></a></h3>
+<p>The keyed elements meeting the device-px rectangle with corners
+<code>(x0, y0)</code>, <code>(x1, y1)</code>: <code>key</code>, <code>kind</code>, in paint order. <code>mode</code> is
+<code>"intersect"</code>, <code>"contain"</code> or <code>"centre"</code> (see <code>spatial::Region</code>).</p>
+</div>
+
+<div class="section">
+<h3 id="method-lasso-table">Method <code>lasso_table</code><a class="anchor" aria-label="anchor" href="#method-lasso-table"></a></h3>
+<p>The keyed elements meeting the device-px polygon <code>(xs, ys)</code> (closed
+implicitly, even-odd rule): <code>key</code>, <code>kind</code>, in paint order.</p>
+</div>
+
+<div class="section">
 <h3 id="method-font-table">Method <code>font_table</code><a class="anchor" aria-label="anchor" href="#method-font-table"></a></h3>
 <p>The font files this scene's text actually resolved to.</p>
 <p>Read off the shaped glyphs rather than re-resolved from family names, so
 it reports what was <em>used</em>, not what would be picked if asked again.
 Returns <code>path</code>, <code>index</code> (face within a collection) and <code>glyphs</code> (how many
 glyphs came from that face).</p>
+</div>
+
+<div class="section">
+<h3 id="method-element-table">Method <code>element_table</code><a class="anchor" aria-label="anchor" href="#method-element-table"></a></h3>
+<p>Per-element device-px bounding boxes for the batched mark nodes (the ones
+that can carry data keys): rects, circles, points/markers, hexagons,
+sectors, segments. Rows are emitted in paint order (the compiler's DFS),
+one per drawn element — the same order and count the R grammar enumerates,
+so <code><a href="scene_model.html">scene_model()</a></code> zips this with R-side semantics positionally (and
+cross-checks the <code>key</code> column). Columns: <code>key</code> ("" = none), enclosing
+<code>panel</code> ("" = none), and device-px bbox <code>x0,y0,x1,y1</code> (y-down). Each box is
+the extent of the element's recorded outline, so a sector's box is its
+wedge (centre included for a pie slice), not the outer-radius disc.</p>
 </div>
 
 <div class="section">

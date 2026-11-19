@@ -263,8 +263,8 @@ demo <- vl_scene(4, 3, bg = "white") |>
 # This probe is INSIDE the diagonal's bounding box, and far from the diagonal.
 vl_nearest(demo, 0.82, 0.18, n = 2)
 #>        key    kind    dist
-#> 2   corner   point   0.000
-#> 1 diagonal segment 147.456
+#> 1   corner   point   0.000
+#> 2 diagonal segment 147.456
 ```
 
 Distances are to the real shape: perpendicular to a segment, to the disc

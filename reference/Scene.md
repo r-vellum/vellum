@@ -280,19 +280,8 @@ names it recorded during compilation.
 
 ### Method `lint_table`
 
-Per-element device-px bounding boxes for the batched mark nodes (the
-ones that can carry data keys): rects, circles, points/markers,
-hexagons, sectors, segments. Rows are emitted in paint order (the
-compiler's DFS), one per drawn element — the same order and count the R
-grammar enumerates, so
-[`scene_model()`](https://r-vellum.github.io/vellum/reference/scene_model.md)
-zips this with R-side semantics positionally (and cross-checks the `key`
-column). Columns: `key` ("" = none), enclosing `panel` ("" = none), and
-device-px bbox `x0,y0,x1,y1` (y-down). Sector boxes use the outer-radius
-disk and hexagon boxes the circumscribed extent — safe
-over-approximations sufficient for a spatial index. Per-node facts a
-linter needs, in paint order: one row per drawn node (not per element –
-the rules that matter are about a whole mark).
+Per-node facts a linter needs, in paint order: one row per drawn node
+(not per element – the rules that matter are about a whole mark).
 
 Everything here is measured from the *resolved* scene, which is the
 point: a linter built on top of the drawing code can say "this text is 4
@@ -322,6 +311,25 @@ can do it exactly rather than asking per event.
 Filled shapes contain their interior — a point inside a polygon is at
 distance zero, so clicking the middle of a choropleth region hits it.
 
+### Method `nearest_table`
+
+The `n` keyed elements nearest device px `(px, py)` within `max_dist`
+px: `key`, `kind`, `dist`, nearest first, ties in paint order. Answers
+from a uniform-grid spatial index built once per scene (and dropped when
+it is drawn into), so a hover-rate caller does not rebuild the pick
+table per probe. Same rows as `pick_table()` sorted by `dist`.
+
+### Method `brush_table`
+
+The keyed elements meeting the device-px rectangle with corners
+`(x0, y0)`, `(x1, y1)`: `key`, `kind`, in paint order. `mode` is
+`"intersect"`, `"contain"` or `"centre"` (see `spatial::Region`).
+
+### Method `lasso_table`
+
+The keyed elements meeting the device-px polygon `(xs, ys)` (closed
+implicitly, even-odd rule): `key`, `kind`, in paint order.
+
 ### Method `font_table`
 
 The font files this scene's text actually resolved to.
@@ -330,6 +338,20 @@ Read off the shaped glyphs rather than re-resolved from family names, so
 it reports what was *used*, not what would be picked if asked again.
 Returns `path`, `index` (face within a collection) and `glyphs` (how
 many glyphs came from that face).
+
+### Method `element_table`
+
+Per-element device-px bounding boxes for the batched mark nodes (the
+ones that can carry data keys): rects, circles, points/markers,
+hexagons, sectors, segments. Rows are emitted in paint order (the
+compiler's DFS), one per drawn element — the same order and count the R
+grammar enumerates, so
+[`scene_model()`](https://r-vellum.github.io/vellum/reference/scene_model.md)
+zips this with R-side semantics positionally (and cross-checks the `key`
+column). Columns: `key` ("" = none), enclosing `panel` ("" = none), and
+device-px bbox `x0,y0,x1,y1` (y-down). Each box is the extent of the
+element's recorded outline, so a sector's box is its wedge (centre
+included for a pie slice), not the outer-radius disc.
 
 ### Method `pixel`
 
