@@ -121,6 +121,18 @@
   label; it failed with "values must be length 1". The label must have length
   1 or the length of `values`.
 
+## Documentation
+
+* `vignette("scene-contract")` matches the code again. The `mark` vocabulary
+  has eleven values, including `roundrect` and `text` (rows only for keyed
+  elements). `lines_grob()`, `polygon_grob()` and `path_grob()` take `key`.
+  `key`/`meta` must have length 1 or the element count. Bare numbers are npc
+  in every constructor. A `circle_grob()` element reports as `point` in
+  `element_geometry()`. `hit_test()` follows the fill rule as `vl_nearest()`
+  does. A panel row appears only for a named viewport that encloses an
+  element. `test-contract.R` pins each of these, and the `scene_model()`
+  help page no longer lists only the batched marks.
+
 # vellum 0.7.2
 
 ## Strokes
