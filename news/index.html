@@ -104,6 +104,30 @@
 </ul></li>
 <li><p><strong>Fix: PNG files read by <code><a href="../reference/grob.html">raster_grob()</a></code> keep their colours when they use a palette or fewer than 8 bits per sample.</strong> They came back as grey palette indices or packed bytes.</p></li>
 </ul></div>
+<div class="section level3">
+<h3 id="input-validation-0-7-2-9000">Input validation<a class="anchor" aria-label="anchor" href="#input-validation-0-7-2-9000"></a></h3>
+<ul><li>
+<p><strong>Bad inputs fail where they are passed, with an error that names the argument and the function.</strong> Before, many reached the Rust backend and came back as bare extendr messages (“Must not be NA.”, “Expected Scalar, got Integers”, “Expected Strings got Doubles”) at render time.</p>
+<ul><li>
+<code><a href="../reference/hit_test.html">hit_test()</a></code> and <code><a href="../reference/vl_nearest.html">vl_nearest()</a></code> check <code>x</code>, <code>y</code>, <code>units</code>, <code>n</code> and <code>max_dist</code>.</li>
+<li>
+<code><a href="../reference/vl_scene.html">vl_scene()</a></code> checks the page size (a single positive absolute length), <code>dpi</code>, <code>bg</code>, <code>xscale</code>/<code>yscale</code>, <code>clip</code>, <code>title</code> and <code>desc</code>; <code><a href="../reference/describe.html">describe()</a></code> checks <code>title</code>/<code>desc</code>.</li>
+<li>
+<code><a href="../reference/vl_viewport.html">vl_viewport()</a></code> checks <code>angle</code>, <code>xscale</code>/<code>yscale</code> (finite, length 2), <code>row</code>/<code>col</code>/<code>rowspan</code>/<code>colspan</code> (whole numbers &gt;= 1), <code>blur</code>, <code>clip</code>, <code>pannable</code> and <code>blend</code> (no longer partially matched).</li>
+<li>
+<code><a href="../reference/vl_arrow.html">vl_arrow()</a></code> checks <code>angle</code> (strictly between 0 and 180), <code>ends</code> and <code>type</code>, and rejects an <code>npc</code>/<code>native</code>, negative or vector <code>length</code> when it is built rather than when the scene renders.</li>
+<li>
+<code><a href="../reference/vl_gpar.html">vl_gpar()</a></code> rejects a negative <code>lwd</code> (<code>0</code> is still fine), a <code>fontsize</code> that is not positive, an unknown <code>fontface</code> such as <code>"heavy"</code>, and an empty or invalid colour vector, which was silently drawn as transparent. A numeric <code>fontface</code> (grid’s <code>1:4</code>) is now accepted and converted to its name.</li>
+<li>
+<code><a href="../reference/grob.html">sector_grob()</a></code> rejects <code>r0 &gt; r1</code> (where both radii share a unit) and negative radii; <code><a href="../reference/grob.html">loop_grob()</a></code> rejects a negative <code>width</code>.</li>
+<li>
+<code><a href="../reference/vl_scene.html">draw()</a></code> accepts only a grob (a gtree is one) or a list of grobs. <code>draw(scene, 1)</code> used to succeed and then fail at render with “Can’t find method for compile(<double>)”.</double></li>
+</ul></li>
+<li><p><strong>Fix: <code>text_grob(width =)</code> and <code>height =</code> take one length.</strong> A vector such as <code>vl_unit(c(10, 50), "mm")</code> silently used its first element; it is now an error. The internal page-size reader behind it validates the same way.</p></li>
+<li><p><strong>Fix: <code><a href="../reference/grob.html">sector_grob()</a></code> and <code><a href="../reference/grob.html">hexagon_grob()</a></code> take a per-element <code>gp$fill</code> vector</strong>, as documented, instead of failing at render. Like <code>fill =</code>, it must have length 1 or the element count.</p></li>
+<li><p><strong>Fix: unary minus negates a compound unit’s offset.</strong> <code>-(vl_unit(1, "native") + vl_unit(2, "mm"))</code> is now <code>-1native-2mm</code>; it was <code>-1native+2mm</code>.</p></li>
+<li><p><strong>Fix: <code>strwidth</code>/<code>strheight</code> units take a vector label.</strong> <code>vl_unit(1:2, "strwidth", data = list(label = c("a", "bb")))</code> measures each label; it failed with “values must be length 1”. The label must have length 1 or the length of <code>values</code>.</p></li>
+</ul></div>
 </div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.7.2" id="vellum-072">vellum 0.7.2<a class="anchor" aria-label="anchor" href="#vellum-072"></a></h2>

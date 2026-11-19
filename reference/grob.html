@@ -508,8 +508,8 @@ a node's mm size at any page size/dpi. Nested loops on one vertex pass growing
 
 
 <dt id="arg-fill">fill<a class="anchor" aria-label="anchor" href="#arg-fill"></a></dt>
-<dd><p>Per-element fill colour(s), recycled to the number of sectors. <code>NULL</code>
-falls back to <code>gp$fill</code>.</p></dd>
+<dd><p>Per-element fill colour(s), length 1 or the number of sectors.
+<code>NULL</code> falls back to <code>gp$fill</code>, which may likewise be a per-sector vector.</p></dd>
 
 
 <dt id="arg-orientation">orientation<a class="anchor" aria-label="anchor" href="#arg-orientation"></a></dt>
@@ -613,7 +613,8 @@ instead. Requires <code>width</code>.</p></dd>
     <div class="section level2">
     <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
     <p><code>sector_grob()</code> draws a batch of annular sectors (pie / donut / rose wedges) in a
-single call. <code>gp$fill</code> recycles per sector; <code>gp$col</code>/<code>lwd</code> give a uniform stroke.</p>
+single call. <code>fill</code> (or a colour vector in <code>gp$fill</code>) recycles per sector;
+<code>gp$col</code>/<code>lwd</code> give a uniform stroke. <code>r0</code> must not exceed <code>r1</code>.</p>
 <p>Passing <code>r0 == r1</code> gives an <strong>open arc</strong> (stroke only). Combined with an
 absolute (<code>mm</code>) radius at a <code>"native"</code> centre and an <code><a href="vl_arrow.html">vl_arrow()</a></code>, the radius is
 resolved to a device length at render (like a marker <code>size</code>), so the arc tracks

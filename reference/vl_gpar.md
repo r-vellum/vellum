@@ -54,10 +54,13 @@ vl_gpar(
   [`linear_gradient()`](https://r-vellum.github.io/vellum/reference/gradients.md)
   /
   [`radial_gradient()`](https://r-vellum.github.io/vellum/reference/gradients.md).
+  A colour (for `col` or `fill`) may be a vector, which batched grobs
+  recycle per element, but not an empty one: use `NA` for no paint or
+  `NULL` to inherit.
 
 - lwd:
 
-  Line width (1 == 1/96 inch).
+  Line width (1 == 1/96 inch), non-negative; `0` draws no stroke.
 
 - alpha:
 
@@ -88,11 +91,13 @@ vl_gpar(
 
 - fontface:
 
-  One of `"plain"`, `"bold"`, `"italic"`, `"bold.italic"`.
+  One of `"plain"`, `"bold"`, `"italic"`, `"bold.italic"` (also
+  `"oblique"`/`"bold.oblique"`), or grid's integer code `1:4` for the
+  first four. Anything else is an error.
 
 - fontsize:
 
-  Font size in points.
+  Font size in points (positive).
 
 - cex:
 

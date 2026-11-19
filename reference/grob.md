@@ -467,8 +467,8 @@ text_grob(
 
 - fill:
 
-  Per-element fill colour(s), recycled to the number of sectors. `NULL`
-  falls back to `gp$fill`.
+  Per-element fill colour(s), length 1 or the number of sectors. `NULL`
+  falls back to `gp$fill`, which may likewise be a per-sector vector.
 
 - orientation:
 
@@ -583,8 +583,9 @@ A grob object.
 ## Details
 
 `sector_grob()` draws a batch of annular sectors (pie / donut / rose
-wedges) in a single call. `gp$fill` recycles per sector; `gp$col`/`lwd`
-give a uniform stroke.
+wedges) in a single call. `fill` (or a colour vector in `gp$fill`)
+recycles per sector; `gp$col`/`lwd` give a uniform stroke. `r0` must not
+exceed `r1`.
 
 Passing `r0 == r1` gives an **open arc** (stroke only). Combined with an
 absolute (`mm`) radius at a `"native"` centre and an

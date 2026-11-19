@@ -104,7 +104,9 @@ axes (e.g. <code>x</code> in <code>"native"</code>, <code>y</code> in <code>"npc
 
 <dt id="arg-data">data<a class="anchor" aria-label="anchor" href="#arg-data"></a></dt>
 <dd><p>Optional list supplying context for derived units:
-<code>label</code>, <code>fontfamily</code>, <code>fontface</code>, <code>fontsize</code>, <code>lineheight</code>.</p></dd>
+<code>label</code>, <code>fontfamily</code>, <code>fontface</code>, <code>fontsize</code>, <code>lineheight</code>. <code>label</code> is
+recycled to the length of <code>values</code> (it must have length 1 or that length),
+so each string unit measures its own label.</p></dd>
 
 
 <dt id="arg-x">x<a class="anchor" aria-label="anchor" href="#arg-x"></a></dt>

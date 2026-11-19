@@ -120,11 +120,13 @@ run a ramp along. A <code><a href="vl_hatch.html">vl_hatch()</a></code> is fill-
 
 <dt id="arg-fill">fill<a class="anchor" aria-label="anchor" href="#arg-fill"></a></dt>
 <dd><p>Fill colour, or a gradient from <code><a href="gradients.html">linear_gradient()</a></code> /
-<code><a href="gradients.html">radial_gradient()</a></code>.</p></dd>
+<code><a href="gradients.html">radial_gradient()</a></code>. A colour (for <code>col</code> or <code>fill</code>) may be a vector, which
+batched grobs recycle per element, but not an empty one: use <code>NA</code> for no
+paint or <code>NULL</code> to inherit.</p></dd>
 
 
 <dt id="arg-lwd">lwd<a class="anchor" aria-label="anchor" href="#arg-lwd"></a></dt>
-<dd><p>Line width (1 == 1/96 inch).</p></dd>
+<dd><p>Line width (1 == 1/96 inch), non-negative; <code>0</code> draws no stroke.</p></dd>
 
 
 <dt id="arg-alpha">alpha<a class="anchor" aria-label="anchor" href="#arg-alpha"></a></dt>
@@ -155,11 +157,13 @@ run a ramp along. A <code><a href="vl_hatch.html">vl_hatch()</a></code> is fill-
 
 
 <dt id="arg-fontface">fontface<a class="anchor" aria-label="anchor" href="#arg-fontface"></a></dt>
-<dd><p>One of <code>"plain"</code>, <code>"bold"</code>, <code>"italic"</code>, <code>"bold.italic"</code>.</p></dd>
+<dd><p>One of <code>"plain"</code>, <code>"bold"</code>, <code>"italic"</code>, <code>"bold.italic"</code>
+(also <code>"oblique"</code>/<code>"bold.oblique"</code>), or grid's integer code <code>1:4</code> for the
+first four. Anything else is an error.</p></dd>
 
 
 <dt id="arg-fontsize">fontsize<a class="anchor" aria-label="anchor" href="#arg-fontsize"></a></dt>
-<dd><p>Font size in points.</p></dd>
+<dd><p>Font size in points (positive).</p></dd>
 
 
 <dt id="arg-cex">cex<a class="anchor" aria-label="anchor" href="#arg-cex"></a></dt>

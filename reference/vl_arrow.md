@@ -20,13 +20,15 @@ vl_arrow(
 
 - angle:
 
-  Half-angle of the head at the tip, in degrees (default 30).
+  Half-angle of the head at the tip, in degrees, strictly between 0 and
+  180 (default 30).
 
 - length:
 
-  Head length as an absolute
+  Head length as a single, non-negative absolute
   [`vl_unit()`](https://r-vellum.github.io/vellum/reference/vl_unit.md)
-  (default `vl_unit(0.25, "in")`).
+  (`mm`/`cm`/`in`/`pt`; a bare number is inches). Default
+  `vl_unit(0.25, "in")`.
 
 - ends:
 

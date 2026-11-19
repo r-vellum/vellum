@@ -92,11 +92,13 @@ segments_grob() (pass as their arrow = argument)."><meta property="og:image" con
 
 
 <dl><dt id="arg-angle">angle<a class="anchor" aria-label="anchor" href="#arg-angle"></a></dt>
-<dd><p>Half-angle of the head at the tip, in degrees (default 30).</p></dd>
+<dd><p>Half-angle of the head at the tip, in degrees, strictly between
+0 and 180 (default 30).</p></dd>
 
 
 <dt id="arg-length">length<a class="anchor" aria-label="anchor" href="#arg-length"></a></dt>
-<dd><p>Head length as an absolute <code><a href="vl_unit.html">vl_unit()</a></code> (default <code>vl_unit(0.25, "in")</code>).</p></dd>
+<dd><p>Head length as a single, non-negative absolute <code><a href="vl_unit.html">vl_unit()</a></code>
+(<code>mm</code>/<code>cm</code>/<code>in</code>/<code>pt</code>; a bare number is inches). Default <code>vl_unit(0.25, "in")</code>.</p></dd>
 
 
 <dt id="arg-ends">ends<a class="anchor" aria-label="anchor" href="#arg-ends"></a></dt>

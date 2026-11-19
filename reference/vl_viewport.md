@@ -61,7 +61,9 @@ grid_layout(
 
 - xscale, yscale:
 
-  Length-2 native coordinate ranges.
+  Length-2 native coordinate ranges of finite numbers (the ends may be
+  reversed to flip an axis). A zero-width range such as `c(1, 1)` has no
+  native extent; it resolves as `c(0, 1)`.
 
 - angle:
 
