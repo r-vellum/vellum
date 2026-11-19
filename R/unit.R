@@ -30,7 +30,9 @@
 #' @param values Numeric vector of magnitudes.
 #' @param units Character vector of unit names, recycled against `values`.
 #' @param data Optional list supplying context for derived units:
-#'   `label`, `fontfamily`, `fontface`, `fontsize`, `lineheight`.
+#'   `label`, `fontfamily`, `fontface`, `fontsize`, `lineheight`. `label` is
+#'   recycled to the length of `values` (it must have length 1 or that length),
+#'   so each string unit measures its own label.
 #' @return A `unit` vector.
 #' @examples
 #' vl_unit(1:3, "native")
@@ -67,6 +69,22 @@ vl_unit <- function(values, units = "npc", data = NULL) {
 
   derived <- !core
   if (any(derived)) {
+    # A string-unit label is recycled to `values` and indexed element-wise, so
+    # `vl_unit(1:2, "strwidth", list(label = c("a", "bb")))` measures each.
+    if (
+      is.list(data) &&
+        !S7::S7_inherits(data, grob) &&
+        !is.null(data$label) &&
+        any(units %in% c("strwidth", "strheight"))
+    ) {
+      nl <- length(data$label)
+      if (!nl %in% c(1L, length(values))) {
+        cli::cli_abort(
+          "{.arg data$label} must have length 1 or {length(values)} (the length of {.arg values}), not {nl}."
+        )
+      }
+      data$label <- rep_len(as.character(data$label), length(values))[derived]
+    }
     out_val[derived] <- .resolve_to_mm(values[derived], units[derived], data)
     out_code[derived] <- .unit_codes[["mm"]]
   }
@@ -225,7 +243,7 @@ vl_convert <- function(
     inches <- if (identical(axis, "x")) {
       .to_inches(scene@width)
     } else {
-      .to_inches(scene@height)
+      .to_inches(scene@height, "height")
     }
     # The page's implicit root viewport spans 0..1 in native.
     return(list(extent_mm = inches * 25.4, lo = 0, hi = 1, dpi = scene@dpi))
@@ -292,7 +310,8 @@ as_unit <- function(x, default = "npc") {
               '{.val strwidth} units need a {.arg label} in {.arg data}.'
             )
           }
-          v * vl_strwidth(data$label, family, face, fontsize, unit = "mm")
+          lab <- data$label[(i - 1L) %% length(data$label) + 1L]
+          v * vl_strwidth(lab, family, face, fontsize, unit = "mm")
         },
         strheight = {
           if (is.null(data$label)) {
@@ -300,7 +319,8 @@ as_unit <- function(x, default = "npc") {
               '{.val strheight} units need a {.arg label} in {.arg data}.'
             )
           }
-          v * vl_strheight(data$label, family, face, fontsize, unit = "mm")
+          lab <- data$label[(i - 1L) %% length(data$label) + 1L]
+          v * vl_strheight(lab, family, face, fontsize, unit = "mm")
         },
         grobwidth = v * ext[1],
         grobheight = v * ext[2]
@@ -480,7 +500,12 @@ vec_arith.vellum_unit.vellum_unit <- function(op, x, y, ...) {
 vec_arith.vellum_unit.MISSING <- function(op, x, y, ...) {
   switch(
     op,
-    "-" = new_unit(-vctrs::field(x, "value"), vctrs::field(x, "unit")),
+    # Negate the absolute offset too: `-(1native + 2mm)` is `-1native - 2mm`.
+    "-" = new_unit(
+      -vctrs::field(x, "value"),
+      vctrs::field(x, "unit"),
+      -vctrs::field(x, "offset")
+    ),
     "+" = x,
     vctrs::stop_incompatible_op(op, x, y)
   )

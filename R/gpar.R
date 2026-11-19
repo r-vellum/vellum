@@ -11,8 +11,10 @@
 #'   and markers fall back to its first stop, since a glyph run has no path to
 #'   run a ramp along. A [vl_hatch()] is fill-only and is an error here.
 #' @param fill Fill colour, or a gradient from [linear_gradient()] /
-#'   [radial_gradient()].
-#' @param lwd Line width (1 == 1/96 inch).
+#'   [radial_gradient()]. A colour (for `col` or `fill`) may be a vector, which
+#'   batched grobs recycle per element, but not an empty one: use `NA` for no
+#'   paint or `NULL` to inherit.
+#' @param lwd Line width (1 == 1/96 inch), non-negative; `0` draws no stroke.
 #' @param alpha Opacity multiplier in `[0, 1]`.
 #' @param lty Line type: a name (`"solid"`, `"dashed"`, `"dotted"`, `"dotdash"`,
 #'   `"longdash"`, `"twodash"`), an integer code `0:6`, a hex dash string (e.g.
@@ -22,8 +24,10 @@
 #' @param linejoin Line join: `"round"` (default), `"mitre"`, or `"bevel"`.
 #' @param linemitre Mitre limit (>= 1) for mitre joins; default 10.
 #' @param fontfamily Font family (text grobs).
-#' @param fontface One of `"plain"`, `"bold"`, `"italic"`, `"bold.italic"`.
-#' @param fontsize Font size in points.
+#' @param fontface One of `"plain"`, `"bold"`, `"italic"`, `"bold.italic"`
+#'   (also `"oblique"`/`"bold.oblique"`), or grid's integer code `1:4` for the
+#'   first four. Anything else is an error.
+#' @param fontsize Font size in points (positive).
 #' @param cex Multiplier applied to `fontsize` (grid semantics), so a theme can
 #'   ask for a relative size without knowing the base one. `cex = 2` is exactly
 #'   equivalent to doubling `fontsize`: it scales drawn text, `char`/`line`
@@ -85,6 +89,73 @@ vl_gpar <- S7::new_class(
     crisp = S7::new_property(S7::class_any, default = NULL),
     dash_phase = S7::new_property(S7::class_any, default = NULL)
   ),
+  # The constructor validates the user-facing arguments with cli errors that
+  # name `vl_gpar()`; the validator below still guards later `@<-` writes.
+  constructor = function(
+    col = NULL,
+    fill = NULL,
+    lwd = NULL,
+    alpha = NULL,
+    lty = NULL,
+    lineend = NULL,
+    linejoin = NULL,
+    linemitre = NULL,
+    fontfamily = NULL,
+    fontface = NULL,
+    fontsize = NULL,
+    cex = NULL,
+    lineheight = NULL,
+    halo_col = NULL,
+    halo_width = NULL,
+    features = NULL,
+    antialias = NULL,
+    crisp = NULL,
+    dash_phase = NULL
+  ) {
+    if (!is.null(col) && !.is_paint(col)) {
+      .check_colour(col, "col")
+    }
+    if (!is.null(fill) && !.is_paint(fill)) {
+      .check_colour(fill, "fill")
+    }
+    if (!is.null(halo_col)) {
+      .check_colour(halo_col, "halo_col")
+    }
+    # NA (any type) means "inherit", as `NULL` does.
+    if (!(is.logical(lwd) && length(lwd) && all(is.na(lwd)))) {
+      .check_range(lwd, "lwd", min = 0, allow_null = TRUE, allow_na = TRUE)
+    }
+    .check_range(
+      fontsize,
+      "fontsize",
+      min = 0,
+      inclusive = c(FALSE, TRUE),
+      allow_null = TRUE
+    )
+    fontface <- .check_fontface(fontface, "fontface")
+    S7::new_object(
+      S7::S7_object(),
+      col = col,
+      fill = fill,
+      lwd = lwd,
+      alpha = alpha,
+      lty = lty,
+      lineend = lineend,
+      linejoin = linejoin,
+      linemitre = linemitre,
+      fontfamily = fontfamily,
+      fontface = fontface,
+      fontsize = fontsize,
+      cex = cex,
+      lineheight = lineheight,
+      halo_col = halo_col,
+      halo_width = halo_width,
+      features = features,
+      antialias = antialias,
+      crisp = crisp,
+      dash_phase = dash_phase
+    )
+  },
   validator = function(self) {
     x <- self@cex
     if (!is.null(x) && is.numeric(x) && any(!is.na(x) & x < 0)) {
@@ -106,6 +177,58 @@ vl_gpar <- S7::new_class(
     NULL
   }
 )
+
+# Font faces the text stack understands (`.rs_face()` reads bold/italic/oblique
+# out of the name). Grid's integer codes 1:4 map to the first four.
+.fontfaces <- c(
+  "plain",
+  "bold",
+  "italic",
+  "bold.italic",
+  "oblique",
+  "bold.oblique"
+)
+
+# Validate `fontface` and normalise it to character: NULL passes through, a
+# whole number in 1:4 becomes its grid name, a string must be a known face.
+.check_fontface <- function(x, arg = "fontface", call = parent.frame()) {
+  if (is.null(x)) {
+    return(NULL)
+  }
+  if (is.numeric(x)) {
+    if (length(x) == 0L || anyNA(x) || !all(x %in% 1:4)) {
+      cli::cli_abort(
+        c(
+          "{.arg {arg}} given as a number must be a whole number in 1 to 4.",
+          i = "1 = plain, 2 = bold, 3 = italic, 4 = bold.italic."
+        ),
+        call = call
+      )
+    }
+    return(.fontfaces[as.integer(x)])
+  }
+  bad <- if (is.character(x)) unique(x[is.na(x) | !x %in% .fontfaces]) else x
+  if (!is.character(x) || length(x) == 0L || length(bad)) {
+    cli::cli_abort(
+      c(
+        "{.arg {arg}} must be one of {.or {.val {(.fontfaces)}}} (or 1 to 4).",
+        x = if (is.character(x) && length(bad)) "Not a font face: {.val {bad}}."
+      ),
+      call = call
+    )
+  }
+  x
+}
+
+# A copy of `gp` with no `fill`, for batched marks whose per-element fill
+# travels separately (see the hexagon/sector compile methods).
+.gp_without_fill <- function(gp) {
+  if (is.null(gp@fill)) {
+    return(gp)
+  }
+  gp@fill <- NULL
+  gp
+}
 
 # The effective type size for a gpar: `fontsize` scaled by `cex`, matching grid
 # (where `cex` is a multiplier on the base size, not a size itself). Both default

@@ -301,15 +301,11 @@
 
 .as_size <- function(x) if (is_unit(x)) x else vl_unit(x, "in")
 
-.to_inches <- function(u) {
-  v <- vctrs::field(u, "value")[1]
-  switch(
-    as.character(vctrs::field(u, "unit")[1]),
-    "2" = v / 25.4, # mm
-    "3" = v, # in
-    "4" = v / 72, # pt
-    cli::cli_abort("Page size must be an absolute unit (in/mm/pt).")
-  )
+# A single absolute length in inches (page size, arrowhead length). Validated:
+# a vector, a relative unit or a non-finite value is an error, never a silent
+# read of the first element.
+.to_inches <- function(u, arg = "width", call = parent.frame()) {
+  .abs_length_mm(u, arg, default_units = "in", call = call) / 25.4
 }
 
 .just_to_hv <- function(just) {

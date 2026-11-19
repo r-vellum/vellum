@@ -36,9 +36,11 @@ and markers fall back to its first stop, since a glyph run has no path to
 run a ramp along. A \code{\link[=vl_hatch]{vl_hatch()}} is fill-only and is an error here.}
 
 \item{fill}{Fill colour, or a gradient from \code{\link[=linear_gradient]{linear_gradient()}} /
-\code{\link[=radial_gradient]{radial_gradient()}}.}
+\code{\link[=radial_gradient]{radial_gradient()}}. A colour (for \code{col} or \code{fill}) may be a vector, which
+batched grobs recycle per element, but not an empty one: use \code{NA} for no
+paint or \code{NULL} to inherit.}
 
-\item{lwd}{Line width (1 == 1/96 inch).}
+\item{lwd}{Line width (1 == 1/96 inch), non-negative; \code{0} draws no stroke.}
 
 \item{alpha}{Opacity multiplier in \verb{[0, 1]}.}
 
@@ -55,9 +57,11 @@ run a ramp along. A \code{\link[=vl_hatch]{vl_hatch()}} is fill-only and is an e
 
 \item{fontfamily}{Font family (text grobs).}
 
-\item{fontface}{One of \code{"plain"}, \code{"bold"}, \code{"italic"}, \code{"bold.italic"}.}
+\item{fontface}{One of \code{"plain"}, \code{"bold"}, \code{"italic"}, \code{"bold.italic"}
+(also \code{"oblique"}/\code{"bold.oblique"}), or grid's integer code \code{1:4} for the
+first four. Anything else is an error.}
 
-\item{fontsize}{Font size in points.}
+\item{fontsize}{Font size in points (positive).}
 
 \item{cex}{Multiplier applied to \code{fontsize} (grid semantics), so a theme can
 ask for a relative size without knowing the base one. \code{cex = 2} is exactly

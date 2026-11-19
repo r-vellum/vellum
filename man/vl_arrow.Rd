@@ -12,9 +12,11 @@ vl_arrow(
 )
 }
 \arguments{
-\item{angle}{Half-angle of the head at the tip, in degrees (default 30).}
+\item{angle}{Half-angle of the head at the tip, in degrees, strictly between
+0 and 180 (default 30).}
 
-\item{length}{Head length as an absolute \code{\link[=vl_unit]{vl_unit()}} (default \code{vl_unit(0.25, "in")}).}
+\item{length}{Head length as a single, non-negative absolute \code{\link[=vl_unit]{vl_unit()}}
+(\code{mm}/\code{cm}/\verb{in}/\code{pt}; a bare number is inches). Default \code{vl_unit(0.25, "in")}.}
 
 \item{ends}{Which ends get a head: \code{"last"} (default), \code{"first"}, or \code{"both"}.}
 

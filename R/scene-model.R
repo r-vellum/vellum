@@ -393,7 +393,7 @@ scene_model <- function(scene) {
     key <- .render_key(
       cid,
       .to_inches(scene@width),
-      .to_inches(scene@height),
+      .to_inches(scene@height, "height"),
       scene@dpi,
       .rs_col(scene@bg) %||% c(255L, 255L, 255L, 0L),
       scene@title,

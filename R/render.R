@@ -291,7 +291,7 @@ makeContent.vellum_scene_grob <- function(x) {
     w_in <- .to_inches(x$scene@width)
   }
   if (!is.finite(h_in) || h_in <= 0) {
-    h_in <- .to_inches(x$scene@height)
+    h_in <- .to_inches(x$scene@height, "height")
   }
   # Pick the dpi to re-render at. Priority: (1) the knitr/Quarto chunk dpi the
   # user set and expects to win; (2) the live device's pixel density, but only
