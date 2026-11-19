@@ -208,7 +208,7 @@ element_geometry <- function(scene) {
 #' 2 px). grid ships no equivalent: `grid.locator()` waits for one interactive
 #' click and returns coordinates rather than a node.
 #'
-#' @param scene A [vl_scene()].
+#' @param scene A [vl_scene()] (or anything with an [as_vellum_scene()] method).
 #' @param x,y Query point, in `units`: `"npc"` (default; the page, `0..1` with y
 #'   up) or `"px"` (device pixels, top-left origin, y down).
 #' @param units `"npc"` or `"px"`.
@@ -217,6 +217,7 @@ element_geometry <- function(scene) {
 #' @export
 hit_test <- function(scene, x, y, units = c("npc", "px")) {
   units <- match.arg(units)
+  scene <- as_vellum_scene(scene)
   s <- Scene$new(
     .to_inches(scene@width),
     .to_inches(scene@height),

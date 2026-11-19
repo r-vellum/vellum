@@ -1,5 +1,8 @@
 # vellum 0.7.2.9000 (development version)
 
+* `hit_test()`, `node_names()`, `get_node()` and `edit_node()` now coerce their
+  `scene` through `as_vellum_scene()`, like `render()` and the other scene
+  functions, so they accept any object with an `as_vellum_scene()` method.
 
 # vellum 0.7.2
 
