@@ -38,6 +38,17 @@
 * Constructors refuse a non-numeric coordinate (`rect_grob(x = "left")`) with
   a clear error instead of an obscure cast failure.
 
+## Hit testing
+
+* **`hit_test()` is ~1000x faster when called repeatedly on one scene.** Each
+  call compiled the scene into a fresh backend, so 1000 hit tests on a
+  ~270-grob scene took 111 s. The compiled pick backend is now memoised like
+  the render cache, keyed on the scene's content and device size, so the same
+  1000 calls take 0.12 s. An edit, a resize or `vl_clear_render_cache()` starts
+  afresh, and `options(vellum.cache = FALSE)` turns the memo off.
+* `hit_test()`, `node_names()`, `get_node()` and `edit_node()` now coerce their
+  `scene` through `as_vellum_scene()`, like `render()` and the other scene
+  functions, so they accept any object with an `as_vellum_scene()` method.
 
 # vellum 0.7.2
 
