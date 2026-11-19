@@ -72,6 +72,8 @@
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.7.2.9000" id="vellum-0729000-development-version">vellum 0.7.2.9000 (development version)<a class="anchor" aria-label="anchor" href="#vellum-0729000-development-version"></a></h2>
 <ul><li>
+<strong><code><a href="../reference/hit_test.html">hit_test()</a></code> is ~1000x faster when called repeatedly on one scene.</strong> Each call compiled the scene into a fresh backend, so 1000 hit tests on a ~270-grob scene took 111 s. The compiled pick backend is now memoised like the render cache, keyed on the scene’s content and device size, so the same 1000 calls take 0.12 s. An edit, a resize or <code><a href="../reference/vl_clear_render_cache.html">vl_clear_render_cache()</a></code> starts afresh, and <code>options(vellum.cache = FALSE)</code> turns the memo off.</li>
+<li>
 <code><a href="../reference/hit_test.html">hit_test()</a></code>, <code><a href="../reference/node_names.html">node_names()</a></code>, <code><a href="../reference/node_names.html">get_node()</a></code> and <code><a href="../reference/node_names.html">edit_node()</a></code> now coerce their <code>scene</code> through <code><a href="../reference/as_vellum_scene.html">as_vellum_scene()</a></code>, like <code><a href="../reference/vl_scene.html">render()</a></code> and the other scene functions, so they accept any object with an <code><a href="../reference/as_vellum_scene.html">as_vellum_scene()</a></code> method.</li>
 </ul></div>
     <div class="section level2">

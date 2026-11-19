@@ -2,6 +2,14 @@
 
 ## vellum 0.7.2.9000 (development version)
 
+- **[`hit_test()`](https://r-vellum.github.io/vellum/reference/hit_test.md)
+  is ~1000x faster when called repeatedly on one scene.** Each call
+  compiled the scene into a fresh backend, so 1000 hit tests on a
+  ~270-grob scene took 111 s. The compiled pick backend is now memoised
+  like the render cache, keyed on the scene’s content and device size,
+  so the same 1000 calls take 0.12 s. An edit, a resize or
+  [`vl_clear_render_cache()`](https://r-vellum.github.io/vellum/reference/vl_clear_render_cache.md)
+  starts afresh, and `options(vellum.cache = FALSE)` turns the memo off.
 - [`hit_test()`](https://r-vellum.github.io/vellum/reference/hit_test.md),
   [`node_names()`](https://r-vellum.github.io/vellum/reference/node_names.md),
   [`get_node()`](https://r-vellum.github.io/vellum/reference/node_names.md)
