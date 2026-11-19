@@ -51,6 +51,8 @@
   `scene` through `as_vellum_scene()`, like `render()` and the other scene
   functions, so they accept any object with an `as_vellum_scene()` method.
 
+## Rendering fixes
+
 * **Fix: inputs that crashed or hung the renderer now draw or fail with a clear
   error.**
   - A sketched `sector_grob()` with a gradient, pattern or hatch fill panicked
