@@ -2,6 +2,22 @@
 
 ## vellum 0.8.0.9000 (development version)
 
+### Bug fixes
+
+- The same scene now renders to byte-identical SVG every time, so SVG
+  output can be diffed and snapshot-tested (VP-24). The
+  `<title>`/`<desc>` ids used to take a prefix from a session counter,
+  stamped when the scene was built, so two builds of one scene differed
+  (`vl2-d` against `vl208-d`). Every id in the document (title, desc,
+  and each clip path, gradient, pattern, mask and filter) now starts
+  with one prefix, `vl` plus a hash of the document’s own content,
+  followed by a counter that restarts at 0 in every render
+  (`vl3f9a01c2-c0`). Different scenes embedded in one HTML page
+  therefore still get distinct ids. Clip-path and gradient ids used to
+  have no prefix at all, so two SVGs on one page could resolve each
+  other’s `url(#c0)`. A scene’s `a11y_prefix`, when set, is used as the
+  prefix instead.
+
 ### Performance
 
 - SVG output is about 4.5x smaller per mark and renders about 4x faster
