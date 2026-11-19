@@ -2,7 +2,7 @@
 # <- fn` is a replacement call, so it binds `print` in the namespace, and R's
 # loader then files every `S3method(print, <class>)` into vellum's own methods
 # table rather than base's — dispatch stops finding them while the methods
-# themselves still look fine. See the note next to the S7 methods in `api.R`.
+# themselves still look fine. See the note next to the S7 methods in `render.R`.
 
 test_that("no base generic is shadowed by a stray namespace binding", {
   ns <- asNamespace("vellum")

@@ -1,4 +1,4 @@
-#' @include api.R
+#' @include scene-build.R
 NULL
 
 # Active debug-capture registry. While `$reg` is an environment, `.push_vp`

@@ -1,4 +1,4 @@
-#' @include api.R
+#' @include scene-build.R
 NULL
 
 #' Where a scene spends its render time

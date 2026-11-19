@@ -194,3 +194,69 @@ element_geometry <- function(scene) {
     stringsAsFactors = FALSE
   )
 }
+
+# --- hit-testing ------------------------------------------------------------
+
+#' Hit-test a scene
+#'
+#' Find the topmost node drawn under a point. The geometry is recorded by the
+#' same walk that renders the scene, so offsets, caps and rotation are where they
+#' are drawn; grobs are tested in reverse paint order against that geometry and
+#' their viewport's clip, so the result is clip- and overlap-exact. A filled
+#' shape is matched by its fill rule, a marker by its disc, text by its (rotated)
+#' box, and lines and segments by a band of half their stroke width (at least
+#' 2 px). grid ships no equivalent: `grid.locator()` waits for one interactive
+#' click and returns coordinates rather than a node.
+#'
+#' @param scene A [vl_scene()].
+#' @param x,y Query point, in `units`: `"npc"` (default; the page, `0..1` with y
+#'   up) or `"px"` (device pixels, top-left origin, y down).
+#' @param units `"npc"` or `"px"`.
+#' @return The hit node's `name` (character); `NA_character_` if the topmost grob
+#'   there is unnamed; or `NULL` if nothing is drawn at the point.
+#' @export
+hit_test <- function(scene, x, y, units = c("npc", "px")) {
+  units <- match.arg(units)
+  s <- Scene$new(
+    .to_inches(scene@width),
+    .to_inches(scene@height),
+    scene@dpi,
+    .rs_col(scene@bg) %||% c(255L, 255L, 255L, 0L)
+  )
+  reg <- new.env(parent = emptyenv())
+  reg$n <- 0L
+  reg$names <- list()
+  .compile_pick(s, .materialize(scene), reg)
+  d <- s$dim()
+  if (units == "npc") {
+    px <- x * d[1]
+    py <- (1 - y) * d[2] # npc y is up; device y is down
+  } else {
+    px <- x
+    py <- y
+  }
+  id <- s$hit_test(as.integer(round(px)), as.integer(round(py)))
+  if (id < 0L) {
+    return(NULL)
+  }
+  reg$names[[id + 1L]] # name, or NA_character_ for an unnamed grob
+}
+
+# Compile for picking: like the render compile, but assign each leaf grob a
+# sequential pick id (paint order) and record its name, so hit_test can map the
+# pick-buffer colour back to a node. Masks are ignored (content is drawn plainly).
+.compile_pick <- function(scene, node, reg) {
+  if (S7::S7_inherits(node, gtree)) {
+    .push_vp(scene, node@vp)
+    for (ch in node@children) {
+      .compile_pick(scene, ch, reg)
+    }
+    scene$pop_viewport(1L)
+  } else {
+    id <- reg$n
+    reg$n <- id + 1L
+    reg$names[[id + 1L]] <- .node_name(node) %||% NA_character_
+    scene$set_pick(id)
+    compile(node, scene)
+  }
+}
