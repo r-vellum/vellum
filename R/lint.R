@@ -1,4 +1,4 @@
-#' @include api.R
+#' @include scene-build.R
 NULL
 
 # Static analysis for a scene. Every rule reads the *resolved* geometry -- the

@@ -16,7 +16,6 @@ URL: https://github.com/r-vellum/vellum,
 BugReports: https://github.com/r-vellum/vellum/issues
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
-RoxygenNote: 8.0.0.9000
 Config/rextendr/version: 0.5.0
 SystemRequirements: Cargo (Rust's package manager), rustc >= 1.92.0, xz
 Depends: 
@@ -47,26 +46,36 @@ Imports:
 Collate:
     'gpar.R'
     'viewport.R'
-    'grob.R'
-    'api.R'
+    'grob-class.R'
+    'scene-build.R'
     'analysis.R'
     'animate.R'
+    'compile.R'
+    'curves.R'
     'datashade.R'
     'debug.R'
     'device.R'
+    'edit.R'
+    'encode.R'
     'extendr-wrappers.R'
     'fonts.R'
     'geometry2.R'
+    'grob-constructors.R'
+    'grob-measure.R'
     'lint.R'
     'output.R'
     'paint.R'
     'pick.R'
     'place.R'
+    'raster.R'
+    'render.R'
     'scene-model.R'
     'serialize.R'
     'spread.R'
+    'stroke-to-path.R'
     'style.R'
     'text.R'
     'unit.R'
     'vellum-package.R'
     'zzz.R'
+RoxygenNote: 8.0.0.9000
