@@ -71,6 +71,22 @@
 
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.7.2.9000" id="vellum-0729000-development-version">vellum 0.7.2.9000 (development version)<a class="anchor" aria-label="anchor" href="#vellum-0729000-development-version"></a></h2>
+<div class="section level3">
+<h3 id="breaking-changes-0-7-2-9000">Breaking changes<a class="anchor" aria-label="anchor" href="#breaking-changes-0-7-2-9000"></a></h3>
+<ul><li>
+<p><strong>Bare numbers now mean npc in every constructor</strong>; <code><a href="../reference/grob.html">lines_grob()</a></code>/<code><a href="../reference/grob.html">polygon_grob()</a></code>/<code><a href="../reference/grob.html">segments_grob()</a></code>/<code><a href="../reference/grob.html">path_grob()</a></code>/ <code><a href="../reference/grob.html">bezier_grob()</a></code>/<code><a href="../reference/grob.html">spline_grob()</a></code> and <code><a href="../reference/grob.html">hexagon_grob()</a></code>/<code><a href="../reference/grob.html">sector_grob()</a></code> sizes used native. Pass <code>default_units = "native"</code> or <code>vl_unit(x, "native")</code> for the old behaviour.</p>
+<p>vellum mixed two defaults: a bare number was <code>"npc"</code> in <code><a href="../reference/grob.html">rect_grob()</a></code>, <code><a href="../reference/grob.html">circle_grob()</a></code>, <code><a href="../reference/grob.html">text_grob()</a></code> and most other constructors, but <code>"native"</code> in the line and polygon family, in the <code>width</code>/<code>height</code> of a hexagon and in the <code>r0</code>/<code>r1</code> of a sector. Now every constructor reads it as grid does.</p>
+<p>Where it shows: in a viewport whose <code>xscale</code>/<code>yscale</code> is the default <code>c(0, 1)</code>, npc and native positions coincide, so lines, polygons, segments, paths and hexagon sizes drawn there do not move. Bare data values passed to them inside a <em>scaled</em> viewport must now say <code>"native"</code>. A bare sector radius changes even on the default scale: a native radius was a fraction of the viewport’s width, an npc radius is a fraction of its shorter side (so a pie in a wide viewport draws smaller).</p>
+</li>
+</ul></div>
+<div class="section level3">
+<h3 id="new-features-0-7-2-9000">New features<a class="anchor" aria-label="anchor" href="#new-features-0-7-2-9000"></a></h3>
+<ul><li><p><strong>Every constructor takes a <code>default_units</code> argument</strong>, as grid’s <code>default.units</code>: the unit a bare number is read in for the position and size arguments. It defaults to <code>"npc"</code> everywhere, including <code><a href="../reference/vl_viewport.html">vl_viewport()</a></code> and <code><a href="../reference/vl_svg_path.html">svg_grob()</a></code>. Arguments with a physical default of their own are unaffected: a bare point, hexagon or loop <code>size</code>, and <code>foot</code>, <code>start_cap</code>, <code>end_cap</code> and <code>offset</code>, stay millimetres; an arrow <code>length</code> stays inches. <code><a href="../reference/grob.html">?grob</a></code> now documents how a relative length resolves: a <code>width</code> or <code>height</code> per axis, a radius against the viewport’s shorter side.</p></li>
+<li><p><code><a href="../reference/vl_path_op.html">vl_path_op()</a></code> returns its result in the operands’ unit (bare operands give <code>"npc"</code>), instead of tagging the numbers <code>"native"</code> whatever went in.</p></li>
+<li><p>Constructors refuse a non-numeric coordinate (<code>rect_grob(x = "left")</code>) with a clear error instead of an obscure cast failure.</p></li>
+</ul></div>
+<div class="section level3">
+<h3 id="hit-testing-0-7-2-9000">Hit testing<a class="anchor" aria-label="anchor" href="#hit-testing-0-7-2-9000"></a></h3>
 <ul><li><p><strong><code><a href="../reference/hit_test.html">hit_test()</a></code> is ~1000x faster when called repeatedly on one scene.</strong> Each call compiled the scene into a fresh backend, so 1000 hit tests on a ~270-grob scene took 111 s. The compiled pick backend is now memoised like the render cache, keyed on the scene’s content and device size, so the same 1000 calls take 0.12 s. An edit, a resize or <code><a href="../reference/vl_clear_render_cache.html">vl_clear_render_cache()</a></code> starts afresh, and <code>options(vellum.cache = FALSE)</code> turns the memo off.</p></li>
 <li><p><code><a href="../reference/hit_test.html">hit_test()</a></code>, <code><a href="../reference/node_names.html">node_names()</a></code>, <code><a href="../reference/node_names.html">get_node()</a></code> and <code><a href="../reference/node_names.html">edit_node()</a></code> now coerce their <code>scene</code> through <code><a href="../reference/as_vellum_scene.html">as_vellum_scene()</a></code>, like <code><a href="../reference/vl_scene.html">render()</a></code> and the other scene functions, so they accept any object with an <code><a href="../reference/as_vellum_scene.html">as_vellum_scene()</a></code> method.</p></li>
 <li>
@@ -88,6 +104,7 @@
 </ul></li>
 <li><p><strong>Fix: PNG files read by <code><a href="../reference/grob.html">raster_grob()</a></code> keep their colours when they use a palette or fewer than 8 bits per sample.</strong> They came back as grey palette indices or packed bytes.</p></li>
 </ul></div>
+</div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.7.2" id="vellum-072">vellum 0.7.2<a class="anchor" aria-label="anchor" href="#vellum-072"></a></h2>
 <div class="section level3">

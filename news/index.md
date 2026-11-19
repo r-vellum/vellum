@@ -2,6 +2,57 @@
 
 ## vellum 0.7.2.9000 (development version)
 
+### Breaking changes
+
+- **Bare numbers now mean npc in every constructor**;
+  [`lines_grob()`](https://r-vellum.github.io/vellum/reference/grob.md)/[`polygon_grob()`](https://r-vellum.github.io/vellum/reference/grob.md)/[`segments_grob()`](https://r-vellum.github.io/vellum/reference/grob.md)/[`path_grob()`](https://r-vellum.github.io/vellum/reference/grob.md)/
+  [`bezier_grob()`](https://r-vellum.github.io/vellum/reference/grob.md)/[`spline_grob()`](https://r-vellum.github.io/vellum/reference/grob.md)
+  and
+  [`hexagon_grob()`](https://r-vellum.github.io/vellum/reference/grob.md)/[`sector_grob()`](https://r-vellum.github.io/vellum/reference/grob.md)
+  sizes used native. Pass `default_units = "native"` or
+  `vl_unit(x, "native")` for the old behaviour.
+
+  vellum mixed two defaults: a bare number was `"npc"` in
+  [`rect_grob()`](https://r-vellum.github.io/vellum/reference/grob.md),
+  [`circle_grob()`](https://r-vellum.github.io/vellum/reference/grob.md),
+  [`text_grob()`](https://r-vellum.github.io/vellum/reference/grob.md)
+  and most other constructors, but `"native"` in the line and polygon
+  family, in the `width`/`height` of a hexagon and in the `r0`/`r1` of a
+  sector. Now every constructor reads it as grid does.
+
+  Where it shows: in a viewport whose `xscale`/`yscale` is the default
+  `c(0, 1)`, npc and native positions coincide, so lines, polygons,
+  segments, paths and hexagon sizes drawn there do not move. Bare data
+  values passed to them inside a *scaled* viewport must now say
+  `"native"`. A bare sector radius changes even on the default scale: a
+  native radius was a fraction of the viewport’s width, an npc radius is
+  a fraction of its shorter side (so a pie in a wide viewport draws
+  smaller).
+
+### New features
+
+- **Every constructor takes a `default_units` argument**, as grid’s
+  `default.units`: the unit a bare number is read in for the position
+  and size arguments. It defaults to `"npc"` everywhere, including
+  [`vl_viewport()`](https://r-vellum.github.io/vellum/reference/vl_viewport.md)
+  and
+  [`svg_grob()`](https://r-vellum.github.io/vellum/reference/vl_svg_path.md).
+  Arguments with a physical default of their own are unaffected: a bare
+  point, hexagon or loop `size`, and `foot`, `start_cap`, `end_cap` and
+  `offset`, stay millimetres; an arrow `length` stays inches.
+  [`?grob`](https://r-vellum.github.io/vellum/reference/grob.md) now
+  documents how a relative length resolves: a `width` or `height` per
+  axis, a radius against the viewport’s shorter side.
+
+- [`vl_path_op()`](https://r-vellum.github.io/vellum/reference/vl_path_op.md)
+  returns its result in the operands’ unit (bare operands give `"npc"`),
+  instead of tagging the numbers `"native"` whatever went in.
+
+- Constructors refuse a non-numeric coordinate (`rect_grob(x = "left")`)
+  with a clear error instead of an obscure cast failure.
+
+### Hit testing
+
 - **[`hit_test()`](https://r-vellum.github.io/vellum/reference/hit_test.md)
   is ~1000x faster when called repeatedly on one scene.** Each call
   compiled the scene into a fresh backend, so 1000 hit tests on a

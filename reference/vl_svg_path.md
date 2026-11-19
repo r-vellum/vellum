@@ -20,7 +20,8 @@ svg_grob(
   name = NULL,
   vp = NULL,
   id = NULL,
-  role = NULL
+  role = NULL,
+  default_units = "npc"
 )
 ```
 
@@ -33,14 +34,16 @@ svg_grob(
 
 - x, y:
 
-  Centre of the drawn icon.
+  Centre of the drawn icon
+  ([`vl_unit()`](https://r-vellum.github.io/vellum/reference/vl_unit.md)
+  or numeric).
 
 - size:
 
   Size of the reference box's longer side, as a
   [`vl_unit()`](https://r-vellum.github.io/vellum/reference/vl_unit.md)
   — the viewBox when one is given, otherwise the path's own bounding
-  box.
+  box. A bare numeric is read in `default_units`, like `x`/`y`.
 
 - flip_y:
 
@@ -58,6 +61,12 @@ svg_grob(
 
   Passed to the returned
   [`path_grob()`](https://r-vellum.github.io/vellum/reference/grob.md).
+
+- default_units:
+
+  Unit a bare numeric `x`, `y` or `size` is read in. Defaults to
+  `"npc"`, as in every constructor (see
+  [grob](https://r-vellum.github.io/vellum/reference/grob.md)).
 
 ## Value
 

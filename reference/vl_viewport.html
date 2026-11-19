@@ -111,7 +111,8 @@ viewports are then placed into cells via <code>row</code>/<code>col</code>.</p>
 <span>  name <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  meta <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  pannable <span class="op">=</span> <span class="cn">FALSE</span>,</span>
-<span>  cache <span class="op">=</span> <span class="cn">FALSE</span></span>
+<span>  cache <span class="op">=</span> <span class="cn">FALSE</span>,</span>
+<span>  default_units <span class="op">=</span> <span class="st">"npc"</span></span>
 <span><span class="op">)</span></span>
 <span></span>
 <span><span class="fu">grid_layout</span><span class="op">(</span></span>
@@ -237,6 +238,13 @@ only what changed. Raster/<code><a href="display.html">display()</a></code> only
 subtree as vector (no fidelity loss). Ignored when the viewport also sets a
 non-normal <code>blend</code> (a blend needs the live backdrop). See
 <code><a href="vl_clear_render_cache.html">vl_clear_render_cache()</a></code>.</p></dd>
+
+
+<dt id="arg-default-units">default_units<a class="anchor" aria-label="anchor" href="#arg-default-units"></a></dt>
+<dd><p>Unit a bare numeric <code>x</code>, <code>y</code>, <code>width</code> or <code>height</code> is
+read in, as grid's <code>default.units</code>. Defaults to <code>"npc"</code> (fractions of the
+parent), as in every grob constructor. <code>width</code> resolves against the
+parent's width and <code>height</code> against its height.</p></dd>
 
 
 <dt id="arg-widths-heights">widths, heights<a class="anchor" aria-label="anchor" href="#arg-widths-heights"></a></dt>

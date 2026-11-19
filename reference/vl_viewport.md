@@ -34,7 +34,8 @@ vl_viewport(
   name = NULL,
   meta = NULL,
   pannable = FALSE,
-  cache = FALSE
+  cache = FALSE,
+  default_units = "npc"
 )
 
 grid_layout(
@@ -173,6 +174,13 @@ grid_layout(
   loss). Ignored when the viewport also sets a non-normal `blend` (a
   blend needs the live backdrop). See
   [`vl_clear_render_cache()`](https://r-vellum.github.io/vellum/reference/vl_clear_render_cache.md).
+
+- default_units:
+
+  Unit a bare numeric `x`, `y`, `width` or `height` is read in, as
+  grid's `default.units`. Defaults to `"npc"` (fractions of the parent),
+  as in every grob constructor. `width` resolves against the parent's
+  width and `height` against its height.
 
 - widths, heights:
 

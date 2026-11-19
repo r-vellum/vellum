@@ -8,10 +8,10 @@
 </script><script src="../deps/jquery-3.6.0/jquery-3.6.0.min.js"></script><meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no"><link href="../deps/bootstrap-5.3.8/bootstrap.min.css" rel="stylesheet"><script src="../deps/bootstrap-5.3.8/bootstrap.bundle.min.js"></script><link href="../deps/Spectral-0.4.10/font.css" rel="stylesheet"><link href="../deps/JetBrains_Mono-0.4.10/font.css" rel="stylesheet"><link href="../deps/Spectral_SC-0.4.10/font.css" rel="stylesheet"><link href="../deps/font-awesome-6.5.2/css/all.min.css" rel="stylesheet"><link href="../deps/font-awesome-6.5.2/css/v4-shims.min.css" rel="stylesheet"><script src="../deps/headroom-0.11.0/headroom.min.js"></script><script src="../deps/headroom-0.11.0/jQuery.headroom.min.js"></script><script src="../deps/bootstrap-toc-1.0.1/bootstrap-toc.min.js"></script><script src="../deps/clipboard.js-2.0.11/clipboard.min.js"></script><script src="../deps/search-1.0.0/autocomplete.jquery.min.js"></script><script src="../deps/search-1.0.0/fuse.min.js"></script><script src="../deps/search-1.0.0/mark.min.js"></script><!-- pkgdown --><script src="../pkgdown.js"></script><link href="../extra.css" rel="stylesheet"><meta property="og:title" content="Graphical objects (grobs) — grob"><meta name="description" content="Grobs are immutable value objects describing something to draw. Build them
 with the constructors below, add them to a scene with draw(), and render
 with render(). Coordinates accept a vl_unit() vector or a bare numeric
-(interpreted in the default_units, usually &quot;npc&quot;)."><meta property="og:description" content="Grobs are immutable value objects describing something to draw. Build them
+(interpreted in the default_units)."><meta property="og:description" content="Grobs are immutable value objects describing something to draw. Build them
 with the constructors below, add them to a scene with draw(), and render
 with render(). Coordinates accept a vl_unit() vector or a bare numeric
-(interpreted in the default_units, usually &quot;npc&quot;)."><meta property="og:image" content="https://r-vellum.github.io/vellum/logo.png"><meta name="twitter:card" content="summary_large_image"><meta name="twitter:creator" content="@schochastics"><meta name="twitter:site" content="@schochastics"><meta name="theme-color" content="#efe6d2"></head><body>
+(interpreted in the default_units)."><meta property="og:image" content="https://r-vellum.github.io/vellum/logo.png"><meta name="twitter:card" content="summary_large_image"><meta name="twitter:creator" content="@schochastics"><meta name="twitter:site" content="@schochastics"><meta name="theme-color" content="#efe6d2"></head><body>
     <a href="#main" class="visually-hidden-focusable">Skip to contents</a>
 
 
@@ -80,7 +80,7 @@ with render(). Coordinates accept a vl_unit() vector or a bare numeric
     <p>Grobs are immutable value objects describing something to draw. Build them
 with the constructors below, add them to a scene with <code><a href="vl_scene.html">draw()</a></code>, and render
 with <code><a href="vl_scene.html">render()</a></code>. Coordinates accept a <code><a href="vl_unit.html">vl_unit()</a></code> vector or a bare numeric
-(interpreted in the <code>default_units</code>, usually <code>"npc"</code>).</p>
+(interpreted in the <code>default_units</code>).</p>
     </div>
 
     <div class="section level2">
@@ -97,7 +97,8 @@ with <code><a href="vl_scene.html">render()</a></code>. Coordinates accept a <co
 <span>  id <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  role <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  key <span class="op">=</span> <span class="cn">NULL</span>,</span>
-<span>  meta <span class="op">=</span> <span class="cn">NULL</span></span>
+<span>  meta <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  default_units <span class="op">=</span> <span class="st">"npc"</span></span>
 <span><span class="op">)</span></span>
 <span></span>
 <span><span class="fu">roundrect_grob</span><span class="op">(</span></span>
@@ -113,7 +114,8 @@ with <code><a href="vl_scene.html">render()</a></code>. Coordinates accept a <co
 <span>  id <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  role <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  key <span class="op">=</span> <span class="cn">NULL</span>,</span>
-<span>  meta <span class="op">=</span> <span class="cn">NULL</span></span>
+<span>  meta <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  default_units <span class="op">=</span> <span class="st">"npc"</span></span>
 <span><span class="op">)</span></span>
 <span></span>
 <span><span class="fu">lines_grob</span><span class="op">(</span></span>
@@ -131,7 +133,8 @@ with <code><a href="vl_scene.html">render()</a></code>. Coordinates accept a <co
 <span>  id <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  role <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  key <span class="op">=</span> <span class="cn">NULL</span>,</span>
-<span>  meta <span class="op">=</span> <span class="cn">NULL</span></span>
+<span>  meta <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  default_units <span class="op">=</span> <span class="st">"npc"</span></span>
 <span><span class="op">)</span></span>
 <span></span>
 <span><span class="fu">polygon_grob</span><span class="op">(</span></span>
@@ -144,7 +147,8 @@ with <code><a href="vl_scene.html">render()</a></code>. Coordinates accept a <co
 <span>  id <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  role <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  key <span class="op">=</span> <span class="cn">NULL</span>,</span>
-<span>  meta <span class="op">=</span> <span class="cn">NULL</span></span>
+<span>  meta <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  default_units <span class="op">=</span> <span class="st">"npc"</span></span>
 <span><span class="op">)</span></span>
 <span></span>
 <span><span class="fu">bezier_grob</span><span class="op">(</span></span>
@@ -155,7 +159,8 @@ with <code><a href="vl_scene.html">render()</a></code>. Coordinates accept a <co
 <span>  name <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  vp <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  id <span class="op">=</span> <span class="cn">NULL</span>,</span>
-<span>  role <span class="op">=</span> <span class="cn">NULL</span></span>
+<span>  role <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  default_units <span class="op">=</span> <span class="st">"npc"</span></span>
 <span><span class="op">)</span></span>
 <span></span>
 <span><span class="fu">spline_grob</span><span class="op">(</span></span>
@@ -168,7 +173,8 @@ with <code><a href="vl_scene.html">render()</a></code>. Coordinates accept a <co
 <span>  name <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  vp <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  id <span class="op">=</span> <span class="cn">NULL</span>,</span>
-<span>  role <span class="op">=</span> <span class="cn">NULL</span></span>
+<span>  role <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  default_units <span class="op">=</span> <span class="st">"npc"</span></span>
 <span><span class="op">)</span></span>
 <span></span>
 <span><span class="fu">circle_grob</span><span class="op">(</span></span>
@@ -182,7 +188,8 @@ with <code><a href="vl_scene.html">render()</a></code>. Coordinates accept a <co
 <span>  id <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  role <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  key <span class="op">=</span> <span class="cn">NULL</span>,</span>
-<span>  meta <span class="op">=</span> <span class="cn">NULL</span></span>
+<span>  meta <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  default_units <span class="op">=</span> <span class="st">"npc"</span></span>
 <span><span class="op">)</span></span>
 <span></span>
 <span><span class="fu">points_grob</span><span class="op">(</span></span>
@@ -197,7 +204,8 @@ with <code><a href="vl_scene.html">render()</a></code>. Coordinates accept a <co
 <span>  id <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  role <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  key <span class="op">=</span> <span class="cn">NULL</span>,</span>
-<span>  meta <span class="op">=</span> <span class="cn">NULL</span></span>
+<span>  meta <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  default_units <span class="op">=</span> <span class="st">"npc"</span></span>
 <span><span class="op">)</span></span>
 <span></span>
 <span><span class="fu">hexagon_grob</span><span class="op">(</span></span>
@@ -214,7 +222,8 @@ with <code><a href="vl_scene.html">render()</a></code>. Coordinates accept a <co
 <span>  id <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  role <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  key <span class="op">=</span> <span class="cn">NULL</span>,</span>
-<span>  meta <span class="op">=</span> <span class="cn">NULL</span></span>
+<span>  meta <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  default_units <span class="op">=</span> <span class="st">"npc"</span></span>
 <span><span class="op">)</span></span>
 <span></span>
 <span><span class="fu">sector_grob</span><span class="op">(</span></span>
@@ -233,7 +242,8 @@ with <code><a href="vl_scene.html">render()</a></code>. Coordinates accept a <co
 <span>  id <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  role <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  key <span class="op">=</span> <span class="cn">NULL</span>,</span>
-<span>  meta <span class="op">=</span> <span class="cn">NULL</span></span>
+<span>  meta <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  default_units <span class="op">=</span> <span class="st">"npc"</span></span>
 <span><span class="op">)</span></span>
 <span></span>
 <span><span class="fu">loop_grob</span><span class="op">(</span></span>
@@ -248,7 +258,8 @@ with <code><a href="vl_scene.html">render()</a></code>. Coordinates accept a <co
 <span>  name <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  vp <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  id <span class="op">=</span> <span class="cn">NULL</span>,</span>
-<span>  role <span class="op">=</span> <span class="cn">NULL</span></span>
+<span>  role <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  default_units <span class="op">=</span> <span class="st">"npc"</span></span>
 <span><span class="op">)</span></span>
 <span></span>
 <span><span class="fu">segments_grob</span><span class="op">(</span></span>
@@ -269,7 +280,8 @@ with <code><a href="vl_scene.html">render()</a></code>. Coordinates accept a <co
 <span>  key <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  meta <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  col <span class="op">=</span> <span class="cn">NULL</span>,</span>
-<span>  lwd <span class="op">=</span> <span class="cn">NULL</span></span>
+<span>  lwd <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  default_units <span class="op">=</span> <span class="st">"npc"</span></span>
 <span><span class="op">)</span></span>
 <span></span>
 <span><span class="fu">path_grob</span><span class="op">(</span></span>
@@ -283,7 +295,8 @@ with <code><a href="vl_scene.html">render()</a></code>. Coordinates accept a <co
 <span>  vp <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  role <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  key <span class="op">=</span> <span class="cn">NULL</span>,</span>
-<span>  meta <span class="op">=</span> <span class="cn">NULL</span></span>
+<span>  meta <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  default_units <span class="op">=</span> <span class="st">"npc"</span></span>
 <span><span class="op">)</span></span>
 <span></span>
 <span><span class="fu">raster_grob</span><span class="op">(</span></span>
@@ -297,7 +310,8 @@ with <code><a href="vl_scene.html">render()</a></code>. Coordinates accept a <co
 <span>  name <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  vp <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  id <span class="op">=</span> <span class="cn">NULL</span>,</span>
-<span>  role <span class="op">=</span> <span class="cn">NULL</span></span>
+<span>  role <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  default_units <span class="op">=</span> <span class="st">"npc"</span></span>
 <span><span class="op">)</span></span>
 <span></span>
 <span><span class="fu">text_grob</span><span class="op">(</span></span>
@@ -316,7 +330,8 @@ with <code><a href="vl_scene.html">render()</a></code>. Coordinates accept a <co
 <span>  align <span class="op">=</span> <span class="st">"left"</span>,</span>
 <span>  fit <span class="op">=</span> <span class="cn">FALSE</span>,</span>
 <span>  key <span class="op">=</span> <span class="cn">NULL</span>,</span>
-<span>  meta <span class="op">=</span> <span class="cn">NULL</span></span>
+<span>  meta <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  default_units <span class="op">=</span> <span class="st">"npc"</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
 
@@ -325,11 +340,12 @@ with <code><a href="vl_scene.html">render()</a></code>. Coordinates accept a <co
 
 
 <dl><dt id="arg-x-y">x, y<a class="anchor" aria-label="anchor" href="#arg-x-y"></a></dt>
-<dd><p>Coordinates (<code><a href="vl_unit.html">vl_unit()</a></code> or numeric).</p></dd>
+<dd><p>Coordinates (<code><a href="vl_unit.html">vl_unit()</a></code> or numeric, read in <code>default_units</code>).</p></dd>
 
 
 <dt id="arg-width-height">width, height<a class="anchor" aria-label="anchor" href="#arg-width-height"></a></dt>
-<dd><p>Grob size (<code><a href="vl_unit.html">vl_unit()</a></code> or numeric), recycled like <code>x</code>/<code>y</code>.
+<dd><p>Grob size (<code><a href="vl_unit.html">vl_unit()</a></code> or numeric, read in
+<code>default_units</code>), recycled like <code>x</code>/<code>y</code>.
 For most grobs the drawn rectangle size. For <code>hexagon_grob()</code>, the optional
 per-hexagon <strong>full</strong> corner-to-corner extent along x/y: when both are given
 they override <code>size</code> (resolved per-axis, so a hexagon can be <em>non-regular</em>
@@ -395,8 +411,23 @@ field values. It never reaches the backend (nothing drawn changes); it rides
 on the scene and is returned by <code><a href="scene_model.html">scene_model()</a></code>. <code>NULL</code> (default) = none.</p></dd>
 
 
+<dt id="arg-default-units">default_units<a class="anchor" aria-label="anchor" href="#arg-default-units"></a></dt>
+<dd><p>Unit a <strong>bare numeric</strong> is read in, for the position
+and size arguments (<code>x</code>, <code>y</code>, <code>width</code>, <code>height</code>, <code>x0</code>..<code>y1</code>, <code>r</code>,
+<code>r0</code>/<code>r1</code>), as grid's <code>default.units</code>. Defaults to <code>"npc"</code> in every
+constructor; pass <code>"native"</code> to read bare numbers on the viewport's
+<code>xscale</code>/<code>yscale</code>, or an absolute unit such as <code>"mm"</code>. A <code><a href="vl_unit.html">vl_unit()</a></code> keeps
+its own unit. Arguments with a physical default of their own ignore it: a
+bare <code>size</code> on <code>points_grob()</code>, <code>hexagon_grob()</code> and <code>loop_grob()</code>, and
+<code>foot</code>, <code>start_cap</code>, <code>end_cap</code> and <code>offset</code>, stay <code>"mm"</code>; an arrow
+<code>length</code> stays <code>"in"</code>. See <strong>Units</strong> below for how a relative length
+resolves.</p></dd>
+
+
 <dt id="arg-r">r<a class="anchor" aria-label="anchor" href="#arg-r"></a></dt>
-<dd><p>Radius (<code><a href="vl_unit.html">vl_unit()</a></code> or numeric).</p></dd>
+<dd><p>Radius (<code><a href="vl_unit.html">vl_unit()</a></code> or numeric, read in <code>default_units</code>). An
+<code>"npc"</code> radius is a fraction of the viewport's shorter side, so the circle
+stays round.</p></dd>
 
 
 <dt id="arg-arrow">arrow<a class="anchor" aria-label="anchor" href="#arg-arrow"></a></dt>
@@ -487,8 +518,9 @@ or <code>"pointy"</code> (vertex at top). <code>size</code> is the circumradius 
 
 
 <dt id="arg-r-r-">r0, r1<a class="anchor" aria-label="anchor" href="#arg-r-r-"></a></dt>
-<dd><p>Inner and outer radius of each sector (<code><a href="vl_unit.html">vl_unit()</a></code> or numeric;
-numeric is treated as <code>"native"</code>). <code>r0 = 0</code> gives a pie slice; <code>r0 == r1</code>
+<dd><p>Inner and outer radius of each sector (<code><a href="vl_unit.html">vl_unit()</a></code> or numeric,
+read in <code>default_units</code>; an <code>"npc"</code> radius is a fraction of the viewport's
+shorter side). <code>r0 = 0</code> gives a pie slice; <code>r0 == r1</code>
 gives an arc outline (stroke only, no fill).</p></dd>
 
 
@@ -511,7 +543,8 @@ bulges away from the vertex, e.g. away from the layout centroid).</p></dd>
 
 
 <dt id="arg-x-y-x-y-">x0, y0, x1, y1<a class="anchor" aria-label="anchor" href="#arg-x-y-x-y-"></a></dt>
-<dd><p>Segment start/end coordinates (<code><a href="vl_unit.html">vl_unit()</a></code> or numeric).</p></dd>
+<dd><p>Segment start/end coordinates (<code><a href="vl_unit.html">vl_unit()</a></code> or numeric,
+read in <code>default_units</code>).</p></dd>
 
 
 <dt id="arg-col-lwd">col, lwd<a class="anchor" aria-label="anchor" href="#arg-col-lwd"></a></dt>
@@ -594,6 +627,30 @@ to the curve at the returning foot. <code>size</code> and <code>foot</code> are 
 device px <strong>at render</strong>, so the loop is a fixed physical size that scales with the
 mm node markers — no native-per-mm estimation, exact at any figure size/dpi.</p>
     </div>
+    <div class="section level2">
+    <h2 id="units">Units<a class="anchor" aria-label="anchor" href="#units"></a></h2>
+
+
+<p>As in grid, a bare numeric position or size is interpreted in the
+constructor's <code>default_units</code>, which is <code>"npc"</code> in <strong>every</strong> constructor: <code>0</code>
+is the left/bottom edge of the viewport and <code>1</code> the right/top. To place
+marks on a viewport's <code>xscale</code>/<code>yscale</code>, pass <code>default_units = "native"</code> or
+wrap the values in <code>vl_unit(x, "native")</code>. A <code><a href="vl_unit.html">vl_unit()</a></code> always keeps its
+own unit, so one grob can mix units per element.</p>
+<p>A few arguments are absolute by nature and keep their own default whatever
+<code>default_units</code> says: a bare <code>size</code> on <code>points_grob()</code>, <code>hexagon_grob()</code> and
+<code>loop_grob()</code>, and <code>foot</code>, <code>start_cap</code>, <code>end_cap</code> and <code>offset</code>, are
+millimetres; an arrow's <code>length</code> is inches.</p>
+<p>How a relative <strong>length</strong> resolves depends on what it measures:</p><ul><li><p>A <code>width</code> resolves against the viewport's width and a <code>height</code> against
+its height (rects, rasters, viewports, and the <code>width</code>/<code>height</code> of a
+hexagon – so an <code>"npc"</code> or <code>"native"</code> hexagon follows the viewport's
+aspect, and can tile a non-square lattice).</p></li>
+<li><p>A radius is one length on both axes: circle and roundrect <code>r</code>, sector
+<code>r0</code>/<code>r1</code>, and a point or hexagon <code>size</code>. An <code>"npc"</code> radius is a fraction
+of the viewport's <strong>shorter</strong> side (grid's <code>"snpc"</code>), so circles stay
+round in a non-square viewport; a <code>"native"</code> radius is measured on the x
+scale.</p></li>
+</ul></div>
 
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>
     </nav></aside></div>

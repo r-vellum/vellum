@@ -71,8 +71,8 @@ lines_grob(c(0.1, 0.9), c(0.1, 0.9), arrow = vl_arrow(type = "closed"))
 #>  @ role       : NULL
 #>  @ keys       : NULL
 #>  @ meta       : NULL
-#>  @ x          : unit [1:2] 0.1native, 0.9native
-#>  @ y          : unit [1:2] 0.1native, 0.9native
+#>  @ x          : unit [1:2] 0.1npc, 0.9npc
+#>  @ y          : unit [1:2] 0.1npc, 0.9npc
 #>  @ arrow      :List of 4
 #>  .. $ angle : num 30
 #>  .. $ length: unit [1:1] 0.25in

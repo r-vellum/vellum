@@ -7,8 +7,7 @@ render with
 [`render()`](https://r-vellum.github.io/vellum/reference/vl_scene.md).
 Coordinates accept a
 [`vl_unit()`](https://r-vellum.github.io/vellum/reference/vl_unit.md)
-vector or a bare numeric (interpreted in the `default_units`, usually
-`"npc"`).
+vector or a bare numeric (interpreted in the `default_units`).
 
 ## Usage
 
@@ -25,7 +24,8 @@ rect_grob(
   id = NULL,
   role = NULL,
   key = NULL,
-  meta = NULL
+  meta = NULL,
+  default_units = "npc"
 )
 
 roundrect_grob(
@@ -41,7 +41,8 @@ roundrect_grob(
   id = NULL,
   role = NULL,
   key = NULL,
-  meta = NULL
+  meta = NULL,
+  default_units = "npc"
 )
 
 lines_grob(
@@ -59,7 +60,8 @@ lines_grob(
   id = NULL,
   role = NULL,
   key = NULL,
-  meta = NULL
+  meta = NULL,
+  default_units = "npc"
 )
 
 polygon_grob(
@@ -72,7 +74,8 @@ polygon_grob(
   id = NULL,
   role = NULL,
   key = NULL,
-  meta = NULL
+  meta = NULL,
+  default_units = "npc"
 )
 
 bezier_grob(
@@ -83,7 +86,8 @@ bezier_grob(
   name = NULL,
   vp = NULL,
   id = NULL,
-  role = NULL
+  role = NULL,
+  default_units = "npc"
 )
 
 spline_grob(
@@ -96,7 +100,8 @@ spline_grob(
   name = NULL,
   vp = NULL,
   id = NULL,
-  role = NULL
+  role = NULL,
+  default_units = "npc"
 )
 
 circle_grob(
@@ -110,7 +115,8 @@ circle_grob(
   id = NULL,
   role = NULL,
   key = NULL,
-  meta = NULL
+  meta = NULL,
+  default_units = "npc"
 )
 
 points_grob(
@@ -125,7 +131,8 @@ points_grob(
   id = NULL,
   role = NULL,
   key = NULL,
-  meta = NULL
+  meta = NULL,
+  default_units = "npc"
 )
 
 hexagon_grob(
@@ -142,7 +149,8 @@ hexagon_grob(
   id = NULL,
   role = NULL,
   key = NULL,
-  meta = NULL
+  meta = NULL,
+  default_units = "npc"
 )
 
 sector_grob(
@@ -161,7 +169,8 @@ sector_grob(
   id = NULL,
   role = NULL,
   key = NULL,
-  meta = NULL
+  meta = NULL,
+  default_units = "npc"
 )
 
 loop_grob(
@@ -176,7 +185,8 @@ loop_grob(
   name = NULL,
   vp = NULL,
   id = NULL,
-  role = NULL
+  role = NULL,
+  default_units = "npc"
 )
 
 segments_grob(
@@ -197,7 +207,8 @@ segments_grob(
   key = NULL,
   meta = NULL,
   col = NULL,
-  lwd = NULL
+  lwd = NULL,
+  default_units = "npc"
 )
 
 path_grob(
@@ -211,7 +222,8 @@ path_grob(
   vp = NULL,
   role = NULL,
   key = NULL,
-  meta = NULL
+  meta = NULL,
+  default_units = "npc"
 )
 
 raster_grob(
@@ -225,7 +237,8 @@ raster_grob(
   name = NULL,
   vp = NULL,
   id = NULL,
-  role = NULL
+  role = NULL,
+  default_units = "npc"
 )
 
 text_grob(
@@ -244,7 +257,8 @@ text_grob(
   align = "left",
   fit = FALSE,
   key = NULL,
-  meta = NULL
+  meta = NULL,
+  default_units = "npc"
 )
 ```
 
@@ -254,23 +268,24 @@ text_grob(
 
   Coordinates
   ([`vl_unit()`](https://r-vellum.github.io/vellum/reference/vl_unit.md)
-  or numeric).
+  or numeric, read in `default_units`).
 
 - width, height:
 
   Grob size
   ([`vl_unit()`](https://r-vellum.github.io/vellum/reference/vl_unit.md)
-  or numeric), recycled like `x`/`y`. For most grobs the drawn rectangle
-  size. For `hexagon_grob()`, the optional per-hexagon **full**
-  corner-to-corner extent along x/y: when both are given they override
-  `size` (resolved per-axis, so a hexagon can be *non-regular* and tile
-  a non-square lattice — e.g. `"native"` units tile in data space
-  regardless of device aspect); a *regular* flat hexagon is
-  `height == width * sqrt(3) / 2`; leave both `NULL` to use circumradius
-  `size`; must be given together. For `loop_grob()`, `width` is instead
-  a dimensionless lateral petal scale in `(0, 1]` (recycled per loop):
-  `1` (default) is the full teardrop, smaller narrows the petal's
-  **waist** without shortening it (the igraph "narrowing" factor).
+  or numeric, read in `default_units`), recycled like `x`/`y`. For most
+  grobs the drawn rectangle size. For `hexagon_grob()`, the optional
+  per-hexagon **full** corner-to-corner extent along x/y: when both are
+  given they override `size` (resolved per-axis, so a hexagon can be
+  *non-regular* and tile a non-square lattice — e.g. `"native"` units
+  tile in data space regardless of device aspect); a *regular* flat
+  hexagon is `height == width * sqrt(3) / 2`; leave both `NULL` to use
+  circumradius `size`; must be given together. For `loop_grob()`,
+  `width` is instead a dimensionless lateral petal scale in `(0, 1]`
+  (recycled per loop): `1` (default) is the full teardrop, smaller
+  narrows the petal's **waist** without shortening it (the igraph
+  "narrowing" factor).
 
   For `text_grob()` these mean something different: `width` is an
   **absolute** wrapping measure (`mm`/`cm`/`in`/`pt`), and giving it
@@ -337,11 +352,26 @@ text_grob(
   [`scene_model()`](https://r-vellum.github.io/vellum/reference/scene_model.md).
   `NULL` (default) = none.
 
+- default_units:
+
+  Unit a **bare numeric** is read in, for the position and size
+  arguments (`x`, `y`, `width`, `height`, `x0`..`y1`, `r`, `r0`/`r1`),
+  as grid's `default.units`. Defaults to `"npc"` in every constructor;
+  pass `"native"` to read bare numbers on the viewport's
+  `xscale`/`yscale`, or an absolute unit such as `"mm"`. A
+  [`vl_unit()`](https://r-vellum.github.io/vellum/reference/vl_unit.md)
+  keeps its own unit. Arguments with a physical default of their own
+  ignore it: a bare `size` on `points_grob()`, `hexagon_grob()` and
+  `loop_grob()`, and `foot`, `start_cap`, `end_cap` and `offset`, stay
+  `"mm"`; an arrow `length` stays `"in"`. See **Units** below for how a
+  relative length resolves.
+
 - r:
 
   Radius
   ([`vl_unit()`](https://r-vellum.github.io/vellum/reference/vl_unit.md)
-  or numeric).
+  or numeric, read in `default_units`). An `"npc"` radius is a fraction
+  of the viewport's shorter side, so the circle stays round.
 
 - arrow:
 
@@ -450,8 +480,9 @@ text_grob(
 
   Inner and outer radius of each sector
   ([`vl_unit()`](https://r-vellum.github.io/vellum/reference/vl_unit.md)
-  or numeric; numeric is treated as `"native"`). `r0 = 0` gives a pie
-  slice; `r0 == r1` gives an arc outline (stroke only, no fill).
+  or numeric, read in `default_units`; an `"npc"` radius is a fraction
+  of the viewport's shorter side). `r0 = 0` gives a pie slice;
+  `r0 == r1` gives an arc outline (stroke only, no fill).
 
 - theta0, theta1:
 
@@ -476,7 +507,7 @@ text_grob(
 
   Segment start/end coordinates
   ([`vl_unit()`](https://r-vellum.github.io/vellum/reference/vl_unit.md)
-  or numeric).
+  or numeric, read in `default_units`).
 
 - col, lwd:
 
@@ -572,3 +603,31 @@ head tangent to the curve at the returning foot. `size` and `foot` are
 absolute and resolved to device px **at render**, so the loop is a fixed
 physical size that scales with the mm node markers — no native-per-mm
 estimation, exact at any figure size/dpi.
+
+## Units
+
+As in grid, a bare numeric position or size is interpreted in the
+constructor's `default_units`, which is `"npc"` in **every**
+constructor: `0` is the left/bottom edge of the viewport and `1` the
+right/top. To place marks on a viewport's `xscale`/`yscale`, pass
+`default_units = "native"` or wrap the values in `vl_unit(x, "native")`.
+A [`vl_unit()`](https://r-vellum.github.io/vellum/reference/vl_unit.md)
+always keeps its own unit, so one grob can mix units per element.
+
+A few arguments are absolute by nature and keep their own default
+whatever `default_units` says: a bare `size` on `points_grob()`,
+`hexagon_grob()` and `loop_grob()`, and `foot`, `start_cap`, `end_cap`
+and `offset`, are millimetres; an arrow's `length` is inches.
+
+How a relative **length** resolves depends on what it measures:
+
+- A `width` resolves against the viewport's width and a `height` against
+  its height (rects, rasters, viewports, and the `width`/`height` of a
+  hexagon – so an `"npc"` or `"native"` hexagon follows the viewport's
+  aspect, and can tile a non-square lattice).
+
+- A radius is one length on both axes: circle and roundrect `r`, sector
+  `r0`/`r1`, and a point or hexagon `size`. An `"npc"` radius is a
+  fraction of the viewport's **shorter** side (grid's `"snpc"`), so
+  circles stay round in a non-square viewport; a `"native"` radius is
+  measured on the x scale.

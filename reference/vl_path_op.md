@@ -72,7 +72,9 @@ set up.
 
 Operands must be in a single coordinate space — one unit, no offsets —
 since a boolean has to be computed somewhere, and mixed units have no
-common space.
+common space. The result comes back in that space: in the unit of `a`
+(or of `b`, when `a` is bare numbers), and bare numbers in give `"npc"`
+out, as in every constructor.
 
 ## Examples
 

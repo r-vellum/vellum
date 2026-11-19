@@ -142,7 +142,10 @@ shape you did not mean.</p>
 <p>The <strong>result</strong> always uses the non-zero rule: holes come back wound opposite
 to their outer ring, which is how the returned <code><a href="grob.html">path_grob()</a></code> is set up.</p>
 <p>Operands must be in a single coordinate space — one unit, no offsets — since
-a boolean has to be computed somewhere, and mixed units have no common space.</p>
+a boolean has to be computed somewhere, and mixed units have no common space.
+The result comes back in that space: in the unit of <code>a</code> (or of <code>b</code>, when <code>a</code>
+is bare numbers), and bare numbers in give <code>"npc"</code> out, as in every
+constructor.</p>
     </div>
 
     <div class="section level2">

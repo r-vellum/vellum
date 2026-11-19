@@ -18,7 +18,8 @@ text_path_grob(
   name = NULL,
   vp = NULL,
   id = NULL,
-  role = NULL
+  role = NULL,
+  default_units = "npc"
 )
 ```
 
@@ -30,7 +31,9 @@ text_path_grob(
 
 - x, y:
 
-  The baseline path, as unit vectors of equal length.
+  The baseline path, as
+  [`vl_unit()`](https://r-vellum.github.io/vellum/reference/vl_unit.md)
+  or numeric vectors (read in `default_units`) of equal length.
 
 - just:
 
@@ -72,6 +75,24 @@ text_path_grob(
 
   Optional ARIA role, emitted by the SVG backend as `role=` for
   accessibility (ignored by the raster and PDF backends).
+
+- default_units:
+
+  Unit a **bare numeric** is read in, for the position and size
+  arguments (`x`, `y`, `width`, `height`, `x0`..`y1`, `r`, `r0`/`r1`),
+  as grid's `default.units`. Defaults to `"npc"` in every constructor;
+  pass `"native"` to read bare numbers on the viewport's
+  `xscale`/`yscale`, or an absolute unit such as `"mm"`. A
+  [`vl_unit()`](https://r-vellum.github.io/vellum/reference/vl_unit.md)
+  keeps its own unit. Arguments with a physical default of their own
+  ignore it: a bare `size` on
+  [`points_grob()`](https://r-vellum.github.io/vellum/reference/grob.md),
+  [`hexagon_grob()`](https://r-vellum.github.io/vellum/reference/grob.md)
+  and
+  [`loop_grob()`](https://r-vellum.github.io/vellum/reference/grob.md),
+  and `foot`, `start_cap`, `end_cap` and `offset`, stay `"mm"`; an arrow
+  `length` stays `"in"`. See **Units** below for how a relative length
+  resolves.
 
 ## Value
 
