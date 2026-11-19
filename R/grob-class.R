@@ -6,7 +6,31 @@ NULL
 #' Grobs are immutable value objects describing something to draw. Build them
 #' with the constructors below, add them to a scene with [draw()], and render
 #' with [render()]. Coordinates accept a [vl_unit()] vector or a bare numeric
-#' (interpreted in the `default_units`, usually `"npc"`).
+#' (interpreted in the `default_units`).
+#'
+#' @section Units:
+#' As in grid, a bare numeric position or size is interpreted in the
+#' constructor's `default_units`, which is `"npc"` in **every** constructor: `0`
+#' is the left/bottom edge of the viewport and `1` the right/top. To place
+#' marks on a viewport's `xscale`/`yscale`, pass `default_units = "native"` or
+#' wrap the values in `vl_unit(x, "native")`. A [vl_unit()] always keeps its
+#' own unit, so one grob can mix units per element.
+#'
+#' A few arguments are absolute by nature and keep their own default whatever
+#' `default_units` says: a bare `size` on [points_grob()], [hexagon_grob()] and
+#' [loop_grob()], and `foot`, `start_cap`, `end_cap` and `offset`, are
+#' millimetres; an arrow's `length` is inches.
+#'
+#' How a relative **length** resolves depends on what it measures:
+#' * A `width` resolves against the viewport's width and a `height` against
+#'   its height (rects, rasters, viewports, and the `width`/`height` of a
+#'   hexagon -- so an `"npc"` or `"native"` hexagon follows the viewport's
+#'   aspect, and can tile a non-square lattice).
+#' * A radius is one length on both axes: circle and roundrect `r`, sector
+#'   `r0`/`r1`, and a point or hexagon `size`. An `"npc"` radius is a fraction
+#'   of the viewport's **shorter** side (grid's `"snpc"`), so circles stay
+#'   round in a non-square viewport; a `"native"` radius is measured on the x
+#'   scale.
 #'
 #' @name grob
 #' @return A grob object.

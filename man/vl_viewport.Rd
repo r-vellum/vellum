@@ -28,7 +28,8 @@ vl_viewport(
   name = NULL,
   meta = NULL,
   pannable = FALSE,
-  cache = FALSE
+  cache = FALSE,
+  default_units = "npc"
 )
 
 grid_layout(
@@ -115,6 +116,11 @@ only what changed. Raster/\code{\link[=display]{display()}} only; SVG/PDF ignore
 subtree as vector (no fidelity loss). Ignored when the viewport also sets a
 non-normal \code{blend} (a blend needs the live backdrop). See
 \code{\link[=vl_clear_render_cache]{vl_clear_render_cache()}}.}
+
+\item{default_units}{Unit a bare numeric \code{x}, \code{y}, \code{width} or \code{height} is
+read in, as grid's \code{default.units}. Defaults to \code{"npc"} (fractions of the
+parent), as in every grob constructor. \code{width} resolves against the
+parent's width and \code{height} against its height.}
 
 \item{widths, heights}{Track sizes as a \code{\link[=vl_unit]{vl_unit()}} vector. Use \code{"null"} units for
 flexible tracks that share leftover space in proportion to their value.}

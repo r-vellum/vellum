@@ -14,13 +14,15 @@ text_path_grob(
   name = NULL,
   vp = NULL,
   id = NULL,
-  role = NULL
+  role = NULL,
+  default_units = "npc"
 )
 }
 \arguments{
 \item{label}{A single character string.}
 
-\item{x, y}{The baseline path, as unit vectors of equal length.}
+\item{x, y}{The baseline path, as \code{\link[=vl_unit]{vl_unit()}} or numeric vectors (read in
+\code{default_units}) of equal length.}
 
 \item{just}{Justification: \code{c(hjust, vjust)} as names (\code{"left"}, \code{"centre"},
 \code{"right"}, \code{"bottom"}, \code{"top"}) or numbers in \verb{[0, 1]}.}
@@ -43,6 +45,17 @@ grid); \code{NULL} makes a single sub-path.}
 
 \item{role}{Optional ARIA role, emitted by the SVG backend as \verb{role=} for
 accessibility (ignored by the raster and PDF backends).}
+
+\item{default_units}{Unit a \strong{bare numeric} is read in, for the position
+and size arguments (\code{x}, \code{y}, \code{width}, \code{height}, \code{x0}..\code{y1}, \code{r},
+\code{r0}/\code{r1}), as grid's \code{default.units}. Defaults to \code{"npc"} in every
+constructor; pass \code{"native"} to read bare numbers on the viewport's
+\code{xscale}/\code{yscale}, or an absolute unit such as \code{"mm"}. A \code{\link[=vl_unit]{vl_unit()}} keeps
+its own unit. Arguments with a physical default of their own ignore it: a
+bare \code{size} on \code{\link[=points_grob]{points_grob()}}, \code{\link[=hexagon_grob]{hexagon_grob()}} and \code{\link[=loop_grob]{loop_grob()}}, and
+\code{foot}, \code{start_cap}, \code{end_cap} and \code{offset}, stay \code{"mm"}; an arrow
+\code{length} stays \code{"in"}. See \strong{Units} below for how a relative length
+resolves.}
 }
 \value{
 A grob.

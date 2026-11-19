@@ -11,11 +11,17 @@
     return(list(
       x = .ring_px(g@x),
       y = .ring_px(g@y),
-      nper = as.integer(g@nper %||% length(g@x))
+      nper = as.integer(g@nper %||% length(g@x)),
+      unit = .ring_unit(g@x)
     ))
   }
   if (S7::S7_inherits(g, grob_polygon)) {
-    return(list(x = .ring_px(g@x), y = .ring_px(g@y), nper = length(g@x)))
+    return(list(
+      x = .ring_px(g@x),
+      y = .ring_px(g@y),
+      nper = length(g@x),
+      unit = .ring_unit(g@x)
+    ))
   }
   if (is.list(g) && all(c("x", "y") %in% names(g))) {
     # Through `.ring_px` like the grob branches, not `as.numeric()`: a list may
@@ -26,7 +32,8 @@
     return(list(
       x = x[seq_len(n)],
       y = y[seq_len(n)],
-      nper = as.integer(g$nper %||% n)
+      nper = as.integer(g$nper %||% n),
+      unit = .ring_unit(g$x)
     ))
   }
   cli::cli_abort(c(
@@ -53,6 +60,16 @@
   as.numeric(vctrs::field(u, "value"))
 }
 
+# The unit name of a ring coordinate vector (validated single-unit by
+# `.ring_px()`), or NA for bare numbers -- so a boolean result can be handed
+# back in the space its operands were in.
+.ring_unit <- function(u) {
+  if (!is_unit(u) || !vctrs::vec_size(u)) {
+    return(NA_character_)
+  }
+  names(.unit_codes)[match(vctrs::field(u, "unit")[1], .unit_codes)]
+}
+
 #' Boolean operations on paths
 #'
 #' Combine two shapes as **geometry**: union, intersection, difference or
@@ -77,6 +94,9 @@
 #'
 #' Operands must be in a single coordinate space — one unit, no offsets — since
 #' a boolean has to be computed somewhere, and mixed units have no common space.
+#' The result comes back in that space: in the unit of `a` (or of `b`, when `a`
+#' is bare numbers), and bare numbers in give `"npc"` out, as in every
+#' constructor.
 #'
 #' @param a,b The operands: a [path_grob()], a [polygon_grob()], or a list with
 #'   `x`, `y` and optionally `nper` (points per ring).
@@ -121,6 +141,8 @@ vl_path_op <- function(
     .PATH_OPS[[op]],
     identical(rule, "evenodd")
   )
+  unit <- c(ra$unit, rb$unit, "npc")
+  unit <- unit[!is.na(unit)][1L]
   if (!length(res$nper)) {
     return(path_grob(
       numeric(0),
@@ -128,13 +150,15 @@ vl_path_op <- function(
       gp = gp,
       name = name,
       vp = vp,
-      role = role
+      role = role,
+      default_units = unit
     ))
   }
   path_grob(
     res$x,
     res$y,
     id = rep(seq_along(res$nper), res$nper),
+    default_units = unit,
     rule = "winding",
     gp = gp,
     name = name,
@@ -336,9 +360,12 @@ contour_grob <- function(
 #'
 #' @param d A character string of SVG path data, or (for `svg_grob()`) a whole
 #'   `<svg>` element to read `<path>` geometry and the `viewBox` from.
-#' @param x,y Centre of the drawn icon.
+#' @param x,y Centre of the drawn icon ([vl_unit()] or numeric).
 #' @param size Size of the reference box's longer side, as a [vl_unit()] — the
-#'   viewBox when one is given, otherwise the path's own bounding box.
+#'   viewBox when one is given, otherwise the path's own bounding box. A bare
+#'   numeric is read in `default_units`, like `x`/`y`.
+#' @param default_units Unit a bare numeric `x`, `y` or `size` is read in.
+#'   Defaults to `"npc"`, as in every constructor (see [grob]).
 #' @param flip_y Flip the y axis to convert from SVG's convention. Leave `TRUE`
 #'   unless your `d` is already in a y-up space.
 #' @param viewbox The icon's SVG `viewBox` as `c(xmin, ymin, width, height)` or
@@ -400,8 +427,10 @@ svg_grob <- function(
   name = NULL,
   vp = NULL,
   id = NULL,
-  role = NULL
+  role = NULL,
+  default_units = "npc"
 ) {
+  du <- .check_default_units(default_units)
   empty <- function() {
     path_grob(
       numeric(0),
@@ -432,9 +461,17 @@ svg_grob <- function(
   # `unit * numeric` is elementwise, not recycling, so widen the scalars to the
   # point count before combining them.
   n <- nrow(p)
-  su <- vctrs::vec_recycle(as_unit(size), n)
-  cx <- vctrs::vec_recycle(as_unit(x), n)
-  cy <- vctrs::vec_recycle(as_unit(y), n)
+  v <- .recycle_elems(
+    list(
+      size = .as_unit_arg(size, "size", du),
+      x = .as_unit_arg(x, "x", du),
+      y = .as_unit_arg(y, "y", du)
+    ),
+    n
+  )
+  su <- v$size
+  cx <- v$x
+  cy <- v$y
   path_grob(
     x = cx + su * ((p$x - frame$cx) / frame$span),
     y = cy + su * ((p$y - frame$cy) / frame$span),

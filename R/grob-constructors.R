@@ -4,8 +4,9 @@ NULL
 # --- friendly constructors --------------------------------------------------
 
 #' @rdname grob
-#' @param x,y Coordinates ([vl_unit()] or numeric).
-#' @param width,height Grob size ([vl_unit()] or numeric), recycled like `x`/`y`.
+#' @param x,y Coordinates ([vl_unit()] or numeric, read in `default_units`).
+#' @param width,height Grob size ([vl_unit()] or numeric, read in
+#'   `default_units`), recycled like `x`/`y`.
 #'   For most grobs the drawn rectangle size. For [hexagon_grob()], the optional
 #'   per-hexagon **full** corner-to-corner extent along x/y: when both are given
 #'   they override `size` (resolved per-axis, so a hexagon can be *non-regular*
@@ -29,6 +30,16 @@ NULL
 #' @param vp Optional [vl_viewport()] to draw this grob inside.
 #' @param role Optional ARIA role, emitted by the SVG backend as `role=` for
 #'   accessibility (ignored by the raster and PDF backends).
+#' @param default_units Unit a **bare numeric** is read in, for the position
+#'   and size arguments (`x`, `y`, `width`, `height`, `x0`..`y1`, `r`,
+#'   `r0`/`r1`), as grid's `default.units`. Defaults to `"npc"` in every
+#'   constructor; pass `"native"` to read bare numbers on the viewport's
+#'   `xscale`/`yscale`, or an absolute unit such as `"mm"`. A [vl_unit()] keeps
+#'   its own unit. Arguments with a physical default of their own ignore it: a
+#'   bare `size` on [points_grob()], [hexagon_grob()] and [loop_grob()], and
+#'   `foot`, `start_cap`, `end_cap` and `offset`, stay `"mm"`; an arrow
+#'   `length` stays `"in"`. See **Units** below for how a relative length
+#'   resolves.
 #' @export
 rect_grob <- function(
   x = 0.5,
@@ -42,18 +53,22 @@ rect_grob <- function(
   id = NULL,
   role = NULL,
   key = NULL,
-  meta = NULL
+  meta = NULL,
+  default_units = "npc"
 ) {
-  w <- as_unit(width)
-  h <- as_unit(height)
-  .check_extent(w, "width")
-  .check_extent(h, "height")
-  n <- .elem_n(list(x = x, y = y, width = w, height = h))
+  du <- .check_default_units(default_units)
+  v <- list(
+    x = .as_unit_arg(x, "x", du),
+    y = .as_unit_arg(y, "y", du),
+    width = .check_extent(.as_unit_arg(width, "width", du), "width"),
+    height = .check_extent(.as_unit_arg(height, "height", du), "height")
+  )
+  n <- .elem_n(v)
   grob_rect(
-    x = as_unit(x),
-    y = as_unit(y),
-    width = w,
-    height = h,
+    x = v$x,
+    y = v$y,
+    width = v$width,
+    height = v$height,
     sketch = sketch,
     gp = gp,
     name = name,
@@ -66,8 +81,8 @@ rect_grob <- function(
 }
 
 #' @rdname grob
-#' @param r Corner radius ([vl_unit()] or numeric). An `"npc"`/numeric radius is
-#'   isotropic (a fraction of the shorter side, like grid's `"snpc"`), so corners
+#' @param r Corner radius ([vl_unit()] or numeric, read in `default_units`).
+#'   An `"npc"` radius is isotropic (a fraction of the shorter side, like grid's `"snpc"`), so corners
 #'   stay circular on non-square rectangles; clamped to half the shorter side.
 #' @export
 roundrect_grob <- function(
@@ -83,24 +98,27 @@ roundrect_grob <- function(
   id = NULL,
   role = NULL,
   key = NULL,
-  meta = NULL
+  meta = NULL,
+  default_units = "npc"
 ) {
-  w <- as_unit(width)
-  h <- as_unit(height)
-  rr <- as_unit(r)
-  .check_extent(w, "width")
-  .check_extent(h, "height")
-  .check_extent(rr, "r")
+  du <- .check_default_units(default_units)
+  v <- list(
+    x = .as_unit_arg(x, "x", du),
+    y = .as_unit_arg(y, "y", du),
+    width = .check_extent(.as_unit_arg(width, "width", du), "width"),
+    height = .check_extent(.as_unit_arg(height, "height", du), "height"),
+    r = .check_extent(.as_unit_arg(r, "r", du), "r")
+  )
   # A roundrect grob is a *batch*: one box per (x, y, w, h, r) element, like
   # `rect_grob()`. Recycle keys/meta to that element count (not to 1, which
   # silently dropped every key past the first on a multi-box grob).
-  n <- .elem_n(list(x = x, y = y, width = w, height = h, r = rr))
+  n <- .elem_n(v)
   grob_roundrect(
-    x = as_unit(x),
-    y = as_unit(y),
-    width = w,
-    height = h,
-    r = rr,
+    x = v$x,
+    y = v$y,
+    width = v$width,
+    height = v$height,
+    r = v$r,
     sketch = sketch,
     gp = gp,
     name = name,
@@ -110,30 +128,6 @@ roundrect_grob <- function(
     keys = .recycle_keys(key, n),
     meta = .recycle_meta(meta, n)
   )
-}
-
-# An extent (width/height/radius/size) must be non-negative. Checks the resolved
-# numeric value of a unit vector (absolute/derived kinds are already in mm; npc/
-# native lengths are likewise non-negative when sensible).
-.check_extent <- function(u, arg) {
-  v <- vctrs::field(u, "value")
-  if (length(v) && any(v < 0, na.rm = TRUE)) {
-    cli::cli_abort("{.arg {arg}} must be non-negative.")
-  }
-  invisible(u)
-}
-
-# A numeric angle/parameter vector must be finite (no NA/NaN/Inf). Non-finite
-# angles otherwise reach the backend and, for arc/sector spans, blow up the
-# segment count (see the render-time clamp in `sector_path`). Named cli error.
-.check_finite_num <- function(v, arg) {
-  v <- as.numeric(v)
-  if (length(v) && !all(is.finite(v))) {
-    cli::cli_abort(
-      "{.arg {arg}} must be finite (no {.val NA}/{.val NaN}/{.val Inf})."
-    )
-  }
-  invisible(v)
 }
 
 #' @rdname grob
@@ -197,8 +191,10 @@ lines_grob <- function(
   id = NULL,
   role = NULL,
   key = NULL,
-  meta = NULL
+  meta = NULL,
+  default_units = "npc"
 ) {
+  du <- .check_default_units(default_units)
   n <- .coord_n(x, y)
   # `id` here is the accessibility identifier, NOT a grouping variable — unlike
   # `path_grob(id=)`, which splits points into rings. Passing a grouping vector
@@ -215,9 +211,13 @@ lines_grob <- function(
   end_cap <- .check_cap(end_cap, "end_cap", scalar = TRUE)
   offset <- .check_cap(offset, "offset", scalar = TRUE, nonneg = FALSE)
   lwd_profile <- .check_vertex_profile(lwd_profile, n, sketch)
+  v <- .recycle_elems(
+    list(x = .as_unit_arg(x, "x", du), y = .as_unit_arg(y, "y", du)),
+    n
+  )
   grob_lines(
-    x = vctrs::vec_recycle(as_unit(x, "native"), n),
-    y = vctrs::vec_recycle(as_unit(y, "native"), n),
+    x = v$x,
+    y = v$y,
     arrow = arrow,
     start_cap = start_cap,
     end_cap = end_cap,
@@ -483,12 +483,18 @@ polygon_grob <- function(
   id = NULL,
   role = NULL,
   key = NULL,
-  meta = NULL
+  meta = NULL,
+  default_units = "npc"
 ) {
+  du <- .check_default_units(default_units)
   n <- .coord_n(x, y)
+  v <- .recycle_elems(
+    list(x = .as_unit_arg(x, "x", du), y = .as_unit_arg(y, "y", du)),
+    n
+  )
   grob_polygon(
-    x = vctrs::vec_recycle(as_unit(x, "native"), n),
-    y = vctrs::vec_recycle(as_unit(y, "native"), n),
+    x = v$x,
+    y = v$y,
     sketch = sketch,
     gp = gp,
     name = name,
@@ -511,10 +517,12 @@ bezier_grob <- function(
   name = NULL,
   vp = NULL,
   id = NULL,
-  role = NULL
+  role = NULL,
+  default_units = "npc"
 ) {
-  ax <- .axis_unit(x)
-  ay <- .axis_unit(y)
+  du <- .check_default_units(default_units)
+  ax <- .axis_unit(x, du)
+  ay <- .axis_unit(y, du)
   if (length(ax$value) != length(ay$value)) {
     cli::cli_abort("{.arg x} and {.arg y} must have the same length.")
   }
@@ -548,10 +556,12 @@ spline_grob <- function(
   name = NULL,
   vp = NULL,
   id = NULL,
-  role = NULL
+  role = NULL,
+  default_units = "npc"
 ) {
-  ax <- .axis_unit(x)
-  ay <- .axis_unit(y)
+  du <- .check_default_units(default_units)
+  ax <- .axis_unit(x, du)
+  ay <- .axis_unit(y, du)
   if (length(ax$value) != length(ay$value)) {
     cli::cli_abort("{.arg x} and {.arg y} must have the same length.")
   }
@@ -570,7 +580,9 @@ spline_grob <- function(
 }
 
 #' @rdname grob
-#' @param r Radius ([vl_unit()] or numeric).
+#' @param r Radius ([vl_unit()] or numeric, read in `default_units`). An
+#'   `"npc"` radius is a fraction of the viewport's shorter side, so the circle
+#'   stays round.
 #' @export
 circle_grob <- function(
   x = 0.5,
@@ -583,15 +595,21 @@ circle_grob <- function(
   id = NULL,
   role = NULL,
   key = NULL,
-  meta = NULL
+  meta = NULL,
+  default_units = "npc"
 ) {
-  n <- .elem_n(list(x = x, y = y, r = r))
-  ru <- as_unit(r)
-  .check_extent(ru, "r")
+  du <- .check_default_units(default_units)
+  v <- list(
+    x = .as_unit_arg(x, "x", du),
+    y = .as_unit_arg(y, "y", du),
+    r = .check_extent(.as_unit_arg(r, "r", du), "r")
+  )
+  n <- .elem_n(v)
+  v <- .recycle_elems(v, n)
   grob_circle(
-    x = vctrs::vec_recycle(as_unit(x), n),
-    y = vctrs::vec_recycle(as_unit(y), n),
-    r = vctrs::vec_recycle(ru, n),
+    x = v$x,
+    y = v$y,
+    r = v$r,
     sketch = sketch,
     gp = gp,
     name = name,
@@ -604,7 +622,8 @@ circle_grob <- function(
 }
 
 #' @rdname grob
-#' @param size Point size ([vl_unit()] or numeric).
+#' @param size Point size ([vl_unit()] or numeric; a bare numeric is `"mm"`,
+#'   whatever `default_units` says).
 #' @param shape Marker shape(s): `"circle"` (default), `"square"`, `"triangle"`,
 #'   `"diamond"`, `"plus"`, `"cross"`, `"triangle_down"`, or `"star"`, recycled per
 #'   point. Filled shapes (all but `"plus"`/`"cross"`) paint `gp$fill` and outline
@@ -623,23 +642,31 @@ points_grob <- function(
   id = NULL,
   role = NULL,
   key = NULL,
-  meta = NULL
+  meta = NULL,
+  default_units = "npc"
 ) {
-  sz <- as_unit(size, "mm")
-  .check_extent(sz, "size")
+  du <- .check_default_units(default_units)
   shape <- as.character(shape)
-  n <- .elem_n(list(x = x, y = y, size = sz, shape = shape))
+  v <- list(
+    x = .as_unit_arg(x, "x", du),
+    y = .as_unit_arg(y, "y", du),
+    # `size` keeps its own physical default: a bare number is millimetres.
+    size = .check_extent(.as_unit_arg(size, "size", "mm"), "size"),
+    shape = shape
+  )
+  n <- .elem_n(v)
   bad <- setdiff(unique(shape), names(.marker_codes))
   if (length(bad)) {
     cli::cli_abort(
       "Unknown point {.arg shape}: {.val {bad}}. Use {.or {names(.marker_codes)}}."
     )
   }
+  v <- .recycle_elems(v, n)
   grob_points(
-    x = vctrs::vec_recycle(as_unit(x), n),
-    y = vctrs::vec_recycle(as_unit(y), n),
-    size = vctrs::vec_recycle(sz, n),
-    shape = vctrs::vec_recycle(shape, n),
+    x = v$x,
+    y = v$y,
+    size = v$size,
+    shape = v$shape,
     sketch = sketch,
     gp = gp,
     name = name,
@@ -673,38 +700,39 @@ hexagon_grob <- function(
   id = NULL,
   role = NULL,
   key = NULL,
-  meta = NULL
+  meta = NULL,
+  default_units = "npc"
 ) {
-  orientation <- match.arg(orientation)
-  sz <- as_unit(size, "mm")
-  .check_extent(sz, "size")
+  orientation <- .check_choice(orientation, c("flat", "pointy"), "orientation")
+  du <- .check_default_units(default_units)
   if (is.null(width) != is.null(height)) {
     cli::cli_abort("{.arg width} and {.arg height} must be supplied together.")
   }
-  n <- .elem_n(list(
-    x = x,
-    y = y,
-    size = sz,
-    width = width,
-    height = height
-  ))
-  if (!is.null(width)) {
-    width <- as_unit(width, "native")
-    height <- as_unit(height, "native")
-    .check_extent(width, "width")
-    .check_extent(height, "height")
-    width <- vctrs::vec_recycle(width, n)
-    height <- vctrs::vec_recycle(height, n)
-  }
+  v <- list(
+    x = .as_unit_arg(x, "x", du),
+    y = .as_unit_arg(y, "y", du),
+    # `size` keeps its own physical default: a bare number is millimetres.
+    size = .check_extent(.as_unit_arg(size, "size", "mm"), "size"),
+    width = .check_extent(
+      .as_unit_arg(width, "width", du, allow_null = TRUE),
+      "width"
+    ),
+    height = .check_extent(
+      .as_unit_arg(height, "height", du, allow_null = TRUE),
+      "height"
+    )
+  )
+  n <- .elem_n(v)
+  v <- .recycle_elems(v, n)
   if (!is.null(fill) && !.is_paint(fill)) {
     fill <- rep_len(fill, n)
   }
   grob_hexagon(
-    x = vctrs::vec_recycle(as_unit(x), n),
-    y = vctrs::vec_recycle(as_unit(y), n),
-    size = vctrs::vec_recycle(sz, n),
-    width = width,
-    height = height,
+    x = v$x,
+    y = v$y,
+    size = v$size,
+    width = v$width,
+    height = v$height,
     fill = fill,
     orientation = orientation,
     gp = gp,
@@ -718,8 +746,9 @@ hexagon_grob <- function(
 }
 
 #' @rdname grob
-#' @param r0,r1 Inner and outer radius of each sector ([vl_unit()] or numeric;
-#'   numeric is treated as `"native"`). `r0 = 0` gives a pie slice; `r0 == r1`
+#' @param r0,r1 Inner and outer radius of each sector ([vl_unit()] or numeric,
+#'   read in `default_units`; an `"npc"` radius is a fraction of the viewport's
+#'   shorter side). `r0 = 0` gives a pie slice; `r0 == r1`
 #'   gives an arc outline (stroke only, no fill).
 #' @param theta0,theta1 Start and end angle of each sector, in **radians**, with 0
 #'   at 3 o'clock and increasing counter-clockwise.
@@ -752,28 +781,30 @@ sector_grob <- function(
   id = NULL,
   role = NULL,
   key = NULL,
-  meta = NULL
+  meta = NULL,
+  default_units = "npc"
 ) {
-  n <- .elem_n(list(
-    x = x,
-    y = y,
-    r0 = r0,
-    r1 = r1,
-    theta0 = theta0,
-    theta1 = theta1
-  ))
-  .check_finite_num(theta0, "theta0")
-  .check_finite_num(theta1, "theta1")
+  du <- .check_default_units(default_units)
+  v <- list(
+    x = .as_unit_arg(x, "x", du),
+    y = .as_unit_arg(y, "y", du),
+    r0 = .as_unit_arg(r0, "r0", du),
+    r1 = .as_unit_arg(r1, "r1", du),
+    theta0 = .check_finite_num(theta0, "theta0"),
+    theta1 = .check_finite_num(theta1, "theta1")
+  )
+  n <- .elem_n(v)
+  v <- .recycle_elems(v, n)
   if (!is.null(fill) && !.is_paint(fill)) {
     fill <- rep_len(fill, n)
   }
   grob_sector(
-    x = vctrs::vec_recycle(as_unit(x), n),
-    y = vctrs::vec_recycle(as_unit(y), n),
-    r0 = vctrs::vec_recycle(as_unit(r0, "native"), n),
-    r1 = vctrs::vec_recycle(as_unit(r1, "native"), n),
-    theta0 = vctrs::vec_recycle(as.numeric(theta0), n),
-    theta1 = vctrs::vec_recycle(as.numeric(theta1), n),
+    x = v$x,
+    y = v$y,
+    r0 = v$r0,
+    r1 = v$r1,
+    theta0 = v$theta0,
+    theta1 = v$theta1,
     fill = fill,
     arrow = arrow,
     sketch = sketch,
@@ -819,26 +850,28 @@ loop_grob <- function(
   name = NULL,
   vp = NULL,
   id = NULL,
-  role = NULL
+  role = NULL,
+  default_units = "npc"
 ) {
-  n <- .elem_n(list(
-    x = x,
-    y = y,
-    size = size,
-    foot = foot,
-    angle = angle,
-    width = width
-  ))
-  .check_finite_num(angle, "angle")
-  sz <- .check_cap(as_unit(size, "mm"), "size")
-  ft <- .check_cap(as_unit(foot, "mm"), "foot")
+  du <- .check_default_units(default_units)
+  v <- list(
+    x = .as_unit_arg(x, "x", du),
+    y = .as_unit_arg(y, "y", du),
+    # `size`/`foot` are absolute (a bare number is mm), whatever `default_units`.
+    size = .check_cap(size, "size"),
+    foot = .check_cap(foot, "foot"),
+    angle = .check_finite_num(angle, "angle"),
+    width = as.numeric(width)
+  )
+  n <- .elem_n(v)
+  v <- .recycle_elems(v, n)
   grob_loop(
-    x = vctrs::vec_recycle(as_unit(x), n),
-    y = vctrs::vec_recycle(as_unit(y), n),
-    size = vctrs::vec_recycle(sz, n),
-    foot = vctrs::vec_recycle(ft, n),
-    angle = vctrs::vec_recycle(as.numeric(angle), n),
-    width = vctrs::vec_recycle(as.numeric(width), n),
+    x = v$x,
+    y = v$y,
+    size = v$size,
+    foot = v$foot,
+    angle = v$angle,
+    width = v$width,
     arrow = arrow,
     gp = gp,
     name = name,
@@ -849,7 +882,8 @@ loop_grob <- function(
 }
 
 #' @rdname grob
-#' @param x0,y0,x1,y1 Segment start/end coordinates ([vl_unit()] or numeric).
+#' @param x0,y0,x1,y1 Segment start/end coordinates ([vl_unit()] or numeric,
+#'   read in `default_units`).
 #' @export
 segments_grob <- function(
   x0,
@@ -869,38 +903,32 @@ segments_grob <- function(
   key = NULL,
   meta = NULL,
   col = NULL,
-  lwd = NULL
+  lwd = NULL,
+  default_units = "npc"
 ) {
-  n <- .elem_n(list(
-    x0 = x0,
-    y0 = y0,
-    x1 = x1,
-    y1 = y1,
-    start_cap = start_cap,
-    end_cap = end_cap,
-    offset = offset
-  ))
-  start_cap <- .check_cap(start_cap, "start_cap")
-  end_cap <- .check_cap(end_cap, "end_cap")
-  offset <- .check_cap(offset, "offset", nonneg = FALSE)
-  if (!is.null(start_cap)) {
-    start_cap <- vctrs::vec_recycle(start_cap, n)
-  }
-  if (!is.null(end_cap)) {
-    end_cap <- vctrs::vec_recycle(end_cap, n)
-  }
-  if (!is.null(offset)) {
-    offset <- vctrs::vec_recycle(offset, n)
-  }
+  du <- .check_default_units(default_units)
+  v <- list(
+    x0 = .as_unit_arg(x0, "x0", du),
+    y0 = .as_unit_arg(y0, "y0", du),
+    x1 = .as_unit_arg(x1, "x1", du),
+    y1 = .as_unit_arg(y1, "y1", du),
+    # Caps and offset are absolute (a bare number is mm), whatever
+    # `default_units`.
+    start_cap = .check_cap(start_cap, "start_cap"),
+    end_cap = .check_cap(end_cap, "end_cap"),
+    offset = .check_cap(offset, "offset", nonneg = FALSE)
+  )
+  n <- .elem_n(v)
+  v <- .recycle_elems(v, n)
   grob_segments(
-    x0 = vctrs::vec_recycle(as_unit(x0, "native"), n),
-    y0 = vctrs::vec_recycle(as_unit(y0, "native"), n),
-    x1 = vctrs::vec_recycle(as_unit(x1, "native"), n),
-    y1 = vctrs::vec_recycle(as_unit(y1, "native"), n),
+    x0 = v$x0,
+    y0 = v$y0,
+    x1 = v$x1,
+    y1 = v$y1,
     arrow = arrow,
-    start_cap = start_cap,
-    end_cap = end_cap,
-    offset = offset,
+    start_cap = v$start_cap,
+    end_cap = v$end_cap,
+    offset = v$offset,
     sketch = sketch,
     gp = gp,
     name = name,
@@ -958,12 +986,18 @@ path_grob <- function(
   vp = NULL,
   role = NULL,
   key = NULL,
-  meta = NULL
+  meta = NULL,
+  default_units = "npc"
 ) {
-  rule <- match.arg(rule)
+  rule <- .check_choice(rule, c("winding", "evenodd"), "rule")
+  du <- .check_default_units(default_units)
   n <- .coord_n(x, y)
-  xu <- vctrs::vec_recycle(as_unit(x, "native"), n)
-  yu <- vctrs::vec_recycle(as_unit(y, "native"), n)
+  v <- .recycle_elems(
+    list(x = .as_unit_arg(x, "x", du), y = .as_unit_arg(y, "y", du)),
+    n
+  )
+  xu <- v$x
+  yu <- v$y
   if (is.null(id)) {
     nper <- n
   } else {
@@ -1012,17 +1046,19 @@ raster_grob <- function(
   name = NULL,
   vp = NULL,
   id = NULL,
-  role = NULL
+  role = NULL,
+  default_units = "npc"
 ) {
+  du <- .check_default_units(default_units)
   px <- .image_to_rgba(image)
   grob_raster(
     rgba = px$rgba,
     iw = px$iw,
     ih = px$ih,
-    x = as_unit(x),
-    y = as_unit(y),
-    width = as_unit(width),
-    height = as_unit(height),
+    x = .as_unit_arg(x, "x", du),
+    y = .as_unit_arg(y, "y", du),
+    width = .as_unit_arg(width, "width", du),
+    height = .as_unit_arg(height, "height", du),
     interpolate = isTRUE(interpolate),
     gp = gp,
     name = name,
@@ -1061,8 +1097,10 @@ text_grob <- function(
   align = "left",
   fit = FALSE,
   key = NULL,
-  meta = NULL
+  meta = NULL,
+  default_units = "npc"
 ) {
+  du <- .check_default_units(default_units)
   # Rich labels pass through untouched; everything else coerces to character.
   if (!S7::S7_inherits(label, vellum_label)) {
     label <- as.character(label)
@@ -1071,8 +1109,8 @@ text_grob <- function(
   if (!isFALSE(fit) && is.null(width)) {
     cli::cli_abort("{.arg fit} needs a {.arg width} to fit into.")
   }
-  x <- as_unit(x)
-  y <- as_unit(y)
+  x <- .as_unit_arg(x, "x", du)
+  y <- .as_unit_arg(y, "y", du)
   n <- .text_n(label, x, y)
   grob_text(
     label = label,
@@ -1080,8 +1118,14 @@ text_grob <- function(
     y = y,
     just = as.character(just),
     rot = as.numeric(rot),
-    width = .abs_mm(width, "width"),
-    height = .abs_mm(height, "height"),
+    width = .abs_mm(
+      .as_unit_arg(width, "width", du, allow_null = TRUE),
+      "width"
+    ),
+    height = .abs_mm(
+      .as_unit_arg(height, "height", du, allow_null = TRUE),
+      "height"
+    ),
     align = align,
     fit = if (isFALSE(fit)) {
       NA_real_
@@ -1132,7 +1176,8 @@ text_grob <- function(
 #'
 #' @inheritParams grob
 #' @param label A single character string.
-#' @param x,y The baseline path, as unit vectors of equal length.
+#' @param x,y The baseline path, as [vl_unit()] or numeric vectors (read in
+#'   `default_units`) of equal length.
 #' @param offset Perpendicular standoff from the baseline in points; positive is
 #'   to the left of the direction of travel.
 #' @return A grob.
@@ -1155,16 +1200,18 @@ text_path_grob <- function(
   name = NULL,
   vp = NULL,
   id = NULL,
-  role = NULL
+  role = NULL,
+  default_units = "npc"
 ) {
+  du <- .check_default_units(default_units)
   label <- as.character(label)
   if (length(label) != 1L) {
     cli::cli_abort("{.arg label} must be a single string; got {length(label)}.")
   }
   grob_textpath(
     label = label,
-    x = as_unit(x),
-    y = as_unit(y),
+    x = .as_unit_arg(x, "x", du),
+    y = .as_unit_arg(y, "y", du),
     just = as.character(just),
     offset = as.numeric(offset),
     gp = gp,
