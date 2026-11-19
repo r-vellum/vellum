@@ -1,6 +1,6 @@
 # Changelog
 
-## vellum 0.7.2.9000 (development version)
+## vellum 0.8.0
 
 ### Breaking changes
 

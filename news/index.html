@@ -13,7 +13,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">vellum</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.7.2.9000</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.8.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -70,9 +70,9 @@
     </div>
 
     <div class="section level2">
-<h2 class="pkg-version" data-toc-text="0.7.2.9000" id="vellum-0729000-development-version">vellum 0.7.2.9000 (development version)<a class="anchor" aria-label="anchor" href="#vellum-0729000-development-version"></a></h2>
+<h2 class="pkg-version" data-toc-text="0.8.0" id="vellum-080">vellum 0.8.0<a class="anchor" aria-label="anchor" href="#vellum-080"></a></h2>
 <div class="section level3">
-<h3 id="breaking-changes-0-7-2-9000">Breaking changes<a class="anchor" aria-label="anchor" href="#breaking-changes-0-7-2-9000"></a></h3>
+<h3 id="breaking-changes-0-8-0">Breaking changes<a class="anchor" aria-label="anchor" href="#breaking-changes-0-8-0"></a></h3>
 <ul><li>
 <p><strong>Bare numbers now mean npc in every constructor</strong>; <code><a href="../reference/grob.html">lines_grob()</a></code>/<code><a href="../reference/grob.html">polygon_grob()</a></code>/<code><a href="../reference/grob.html">segments_grob()</a></code>/<code><a href="../reference/grob.html">path_grob()</a></code>/ <code><a href="../reference/grob.html">bezier_grob()</a></code>/<code><a href="../reference/grob.html">spline_grob()</a></code> and <code><a href="../reference/grob.html">hexagon_grob()</a></code>/<code><a href="../reference/grob.html">sector_grob()</a></code> sizes used native. Pass <code>default_units = "native"</code> or <code>vl_unit(x, "native")</code> for the old behaviour.</p>
 <p>vellum mixed two defaults: a bare number was <code>"npc"</code> in <code><a href="../reference/grob.html">rect_grob()</a></code>, <code><a href="../reference/grob.html">circle_grob()</a></code>, <code><a href="../reference/grob.html">text_grob()</a></code> and most other constructors, but <code>"native"</code> in the line and polygon family, in the <code>width</code>/<code>height</code> of a hexagon and in the <code>r0</code>/<code>r1</code> of a sector. Now every constructor reads it as grid does.</p>
@@ -80,18 +80,18 @@
 </li>
 </ul></div>
 <div class="section level3">
-<h3 id="new-features-0-7-2-9000">New features<a class="anchor" aria-label="anchor" href="#new-features-0-7-2-9000"></a></h3>
+<h3 id="new-features-0-8-0">New features<a class="anchor" aria-label="anchor" href="#new-features-0-8-0"></a></h3>
 <ul><li><p><strong>Every constructor takes a <code>default_units</code> argument</strong>, as grid’s <code>default.units</code>: the unit a bare number is read in for the position and size arguments. It defaults to <code>"npc"</code> everywhere, including <code><a href="../reference/vl_viewport.html">vl_viewport()</a></code> and <code><a href="../reference/vl_svg_path.html">svg_grob()</a></code>. Arguments with a physical default of their own are unaffected: a bare point, hexagon or loop <code>size</code>, and <code>foot</code>, <code>start_cap</code>, <code>end_cap</code> and <code>offset</code>, stay millimetres; an arrow <code>length</code> stays inches. <code><a href="../reference/grob.html">?grob</a></code> now documents how a relative length resolves: a <code>width</code> or <code>height</code> per axis, a radius against the viewport’s shorter side.</p></li>
 <li><p><code><a href="../reference/vl_path_op.html">vl_path_op()</a></code> returns its result in the operands’ unit (bare operands give <code>"npc"</code>), instead of tagging the numbers <code>"native"</code> whatever went in.</p></li>
 <li><p>Constructors refuse a non-numeric coordinate (<code>rect_grob(x = "left")</code>) with a clear error instead of an obscure cast failure.</p></li>
 </ul></div>
 <div class="section level3">
-<h3 id="hit-testing-0-7-2-9000">Hit testing<a class="anchor" aria-label="anchor" href="#hit-testing-0-7-2-9000"></a></h3>
+<h3 id="hit-testing-0-8-0">Hit testing<a class="anchor" aria-label="anchor" href="#hit-testing-0-8-0"></a></h3>
 <ul><li><p><strong><code><a href="../reference/hit_test.html">hit_test()</a></code> is ~1000x faster when called repeatedly on one scene.</strong> Each call compiled the scene into a fresh backend, so 1000 hit tests on a ~270-grob scene took 111 s. The compiled pick backend is now memoised like the render cache, keyed on the scene’s content and device size, so the same 1000 calls take 0.12 s. An edit, a resize or <code><a href="../reference/vl_clear_render_cache.html">vl_clear_render_cache()</a></code> starts afresh, and <code>options(vellum.cache = FALSE)</code> turns the memo off.</p></li>
 <li><p><code><a href="../reference/hit_test.html">hit_test()</a></code>, <code><a href="../reference/node_names.html">node_names()</a></code>, <code><a href="../reference/node_names.html">get_node()</a></code> and <code><a href="../reference/node_names.html">edit_node()</a></code> now coerce their <code>scene</code> through <code><a href="../reference/as_vellum_scene.html">as_vellum_scene()</a></code>, like <code><a href="../reference/vl_scene.html">render()</a></code> and the other scene functions, so they accept any object with an <code><a href="../reference/as_vellum_scene.html">as_vellum_scene()</a></code> method.</p></li>
 </ul></div>
 <div class="section level3">
-<h3 id="rendering-fixes-0-7-2-9000">Rendering fixes<a class="anchor" aria-label="anchor" href="#rendering-fixes-0-7-2-9000"></a></h3>
+<h3 id="rendering-fixes-0-8-0">Rendering fixes<a class="anchor" aria-label="anchor" href="#rendering-fixes-0-8-0"></a></h3>
 <ul><li>
 <p><strong>Fix: inputs that crashed or hung the renderer now draw or fail with a clear error.</strong></p>
 <ul><li>A sketched <code><a href="../reference/grob.html">sector_grob()</a></code> with a gradient, pattern or hatch fill panicked with “index out of bounds”; it now draws with that paint.</li>
@@ -110,7 +110,7 @@
 <li><p>The PDF warning for a pattern that cannot be rendered now says whether it was a fill or a stroke. A pattern stroke used to be reported as a “fill” that “was left unfilled”.</p></li>
 </ul></div>
 <div class="section level3">
-<h3 id="input-validation-0-7-2-9000">Input validation<a class="anchor" aria-label="anchor" href="#input-validation-0-7-2-9000"></a></h3>
+<h3 id="input-validation-0-8-0">Input validation<a class="anchor" aria-label="anchor" href="#input-validation-0-8-0"></a></h3>
 <ul><li>
 <p><strong>Bad inputs fail where they are passed, with an error that names the argument and the function.</strong> Before, many reached the Rust backend and came back as bare extendr messages (“Must not be NA.”, “Expected Scalar, got Integers”, “Expected Strings got Doubles”) at render time.</p>
 <ul><li>
@@ -134,7 +134,7 @@
 <li><p><strong>Fix: <code>strwidth</code>/<code>strheight</code> units take a vector label.</strong> <code>vl_unit(1:2, "strwidth", data = list(label = c("a", "bb")))</code> measures each label; it failed with “values must be length 1”. The label must have length 1 or the length of <code>values</code>.</p></li>
 </ul></div>
 <div class="section level3">
-<h3 id="documentation-0-7-2-9000">Documentation<a class="anchor" aria-label="anchor" href="#documentation-0-7-2-9000"></a></h3>
+<h3 id="documentation-0-8-0">Documentation<a class="anchor" aria-label="anchor" href="#documentation-0-8-0"></a></h3>
 <ul><li>
 <code><a href="../articles/scene-contract.html">vignette("scene-contract")</a></code> matches the code again. The <code>mark</code> vocabulary has eleven values, including <code>roundrect</code> and <code>text</code> (rows only for keyed elements). <code><a href="../reference/grob.html">lines_grob()</a></code>, <code><a href="../reference/grob.html">polygon_grob()</a></code> and <code><a href="../reference/grob.html">path_grob()</a></code> take <code>key</code>. <code>key</code>/<code>meta</code> must have length 1 or the element count. Bare numbers are npc in every constructor. A <code><a href="../reference/grob.html">circle_grob()</a></code> element reports as <code>point</code> in <code><a href="../reference/element_geometry.html">element_geometry()</a></code>. <code><a href="../reference/hit_test.html">hit_test()</a></code> follows the fill rule as <code><a href="../reference/vl_nearest.html">vl_nearest()</a></code> does. A panel row appears only for a named viewport that encloses an element. <code>test-contract.R</code> pins each of these, and the <code><a href="../reference/scene_model.html">scene_model()</a></code> help page no longer lists only the batched marks.</li>
 </ul></div>
