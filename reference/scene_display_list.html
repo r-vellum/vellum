@@ -183,8 +183,14 @@ the record is drawn in, 0 = none). <code>groups</code> has <code>alpha</code> an
 (1-based, 0 = top level). A client draws a group's records into their own
 layer and composites it at <code>alpha</code>.</p></li>
 </ul><p>Masks, blend modes, blur and shadow effects, hatches, patterns, repeating or
-reflecting gradients and gradient strokes stay flagged.</p>
-    </div>
+reflecting gradients and gradient strokes stay flagged.</p><ul><li><p>Flagged runs (VW-30): <code>record$run</code> is the run of flagged marks a record
+belongs to (1-based, 0 = none) and <code>runs</code> their count. A run is a stretch
+of flagged marks in paint order that no exactly drawn mark interrupts;
+every record of a node with a flagged record, and of an opacity group
+holding one, is in it. <code>scene_png(layer = "keyed_flagged", run = k)</code>
+draws run <code>k</code>, so a client can draw the exact records itself and
+composite each run's raster where the run starts.</p></li>
+</ul></div>
     <div class="section level2">
     <h2 id="what-stage-does-not-reproduce">What stage 1 does not reproduce<a class="anchor" aria-label="anchor" href="#what-stage-does-not-reproduce"></a></h2>
 
@@ -197,8 +203,10 @@ mark inside a group with opacity, blend mode, mask or effect; <code>8</code> a t
 label (the geometry is its box); <code>16</code> pick-only: a keyed mark that paints
 nothing (an invisible hover target such as a <code>fill = NA</code> rect, circle,
 marker or polygon). Its geometry is listed and its paint has <code>fill</code> and
-<code>stroke</code> <code>NA</code>, so a client hit-tests it but draws nothing. Images do not
-appear at all.</p>
+<code>stroke</code> <code>NA</code>, so a client hit-tests it but draws nothing; <code>32</code> inside a
+group with a blend mode (with <code>4</code>): the mark mixes with what is painted
+beneath it, so a separately rendered raster of it (a <code>"keyed_flagged"</code>
+run) cannot reproduce it either. Images do not appear at all.</p>
     </div>
 
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>

@@ -13,8 +13,9 @@ tests that assert on emitted attributes such as `data-key`.
 scene_svg(
   scene,
   text = c("native", "outline"),
-  layer = c("all", "unkeyed", "keyed", "unkeyed_below", "unkeyed_above"),
-  panels = NULL
+  layer = c("all", "unkeyed", "keyed", "unkeyed_below", "unkeyed_above", "keyed_flagged"),
+  panels = NULL,
+  run = NULL
 )
 ```
 
@@ -35,15 +36,22 @@ scene_svg(
 - layer:
 
   Which part of the scene to draw: `"all"` (the default), only the
-  `"keyed"` marks, everything `"unkeyed"`, or the unkeyed elements
-  painted before (`"unkeyed_below"`) or after (`"unkeyed_above"`) the
-  marks. See the *Split render* section.
+  `"keyed"` marks, everything `"unkeyed"`, the unkeyed elements painted
+  before (`"unkeyed_below"`) or after (`"unkeyed_above"`) the marks, or
+  only the keyed marks the display list flags (`"keyed_flagged"`). See
+  the *Split render* section.
 
 - panels:
 
   `NULL` (the default: every keyed mark is in the mark layer), or a
   character vector of panel names restricting the mark layer to keyed
   marks inside those panels. Ignored when `layer = "all"`.
+
+- run:
+
+  For `layer = "keyed_flagged"`: `NULL` (the default) for every flagged
+  mark, or a positive integer, the one run of flagged marks to draw (see
+  the *Split render* section). Ignored for the other layers.
 
 ## Value
 
@@ -86,6 +94,22 @@ keyed batches are therefore above, and a later facet's gridlines stay
 below that facet's own marks. With no marks at all, everything is below.
 `"unkeyed_above"`, like `"keyed"`, has a transparent page. The two
 halves together are exactly `"unkeyed"`.
+
+`"keyed_flagged"` draws only the marks of the `"keyed"` layer that
+[`scene_display_list()`](https://r-vellum.github.io/vellum/reference/scene_display_list.md)
+(`version = 2`, same `panels`) flags as not drawable from the list:
+marks under a mask, a blend mode or an effect, hatched, patterned or
+repeating-gradient fills, gradient strokes and text. Whole nodes are
+drawn (every record of a node with one flagged record), and an opacity
+group holding a flagged mark goes in whole. The flagged marks fall into
+*runs*: maximal stretches in paint order not interrupted by a mark the
+list draws exactly, numbered from 1 in the list's `record$run` (its
+`runs` field counts them). `run = k` draws only run `k`; `NULL` draws
+every run. A host that draws the exact marks itself can composite run
+`k` at its place in paint order and keep the overlap order right. The
+page is transparent. A mark under a blend mode (display-list flag `32`)
+is drawn too, but blends against transparency here rather than against
+the marks beneath it.
 
 ## See also
 

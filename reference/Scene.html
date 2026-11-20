@@ -326,7 +326,8 @@ rather than dropped so the caller can surface them exactly as <code><a href="vl_
 does. Shares the memoised pixmap with <code>render_png</code>. <code>layer</code> (0 all,
 1 unkeyed, 2 keyed) and <code>panels</code> (<code>NULL</code> or names) restrict the walk for
 the split render; a layer render bypasses the memo, and the keyed layer
-has a transparent page.</p>
+has a transparent page. <code>run</code> picks one run of the <code>keyed_flagged</code>
+layer (0 = every run).</p>
 </div>
 
 <div class="section">

@@ -231,7 +231,8 @@ rather than dropped so the caller can surface them exactly as
 does. Shares the memoised pixmap with `render_png`. `layer` (0 all, 1
 unkeyed, 2 keyed) and `panels` (`NULL` or names) restrict the walk for
 the split render; a layer render bypasses the memo, and the keyed layer
-has a transparent page.
+has a transparent page. `run` picks one run of the `keyed_flagged` layer
+(0 = every run).
 
 ### Method `render_pdf_raw`
 

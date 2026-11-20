@@ -15,8 +15,9 @@ scene_png(
   scene,
   scale = 1,
   cvd = "none",
-  layer = c("all", "unkeyed", "keyed", "unkeyed_below", "unkeyed_above"),
-  panels = NULL
+  layer = c("all", "unkeyed", "keyed", "unkeyed_below", "unkeyed_above", "keyed_flagged"),
+  panels = NULL,
+  run = NULL
 )
 
 scene_pdf(scene)
@@ -56,7 +57,7 @@ scene_pdf(scene)
   [`render()`](https://r-vellum.github.io/vellum/reference/vl_scene.md)
   warns if you ask for one.
 
-- layer, panels:
+- layer, panels, run:
 
   For `scene_png()`: which part of the scene to draw, as for
   [`scene_svg()`](https://r-vellum.github.io/vellum/reference/scene_svg.md)

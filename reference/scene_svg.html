@@ -88,8 +88,9 @@ and for tests that assert on emitted attributes such as <code>data-key</code>.</
     <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">scene_svg</span><span class="op">(</span></span>
 <span>  <span class="va">scene</span>,</span>
 <span>  text <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"native"</span>, <span class="st">"outline"</span><span class="op">)</span>,</span>
-<span>  layer <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"all"</span>, <span class="st">"unkeyed"</span>, <span class="st">"keyed"</span>, <span class="st">"unkeyed_below"</span>, <span class="st">"unkeyed_above"</span><span class="op">)</span>,</span>
-<span>  panels <span class="op">=</span> <span class="cn">NULL</span></span>
+<span>  layer <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"all"</span>, <span class="st">"unkeyed"</span>, <span class="st">"keyed"</span>, <span class="st">"unkeyed_below"</span>, <span class="st">"unkeyed_above"</span>, <span class="st">"keyed_flagged"</span><span class="op">)</span>,</span>
+<span>  panels <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  run <span class="op">=</span> <span class="cn">NULL</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
 
@@ -110,8 +111,9 @@ selectable). Ignored for PNG/PDF.</p></dd>
 
 <dt id="arg-layer">layer<a class="anchor" aria-label="anchor" href="#arg-layer"></a></dt>
 <dd><p>Which part of the scene to draw: <code>"all"</code> (the default), only the
-<code>"keyed"</code> marks, everything <code>"unkeyed"</code>, or the unkeyed elements painted
-before (<code>"unkeyed_below"</code>) or after (<code>"unkeyed_above"</code>) the marks. See the
+<code>"keyed"</code> marks, everything <code>"unkeyed"</code>, the unkeyed elements painted
+before (<code>"unkeyed_below"</code>) or after (<code>"unkeyed_above"</code>) the marks, or only
+the keyed marks the display list flags (<code>"keyed_flagged"</code>). See the
 <em>Split render</em> section.</p></dd>
 
 
@@ -119,6 +121,12 @@ before (<code>"unkeyed_below"</code>) or after (<code>"unkeyed_above"</code>) th
 <dd><p><code>NULL</code> (the default: every keyed mark is in the mark layer), or
 a character vector of panel names restricting the mark layer to keyed marks
 inside those panels. Ignored when <code>layer = "all"</code>.</p></dd>
+
+
+<dt id="arg-run">run<a class="anchor" aria-label="anchor" href="#arg-run"></a></dt>
+<dd><p>For <code>layer = "keyed_flagged"</code>: <code>NULL</code> (the default) for every
+flagged mark, or a positive integer, the one run of flagged marks to draw
+(see the <em>Split render</em> section). Ignored for the other layers.</p></dd>
 
 </dl></div>
     <div class="section level2">
@@ -156,6 +164,19 @@ elements interleaved between two keyed batches are therefore above, and a
 later facet's gridlines stay below that facet's own marks. With no marks at
 all, everything is below. <code>"unkeyed_above"</code>, like <code>"keyed"</code>, has a
 transparent page. The two halves together are exactly <code>"unkeyed"</code>.</p>
+<p><code>"keyed_flagged"</code> draws only the marks of the <code>"keyed"</code> layer that
+<code><a href="scene_display_list.html">scene_display_list()</a></code> (<code>version = 2</code>, same <code>panels</code>) flags as not drawable
+from the list: marks under a mask, a blend mode or an effect, hatched,
+patterned or repeating-gradient fills, gradient strokes and text. Whole
+nodes are drawn (every record of a node with one flagged record), and an
+opacity group holding a flagged mark goes in whole. The flagged marks fall
+into <em>runs</em>: maximal stretches in paint order not interrupted by a mark the
+list draws exactly, numbered from 1 in the list's <code>record$run</code> (its <code>runs</code>
+field counts them). <code>run = k</code> draws only run <code>k</code>; <code>NULL</code> draws every run. A
+host that draws the exact marks itself can composite run <code>k</code> at its place
+in paint order and keep the overlap order right. The page is transparent.
+A mark under a blend mode (display-list flag <code>32</code>) is drawn too, but blends
+against transparency here rather than against the marks beneath it.</p>
     </div>
     <div class="section level2">
     <h2 id="see-also">See also<a class="anchor" aria-label="anchor" href="#see-also"></a></h2>
