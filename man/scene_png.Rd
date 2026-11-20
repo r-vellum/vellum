@@ -9,7 +9,7 @@ scene_png(
   scene,
   scale = 1,
   cvd = "none",
-  layer = c("all", "unkeyed", "keyed"),
+  layer = c("all", "unkeyed", "keyed", "unkeyed_below", "unkeyed_above"),
   panels = NULL
 )
 

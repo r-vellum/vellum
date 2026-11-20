@@ -111,8 +111,58 @@ impl Scene {
         layer: &LayerFilter,
     ) -> Vec<String> {
         let resolved = self.resolve_all();
-        self.render_nodes(b, &resolved, &self.nodes, Some(&self.meta), layer);
+        if layer.layer.needs_order() && layer.above.is_empty() {
+            let layer = self.with_paint_order(layer);
+            self.render_nodes(b, &resolved, &self.nodes, Some(&self.meta), &layer);
+        } else {
+            self.render_nodes(b, &resolved, &self.nodes, Some(&self.meta), layer);
+        }
         b.take_warnings()
+    }
+
+    /// Fill `layer.above` for the paint-order split (VW-21): for each top-level
+    /// node, whether a mark was painted before it within its innermost named
+    /// panel. A mark counts for every panel enclosing it; a node outside every
+    /// named panel compares against the first mark anywhere.
+    pub(super) fn with_paint_order(&self, layer: &LayerFilter) -> LayerFilter {
+        use std::collections::HashMap;
+        let mut stack: Vec<&str> = Vec::new();
+        let mut first: HashMap<&str, usize> = HashMap::new();
+        let mut first_any: Option<usize> = None;
+        let mut innermost: Vec<Option<&str>> = Vec::with_capacity(self.nodes.len());
+        for (i, (_, node)) in self.nodes.iter().enumerate() {
+            match node {
+                Node::PanelStart { name, .. } => stack.push(name.as_str()),
+                Node::PanelEnd => {
+                    stack.pop();
+                }
+                _ => {}
+            }
+            let inner = stack.last().copied();
+            innermost.push(inner);
+            if layer.is_mark(node, inner.unwrap_or_default()) {
+                first_any.get_or_insert(i);
+                for p in &stack {
+                    first.entry(*p).or_insert(i);
+                }
+            }
+        }
+        let above = innermost
+            .iter()
+            .enumerate()
+            .map(|(i, p)| {
+                let t = match p {
+                    Some(p) => first.get(p).copied(),
+                    None => first_any,
+                };
+                t.is_some_and(|t| t < i)
+            })
+            .collect();
+        LayerFilter {
+            layer: layer.layer,
+            panels: layer.panels.clone(),
+            above,
+        }
     }
 
     /// Render an ordered node list (the scene, or a mask's content) onto `b`.
@@ -281,7 +331,7 @@ impl Scene {
                     hu,
                     interpolate,
                 } => {
-                    if !layer.keeps(node, panel_stack.last().copied().unwrap_or_default()) {
+                    if !layer.keeps(i, node, panel_stack.last().copied().unwrap_or_default()) {
                         continue;
                     }
                     let rv = &resolved[*vp_id];
@@ -321,7 +371,7 @@ impl Scene {
             }
             // Split render: drop drawing nodes outside the requested layer
             // (before any begin_node, so nothing needs closing).
-            if !layer.keeps(node, panel_stack.last().copied().unwrap_or_default()) {
+            if !layer.keeps(i, node, panel_stack.last().copied().unwrap_or_default()) {
                 continue;
             }
 

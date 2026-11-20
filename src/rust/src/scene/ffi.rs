@@ -18,12 +18,14 @@ fn layer_filter(layer: i32, panels: &Robj) -> LayerFilter {
                     .unwrap_or_default(),
             )
         },
+        above: Vec::new(),
     }
 }
 
-/// The keyed layer is drawn on a transparent page, ready to composite.
+/// The keyed layer (and the furniture above it) is drawn on a transparent
+/// page, ready to composite.
 fn layer_bg(layer: &LayerFilter, bg: Rgba) -> Rgba {
-    if layer.layer == Layer::Keyed {
+    if layer.layer.is_overlay() {
         Rgba {
             r: 0,
             g: 0,
