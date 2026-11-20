@@ -142,3 +142,27 @@ test_that("justification places text on the correct side of the anchor", {
   expect_gt(mean(inked_x(0)), anchor_px) # left-justified -> ink right of anchor
   expect_lt(mean(inked_x(1)), anchor_px) # right-justified -> ink left of anchor
 })
+
+test_that("text measured outside a render has a finite width, or errors", {
+  # VR-15: no scene or device exists here. A valid size measures a sane width
+  # on every platform ...
+  w <- vl_strwidth(c("p", "a longer label"), fontsize = 8.8, unit = "mm")
+  expect_true(all(is.finite(w) & w > 0 & w < 100))
+  h <- vl_strheight("Ag", fontsize = 8.8, unit = "mm")
+  expect_true(is.finite(h) && h > 0 && h < 100)
+  expect_true(all(is.finite(vellum:::.grob_extent(text_grob("legend")))))
+  # ... and a missing or non-finite one is an error, not textshaping's
+  # platform-dependent cast (-33554432 pt on x86_64 Linux, 0 on arm64)
+  for (fs in list(NULL, NA_real_, NaN, Inf)) {
+    expect_error(
+      vl_strwidth("p", "", "plain", fs, unit = "mm"),
+      "finite number of points"
+    )
+    expect_error(vl_strheight("Ag", fontsize = fs), "finite number of points")
+  }
+  expect_error(vl_strwidth("p", cex = NA), "finite number of points")
+  expect_error(
+    vl_strwidth(md("**p**"), fontsize = NA),
+    "finite number of points"
+  )
+})
