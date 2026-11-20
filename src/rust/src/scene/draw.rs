@@ -114,10 +114,29 @@ impl Scene {
         if layer.layer.needs_order() && layer.above.is_empty() {
             let layer = self.with_paint_order(layer);
             self.render_nodes(b, &resolved, &self.nodes, Some(&self.meta), &layer);
+        } else if layer.layer == Layer::KeyedFlagged && layer.flagged.is_none() {
+            let layer = self.with_flagged_runs(layer);
+            self.render_nodes(b, &resolved, &self.nodes, Some(&self.meta), &layer);
         } else {
             self.render_nodes(b, &resolved, &self.nodes, Some(&self.meta), layer);
         }
         b.take_warnings()
+    }
+
+    /// Fill `layer.flagged` for the flagged-marks layer (VW-30): walk the scene
+    /// through the display-list backend (version 2, restricted to the layer's
+    /// panels, as the client's list is) and take each flagged node's run.
+    pub(super) fn with_flagged_runs(&self, layer: &LayerFilter) -> LayerFilter {
+        let mut d = crate::render::DisplayListBackend::with_options(layer.panels.clone(), 2);
+        let _ = self.render_to(&mut d);
+        let dl = d.finish();
+        LayerFilter {
+            layer: layer.layer,
+            panels: layer.panels.clone(),
+            above: layer.above.clone(),
+            flagged: Some(dl.node_runs),
+            run: layer.run,
+        }
     }
 
     /// Fill `layer.above` for the paint-order split (VW-21): for each top-level
@@ -162,6 +181,8 @@ impl Scene {
             layer: layer.layer,
             panels: layer.panels.clone(),
             above,
+            flagged: layer.flagged.clone(),
+            run: layer.run,
         }
     }
 
@@ -396,6 +417,9 @@ impl Scene {
 
             if has_meta {
                 b.begin_node(&attrs);
+            }
+            if meta.is_some() {
+                b.begin_draw_node(i);
             }
             // Clear any per-element data key from the previous node so a keyed
             // batch never leaks its last key onto a later, keyless node.

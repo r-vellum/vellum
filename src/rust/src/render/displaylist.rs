@@ -71,6 +71,11 @@ pub struct Rec {
     /// Version 2: 1-based into `DisplayList::groups` (the innermost opacity
     /// group the record is drawn in), 0 = none.
     pub group: u32,
+    /// The top-level scene node the record was drawn by.
+    pub node: u32,
+    /// The flagged run the record belongs to (1-based, 0 = none; see
+    /// `assign_runs`).
+    pub run: u32,
 }
 
 /// A gradient fill (version 2): geometry in the shape's local px, placed in
@@ -141,6 +146,10 @@ pub struct DisplayList {
     /// Named panels; `record$panel` is 1-based into this (the innermost named
     /// panel a mark is drawn in), 0 = outside every panel.
     pub panels: Vec<String>,
+    /// The number of flagged runs (`assign_runs`).
+    pub runs: u32,
+    /// Per top-level node holding a flagged run's marks, its run (1-based).
+    pub node_runs: HashMap<u32, u32>,
 }
 
 pub struct DisplayListBackend {
@@ -163,6 +172,8 @@ pub struct DisplayListBackend {
     panel_stack: Vec<u32>,
     /// Only list marks whose innermost named panel is one of these.
     only_panels: Option<Vec<String>>,
+    /// The top-level node being drawn (`begin_draw_node`).
+    cur_node: u32,
 }
 
 impl Default for DisplayListBackend {
@@ -211,6 +222,7 @@ impl DisplayListBackend {
             marker: None,
             panel_stack: Vec::new(),
             only_panels: None,
+            cur_node: 0,
         }
     }
 
@@ -279,6 +291,7 @@ impl DisplayListBackend {
             }
         }
         self.dl.panels = panels;
+        assign_runs(&mut self.dl);
         self.dl
     }
 
@@ -419,6 +432,8 @@ impl DisplayListBackend {
             clip: ci,
             panel: self.panel_stack.last().copied().unwrap_or(0),
             group: self.alpha_stack.last().copied().unwrap_or(0),
+            node: self.cur_node,
+            run: 0,
         });
     }
 
@@ -553,6 +568,70 @@ impl DisplayListBackend {
         }
         true
     }
+}
+
+/// Group the marks a client cannot draw from the list into ordered runs
+/// (VW-30), so a host can composite a raster of just those marks between the
+/// marks it draws itself and keep the paint order.
+///
+/// A node is *flagged* when one of its records is flagged (pick-only aside):
+/// a layer filter selects whole nodes, so every record of that node goes with
+/// it. With version 2, a flagged record inside a listed opacity group flags
+/// every node in the group's outermost listed ancestor, since that group is
+/// composited as one layer and cannot be split between the client's canvas
+/// and the raster. A run is a maximal stretch of flagged nodes' records in
+/// paint order; only a record that paints (unflagged, not pick-only) ends it.
+/// Each record gets its run (0 = none) and `node_runs` its nodes.
+pub fn assign_runs(dl: &mut DisplayList) {
+    let drawn_flag = |r: &Rec| r.flags & !FLAG_PICK != 0;
+    let root_of = |dl: &DisplayList, mut g: u32| {
+        let mut guard = 0;
+        while g > 0 && guard < 256 {
+            let p = dl
+                .groups
+                .get(g as usize - 1)
+                .map(|gr| gr.parent)
+                .unwrap_or(0);
+            if p == 0 {
+                break;
+            }
+            g = p;
+            guard += 1;
+        }
+        g
+    };
+    let mut tainted: std::collections::HashSet<u32> = std::collections::HashSet::new();
+    for r in &dl.recs {
+        if r.group > 0 && drawn_flag(r) {
+            tainted.insert(root_of(dl, r.group));
+        }
+    }
+    let mut flagged_nodes: std::collections::HashSet<u32> = std::collections::HashSet::new();
+    for r in &dl.recs {
+        if drawn_flag(r) || (r.group > 0 && tainted.contains(&root_of(dl, r.group))) {
+            flagged_nodes.insert(r.node);
+        }
+    }
+    let mut runs = 0u32;
+    let mut in_run = false;
+    let mut node_runs = HashMap::new();
+    for r in dl.recs.iter_mut() {
+        if flagged_nodes.contains(&r.node) {
+            if !in_run {
+                runs += 1;
+                in_run = true;
+            }
+            r.run = runs;
+            node_runs.entry(r.node).or_insert(runs);
+        } else {
+            r.run = 0;
+            if r.flags & FLAG_PICK == 0 {
+                in_run = false;
+            }
+        }
+    }
+    dl.runs = runs;
+    dl.node_runs = node_runs;
 }
 
 fn pack(c: Rgba) -> u32 {
@@ -924,6 +1003,10 @@ impl RenderBackend for DisplayListBackend {
         self.marker = Some(self.dl.recs.len() - 1);
     }
 
+    fn begin_draw_node(&mut self, node: usize) {
+        self.cur_node = node as u32;
+    }
+
     fn set_element_key(&mut self, key: Option<&str>) {
         self.marker = None;
         self.key = match key {
@@ -1156,5 +1239,57 @@ mod tests {
                                                       // a gradient-filled mark is not pick-only
             assert_eq!(dl.recs[0].flags & FLAG_PICK, 0);
         }
+    }
+
+    #[test]
+    fn flagged_nodes_group_into_ordered_runs() {
+        let mut b = DisplayListBackend::with_options(None, 2);
+        let blend = |b: &mut DisplayListBackend, node: usize, key: &str| {
+            b.begin_draw_node(node);
+            b.begin_group(None, 1.0, BlendKind::Multiply, GroupEffect::default());
+            one_circle(b, key, &red(), &no_clip());
+            b.end_group();
+        };
+        let plain = |b: &mut DisplayListBackend, node: usize, key: &str| {
+            b.begin_draw_node(node);
+            one_circle(b, key, &red(), &no_clip());
+        };
+        plain(&mut b, 0, "a"); // exact
+        blend(&mut b, 1, "b"); // run 1
+        blend(&mut b, 2, "c"); // still run 1
+                               // a pick-only mark does not end a run
+        b.begin_draw_node(3);
+        b.draw_circles(
+            &[1.0],
+            &[1.0],
+            &[1.0],
+            None,
+            None,
+            Transform::identity(),
+            &no_clip(),
+            &["p".to_string()],
+        );
+        blend(&mut b, 4, "d"); // run 1
+        plain(&mut b, 5, "e"); // exact: ends the run
+        blend(&mut b, 6, "f"); // run 2
+                               // an opacity group holding one flagged mark goes whole into a run
+        b.begin_group(None, 0.5, BlendKind::Normal, GroupEffect::default());
+        plain(&mut b, 7, "g");
+        blend(&mut b, 8, "h");
+        b.end_group();
+        plain(&mut b, 9, "i"); // exact
+        let dl = b.finish();
+        let runs: Vec<u32> = dl.recs.iter().map(|r| r.run).collect();
+        assert_eq!(runs, vec![0, 1, 1, 0, 1, 0, 2, 2, 2, 0]);
+        assert_eq!(dl.runs, 2);
+        assert_eq!(dl.node_runs.get(&1), Some(&1));
+        assert_eq!(dl.node_runs.get(&7), Some(&2)); // unflagged, but in the tainted group
+        assert!(!dl.node_runs.contains_key(&0) && !dl.node_runs.contains_key(&3));
+        // no flagged mark: no run
+        let mut b = DisplayListBackend::with_options(None, 2);
+        plain(&mut b, 0, "a");
+        let dl = b.finish();
+        assert_eq!(dl.runs, 0);
+        assert!(dl.node_runs.is_empty());
     }
 }

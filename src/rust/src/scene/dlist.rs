@@ -145,6 +145,7 @@ pub(super) fn encode(dl: DisplayList, w: f64, h: f64) -> List {
     let mut clip = Vec::with_capacity(dl.recs.len());
     let mut panel = Vec::with_capacity(dl.recs.len());
     let mut group = Vec::with_capacity(dl.recs.len());
+    let mut run = Vec::with_capacity(dl.recs.len());
     for r in &dl.recs {
         let pi = *paint_ix.entry(r.paint.clone()).or_insert_with(|| {
             paints.push(r.paint.clone());
@@ -157,6 +158,7 @@ pub(super) fn encode(dl: DisplayList, w: f64, h: f64) -> List {
         clip.push(r.clip);
         panel.push(r.panel);
         group.push(r.group);
+        run.push(r.run);
     }
     let v2 = dl.version >= 2;
     let caps = ["butt", "round", "square"];
@@ -288,7 +290,9 @@ pub(super) fn encode(dl: DisplayList, w: f64, h: f64) -> List {
     let rec_ix = out.names().unwrap().position(|n| n == "record").unwrap();
     let rec: List = out.elt(rec_ix).unwrap().try_into().unwrap();
     let rec = with_field(rec, "group", col_uint(&group));
+    let rec = with_field(rec, "run", col_uint(&run));
     let _ = out.set_elt(rec_ix, rec.into());
+    let out = with_field(out, "runs", Robj::from(dl.runs as i32));
     let g = &dl.gradients;
     let mut stop_off = vec![0i32];
     let mut stop_pos: Vec<f64> = Vec::new();

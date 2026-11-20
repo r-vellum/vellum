@@ -13,6 +13,15 @@
   Masks, blend modes, effects, hatches, patterns, repeating gradients and
   gradient strokes stay flagged.
 
+* `scene_png()` and `scene_svg()` gain `layer = "keyed_flagged"` and a `run`
+  argument (VW-30). The layer draws only the keyed marks that
+  `scene_display_list(version = 2)` flags (masks, blend modes, effects,
+  hatches, patterns, repeating gradients, gradient strokes, text), grouped
+  into runs in paint order. A version-2 display list numbers them in a new
+  `record$run` column and counts them in `runs`. vellumwidget can then draw the
+  exact marks itself and composite each run's image where it falls in paint
+  order, instead of keeping every mark on the PNG when one mark is flagged.
+
 # vellum 0.10.1
 
 ## Bug fixes

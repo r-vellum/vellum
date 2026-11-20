@@ -7,8 +7,9 @@
 scene_svg(
   scene,
   text = c("native", "outline"),
-  layer = c("all", "unkeyed", "keyed", "unkeyed_below", "unkeyed_above"),
-  panels = NULL
+  layer = c("all", "unkeyed", "keyed", "unkeyed_below", "unkeyed_above", "keyed_flagged"),
+  panels = NULL,
+  run = NULL
 )
 }
 \arguments{
@@ -20,13 +21,18 @@ outlines (pixel-faithful, identical to the raster/PDF backends, but not
 selectable). Ignored for PNG/PDF.}
 
 \item{layer}{Which part of the scene to draw: \code{"all"} (the default), only the
-\code{"keyed"} marks, everything \code{"unkeyed"}, or the unkeyed elements painted
-before (\code{"unkeyed_below"}) or after (\code{"unkeyed_above"}) the marks. See the
+\code{"keyed"} marks, everything \code{"unkeyed"}, the unkeyed elements painted
+before (\code{"unkeyed_below"}) or after (\code{"unkeyed_above"}) the marks, or only
+the keyed marks the display list flags (\code{"keyed_flagged"}). See the
 \emph{Split render} section.}
 
 \item{panels}{\code{NULL} (the default: every keyed mark is in the mark layer), or
 a character vector of panel names restricting the mark layer to keyed marks
 inside those panels. Ignored when \code{layer = "all"}.}
+
+\item{run}{For \code{layer = "keyed_flagged"}: \code{NULL} (the default) for every
+flagged mark, or a positive integer, the one run of flagged marks to draw
+(see the \emph{Split render} section). Ignored for the other layers.}
 }
 \value{
 A length-1 character vector: the SVG document.
@@ -69,6 +75,18 @@ elements interleaved between two keyed batches are therefore above, and a
 later facet's gridlines stay below that facet's own marks. With no marks at
 all, everything is below. \code{"unkeyed_above"}, like \code{"keyed"}, has a
 transparent page. The two halves together are exactly \code{"unkeyed"}.
+
+\code{"keyed_flagged"} draws only the marks of the \code{"keyed"} layer that
+\code{\link[=scene_display_list]{scene_display_list()}} (\code{version = 2}, same \code{panels}) flags as not drawable
+from the list: marks under a mask, a blend mode or an effect, hatched,
+patterned or repeating-gradient fills, gradient strokes and text. Whole
+nodes are drawn (every record of a node with one flagged record), and an
+opacity group holding a flagged mark goes in whole. The flagged marks fall
+into \emph{runs}: maximal stretches in paint order not interrupted by a mark the
+list draws exactly, numbered from 1 in the list's \code{record$run} (its \code{runs}
+field counts them). \code{run = k} draws only run \code{k}; \code{NULL} draws every run. A
+host that draws the exact marks itself can composite run \code{k} at its place
+in paint order and keep the overlap order right. The page is transparent.
 }
 
 \seealso{

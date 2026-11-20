@@ -9,8 +9,9 @@ scene_png(
   scene,
   scale = 1,
   cvd = "none",
-  layer = c("all", "unkeyed", "keyed", "unkeyed_below", "unkeyed_above"),
-  panels = NULL
+  layer = c("all", "unkeyed", "keyed", "unkeyed_below", "unkeyed_above", "keyed_flagged"),
+  panels = NULL,
+  run = NULL
 )
 
 scene_pdf(scene)
@@ -36,9 +37,9 @@ into a one-line change instead of an export-and-upload round trip. \strong{Raste
 output only} — a vector format has no pixels to transform, and \code{render()}
 warns if you ask for one.}
 
-\item{layer, panels}{For \code{scene_png()}: which part of the scene to draw, as
-for \code{\link[=scene_svg]{scene_svg()}} (see its \emph{Split render} section). The \code{"keyed"} layer has
-a transparent background, ready to composite over the \code{"unkeyed"} one.}
+\item{layer, panels, run}{For \code{scene_png()}: which part of the scene to draw,
+as for \code{\link[=scene_svg]{scene_svg()}} (see its \emph{Split render} section). The \code{"keyed"} layer
+has a transparent background, ready to composite over the \code{"unkeyed"} one.}
 }
 \value{
 A raw vector: the encoded PNG or PDF document.

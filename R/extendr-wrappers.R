@@ -428,7 +428,8 @@ rs_attractor <- function(kind, n, a, b, c, d, x0, y0) .Call(wrap__rs_attractor, 
 #'does. Shares the memoised pixmap with `render_png`. `layer` (0 all,
 #'1 unkeyed, 2 keyed) and `panels` (`NULL` or names) restrict the walk for
 #'the split render; a layer render bypasses the memo, and the keyed layer
-#'has a transparent page.
+#'has a transparent page. `run` picks one run of the `keyed_flagged`
+#'layer (0 = every run).
 #'}
 #'
 #'\subsection{Method `render_pdf_raw`}{
@@ -651,13 +652,13 @@ Scene$dpi <- function() .Call(wrap__Scene__dpi, self)
 
 Scene$render_png <- function(path) .Call(wrap__Scene__render_png, self, path)
 
-Scene$render_png_raw <- function(layer, panels) .Call(wrap__Scene__render_png_raw, self, layer, panels)
+Scene$render_png_raw <- function(layer, panels, run) .Call(wrap__Scene__render_png_raw, self, layer, panels, run)
 
 Scene$render_pdf_raw <- function() .Call(wrap__Scene__render_pdf_raw, self)
 
 Scene$render_svg <- function(path, outline_text) .Call(wrap__Scene__render_svg, self, path, outline_text)
 
-Scene$render_svg_string <- function(outline_text, layer, panels) .Call(wrap__Scene__render_svg_string, self, outline_text, layer, panels)
+Scene$render_svg_string <- function(outline_text, layer, panels, run) .Call(wrap__Scene__render_svg_string, self, outline_text, layer, panels, run)
 
 Scene$display_list_raw <- function(panels, version) .Call(wrap__Scene__display_list_raw, self, panels, version)
 

@@ -96,29 +96,79 @@ render <- function(
 #' all, everything is below. `"unkeyed_above"`, like `"keyed"`, has a
 #' transparent page. The two halves together are exactly `"unkeyed"`.
 #'
+#' `"keyed_flagged"` draws only the marks of the `"keyed"` layer that
+#' [scene_display_list()] (`version = 2`, same `panels`) flags as not drawable
+#' from the list: marks under a mask, a blend mode or an effect, hatched,
+#' patterned or repeating-gradient fills, gradient strokes and text. Whole
+#' nodes are drawn (every record of a node with one flagged record), and an
+#' opacity group holding a flagged mark goes in whole. The flagged marks fall
+#' into *runs*: maximal stretches in paint order not interrupted by a mark the
+#' list draws exactly, numbered from 1 in the list's `record$run` (its `runs`
+#' field counts them). `run = k` draws only run `k`; `NULL` draws every run. A
+#' host that draws the exact marks itself can composite run `k` at its place
+#' in paint order and keep the overlap order right. The page is transparent.
+#'
 #' @inheritParams render
 #' @param layer Which part of the scene to draw: `"all"` (the default), only the
-#'   `"keyed"` marks, everything `"unkeyed"`, or the unkeyed elements painted
-#'   before (`"unkeyed_below"`) or after (`"unkeyed_above"`) the marks. See the
+#'   `"keyed"` marks, everything `"unkeyed"`, the unkeyed elements painted
+#'   before (`"unkeyed_below"`) or after (`"unkeyed_above"`) the marks, or only
+#'   the keyed marks the display list flags (`"keyed_flagged"`). See the
 #'   *Split render* section.
 #' @param panels `NULL` (the default: every keyed mark is in the mark layer), or
 #'   a character vector of panel names restricting the mark layer to keyed marks
 #'   inside those panels. Ignored when `layer = "all"`.
+#' @param run For `layer = "keyed_flagged"`: `NULL` (the default) for every
+#'   flagged mark, or a positive integer, the one run of flagged marks to draw
+#'   (see the *Split render* section). Ignored for the other layers.
 #' @return A length-1 character vector: the SVG document.
 #' @seealso [render()], [scene_png()], [scene_model()]
 #' @export
 scene_svg <- function(
   scene,
   text = c("native", "outline"),
-  layer = c("all", "unkeyed", "keyed", "unkeyed_below", "unkeyed_above"),
-  panels = NULL
+  layer = c(
+    "all",
+    "unkeyed",
+    "keyed",
+    "unkeyed_below",
+    "unkeyed_above",
+    "keyed_flagged"
+  ),
+  panels = NULL,
+  run = NULL
 ) {
   text <- match.arg(text)
   layer <- match.arg(layer)
   panels <- .check_panels(panels)
+  run <- .check_run(run)
   scene <- as_vellum_scene(scene)
   s <- .scene_to_backend(scene)
-  s$render_svg_string(identical(text, "outline"), .layer_code(layer), panels)
+  s$render_svg_string(
+    identical(text, "outline"),
+    .layer_code(layer),
+    panels,
+    run
+  )
+}
+
+# `run` as the backend's code: 0 for every run (`NULL`), else the run number.
+.check_run <- function(run, call = parent.frame()) {
+  if (is.null(run)) {
+    return(0L)
+  }
+  if (
+    !is.numeric(run) ||
+      length(run) != 1L ||
+      is.na(run) ||
+      run < 1 ||
+      run != round(run)
+  ) {
+    cli::cli_abort(
+      "{.arg run} must be {.code NULL} or a single positive whole number.",
+      call = call
+    )
+  }
+  as.integer(run)
 }
 
 .check_panels <- function(panels, call = parent.frame()) {
@@ -138,7 +188,14 @@ scene_svg <- function(
 .layer_code <- function(layer) {
   match(
     layer,
-    c("all", "unkeyed", "keyed", "unkeyed_below", "unkeyed_above")
+    c(
+      "all",
+      "unkeyed",
+      "keyed",
+      "unkeyed_below",
+      "unkeyed_above",
+      "keyed_flagged"
+    )
   ) -
     1L
 }
@@ -168,20 +225,37 @@ scene_svg <- function(
 #' rawToChar(png_bytes[2:4]) # "PNG"
 #' @inheritParams render
 #' @inheritParams scene_svg
-#' @param layer,panels For `scene_png()`: which part of the scene to draw, as
-#'   for [scene_svg()] (see its *Split render* section). The `"keyed"` layer has
-#'   a transparent background, ready to composite over the `"unkeyed"` one.
+#' @param layer,panels,run For `scene_png()`: which part of the scene to draw,
+#'   as for [scene_svg()] (see its *Split render* section). The `"keyed"` layer
+#'   has a transparent background, ready to composite over the `"unkeyed"` one.
 #' @export
 scene_png <- function(
   scene,
   scale = 1,
   cvd = "none",
-  layer = c("all", "unkeyed", "keyed", "unkeyed_below", "unkeyed_above"),
-  panels = NULL
+  layer = c(
+    "all",
+    "unkeyed",
+    "keyed",
+    "unkeyed_below",
+    "unkeyed_above",
+    "keyed_flagged"
+  ),
+  panels = NULL,
+  run = NULL
 ) {
   layer <- match.arg(layer)
   panels <- .check_panels(panels)
-  .scene_bytes(scene, "png", scale, cvd, layer = layer, panels = panels)
+  run <- .check_run(run)
+  .scene_bytes(
+    scene,
+    "png",
+    scale,
+    cvd,
+    layer = layer,
+    panels = panels,
+    run = run
+  )
 }
 
 #' @rdname scene_png
@@ -198,14 +272,15 @@ scene_pdf <- function(scene) {
   scale = 1,
   cvd = "none",
   layer = "all",
-  panels = NULL
+  panels = NULL,
+  run = 0L
 ) {
   scene <- .apply_scale(as_vellum_scene(scene), scale)
   on.exit(.set_cvd("none"), add = TRUE)
   .set_cvd(cvd, format = kind)
   s <- .scene_to_backend(scene)
   res <- if (identical(kind, "png")) {
-    s$render_png_raw(.layer_code(layer), panels)
+    s$render_png_raw(.layer_code(layer), panels, run)
   } else {
     s$render_pdf_raw()
   }

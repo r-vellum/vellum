@@ -325,3 +325,120 @@ test_that("an unkeyed scene is all below", {
   expect_identical(scene_png(s, layer = "unkeyed_below"), scene_png(s))
   expect_true(all(.png_arr(scene_png(s, layer = "unkeyed_above"))[,, 4] == 0))
 })
+
+# VW-30: the flagged-marks layer. Three overlapping discs: `a` and `c` are
+# drawn exactly from the display list, `b` (under a mask) is flagged and sits
+# between them in paint order; a keyed label is flagged too, after `c`.
+.flag_scene <- function(keys = c("a", "b", "c", "t")) {
+  k <- function(x) if (x %in% keys) x else NULL
+  vl_scene(4, 3, dpi = 72, bg = "white") |>
+    draw(rect_grob(gp = vl_gpar(fill = "grey95", col = NA))) |>
+    draw(circle_grob(
+      x = 0.3,
+      y = 0.5,
+      r = 0.2,
+      gp = vl_gpar(fill = "steelblue", col = NA),
+      key = k("a")
+    )) |>
+    push(vl_viewport(
+      mask = as_mask(rect_grob(width = 0.9, gp = vl_gpar(fill = "black")))
+    )) |>
+    draw(circle_grob(
+      x = 0.45,
+      y = 0.5,
+      r = 0.2,
+      gp = vl_gpar(fill = "gold", col = NA),
+      key = k("b")
+    )) |>
+    pop() |>
+    draw(circle_grob(
+      x = 0.6,
+      y = 0.5,
+      r = 0.2,
+      gp = vl_gpar(fill = "tomato", col = NA),
+      key = k("c")
+    )) |>
+    draw(text_grob("lab", x = 0.85, y = 0.85, key = k("t")))
+}
+
+test_that("the display list numbers the flagged runs in paint order", {
+  dl <- scene_display_list(.flag_scene(), version = 2L)
+  run <- .dl_col(dl$record$run)
+  flags <- .dl_col(dl$record$flags)
+  keys <- as.character(dl$keys)[.dl_col(dl$record$key) + 1L]
+  expect_identical(dl$runs, 2L)
+  expect_equal(run[keys == "a"], 0)
+  expect_equal(run[keys == "b"], 1)
+  expect_equal(run[keys == "c"], 0)
+  expect_true(all(run[keys == "t"] == 2))
+  expect_true(all(flags[run > 0] != 0))
+  # version 1 lists carry no runs
+  expect_null(scene_display_list(.flag_scene())$record$run)
+  # no flagged mark, no run
+  plain <- scene_display_list(.flag_scene(c("a", "c")), version = 2L)
+  expect_identical(plain$runs, 0L)
+})
+
+test_that("keyed_flagged draws only the flagged marks, run by run", {
+  skip_if_not_installed("png")
+  s <- .flag_scene()
+  r1 <- .png_arr(scene_png(s, layer = "keyed_flagged", run = 1))
+  r2 <- .png_arr(scene_png(s, layer = "keyed_flagged", run = 2))
+  all <- .png_arr(scene_png(s, layer = "keyed_flagged"))
+  # run 1 is the masked disc alone, exactly as a keyed layer of just `b` draws it
+  only_b <- .png_arr(scene_png(.flag_scene("b"), layer = "keyed"))
+  expect_lt(max(abs(r1 - only_b)), 1 / 255)
+  only_t <- .png_arr(scene_png(.flag_scene("t"), layer = "keyed"))
+  expect_lt(max(abs(r2 - only_t)), 1 / 255)
+  # every run together; the page is transparent
+  expect_lt(max(abs(.over(r2, r1) - all)), 1 / 255)
+  expect_equal(all[1, 1, 4], 0)
+  # nothing past the last run
+  expect_true(all(.png_arr(scene_png(s, layer = "keyed_flagged", run = 3))[,, 4] == 0))
+  # no flagged marks: an empty layer
+  expect_true(all(
+    .png_arr(scene_png(.flag_scene(c("a", "c")), layer = "keyed_flagged"))[,, 4] == 0
+  ))
+})
+
+test_that("compositing the runs between the exact marks keeps the paint order", {
+  skip_if_not_installed("png")
+  s <- .flag_scene()
+  keyed <- .png_arr(scene_png(s, layer = "keyed"))
+  a <- .png_arr(scene_png(.flag_scene("a"), layer = "keyed"))
+  c <- .png_arr(scene_png(.flag_scene("c"), layer = "keyed"))
+  r1 <- .png_arr(scene_png(s, layer = "keyed_flagged", run = 1))
+  r2 <- .png_arr(scene_png(s, layer = "keyed_flagged", run = 2))
+  # a, run 1, c, run 2 (what a client drawing a and c itself does)
+  comp <- .over(r2, .over(c, .over(r1, a)))
+  expect_lt(max(abs(comp - keyed)), 3 / 255)
+  # one flagged image over all the exact marks gets the overlap wrong
+  wrong <- .over(.over(r2, r1), .over(c, a))
+  expect_gt(max(abs(wrong - keyed)), 0.3)
+})
+
+test_that("keyed_flagged follows panels and works in the SVG backend", {
+  s <- vl_scene(4, 3, dpi = 72) |>
+    push(vl_viewport(width = 0.5, x = 0.25, name = "p1")) |>
+    draw(text_grob("one", key = "t1")) |>
+    pop() |>
+    push(vl_viewport(width = 0.5, x = 0.75, name = "p2")) |>
+    draw(text_grob("two", key = "t2")) |>
+    draw(circle_grob(r = 0.1, key = "c2")) |>
+    pop()
+  svg <- scene_svg(s, layer = "keyed_flagged", panels = "p2")
+  expect_match(svg, 'data-key="t2"', fixed = TRUE)
+  expect_false(grepl('data-key="t1"', svg, fixed = TRUE))
+  expect_false(grepl('data-key="c2"', svg, fixed = TRUE))
+  dl <- scene_display_list(s, panels = "p2", version = 2L)
+  expect_identical(dl$runs, 1L)
+})
+
+test_that("run is validated", {
+  s <- .flag_scene()
+  expect_error(scene_png(s, layer = "keyed_flagged", run = 0), "positive whole")
+  expect_error(scene_svg(s, layer = "keyed_flagged", run = 1.5), "positive whole")
+  expect_error(scene_png(s, layer = "keyed_flagged", run = c(1, 2)), "positive whole")
+  # ignored by the other layers
+  expect_identical(scene_png(s, layer = "keyed", run = 2), scene_png(s, layer = "keyed"))
+})

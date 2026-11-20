@@ -5,7 +5,7 @@
 use super::*;
 
 /// The split-render filter from its R encoding (see `render_png_raw`).
-fn layer_filter(layer: i32, panels: &Robj) -> LayerFilter {
+fn layer_filter(layer: i32, panels: &Robj, run: i32) -> LayerFilter {
     LayerFilter {
         layer: Layer::from_code(layer),
         panels: if panels.is_null() {
@@ -19,6 +19,8 @@ fn layer_filter(layer: i32, panels: &Robj) -> LayerFilter {
             )
         },
         above: Vec::new(),
+        flagged: None,
+        run: run.max(0) as u32,
     }
 }
 
@@ -1586,9 +1588,10 @@ impl Scene {
     /// does. Shares the memoised pixmap with `render_png`. `layer` (0 all,
     /// 1 unkeyed, 2 keyed) and `panels` (`NULL` or names) restrict the walk for
     /// the split render; a layer render bypasses the memo, and the keyed layer
-    /// has a transparent page.
-    fn render_png_raw(&self, layer: i32, panels: Robj) -> List {
-        let layer = layer_filter(layer, &panels);
+    /// has a transparent page. `run` picks one run of the `keyed_flagged`
+    /// layer (0 = every run).
+    fn render_png_raw(&self, layer: i32, panels: Robj, run: i32) -> List {
+        let layer = layer_filter(layer, &panels, run);
         let (pm, warnings) = if !layer.is_all() {
             check_raster_area(self.w_px, self.h_px);
             let bg = layer_bg(&layer, self.bg);
@@ -1646,8 +1649,8 @@ impl Scene {
     /// `layer` (0 all, 1 unkeyed, 2 keyed) and `panels` (`NULL` or names)
     /// restrict the walk for the split render; the keyed layer has no page
     /// background.
-    fn render_svg_string(&self, outline_text: bool, layer: i32, panels: Robj) -> String {
-        let layer = layer_filter(layer, &panels);
+    fn render_svg_string(&self, outline_text: bool, layer: i32, panels: Robj, run: i32) -> String {
+        let layer = layer_filter(layer, &panels, run);
         let mut b = SvgBackend::new(
             self.w_px,
             self.h_px,
