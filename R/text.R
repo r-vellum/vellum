@@ -104,7 +104,7 @@ vl_strheight <- function(
 # undefined behaviour: on x86_64 Linux it becomes INT_MIN, so a string measured
 # -33554432 pt (about -1.2e7 mm), while arm64 saturates to 0 (VR-15). A NULL
 # `fontsize` reaches here as `numeric(0)`.
-.check_font_size <- function(size, call = rlang::caller_env()) {
+.check_font_size <- function(size, call = parent.frame()) {
   if (!is.numeric(size) || !length(size) || !all(is.finite(size))) {
     shown <- if (is.numeric(size) && length(size)) {
       format(size[!is.finite(size)][1])
