@@ -2,6 +2,17 @@
 
 ## vellum 0.10.0.9000 (development version)
 
+### Bug fixes
+
+- [`vl_strwidth()`](https://r-vellum.github.io/vellum/reference/vl_strwidth.md),
+  [`vl_strheight()`](https://r-vellum.github.io/vellum/reference/vl_strwidth.md)
+  and text shaping now error when the text size (`fontsize * cex`) is
+  missing or not finite, instead of passing it to textshaping.
+  textshaping converts such a size to a fixed-point integer, which
+  depends on the platform: on x86_64 Linux a string measured -33554432
+  pt (about -1.2e7 mm), while macOS (arm64) measured 0. A `NULL`
+  `fontsize` was the usual way in (VR-15).
+
 ## vellum 0.10.0
 
 ### Bug fixes
