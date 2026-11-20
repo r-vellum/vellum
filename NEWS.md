@@ -1,5 +1,18 @@
 # vellum 0.10.1.9000 (development version)
 
+## New features
+
+* `scene_display_list()` (internal, for vellumwidget) gains `version = 2`
+  (VW-23). Version 2 lists three cases exactly that version 1 flags: linear
+  and radial gradient fills with `pad` extension (a gradient table the paints
+  refer to), clips by a path or a rotated rectangle (clip paths in device px),
+  and groups whose only effect is an opacity below 1 (a group table each
+  record refers to). vellumwidget can then draw these marks on its canvas,
+  restyle them and show them as SVG nodes on deep zoom. The default stays
+  `version = 1`, unchanged, so older vellumwidget releases are unaffected.
+  Masks, blend modes, effects, hatches, patterns, repeating gradients and
+  gradient strokes stay flagged.
+
 # vellum 0.10.1
 
 ## Bug fixes

@@ -9,7 +9,7 @@
 #' Do not build on it.
 #'
 #' @section Format:
-#' A list with `format = "vellum-display-list"`, `version` (1), the page
+#' A list with `format = "vellum-display-list"`, `version` (1 or 2), the page
 #' `width` and `height` in device px, the record count `n`, and:
 #'
 #' * `record`: one row per keyed primitive, in paint order. `kind` (0 point,
@@ -44,6 +44,35 @@
 #' (an arithmetic sequence) or `rle = list(values, lengths)` (runs of equal
 #' values, used when there are few).
 #'
+#' @section Version 2:
+#' `version = 2` lists three more cases exactly, which version 1 flags, and
+#' adds the tables they need. A reader that knows only version 1 must not be
+#' handed a version-2 list: their records are no longer flagged.
+#'
+#' * Gradient fills: linear and radial gradients with `pad` extension.
+#'   `paints$fill_gradient` is the 1-based row of `gradients` (0 = none; then
+#'   `fill` is `NA`). `gradients` has `type` (`"linear"` or `"radial"`), the
+#'   geometry in the shape's local px (linear: `x1, y1` to `x2, y2`; radial:
+#'   the focal circle `x1, y1, r1` at offset 0 to the outer circle `x2, y2, r2`
+#'   at offset 1), the transform placing it in device px as `a`, `b`, `c`,
+#'   `d`, `e`, `f` (the SVG / canvas `matrix(a, b, c, d, e, f)`), and its stops:
+#'   gradient *i*'s are rows `stop_offset[i] + 1` to `stop_offset[i + 1]` of
+#'   `stop_pos` (0 to 1) and `stop_color` (`"#rrggbbaa"`).
+#' * Path clips: a clip by a path or a rotated rectangle. `clips` gains
+#'   `path_start` and `path_n`: a clip's paths are shapes `path_start + 1` to
+#'   `path_start + path_n` of `clip_paths` (0 = the rect alone), and a record is
+#'   clipped to the rect and to each of them. Its rect is then also bounded by
+#'   the paths' boxes. `clip_paths` is a path table like `path`: `xy`,
+#'   `run_offset`, `path_offset` (one shape per entry) and `evenodd`.
+#' * Opacity groups: a group whose only effect is an opacity below 1.
+#'   `record$group` is the 1-based row of `groups` (the innermost such group
+#'   the record is drawn in, 0 = none). `groups` has `alpha` and `parent`
+#'   (1-based, 0 = top level). A client draws a group's records into their own
+#'   layer and composites it at `alpha`.
+#'
+#' Masks, blend modes, blur and shadow effects, hatches, patterns, repeating or
+#' reflecting gradients and gradient strokes stay flagged.
+#'
 #' @section What stage 1 does not reproduce:
 #' Such marks are still listed, so they can be hit-tested, but `flags` marks
 #' them and a client should fall back to its approximate path for them:
@@ -63,11 +92,16 @@
 #'   panel (`scene_model()$elements$panel`) is one of them, the same rule as
 #'   `scene_png(layer = "keyed", panels = )`. vellumwidget passes its data
 #'   panels, which leaves out a legend's keyed swatches.
+#' @param version The format version, `1` (the default) or `2` (see the
+#'   *Version 2* section).
 #' @return The display list, as described in the *Format* section.
 #' @keywords internal
 #' @export
-scene_display_list <- function(scene, what = "keyed", panels = NULL) {
+scene_display_list <- function(scene, what = "keyed", panels = NULL, version = 1L) {
   what <- match.arg(what)
+  if (!is.numeric(version) || length(version) != 1L || !version %in% c(1, 2)) {
+    cli::cli_abort("{.arg version} must be 1 or 2.")
+  }
   if (!is.null(panels) && (!is.character(panels) || anyNA(panels))) {
     cli::cli_abort(
       "{.arg panels} must be {.code NULL} or a character vector of panel names."
@@ -75,5 +109,5 @@ scene_display_list <- function(scene, what = "keyed", panels = NULL) {
   }
   scene <- as_vellum_scene(scene)
   s <- .scene_to_backend(scene)
-  s$display_list_raw(panels)
+  s$display_list_raw(panels, as.integer(version))
 }

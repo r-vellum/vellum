@@ -4,7 +4,7 @@
 \alias{scene_display_list}
 \title{Marks-only display list (internal, for vellumwidget)}
 \usage{
-scene_display_list(scene, what = "keyed", panels = NULL)
+scene_display_list(scene, what = "keyed", panels = NULL, version = 1L)
 }
 \arguments{
 \item{scene}{A \code{\link[=vl_scene]{vl_scene()}}, or anything with an \code{\link[=as_vellum_scene]{as_vellum_scene()}} method.}
@@ -16,6 +16,9 @@ a character vector of panel names to list only those whose innermost named
 panel (\code{scene_model()$elements$panel}) is one of them, the same rule as
 \code{scene_png(layer = "keyed", panels = )}. vellumwidget passes its data
 panels, which leaves out a legend's keyed swatches.}
+
+\item{version}{The format version, \code{1} (the default) or \code{2} (see the
+\emph{Version 2} section).}
 }
 \value{
 The display list, as described in the \emph{Format} section.
@@ -32,7 +35,7 @@ Do not build on it.
 }
 \section{Format}{
 
-A list with \code{format = "vellum-display-list"}, \code{version} (1), the page
+A list with \code{format = "vellum-display-list"}, \code{version} (1 or 2), the page
 \code{width} and \code{height} in device px, the record count \code{n}, and:
 \itemize{
 \item \code{record}: one row per keyed primitive, in paint order. \code{kind} (0 point,
@@ -67,6 +70,38 @@ is the length. The values come as exactly one of \code{data} (base64,
 little-endian, typed), \code{const} (every value equal), \code{seq = c(start, step)}
 (an arithmetic sequence) or \code{rle = list(values, lengths)} (runs of equal
 values, used when there are few).
+}
+
+\section{Version 2}{
+
+\code{version = 2} lists three more cases exactly, which version 1 flags, and
+adds the tables they need. A reader that knows only version 1 must not be
+handed a version-2 list: their records are no longer flagged.
+\itemize{
+\item Gradient fills: linear and radial gradients with \code{pad} extension.
+\code{paints$fill_gradient} is the 1-based row of \code{gradients} (0 = none; then
+\code{fill} is \code{NA}). \code{gradients} has \code{type} (\code{"linear"} or \code{"radial"}), the
+geometry in the shape's local px (linear: \verb{x1, y1} to \verb{x2, y2}; radial:
+the focal circle \verb{x1, y1, r1} at offset 0 to the outer circle \verb{x2, y2, r2}
+at offset 1), the transform placing it in device px as \code{a}, \code{b}, \code{c},
+\code{d}, \code{e}, \code{f} (the SVG / canvas \code{matrix(a, b, c, d, e, f)}), and its stops:
+gradient \emph{i}'s are rows \code{stop_offset[i] + 1} to \code{stop_offset[i + 1]} of
+\code{stop_pos} (0 to 1) and \code{stop_color} (\code{"#rrggbbaa"}).
+\item Path clips: a clip by a path or a rotated rectangle. \code{clips} gains
+\code{path_start} and \code{path_n}: a clip's paths are shapes \code{path_start + 1} to
+\code{path_start + path_n} of \code{clip_paths} (0 = the rect alone), and a record is
+clipped to the rect and to each of them. Its rect is then also bounded by
+the paths' boxes. \code{clip_paths} is a path table like \code{path}: \code{xy},
+\code{run_offset}, \code{path_offset} (one shape per entry) and \code{evenodd}.
+\item Opacity groups: a group whose only effect is an opacity below 1.
+\code{record$group} is the 1-based row of \code{groups} (the innermost such group
+the record is drawn in, 0 = none). \code{groups} has \code{alpha} and \code{parent}
+(1-based, 0 = top level). A client draws a group's records into their own
+layer and composites it at \code{alpha}.
+}
+
+Masks, blend modes, blur and shadow effects, hatches, patterns, repeating or
+reflecting gradients and gradient strokes stay flagged.
 }
 
 \section{What stage 1 does not reproduce}{

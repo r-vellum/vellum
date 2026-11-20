@@ -112,6 +112,18 @@ fn col_u8(v: &[u8]) -> Robj {
     col_uint(&v.iter().map(|&x| x as u32).collect::<Vec<_>>())
 }
 
+/// `l` with one more named element appended.
+fn with_field(l: List, name: &str, value: Robj) -> List {
+    let mut names: Vec<String> = l
+        .names()
+        .map(|n| n.map(String::from).collect())
+        .unwrap_or_default();
+    let mut values: Vec<Robj> = l.values().collect();
+    names.push(name.to_string());
+    values.push(value);
+    List::from_names_and_values(names, values).expect("list field")
+}
+
 fn hex(c: Option<u32>) -> Option<String> {
     c.map(|c| format!("#{c:08x}"))
 }
@@ -132,6 +144,7 @@ pub(super) fn encode(dl: DisplayList, w: f64, h: f64) -> List {
     let mut flags = Vec::with_capacity(dl.recs.len());
     let mut clip = Vec::with_capacity(dl.recs.len());
     let mut panel = Vec::with_capacity(dl.recs.len());
+    let mut group = Vec::with_capacity(dl.recs.len());
     for r in &dl.recs {
         let pi = *paint_ix.entry(r.paint.clone()).or_insert_with(|| {
             paints.push(r.paint.clone());
@@ -143,7 +156,9 @@ pub(super) fn encode(dl: DisplayList, w: f64, h: f64) -> List {
         flags.push(r.flags);
         clip.push(r.clip);
         panel.push(r.panel);
+        group.push(r.group);
     }
+    let v2 = dl.version >= 2;
     let caps = ["butt", "round", "square"];
     let joins = ["mitre", "round", "bevel"];
     let paint_df = list!(
@@ -182,6 +197,39 @@ pub(super) fn encode(dl: DisplayList, w: f64, h: f64) -> List {
         x1 = dl.clips.iter().map(|c| c[2]).collect::<Vec<f64>>(),
         y1 = dl.clips.iter().map(|c| c[3]).collect::<Vec<f64>>()
     );
+    // Version 2 (VW-23) adds, and a version-1 reader never sees: the paints'
+    // gradient refs, the gradient table, the clip paths, and the opacity groups.
+    let mut paint_df = paint_df;
+    let mut clip_df = clip_df;
+    if v2 {
+        paint_df = with_field(
+            paint_df,
+            "fill_gradient",
+            paints
+                .iter()
+                .map(|p| p.grad as i32)
+                .collect::<Vec<i32>>()
+                .into(),
+        );
+        clip_df = with_field(
+            clip_df,
+            "path_start",
+            dl.clip_paths
+                .iter()
+                .map(|c| c.0 as i32)
+                .collect::<Vec<i32>>()
+                .into(),
+        );
+        clip_df = with_field(
+            clip_df,
+            "path_n",
+            dl.clip_paths
+                .iter()
+                .map(|c| c.1 as i32)
+                .collect::<Vec<i32>>()
+                .into(),
+        );
+    }
     // Keys: integer-valued keys (the common `data_id = row`) ship as a number
     // column -- usually a `seq` -- rather than as text.
     let ints: Option<Vec<u32>> = dl.keys.iter().map(|k| int_key(k)).collect();
@@ -194,9 +242,9 @@ pub(super) fn encode(dl: DisplayList, w: f64, h: f64) -> List {
             .collect::<Strings>()
             .into(),
     };
-    list!(
+    let out = list!(
         format = "vellum-display-list",
-        version = 1,
+        version = if v2 { 2 } else { 1 },
         width = w,
         height = h,
         n = dl.recs.len() as i32,
@@ -231,13 +279,103 @@ pub(super) fn encode(dl: DisplayList, w: f64, h: f64) -> List {
         clips = clip_df,
         keys = keys,
         panels = dl.panels.iter().map(|s| s.as_str()).collect::<Strings>()
+    );
+    if !v2 {
+        return out;
+    }
+    let mut out = out;
+    // record$group
+    let rec_ix = out.names().unwrap().position(|n| n == "record").unwrap();
+    let rec: List = out.elt(rec_ix).unwrap().try_into().unwrap();
+    let rec = with_field(rec, "group", col_uint(&group));
+    let _ = out.set_elt(rec_ix, rec.into());
+    let g = &dl.gradients;
+    let mut stop_off = vec![0i32];
+    let mut stop_pos: Vec<f64> = Vec::new();
+    let mut stop_col: Vec<String> = Vec::new();
+    for gr in g {
+        for &(o, c) in &gr.stops {
+            stop_pos.push(o as f64);
+            stop_col.push(format!("#{c:08x}"));
+        }
+        stop_off.push(stop_pos.len() as i32);
+    }
+    let tcol = |k: usize| {
+        g.iter()
+            .map(|gr| gr.transform[k] as f64)
+            .collect::<Vec<f64>>()
+    };
+    // (`type` is a reserved word for `list!`.)
+    let gradients = List::from_names_and_values(
+        [
+            "type",
+            "x1",
+            "y1",
+            "x2",
+            "y2",
+            "r1",
+            "r2",
+            "a",
+            "b",
+            "c",
+            "d",
+            "e",
+            "f",
+            "stop_offset",
+            "stop_pos",
+            "stop_color",
+        ],
+        [
+            Robj::from(
+                g.iter()
+                    .map(|gr| if gr.radial { "radial" } else { "linear" })
+                    .collect::<Strings>(),
+            ),
+            Robj::from(g.iter().map(|gr| gr.p1.0).collect::<Vec<f64>>()),
+            Robj::from(g.iter().map(|gr| gr.p1.1).collect::<Vec<f64>>()),
+            Robj::from(g.iter().map(|gr| gr.p2.0).collect::<Vec<f64>>()),
+            Robj::from(g.iter().map(|gr| gr.p2.1).collect::<Vec<f64>>()),
+            Robj::from(g.iter().map(|gr| gr.r1).collect::<Vec<f64>>()),
+            Robj::from(g.iter().map(|gr| gr.r2).collect::<Vec<f64>>()),
+            Robj::from(tcol(0)),
+            Robj::from(tcol(1)),
+            Robj::from(tcol(2)),
+            Robj::from(tcol(3)),
+            Robj::from(tcol(4)),
+            Robj::from(tcol(5)),
+            Robj::from(stop_off),
+            Robj::from(stop_pos),
+            Robj::from(stop_col),
+        ],
     )
+    .expect("gradients");
+    let clip_paths = list!(
+        xy = col_f32(&dl.cp_xy),
+        run_offset = col_uint(&dl.cp_run_off),
+        path_offset = col_uint(&dl.cp_path_off),
+        evenodd = col_u8(&dl.cp_evenodd)
+    );
+    let groups = list!(
+        alpha = dl
+            .groups
+            .iter()
+            .map(|gr| gr.alpha as f64)
+            .collect::<Vec<f64>>(),
+        parent = dl
+            .groups
+            .iter()
+            .map(|gr| gr.parent as i32)
+            .collect::<Vec<i32>>()
+    );
+    let out = with_field(out, "gradients", gradients.into());
+    let out = with_field(out, "clip_paths", clip_paths.into());
+    with_field(out, "groups", groups.into())
 }
 
 impl Scene {
     /// Walk the scene through the display-list backend and encode the result.
-    pub(super) fn display_list(&self, panels: Option<Vec<String>>) -> List {
-        let mut b = DisplayListBackend::with_panels(panels);
+    pub(super) fn display_list(&self, panels: Option<Vec<String>>, version: u32) -> List {
+        let mut b = DisplayListBackend::with_options(panels, version);
         let _ = self.render_to(&mut b);
         encode(b.finish(), self.w_px as f64, self.h_px as f64)
     }

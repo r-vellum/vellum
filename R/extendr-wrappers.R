@@ -659,7 +659,7 @@ Scene$render_svg <- function(path, outline_text) .Call(wrap__Scene__render_svg, 
 
 Scene$render_svg_string <- function(outline_text, layer, panels) .Call(wrap__Scene__render_svg_string, self, outline_text, layer, panels)
 
-Scene$display_list_raw <- function(panels) .Call(wrap__Scene__display_list_raw, self, panels)
+Scene$display_list_raw <- function(panels, version) .Call(wrap__Scene__display_list_raw, self, panels, version)
 
 Scene$render_pdf <- function(path) .Call(wrap__Scene__render_pdf, self, path)
 

@@ -1663,7 +1663,7 @@ impl Scene {
     /// device px, as columnar base64 tables. Internal to vellumwidget; see
     /// `scene_display_list()`.
     /// `panels` (`NULL` or names) restricts it to marks in those panels.
-    fn display_list_raw(&self, panels: Robj) -> List {
+    fn display_list_raw(&self, panels: Robj, version: i32) -> List {
         let panels = if panels.is_null() {
             None
         } else {
@@ -1674,7 +1674,7 @@ impl Scene {
                     .unwrap_or_default(),
             )
         };
-        self.display_list(panels)
+        self.display_list(panels, version.clamp(1, 2) as u32)
     }
 
     /// Render the scene to a PDF file. Returns any degradation warnings (e.g. a
