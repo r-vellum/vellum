@@ -4,6 +4,14 @@
 
 ### New features
 
+- [`scene_display_list()`](https://r-vellum.github.io/vellum/reference/scene_display_list.md)
+  now lists keyed marks that paint nothing (invisible hover targets:
+  `fill = NA, col = NA` rects, circles, markers, polygons) with their
+  geometry and a new pick-only flag (`16`), so vellumwidget can hit-test
+  them in raster mode (VR-17). The change is additive: drawn marks keep
+  their records and flags, and an older client treats the new flag like
+  any other (falls back to the element’s bounding box).
+
 - [`scene_svg()`](https://r-vellum.github.io/vellum/reference/scene_svg.md)
   and
   [`scene_png()`](https://r-vellum.github.io/vellum/reference/scene_png.md)
