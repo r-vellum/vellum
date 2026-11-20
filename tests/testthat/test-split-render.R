@@ -223,3 +223,105 @@ test_that("panels narrows the mark layer to keyed marks in those panels", {
   ))
   expect_error(scene_png(s, layer = "keyed", panels = 1), "panels")
 })
+
+# VW-21: paint-order split of the unkeyed layer.
+.order_scene <- function() {
+  vl_scene(4, 2, dpi = 72, bg = "white") |>
+    push(vl_viewport(x = 0.25, width = 0.5, name = "p1", clip = TRUE)) |>
+    draw(rect_grob(gp = vl_gpar(fill = "grey90", col = NA))) |>
+    draw(points_grob(
+      c(0.3, 0.5, 0.7),
+      0.5,
+      size = 8,
+      key = c("a", "b", "c"),
+      gp = vl_gpar(fill = "red", col = NA)
+    )) |>
+    # An annotation over the points, between two keyed batches.
+    draw(text_grob("between", x = 0.5, y = 0.8)) |>
+    draw(points_grob(0.5, 0.2, size = 8, key = "d", gp = vl_gpar(fill = "red"))) |>
+    draw(lines_grob(c(0, 1), c(0.5, 0.5), gp = vl_gpar(col = "blue", lwd = 4))) |>
+    pop() |>
+    # A second facet painted after p1's marks: its background stays below.
+    push(vl_viewport(x = 0.75, width = 0.5, name = "p2")) |>
+    draw(rect_grob(gp = vl_gpar(fill = "grey80", col = NA))) |>
+    draw(text_grob("facet2bg", x = 0.5, y = 0.9)) |>
+    draw(points_grob(0.5, 0.5, size = 8, key = "e", gp = vl_gpar(fill = "red"))) |>
+    draw(text_grob("facet2top", x = 0.5, y = 0.1)) |>
+    pop() |>
+    draw(text_grob("caption", x = 0.5, y = 0.02))
+}
+
+test_that("layer choices are visible for feature detection", {
+  ch <- eval(formals(scene_png)$layer)
+  expect_true(all(c("unkeyed_below", "unkeyed_above") %in% ch))
+  expect_identical(eval(formals(scene_svg)$layer), ch)
+})
+
+test_that("unkeyed_below/above split the furniture by paint order per panel", {
+  s <- .order_scene()
+  below <- scene_svg(s, layer = "unkeyed_below")
+  above <- scene_svg(s, layer = "unkeyed_above")
+  has <- function(x, t) grepl(paste0(">", t, "<"), x, fixed = TRUE)
+  expect_true(has(below, "facet2bg"))
+  expect_false(has(above, "facet2bg"))
+  for (t in c("between", "facet2top", "caption")) {
+    expect_true(has(above, t), label = t)
+    expect_false(has(below, t), label = t)
+  }
+  expect_false(grepl("data-key=", below, fixed = TRUE))
+  expect_false(grepl("data-key=", above, fixed = TRUE))
+  # The above layer has no page background; the below layer keeps it.
+  expect_false(grepl('fill="#FFFFFF"', above, fixed = TRUE))
+  # The overlay keeps the panel clip around the annotation.
+  expect_match(above, "clip-path=", fixed = TRUE)
+})
+
+test_that("below + keyed + above reproduces the full render", {
+  skip_if_not_installed("png")
+  s <- .order_scene()
+  full <- .png_arr(scene_png(s))
+  comp <- .over(
+    .png_arr(scene_png(s, layer = "unkeyed_above")),
+    .over(
+      .png_arr(scene_png(s, layer = "keyed")),
+      .png_arr(scene_png(s, layer = "unkeyed_below"))
+    )
+  )
+  expect_lt(max(abs(comp - full)), 3 / 255)
+  # The old two-layer stack loses the line drawn over the points.
+  two <- .over(
+    .png_arr(scene_png(s, layer = "keyed")),
+    .png_arr(scene_png(s, layer = "unkeyed"))
+  )
+  expect_gt(max(abs(two - full)), 0.5)
+  # below + above is exactly unkeyed.
+  expect_lt(
+    max(abs(
+      .over(
+        .png_arr(scene_png(s, layer = "unkeyed_above")),
+        .png_arr(scene_png(s, layer = "unkeyed_below"))
+      ) -
+        .png_arr(scene_png(s, layer = "unkeyed"))
+    )),
+    3 / 255
+  )
+})
+
+test_that("panels changes which marks set the paint-order threshold", {
+  s <- .order_scene()
+  # With p1 not in the mark layer, p1's keyed points are furniture, so p1's
+  # annotation still comes after them but no mark precedes it in p1.
+  above <- scene_svg(s, layer = "unkeyed_above", panels = "p2")
+  below <- scene_svg(s, layer = "unkeyed_below", panels = "p2")
+  expect_false(grepl(">between<", above, fixed = TRUE))
+  expect_match(below, 'data-key="a"', fixed = TRUE)
+  expect_match(above, ">facet2top<", fixed = TRUE)
+})
+
+test_that("an unkeyed scene is all below", {
+  skip_if_not_installed("png")
+  s <- vl_scene(2, 2, dpi = 72, bg = "white") |>
+    draw(circle_grob(gp = vl_gpar(fill = "tomato")))
+  expect_identical(scene_png(s, layer = "unkeyed_below"), scene_png(s))
+  expect_true(all(.png_arr(scene_png(s, layer = "unkeyed_above"))[,, 4] == 0))
+})

@@ -433,32 +433,60 @@ impl Node {
 /// mark keeps its clip, mask, opacity and blend group. Composited `Keyed` over
 /// `Unkeyed` reproduces `All` whenever no unkeyed node paints over a keyed one
 /// and no keyed mark blends with an unkeyed backdrop.
+///
+/// `UnkeyedBelow` / `UnkeyedAbove` (VW-21) partition `Unkeyed` by paint order
+/// relative to the mark layer, so `UnkeyedBelow`, `Keyed`, `UnkeyedAbove`
+/// stacked bottom to top also reproduce an annotation drawn over the marks. An
+/// unkeyed node is "above" when a mark was painted before it within its
+/// innermost named panel (a mark in a nested panel counts for every enclosing
+/// panel); outside every named panel, any earlier mark counts. So an unkeyed
+/// node interleaved between two keyed batches is above, while a later facet's
+/// gridlines stay below that facet's own marks.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Layer {
     All,
     Unkeyed,
     Keyed,
+    UnkeyedBelow,
+    UnkeyedAbove,
 }
 
 impl Layer {
-    /// Codes match `.layer_code()` in R: 0 all, 1 unkeyed, 2 keyed.
+    /// Codes match `.layer_code()` in R: 0 all, 1 unkeyed, 2 keyed,
+    /// 3 unkeyed_below, 4 unkeyed_above.
     pub fn from_code(c: i32) -> Layer {
         match c {
             1 => Layer::Unkeyed,
             2 => Layer::Keyed,
+            3 => Layer::UnkeyedBelow,
+            4 => Layer::UnkeyedAbove,
             _ => Layer::All,
         }
+    }
+
+    /// Whether this layer is an overlay drawn on a transparent page (no page
+    /// background): the mark layer and the furniture above it.
+    pub fn is_overlay(self) -> bool {
+        matches!(self, Layer::Keyed | Layer::UnkeyedAbove)
+    }
+
+    /// Whether the layer needs the per-node paint-order split.
+    pub fn needs_order(self) -> bool {
+        matches!(self, Layer::UnkeyedBelow | Layer::UnkeyedAbove)
     }
 }
 
 /// A [`Layer`] plus the optional panel restriction of the mark layer: when
 /// `panels` is `Some`, a keyed node counts as a mark only if its innermost named
 /// panel is listed (so a keyed legend swatch can stay with the furniture). The
-/// two layers stay exact complements either way.
+/// layers stay exact complements either way. `above` (filled by
+/// `Scene::with_paint_order` for the below/above layers) is parallel to the
+/// top-level node list: whether a mark precedes the node in its panel.
 #[derive(Clone, Debug)]
 pub struct LayerFilter {
     pub layer: Layer,
     pub panels: Option<Vec<String>>,
+    pub above: Vec<bool>,
 }
 
 impl LayerFilter {
@@ -466,6 +494,7 @@ impl LayerFilter {
         LayerFilter {
             layer: Layer::All,
             panels: None,
+            above: Vec::new(),
         }
     }
 
@@ -473,18 +502,29 @@ impl LayerFilter {
         self.layer == Layer::All
     }
 
-    /// Whether a drawing node, inside innermost named panel `panel` (empty when
-    /// outside every panel), belongs to this layer.
-    pub(super) fn keeps(&self, node: &Node, panel: &str) -> bool {
-        if self.layer == Layer::All {
-            return true;
-        }
-        let mark = node.is_keyed()
+    /// Whether a drawing node inside innermost named panel `panel` is a mark
+    /// (belongs to the keyed layer).
+    pub(super) fn is_mark(&self, node: &Node, panel: &str) -> bool {
+        node.is_keyed()
             && self
                 .panels
                 .as_ref()
-                .is_none_or(|ps| ps.iter().any(|p| p == panel));
-        mark == (self.layer == Layer::Keyed)
+                .is_none_or(|ps| ps.iter().any(|p| p == panel))
+    }
+
+    /// Whether drawing node `i`, inside innermost named panel `panel` (empty
+    /// when outside every panel), belongs to this layer.
+    pub(super) fn keeps(&self, i: usize, node: &Node, panel: &str) -> bool {
+        match self.layer {
+            Layer::All => true,
+            Layer::Keyed => self.is_mark(node, panel),
+            Layer::Unkeyed => !self.is_mark(node, panel),
+            Layer::UnkeyedBelow | Layer::UnkeyedAbove => {
+                !self.is_mark(node, panel)
+                    && self.above.get(i).copied().unwrap_or(false)
+                        == (self.layer == Layer::UnkeyedAbove)
+            }
+        }
     }
 }
 
