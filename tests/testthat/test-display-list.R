@@ -411,6 +411,9 @@ test_that("version 2 lists a path clip as device-px clip paths (VW-23)", {
   expect_equal(rec$group[d2$key == "in"], 2)
   expect_equal(d2$flags[d2$key == "in"], 0)
   expect_equal(bitwAnd(d2$flags[d2$key == "bl"], 4L), 4L)
+  # ...and says it blends (32), which no separate raster reproduces (VW-30)
+  expect_equal(bitwAnd(d2$flags[d2$key == "bl"], 32L), 32L)
+  expect_equal(bitwAnd(d2$flags[d2$key != "bl"], 32L), rep(0L, sum(d2$key != "bl")))
   # a repeating gradient stays flagged
   s3 <- vl_scene(2, 2, dpi = 72) |>
     draw(rect_grob(gp = vl_gpar(fill = linear_gradient(c("red", "blue"), extend = "repeat")), key = "rep"))

@@ -34,8 +34,8 @@ pub use paths::*;
 pub(crate) use pdf::is_decorative;
 pub use pdf::{pdf_tag, PdfBackend};
 pub use raster::RasterBackend;
-pub(crate) use svg::{resolve_ids, xml_escape};
 pub use svg::SvgBackend;
+pub(crate) use svg::{resolve_ids, xml_escape};
 
 /// Resolved stroke style handed to `stroke_path`: width + dash (device px, on/off,
 /// empty = solid) + cap/join/mitre.
@@ -488,7 +488,14 @@ pub trait RenderBackend {
     /// A closed shape that paints nothing (no fill, no stroke): an invisible
     /// hover target, such as a `fill = NA` rect. Painting backends ignore it; the
     /// display list records its geometry as a pick-only mark (VR-17).
-    fn pick_only_path(&mut self, _path: &Path, _transform: Transform, _rule: FillRule, _clip: &Clip) {}
+    fn pick_only_path(
+        &mut self,
+        _path: &Path,
+        _transform: Transform,
+        _rule: FillRule,
+        _clip: &Clip,
+    ) {
+    }
     fn draw_text(&mut self, run: &TextRun, transform: Transform, clip: &Clip);
     fn begin_group(
         &mut self,
@@ -639,6 +646,12 @@ pub trait RenderBackend {
     /// `data-key="…"` attribute; raster/PDF ignore it. `None` clears it.
     fn set_element_key(&mut self, _key: Option<&str>) {}
 
+    /// The top-level node index of the drawing node about to be emitted. Only
+    /// the page walk calls it (a mask's content walk does not), so the display
+    /// list can map its records back to the nodes a layer filter selects
+    /// (VW-30, the flagged-marks layer). No-op for every painting backend.
+    fn begin_draw_node(&mut self, _node: usize) {}
+
     /// Open a named panel group around the following primitives (paired with
     /// `end_panel`). The SVG backend wraps them in `<g data-vellum-panel="name">`
     /// (and, when `pannable`, an inner `<g data-vellum-pan>` with the clip hoisted
@@ -706,7 +719,9 @@ fn circles_by_path<B: RenderBackend>(
             (*c, scaled)
         });
         match (fill, scaled) {
-            (Some(f), Some((c, st))) if st.width > 0.0 && !matches!(f, ResolvedPaint::Hatch { .. }) => {
+            (Some(f), Some((c, st)))
+                if st.width > 0.0 && !matches!(f, ResolvedPaint::Hatch { .. }) =>
+            {
                 b.fill_and_stroke_path(&unit, tr, f, FillRule::Winding, c, &st, clip);
             }
             (f, st) => {

@@ -102,6 +102,15 @@ layer and composites it at \code{alpha}.
 
 Masks, blend modes, blur and shadow effects, hatches, patterns, repeating or
 reflecting gradients and gradient strokes stay flagged.
+\itemize{
+\item Flagged runs (VW-30): \code{record$run} is the run of flagged marks a record
+belongs to (1-based, 0 = none) and \code{runs} their count. A run is a stretch
+of flagged marks in paint order that no exactly drawn mark interrupts;
+every record of a node with a flagged record, and of an opacity group
+holding one, is in it. \code{scene_png(layer = "keyed_flagged", run = k)}
+draws run \code{k}, so a client can draw the exact records itself and
+composite each run's raster where the run starts.
+}
 }
 
 \section{What stage 1 does not reproduce}{
@@ -114,8 +123,10 @@ mark inside a group with opacity, blend mode, mask or effect; \code{8} a text
 label (the geometry is its box); \code{16} pick-only: a keyed mark that paints
 nothing (an invisible hover target such as a \code{fill = NA} rect, circle,
 marker or polygon). Its geometry is listed and its paint has \code{fill} and
-\code{stroke} \code{NA}, so a client hit-tests it but draws nothing. Images do not
-appear at all.
+\code{stroke} \code{NA}, so a client hit-tests it but draws nothing; \code{32} inside a
+group with a blend mode (with \code{4}): the mark mixes with what is painted
+beneath it, so a separately rendered raster of it (a \code{"keyed_flagged"}
+run) cannot reproduce it either. Images do not appear at all.
 }
 
 \keyword{internal}

@@ -218,7 +218,8 @@ rather than dropped so the caller can surface them exactly as \code{render()}
 does. Shares the memoised pixmap with \code{render_png}. \code{layer} (0 all,
 1 unkeyed, 2 keyed) and \code{panels} (\code{NULL} or names) restrict the walk for
 the split render; a layer render bypasses the memo, and the keyed layer
-has a transparent page.
+has a transparent page. \code{run} picks one run of the \code{keyed_flagged}
+layer (0 = every run).
 }
 
 \subsection{Method \code{render_pdf_raw}}{

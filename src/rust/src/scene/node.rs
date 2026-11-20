@@ -442,6 +442,12 @@ impl Node {
 /// panel); outside every named panel, any earlier mark counts. So an unkeyed
 /// node interleaved between two keyed batches is above, while a later facet's
 /// gridlines stay below that facet's own marks.
+///
+/// `KeyedFlagged` (VW-30) draws only the marks the display list (version 2)
+/// flags: those a client cannot draw from the list (masks, blend modes,
+/// effects, hatches, patterns, repeating gradients, gradient strokes, text),
+/// grouped into runs in paint order (`render::assign_runs`); `LayerFilter::run`
+/// picks one run (0 = all of them).
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Layer {
     All,
@@ -449,17 +455,19 @@ pub enum Layer {
     Keyed,
     UnkeyedBelow,
     UnkeyedAbove,
+    KeyedFlagged,
 }
 
 impl Layer {
     /// Codes match `.layer_code()` in R: 0 all, 1 unkeyed, 2 keyed,
-    /// 3 unkeyed_below, 4 unkeyed_above.
+    /// 3 unkeyed_below, 4 unkeyed_above, 5 keyed_flagged.
     pub fn from_code(c: i32) -> Layer {
         match c {
             1 => Layer::Unkeyed,
             2 => Layer::Keyed,
             3 => Layer::UnkeyedBelow,
             4 => Layer::UnkeyedAbove,
+            5 => Layer::KeyedFlagged,
             _ => Layer::All,
         }
     }
@@ -467,7 +475,10 @@ impl Layer {
     /// Whether this layer is an overlay drawn on a transparent page (no page
     /// background): the mark layer and the furniture above it.
     pub fn is_overlay(self) -> bool {
-        matches!(self, Layer::Keyed | Layer::UnkeyedAbove)
+        matches!(
+            self,
+            Layer::Keyed | Layer::UnkeyedAbove | Layer::KeyedFlagged
+        )
     }
 
     /// Whether the layer needs the per-node paint-order split.
@@ -482,11 +493,16 @@ impl Layer {
 /// layers stay exact complements either way. `above` (filled by
 /// `Scene::with_paint_order` for the below/above layers) is parallel to the
 /// top-level node list: whether a mark precedes the node in its panel.
+/// `flagged` (filled by `Scene::with_flagged_runs` for `KeyedFlagged`) maps a
+/// top-level node to its flagged run, and `run` restricts that layer to one
+/// run (0 = every run).
 #[derive(Clone, Debug)]
 pub struct LayerFilter {
     pub layer: Layer,
     pub panels: Option<Vec<String>>,
     pub above: Vec<bool>,
+    pub flagged: Option<std::collections::HashMap<u32, u32>>,
+    pub run: u32,
 }
 
 impl LayerFilter {
@@ -495,6 +511,8 @@ impl LayerFilter {
             layer: Layer::All,
             panels: None,
             above: Vec::new(),
+            flagged: None,
+            run: 0,
         }
     }
 
@@ -518,6 +536,14 @@ impl LayerFilter {
         match self.layer {
             Layer::All => true,
             Layer::Keyed => self.is_mark(node, panel),
+            Layer::KeyedFlagged => {
+                self.is_mark(node, panel)
+                    && self
+                        .flagged
+                        .as_ref()
+                        .and_then(|f| f.get(&(i as u32)))
+                        .is_some_and(|&r| self.run == 0 || r == self.run)
+            }
             Layer::Unkeyed => !self.is_mark(node, panel),
             Layer::UnkeyedBelow | Layer::UnkeyedAbove => {
                 !self.is_mark(node, panel)
