@@ -13,7 +13,7 @@ tests that assert on emitted attributes such as `data-key`.
 scene_svg(
   scene,
   text = c("native", "outline"),
-  layer = c("all", "unkeyed", "keyed"),
+  layer = c("all", "unkeyed", "keyed", "unkeyed_below", "unkeyed_above"),
   panels = NULL
 )
 ```
@@ -35,8 +35,9 @@ scene_svg(
 - layer:
 
   Which part of the scene to draw: `"all"` (the default), only the
-  `"keyed"` marks, or everything `"unkeyed"`. See the *Split render*
-  section.
+  `"keyed"` marks, everything `"unkeyed"`, or the unkeyed elements
+  painted before (`"unkeyed_below"`) or after (`"unkeyed_above"`) the
+  marks. See the *Split render* section.
 
 - panels:
 
@@ -72,6 +73,19 @@ mark (it ends up underneath), or where a keyed mark's blend mode would
 mix with the unkeyed backdrop (it blends against transparency instead).
 This is the raster mode of vellumwidget: SVG furniture plus a PNG of the
 heavy mark layer.
+
+`"unkeyed_below"` and `"unkeyed_above"` split `"unkeyed"` by paint
+order, so stacking `"unkeyed_below"`, `"keyed"`, `"unkeyed_above"`
+(bottom to top) also gets an annotation or reference line drawn after
+the marks right. An unkeyed element is *above* when a mark (an element
+of the `"keyed"` layer, so `panels` applies) was painted before it
+inside its innermost named panel; a mark in a nested panel counts for
+every panel around it, and an element outside every named panel is above
+when any mark precedes it. Unkeyed elements interleaved between two
+keyed batches are therefore above, and a later facet's gridlines stay
+below that facet's own marks. With no marks at all, everything is below.
+`"unkeyed_above"`, like `"keyed"`, has a transparent page. The two
+halves together are exactly `"unkeyed"`.
 
 ## See also
 

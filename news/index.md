@@ -7,6 +7,19 @@
 - [`scene_svg()`](https://r-vellum.github.io/vellum/reference/scene_svg.md)
   and
   [`scene_png()`](https://r-vellum.github.io/vellum/reference/scene_png.md)
+  accept `layer = "unkeyed_below"` and `layer = "unkeyed_above"`
+  (VW-21), which split the unkeyed layer by paint order relative to the
+  marks: an unkeyed element is above when a mark was painted before it
+  in its innermost named panel. Stacking below, keyed and above
+  reproduces an annotation or reference line drawn over the points,
+  which the two-layer split put underneath them. `"unkeyed"` is
+  unchanged and is exactly the union of the two; `"unkeyed_above"` has a
+  transparent page. Feature-detect with
+  `"unkeyed_above" %in% eval(formals(vellum::scene_png)$layer)`.
+
+- [`scene_svg()`](https://r-vellum.github.io/vellum/reference/scene_svg.md)
+  and
+  [`scene_png()`](https://r-vellum.github.io/vellum/reference/scene_png.md)
   gain `layer = c("all", "unkeyed", "keyed")` for a split render
   (VR-13). `"keyed"` draws only the marks that carry an interactivity
   key, on a transparent page; `"unkeyed"` draws everything else
