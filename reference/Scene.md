@@ -255,6 +255,13 @@ here (the file path surfaces them); callers wanting them use
 or names) restrict the walk for the split render; the keyed layer has no
 page background.
 
+### Method `display_list_raw`
+
+The marks-only display list (VR-14): every keyed primitive, resolved to
+device px, as columnar base64 tables. Internal to vellumwidget; see
+[`scene_display_list()`](https://r-vellum.github.io/vellum/reference/scene_display_list.md).
+`panels` (`NULL` or names) restricts it to marks in those panels.
+
 ### Method `render_pdf`
 
 Render the scene to a PDF file. Returns any degradation warnings (e.g. a
