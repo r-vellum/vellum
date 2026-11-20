@@ -28,5 +28,55 @@ style <- S7::new_class(
   package = "vellum",
   properties = list(
     name = S7::new_property(S7::class_any, default = NULL)
-  )
+  ),
+  # Spelled out rather than generated: S7 >= 1.0 generates `function(...,
+  # name)` for a subclass of a class with a custom constructor, which no longer
+  # matches the documented usage (R CMD check codoc).
+  constructor = function(
+    col = NULL,
+    fill = NULL,
+    lwd = NULL,
+    alpha = NULL,
+    lty = NULL,
+    lineend = NULL,
+    linejoin = NULL,
+    linemitre = NULL,
+    fontfamily = NULL,
+    fontface = NULL,
+    fontsize = NULL,
+    cex = NULL,
+    lineheight = NULL,
+    halo_col = NULL,
+    halo_width = NULL,
+    features = NULL,
+    antialias = NULL,
+    crisp = NULL,
+    dash_phase = NULL,
+    name = NULL
+  ) {
+    S7::new_object(
+      vl_gpar(
+        col = col,
+        fill = fill,
+        lwd = lwd,
+        alpha = alpha,
+        lty = lty,
+        lineend = lineend,
+        linejoin = linejoin,
+        linemitre = linemitre,
+        fontfamily = fontfamily,
+        fontface = fontface,
+        fontsize = fontsize,
+        cex = cex,
+        lineheight = lineheight,
+        halo_col = halo_col,
+        halo_width = halo_width,
+        features = features,
+        antialias = antialias,
+        crisp = crisp,
+        dash_phase = dash_phase
+      ),
+      name = name
+    )
+  }
 )

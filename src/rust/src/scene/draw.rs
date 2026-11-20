@@ -99,8 +99,19 @@ impl Scene {
     /// [`RenderBackend`]. Geometry resolution (transform, clip, gpar, path) is
     /// shared; only the per-primitive draw calls are backend-specific.
     pub(super) fn render_to<B: RenderBackend>(&self, b: &mut B) -> Vec<String> {
+        self.render_layer_to(b, &LayerFilter::all())
+    }
+
+    /// [`render_to`](Self::render_to) restricted to one [`Layer`] (the split
+    /// render). Same page, transforms and clips as the full walk, so the layers
+    /// overlay pixel-exactly.
+    pub(super) fn render_layer_to<B: RenderBackend>(
+        &self,
+        b: &mut B,
+        layer: &LayerFilter,
+    ) -> Vec<String> {
         let resolved = self.resolve_all();
-        self.render_nodes(b, &resolved, &self.nodes, Some(&self.meta));
+        self.render_nodes(b, &resolved, &self.nodes, Some(&self.meta), layer);
         b.take_warnings()
     }
 
@@ -116,7 +127,10 @@ impl Scene {
         resolved: &[ResolvedVp],
         nodes: &[(usize, Node)],
         meta: Option<&[NodeMeta]>,
+        layer: &LayerFilter,
     ) {
+        // Innermost named panel, for a panel-restricted layer filter.
+        let mut panel_stack: Vec<&str> = Vec::new();
         // Repaint-boundary state (raster backend only): `skip_depth > 0` means we
         // are skipping a cached subtree whose pixels were already composited from
         // the cache; `sub_stack` holds, per open (miss) boundary, its cache key —
@@ -167,7 +181,9 @@ impl Scene {
             match node {
                 Node::SubrasterStart { nid } => {
                     // Vector backends ignore the boundary (render subtree inline).
-                    if b.caches_subrasters() {
+                    // So does a layer walk: a partial subtree must never enter
+                    // the cache a full render would then reuse.
+                    if b.caches_subrasters() && layer.is_all() {
                         let rv = &resolved[*vp_id];
                         match subraster_key(
                             *nid,
@@ -193,7 +209,7 @@ impl Scene {
                     continue;
                 }
                 Node::SubrasterEnd => {
-                    if b.caches_subrasters() {
+                    if b.caches_subrasters() && layer.is_all() {
                         if let Some(Some(key)) = sub_stack.pop() {
                             if let Some(pm) = b.subraster_end() {
                                 subraster_put(key, pm.clone());
@@ -225,7 +241,9 @@ impl Scene {
                                 a: 0,
                             },
                         );
-                        self.render_nodes(&mut mb, resolved, &md.nodes, None);
+                        // A mask is the mark's own modulation, not a layer:
+                        // its content is always drawn in full.
+                        self.render_nodes(&mut mb, resolved, &md.nodes, None, &LayerFilter::all());
                         MaskLayer {
                             pixmap: mb.into_pixmap(),
                             kind: md.kind,
@@ -239,10 +257,12 @@ impl Scene {
                     continue;
                 }
                 Node::PanelStart { name, pannable } => {
+                    panel_stack.push(name);
                     b.begin_panel(name, *pannable);
                     continue;
                 }
                 Node::PanelEnd => {
+                    panel_stack.pop();
                     b.end_panel();
                     continue;
                 }
@@ -261,6 +281,9 @@ impl Scene {
                     hu,
                     interpolate,
                 } => {
+                    if !layer.keeps(node, panel_stack.last().copied().unwrap_or_default()) {
+                        continue;
+                    }
                     let rv = &resolved[*vp_id];
                     let vp = &rv.vp;
                     let clip = Clip {
@@ -295,6 +318,11 @@ impl Scene {
                     continue;
                 }
                 _ => {}
+            }
+            // Split render: drop drawing nodes outside the requested layer
+            // (before any begin_node, so nothing needs closing).
+            if !layer.keeps(node, panel_stack.last().copied().unwrap_or_default()) {
+                continue;
             }
 
             let rv = &resolved[*vp_id];

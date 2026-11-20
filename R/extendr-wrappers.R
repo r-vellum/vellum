@@ -425,7 +425,10 @@ rs_attractor <- function(kind, n, a, b, c, d, x0, y0) .Call(wrap__rs_attractor, 
 #'Render the scene and return the PNG bytes rather than writing a file.
 #'`list(bytes = <raw>, warnings = <character>)` -- warnings are returned
 #'rather than dropped so the caller can surface them exactly as `render()`
-#'does. Shares the memoised pixmap with `render_png`.
+#'does. Shares the memoised pixmap with `render_png`. `layer` (0 all,
+#'1 unkeyed, 2 keyed) and `panels` (`NULL` or names) restrict the walk for
+#'the split render; a layer render bypasses the memo, and the keyed layer
+#'has a transparent page.
 #'}
 #'
 #'\subsection{Method `render_pdf_raw`}{
@@ -445,6 +448,9 @@ rs_attractor <- function(kind, n, a, b, c, d, x0, y0) .Call(wrap__rs_attractor, 
 #'layer needs the markup in-memory to embed it in an htmlwidget, and tests
 #'use it to assert on emitted attributes. Degradation warnings are dropped
 #'here (the file path surfaces them); callers wanting them use `render_svg`.
+#'`layer` (0 all, 1 unkeyed, 2 keyed) and `panels` (`NULL` or names)
+#'restrict the walk for the split render; the keyed layer has no page
+#'background.
 #'}
 #'
 #'\subsection{Method `display_list_raw`}{
@@ -645,13 +651,13 @@ Scene$dpi <- function() .Call(wrap__Scene__dpi, self)
 
 Scene$render_png <- function(path) .Call(wrap__Scene__render_png, self, path)
 
-Scene$render_png_raw <- function() .Call(wrap__Scene__render_png_raw, self)
+Scene$render_png_raw <- function(layer, panels) .Call(wrap__Scene__render_png_raw, self, layer, panels)
 
 Scene$render_pdf_raw <- function() .Call(wrap__Scene__render_pdf_raw, self)
 
 Scene$render_svg <- function(path, outline_text) .Call(wrap__Scene__render_svg, self, path, outline_text)
 
-Scene$render_svg_string <- function(outline_text) .Call(wrap__Scene__render_svg_string, self, outline_text)
+Scene$render_svg_string <- function(outline_text, layer, panels) .Call(wrap__Scene__render_svg_string, self, outline_text, layer, panels)
 
 Scene$display_list_raw <- function(panels) .Call(wrap__Scene__display_list_raw, self, panels)
 

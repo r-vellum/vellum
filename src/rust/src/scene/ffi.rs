@@ -4,6 +4,37 @@
 
 use super::*;
 
+/// The split-render filter from its R encoding (see `render_png_raw`).
+fn layer_filter(layer: i32, panels: &Robj) -> LayerFilter {
+    LayerFilter {
+        layer: Layer::from_code(layer),
+        panels: if panels.is_null() {
+            None
+        } else {
+            Some(
+                panels
+                    .as_str_vector()
+                    .map(|v| v.into_iter().map(String::from).collect())
+                    .unwrap_or_default(),
+            )
+        },
+    }
+}
+
+/// The keyed layer is drawn on a transparent page, ready to composite.
+fn layer_bg(layer: &LayerFilter, bg: Rgba) -> Rgba {
+    if layer.layer == Layer::Keyed {
+        Rgba {
+            r: 0,
+            g: 0,
+            b: 0,
+            a: 0,
+        }
+    } else {
+        bg
+    }
+}
+
 /// Build the optional text halo from the R-side `(colour, width_px)` pair.
 /// Absent colour or a non-positive width means no halo, so a scene that never
 /// asks for one is unchanged.
@@ -1550,9 +1581,20 @@ impl Scene {
     /// Render the scene and return the PNG bytes rather than writing a file.
     /// `list(bytes = <raw>, warnings = <character>)` -- warnings are returned
     /// rather than dropped so the caller can surface them exactly as `render()`
-    /// does. Shares the memoised pixmap with `render_png`.
-    fn render_png_raw(&self) -> List {
-        let (pm, warnings) = if self.raster_cache.borrow().is_some() {
+    /// does. Shares the memoised pixmap with `render_png`. `layer` (0 all,
+    /// 1 unkeyed, 2 keyed) and `panels` (`NULL` or names) restrict the walk for
+    /// the split render; a layer render bypasses the memo, and the keyed layer
+    /// has a transparent page.
+    fn render_png_raw(&self, layer: i32, panels: Robj) -> List {
+        let layer = layer_filter(layer, &panels);
+        let (pm, warnings) = if !layer.is_all() {
+            check_raster_area(self.w_px, self.h_px);
+            let bg = layer_bg(&layer, self.bg);
+            let mut b = RasterBackend::new(self.w_px, self.h_px, bg);
+            b.set_bitmap_text(self.want_bitmap_text());
+            let warnings = self.render_layer_to(&mut b, &layer);
+            (b.into_pixmap(), warnings)
+        } else if self.raster_cache.borrow().is_some() {
             (
                 self.raster_cache.borrow().as_ref().unwrap().clone(),
                 Vec::new(),
@@ -1599,10 +1641,19 @@ impl Scene {
     /// layer needs the markup in-memory to embed it in an htmlwidget, and tests
     /// use it to assert on emitted attributes. Degradation warnings are dropped
     /// here (the file path surfaces them); callers wanting them use `render_svg`.
-    fn render_svg_string(&self, outline_text: bool) -> String {
-        let mut b = SvgBackend::new(self.w_px, self.h_px, self.bg, outline_text);
+    /// `layer` (0 all, 1 unkeyed, 2 keyed) and `panels` (`NULL` or names)
+    /// restrict the walk for the split render; the keyed layer has no page
+    /// background.
+    fn render_svg_string(&self, outline_text: bool, layer: i32, panels: Robj) -> String {
+        let layer = layer_filter(layer, &panels);
+        let mut b = SvgBackend::new(
+            self.w_px,
+            self.h_px,
+            layer_bg(&layer, self.bg),
+            outline_text,
+        );
         b.set_a11y(&self.a11y_title, &self.a11y_desc, &self.a11y_prefix);
-        let _warnings = self.render_to(&mut b);
+        let _warnings = self.render_layer_to(&mut b, &layer);
         b.into_string()
     }
 
