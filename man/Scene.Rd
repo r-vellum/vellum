@@ -215,7 +215,10 @@ the raster backend today; uniform with the SVG/PDF signatures).
 Render the scene and return the PNG bytes rather than writing a file.
 \verb{list(bytes = <raw>, warnings = <character>)} -- warnings are returned
 rather than dropped so the caller can surface them exactly as \code{render()}
-does. Shares the memoised pixmap with \code{render_png}.
+does. Shares the memoised pixmap with \code{render_png}. \code{layer} (0 all,
+1 unkeyed, 2 keyed) and \code{panels} (\code{NULL} or names) restrict the walk for
+the split render; a layer render bypasses the memo, and the keyed layer
+has a transparent page.
 }
 
 \subsection{Method \code{render_pdf_raw}}{
@@ -235,6 +238,9 @@ writing it to a file). Same output as \code{render_svg}; the interactivity
 layer needs the markup in-memory to embed it in an htmlwidget, and tests
 use it to assert on emitted attributes. Degradation warnings are dropped
 here (the file path surfaces them); callers wanting them use \code{render_svg}.
+\code{layer} (0 all, 1 unkeyed, 2 keyed) and \code{panels} (\code{NULL} or names)
+restrict the walk for the split render; the keyed layer has no page
+background.
 }
 
 \subsection{Method \code{render_pdf}}{

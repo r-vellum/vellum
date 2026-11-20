@@ -1,5 +1,17 @@
 # vellum 0.9.0.9000 (development version)
 
+## New features
+
+* `scene_svg()` and `scene_png()` gain `layer = c("all", "unkeyed", "keyed")`
+  for a split render (VR-13). `"keyed"` draws only the marks that carry an
+  interactivity key, on a transparent page; `"unkeyed"` draws everything else
+  (background, gridlines, axes, legends). Both use the full page and the same
+  transforms, and a mark keeps its clip, mask and group opacity, so the keyed
+  PNG laid over the unkeyed SVG or PNG reproduces the full render. `panels`
+  restricts the mark layer to keyed marks inside the named panels, which keeps
+  a legend's keyed swatches with the furniture. vellumwidget uses this in
+  raster mode to keep axes and legends as SVG and rasterise only the marks.
+
 # vellum 0.9.0
 
 ## New features

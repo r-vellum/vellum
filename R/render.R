@@ -64,15 +64,65 @@ render <- function(
 #' for hosting a scene interactively (an htmlwidget embeds the markup directly)
 #' and for tests that assert on emitted attributes such as `data-key`.
 #'
+#' @section Split render:
+#' `layer` renders part of the scene on the same page, with the same transforms
+#' and clips, so the parts overlay pixel-exactly. `"keyed"` draws only the marks
+#' that carry an interactivity key (`data_id`/`key`: the elements with a non-`NA`
+#' `key` in [scene_model()]) on a transparent page; `"unkeyed"` draws everything
+#' else (background, gridlines, axes, legends, unkeyed annotations). Groups,
+#' clips and masks around a mark stay with it. A batch of elements counts as
+#' keyed when any element carries a key.
+#'
+#' `panels` narrows the mark layer to keyed marks whose innermost named panel
+#' (the `panel` column of `scene_model()$elements`) is listed, so keyed marks
+#' elsewhere (e.g. a vellumplot legend's interactive swatches, in panel
+#' `"legend"`) stay with the furniture. The two layers remain exact complements.
+#'
+#' Compositing the `"keyed"` layer over the `"unkeyed"` one reproduces the full
+#' render, except where an unkeyed node is painted *above* a keyed mark (it ends
+#' up underneath), or where a keyed mark's blend mode would mix with the
+#' unkeyed backdrop (it blends against transparency instead). This is the
+#' raster mode of vellumwidget: SVG furniture plus a PNG of the heavy mark layer.
+#'
 #' @inheritParams render
+#' @param layer Which part of the scene to draw: `"all"` (the default), only the
+#'   `"keyed"` marks, or everything `"unkeyed"`. See the *Split render* section.
+#' @param panels `NULL` (the default: every keyed mark is in the mark layer), or
+#'   a character vector of panel names restricting the mark layer to keyed marks
+#'   inside those panels. Ignored when `layer = "all"`.
 #' @return A length-1 character vector: the SVG document.
 #' @seealso [render()], [scene_png()], [scene_model()]
 #' @export
-scene_svg <- function(scene, text = c("native", "outline")) {
+scene_svg <- function(
+  scene,
+  text = c("native", "outline"),
+  layer = c("all", "unkeyed", "keyed"),
+  panels = NULL
+) {
   text <- match.arg(text)
+  layer <- match.arg(layer)
+  panels <- .check_panels(panels)
   scene <- as_vellum_scene(scene)
   s <- .scene_to_backend(scene)
-  s$render_svg_string(identical(text, "outline"))
+  s$render_svg_string(identical(text, "outline"), .layer_code(layer), panels)
+}
+
+.check_panels <- function(panels, call = parent.frame()) {
+  if (is.null(panels)) {
+    return(NULL)
+  }
+  if (!is.character(panels) || anyNA(panels)) {
+    cli::cli_abort(
+      "{.arg panels} must be {.code NULL} or a character vector of panel names.",
+      call = call
+    )
+  }
+  panels
+}
+
+# R<->Rust ABI for the split render (`Layer::from_code`).
+.layer_code <- function(layer) {
+  match(layer, c("all", "unkeyed", "keyed")) - 1L
 }
 
 #' Render a scene to PNG or PDF bytes
@@ -99,9 +149,21 @@ scene_svg <- function(scene, text = c("native", "outline")) {
 #' length(png_bytes)
 #' rawToChar(png_bytes[2:4]) # "PNG"
 #' @inheritParams render
+#' @inheritParams scene_svg
+#' @param layer,panels For `scene_png()`: which part of the scene to draw, as
+#'   for [scene_svg()] (see its *Split render* section). The `"keyed"` layer has
+#'   a transparent background, ready to composite over the `"unkeyed"` one.
 #' @export
-scene_png <- function(scene, scale = 1, cvd = "none") {
-  .scene_bytes(scene, "png", scale, cvd)
+scene_png <- function(
+  scene,
+  scale = 1,
+  cvd = "none",
+  layer = c("all", "unkeyed", "keyed"),
+  panels = NULL
+) {
+  layer <- match.arg(layer)
+  panels <- .check_panels(panels)
+  .scene_bytes(scene, "png", scale, cvd, layer = layer, panels = panels)
 }
 
 #' @rdname scene_png
@@ -112,12 +174,23 @@ scene_pdf <- function(scene) {
 
 # Shared body for `scene_png()`/`scene_pdf()`: render to bytes and surface the
 # backend's degradation warnings the same way `render()` does.
-.scene_bytes <- function(scene, kind, scale = 1, cvd = "none") {
+.scene_bytes <- function(
+  scene,
+  kind,
+  scale = 1,
+  cvd = "none",
+  layer = "all",
+  panels = NULL
+) {
   scene <- .apply_scale(as_vellum_scene(scene), scale)
   on.exit(.set_cvd("none"), add = TRUE)
   .set_cvd(cvd, format = kind)
   s <- .scene_to_backend(scene)
-  res <- if (identical(kind, "png")) s$render_png_raw() else s$render_pdf_raw()
+  res <- if (identical(kind, "png")) {
+    s$render_png_raw(.layer_code(layer), panels)
+  } else {
+    s$render_pdf_raw()
+  }
   .emit_degrade_warnings(res$warnings)
   res$bytes
 }
