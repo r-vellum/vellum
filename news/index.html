@@ -71,6 +71,11 @@
 
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.10.1.9000" id="vellum-01019000-development-version">vellum 0.10.1.9000 (development version)<a class="anchor" aria-label="anchor" href="#vellum-01019000-development-version"></a></h2>
+<div class="section level3">
+<h3 id="new-features-0-10-1-9000">New features<a class="anchor" aria-label="anchor" href="#new-features-0-10-1-9000"></a></h3>
+<ul><li>
+<code><a href="../reference/scene_display_list.html">scene_display_list()</a></code> (internal, for vellumwidget) gains <code>version = 2</code> (VW-23). Version 2 lists three cases exactly that version 1 flags: linear and radial gradient fills with <code>pad</code> extension (a gradient table the paints refer to), clips by a path or a rotated rectangle (clip paths in device px), and groups whose only effect is an opacity below 1 (a group table each record refers to). vellumwidget can then draw these marks on its canvas, restyle them and show them as SVG nodes on deep zoom. The default stays <code>version = 1</code>, unchanged, so older vellumwidget releases are unaffected. Masks, blend modes, effects, hatches, patterns, repeating gradients and gradient strokes stay flagged.</li>
+</ul></div>
 </div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.10.1" id="vellum-0101">vellum 0.10.1<a class="anchor" aria-label="anchor" href="#vellum-0101"></a></h2>

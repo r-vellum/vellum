@@ -82,7 +82,7 @@ browser to draw and hit-test big plots (F-5 stage 1).</p>
 
     <div class="section level2">
     <h2 id="ref-usage">Usage<a class="anchor" aria-label="anchor" href="#ref-usage"></a></h2>
-    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">scene_display_list</span><span class="op">(</span><span class="va">scene</span>, what <span class="op">=</span> <span class="st">"keyed"</span>, panels <span class="op">=</span> <span class="cn">NULL</span><span class="op">)</span></span></code></pre></div>
+    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">scene_display_list</span><span class="op">(</span><span class="va">scene</span>, what <span class="op">=</span> <span class="st">"keyed"</span>, panels <span class="op">=</span> <span class="cn">NULL</span>, version <span class="op">=</span> <span class="fl">1L</span><span class="op">)</span></span></code></pre></div>
     </div>
 
     <div class="section level2">
@@ -104,6 +104,11 @@ panel (<code>scene_model()$elements$panel</code>) is one of them, the same rule 
 <code>scene_png(layer = "keyed", panels = )</code>. vellumwidget passes its data
 panels, which leaves out a legend's keyed swatches.</p></dd>
 
+
+<dt id="arg-version">version<a class="anchor" aria-label="anchor" href="#arg-version"></a></dt>
+<dd><p>The format version, <code>1</code> (the default) or <code>2</code> (see the
+<em>Version 2</em> section).</p></dd>
+
 </dl></div>
     <div class="section level2">
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
@@ -119,7 +124,7 @@ Do not build on it.</p>
     <h2 id="format">Format<a class="anchor" aria-label="anchor" href="#format"></a></h2>
 
 
-<p>A list with <code>format = "vellum-display-list"</code>, <code>version</code> (1), the page
+<p>A list with <code>format = "vellum-display-list"</code>, <code>version</code> (1 or 2), the page
 <code>width</code> and <code>height</code> in device px, the record count <code>n</code>, and:</p><ul><li><p><code>record</code>: one row per keyed primitive, in paint order. <code>kind</code> (0 point,
 1 rect, 2 path), <code>paint</code> (0-based row of <code>paints</code>), <code>key</code> (0-based index
 into <code>keys</code>), <code>flags</code> (bitfield, see below), <code>clip</code> (1-based row of
@@ -150,6 +155,35 @@ is the length. The values come as exactly one of <code>data</code> (base64,
 little-endian, typed), <code>const</code> (every value equal), <code>seq = c(start, step)</code>
 (an arithmetic sequence) or <code>rle = list(values, lengths)</code> (runs of equal
 values, used when there are few).</p>
+    </div>
+    <div class="section level2">
+    <h2 id="version-">Version 2<a class="anchor" aria-label="anchor" href="#version-"></a></h2>
+
+
+<p><code>version = 2</code> lists three more cases exactly, which version 1 flags, and
+adds the tables they need. A reader that knows only version 1 must not be
+handed a version-2 list: their records are no longer flagged.</p><ul><li><p>Gradient fills: linear and radial gradients with <code>pad</code> extension.
+<code>paints$fill_gradient</code> is the 1-based row of <code>gradients</code> (0 = none; then
+<code>fill</code> is <code>NA</code>). <code>gradients</code> has <code>type</code> (<code>"linear"</code> or <code>"radial"</code>), the
+geometry in the shape's local px (linear: <code>x1, y1</code> to <code>x2, y2</code>; radial:
+the focal circle <code>x1, y1, r1</code> at offset 0 to the outer circle <code>x2, y2, r2</code>
+at offset 1), the transform placing it in device px as <code>a</code>, <code>b</code>, <code>c</code>,
+<code>d</code>, <code>e</code>, <code>f</code> (the SVG / canvas <code>matrix(a, b, c, d, e, f)</code>), and its stops:
+gradient <em>i</em>'s are rows <code>stop_offset[i] + 1</code> to <code>stop_offset[i + 1]</code> of
+<code>stop_pos</code> (0 to 1) and <code>stop_color</code> (<code>"#rrggbbaa"</code>).</p></li>
+<li><p>Path clips: a clip by a path or a rotated rectangle. <code>clips</code> gains
+<code>path_start</code> and <code>path_n</code>: a clip's paths are shapes <code>path_start + 1</code> to
+<code>path_start + path_n</code> of <code>clip_paths</code> (0 = the rect alone), and a record is
+clipped to the rect and to each of them. Its rect is then also bounded by
+the paths' boxes. <code>clip_paths</code> is a path table like <code>path</code>: <code>xy</code>,
+<code>run_offset</code>, <code>path_offset</code> (one shape per entry) and <code>evenodd</code>.</p></li>
+<li><p>Opacity groups: a group whose only effect is an opacity below 1.
+<code>record$group</code> is the 1-based row of <code>groups</code> (the innermost such group
+the record is drawn in, 0 = none). <code>groups</code> has <code>alpha</code> and <code>parent</code>
+(1-based, 0 = top level). A client draws a group's records into their own
+layer and composites it at <code>alpha</code>.</p></li>
+</ul><p>Masks, blend modes, blur and shadow effects, hatches, patterns, repeating or
+reflecting gradients and gradient strokes stay flagged.</p>
     </div>
     <div class="section level2">
     <h2 id="what-stage-does-not-reproduce">What stage 1 does not reproduce<a class="anchor" aria-label="anchor" href="#what-stage-does-not-reproduce"></a></h2>
