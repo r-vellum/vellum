@@ -453,6 +453,13 @@ rs_attractor <- function(kind, n, a, b, c, d, x0, y0) .Call(wrap__rs_attractor, 
 #'background.
 #'}
 #'
+#'\subsection{Method `display_list_raw`}{
+#'The marks-only display list (VR-14): every keyed primitive, resolved to
+#'device px, as columnar base64 tables. Internal to vellumwidget; see
+#'`scene_display_list()`.
+#'`panels` (`NULL` or names) restricts it to marks in those panels.
+#'}
+#'
 #'\subsection{Method `render_pdf`}{
 #'Render the scene to a PDF file. Returns any degradation warnings (e.g. a
 #'tiling pattern or mask the PDF walk could not honour).
@@ -651,6 +658,8 @@ Scene$render_pdf_raw <- function() .Call(wrap__Scene__render_pdf_raw, self)
 Scene$render_svg <- function(path, outline_text) .Call(wrap__Scene__render_svg, self, path, outline_text)
 
 Scene$render_svg_string <- function(outline_text, layer, panels) .Call(wrap__Scene__render_svg_string, self, outline_text, layer, panels)
+
+Scene$display_list_raw <- function(panels) .Call(wrap__Scene__display_list_raw, self, panels)
 
 Scene$render_pdf <- function(path) .Call(wrap__Scene__render_pdf, self, path)
 

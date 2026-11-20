@@ -905,6 +905,7 @@ impl RenderBackend for RasterBackend {
         stroke: Option<(Rgba, StrokeStyle)>,
         transform: Transform,
         clip: &Clip,
+        _keys: &[String],
     ) {
         // Sprite fast path: a large cloud of equal-radius, solid-fill, unstroked
         // markers. Rasterize the marker once and blit it per point (pixel-snapped,

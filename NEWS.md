@@ -12,6 +12,22 @@
   a legend's keyed swatches with the furniture. vellumwidget uses this in
   raster mode to keep axes and legends as SVG and rasterise only the marks.
 
+* `scene_display_list()` (internal, for vellumwidget) resolves every keyed
+  mark to device-pixel geometry, a paint and its key, packed as columnar
+  base64 typed arrays (VR-14, F-5 stage 1). Points carry centre, radius and
+  marker shape, rects their box, and lines and polygons flattened vertex runs.
+  Paints, clip rects and panels are small lookup tables. Marks the format
+  cannot yet draw exactly (text, gradients, path clips, translucent groups)
+  are flagged. For a 20,000-point scatter it comes to 268 KB, against 1.5 MB
+  for the key-and-bbox index vellumwidget ships today, and it builds in 5 ms.
+  The format is private to vellumwidget and may change without notice.
+
+## Performance
+
+* A keyed batch of circles now reaches the backend as one batch with its keys
+  (VR-14), instead of being split into one draw per circle whenever the
+  backend writes keys. SVG, PNG and PDF output are byte-identical.
+
 # vellum 0.9.0
 
 ## New features

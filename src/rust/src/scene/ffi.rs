@@ -1657,6 +1657,24 @@ impl Scene {
         b.into_string()
     }
 
+    /// The marks-only display list (VR-14): every keyed primitive, resolved to
+    /// device px, as columnar base64 tables. Internal to vellumwidget; see
+    /// `scene_display_list()`.
+    /// `panels` (`NULL` or names) restricts it to marks in those panels.
+    fn display_list_raw(&self, panels: Robj) -> List {
+        let panels = if panels.is_null() {
+            None
+        } else {
+            Some(
+                panels
+                    .as_str_vector()
+                    .map(|v| v.into_iter().map(String::from).collect())
+                    .unwrap_or_default(),
+            )
+        };
+        self.display_list(panels)
+    }
+
     /// Render the scene to a PDF file. Returns any degradation warnings (e.g. a
     /// tiling pattern or mask the PDF walk could not honour).
     fn render_pdf(&self, path: &str) -> Vec<String> {

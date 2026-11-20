@@ -243,6 +243,13 @@ restrict the walk for the split render; the keyed layer has no page
 background.
 }
 
+\subsection{Method \code{display_list_raw}}{
+The marks-only display list (VR-14): every keyed primitive, resolved to
+device px, as columnar base64 tables. Internal to vellumwidget; see
+\code{scene_display_list()}.
+\code{panels} (\code{NULL} or names) restricts it to marks in those panels.
+}
+
 \subsection{Method \code{render_pdf}}{
 Render the scene to a PDF file. Returns any degradation warnings (e.g. a
 tiling pattern or mask the PDF walk could not honour).

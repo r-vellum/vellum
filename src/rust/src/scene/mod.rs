@@ -30,6 +30,7 @@ use crate::geom::{
 use crate::spatial::{Item as SpatialItem, Region, SpatialIndex};
 use crate::units::{rotation_about, Unit, UnitKind, Vp};
 
+mod dlist;
 mod draw;
 mod layout;
 mod marks;
