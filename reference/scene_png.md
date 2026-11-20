@@ -11,7 +11,13 @@ a connection — without a temp-file round-trip.
 ## Usage
 
 ``` r
-scene_png(scene, scale = 1, cvd = "none")
+scene_png(
+  scene,
+  scale = 1,
+  cvd = "none",
+  layer = c("all", "unkeyed", "keyed"),
+  panels = NULL
+)
 
 scene_pdf(scene)
 ```
@@ -49,6 +55,13 @@ scene_pdf(scene)
   has no pixels to transform, and
   [`render()`](https://r-vellum.github.io/vellum/reference/vl_scene.md)
   warns if you ask for one.
+
+- layer, panels:
+
+  For `scene_png()`: which part of the scene to draw, as for
+  [`scene_svg()`](https://r-vellum.github.io/vellum/reference/scene_svg.md)
+  (see its *Split render* section). The `"keyed"` layer has a
+  transparent background, ready to composite over the `"unkeyed"` one.
 
 ## Value
 

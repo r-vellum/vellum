@@ -71,6 +71,11 @@
 
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.9.0.9000" id="vellum-0909000-development-version">vellum 0.9.0.9000 (development version)<a class="anchor" aria-label="anchor" href="#vellum-0909000-development-version"></a></h2>
+<div class="section level3">
+<h3 id="new-features-0-9-0-9000">New features<a class="anchor" aria-label="anchor" href="#new-features-0-9-0-9000"></a></h3>
+<ul><li>
+<code><a href="../reference/scene_svg.html">scene_svg()</a></code> and <code><a href="../reference/scene_png.html">scene_png()</a></code> gain <code>layer = c("all", "unkeyed", "keyed")</code> for a split render (VR-13). <code>"keyed"</code> draws only the marks that carry an interactivity key, on a transparent page; <code>"unkeyed"</code> draws everything else (background, gridlines, axes, legends). Both use the full page and the same transforms, and a mark keeps its clip, mask and group opacity, so the keyed PNG laid over the unkeyed SVG or PNG reproduces the full render. <code>panels</code> restricts the mark layer to keyed marks inside the named panels, which keeps a legend’s keyed swatches with the furniture. vellumwidget uses this in raster mode to keep axes and legends as SVG and rasterise only the marks.</li>
+</ul></div>
 </div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.9.0" id="vellum-090">vellum 0.9.0<a class="anchor" aria-label="anchor" href="#vellum-090"></a></h2>

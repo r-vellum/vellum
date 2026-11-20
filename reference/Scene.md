@@ -228,7 +228,10 @@ Render the scene and return the PNG bytes rather than writing a file.
 `list(bytes = <raw>, warnings = <character>)` – warnings are returned
 rather than dropped so the caller can surface them exactly as
 [`render()`](https://r-vellum.github.io/vellum/reference/vl_scene.md)
-does. Shares the memoised pixmap with `render_png`.
+does. Shares the memoised pixmap with `render_png`. `layer` (0 all, 1
+unkeyed, 2 keyed) and `panels` (`NULL` or names) restrict the walk for
+the split render; a layer render bypasses the memo, and the keyed layer
+has a transparent page.
 
 ### Method `render_pdf_raw`
 
@@ -248,7 +251,9 @@ writing it to a file). Same output as `render_svg`; the interactivity
 layer needs the markup in-memory to embed it in an htmlwidget, and tests
 use it to assert on emitted attributes. Degradation warnings are dropped
 here (the file path surfaces them); callers wanting them use
-`render_svg`.
+`render_svg`. `layer` (0 all, 1 unkeyed, 2 keyed) and `panels` (`NULL`
+or names) restrict the walk for the split render; the keyed layer has no
+page background.
 
 ### Method `render_pdf`
 

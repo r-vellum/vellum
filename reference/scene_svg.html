@@ -85,7 +85,12 @@ and for tests that assert on emitted attributes such as <code>data-key</code>.</
 
     <div class="section level2">
     <h2 id="ref-usage">Usage<a class="anchor" aria-label="anchor" href="#ref-usage"></a></h2>
-    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">scene_svg</span><span class="op">(</span><span class="va">scene</span>, text <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"native"</span>, <span class="st">"outline"</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
+    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">scene_svg</span><span class="op">(</span></span>
+<span>  <span class="va">scene</span>,</span>
+<span>  text <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"native"</span>, <span class="st">"outline"</span><span class="op">)</span>,</span>
+<span>  layer <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"all"</span>, <span class="st">"unkeyed"</span>, <span class="st">"keyed"</span><span class="op">)</span>,</span>
+<span>  panels <span class="op">=</span> <span class="cn">NULL</span></span>
+<span><span class="op">)</span></span></code></pre></div>
     </div>
 
     <div class="section level2">
@@ -102,10 +107,42 @@ selectable <code>&lt;text&gt;</code> referencing system fonts, <code>"outline"</
 outlines (pixel-faithful, identical to the raster/PDF backends, but not
 selectable). Ignored for PNG/PDF.</p></dd>
 
+
+<dt id="arg-layer">layer<a class="anchor" aria-label="anchor" href="#arg-layer"></a></dt>
+<dd><p>Which part of the scene to draw: <code>"all"</code> (the default), only the
+<code>"keyed"</code> marks, or everything <code>"unkeyed"</code>. See the <em>Split render</em> section.</p></dd>
+
+
+<dt id="arg-panels">panels<a class="anchor" aria-label="anchor" href="#arg-panels"></a></dt>
+<dd><p><code>NULL</code> (the default: every keyed mark is in the mark layer), or
+a character vector of panel names restricting the mark layer to keyed marks
+inside those panels. Ignored when <code>layer = "all"</code>.</p></dd>
+
 </dl></div>
     <div class="section level2">
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
     <p>A length-1 character vector: the SVG document.</p>
+    </div>
+    <div class="section level2">
+    <h2 id="split-render">Split render<a class="anchor" aria-label="anchor" href="#split-render"></a></h2>
+
+
+<p><code>layer</code> renders part of the scene on the same page, with the same transforms
+and clips, so the parts overlay pixel-exactly. <code>"keyed"</code> draws only the marks
+that carry an interactivity key (<code>data_id</code>/<code>key</code>: the elements with a non-<code>NA</code>
+<code>key</code> in <code><a href="scene_model.html">scene_model()</a></code>) on a transparent page; <code>"unkeyed"</code> draws everything
+else (background, gridlines, axes, legends, unkeyed annotations). Groups,
+clips and masks around a mark stay with it. A batch of elements counts as
+keyed when any element carries a key.</p>
+<p><code>panels</code> narrows the mark layer to keyed marks whose innermost named panel
+(the <code>panel</code> column of <code>scene_model()$elements</code>) is listed, so keyed marks
+elsewhere (e.g. a vellumplot legend's interactive swatches, in panel
+<code>"legend"</code>) stay with the furniture. The two layers remain exact complements.</p>
+<p>Compositing the <code>"keyed"</code> layer over the <code>"unkeyed"</code> one reproduces the full
+render, except where an unkeyed node is painted <em>above</em> a keyed mark (it ends
+up underneath), or where a keyed mark's blend mode would mix with the
+unkeyed backdrop (it blends against transparency instead). This is the
+raster mode of vellumwidget: SVG furniture plus a PNG of the heavy mark layer.</p>
     </div>
     <div class="section level2">
     <h2 id="see-also">See also<a class="anchor" aria-label="anchor" href="#see-also"></a></h2>

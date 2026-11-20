@@ -60,8 +60,8 @@ s <- vl_scene(4, 3) |>
   draw(text_grob("title", y = 0.95, gp = vl_gpar(fontsize = 16)))
 profile_render(s)
 #> Phases (median of the timed reps):
-#> • build 0.000 s (constructing the R value)
-#> • compile 0.003 s (R -> Rust replay, incl. text shaping)
+#> • build 0.001 s (constructing the R value)
+#> • compile 0.002 s (R -> Rust replay, incl. text shaping)
 #> • raster 0.023 s (drawing)
 #> 
 #> Slowest marks (raster time):
