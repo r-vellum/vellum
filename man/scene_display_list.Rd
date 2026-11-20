@@ -123,8 +123,10 @@ mark inside a group with opacity, blend mode, mask or effect; \code{8} a text
 label (the geometry is its box); \code{16} pick-only: a keyed mark that paints
 nothing (an invisible hover target such as a \code{fill = NA} rect, circle,
 marker or polygon). Its geometry is listed and its paint has \code{fill} and
-\code{stroke} \code{NA}, so a client hit-tests it but draws nothing. Images do not
-appear at all.
+\code{stroke} \code{NA}, so a client hit-tests it but draws nothing; \code{32} inside a
+group with a blend mode (with \code{4}): the mark mixes with what is painted
+beneath it, so a separately rendered raster of it (a \code{"keyed_flagged"}
+run) cannot reproduce it either. Images do not appear at all.
 }
 
 \keyword{internal}

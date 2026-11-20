@@ -44,6 +44,7 @@ pub const FLAG_CLIP: u8 = 2; // clipped by a path or rotated rect: clip not list
 pub const FLAG_GROUP: u8 = 4; // inside a group with opacity / blend / mask / effect
 pub const FLAG_TEXT: u8 = 8; // a text label: geometry is its (rotated) box
 pub const FLAG_PICK: u8 = 16; // pick-only: paints nothing (an invisible hover target)
+pub const FLAG_BLEND: u8 = 32; // inside a group with a blend mode: mixes with what is beneath it
 
 /// One paint, interned into the paint table. Colours are packed RGBA; lengths
 /// are device px stored as `f32` bits so the struct can be hashed.
@@ -166,6 +167,9 @@ pub struct DisplayListBackend {
     /// Record the version-2 extensions (gradients, clip paths, opacity groups).
     v2: bool,
     effect_depth: usize,
+    /// Open groups with a blend mode other than normal (one flag per open
+    /// group, so `end_group` knows what to undo).
+    blend_stack: Vec<bool>,
     /// The point record of the marker being painted (see `begin_marker`).
     marker: Option<usize>,
     /// Open panels, as 1-based indices into `dl.panels`.
@@ -219,6 +223,7 @@ impl DisplayListBackend {
             alpha_stack: Vec::new(),
             v2: false,
             effect_depth: 0,
+            blend_stack: Vec::new(),
             marker: None,
             panel_stack: Vec::new(),
             only_panels: None,
@@ -423,6 +428,9 @@ impl DisplayListBackend {
         }
         if self.effect_depth > 0 {
             flags |= FLAG_GROUP;
+        }
+        if self.blend_stack.iter().any(|&b| b) {
+            flags |= FLAG_BLEND;
         }
         self.dl.recs.push(Rec {
             kind,
@@ -882,6 +890,7 @@ impl RenderBackend for DisplayListBackend {
         effect: GroupEffect,
     ) {
         let other = mask.is_some() || blend != BlendKind::Normal || !effect.is_none();
+        self.blend_stack.push(blend != BlendKind::Normal);
         if !other && alpha < 1.0 && self.v2 {
             // Version 2: an opacity-only group is listed; its records carry it.
             self.dl.groups.push(Group {
@@ -899,6 +908,7 @@ impl RenderBackend for DisplayListBackend {
     }
 
     fn end_group(&mut self) {
+        self.blend_stack.pop();
         match self.groups.pop() {
             Some(1) => self.effect_depth -= 1,
             Some(2) => {
@@ -1160,7 +1170,7 @@ mod tests {
                     ]
                 );
             }
-            assert_eq!(dl.recs[1].flags, FLAG_GROUP); // blend: always flagged
+            assert_eq!(dl.recs[1].flags, FLAG_GROUP | FLAG_BLEND); // blend: always flagged
             assert_eq!(dl.recs[2].flags, 0);
             assert_eq!(dl.recs[2].group, 0);
         }

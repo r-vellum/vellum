@@ -87,6 +87,8 @@ list draws exactly, numbered from 1 in the list's \code{record$run} (its \code{r
 field counts them). \code{run = k} draws only run \code{k}; \code{NULL} draws every run. A
 host that draws the exact marks itself can composite run \code{k} at its place
 in paint order and keep the overlap order right. The page is transparent.
+A mark under a blend mode (display-list flag \code{32}) is drawn too, but blends
+against transparency here rather than against the marks beneath it.
 }
 
 \seealso{

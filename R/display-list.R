@@ -90,8 +90,10 @@
 #' label (the geometry is its box); `16` pick-only: a keyed mark that paints
 #' nothing (an invisible hover target such as a `fill = NA` rect, circle,
 #' marker or polygon). Its geometry is listed and its paint has `fill` and
-#' `stroke` `NA`, so a client hit-tests it but draws nothing. Images do not
-#' appear at all.
+#' `stroke` `NA`, so a client hit-tests it but draws nothing; `32` inside a
+#' group with a blend mode (with `4`): the mark mixes with what is painted
+#' beneath it, so a separately rendered raster of it (a `"keyed_flagged"`
+#' run) cannot reproduce it either. Images do not appear at all.
 #'
 #' @param scene A [vl_scene()], or anything with an [as_vellum_scene()] method.
 #' @param what Which marks to list. Only `"keyed"` for now.

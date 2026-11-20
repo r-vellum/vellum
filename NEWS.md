@@ -21,6 +21,8 @@
   `record$run` column and counts them in `runs`. vellumwidget can then draw the
   exact marks itself and composite each run's image where it falls in paint
   order, instead of keeping every mark on the PNG when one mark is flagged.
+  A mark under a blend mode now also carries display-list flag `32`: it
+  mixes with what is beneath it, which a separate raster cannot reproduce.
 
 # vellum 0.10.1
 

@@ -107,6 +107,8 @@ render <- function(
 #' field counts them). `run = k` draws only run `k`; `NULL` draws every run. A
 #' host that draws the exact marks itself can composite run `k` at its place
 #' in paint order and keep the overlap order right. The page is transparent.
+#' A mark under a blend mode (display-list flag `32`) is drawn too, but blends
+#' against transparency here rather than against the marks beneath it.
 #'
 #' @inheritParams render
 #' @param layer Which part of the scene to draw: `"all"` (the default), only the
