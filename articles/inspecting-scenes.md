@@ -335,12 +335,12 @@ profile_render(heavy, reps = 1)
 #> Phases (median of the timed reps):
 #> • build 0.001 s (constructing the R value)
 #> • compile 0.024 s (R -> Rust replay, incl. text shaping)
-#> • raster 0.104 s (drawing)
+#> • raster 0.094 s (drawing)
 #> 
 #> Slowest marks (raster time):
-#> • segments edges 2000 elem 0.0333 s 57.7%
-#> • circle points 20000 elem 0.0218 s 37.8%
-#> • text labels 200 elem 0.0026 s 4.5%
+#> • segments edges 2000 elem 0.0290 s 56.7%
+#> • circle points 20000 elem 0.0196 s 38.2%
+#> • text labels 200 elem 0.0026 s 5.1%
 ```
 
 **Read the phase split first.** A render is three phases: *build*
