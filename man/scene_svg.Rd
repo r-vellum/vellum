@@ -7,7 +7,7 @@
 scene_svg(
   scene,
   text = c("native", "outline"),
-  layer = c("all", "unkeyed", "keyed"),
+  layer = c("all", "unkeyed", "keyed", "unkeyed_below", "unkeyed_above"),
   panels = NULL
 )
 }
@@ -20,7 +20,9 @@ outlines (pixel-faithful, identical to the raster/PDF backends, but not
 selectable). Ignored for PNG/PDF.}
 
 \item{layer}{Which part of the scene to draw: \code{"all"} (the default), only the
-\code{"keyed"} marks, or everything \code{"unkeyed"}. See the \emph{Split render} section.}
+\code{"keyed"} marks, everything \code{"unkeyed"}, or the unkeyed elements painted
+before (\code{"unkeyed_below"}) or after (\code{"unkeyed_above"}) the marks. See the
+\emph{Split render} section.}
 
 \item{panels}{\code{NULL} (the default: every keyed mark is in the mark layer), or
 a character vector of panel names restricting the mark layer to keyed marks
@@ -55,6 +57,18 @@ render, except where an unkeyed node is painted \emph{above} a keyed mark (it en
 up underneath), or where a keyed mark's blend mode would mix with the
 unkeyed backdrop (it blends against transparency instead). This is the
 raster mode of vellumwidget: SVG furniture plus a PNG of the heavy mark layer.
+
+\code{"unkeyed_below"} and \code{"unkeyed_above"} split \code{"unkeyed"} by paint order, so
+stacking \code{"unkeyed_below"}, \code{"keyed"}, \code{"unkeyed_above"} (bottom to top) also
+gets an annotation or reference line drawn after the marks right. An unkeyed
+element is \emph{above} when a mark (an element of the \code{"keyed"} layer, so
+\code{panels} applies) was painted before it inside its innermost named panel; a
+mark in a nested panel counts for every panel around it, and an element
+outside every named panel is above when any mark precedes it. Unkeyed
+elements interleaved between two keyed batches are therefore above, and a
+later facet's gridlines stay below that facet's own marks. With no marks at
+all, everything is below. \code{"unkeyed_above"}, like \code{"keyed"}, has a
+transparent page. The two halves together are exactly \code{"unkeyed"}.
 }
 
 \seealso{
