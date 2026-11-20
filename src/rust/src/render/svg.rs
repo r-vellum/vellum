@@ -51,6 +51,10 @@ pub struct SvgBackend {
     pan_active: bool,
     pan_clip_pending: bool,
     pan_clip_id: Option<usize>,
+    /// Index in `node_open` of the open pannable panel's outer frame, the one
+    /// that receives the hoisted clip. Recorded when the panel opens, because
+    /// per-node `<g>` frames opened inside the panel sit above it on the stack.
+    pan_outer: usize,
     /// Per-element data key for the next primitive (`set_element_key`); spliced
     /// into the emitted element as `data-key="…"`. `None` = no attribute. Held as
     /// `Rc<str>` so `emit` (called once per fill and once per stroke of an element)
@@ -103,6 +107,7 @@ impl SvgBackend {
             pan_active: false,
             pan_clip_pending: false,
             pan_clip_id: None,
+            pan_outer: 0,
             cur_element_key: None,
             last_solid_fill: None,
             a11y_title: None,
@@ -333,14 +338,12 @@ impl SvgBackend {
         // Pannable panel: hoist the first clipped element's clip onto the outer
         // panel group (so it stays put under the inner group's transform), and
         // suppress that clip on the elements themselves. The outer frame is the one
-        // below the inner `data-vellum-pan` frame on the open-frame stack.
+        // recorded by `begin_panel` (not simply the frame below the top: an element
+        // inside a per-node `<g>` has that frame on top of the inner pan frame).
         if self.pan_active && !attr.is_empty() {
             if self.pan_clip_pending {
-                let n = self.node_open.len();
-                if n >= 2 {
-                    if let Some(outer) = self.node_open[n - 2].as_mut() {
-                        outer.push_str(&attr);
-                    }
+                if let Some(Some(outer)) = self.node_open.get_mut(self.pan_outer) {
+                    outer.push_str(&attr);
                 }
                 self.pan_clip_id = Some(clip.id);
                 self.pan_clip_pending = false;
@@ -972,6 +975,7 @@ impl RenderBackend for SvgBackend {
         self.node_open
             .push(Some(format!("data-vellum-panel=\"{}\"", xml_escape(name))));
         if pan {
+            self.pan_outer = self.node_open.len() - 1;
             self.node_stack.push(String::new());
             self.node_open
                 .push(Some(format!("data-vellum-pan=\"{}\"", xml_escape(name))));

@@ -1,5 +1,15 @@
 # vellum 0.9.0.9000 (development version)
 
+## Bug fixes
+
+* In a pannable clipped panel, the SVG backend hoists the panel clip onto the
+  outer `data-vellum-panel` group so it stays put while a host transforms the
+  inner `data-vellum-pan` group. When the first clipped element sat inside a
+  per-node `<g>` (a layer with an `id`, or a split-render layer such as
+  `"keyed"` or `"unkeyed_above"` whose panel background was filtered out), the
+  clip landed on the pan group instead and moved with the data. It now always
+  goes on the panel group.
+
 ## New features
 
 * `scene_display_list()` now lists keyed marks that paint nothing (invisible

@@ -333,6 +333,29 @@ test_that("a pannable clipped panel emits outer(clip) > inner(data-vellum-pan) w
   expect_equal(lengths(regmatches(svg, gregexpr("clip-path=", svg))), 1L)
 })
 
+test_that("the hoisted clip lands on the panel group even when the first element is in a node group", {
+  # The first clipped element sits inside a per-node `<g data-vellum-id>`, as in
+  # a vellumplot layer, or in a split-render layer whose panel background was
+  # filtered out. The clip must still go on the outer panel group, never on the
+  # transformable pan group.
+  sc <- vl_scene(3, 2, dpi = 100) |>
+    push(vl_viewport(name = "panel-1-1", clip = TRUE, pannable = TRUE)) |>
+    draw(points_grob(
+      c(0.3, 0.7),
+      0.5,
+      gp = vl_gpar(fill = "red"),
+      key = c("a", "b"),
+      id = "layer-1-point"
+    )) |>
+    pop()
+  for (layer in c("all", "keyed")) {
+    svg <- scene_svg(sc, layer = layer)
+    expect_match(svg, 'data-vellum-panel="panel-1-1"[^>]*clip-path=', info = layer)
+    expect_no_match(svg, 'data-vellum-pan="panel-1-1"[^>]*clip-path=', info = layer)
+    expect_equal(lengths(regmatches(svg, gregexpr("clip-path=", svg))), 1L)
+  }
+})
+
 test_that("a non-pannable panel is unchanged (no pan group; per-element clips)", {
   sc <- vl_scene(3, 2, dpi = 100) |>
     push(vl_viewport(name = "p", clip = TRUE)) |>
