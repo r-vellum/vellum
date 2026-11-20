@@ -394,6 +394,98 @@ impl Node {
             | Node::PanelEnd => None,
         }
     }
+
+    /// Whether this node carries an interactivity data key on any element: the
+    /// same notion as a non-NA `key` in `scene_model()$elements`, which is what
+    /// the widget counts to decide raster mode. Structural nodes and images are
+    /// never keyed. A batch counts as keyed if any of its elements is.
+    pub(super) fn is_keyed(&self) -> bool {
+        match self {
+            Node::RoundRect { key, .. }
+            | Node::Lines { key, .. }
+            | Node::Polygon { key, .. }
+            | Node::Text { key, .. }
+            | Node::Path { key, .. } => key.as_deref().is_some_and(|k| !k.is_empty()),
+            Node::Rects { keys, .. }
+            | Node::Circles { keys, .. }
+            | Node::Markers { keys, .. }
+            | Node::Hexagons { keys, .. }
+            | Node::Sectors { keys, .. }
+            | Node::Segments { keys, .. } => keys.iter().any(|k| !k.is_empty()),
+            Node::Rect { .. }
+            | Node::Circle { .. }
+            | Node::Loop { .. }
+            | Node::Image { .. }
+            | Node::GroupStart { .. }
+            | Node::GroupEnd
+            | Node::SubrasterStart { .. }
+            | Node::SubrasterEnd
+            | Node::PanelStart { .. }
+            | Node::PanelEnd => false,
+        }
+    }
+}
+
+/// Which nodes a render walk draws (the split render, VR-13). `All` is every
+/// render's default; `Keyed` draws only the mark layer (keyed marks); `Unkeyed`
+/// draws everything else (axes, gridlines, legends, unkeyed annotations).
+/// Structural nodes (groups, masks, clips, panels) are kept in every layer, so a
+/// mark keeps its clip, mask, opacity and blend group. Composited `Keyed` over
+/// `Unkeyed` reproduces `All` whenever no unkeyed node paints over a keyed one
+/// and no keyed mark blends with an unkeyed backdrop.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Layer {
+    All,
+    Unkeyed,
+    Keyed,
+}
+
+impl Layer {
+    /// Codes match `.layer_code()` in R: 0 all, 1 unkeyed, 2 keyed.
+    pub fn from_code(c: i32) -> Layer {
+        match c {
+            1 => Layer::Unkeyed,
+            2 => Layer::Keyed,
+            _ => Layer::All,
+        }
+    }
+}
+
+/// A [`Layer`] plus the optional panel restriction of the mark layer: when
+/// `panels` is `Some`, a keyed node counts as a mark only if its innermost named
+/// panel is listed (so a keyed legend swatch can stay with the furniture). The
+/// two layers stay exact complements either way.
+#[derive(Clone, Debug)]
+pub struct LayerFilter {
+    pub layer: Layer,
+    pub panels: Option<Vec<String>>,
+}
+
+impl LayerFilter {
+    pub fn all() -> Self {
+        LayerFilter {
+            layer: Layer::All,
+            panels: None,
+        }
+    }
+
+    pub fn is_all(&self) -> bool {
+        self.layer == Layer::All
+    }
+
+    /// Whether a drawing node, inside innermost named panel `panel` (empty when
+    /// outside every panel), belongs to this layer.
+    pub(super) fn keeps(&self, node: &Node, panel: &str) -> bool {
+        if self.layer == Layer::All {
+            return true;
+        }
+        let mark = node.is_keyed()
+            && self
+                .panels
+                .as_ref()
+                .is_none_or(|ps| ps.iter().any(|p| p == panel));
+        mark == (self.layer == Layer::Keyed)
+    }
 }
 
 /// A mask attached to a viewport: the grob content to rasterize plus how its
