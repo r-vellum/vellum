@@ -325,3 +325,94 @@ test_that("keyed marks that paint nothing are listed pick-only (VR-17)", {
     )
   )
 })
+
+test_that("version 2 lists gradients, path clips and opacity groups exactly (VW-23)", {
+  skip_if_not_installed("jsonlite")
+  s <- .dl_scene()
+  v1 <- scene_display_list(s)
+  v2 <- scene_display_list(s, version = 2)
+  expect_identical(v1$version, 1L)
+  expect_identical(v2$version, 2L)
+  # version 1 is unchanged: no version-2 fields
+  expect_null(v1$gradients)
+  expect_null(v1$groups)
+  expect_null(v1$record$group)
+  expect_null(v1$paints$fill_gradient)
+  d1 <- .dl_decode(v1)
+  d2 <- .dl_decode(v2)
+  expect_identical(d2$key, d1$key)
+  flag <- function(d, k) d$flags[d$key == k]
+  # the gradient and the translucent group are no longer flagged
+  expect_true(all(flag(d2, "grad") == 0))
+  expect_true(all(flag(d2, "grp") == 0))
+  expect_equal(bitwAnd(flag(d2, "tx"), 8L), 8L) # text stays flagged
+  # gradient table
+  rec <- lapply(v2$record, .dl_col)
+  pg <- v2$paints$fill_gradient[rec$paint + 1]
+  gi <- unique(pg[d2$key == "grad"])
+  expect_length(gi, 1L)
+  expect_gt(gi, 0L)
+  expect_true(all(pg[d2$key != "grad"] == 0L))
+  g <- v2$gradients
+  expect_identical(g$type[gi], "linear")
+  stops <- (g$stop_offset[gi] + 1):g$stop_offset[gi + 1]
+  expect_identical(g$stop_color[stops], c("#ff0000ff", "#0000ffff"))
+  expect_equal(g$stop_pos[stops], c(0, 1))
+  # an npc gradient spans the viewport (here the page) in device px, through
+  # its transform
+  ex <- g$a[gi] * c(g$x1[gi], g$x2[gi]) + g$c[gi] * c(g$y1[gi], g$y2[gi]) + g$e[gi]
+  expect_equal(ex, c(0, v2$width), tolerance = 0.5)
+  # group table: the "grp" point is in a 0.5 group
+  expect_equal(v2$groups$alpha, 0.5)
+  expect_identical(v2$groups$parent, 0L)
+  expect_true(all(rec$group[d2$key == "grp"] == 1))
+  expect_true(all(rec$group[d2$key != "grp"] == 0))
+  # a rect clip has no paths
+  expect_identical(v2$clips$path_n, 0L)
+  expect_error(scene_display_list(s, version = 3), "version")
+})
+
+test_that("version 2 lists a path clip as device-px clip paths (VW-23)", {
+  skip_if_not_installed("jsonlite")
+  s <- vl_scene(2, 2, dpi = 72) |>
+    push(vl_viewport(
+      clip = polygon_grob(c(0.1, 0.9, 0.5), c(0.1, 0.1, 0.9))
+    )) |>
+    draw(points_grob(0.5, 0.5, key = "a")) |>
+    pop()
+  dl <- scene_display_list(s, version = 2)
+  d <- .dl_decode(dl)
+  expect_equal(d$flags, 0)
+  expect_equal(d$clip, 1)
+  expect_identical(dl$clips$path_n, 1L)
+  cp <- lapply(dl$clip_paths, .dl_col)
+  xy <- matrix(cp$xy, ncol = 2, byrow = TRUE)
+  # the triangle, 144 px square device, y down
+  expect_equal(range(xy[, 1]), c(0.1, 0.9) * 144, tolerance = 1e-3)
+  expect_equal(range(xy[, 2]), c(0.1, 0.9) * 144, tolerance = 1e-3)
+  expect_equal(cp$path_offset, c(0, 1))
+  # the clip rect is bounded by the path's box
+  expect_equal(c(dl$clips$x0, dl$clips$x1), c(0.1, 0.9) * 144, tolerance = 1e-3)
+  # nested opacity groups chain their parents; a blend group stays flagged
+  s2 <- vl_scene(2, 2, dpi = 72) |>
+    push(vl_viewport(alpha = 0.5)) |>
+    push(vl_viewport(alpha = 0.4)) |>
+    draw(points_grob(0.5, 0.5, key = "in")) |>
+    pop() |>
+    pop() |>
+    push(vl_viewport(blend = "multiply")) |>
+    draw(points_grob(0.2, 0.2, key = "bl")) |>
+    pop()
+  dl2 <- scene_display_list(s2, version = 2)
+  d2 <- .dl_decode(dl2)
+  rec <- lapply(dl2$record, .dl_col)
+  expect_equal(dl2$groups$alpha, c(0.5, 0.4))
+  expect_identical(dl2$groups$parent, c(0L, 1L))
+  expect_equal(rec$group[d2$key == "in"], 2)
+  expect_equal(d2$flags[d2$key == "in"], 0)
+  expect_equal(bitwAnd(d2$flags[d2$key == "bl"], 4L), 4L)
+  # a repeating gradient stays flagged
+  s3 <- vl_scene(2, 2, dpi = 72) |>
+    draw(rect_grob(gp = vl_gpar(fill = linear_gradient(c("red", "blue"), extend = "repeat")), key = "rep"))
+  expect_equal(bitwAnd(.dl_decode(scene_display_list(s3, version = 2))$flags, 1L), 1L)
+})

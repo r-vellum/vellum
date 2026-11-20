@@ -12,12 +12,20 @@
 //! compositing group (opacity, blend, mask, effect). A keyed mark that paints
 //! nothing at all (an invisible hover target) is listed too, flagged pick-only,
 //! so the widget can still hit-test it.
+//!
+//! Version 2 (opt-in, VW-23) makes three of those cases exact instead of
+//! flagged: linear and radial gradient fills with `pad` extension (a gradient
+//! table the paints refer to), clips by a path or a rotated rect (clip paths
+//! in device px), and groups whose only effect is an opacity below 1 (a group
+//! table each record refers to; a client composites the group's records as
+//! one layer). Masks, blend modes, effects, hatches, patterns, repeating
+//! gradients and gradient strokes stay flagged.
 
 use std::collections::HashMap;
 
 use tiny_skia::{FillRule, Path, PathSegment, Transform};
 
-use crate::color::{LineCap, LineJoin, Rgba};
+use crate::color::{Extend, LineCap, LineJoin, Rgba, Stop};
 use crate::units::rotation_about;
 
 use super::{
@@ -47,6 +55,9 @@ pub struct PaintKey {
     pub dash: Vec<u32>,
     pub cap: u8,
     pub join: u8,
+    /// Version 2: 1-based into `DisplayList::gradients` for a gradient fill
+    /// (then `fill` is `None`), 0 = none.
+    pub grad: u32,
 }
 
 #[derive(Clone, Debug)]
@@ -57,6 +68,33 @@ pub struct Rec {
     pub flags: u8,
     pub clip: u32,
     pub panel: u32,
+    /// Version 2: 1-based into `DisplayList::groups` (the innermost opacity
+    /// group the record is drawn in), 0 = none.
+    pub group: u32,
+}
+
+/// A gradient fill (version 2): geometry in the shape's local px, placed in
+/// device px by `transform` (`[sx, ky, kx, sy, tx, ty]`, the canvas/SVG
+/// `matrix(a, b, c, d, e, f)` order). Linear: `p1` -> `p2`. Radial: the focal
+/// circle `(p1, r1)` at offset 0 to the outer circle `(p2, r2)` at offset 1.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Gradient {
+    pub radial: bool,
+    pub p1: (f64, f64),
+    pub p2: (f64, f64),
+    pub r1: f64,
+    pub r2: f64,
+    pub transform: [f32; 6],
+    /// `(offset, packed RGBA)`.
+    pub stops: Vec<(f32, u32)>,
+}
+
+/// An opacity group (version 2): its alpha and its parent group (1-based, 0 =
+/// top level).
+#[derive(Clone, Debug, PartialEq)]
+pub struct Group {
+    pub alpha: f32,
+    pub parent: u32,
 }
 
 /// The recorded display list (see the module docs).
@@ -85,6 +123,20 @@ pub struct DisplayList {
     /// Interned clip rects (device px `x0, y0, x1, y1`); `record$clip` is
     /// 1-based into this, 0 = unclipped.
     pub clips: Vec<[f64; 4]>,
+    /// Version 2: per clip, the range `(start, n)` of its path shapes in the
+    /// clip-path table (n = 0: the rect alone). A record is clipped to the
+    /// rect and to every one of its paths.
+    pub clip_paths: Vec<(u32, u32)>,
+    /// The clip-path table: interleaved device-px vertices, run starts
+    /// (`n_runs + 1`), shape starts in runs (`n_shapes + 1`), fill rule.
+    pub cp_xy: Vec<f32>,
+    pub cp_run_off: Vec<u32>,
+    pub cp_path_off: Vec<u32>,
+    pub cp_evenodd: Vec<u8>,
+    pub gradients: Vec<Gradient>,
+    pub groups: Vec<Group>,
+    /// The format version the list was recorded for (1 or 2).
+    pub version: u32,
     pub keys: Vec<String>,
     /// Named panels; `record$panel` is 1-based into this (the innermost named
     /// panel a mark is drawn in), 0 = outside every panel.
@@ -97,8 +149,13 @@ pub struct DisplayListBackend {
     key_ix: HashMap<String, u32>,
     /// Clip id -> (1-based clip index or 0, supported?).
     clip_cache: HashMap<usize, (u32, bool)>,
-    /// Per open group: does it change how its content composites?
-    groups: Vec<bool>,
+    /// Per open group: 0 = composites normally, 1 = an unlisted effect
+    /// (flags its content), 2 = a listed opacity group (version 2).
+    groups: Vec<u8>,
+    /// Open listed opacity groups, as 1-based indices into `dl.groups`.
+    alpha_stack: Vec<u32>,
+    /// Record the version-2 extensions (gradients, clip paths, opacity groups).
+    v2: bool,
     effect_depth: usize,
     /// The point record of the marker being painted (see `begin_marker`).
     marker: Option<usize>,
@@ -123,10 +180,23 @@ impl DisplayListBackend {
         b
     }
 
+    /// As `with_panels()`, recording format `version` (1 or 2).
+    pub fn with_options(panels: Option<Vec<String>>, version: u32) -> Self {
+        let mut b = Self::with_panels(panels);
+        b.v2 = version >= 2;
+        b.dl.version = if b.v2 { 2 } else { 1 };
+        b.dl.cp_run_off = vec![0];
+        b.dl.cp_path_off = vec![0];
+        b
+    }
+
     pub fn new() -> Self {
         let dl = DisplayList {
             run_off: vec![0],
             path_off: vec![0],
+            cp_run_off: vec![0],
+            cp_path_off: vec![0],
+            version: 1,
             ..Default::default()
         };
         DisplayListBackend {
@@ -135,6 +205,8 @@ impl DisplayListBackend {
             key_ix: HashMap::new(),
             clip_cache: HashMap::new(),
             groups: Vec::new(),
+            alpha_stack: Vec::new(),
+            v2: false,
             effect_depth: 0,
             marker: None,
             panel_stack: Vec::new(),
@@ -165,6 +237,7 @@ impl DisplayListBackend {
         // batch, or a marker whose paint calls never came.
         for r in self.dl.recs.iter_mut() {
             if r.paint.fill.is_none()
+                && r.paint.grad == 0
                 && r.paint.stroke.is_none()
                 && r.flags & (FLAG_PAINT | FLAG_TEXT) == 0
             {
@@ -234,6 +307,8 @@ impl DisplayListBackend {
             f64::INFINITY,
         ];
         let mut ok = true;
+        // Version 2: path shapes (and rotated rects) as device-px polygons.
+        let mut paths: Vec<(Vec<(Vec<(f32, f32)>, bool)>, bool)> = Vec::new();
         for s in clip.shapes {
             match s {
                 ClipShape::Rect { w, h, transform: t } if t.kx == 0.0 && t.ky == 0.0 => {
@@ -244,8 +319,55 @@ impl DisplayListBackend {
                     acc[2] = acc[2].min(xa.max(xb));
                     acc[3] = acc[3].min(ya.max(yb));
                 }
+                ClipShape::Rect { w, h, transform: t } if self.v2 => {
+                    let (w, h) = (*w as f32, *h as f32);
+                    let ring = [(0.0, 0.0), (w, 0.0), (w, h), (0.0, h)]
+                        .iter()
+                        .map(|&(x, y)| map(t, x, y))
+                        .collect::<Vec<_>>();
+                    paths.push((vec![(ring, true)], false));
+                }
+                ClipShape::Path {
+                    path,
+                    evenodd,
+                    transform: t,
+                } if self.v2 => {
+                    let runs: Vec<_> = flatten_runs(path, *t)
+                        .into_iter()
+                        .filter(|(r, _)| r.len() >= 3)
+                        .collect();
+                    paths.push((runs, *evenodd));
+                }
                 _ => ok = false,
             }
+        }
+        // A path clip also bounds the rect (its bbox), for culling.
+        for (runs, _) in &paths {
+            let (mut x0, mut y0, mut x1, mut y1) = (
+                f64::INFINITY,
+                f64::INFINITY,
+                f64::NEG_INFINITY,
+                f64::NEG_INFINITY,
+            );
+            for (r, _) in runs {
+                for &(x, y) in r {
+                    x0 = x0.min(x as f64);
+                    y0 = y0.min(y as f64);
+                    x1 = x1.max(x as f64);
+                    y1 = y1.max(y as f64);
+                }
+            }
+            if x0 > x1 {
+                // an empty path clips everything away
+                x0 = 0.0;
+                x1 = 0.0;
+                y0 = 0.0;
+                y1 = 0.0;
+            }
+            acc[0] = acc[0].max(x0);
+            acc[1] = acc[1].max(y0);
+            acc[2] = acc[2].min(x1);
+            acc[3] = acc[3].min(y1);
         }
         let out = if ok {
             if acc[2] < acc[0] {
@@ -255,6 +377,23 @@ impl DisplayListBackend {
                 acc[3] = acc[1];
             }
             self.dl.clips.push(acc);
+            if self.v2 {
+                let start = (self.dl.cp_path_off.len() - 1) as u32;
+                for (runs, evenodd) in &paths {
+                    for (r, _) in runs {
+                        for &(x, y) in r {
+                            self.dl.cp_xy.push(x);
+                            self.dl.cp_xy.push(y);
+                        }
+                        self.dl.cp_run_off.push((self.dl.cp_xy.len() / 2) as u32);
+                    }
+                    self.dl
+                        .cp_path_off
+                        .push((self.dl.cp_run_off.len() - 1) as u32);
+                    self.dl.cp_evenodd.push(*evenodd as u8);
+                }
+                self.dl.clip_paths.push((start, paths.len() as u32));
+            }
             (self.dl.clips.len() as u32, true)
         } else {
             (0, false)
@@ -279,6 +418,7 @@ impl DisplayListBackend {
             flags,
             clip: ci,
             panel: self.panel_stack.last().copied().unwrap_or(0),
+            group: self.alpha_stack.last().copied().unwrap_or(0),
         });
     }
 
@@ -332,17 +472,74 @@ impl DisplayListBackend {
         }
     }
 
+    /// A fill paint: packed colour (None for no / non-solid fill), gradient
+    /// index (version 2; 0 = none) and flags. Version 2 lists linear and
+    /// radial gradients with `pad` extension (only recorded while a listed
+    /// mark is being drawn, so unlisted marks add no rows).
+    fn fill_of(&mut self, p: &ResolvedPaint, t: Transform) -> (Option<u32>, u32, u8) {
+        let (radial, p1, p2, r1, r2, stops, extend) = match p {
+            ResolvedPaint::Solid(c) => return (Some(pack(*c)), 0, 0),
+            ResolvedPaint::Linear {
+                x1,
+                y1,
+                x2,
+                y2,
+                stops,
+                extend,
+            } => (false, (*x1, *y1), (*x2, *y2), 0.0, 0.0, stops, extend),
+            ResolvedPaint::Radial {
+                cx,
+                cy,
+                r,
+                fx,
+                fy,
+                fr,
+                stops,
+                extend,
+            } => (true, (*fx, *fy), (*cx, *cy), *fr, *r, stops, extend),
+            _ => return (None, 0, FLAG_PAINT),
+        };
+        if !self.v2
+            || !matches!(extend, Extend::Pad)
+            || stops.is_empty()
+            || (self.marker.is_none() && !self.active())
+        {
+            return (None, 0, FLAG_PAINT);
+        }
+        let g = Gradient {
+            radial,
+            p1,
+            p2,
+            r1,
+            r2,
+            transform: [t.sx, t.ky, t.kx, t.sy, t.tx, t.ty],
+            stops: stops
+                .iter()
+                .map(|s: &Stop| (s.offset, pack(s.color)))
+                .collect(),
+        };
+        let ix = match self.dl.gradients.iter().rposition(|h| *h == g) {
+            Some(i) => i,
+            None => {
+                self.dl.gradients.push(g);
+                self.dl.gradients.len() - 1
+            }
+        };
+        (None, ix as u32 + 1, 0)
+    }
+
     /// While a marker is open, paint calls set its paint instead of recording
     /// geometry. Returns whether the call was absorbed.
     fn absorb(
         &mut self,
-        fill: Option<(Option<u32>, u8)>,
+        fill: Option<(Option<u32>, u32, u8)>,
         stroke: Option<(Rgba, &StrokeStyle, Transform)>,
     ) -> bool {
         let Some(m) = self.marker else { return false };
         let rec = &mut self.dl.recs[m];
-        if let Some((f, fl)) = fill {
+        if let Some((f, g, fl)) = fill {
             rec.paint.fill = f;
+            rec.paint.grad = g;
             rec.flags |= fl;
         }
         if let Some((c, st, t)) = stroke {
@@ -360,14 +557,6 @@ impl DisplayListBackend {
 
 fn pack(c: Rgba) -> u32 {
     ((c.r as u32) << 24) | ((c.g as u32) << 16) | ((c.b as u32) << 8) | c.a as u32
-}
-
-/// A fill paint: packed colour (None for no/unsupported fill) and flags.
-fn fill_paint(p: &ResolvedPaint) -> (Option<u32>, u8) {
-    match p {
-        ResolvedPaint::Solid(c) => (Some(pack(*c)), 0),
-        _ => (None, FLAG_PAINT),
-    }
 }
 
 /// Linear scale of a transform (exact for the similarity transforms viewports use).
@@ -392,6 +581,7 @@ fn stroke_paint(c: Rgba, st: &StrokeStyle, t: Transform) -> (PaintKey, u8) {
             LineJoin::Round => 1,
             LineJoin::Bevel => 2,
         },
+        grad: 0,
     };
     (k, if st.paint.is_some() { FLAG_PAINT } else { 0 })
 }
@@ -507,12 +697,13 @@ impl RenderBackend for DisplayListBackend {
         rule: FillRule,
         clip: &Clip,
     ) {
-        let (f, fl) = fill_paint(paint);
-        if self.absorb(Some((f, fl)), None) {
+        let (f, g, fl) = self.fill_of(paint, transform);
+        if self.absorb(Some((f, g, fl)), None) {
             return;
         }
         let pk = PaintKey {
             fill: f,
+            grad: g,
             ..Default::default()
         };
         let n = self.dl.recs.len();
@@ -550,12 +741,13 @@ impl RenderBackend for DisplayListBackend {
         stroke: &StrokeStyle,
         clip: &Clip,
     ) {
-        let (f, ffl) = fill_paint(paint);
-        if self.absorb(Some((f, ffl)), Some((color, stroke, transform))) {
+        let (f, g, ffl) = self.fill_of(paint, transform);
+        if self.absorb(Some((f, g, ffl)), Some((color, stroke, transform))) {
             return;
         }
         let (mut pk, sfl) = stroke_paint(color, stroke, transform);
         pk.fill = f;
+        pk.grad = g;
         let n = self.dl.recs.len();
         self.record_path(path, transform, true, pk, ffl | sfl, clip);
         if self.dl.recs.len() > n {
@@ -610,17 +802,30 @@ impl RenderBackend for DisplayListBackend {
         blend: BlendKind,
         effect: GroupEffect,
     ) {
-        let changes =
-            mask.is_some() || alpha < 1.0 || blend != BlendKind::Normal || !effect.is_none();
-        if changes {
+        let other = mask.is_some() || blend != BlendKind::Normal || !effect.is_none();
+        if !other && alpha < 1.0 && self.v2 {
+            // Version 2: an opacity-only group is listed; its records carry it.
+            self.dl.groups.push(Group {
+                alpha: alpha.max(0.0),
+                parent: self.alpha_stack.last().copied().unwrap_or(0),
+            });
+            self.alpha_stack.push(self.dl.groups.len() as u32);
+            self.groups.push(2);
+        } else if other || alpha < 1.0 {
             self.effect_depth += 1;
+            self.groups.push(1);
+        } else {
+            self.groups.push(0);
         }
-        self.groups.push(changes);
     }
 
     fn end_group(&mut self) {
-        if self.groups.pop() == Some(true) {
-            self.effect_depth -= 1;
+        match self.groups.pop() {
+            Some(1) => self.effect_depth -= 1,
+            Some(2) => {
+                self.alpha_stack.pop();
+            }
+            _ => {}
         }
     }
 
@@ -654,12 +859,13 @@ impl RenderBackend for DisplayListBackend {
         if keys.is_empty() {
             return;
         }
-        let (f, ffl) = fill.map(fill_paint).unwrap_or((None, 0));
         let (mut pk, sfl) = match &stroke {
             Some((c, st)) if st.width > 0.0 => stroke_paint(*c, st, transform),
             _ => (PaintKey::default(), 0),
         };
-        pk.fill = f;
+        // The fill is resolved at the first listed circle (a gradient is
+        // recorded only for a listed mark).
+        let mut ffl: Option<u8> = None;
         let s = scale_of(transform);
         let n = cx.len().min(cy.len()).min(r.len());
         for i in 0..n {
@@ -675,12 +881,24 @@ impl RenderBackend for DisplayListBackend {
             if !self.active() {
                 continue;
             }
+            let fl = match ffl {
+                Some(fl) => fl,
+                None => {
+                    let (f, g, fl) = fill
+                        .map(|p| self.fill_of(p, transform))
+                        .unwrap_or((None, 0, 0));
+                    pk.fill = f;
+                    pk.grad = g;
+                    ffl = Some(fl);
+                    fl
+                }
+            };
             let (x, y) = map(&transform, cx[i] as f32, cy[i] as f32);
             self.dl.pt_cx.push(x);
             self.dl.pt_cy.push(y);
             self.dl.pt_r.push(r[i] as f32 * s);
             self.dl.pt_shape.push(0);
-            self.push_rec(KIND_POINT, pk.clone(), ffl | sfl, clip);
+            self.push_rec(KIND_POINT, pk.clone(), fl | sfl, clip);
         }
         self.key = None;
     }
@@ -800,5 +1018,143 @@ mod tests {
             as_rect(&[(0.0, 0.0), (2.0, 0.5), (2.0, 1.0), (0.0, 1.0)]),
             None
         );
+    }
+
+    fn red() -> ResolvedPaint {
+        ResolvedPaint::Solid(Rgba {
+            r: 255,
+            g: 0,
+            b: 0,
+            a: 255,
+        })
+    }
+
+    fn one_circle(b: &mut DisplayListBackend, key: &str, fill: &ResolvedPaint, clip: &Clip) {
+        b.draw_circles(
+            &[5.0],
+            &[5.0],
+            &[2.0],
+            Some(fill),
+            None,
+            Transform::identity(),
+            clip,
+            &[key.to_string()],
+        );
+    }
+
+    #[test]
+    fn version_two_lists_opacity_groups_version_one_flags_them() {
+        for v in [1u32, 2] {
+            let mut b = DisplayListBackend::with_options(None, v);
+            b.begin_group(None, 0.5, BlendKind::Normal, GroupEffect::default());
+            b.begin_group(None, 0.4, BlendKind::Normal, GroupEffect::default());
+            one_circle(&mut b, "in", &red(), &no_clip());
+            b.end_group();
+            b.end_group();
+            b.begin_group(None, 0.5, BlendKind::Multiply, GroupEffect::default());
+            one_circle(&mut b, "bl", &red(), &no_clip());
+            b.end_group();
+            one_circle(&mut b, "out", &red(), &no_clip());
+            let dl = b.finish();
+            assert_eq!(dl.version, v);
+            if v == 1 {
+                assert_eq!(dl.recs[0].flags, FLAG_GROUP);
+                assert!(dl.groups.is_empty());
+            } else {
+                assert_eq!(dl.recs[0].flags, 0);
+                assert_eq!(dl.recs[0].group, 2);
+                assert_eq!(
+                    dl.groups,
+                    vec![
+                        Group {
+                            alpha: 0.5,
+                            parent: 0
+                        },
+                        Group {
+                            alpha: 0.4,
+                            parent: 1
+                        }
+                    ]
+                );
+            }
+            assert_eq!(dl.recs[1].flags, FLAG_GROUP); // blend: always flagged
+            assert_eq!(dl.recs[2].flags, 0);
+            assert_eq!(dl.recs[2].group, 0);
+        }
+    }
+
+    #[test]
+    fn version_two_lists_pad_gradients_and_path_clips() {
+        let stops = vec![
+            Stop {
+                offset: 0.0,
+                color: Rgba {
+                    r: 255,
+                    g: 0,
+                    b: 0,
+                    a: 255,
+                },
+            },
+            Stop {
+                offset: 1.0,
+                color: Rgba {
+                    r: 0,
+                    g: 0,
+                    b: 255,
+                    a: 255,
+                },
+            },
+        ];
+        let lin = |extend| ResolvedPaint::Linear {
+            x1: 0.0,
+            y1: 0.0,
+            x2: 10.0,
+            y2: 0.0,
+            stops: stops.clone(),
+            extend,
+        };
+        let mut pb = tiny_skia::PathBuilder::new();
+        pb.move_to(0.0, 0.0);
+        pb.line_to(10.0, 0.0);
+        pb.line_to(5.0, 10.0);
+        pb.close();
+        let shapes = [ClipShape::Path {
+            path: pb.finish().unwrap(),
+            evenodd: false,
+            transform: Transform::from_row(2.0, 0.0, 0.0, 2.0, 0.0, 0.0),
+        }];
+        let tri = Clip {
+            id: 7,
+            shapes: &shapes,
+        };
+        for v in [1u32, 2] {
+            let mut b = DisplayListBackend::with_options(None, v);
+            one_circle(&mut b, "pad", &lin(Extend::Pad), &no_clip());
+            one_circle(&mut b, "rep", &lin(Extend::Repeat), &no_clip());
+            one_circle(&mut b, "clipped", &red(), &tri);
+            let dl = b.finish();
+            if v == 1 {
+                assert_eq!(dl.recs[0].flags, FLAG_PAINT);
+                assert_eq!(dl.recs[2].flags, FLAG_CLIP);
+                assert!(dl.gradients.is_empty() && dl.clip_paths.is_empty());
+            } else {
+                assert_eq!(dl.recs[0].flags, 0);
+                assert_eq!(dl.recs[0].paint.grad, 1);
+                assert_eq!(dl.recs[0].paint.fill, None);
+                assert_eq!(dl.gradients.len(), 1);
+                assert_eq!(
+                    dl.gradients[0].stops,
+                    vec![(0.0, 0xff0000ff), (1.0, 0x0000ffff)]
+                );
+                assert_eq!(dl.recs[2].flags, 0);
+                assert_eq!(dl.recs[2].clip, 1);
+                assert_eq!(dl.clip_paths, vec![(0, 1)]);
+                assert_eq!(dl.cp_xy, vec![0.0, 0.0, 20.0, 0.0, 10.0, 20.0]);
+                assert_eq!(dl.clips[0], [0.0, 0.0, 20.0, 20.0]);
+            }
+            assert_eq!(dl.recs[1].flags, FLAG_PAINT); // repeat: flagged
+                                                      // a gradient-filled mark is not pick-only
+            assert_eq!(dl.recs[0].flags & FLAG_PICK, 0);
+        }
     }
 }
