@@ -1,6 +1,6 @@
 # Changelog
 
-## vellum 0.8.1.9000 (development version)
+## vellum 0.9.0
 
 ### New features
 
@@ -1722,7 +1722,7 @@ except where a fix deliberately changed output (noted below).
   `.__S3MethodsTable__.` rather than base’s, where dispatch looks.
   Dropping the accidental `print`/`plot` bindings restores normal
   registration; the S7 methods for `vellum_scene` register via
-  [`S7::methods_register()`](https://rconsortium.github.io/S7/reference/methods_register.html)
+  [`S7::methods_register()`](https://rconsortium.github.io/S7/reference/S7_on_load.html)
   and were never affected. `test-print-methods.R` now guards both
   halves.
 
