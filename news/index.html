@@ -13,7 +13,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">vellum</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.10.0.9000</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.10.1.9000</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -70,9 +70,12 @@
     </div>
 
     <div class="section level2">
-<h2 class="pkg-version" data-toc-text="0.10.0.9000" id="vellum-01009000-development-version">vellum 0.10.0.9000 (development version)<a class="anchor" aria-label="anchor" href="#vellum-01009000-development-version"></a></h2>
+<h2 class="pkg-version" data-toc-text="0.10.1.9000" id="vellum-01019000-development-version">vellum 0.10.1.9000 (development version)<a class="anchor" aria-label="anchor" href="#vellum-01019000-development-version"></a></h2>
+</div>
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.10.1" id="vellum-0101">vellum 0.10.1<a class="anchor" aria-label="anchor" href="#vellum-0101"></a></h2>
 <div class="section level3">
-<h3 id="bug-fixes-0-10-0-9000">Bug fixes<a class="anchor" aria-label="anchor" href="#bug-fixes-0-10-0-9000"></a></h3>
+<h3 id="bug-fixes-0-10-1">Bug fixes<a class="anchor" aria-label="anchor" href="#bug-fixes-0-10-1"></a></h3>
 <ul><li>
 <code><a href="../reference/vl_strwidth.html">vl_strwidth()</a></code>, <code><a href="../reference/vl_strwidth.html">vl_strheight()</a></code> and text shaping now error when the text size (<code>fontsize * cex</code>) is missing or not finite, instead of passing it to textshaping. textshaping converts such a size to a fixed-point integer, which depends on the platform: on x86_64 Linux a string measured -33554432 pt (about -1.2e7 mm), while macOS (arm64) measured 0. A <code>NULL</code> <code>fontsize</code> was the usual way in (VR-15).</li>
 </ul></div>
