@@ -485,6 +485,10 @@ pub trait RenderBackend {
         self.fill_path(path, transform, paint, rule, clip);
         self.stroke_path(path, transform, color, stroke, clip);
     }
+    /// A closed shape that paints nothing (no fill, no stroke): an invisible
+    /// hover target, such as a `fill = NA` rect. Painting backends ignore it; the
+    /// display list records its geometry as a pick-only mark (VR-17).
+    fn pick_only_path(&mut self, _path: &Path, _transform: Transform, _rule: FillRule, _clip: &Clip) {}
     fn draw_text(&mut self, run: &TextRun, transform: Transform, clip: &Clip);
     fn begin_group(
         &mut self,
