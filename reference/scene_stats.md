@@ -65,5 +65,5 @@ dense <- vl_scene(4, 3) |> draw(points_grob(rnorm(20000, 0.5, 0.05),
 rbind(sparse = scene_stats(sparse), dense = scene_stats(dense))
 #>        elements       ink colours   overplot
 #> sparse      200 0.1416016     256   2.918994
-#> dense     20000 0.1258681     256 328.386864
+#> dense     20000 0.1258952     256 328.316106
 ```
