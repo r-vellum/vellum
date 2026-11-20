@@ -79,6 +79,99 @@ fn circle_sprite(r: f64, color: Rgba) -> Option<Pixmap> {
     Some(pm)
 }
 
+/// Sub-pixel placement steps per axis for the stroked-circle sprite (VR-16):
+/// each sprite is rasterised at one of `SPRITE_PHASES^2` fractional offsets, so a
+/// blit lands within `1 / (2 * SPRITE_PHASES)` px (1/32) of the exact centre.
+const SPRITE_PHASES: i64 = 16;
+
+/// A filled-and-stroked AA circle of radius `r` (device px), drawn exactly as the
+/// per-element path draws one (fill, then the solid undashed stroke over it),
+/// into a square sprite whose centre sits at `(c0 + fx, c0 + fy)`. Compositing
+/// the sprite source-over equals the two draws (source-over is associative).
+fn stroked_circle_sprite(
+    r: f64,
+    fill: Option<Rgba>,
+    color: Rgba,
+    stroke: &StrokeStyle,
+    dim: u32,
+    c0: f64,
+    fx: f64,
+    fy: f64,
+) -> Option<Pixmap> {
+    let mut pm = Pixmap::new(dim, dim)?;
+    let mut pb = PathBuilder::new();
+    pb.push_circle((c0 + fx) as f32, (c0 + fy) as f32, r as f32);
+    let path = pb.finish()?;
+    if let Some(fc) = fill {
+        let mut paint = Paint::default();
+        paint.set_color(fc.to_skia());
+        paint.anti_alias = true;
+        pm.fill_path(&path, &paint, FillRule::Winding, Transform::identity(), None);
+    }
+    let mut paint = Paint::default();
+    paint.set_color(color.to_skia());
+    paint.anti_alias = true;
+    pm.stroke_path(&path, &paint, &skia_stroke(stroke), Transform::identity(), None);
+    Some(pm)
+}
+
+/// `a * b / 255`, rounded, for 8-bit channels.
+#[inline]
+fn mul255(a: u32, b: u32) -> u32 {
+    let t = a * b + 128;
+    (t + (t >> 8)) >> 8
+}
+
+/// Source-over blit of the premultiplied `src` onto `dst` with its top-left at
+/// the integer pixel `(x, y)`, coverage scaled by the page-sized `mask` when
+/// given. A plain byte loop: tiny-skia's `draw_pixmap` runs its general
+/// (shader + high-precision) pipeline per call, which dominated stamping 1e5+
+/// small sprites.
+fn blit_over(dst: &mut Pixmap, x: i32, y: i32, src: &Pixmap, mask: Option<&Mask>) {
+    let (dw, dh) = (dst.width() as i32, dst.height() as i32);
+    let (sw, sh) = (src.width() as i32, src.height() as i32);
+    let x0 = x.max(0);
+    let y0 = y.max(0);
+    let x1 = (x + sw).min(dw);
+    let y1 = (y + sh).min(dh);
+    if x0 >= x1 || y0 >= y1 {
+        return;
+    }
+    let sd = src.data();
+    let md = mask.map(|m| m.data());
+    let dd = dst.data_mut();
+    for py in y0..y1 {
+        let srow = ((py - y) * sw) as usize;
+        let drow = (py * dw) as usize;
+        for px in x0..x1 {
+            let si = (srow + (px - x) as usize) * 4;
+            let mut sa = sd[si + 3] as u32;
+            if sa == 0 {
+                continue;
+            }
+            let (mut sr, mut sg, mut sb) = (sd[si] as u32, sd[si + 1] as u32, sd[si + 2] as u32);
+            if let Some(md) = md {
+                let m = md[drow + px as usize] as u32;
+                if m == 0 {
+                    continue;
+                }
+                if m < 255 {
+                    sr = mul255(sr, m);
+                    sg = mul255(sg, m);
+                    sb = mul255(sb, m);
+                    sa = mul255(sa, m);
+                }
+            }
+            let di = (drow + px as usize) * 4;
+            let inv = 255 - sa;
+            dd[di] = (sr + mul255(dd[di] as u32, inv)).min(255) as u8;
+            dd[di + 1] = (sg + mul255(dd[di + 1] as u32, inv)).min(255) as u8;
+            dd[di + 2] = (sb + mul255(dd[di + 2] as u32, inv)).min(255) as u8;
+            dd[di + 3] = (sa + mul255(dd[di + 3] as u32, inv)).min(255) as u8;
+        }
+    }
+}
+
 /// The tile -> local-px transform: scale the `tw` x `th` tile into a `w` x `h`
 /// cell centred at `(x, y)`. The backend's draw transform then maps local->device.
 fn pattern_transform(tw: u32, th: u32, x: f64, y: f64, w: f64, h: f64) -> Transform {
@@ -966,6 +1059,68 @@ impl RenderBackend for RasterBackend {
                     }
                     return;
                 }
+            }
+        }
+        // Stroked sprite (VR-16): the same cloud with a solid, undashed outline
+        // (vellumplot's points: fill and stroke). Per-element fill + stroke
+        // rasterisation dominated a big keyed scatter's PNG; the sprite is drawn
+        // once per sub-pixel phase and blitted, so each mark lands within 1/32 px
+        // of where the exact path would put it.
+        let pen = stroke
+            .as_ref()
+            .filter(|(_, st)| st.width > 0.0 && st.paint.is_none() && st.dash.is_empty());
+        let fill_solid = match fill {
+            None => Some(None),
+            Some(ResolvedPaint::Solid(c)) => Some(Some(*c)),
+            _ => None,
+        };
+        if let (Some((color, st)), Some(fc)) = (pen, fill_solid) {
+            let uniform = n >= SPRITE_MIN
+                && unit_scale
+                && antialias()
+                && r[0] > 0.0
+                && r[0] <= SPRITE_MAX_R
+                && r[..n].iter().all(|&v| (v - r[0]).abs() < 1e-9);
+            if uniform {
+                let reach = r[0] + st.width as f64 / 2.0;
+                let dim = ((reach + 2.0) * 2.0).ceil() as u32;
+                let c0 = (dim / 2) as f64;
+                let mut sprites: Vec<Option<Pixmap>> = vec![None; (SPRITE_PHASES * SPRITE_PHASES) as usize];
+                let mask = self.mask_for(clip);
+                let target = self.targets.last_mut().expect("at least the page target");
+                let p = SPRITE_PHASES as f64;
+                for i in 0..n {
+                    if !cx[i].is_finite() || !cy[i].is_finite() {
+                        continue;
+                    }
+                    let dx = transform.sx as f64 * cx[i]
+                        + transform.kx as f64 * cy[i]
+                        + transform.tx as f64;
+                    let dy = transform.ky as f64 * cx[i]
+                        + transform.sy as f64 * cy[i]
+                        + transform.ty as f64;
+                    let qx = ((dx - c0) * p).round() as i64;
+                    let qy = ((dy - c0) * p).round() as i64;
+                    let (ix, px) = (qx.div_euclid(SPRITE_PHASES), qx.rem_euclid(SPRITE_PHASES));
+                    let (iy, py) = (qy.div_euclid(SPRITE_PHASES), qy.rem_euclid(SPRITE_PHASES));
+                    let slot = (py * SPRITE_PHASES + px) as usize;
+                    if sprites[slot].is_none() {
+                        sprites[slot] = stroked_circle_sprite(
+                            r[0],
+                            fc,
+                            *color,
+                            st,
+                            dim,
+                            c0,
+                            px as f64 / p,
+                            py as f64 / p,
+                        );
+                    }
+                    if let Some(sp) = &sprites[slot] {
+                        blit_over(target, ix as i32, iy as i32, sp, mask.as_deref());
+                    }
+                }
+                return;
             }
         }
         circles_by_path(self, cx, cy, r, fill, stroke.as_ref(), transform, clip);
