@@ -36,6 +36,7 @@ pub(super) fn fill_paint_then_stroke<B: RenderBackend>(
     clip: &Clip,
 ) {
     match (fill, stroke) {
+        (None, None) => b.pick_only_path(path, t, rule, clip),
         (Some(rp), Some((col, style))) if !matches!(rp, ResolvedPaint::Hatch { .. }) => {
             b.fill_and_stroke_path(path, t, rp, rule, *col, style, clip);
         }

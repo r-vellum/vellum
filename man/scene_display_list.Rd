@@ -76,8 +76,11 @@ them and a client should fall back to its approximate path for them:
 \code{1} a gradient, pattern or hatch paint (the paint's colour is \code{NA}); \code{2} a
 clip that is not an axis-aligned rectangle (the clip is not listed); \code{4} a
 mark inside a group with opacity, blend mode, mask or effect; \code{8} a text
-label (the geometry is its box). Keyed marks that paint nothing (invisible
-hover targets) and images do not appear at all.
+label (the geometry is its box); \code{16} pick-only: a keyed mark that paints
+nothing (an invisible hover target such as a \code{fill = NA} rect, circle,
+marker or polygon). Its geometry is listed and its paint has \code{fill} and
+\code{stroke} \code{NA}, so a client hit-tests it but draws nothing. Images do not
+appear at all.
 }
 
 \keyword{internal}

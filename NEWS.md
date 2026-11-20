@@ -2,6 +2,13 @@
 
 ## New features
 
+* `scene_display_list()` now lists keyed marks that paint nothing (invisible
+  hover targets: `fill = NA, col = NA` rects, circles, markers, polygons) with
+  their geometry and a new pick-only flag (`16`), so vellumwidget can hit-test
+  them in raster mode (VR-17). The change is additive: drawn marks keep their
+  records and flags, and an older client treats the new flag like any other
+  (falls back to the element's bounding box).
+
 * `scene_svg()` and `scene_png()` accept `layer = "unkeyed_below"` and
   `layer = "unkeyed_above"` (VW-21), which split the unkeyed layer by paint
   order relative to the marks: an unkeyed element is above when a mark was
