@@ -135,3 +135,69 @@ test_that("point markers render distinct shapes; default circle keeps the fast p
   # an unknown shape errors
   expect_error(points_grob(0.5, 0.5, shape = "hexagon"), "shape")
 })
+
+# VR-16: a large cloud of filled-and-stroked points (vellumplot's default
+# point) is stamped from a sprite rasterised at 16x16 sub-pixel phases. It must
+# match the exact per-element render, which a batch below the sprite threshold
+# (10000) still takes, up to antialiasing at a 1/32 px placement step.
+.stroked_cloud <- function(split, gp, clip = FALSE, n = 12000) {
+  set.seed(7)
+  x <- runif(n, 0.05, 0.95)
+  y <- runif(n, 0.05, 0.95)
+  s <- vl_scene(4, 3, dpi = 96, bg = "white")
+  if (clip) {
+    s <- push(s, vl_viewport(width = 0.6, height = 0.6, clip = TRUE))
+  }
+  parts <- if (split) split(seq_len(n), rep(1:3, each = n / 3)) else list(seq_len(n))
+  for (ix in parts) {
+    s <- draw(s, points_grob(x[ix], y[ix], size = vl_unit(1.2, "mm"), gp = gp))
+  }
+  if (clip) {
+    s <- pop(s)
+  }
+  s
+}
+
+.premul <- function(bytes) {
+  a <- png::readPNG(bytes)
+  if (dim(a)[3] == 3) {
+    return(a)
+  }
+  for (k in 1:3) {
+    a[,, k] <- a[,, k] * a[,, 4]
+  }
+  a
+}
+
+test_that("the stroked-point sprite matches the per-element render", {
+  skip_if_not_installed("png")
+  gps <- list(
+    opaque = vl_gpar(fill = "#E69F00", col = "#E69F00", lwd = 1),
+    two_tone = vl_gpar(fill = "white", col = "navy", lwd = 1.5),
+    translucent = vl_gpar(fill = "steelblue", col = "black", alpha = 0.4),
+    no_fill = vl_gpar(fill = NA, col = "firebrick", lwd = 1)
+  )
+  for (nm in names(gps)) {
+    for (scale in c(1, 2)) {
+      exact <- .premul(scene_png(.stroked_cloud(TRUE, gps[[nm]]), scale = scale))
+      fast <- .premul(scene_png(.stroked_cloud(FALSE, gps[[nm]]), scale = scale))
+      expect_identical(dim(fast), dim(exact))
+      d <- abs(fast - exact)
+      expect_lt(mean(d), 1.5 / 255, label = paste(nm, scale))
+      expect_lt(max(d), 0.35, label = paste(nm, scale))
+    }
+  }
+})
+
+test_that("the stroked-point sprite respects clipping and the keyed layer", {
+  skip_if_not_installed("png")
+  gp <- vl_gpar(fill = "#56B4E9", col = "#56B4E9", lwd = 1)
+  exact <- .premul(scene_png(.stroked_cloud(TRUE, gp, clip = TRUE)))
+  fast <- .premul(scene_png(.stroked_cloud(FALSE, gp, clip = TRUE)))
+  expect_lt(mean(abs(fast - exact)), 1 / 255)
+  # Outside the clip (the outer 20% border) stays page background.
+  h <- dim(fast)[1]
+  w <- dim(fast)[2]
+  expect_true(all(fast[seq_len(floor(0.19 * h)), , 1:3] == 1))
+  expect_true(all(fast[, seq_len(floor(0.19 * w)), 1:3] == 1))
+})

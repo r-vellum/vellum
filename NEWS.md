@@ -50,6 +50,15 @@
 
 ## Performance
 
+* Large clouds of filled-and-stroked points (10,000 or more equal-radius
+  circles with a solid, undashed outline, which is vellumplot's default point)
+  now rasterise from a sprite instead of filling and stroking every circle
+  (VR-16). The sprite is drawn once per 1/16 px sub-pixel phase and blitted
+  with a plain source-over loop, so each mark lands within 1/32 px of its exact
+  position. A 200k-point keyed scatter's PNG at 2x drops from about 3.5 s to
+  0.2 s. Smaller batches, dashed or gradient strokes and SVG/PDF output are
+  unchanged.
+
 * A keyed batch of circles now reaches the backend as one batch with its keys
   (VR-14), instead of being split into one draw per circle whenever the
   backend writes keys. SVG, PNG and PDF output are byte-identical.
