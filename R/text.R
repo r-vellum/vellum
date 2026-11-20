@@ -63,6 +63,7 @@ vl_strheight <- function(
   features = NULL
 ) {
   unit <- match.arg(unit, c("in", "pt", "mm", "cm"))
+  .check_font_size(fontsize * cex)
   # Rich md() labels are measured through the same composition path the renderer
   # draws (`.md_extent_pt`), so reserved layout space matches drawn glyphs. A
   # single label or a list of them is accepted; family/fontface/fontsize give the
@@ -96,6 +97,29 @@ vl_strheight <- function(
     features = .as_font_feature(features)
   )$metrics[[which]]
   .pt_to_unit(pt, unit)
+}
+
+# A text size (points) must be a finite number. textshaping turns a missing or
+# infinite size into a 26.6 fixed-point integer, which is platform-dependent
+# undefined behaviour: on x86_64 Linux it becomes INT_MIN, so a string measured
+# -33554432 pt (about -1.2e7 mm), while arm64 saturates to 0 (VR-15). A NULL
+# `fontsize` reaches here as `numeric(0)`.
+.check_font_size <- function(size, call = parent.frame()) {
+  if (!is.numeric(size) || !length(size) || !all(is.finite(size))) {
+    shown <- if (is.numeric(size) && length(size)) {
+      format(size[!is.finite(size)][1])
+    } else {
+      "missing"
+    }
+    cli::cli_abort(
+      c(
+        "Text size must be a finite number of points.",
+        x = "Got {shown} ({.arg fontsize} * {.arg cex})."
+      ),
+      call = call
+    )
+  }
+  invisible(size)
 }
 
 # TRUE for a single md() label or a non-empty list of them.
@@ -132,6 +156,7 @@ vl_strheight <- function(
 # `list(w, h, n[, index, xoff, yoff, fsize, fpath, findex])` (the glyph fields are
 # present only when n > 0). Cache-missing strings are shaped together in one call.
 .shape_cached <- function(uniq, family, italic, weight, size, features = NULL) {
+  .check_font_size(size)
   # The feature set is part of the font's identity for shaping: the same string
   # in the same font shapes to different glyphs under `smcp` or `onum`, so it
   # must be in the key, or a second grob would be served the first one's glyphs.
