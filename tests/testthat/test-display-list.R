@@ -250,3 +250,78 @@ test_that("keyed batches render byte-identically with and without keys", {
   # Keys are the only difference: each circle is still written the same way.
   expect_identical(gsub(' data-key="[abc]"', "", svg_k), scene_svg(plain))
 })
+
+test_that("keyed marks that paint nothing are listed pick-only (VR-17)", {
+  skip_if_not_installed("jsonlite")
+  s <- vl_scene(3, 2, dpi = 96) |>
+    push(vl_viewport(name = "p")) |>
+    draw(rect_grob(
+      x = c(0.25, 0.75),
+      y = 0.5,
+      width = 0.2,
+      height = 0.4,
+      gp = vl_gpar(fill = NA, col = NA),
+      key = c("hr1", "hr2")
+    )) |>
+    draw(circle_grob(
+      x = 0.5,
+      y = 0.2,
+      r = 0.05,
+      gp = vl_gpar(fill = NA, col = NA),
+      key = "hc"
+    )) |>
+    draw(points_grob(
+      0.1,
+      0.9,
+      shape = "square",
+      gp = vl_gpar(fill = NA, col = NA),
+      key = "hm"
+    )) |>
+    draw(polygon_grob(
+      c(0.6, 0.9, 0.75),
+      c(0.7, 0.7, 0.95),
+      gp = vl_gpar(fill = NA, col = NA),
+      key = "hp"
+    )) |>
+    draw(rect_grob(
+      x = 0.5,
+      y = 0.5,
+      width = 0.1,
+      height = 0.1,
+      gp = vl_gpar(fill = "red", col = NA),
+      key = "vis"
+    )) |>
+    pop()
+  dl <- scene_display_list(s)
+  d <- .dl_decode(dl)
+  el <- scene_model(s)$elements
+  expect_setequal(d$key, el$key[!is.na(el$key)])
+  hidden <- c("hr1", "hr2", "hc", "hm", "hp")
+  expect_true(all(bitwAnd(d$flags[d$key %in% hidden], 16L) == 16L))
+  expect_true(all(is.na(d$fill[d$key %in% hidden])))
+  expect_true(all(is.na(d$stroke[d$key %in% hidden])))
+  expect_identical(d$flags[d$key == "vis"], 0L)
+  # Geometry is present: the rects land on their element boxes.
+  rc <- d[d$key %in% c("hr1", "hr2"), ]
+  bb <- el[match(rc$key, el$key), ]
+  expect_identical(rc$kind, c("rect", "rect"))
+  expect_equal(rc$x, bb$x0, tolerance = 1e-3)
+  expect_equal(rc$x + rc$w, bb$x1, tolerance = 1e-3)
+  expect_identical(d$kind[d$key == "hp"], "path")
+  expect_true(d$closed[d$key == "hp"])
+  expect_identical(d$kind[d$key %in% c("hc", "hm")], c("point", "point"))
+  # Pick-only records change nothing that is drawn.
+  expect_identical(
+    scene_png(s),
+    scene_png(
+      vl_scene(3, 2, dpi = 96) |>
+        draw(rect_grob(
+          x = 0.5,
+          y = 0.5,
+          width = 0.1,
+          height = 0.1,
+          gp = vl_gpar(fill = "red", col = NA)
+        ))
+    )
+  )
+})

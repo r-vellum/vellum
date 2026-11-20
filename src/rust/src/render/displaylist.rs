@@ -9,7 +9,9 @@
 //! table. What stage 1 cannot reproduce exactly is still listed (so the widget
 //! can hit-test it) but flagged, and the widget keeps its bbox path for it:
 //! text (its box), non-solid paints, non-rectangular clips, and marks inside a
-//! compositing group (opacity, blend, mask, effect).
+//! compositing group (opacity, blend, mask, effect). A keyed mark that paints
+//! nothing at all (an invisible hover target) is listed too, flagged pick-only,
+//! so the widget can still hit-test it.
 
 use std::collections::HashMap;
 
@@ -33,6 +35,7 @@ pub const FLAG_PAINT: u8 = 1; // gradient / pattern / hatch: paint not reproduce
 pub const FLAG_CLIP: u8 = 2; // clipped by a path or rotated rect: clip not listed
 pub const FLAG_GROUP: u8 = 4; // inside a group with opacity / blend / mask / effect
 pub const FLAG_TEXT: u8 = 8; // a text label: geometry is its (rotated) box
+pub const FLAG_PICK: u8 = 16; // pick-only: paints nothing (an invisible hover target)
 
 /// One paint, interned into the paint table. Colours are packed RGBA; lengths
 /// are device px stored as `f32` bits so the struct can be hashed.
@@ -157,6 +160,17 @@ impl DisplayListBackend {
     /// The finished list. Keys interned for marks that were not listed (other
     /// panels) are dropped, and the rest renumbered in first-use order.
     pub fn finish(mut self) -> DisplayList {
+        // A mark with neither fill nor stroke (and not a text box or an
+        // unreproducible paint) is a pick-only hover target: a no-paint circle
+        // batch, or a marker whose paint calls never came.
+        for r in self.dl.recs.iter_mut() {
+            if r.paint.fill.is_none()
+                && r.paint.stroke.is_none()
+                && r.flags & (FLAG_PAINT | FLAG_TEXT) == 0
+            {
+                r.flags |= FLAG_PICK;
+            }
+        }
         let mut remap: Vec<Option<u32>> = vec![None; self.dl.keys.len()];
         let mut keys = Vec::new();
         for r in self.dl.recs.iter_mut() {
@@ -544,6 +558,18 @@ impl RenderBackend for DisplayListBackend {
         pk.fill = f;
         let n = self.dl.recs.len();
         self.record_path(path, transform, true, pk, ffl | sfl, clip);
+        if self.dl.recs.len() > n {
+            self.set_last_evenodd(rule);
+        }
+    }
+
+    /// An unpainted closed shape: listed by its geometry, flagged pick-only.
+    fn pick_only_path(&mut self, path: &Path, transform: Transform, rule: FillRule, clip: &Clip) {
+        if self.marker.is_some() {
+            return; // the marker's point record already stands for it
+        }
+        let n = self.dl.recs.len();
+        self.record_path(path, transform, true, PaintKey::default(), FLAG_PICK, clip);
         if self.dl.recs.len() > n {
             self.set_last_evenodd(rule);
         }

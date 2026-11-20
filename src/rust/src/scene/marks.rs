@@ -376,6 +376,25 @@ pub(super) fn draw_rects<B: RenderBackend>(
                     ));
                     fill_or_hatch(b, &unit, tr, rp, FillRule::Winding, clip);
                 }
+            } else if !keys.is_empty() && b.wants_element_keys() {
+                // Neither fill nor stroke: nothing is painted, but a keyed
+                // rect is still a hover target (the display list's pick-only
+                // records, VR-17).
+                let unit = unit_rect();
+                for i in 0..n {
+                    b.set_element_key(key_at(keys, i));
+                    let cx = vp.x_pos(x[i], xu[i]);
+                    let cy = vp.y_pos(y[i], yu[i]);
+                    let pw = vp.x_len(w[i], wu[i]);
+                    let ph = vp.y_len(h[i], hu[i]);
+                    if pw <= 0.0 || ph <= 0.0 {
+                        continue;
+                    }
+                    let tr = t.pre_concat(Transform::from_row(
+                        pw as f32, 0.0, 0.0, ph as f32, cx as f32, cy as f32,
+                    ));
+                    b.pick_only_path(&unit, tr, FillRule::Winding, clip);
+                }
             }
         } else {
             // Stroke (non-uniform scale would distort it) or a gradient
