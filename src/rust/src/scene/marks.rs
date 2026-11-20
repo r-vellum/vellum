@@ -465,21 +465,17 @@ pub(super) fn draw_circles<B: RenderBackend>(
     let lwd = gp.lwd_px(vp.dpi);
     let stroke = gp.col.filter(|_| lwd > 0.0);
     let rf = gp.fill.as_ref().map(|p| resolve_paint(p, vp));
-    // Solid/no fill normally hands the whole batch to `draw_circles`
-    // (which may sprite-stamp on raster), but that can't tag individual
-    // elements — so when the batch carries data keys *and the backend
-    // emits them* (SVG) we fall back to a per-element build (moderate
-    // `n`). Raster/PDF ignore keys, so they keep the fast path and stay
-    // pixel-identical whether or not the scene is keyed. A gradient/
-    // pattern *stroke* also drops to the per-element build: the fast
+    // Solid/no fill hands the whole batch, keys included, to
+    // `draw_circles`: raster may sprite-stamp it, SVG tags each circle
+    // with its key, the display list records it as one point table.
+    // Raster/PDF ignore keys, so they stay pixel-identical whether or
+    // not the scene is keyed. A gradient/
+    // pattern *stroke* drops to the per-element build: the fast
     // path draws a unit circle placed by an affine transform, but the
     // stroke paint is resolved in viewport px, so on the unit circle it
     // would sample a single point of the ramp (collapsing to one stop).
     // Real-coordinate circles keep the ramp aligned, exactly as Rects do.
-    if matches!(gp.fill, Some(Paint::Solid(_)) | None)
-        && gp.col_paint.is_none()
-        && (keys.is_empty() || !b.wants_element_keys())
-    {
+    if matches!(gp.fill, Some(Paint::Solid(_)) | None) && gp.col_paint.is_none() {
         let mut cx = Vec::with_capacity(n);
         let mut cy = Vec::with_capacity(n);
         let mut rr = Vec::with_capacity(n);
@@ -496,11 +492,11 @@ pub(super) fn draw_circles<B: RenderBackend>(
             stroke.map(|c| (c, stroke_style(gp, vp))),
             t,
             clip,
+            keys,
         );
     } else {
-        // Per-element build: either a gradient/pattern fill (resolved in
-        // local px, so position-dependent) or a keyed batch that needs a
-        // `data-key` per circle.
+        // Per-element build: a gradient/pattern fill or stroke (resolved
+        // in local px, so position-dependent).
         let style = stroke_style(gp, vp);
         let pen = stroke.map(|c| (c, style)).filter(|(_, s)| s.width > 0.0);
         for i in 0..n {
@@ -679,6 +675,7 @@ pub(super) fn draw_markers<B: RenderBackend>(
             continue;
         }
         let sh = shape[i];
+        b.begin_marker(sh, cx, cy, rr, t, clip);
         if fast && sh != 4 && sh != 5 {
             if let Some(rp) = &rf {
                 let slot = (sh as usize).min(7);

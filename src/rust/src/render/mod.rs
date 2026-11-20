@@ -23,11 +23,13 @@ use crate::color::{Extend, LineCap, LineJoin, Rgba, Stop};
 use crate::font::{glyph_outline_cached, glyph_sprite_cached, PHASE_X, PHASE_Y};
 use crate::units::rotation_about;
 
+mod displaylist;
 mod paths;
 mod pdf;
 mod raster;
 mod svg;
 
+pub use displaylist::{DisplayList, DisplayListBackend};
 pub use paths::*;
 pub(crate) use pdf::is_decorative;
 pub use pdf::{pdf_tag, PdfBackend};
@@ -527,9 +529,16 @@ pub trait RenderBackend {
     );
 
     /// Draw a batch of circles: centres `(cx, cy)` + radii `r` in local px,
-    /// mapped to device by `transform`. The default places one unit circle per
-    /// element; the raster backend overrides this to stamp a cached sprite for
-    /// large uniform solid-fill point clouds. `stroke` is `(colour, style)`.
+    /// mapped to device by `transform`. `stroke` is `(colour, style)`. `keys`
+    /// are the batch's per-element data keys (empty = unkeyed), handed over
+    /// with the batch so a backend that wants them keeps the batch whole.
+    ///
+    /// The default places one unit circle per element -- or, for a keyed batch
+    /// on a backend that emits keys (SVG), builds each circle in place and tags
+    /// it with its key. The raster backend overrides this to stamp a cached
+    /// sprite for large uniform solid-fill point clouds; the display-list
+    /// backend records the batch as one point table.
+    #[allow(clippy::too_many_arguments)]
     fn draw_circles(
         &mut self,
         cx: &[f64],
@@ -539,10 +548,42 @@ pub trait RenderBackend {
         stroke: Option<(Rgba, StrokeStyle)>,
         transform: Transform,
         clip: &Clip,
+        keys: &[String],
     ) where
         Self: Sized,
     {
-        circles_by_path(self, cx, cy, r, fill, stroke.as_ref(), transform, clip);
+        if !keys.is_empty() && self.wants_element_keys() {
+            circles_keyed(
+                self,
+                cx,
+                cy,
+                r,
+                fill,
+                stroke.as_ref(),
+                transform,
+                clip,
+                keys,
+            );
+        } else {
+            circles_by_path(self, cx, cy, r, fill, stroke.as_ref(), transform, clip);
+        }
+    }
+
+    /// Announce that the primitives that follow, up to the next
+    /// `set_element_key` or `begin_marker`, paint one point marker: glyph
+    /// `shape` (the `points_grob()` code) of radius `r` centred at `(cx, cy)`,
+    /// local px mapped by `transform`. Painting backends ignore it and draw the
+    /// paths as usual; the display list records the marker itself.
+    #[allow(clippy::too_many_arguments)]
+    fn begin_marker(
+        &mut self,
+        _shape: u32,
+        _cx: f64,
+        _cy: f64,
+        _r: f64,
+        _transform: Transform,
+        _clip: &Clip,
+    ) {
     }
 
     /// Stroke a polyline / batch of disjoint segments (one `Path` whose subpaths
@@ -670,6 +711,44 @@ fn circles_by_path<B: RenderBackend>(
                 }
                 if let Some((c, st)) = st {
                     b.stroke_path(&unit, tr, c, &st, clip);
+                }
+            }
+        }
+    }
+}
+
+/// A keyed circle batch on a backend that emits keys: each circle built at its
+/// own coordinates and tagged with its key. Exactly the per-element build the
+/// walk used before keys travelled with the batch, so SVG output is unchanged.
+#[allow(clippy::too_many_arguments)]
+fn circles_keyed<B: RenderBackend>(
+    b: &mut B,
+    cx: &[f64],
+    cy: &[f64],
+    r: &[f64],
+    fill: Option<&ResolvedPaint>,
+    stroke: Option<&(Rgba, StrokeStyle)>,
+    transform: Transform,
+    clip: &Clip,
+    keys: &[String],
+) {
+    let n = cx.len().min(cy.len()).min(r.len());
+    let pen = stroke.filter(|(_, s)| s.width > 0.0);
+    for i in 0..n {
+        b.set_element_key(keys.get(i).map(String::as_str).filter(|k| !k.is_empty()));
+        let mut pb = PathBuilder::new();
+        pb.push_circle(cx[i] as f32, cy[i] as f32, r[i] as f32);
+        let Some(path) = pb.finish() else { continue };
+        match (fill, pen) {
+            (Some(rp), Some((col, style))) if !matches!(rp, ResolvedPaint::Hatch { .. }) => {
+                b.fill_and_stroke_path(&path, transform, rp, FillRule::Winding, *col, style, clip);
+            }
+            (fill, pen) => {
+                if let Some(rp) = fill {
+                    b.fill_path(&path, transform, rp, FillRule::Winding, clip);
+                }
+                if let Some((col, style)) = pen {
+                    b.stroke_path(&path, transform, *col, style, clip);
                 }
             }
         }
