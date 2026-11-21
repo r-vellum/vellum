@@ -14,6 +14,13 @@
     return(rep(col$rle$values, col$rle$lengths))
   }
   raw <- jsonlite::base64_dec(col$data)
+  if (!is.null(col$step)) {
+    # A quantised geometry column (VR-18): lo + u * step.
+    w <- switch(col$type, u8 = 1L, u16 = 2L, u24 = 3L)
+    b <- matrix(as.integer(raw), nrow = w)
+    u <- colSums(b * 256^(seq_len(w) - 1))
+    return(col$lo + u * col$step)
+  }
   switch(
     col$type,
     f32 = readBin(raw, "double", n, size = 4, endian = "little"),

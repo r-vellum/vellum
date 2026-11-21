@@ -251,6 +251,8 @@ device px, as columnar base64 tables. Internal to vellumwidget; see
 \code{panels} (\code{NULL} or names) restricts it to marks in those panels.
 \code{keys} (\code{NULL} or a character vector, VR-22): the caller's key table;
 \code{record$key} then indexes it, and only the keys it lacks are listed.
+\code{precision} (VR-18): \code{"f32"}, \code{"u16"}, \code{"u24"}, or a number, the
+largest rounding error in device px a quantised geometry column may have.
 }
 
 \subsection{Method \code{render_pdf}}{

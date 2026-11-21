@@ -42,11 +42,25 @@
 #' * `panels`: the names of the panels marks are drawn in.
 #'
 #' Every numeric column except those in `paints` and `clips` is a list
-#' `list(type, n, ...)`. `type` is `"f32"`, `"u8"`, `"u16"` or `"u32"`, and `n`
-#' is the length. The values come as exactly one of `data` (base64,
-#' little-endian, typed), `const` (every value equal), `seq = c(start, step)`
-#' (an arithmetic sequence) or `rle = list(values, lengths)` (runs of equal
-#' values, used when there are few).
+#' `list(type, n, ...)`. `type` is `"f32"`, `"u8"`, `"u16"` or `"u32"` (or
+#' `"u24"`, see below), and `n` is the length. The values come as exactly one
+#' of `data` (base64, little-endian, typed), `const` (every value equal),
+#' `seq = c(start, step)` (an arithmetic sequence) or
+#' `rle = list(values, lengths)` (runs of equal values, used when there are
+#' few).
+#'
+#' @section Compact coordinates:
+#' With `precision` other than `"f32"` (VR-18), the geometry columns (`point`
+#' `cx`, `cy`, `r`; `rect` `x`, `y`, `w`, `h`; `path` `xy`) are quantised
+#' within their own range: such a column is `list(type, n, lo, step, data)`
+#' with `type` `"u8"`, `"u16"` or `"u24"` (three bytes per value) and value *i*
+#' `lo + u[i] * step`, where `u` are the little-endian unsigned integers in
+#' `data`, `lo` is the column's minimum and `step` its range over
+#' `2^bits - 1`. The rounding error is at most `step / 2`. A column that is empty,
+#' collapses to `const` or `rle` or holds a non-finite value stays `f32`,
+#' as do the `clip_paths` coordinates. Points come in paint order, not in
+#' space, so their coordinates are not delta-coded: neighbouring records are
+#' as far apart as any two.
 #'
 #' @section Version 2:
 #' `version = 2` lists three more cases exactly, which version 1 flags, and
@@ -122,6 +136,13 @@
 #' @param keys `NULL` (the default), or a character vector of keys for
 #'   `record$key` to index, so the list need not repeat them (VR-22). Keys
 #'   it lacks are listed in `keys` as usual, after it; `NA` matches nothing.
+#' @param precision How to encode the geometry columns (see *Compact
+#'   coordinates*): `"f32"` (the default) for 32-bit floats; `"u16"` or
+#'   `"u24"` to quantise each column to 16 or 24 bits within its range; or a
+#'   positive number, the largest rounding error allowed in device px, to use
+#'   the fewest of 8, 16 or 24 bits that keeps each column within it (`f32`
+#'   when none does). `0.005`, half the 0.01 px grid [scene_svg()] writes
+#'   coordinates on, takes 16 bits for a column spanning up to 655 px.
 #' @return The display list, as described in the *Format* section.
 #' @keywords internal
 #' @export
@@ -130,7 +151,8 @@ scene_display_list <- function(
   what = "keyed",
   panels = NULL,
   version = 1L,
-  keys = NULL
+  keys = NULL,
+  precision = "f32"
 ) {
   what <- match.arg(what)
   if (!is.numeric(version) || length(version) != 1L || !version %in% c(1, 2)) {
@@ -144,7 +166,23 @@ scene_display_list <- function(
   if (!is.null(keys) && !is.character(keys)) {
     cli::cli_abort("{.arg keys} must be {.code NULL} or a character vector.")
   }
+  ok <- if (is.character(precision)) {
+    length(precision) == 1L && precision %in% c("f32", "u16", "u24")
+  } else {
+    is.numeric(precision) &&
+      length(precision) == 1L &&
+      is.finite(precision) &&
+      precision > 0
+  }
+  if (!ok) {
+    cli::cli_abort(
+      '{.arg precision} must be "f32", "u16", "u24" or a positive number of device px.'
+    )
+  }
+  if (is.numeric(precision)) {
+    precision <- as.double(precision)
+  }
   scene <- as_vellum_scene(scene)
   s <- .scene_to_backend(scene)
-  s$display_list_raw(panels, as.integer(version), keys)
+  s$display_list_raw(panels, as.integer(version), keys, precision)
 }

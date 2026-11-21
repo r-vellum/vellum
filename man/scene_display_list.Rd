@@ -9,7 +9,8 @@ scene_display_list(
   what = "keyed",
   panels = NULL,
   version = 1L,
-  keys = NULL
+  keys = NULL,
+  precision = "f32"
 )
 }
 \arguments{
@@ -29,6 +30,14 @@ panels, which leaves out a legend's keyed swatches.}
 \item{keys}{\code{NULL} (the default), or a character vector of keys for
 \code{record$key} to index, so the list need not repeat them (VR-22). Keys
 it lacks are listed in \code{keys} as usual, after it; \code{NA} matches nothing.}
+
+\item{precision}{How to encode the geometry columns (see \emph{Compact
+coordinates}): \code{"f32"} (the default) for 32-bit floats; \code{"u16"} or
+\code{"u24"} to quantise each column to 16 or 24 bits within its range; or a
+positive number, the largest rounding error allowed in device px, to use
+the fewest of 8, 16 or 24 bits that keeps each column within it (\code{f32}
+when none does). \code{0.005}, half the 0.01 px grid \code{\link[=scene_svg]{scene_svg()}} writes
+coordinates on, takes 16 bits for a column spanning up to 655 px.}
 }
 \value{
 The display list, as described in the \emph{Format} section.
@@ -79,11 +88,27 @@ that already has the keys (vellumwidget's element table) ships them once.
 }
 
 Every numeric column except those in \code{paints} and \code{clips} is a list
-\code{list(type, n, ...)}. \code{type} is \code{"f32"}, \code{"u8"}, \code{"u16"} or \code{"u32"}, and \code{n}
-is the length. The values come as exactly one of \code{data} (base64,
-little-endian, typed), \code{const} (every value equal), \code{seq = c(start, step)}
-(an arithmetic sequence) or \code{rle = list(values, lengths)} (runs of equal
-values, used when there are few).
+\code{list(type, n, ...)}. \code{type} is \code{"f32"}, \code{"u8"}, \code{"u16"} or \code{"u32"} (or
+\code{"u24"}, see below), and \code{n} is the length. The values come as exactly one
+of \code{data} (base64, little-endian, typed), \code{const} (every value equal),
+\code{seq = c(start, step)} (an arithmetic sequence) or
+\code{rle = list(values, lengths)} (runs of equal values, used when there are
+few).
+}
+
+\section{Compact coordinates}{
+
+With \code{precision} other than \code{"f32"} (VR-18), the geometry columns (\code{point}
+\code{cx}, \code{cy}, \code{r}; \code{rect} \code{x}, \code{y}, \code{w}, \code{h}; \code{path} \code{xy}) are quantised
+within their own range: such a column is \code{list(type, n, lo, step, data)}
+with \code{type} \code{"u8"}, \code{"u16"} or \code{"u24"} (three bytes per value) and value \emph{i}
+\code{lo + u[i] * step}, where \code{u} are the little-endian unsigned integers in
+\code{data}, \code{lo} is the column's minimum and \code{step} its range over
+\code{2^bits - 1}. The rounding error is at most \code{step / 2}. A column that is empty,
+collapses to \code{const} or \code{rle} or holds a non-finite value stays \code{f32},
+as do the \code{clip_paths} coordinates. Points come in paint order, not in
+space, so their coordinates are not delta-coded: neighbouring records are
+as far apart as any two.
 }
 
 \section{Version 2}{

@@ -464,3 +464,91 @@ test_that("records can index a key table the caller already has (VR-22)", {
   expect_length(du$keys, 0L)
   expect_error(scene_display_list(s, keys = 1:3), "character vector")
 })
+
+test_that("compact coordinates quantise the geometry within each column (VR-18)", {
+  skip_if_not_installed("jsonlite")
+  s <- .dl_scene()
+  ref <- .dl_decode(scene_display_list(s, version = 2L))
+  geo <- c("cx", "cy", "r", "x", "y", "w", "h")
+  coords <- function(d) {
+    c(unlist(d[geo]), unlist(lapply(d$runs, function(r) unlist(r))))
+  }
+  near <- function(dl, ref) {
+    d <- .dl_decode(dl)
+    # Everything but the geometry is unchanged.
+    expect_identical(d[setdiff(names(d), c(geo, "runs"))], ref[setdiff(names(ref), c(geo, "runs"))])
+    cols <- c(dl$point[c("cx", "cy", "r")], dl$rect, list(xy = dl$path$xy))
+    worst <- max(vapply(cols, function(c) if (is.null(c$step)) 0 else c$step / 2, 0))
+    err <- abs(coords(d) - coords(ref))
+    expect_true(all(err[!is.na(err)] <= worst + 1e-4))
+    invisible(d)
+  }
+  u16 <- scene_display_list(s, version = 2L, precision = "u16")
+  expect_identical(u16$point$cx$type, "u16")
+  expect_named(u16$point$cx, c("type", "n", "lo", "step", "data"))
+  expect_equal(u16$point$cx$lo, min(ref$cx, na.rm = TRUE), tolerance = 1e-6)
+  expect_equal(
+    u16$point$cx$step,
+    diff(range(ref$cx, na.rm = TRUE)) / 65535,
+    tolerance = 1e-6
+  )
+  near(u16, ref)
+  u24 <- scene_display_list(s, version = 2L, precision = "u24")
+  expect_identical(u24$path$xy$type, "u24")
+  near(u24, ref)
+  expect_lt(u24$path$xy$step, u16$path$xy$step / 200)
+  # An error bound picks the fewest bits that meet it, per column.
+  d5 <- scene_display_list(s, version = 2L, precision = 0.005)
+  expect_identical(d5$point$cx$type, "u16") # the page is 480 px wide
+  expect_lte(d5$point$cx$step / 2, 0.005)
+  near(d5, ref)
+  expect_identical(scene_display_list(s, precision = 1e-4)$point$cx$type, "u24")
+  expect_identical(scene_display_list(s, precision = 2)$point$cx$type, "u8")
+  expect_identical(scene_display_list(s, precision = 1e-9)$point$cx$type, "f32")
+  # The default and "f32" are the plain list.
+  expect_identical(scene_display_list(s, precision = "f32"), scene_display_list(s))
+  # It combines with a caller's key table.
+  given <- unique(ref$key)
+  dk <- scene_display_list(s, version = 2L, keys = given, precision = "u16")
+  expect_identical(.dl_decode(dk, given)$key, ref$key)
+  expect_error(scene_display_list(s, precision = "u12"), "precision")
+  expect_error(scene_display_list(s, precision = 0), "precision")
+  expect_error(scene_display_list(s, precision = c(0.1, 0.2)), "precision")
+})
+
+test_that("compact coordinates keep a 200-point cloud within half a step", {
+  skip_if_not_installed("jsonlite")
+  set.seed(3)
+  n <- 200
+  s <- vl_scene(7, 5, dpi = 96) |>
+    draw(points_grob(
+      x = runif(n),
+      y = runif(n),
+      size = runif(n, 1, 3),
+      key = as.character(seq_len(n))
+    ))
+  ref <- .dl_decode(scene_display_list(s))
+  for (p in list("u16", "u24", 0.005)) {
+    dl <- scene_display_list(s, precision = p)
+    d <- .dl_decode(dl)
+    for (f in c("cx", "cy", "r")) {
+      expect_lte(max(abs(d[[f]] - ref[[f]])), dl$point[[f]]$step / 2 + 1e-4)
+    }
+  }
+  # 0.005 px takes 16 bits up to a 655.35 px span, 24 above: x spans most
+  # of the 672 px page, y less of the 480.
+  d5 <- scene_display_list(s, precision = 0.005)$point
+  span <- function(v) diff(range(v))
+  expect_identical(d5$cx$type, if (span(ref$cx) > 655.35) "u24" else "u16")
+  expect_identical(d5$cy$type, "u16")
+  # A column that collapses stays f32: one size, one radius.
+  s1 <- vl_scene(7, 5, dpi = 96) |>
+    draw(points_grob(x = runif(n), y = runif(n), size = 2, key = as.character(seq_len(n))))
+  r <- scene_display_list(s1, precision = "u16")$point$r
+  expect_identical(r$type, "f32")
+  expect_false(is.null(r$const))
+  # Empty tables (no rects, no paths) stay plain empty f32 columns.
+  dl1 <- scene_display_list(s1, precision = "u16")
+  expect_identical(dl1$path$xy, scene_display_list(s1)$path$xy)
+  expect_identical(dl1$rect$x$type, "f32")
+})

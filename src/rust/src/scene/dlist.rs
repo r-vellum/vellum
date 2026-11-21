@@ -46,25 +46,114 @@ fn runs<T: Copy + PartialEq>(v: &[T], to_f64: impl Fn(T) -> f64) -> Option<Robj>
     )
 }
 
+/// The `const = v` or `rle = list(values, lengths)` form of an f32 column,
+/// when one applies (every value the same, or few runs), else `None`.
+fn f32_collapsed(v: &[f32]) -> Option<Robj> {
+    let n = v.len() as i32;
+    let &c = v.first()?;
+    if v.iter().all(|&x| x.to_bits() == c.to_bits()) {
+        return Some(col("f32", n, "const", Robj::from(c as f64)));
+    }
+    // Compare bit patterns so NaN runs collapse too.
+    let bits: Vec<u32> = v.iter().map(|x| x.to_bits()).collect();
+    runs(&bits, |b| f32::from_bits(b) as f64).map(|r| col("f32", n, "rle", r))
+}
+
 /// `list(type = "f32", n, data = <base64>)`, or `const = v` when every value
 /// is the same, or `rle = list(values, lengths)` when there are few runs.
 fn col_f32(v: &[f32]) -> Robj {
-    let n = v.len() as i32;
-    if let Some(&c) = v.first() {
-        if v.iter().all(|&x| x.to_bits() == c.to_bits()) {
-            return col("f32", n, "const", Robj::from(c as f64));
-        }
-        // Compare bit patterns so NaN runs collapse too.
-        let bits: Vec<u32> = v.iter().map(|x| x.to_bits()).collect();
-        if let Some(r) = runs(&bits, |b| f32::from_bits(b) as f64) {
-            return col("f32", n, "rle", r);
-        }
+    if let Some(c) = f32_collapsed(v) {
+        return c;
     }
     let mut bytes = Vec::with_capacity(v.len() * 4);
     for x in v {
         bytes.extend_from_slice(&x.to_le_bytes());
     }
-    col("f32", n, "data", Robj::from(b64(&bytes)))
+    col("f32", v.len() as i32, "data", Robj::from(b64(&bytes)))
+}
+
+/// How the geometry columns (point `cx`/`cy`/`r`, rect `x`/`y`/`w`/`h`, path
+/// `xy`) are encoded (VR-18).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(super) enum Precision {
+    /// Plain `f32` columns.
+    F32,
+    /// Quantised to this many bits (8, 16 or 24) within the column's range.
+    Bits(u32),
+    /// Quantised to the fewest of 8, 16 or 24 bits whose rounding error is at
+    /// most this many device px (`f32` when even 24 bits are too coarse).
+    MaxError(f64),
+}
+
+/// The bits a quantised column of `range` px needs under `p`, or `None` for
+/// a plain `f32` column.
+fn quant_bits(range: f64, p: Precision) -> Option<u32> {
+    match p {
+        Precision::F32 => None,
+        Precision::Bits(b) => Some(b),
+        Precision::MaxError(e) => [8u32, 16, 24]
+            .into_iter()
+            .find(|&b| range / ((1u64 << b) - 1) as f64 / 2.0 <= e),
+    }
+}
+
+/// `v` on a grid of `2^bits` steps from `lo` over `range`: the step and each
+/// value's (rounded) step count.
+fn quantise(v: &[f32], lo: f64, range: f64, bits: u32) -> (f64, Vec<u32>) {
+    let top = ((1u64 << bits) - 1) as f64;
+    let step = range / top;
+    let u = v
+        .iter()
+        .map(|&x| ((x as f64 - lo) / step).round().clamp(0.0, top) as u32)
+        .collect();
+    (step, u)
+}
+
+/// A geometry column under `p`. Quantised, it is
+/// `list(type = "u8" | "u16" | "u24", n, lo, step, data)`: value *i* is
+/// `lo + u[i] * step`, `u` little-endian unsigned integers of the type's
+/// width, `lo` the column's minimum and `step` its range over `2^bits - 1`,
+/// so the rounding error is at most `step / 2`. A column that is empty,
+/// collapses (`const`, `rle`) or holds a non-finite value stays `f32`.
+fn col_geo(v: &[f32], p: Precision) -> Robj {
+    if p == Precision::F32 || v.is_empty() || v.iter().any(|x| !x.is_finite()) {
+        return col_f32(v);
+    }
+    if let Some(c) = f32_collapsed(v) {
+        return c;
+    }
+    let (lo, hi) = v
+        .iter()
+        .fold((f64::INFINITY, f64::NEG_INFINITY), |(a, b), &x| {
+            (a.min(x as f64), b.max(x as f64))
+        });
+    let range = hi - lo;
+    let Some(bits) = quant_bits(range, p) else {
+        return col_f32(v);
+    };
+    let (step, u) = quantise(v, lo, range, bits);
+    let width = (bits / 8) as usize;
+    let mut bytes = Vec::with_capacity(v.len() * width);
+    for x in u {
+        bytes.extend_from_slice(&x.to_le_bytes()[..width]);
+    }
+    let ty = match bits {
+        8 => "u8",
+        16 => "u16",
+        _ => "u24",
+    };
+    List::from_names_and_values(
+        ["type", "n", "lo", "step", "data"],
+        [
+            Robj::from(ty),
+            Robj::from(v.len() as i32),
+            Robj::from(lo),
+            Robj::from(step),
+            Robj::from(b64(&bytes)),
+        ],
+    )
+    .expect("quantised column")
+    .into()
 }
 
 /// An unsigned integer column in the narrowest of u8/u16/u32. A constant
@@ -172,7 +261,13 @@ fn key_refs(
     (refs, extra)
 }
 
-pub(super) fn encode(dl: DisplayList, w: f64, h: f64, given: Option<&[Option<String>]>) -> List {
+pub(super) fn encode(
+    dl: DisplayList,
+    w: f64,
+    h: f64,
+    given: Option<&[Option<String>]>,
+    precision: Precision,
+) -> List {
     // Paints, interned in first-use order.
     let mut paint_ix: HashMap<_, u32> = HashMap::new();
     let mut paints = Vec::new();
@@ -297,19 +392,19 @@ pub(super) fn encode(dl: DisplayList, w: f64, h: f64, given: Option<&[Option<Str
             panel = col_uint(&panel)
         ),
         point = list!(
-            cx = col_f32(&dl.pt_cx),
-            cy = col_f32(&dl.pt_cy),
-            r = col_f32(&dl.pt_r),
+            cx = col_geo(&dl.pt_cx, precision),
+            cy = col_geo(&dl.pt_cy, precision),
+            r = col_geo(&dl.pt_r, precision),
             shape = col_u8(&dl.pt_shape)
         ),
         rect = list!(
-            x = col_f32(&dl.rc_x),
-            y = col_f32(&dl.rc_y),
-            w = col_f32(&dl.rc_w),
-            h = col_f32(&dl.rc_h)
+            x = col_geo(&dl.rc_x, precision),
+            y = col_geo(&dl.rc_y, precision),
+            w = col_geo(&dl.rc_w, precision),
+            h = col_geo(&dl.rc_h, precision)
         ),
         path = list!(
-            xy = col_f32(&dl.xy),
+            xy = col_geo(&dl.xy, precision),
             run_offset = col_uint(&dl.run_off),
             path_offset = col_uint(&dl.path_off),
             closed = col_u8(&dl.closed),
@@ -431,11 +526,13 @@ pub(super) fn encode(dl: DisplayList, w: f64, h: f64, given: Option<&[Option<Str
 impl Scene {
     /// Walk the scene through the display-list backend and encode the result.
     /// `keys` (VR-22): the caller's key table for `record$key` to index.
+    /// `precision` (VR-18): how the geometry columns are encoded.
     pub(super) fn display_list(
         &self,
         panels: Option<Vec<String>>,
         version: u32,
         keys: Option<Vec<Option<String>>>,
+        precision: Precision,
     ) -> List {
         let mut b = DisplayListBackend::with_options(panels, version);
         let _ = self.render_to(&mut b);
@@ -444,13 +541,47 @@ impl Scene {
             self.w_px as f64,
             self.h_px as f64,
             keys.as_deref(),
+            precision,
         )
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::key_refs;
+    use super::{key_refs, quant_bits, quantise, Precision};
+
+    #[test]
+    fn quant_bits_pick_the_fewest_that_meet_the_error() {
+        assert_eq!(quant_bits(600.0, Precision::F32), None);
+        assert_eq!(quant_bits(600.0, Precision::Bits(16)), Some(16));
+        // 0.005 px: 16 bits up to 655.35 px, 24 above, f32 beyond 24 bits.
+        assert_eq!(quant_bits(1.0, Precision::MaxError(0.005)), Some(8));
+        assert_eq!(quant_bits(655.0, Precision::MaxError(0.005)), Some(16));
+        assert_eq!(quant_bits(656.0, Precision::MaxError(0.005)), Some(24));
+        assert_eq!(quant_bits(1e6, Precision::MaxError(0.005)), None);
+    }
+
+    #[test]
+    fn quantised_values_are_within_half_a_step() {
+        let v: Vec<f32> = (0..1000)
+            .map(|i| 13.25 + (i as f32 * 0.6137) % 587.0)
+            .collect();
+        let lo = v.iter().fold(f64::INFINITY, |a, &x| a.min(x as f64));
+        let hi = v.iter().fold(f64::NEG_INFINITY, |a, &x| a.max(x as f64));
+        for bits in [8u32, 16, 24] {
+            let (step, u) = quantise(&v, lo, hi - lo, bits);
+            assert!((step - (hi - lo) / ((1u64 << bits) - 1) as f64).abs() < 1e-12);
+            assert_eq!(u.iter().copied().min(), Some(0));
+            assert_eq!(u.iter().copied().max(), Some(((1u64 << bits) - 1) as u32));
+            for (x, q) in v.iter().zip(&u) {
+                let back = lo + *q as f64 * step;
+                assert!(
+                    (back - *x as f64).abs() <= step / 2.0 + 1e-9,
+                    "{bits} {x} {back}"
+                );
+            }
+        }
+    }
 
     fn s(v: &[&str]) -> Vec<String> {
         v.iter().map(|x| x.to_string()).collect()
