@@ -373,3 +373,41 @@ test_that("SVG image colour survives under fully-transparent texels", {
   arr <- png::readPNG(tmp) # h x w x 4, 0..1
   expect_equal(round(arr[1, 1, ], 3), c(1, 0, 0, 0)) # red preserved, alpha 0
 })
+
+test_that("a compositing group inside a named panel wraps its own content in SVG", {
+  # The group's buffer used to lose to the panel's: its marks were written
+  # before an empty `<g style="mix-blend-mode:…">` (or opacity / mask group).
+  for (pan in c(FALSE, TRUE)) {
+    vps <- list(
+      blend = vl_viewport(blend = "screen"),
+      alpha = vl_viewport(alpha = 0.5),
+      mask = vl_viewport(mask = as_mask(rect_grob(width = 0.5, gp = vl_gpar(fill = "black"))))
+    )
+    pattern <- c(
+      blend = '<g style="mix-blend-mode:screen"><g data-vellum-id="lay1">(<g clip-path="[^"]*">)?<path data-key="m"',
+      alpha = '<g opacity="0.5"><g data-vellum-id="lay1">(<g clip-path="[^"]*">)?<path data-key="m"',
+      mask = '<g mask="url\\(#[^"]+\\)"><g data-vellum-id="lay1">(<g clip-path="[^"]*">)?<path data-key="m"'
+    )
+    for (nm in names(vps)) {
+      s <- vl_scene(2, 2, dpi = 72) |>
+        push(vl_viewport(name = "panel-1", pannable = pan, clip = TRUE)) |>
+        draw(rect_grob(gp = vl_gpar(fill = "grey"))) |>
+        push(vps[[nm]]) |>
+        draw(circle_grob(0.5, 0.5, r = 0.2, gp = vl_gpar(fill = "orange"), key = "m", id = "lay1")) |>
+        pop() |>
+        pop()
+      svg <- gsub("\n", "", scene_svg(s))
+      expect_match(svg, pattern[[nm]], info = paste(nm, "pannable =", pan))
+      expect_false(grepl("<g (style|opacity|mask)=\"[^\"]*\"></g>", svg), info = paste(nm, "pannable =", pan))
+    }
+  }
+  # the group's own clip-path and the panel's hoisted clip still nest
+  s <- vl_scene(2, 2, dpi = 72) |>
+    push(vl_viewport(name = "panel-1", pannable = TRUE, clip = TRUE)) |>
+    push(vl_viewport(blend = "multiply")) |>
+    draw(circle_grob(0.5, 0.5, r = 0.2, key = "m", id = "lay1")) |>
+    pop() |>
+    pop()
+  svg <- gsub("\n", "", scene_svg(s))
+  expect_match(svg, '<g data-vellum-panel="panel-1"[^>]*><g data-vellum-pan="panel-1"><g style="mix-blend-mode:multiply">')
+})

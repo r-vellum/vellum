@@ -1,5 +1,14 @@
 # vellum 0.11.0.9000 (development version)
 
+## Bug fixes
+
+* `scene_svg()` wraps a compositing group's content in the group again when
+  the group sits inside a named panel. A blend mode, group opacity, mask or
+  blur/shadow effect inside a panel (every layer `blend`, `clip_layer()` or
+  layer effect in a vellumplot plot) used to be written as an empty `<g>`
+  after its marks, so the SVG showed the marks unblended, opaque and
+  unmasked. The raster and PDF output were right.
+
 # vellum 0.11.0
 
 ## New features
