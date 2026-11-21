@@ -4,17 +4,25 @@
 \alias{scene_model}
 \title{A serializable, per-element model of a scene}
 \usage{
-scene_model(scene)
+scene_model(scene, meta = c("records", "columns"))
 }
 \arguments{
 \item{scene}{A \code{\link[=vl_scene]{vl_scene()}} (or anything coercible via \code{as_vellum_scene()}).}
+
+\item{meta}{The form of the elements' \code{meta} column. \code{"records"} (the
+default) is a list-column with one record per element. \code{"columns"} is a
+data-frame column instead, with one row per element and one column per
+field. In it a field is a plain vector when every element that carries it
+holds one atomic value of one type (\code{NA} for the elements without it), and
+a list-column (\code{NULL} where absent) otherwise. The columnar form skips the
+per-element records, so a host reading many elements should ask for it.}
 }
 \value{
 A list with two data frames:
 \itemize{
 \item \code{elements} — one row per element: \code{key}, \code{mark}, \code{id}, \code{name}, \code{panel}, the
 device-px bbox \verb{x0,y0,x1,y1}, its centre/size \verb{x,y,w,h}, and a \code{meta}
-list-column.
+column (see the \code{meta} argument).
 \item \code{panels} — one row per named panel that encloses at least one element:
 \code{name}, its elements' bounding box \verb{x0,y0,x1,y1}, the panel viewport's
 device-px rectangle \verb{px0,py0,px1,py1}, its native ranges
