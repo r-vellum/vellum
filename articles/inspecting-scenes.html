@@ -18,9 +18,9 @@
   };
 </script><script src="../deps/jquery-3.6.0/jquery-3.6.0.min.js"></script><meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
 <link href="../deps/bootstrap-5.3.8/bootstrap.min.css" rel="stylesheet">
-<script src="../deps/bootstrap-5.3.8/bootstrap.bundle.min.js"></script><link href="../deps/Spectral-0.4.10/font.css" rel="stylesheet">
-<link href="../deps/JetBrains_Mono-0.4.10/font.css" rel="stylesheet">
-<link href="../deps/Spectral_SC-0.4.10/font.css" rel="stylesheet">
+<script src="../deps/bootstrap-5.3.8/bootstrap.bundle.min.js"></script><link href="../deps/Spectral-0.5.0/font.css" rel="stylesheet">
+<link href="../deps/JetBrains_Mono-0.5.0/font.css" rel="stylesheet">
+<link href="../deps/Spectral_SC-0.5.0/font.css" rel="stylesheet">
 <link href="../deps/font-awesome-6.5.2/css/all.min.css" rel="stylesheet">
 <link href="../deps/font-awesome-6.5.2/css/v4-shims.min.css" rel="stylesheet">
 <script src="../deps/headroom-0.11.0/headroom.min.js"></script><script src="../deps/headroom-0.11.0/jQuery.headroom.min.js"></script><script src="../deps/bootstrap-toc-1.0.1/bootstrap-toc.min.js"></script><script src="../deps/clipboard.js-2.0.11/clipboard.min.js"></script><script src="../deps/search-1.0.0/autocomplete.jquery.min.js"></script><script src="../deps/search-1.0.0/fuse.min.js"></script><script src="../deps/search-1.0.0/mark.min.js"></script><!-- pkgdown --><script src="../pkgdown.js"></script><link href="../extra.css" rel="stylesheet">
@@ -406,13 +406,13 @@ unkeyed lines/polygons contribute to <code>ink</code> but not to
 <span></span>
 <span><span class="fu"><a href="../reference/profile_render.html">profile_render</a></span><span class="op">(</span><span class="va">heavy</span>, reps <span class="op">=</span> <span class="fl">1</span><span class="op">)</span></span>
 <span><span class="co">#&gt; <span style="font-weight: bold;">Phases</span> (median of the timed reps):</span></span>
-<span><span class="co">#&gt; <span style="color: #00BBBB;">•</span> build 0.000 s (constructing the R value)</span></span>
-<span><span class="co">#&gt; <span style="color: #00BBBB;">•</span> compile 0.020 s (R -&gt; Rust replay, incl. text shaping)</span></span>
-<span><span class="co">#&gt; <span style="color: #00BBBB;">•</span> raster 0.088 s (drawing)</span></span>
+<span><span class="co">#&gt; <span style="color: #00BBBB;">•</span> build 0.001 s (constructing the R value)</span></span>
+<span><span class="co">#&gt; <span style="color: #00BBBB;">•</span> compile 0.030 s (R -&gt; Rust replay, incl. text shaping)</span></span>
+<span><span class="co">#&gt; <span style="color: #00BBBB;">•</span> raster 0.087 s (drawing)</span></span>
 <span><span class="co">#&gt; </span></span>
 <span><span class="co">#&gt; <span style="font-weight: bold;">Slowest marks</span> (raster time):</span></span>
-<span><span class="co">#&gt; <span style="color: #00BBBB;">•</span> segments edges 2000 elem 0.0289 s 59.2%</span></span>
-<span><span class="co">#&gt; <span style="color: #00BBBB;">•</span> circle points 20000 elem 0.0177 s 36.3%</span></span>
+<span><span class="co">#&gt; <span style="color: #00BBBB;">•</span> segments edges 2000 elem 0.0288 s 59.3%</span></span>
+<span><span class="co">#&gt; <span style="color: #00BBBB;">•</span> circle points 20000 elem 0.0176 s 36.3%</span></span>
 <span><span class="co">#&gt; <span style="color: #00BBBB;">•</span> text labels 200 elem 0.0022 s 4.5%</span></span></code></pre></div>
 <p><strong>Read the phase split first.</strong> A render is three
 phases: <em>build</em> (constructing the R value), <em>compile</em> (the
