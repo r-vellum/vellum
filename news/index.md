@@ -2,6 +2,19 @@
 
 ## vellum 0.12.0.9000 (development version)
 
+### New features
+
+- [`scene_display_list()`](https://r-vellum.github.io/vellum/reference/scene_display_list.md)
+  gains `precision` (VR-18) for compact coordinates. `"u16"` or `"u24"`
+  quantise each geometry column (point centres and radii, rects, path
+  vertices) to 16 or 24 bits within its own range, shipped as `lo`,
+  `step` and the integers; a number is the largest rounding error
+  allowed in device px, and picks the fewest of 8, 16 or 24 bits per
+  column that meets it. At `0.005` (the precision of
+  [`scene_svg()`](https://r-vellum.github.io/vellum/reference/scene_svg.md)’s
+  coordinates) a 200k-point scatter’s list shrinks from 2.14 to 1.07 MB.
+  The default, `"f32"`, is unchanged.
+
 ### Bug fixes
 
 - The raster backend no longer isolates a group that has no mask,

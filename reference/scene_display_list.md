@@ -12,7 +12,8 @@ scene_display_list(
   what = "keyed",
   panels = NULL,
   version = 1L,
-  keys = NULL
+  keys = NULL,
+  precision = "f32"
 )
 ```
 
@@ -48,6 +49,18 @@ scene_display_list(
   `NULL` (the default), or a character vector of keys for `record$key`
   to index, so the list need not repeat them (VR-22). Keys it lacks are
   listed in `keys` as usual, after it; `NA` matches nothing.
+
+- precision:
+
+  How to encode the geometry columns (see *Compact coordinates*):
+  `"f32"` (the default) for 32-bit floats; `"u16"` or `"u24"` to
+  quantise each column to 16 or 24 bits within its range; or a positive
+  number, the largest rounding error allowed in device px, to use the
+  fewest of 8, 16 or 24 bits that keeps each column within it (`f32`
+  when none does). `0.005`, half the 0.01 px grid
+  [`scene_svg()`](https://r-vellum.github.io/vellum/reference/scene_svg.md)
+  writes coordinates on, takes 16 bits for a column spanning up to 655
+  px.
 
 ## Value
 
@@ -106,12 +119,27 @@ page `width` and `height` in device px, the record count `n`, and:
 - `panels`: the names of the panels marks are drawn in.
 
 Every numeric column except those in `paints` and `clips` is a list
-`list(type, n, ...)`. `type` is `"f32"`, `"u8"`, `"u16"` or `"u32"`, and
-`n` is the length. The values come as exactly one of `data` (base64,
-little-endian, typed), `const` (every value equal),
-`seq = c(start, step)` (an arithmetic sequence) or
+`list(type, n, ...)`. `type` is `"f32"`, `"u8"`, `"u16"` or `"u32"` (or
+`"u24"`, see below), and `n` is the length. The values come as exactly
+one of `data` (base64, little-endian, typed), `const` (every value
+equal), `seq = c(start, step)` (an arithmetic sequence) or
 `rle = list(values, lengths)` (runs of equal values, used when there are
 few).
+
+## Compact coordinates
+
+With `precision` other than `"f32"` (VR-18), the geometry columns
+(`point` `cx`, `cy`, `r`; `rect` `x`, `y`, `w`, `h`; `path` `xy`) are
+quantised within their own range: such a column is
+`list(type, n, lo, step, data)` with `type` `"u8"`, `"u16"` or `"u24"`
+(three bytes per value) and value *i* `lo + u[i] * step`, where `u` are
+the little-endian unsigned integers in `data`, `lo` is the column's
+minimum and `step` its range over `2^bits - 1`. The rounding error is at
+most `step / 2`. A column that is empty, collapses to `const` or `rle`
+or holds a non-finite value stays `f32`, as do the `clip_paths`
+coordinates. Points come in paint order, not in space, so their
+coordinates are not delta-coded: neighbouring records are as far apart
+as any two.
 
 ## Version 2
 

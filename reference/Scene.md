@@ -264,6 +264,8 @@ device px, as columnar base64 tables. Internal to vellumwidget; see
 `panels` (`NULL` or names) restricts it to marks in those panels. `keys`
 (`NULL` or a character vector, VR-22): the caller's key table;
 `record$key` then indexes it, and only the keys it lacks are listed.
+`precision` (VR-18): `"f32"`, `"u16"`, `"u24"`, or a number, the largest
+rounding error in device px a quantised geometry column may have.
 
 ### Method `render_pdf`
 

@@ -362,7 +362,9 @@ device px, as columnar base64 tables. Internal to vellumwidget; see
 <code><a href="scene_display_list.html">scene_display_list()</a></code>.
 <code>panels</code> (<code>NULL</code> or names) restricts it to marks in those panels.
 <code>keys</code> (<code>NULL</code> or a character vector, VR-22): the caller's key table;
-<code>record$key</code> then indexes it, and only the keys it lacks are listed.</p>
+<code>record$key</code> then indexes it, and only the keys it lacks are listed.
+<code>precision</code> (VR-18): <code>"f32"</code>, <code>"u16"</code>, <code>"u24"</code>, or a number, the
+largest rounding error in device px a quantised geometry column may have.</p>
 </div>
 
 <div class="section">

@@ -87,7 +87,8 @@ browser to draw and hit-test big plots (F-5 stage 1).</p>
 <span>  what <span class="op">=</span> <span class="st">"keyed"</span>,</span>
 <span>  panels <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  version <span class="op">=</span> <span class="fl">1L</span>,</span>
-<span>  keys <span class="op">=</span> <span class="cn">NULL</span></span>
+<span>  keys <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  precision <span class="op">=</span> <span class="st">"f32"</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
 
@@ -120,6 +121,16 @@ panels, which leaves out a legend's keyed swatches.</p></dd>
 <dd><p><code>NULL</code> (the default), or a character vector of keys for
 <code>record$key</code> to index, so the list need not repeat them (VR-22). Keys
 it lacks are listed in <code>keys</code> as usual, after it; <code>NA</code> matches nothing.</p></dd>
+
+
+<dt id="arg-precision">precision<a class="anchor" aria-label="anchor" href="#arg-precision"></a></dt>
+<dd><p>How to encode the geometry columns (see <em>Compact
+coordinates</em>): <code>"f32"</code> (the default) for 32-bit floats; <code>"u16"</code> or
+<code>"u24"</code> to quantise each column to 16 or 24 bits within its range; or a
+positive number, the largest rounding error allowed in device px, to use
+the fewest of 8, 16 or 24 bits that keeps each column within it (<code>f32</code>
+when none does). <code>0.005</code>, half the 0.01 px grid <code><a href="scene_svg.html">scene_svg()</a></code> writes
+coordinates on, takes 16 bits for a column spanning up to 655 px.</p></dd>
 
 </dl></div>
     <div class="section level2">
@@ -166,11 +177,28 @@ first position there, and the rest follow in first-use order. A client
 that already has the keys (vellumwidget's element table) ships them once.</p></li>
 <li><p><code>panels</code>: the names of the panels marks are drawn in.</p></li>
 </ul><p>Every numeric column except those in <code>paints</code> and <code>clips</code> is a list
-<code>list(type, n, ...)</code>. <code>type</code> is <code>"f32"</code>, <code>"u8"</code>, <code>"u16"</code> or <code>"u32"</code>, and <code>n</code>
-is the length. The values come as exactly one of <code>data</code> (base64,
-little-endian, typed), <code>const</code> (every value equal), <code>seq = c(start, step)</code>
-(an arithmetic sequence) or <code>rle = list(values, lengths)</code> (runs of equal
-values, used when there are few).</p>
+<code>list(type, n, ...)</code>. <code>type</code> is <code>"f32"</code>, <code>"u8"</code>, <code>"u16"</code> or <code>"u32"</code> (or
+<code>"u24"</code>, see below), and <code>n</code> is the length. The values come as exactly one
+of <code>data</code> (base64, little-endian, typed), <code>const</code> (every value equal),
+<code>seq = c(start, step)</code> (an arithmetic sequence) or
+<code>rle = list(values, lengths)</code> (runs of equal values, used when there are
+few).</p>
+    </div>
+    <div class="section level2">
+    <h2 id="compact-coordinates">Compact coordinates<a class="anchor" aria-label="anchor" href="#compact-coordinates"></a></h2>
+
+
+<p>With <code>precision</code> other than <code>"f32"</code> (VR-18), the geometry columns (<code>point</code>
+<code>cx</code>, <code>cy</code>, <code>r</code>; <code>rect</code> <code>x</code>, <code>y</code>, <code>w</code>, <code>h</code>; <code>path</code> <code>xy</code>) are quantised
+within their own range: such a column is <code>list(type, n, lo, step, data)</code>
+with <code>type</code> <code>"u8"</code>, <code>"u16"</code> or <code>"u24"</code> (three bytes per value) and value <em>i</em>
+<code>lo + u[i] * step</code>, where <code>u</code> are the little-endian unsigned integers in
+<code>data</code>, <code>lo</code> is the column's minimum and <code>step</code> its range over
+<code>2^bits - 1</code>. The rounding error is at most <code>step / 2</code>. A column that is empty,
+collapses to <code>const</code> or <code>rle</code> or holds a non-finite value stays <code>f32</code>,
+as do the <code>clip_paths</code> coordinates. Points come in paint order, not in
+space, so their coordinates are not delta-coded: neighbouring records are
+as far apart as any two.</p>
     </div>
     <div class="section level2">
     <h2 id="version-">Version 2<a class="anchor" aria-label="anchor" href="#version-"></a></h2>
