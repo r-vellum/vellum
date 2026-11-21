@@ -7,7 +7,13 @@ to the browser to draw and hit-test big plots (F-5 stage 1).
 ## Usage
 
 ``` r
-scene_display_list(scene, what = "keyed", panels = NULL, version = 1L)
+scene_display_list(
+  scene,
+  what = "keyed",
+  panels = NULL,
+  version = 1L,
+  keys = NULL
+)
 ```
 
 ## Arguments
@@ -36,6 +42,12 @@ scene_display_list(scene, what = "keyed", panels = NULL, version = 1L)
 
   The format version, `1` (the default) or `2` (see the *Version 2*
   section).
+
+- keys:
+
+  `NULL` (the default), or a character vector of keys for `record$key`
+  to index, so the list need not repeat them (VR-22). Keys it lacks are
+  listed in `keys` as usual, after it; `NA` matches nothing.
 
 ## Value
 
@@ -82,7 +94,14 @@ page `width` and `height` in device px, the record count `n`, and:
 
 - `keys`: the distinct keys in first-use order, as a character vector,
   or as an integer column (see below) when every key is a plain
-  non-negative integer.
+  non-negative integer. With the `keys` argument, only the keys it lacks
+  (see below).
+
+- `keys_given`: only with the `keys` argument, its length. `record$key`
+  then indexes `c(<the keys argument>, keys)`: a key found in the
+  argument is its first position there, and the rest follow in first-use
+  order. A client that already has the keys (vellumwidget's element
+  table) ships them once.
 
 - `panels`: the names of the panels marks are drawn in.
 

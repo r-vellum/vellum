@@ -261,7 +261,9 @@ page background.
 The marks-only display list (VR-14): every keyed primitive, resolved to
 device px, as columnar base64 tables. Internal to vellumwidget; see
 [`scene_display_list()`](https://r-vellum.github.io/vellum/reference/scene_display_list.md).
-`panels` (`NULL` or names) restricts it to marks in those panels.
+`panels` (`NULL` or names) restricts it to marks in those panels. `keys`
+(`NULL` or a character vector, VR-22): the caller's key table;
+`record$key` then indexes it, and only the keys it lacks are listed.
 
 ### Method `render_pdf`
 

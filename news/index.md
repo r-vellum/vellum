@@ -12,6 +12,14 @@
   carried, and `"columns"` returns it as a data-frame column, one column
   per field, without building a record per element (VR-19).
 
+- [`scene_display_list()`](https://r-vellum.github.io/vellum/reference/scene_display_list.md)
+  (internal, for vellumwidget) gains `keys`: a character vector of keys
+  the caller already has, such as vellumwidget’s element table.
+  `record$key` then indexes it, and the list’s own `keys` holds only the
+  keys it lacks, with `keys_given` saying how many come first (VR-22).
+  vellumwidget used to ship every key twice; for a 200,000-point keyed
+  scatter this saves about 1 MB of widget payload.
+
 ### Minor improvements and fixes
 
 - Large clouds of equal-size, fill-only circles (10,000 or more in one

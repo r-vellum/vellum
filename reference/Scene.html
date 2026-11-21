@@ -360,7 +360,9 @@ background.</p>
 <p>The marks-only display list (VR-14): every keyed primitive, resolved to
 device px, as columnar base64 tables. Internal to vellumwidget; see
 <code><a href="scene_display_list.html">scene_display_list()</a></code>.
-<code>panels</code> (<code>NULL</code> or names) restricts it to marks in those panels.</p>
+<code>panels</code> (<code>NULL</code> or names) restricts it to marks in those panels.
+<code>keys</code> (<code>NULL</code> or a character vector, VR-22): the caller's key table;
+<code>record$key</code> then indexes it, and only the keys it lacks are listed.</p>
 </div>
 
 <div class="section">
