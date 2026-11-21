@@ -293,6 +293,15 @@ pub(super) fn encode(dl: DisplayList, w: f64, h: f64) -> List {
     let rec = with_field(rec, "run", col_uint(&run));
     let _ = out.set_elt(rec_ix, rec.into());
     let out = with_field(out, "runs", Robj::from(dl.runs as i32));
+    let out = with_field(
+        out,
+        "run_blend",
+        dl.run_blend
+            .iter()
+            .map(|s| s.as_str())
+            .collect::<Strings>()
+            .into(),
+    );
     let g = &dl.gradients;
     let mut stop_off = vec![0i32];
     let mut stop_pos: Vec<f64> = Vec::new();

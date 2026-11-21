@@ -80,6 +80,15 @@
 #'   holding one, is in it. `scene_png(layer = "keyed_flagged", run = k)`
 #'   draws run `k`, so a client can draw the exact records itself and
 #'   composite each run's raster where the run starts.
+#' * Blend modes in runs (VW-32): `run_blend` gives, per run, how its raster
+#'   composites onto what is beneath it: `"normal"`, or a CSS `mix-blend-mode`
+#'   keyword (`"multiply"`, `"screen"`, ...) when the run is exactly the marks
+#'   of one group with that blend mode drawn onto the page (a *blend root*;
+#'   a run ends where the blend root changes). Rendered on its own, such a
+#'   run's raster is its marks unblended, and compositing it with that mode
+#'   reproduces the blend. A blend nested inside a mask, an effect or an
+#'   opacity group happens within that group's raster, so its run is
+#'   `"normal"`. `""` marks a run that cannot be composited from its raster.
 #'
 #' @section What stage 1 does not reproduce:
 #' Such marks are still listed, so they can be hit-tested, but `flags` marks
@@ -92,8 +101,8 @@
 #' marker or polygon). Its geometry is listed and its paint has `fill` and
 #' `stroke` `NA`, so a client hit-tests it but draws nothing; `32` inside a
 #' group with a blend mode (with `4`): the mark mixes with what is painted
-#' beneath it, so a separately rendered raster of it (a `"keyed_flagged"`
-#' run) cannot reproduce it either. Images do not appear at all.
+#' beneath it, so its run's raster reproduces it only when composited with
+#' the run's `run_blend` mode. Images do not appear at all.
 #'
 #' @param scene A [vl_scene()], or anything with an [as_vellum_scene()] method.
 #' @param what Which marks to list. Only `"keyed"` for now.

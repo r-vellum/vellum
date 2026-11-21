@@ -422,6 +422,11 @@ impl BlendKind {
     }
 
     /// CSS `mix-blend-mode` keyword, or `None` for `Normal` (omit the attribute).
+    pub fn css(self) -> Option<&'static str> {
+        self.svg()
+    }
+
+    /// CSS `mix-blend-mode` keyword, or `None` for `Normal` (omit the attribute).
     fn svg(self) -> Option<&'static str> {
         use BlendKind::*;
         Some(match self {
