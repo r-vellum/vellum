@@ -13,6 +13,14 @@
 
 ## Bug fixes
 
+* A `vl_viewport(cache = TRUE)` holding a blend-mode viewport that composites
+  against the page (not inside an opacity, mask, blend or blur/shadow group
+  of its own) is no longer cached in PNG (VR-24). The cached sub-raster is an
+  isolated layer, so the blend mixed with transparency there (a multiply
+  group drew its colours unmultiplied), while SVG and PDF blended against
+  the page. Such a viewport is now drawn inline, as one with its own blend
+  already was.
+
 * The raster backend no longer isolates a group that has no mask, opacity,
   blend mode or effect (VR-21). SVG and PDF never did, and SVG/CSS
   compositing doesn't isolate such a group either, so a blend inside one now

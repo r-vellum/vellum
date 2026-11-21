@@ -72,6 +72,58 @@ test_that("a boundary with a non-normal blend is not cached (rendered inline)", 
   expect_equal(rs_subraster_stats()[1:2], c(0L, 0L)) # never bracketed
 })
 
+# A boundary over a grey page holding a multiply group of a yellow square,
+# optionally inside a `mid` viewport.
+nested_blend <- function(cache, mid = NULL) {
+  s <- vl_scene(1, 1, dpi = 72, bg = "white") |>
+    draw(rect_grob(gp = vl_gpar(fill = "grey50", col = NA))) |>
+    push(vl_viewport(cache = cache))
+  if (!is.null(mid)) {
+    s <- push(s, mid)
+  }
+  s <- s |>
+    push(vl_viewport(blend = "multiply")) |>
+    draw(rect_grob(
+      0.5,
+      0.5,
+      0.6,
+      0.6,
+      gp = vl_gpar(fill = "yellow", col = NA)
+    )) |>
+    pop()
+  if (!is.null(mid)) {
+    s <- pop(s)
+  }
+  pop(s)
+}
+
+test_that("a boundary holding a blend that reaches the page is not cached (VR-24)", {
+  # The blend composites against the page, which a captured sub-raster lacks:
+  # cached, the yellow would multiply with transparency and stay yellow.
+  vl_clear_render_cache()
+  plain <- nested_blend(cache = TRUE)
+  got <- scene_raster(plain)
+  expect_equal(rs_subraster_stats()[1:2], c(0L, 0L)) # never bracketed
+  expect_identical(got, scene_raster(nested_blend(cache = FALSE)))
+  # yellow x grey50 is olive, not yellow
+  expect_lt(got[1, 36, 36], 160L)
+  # also through a plain viewport in between (it isolates nothing, VR-21)
+  vl_clear_render_cache()
+  deep <- nested_blend(TRUE, vl_viewport(name = "mid"))
+  scene_raster(deep)
+  expect_equal(rs_subraster_stats()[1:2], c(0L, 0L))
+})
+
+test_that("a boundary whose blend sits inside its own isolated group still caches (VR-24)", {
+  # An opacity group isolates the blend: it composites against that group's
+  # layer, which the sub-raster holds, so caching is exact.
+  vl_clear_render_cache()
+  iso <- vl_viewport(alpha = 0.8)
+  got <- scene_raster(nested_blend(TRUE, iso))
+  expect_equal(rs_subraster_stats()[2], 1L) # bracketed (one miss)
+  expect_identical(got, scene_raster(nested_blend(FALSE, iso)))
+})
+
 test_that("vector backends ignore the boundary and record no sub-raster activity", {
   vl_clear_render_cache()
   s <- vl_scene(2, 1, dpi = 100, bg = "white") |>
