@@ -41,6 +41,11 @@ pub struct SvgBackend {
     /// attributes (`None` = this node carried no metadata, so no buffer was pushed).
     node_stack: Vec<String>,
     node_open: Vec<Option<String>>,
+    /// The open output frames innermost last, across both stacks: `true` a
+    /// compositing group (`groups`), `false` a metadata or panel buffer
+    /// (`node_stack`). `out()` writes into the innermost, so a group opened
+    /// inside a panel captures its own content.
+    frames: Vec<bool>,
     /// Pannable-panel state (clip-stable pan group). `panel_pannable` records, per
     /// open panel, whether it is pannable (so `end_panel` closes one group or two).
     /// While inside a pannable panel, the first clipped element's clip is hoisted
@@ -103,6 +108,7 @@ impl SvgBackend {
             outline_text,
             node_stack: Vec::new(),
             node_open: Vec::new(),
+            frames: Vec::new(),
             panel_pannable: Vec::new(),
             pan_active: false,
             pan_clip_pending: false,
@@ -161,15 +167,13 @@ impl SvgBackend {
         id
     }
 
-    /// The buffer currently receiving output: an open per-node metadata buffer
-    /// (innermost), else the innermost open compositing group, else the body.
+    /// The buffer currently receiving output: the innermost open frame (a
+    /// per-node metadata or panel buffer, or a compositing group), else the body.
     fn out(&mut self) -> &mut String {
-        if !self.node_stack.is_empty() {
-            self.node_stack.last_mut().unwrap()
-        } else if !self.groups.is_empty() {
-            self.groups.last_mut().unwrap()
-        } else {
-            &mut self.body
+        match self.frames.last() {
+            Some(true) if !self.groups.is_empty() => self.groups.last_mut().unwrap(),
+            Some(false) if !self.node_stack.is_empty() => self.node_stack.last_mut().unwrap(),
+            _ => &mut self.body,
         }
     }
 
@@ -545,7 +549,10 @@ impl RenderBackend for SvgBackend {
                 match circle {
                     Some((cx, cy, r)) => {
                         let paint = self.stroke_attrs(color, stroke, bake, true);
-                        format!("<circle {} fill=\"none\" {paint}/>", circle_attrs(cx, cy, r))
+                        format!(
+                            "<circle {} fill=\"none\" {paint}/>",
+                            circle_attrs(cx, cy, r)
+                        )
                     }
                     None => {
                         let paint = self.stroke_attrs(color, stroke, bake, false);
@@ -820,6 +827,7 @@ impl RenderBackend for SvgBackend {
         effect: GroupEffect,
     ) {
         self.groups.push(String::new());
+        self.frames.push(true);
         self.group_masks.push(mask);
         self.group_alpha.push(alpha);
         self.group_blend.push(blend);
@@ -832,6 +840,7 @@ impl RenderBackend for SvgBackend {
         let blend = self.group_blend.pop().unwrap_or(BlendKind::Normal);
         let effect = self.group_effect.pop().unwrap_or_default();
         let inner = self.groups.pop().unwrap_or_default();
+        self.frames.pop();
         // Blur and drop shadow are native SVG filter primitives, so the viewer
         // does the work and the group stays vector. The filter region is widened
         // past the default -10%/120% box, which clips a wide blur or a far offset.
@@ -936,6 +945,7 @@ impl RenderBackend for SvgBackend {
             self.node_open.push(None);
         } else {
             self.node_stack.push(String::new());
+            self.frames.push(false);
             self.node_open.push(Some(attrs));
         }
     }
@@ -947,6 +957,7 @@ impl RenderBackend for SvgBackend {
     fn end_node(&mut self) {
         if let Some(Some(attrs)) = self.node_open.pop() {
             let inner = self.node_stack.pop().unwrap_or_default();
+            self.frames.pop();
             self.out().push_str(&format!("<g {attrs}>{inner}</g>"));
         }
     }
@@ -972,11 +983,13 @@ impl RenderBackend for SvgBackend {
         // `<g data-vellum-panel>` as before.
         let pan = pannable && !self.pan_active;
         self.node_stack.push(String::new());
+        self.frames.push(false);
         self.node_open
             .push(Some(format!("data-vellum-panel=\"{}\"", xml_escape(name))));
         if pan {
             self.pan_outer = self.node_open.len() - 1;
             self.node_stack.push(String::new());
+            self.frames.push(false);
             self.node_open
                 .push(Some(format!("data-vellum-pan=\"{}\"", xml_escape(name))));
             self.pan_active = true;
@@ -991,12 +1004,14 @@ impl RenderBackend for SvgBackend {
         // Close the (inner, if pannable) group into its parent frame.
         if let Some(Some(attrs)) = self.node_open.pop() {
             let inner = self.node_stack.pop().unwrap_or_default();
+            self.frames.pop();
             self.out().push_str(&format!("<g {attrs}>{inner}</g>"));
         }
         if pan {
             // Close the outer panel group (its attrs may have gained clip-path).
             if let Some(Some(attrs)) = self.node_open.pop() {
                 let outer = self.node_stack.pop().unwrap_or_default();
+                self.frames.pop();
                 self.out().push_str(&format!("<g {attrs}>{outer}</g>"));
             }
             self.pan_active = false;
@@ -1450,7 +1465,12 @@ mod tests {
         let mut pb = PathBuilder::new();
         pb.push_circle(5.0, 5.0, 2.0);
         let clip = Clip { id: 0, shapes: &[] };
-        let red = Rgba { r: 255, g: 0, b: 0, a: 255 };
+        let red = Rgba {
+            r: 255,
+            g: 0,
+            b: 0,
+            a: 255,
+        };
         b.fill_and_stroke_path(
             &pb.finish().unwrap(),
             transform,
@@ -1468,7 +1488,10 @@ mod tests {
         let svg = pair_svg(Transform::identity(), &pen(Vec::new()));
         assert_eq!(svg.matches("<circle").count(), 1, "{svg}");
         assert!(svg.contains("fill=\"#ff0000\" stroke=\"#000000\" stroke-width=\"1\"/>"));
-        assert!(!svg.contains("stroke-linecap"), "a circle drops cap/join: {svg}");
+        assert!(
+            !svg.contains("stroke-linecap"),
+            "a circle drops cap/join: {svg}"
+        );
         // a dash or a non-uniform scale keeps the fill + stroke twin
         let dashed = pair_svg(Transform::identity(), &pen(vec![2.0, 1.0]));
         assert_eq!(dashed.matches("fill=\"none\"").count(), 1, "{dashed}");

@@ -1,5 +1,7 @@
 # vellum 0.11.0.9000 (development version)
 
+## New features
+
 * `scene_display_list(version = 2)` (internal, for vellumwidget) splits the
   flagged runs where a blend mode starts or ends and reports how each run
   composites in `run_blend`: `"normal"`, or the CSS `mix-blend-mode` of the
@@ -7,6 +9,15 @@
   (`scene_png(layer = "keyed_flagged", run = k)`), such a run is its marks
   unblended, so a client can composite it with that blend mode instead of
   falling back to the full mark image.
+
+## Bug fixes
+
+* `scene_svg()` wraps a compositing group's content in the group again when
+  the group sits inside a named panel. A blend mode, group opacity, mask or
+  blur/shadow effect inside a panel (every layer `blend`, `clip_layer()` or
+  layer effect in a vellumplot plot) used to be written as an empty `<g>`
+  after its marks, so the SVG showed the marks unblended, opaque and
+  unmasked. The raster and PDF output were right.
 
 # vellum 0.11.0
 
