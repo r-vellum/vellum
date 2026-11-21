@@ -12,7 +12,7 @@ and uses this table to map an event back to the originating datum.
 ## Usage
 
 ``` r
-scene_model(scene)
+scene_model(scene, meta = c("records", "columns"))
 ```
 
 ## Arguments
@@ -24,13 +24,24 @@ scene_model(scene)
   (or anything coercible via
   [`as_vellum_scene()`](https://r-vellum.github.io/vellum/reference/as_vellum_scene.md)).
 
+- meta:
+
+  The form of the elements' `meta` column. `"records"` (the default) is
+  a list-column with one record per element. `"columns"` is a data-frame
+  column instead, with one row per element and one column per field. In
+  it a field is a plain vector when every element that carries it holds
+  one atomic value of one type (`NA` for the elements without it), and a
+  list-column (`NULL` where absent) otherwise. The columnar form skips
+  the per-element records, so a host reading many elements should ask
+  for it.
+
 ## Value
 
 A list with two data frames:
 
 - `elements` — one row per element: `key`, `mark`, `id`, `name`,
   `panel`, the device-px bbox `x0,y0,x1,y1`, its centre/size `x,y,w,h`,
-  and a `meta` list-column.
+  and a `meta` column (see the `meta` argument).
 
 - `panels` — one row per named panel that encloses at least one element:
   `name`, its elements' bounding box `x0,y0,x1,y1`, the panel viewport's

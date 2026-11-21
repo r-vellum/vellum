@@ -91,7 +91,7 @@ uses this table to map an event back to the originating datum.</p>
 
     <div class="section level2">
     <h2 id="ref-usage">Usage<a class="anchor" aria-label="anchor" href="#ref-usage"></a></h2>
-    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">scene_model</span><span class="op">(</span><span class="va">scene</span><span class="op">)</span></span></code></pre></div>
+    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">scene_model</span><span class="op">(</span><span class="va">scene</span>, meta <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"records"</span>, <span class="st">"columns"</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
     </div>
 
     <div class="section level2">
@@ -101,12 +101,22 @@ uses this table to map an event back to the originating datum.</p>
 <dl><dt id="arg-scene">scene<a class="anchor" aria-label="anchor" href="#arg-scene"></a></dt>
 <dd><p>A <code><a href="vl_scene.html">vl_scene()</a></code> (or anything coercible via <code><a href="as_vellum_scene.html">as_vellum_scene()</a></code>).</p></dd>
 
+
+<dt id="arg-meta">meta<a class="anchor" aria-label="anchor" href="#arg-meta"></a></dt>
+<dd><p>The form of the elements' <code>meta</code> column. <code>"records"</code> (the
+default) is a list-column with one record per element. <code>"columns"</code> is a
+data-frame column instead, with one row per element and one column per
+field. In it a field is a plain vector when every element that carries it
+holds one atomic value of one type (<code>NA</code> for the elements without it), and
+a list-column (<code>NULL</code> where absent) otherwise. The columnar form skips the
+per-element records, so a host reading many elements should ask for it.</p></dd>
+
 </dl></div>
     <div class="section level2">
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
     <p>A list with two data frames:</p><ul><li><p><code>elements</code> — one row per element: <code>key</code>, <code>mark</code>, <code>id</code>, <code>name</code>, <code>panel</code>, the
 device-px bbox <code>x0,y0,x1,y1</code>, its centre/size <code>x,y,w,h</code>, and a <code>meta</code>
-list-column.</p></li>
+column (see the <code>meta</code> argument).</p></li>
 <li><p><code>panels</code> — one row per named panel that encloses at least one element:
 <code>name</code>, its elements' bounding box <code>x0,y0,x1,y1</code>, the panel viewport's
 device-px rectangle <code>px0,py0,px1,py1</code>, its native ranges

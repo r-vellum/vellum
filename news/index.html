@@ -71,6 +71,10 @@
 
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.11.1.9000" id="vellum-01119000-development-version">vellum 0.11.1.9000 (development version)<a class="anchor" aria-label="anchor" href="#vellum-01119000-development-version"></a></h2>
+<div class="section level3">
+<h3 id="new-features-0-11-1-9000">New features<a class="anchor" aria-label="anchor" href="#new-features-0-11-1-9000"></a></h3>
+<ul><li>A grob’s <code>meta</code> can be columnar: a data frame with one row per element and one column per field, in place of a list of records. <code><a href="../reference/scene_model.html">scene_model()</a></code> gains <code>meta = c("records", "columns")</code>: <code>"records"</code> (the default) returns the <code>meta</code> list-column as before, whatever form the grobs carried, and <code>"columns"</code> returns it as a data-frame column, one column per field, without building a record per element (VR-19).</li>
+</ul></div>
 </div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.11.1" id="vellum-0111">vellum 0.11.1<a class="anchor" aria-label="anchor" href="#vellum-0111"></a></h2>

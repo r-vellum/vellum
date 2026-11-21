@@ -154,7 +154,12 @@ This is the join key a host uses to tie an on-screen element back to a
 datum.</li>
 <li>
 <code>meta</code>: a list of <strong>free-form per-element
-records</strong>, e.g. a tooltip string or field values.</li>
+records</strong>, e.g. a tooltip string or field values. It can also be
+given <strong>columnar</strong>: a data frame with one row per element
+and one column per field. Row <code>i</code> stands for the record of
+that row’s values (a <code>NULL</code> entry in a list-column leaves its
+field out of the record), and it costs far less than a list of records
+when there are many elements.</li>
 </ul>
 <p>On a batched mark both are per element and must have <strong>length
 1</strong> (shared by every element) <strong>or exactly the element
@@ -319,10 +324,25 @@ none)</td>
 <tr class="odd">
 <td><code>meta</code></td>
 <td>list</td>
-<td>the free-form per-element record (list-column)</td>
+<td>the free-form per-element record (list-column; see below for the
+columnar form)</td>
 </tr>
 </tbody>
 </table>
+<p><code>scene_model(scene, meta = "columns")</code> returns the same
+table with <code>meta</code> as a <strong>data-frame column</strong>
+instead: one row per element and one column per field. A field is a
+plain vector when every element carrying it holds one atomic value of
+one type (<code>NA</code> for the elements without it), and a
+list-column (<code>NULL</code> where absent) otherwise. A host that
+reads meta for many elements (vellumwidget does) asks for this form, so
+no per-element record is ever built.</p>
+<div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="../reference/scene_model.html">scene_model</a></span><span class="op">(</span><span class="va">s</span>, meta <span class="op">=</span> <span class="st">"columns"</span><span class="op">)</span><span class="op">$</span><span class="va">elements</span><span class="op">$</span><span class="va">meta</span></span>
+<span><span class="co">#&gt;   tooltip</span></span>
+<span><span class="co">#&gt; 1   first</span></span>
+<span><span class="co">#&gt; 2  second</span></span>
+<span><span class="co">#&gt; 3   third</span></span></code></pre></div>
 <p>The <code>mark</code> vocabulary is these eleven values, and only
 these: <code>rect</code>, <code>point</code>, <code>circle</code>,
 <code>hexagon</code>, <code>sector</code>, <code>segment</code>,
@@ -362,7 +382,7 @@ element.) Key one with the constructor’s <code>key</code> argument
 row of <code>elements</code> (a named viewport becomes an addressable
 panel; one with no elements in the table has no row). An element’s
 <code>panel</code> is its innermost enclosing named viewport.</p>
-<div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/utils/str.html" class="external-link">str</a></span><span class="op">(</span><span class="va">m</span><span class="op">$</span><span class="va">panels</span><span class="op">)</span></span>
 <span><span class="co">#&gt; 'data.frame':    0 obs. of  14 variables:</span></span>
 <span><span class="co">#&gt;  $ name     : chr </span></span>
@@ -529,7 +549,7 @@ by the same walk that renders the scene, so a segment drawn with an
 <code>offset</code> or end caps is reported where it lands.
 <code><a href="../reference/vl_nearest.html">vl_nearest()</a></code> measures against exactly this geometry, so a
 client that follows the rules below reproduces it.</p>
-<div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">holed</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/vl_scene.html">vl_scene</a></span><span class="op">(</span><span class="fl">4</span>, <span class="fl">3</span>, dpi <span class="op">=</span> <span class="fl">100</span><span class="op">)</span> <span class="op">|&gt;</span></span>
 <span>  <span class="fu"><a href="../reference/vl_scene.html">draw</a></span><span class="op">(</span><span class="fu"><a href="../reference/grob.html">path_grob</a></span><span class="op">(</span></span>
 <span>    x <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.1</span>, <span class="fl">0.9</span>, <span class="fl">0.9</span>, <span class="fl">0.1</span>, <span class="fl">0.4</span>, <span class="fl">0.6</span>, <span class="fl">0.6</span>, <span class="fl">0.4</span><span class="op">)</span>,</span>
@@ -629,7 +649,7 @@ kind report <code>"nonzero"</code>. <code><a href="../reference/vl_nearest.html"
 <code><a href="../reference/hit_test.html">hit_test()</a></code> both decide containment by that rule, so a click
 in the hole of an even-odd path is outside it, and
 <code><a href="../reference/hit_test.html">hit_test()</a></code> falls through to whatever is drawn beneath:</p>
-<div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/vl_nearest.html">vl_nearest</a></span><span class="op">(</span><span class="va">holed</span>, <span class="fl">0.5</span>, <span class="fl">0.5</span><span class="op">)</span><span class="op">$</span><span class="va">dist</span> <span class="co"># in the hole: outside, so a positive distance</span></span>
 <span><span class="co">#&gt; [1] 30</span></span>
 <span><span class="fu"><a href="../reference/vl_nearest.html">vl_nearest</a></span><span class="op">(</span><span class="va">holed</span>, <span class="fl">0.2</span>, <span class="fl">0.5</span><span class="op">)</span><span class="op">$</span><span class="va">dist</span> <span class="co"># in the ring: inside</span></span>
@@ -644,7 +664,7 @@ in the hole of an even-odd path is outside it, and
 <p><code><a href="../reference/scene_svg.html">scene_svg()</a></code> returns the same scene as an SVG string.
 Interactivity rides on SVG attributes; the raster and PDF backends
 ignore all of them.</p>
-<div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb10"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">svg</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/scene_svg.html">scene_svg</a></span><span class="op">(</span><span class="va">s</span><span class="op">)</span></span>
 <span><span class="co"># the data-key attributes on the three points:</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/base/regmatches.html" class="external-link">regmatches</a></span><span class="op">(</span><span class="va">svg</span>, <span class="fu"><a href="https://rdrr.io/r/base/grep.html" class="external-link">gregexpr</a></span><span class="op">(</span><span class="st">'data-key="[^"]*"'</span>, <span class="va">svg</span><span class="op">)</span><span class="op">)</span><span class="op">[[</span><span class="fl">1</span><span class="op">]</span><span class="op">]</span></span>

@@ -407,8 +407,11 @@ emits nothing (a static render is unchanged). Ignored by raster/PDF.</p></dd>
 <dt id="arg-meta">meta<a class="anchor" aria-label="anchor" href="#arg-meta"></a></dt>
 <dd><p>Optional free-form per-element metadata for the batched marks: a
 list with one entry (record) per element (recycled), e.g. tooltip text or
-field values. It never reaches the backend (nothing drawn changes); it rides
-on the scene and is returned by <code><a href="scene_model.html">scene_model()</a></code>. <code>NULL</code> (default) = none.</p></dd>
+field values, or a data frame with one row per element and one column per
+field (columnar, cheaper for many elements; row <code>i</code> stands for the record
+of its values, a <code>NULL</code> list-column entry leaving its field out). It never
+reaches the backend (nothing drawn changes); it rides on the scene and is
+returned by <code><a href="scene_model.html">scene_model()</a></code>. <code>NULL</code> (default) = none.</p></dd>
 
 
 <dt id="arg-default-units">default_units<a class="anchor" aria-label="anchor" href="#arg-default-units"></a></dt>
