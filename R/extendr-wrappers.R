@@ -461,6 +461,8 @@ rs_attractor <- function(kind, n, a, b, c, d, x0, y0) .Call(wrap__rs_attractor, 
 #'`panels` (`NULL` or names) restricts it to marks in those panels.
 #'`keys` (`NULL` or a character vector, VR-22): the caller's key table;
 #'`record$key` then indexes it, and only the keys it lacks are listed.
+#'`precision` (VR-18): `"f32"`, `"u16"`, `"u24"`, or a number, the
+#'largest rounding error in device px a quantised geometry column may have.
 #'}
 #'
 #'\subsection{Method `render_pdf`}{
@@ -662,7 +664,7 @@ Scene$render_svg <- function(path, outline_text) .Call(wrap__Scene__render_svg, 
 
 Scene$render_svg_string <- function(outline_text, layer, panels, run) .Call(wrap__Scene__render_svg_string, self, outline_text, layer, panels, run)
 
-Scene$display_list_raw <- function(panels, version, keys) .Call(wrap__Scene__display_list_raw, self, panels, version, keys)
+Scene$display_list_raw <- function(panels, version, keys, precision) .Call(wrap__Scene__display_list_raw, self, panels, version, keys, precision)
 
 Scene$render_pdf <- function(path) .Call(wrap__Scene__render_pdf, self, path)
 

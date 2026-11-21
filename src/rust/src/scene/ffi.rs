@@ -1668,7 +1668,9 @@ impl Scene {
     /// `panels` (`NULL` or names) restricts it to marks in those panels.
     /// `keys` (`NULL` or a character vector, VR-22): the caller's key table;
     /// `record$key` then indexes it, and only the keys it lacks are listed.
-    fn display_list_raw(&self, panels: Robj, version: i32, keys: Robj) -> List {
+    /// `precision` (VR-18): `"f32"`, `"u16"`, `"u24"`, or a number, the
+    /// largest rounding error in device px a quantised geometry column may have.
+    fn display_list_raw(&self, panels: Robj, version: i32, keys: Robj, precision: Robj) -> List {
         let panels = if panels.is_null() {
             None
         } else {
@@ -1691,7 +1693,20 @@ impl Scene {
                     .collect(),
             )
         };
-        self.display_list(panels, version.clamp(1, 2) as u32, keys)
+        let precision = if let Some(e) = precision.as_real() {
+            if !(e.is_finite() && e > 0.0) {
+                throw_r_error("`precision` must be a positive number of device px");
+            }
+            super::dlist::Precision::MaxError(e)
+        } else {
+            match precision.as_str() {
+                None | Some("f32") => super::dlist::Precision::F32,
+                Some("u16") => super::dlist::Precision::Bits(16),
+                Some("u24") => super::dlist::Precision::Bits(24),
+                Some(p) => throw_r_error(format!("unknown `precision` \"{p}\"")),
+            }
+        };
+        self.display_list(panels, version.clamp(1, 2) as u32, keys, precision)
     }
 
     /// Render the scene to a PDF file. Returns any degradation warnings (e.g. a
