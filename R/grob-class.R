@@ -76,20 +76,45 @@ grob <- S7::new_class(
   rep_len(as.character(key), n)
 }
 
-# Recycle a per-element `meta` list to `n`. `meta` is a list of records (one per
-# element); a length-1 list is recycled to every element. NULL -> NULL.
+# Recycle a per-element `meta` to `n`. `meta` is either a list of records (one
+# per element) or, columnar, a data frame with one row per element and one
+# column per field (VR-19); one record / one row is recycled to every element.
+# NULL -> NULL.
 .recycle_meta <- function(meta, n, call = parent.frame()) {
   if (is.null(meta)) {
     return(NULL)
   }
+  if (is.data.frame(meta)) {
+    .check_meta_cols(meta, call)
+    .check_elem_len(seq_len(nrow(meta)), n, "meta", call)
+    return(
+      if (nrow(meta) == n) meta else vctrs::vec_slice(meta, rep_len(1L, n))
+    )
+  }
   if (!is.list(meta)) {
     cli::cli_abort(
-      "{.arg meta} must be a list, one entry (record) per element.",
+      "{.arg meta} must be a list, one entry (record) per element, or a data frame, one row per element.",
       call = call
     )
   }
   .check_elem_len(meta, n, "meta", call)
   rep_len(meta, n)
+}
+
+# A columnar `meta`: every column is a plain vector or a list (one value per
+# element). Matrix and data-frame columns have no per-element record form.
+.check_meta_cols <- function(meta, call) {
+  bad <- vapply(meta, function(v) !is.null(dim(v)), logical(1))
+  if (any(bad)) {
+    cli::cli_abort(
+      c(
+        "Each column of a data-frame {.arg meta} must be a vector or a list.",
+        x = "{.field {names(meta)[bad]}} {?is/are} not."
+      ),
+      call = call
+    )
+  }
+  invisible(meta)
 }
 
 .check_elem_len <- function(v, n, arg, call) {
