@@ -134,7 +134,45 @@ fn int_key(k: &str) -> Option<u32> {
     (v.to_string() == k).then_some(v)
 }
 
-pub(super) fn encode(dl: DisplayList, w: f64, h: f64) -> List {
+/// The key table and per-record key indices. With `given` (VR-22: the
+/// caller's own key vector, e.g. vellumwidget's element table) a record's key
+/// is its first position in `given`, and only the keys `given` lacks are
+/// listed, in first-use order, at `given.len()` onwards. `None` entries
+/// (`NA`) match nothing. Without it, the list's own table in first-use order.
+fn key_refs(
+    dl_keys: &[String],
+    rec_keys: &[u32],
+    given: Option<&[Option<String>]>,
+) -> (Vec<u32>, Vec<String>) {
+    let Some(given) = given else {
+        return (rec_keys.to_vec(), dl_keys.to_vec());
+    };
+    let mut pos: HashMap<&str, u32> = HashMap::with_capacity(given.len());
+    for (i, k) in given.iter().enumerate() {
+        if let Some(k) = k {
+            pos.entry(k.as_str()).or_insert(i as u32);
+        }
+    }
+    let base = given.len() as u32;
+    let mut extra: Vec<String> = Vec::new();
+    let map: Vec<u32> = dl_keys
+        .iter()
+        .map(|k| match pos.get(k.as_str()) {
+            Some(&i) => i,
+            None => {
+                extra.push(k.clone());
+                base + extra.len() as u32 - 1
+            }
+        })
+        .collect();
+    let refs = rec_keys
+        .iter()
+        .map(|&k| map.get(k as usize).copied().unwrap_or(k))
+        .collect();
+    (refs, extra)
+}
+
+pub(super) fn encode(dl: DisplayList, w: f64, h: f64, given: Option<&[Option<String>]>) -> List {
     // Paints, interned in first-use order.
     let mut paint_ix: HashMap<_, u32> = HashMap::new();
     let mut paints = Vec::new();
@@ -234,11 +272,11 @@ pub(super) fn encode(dl: DisplayList, w: f64, h: f64) -> List {
     }
     // Keys: integer-valued keys (the common `data_id = row`) ship as a number
     // column -- usually a `seq` -- rather than as text.
-    let ints: Option<Vec<u32>> = dl.keys.iter().map(|k| int_key(k)).collect();
+    let (key, key_table) = key_refs(&dl.keys, &key, given);
+    let ints: Option<Vec<u32>> = key_table.iter().map(|k| int_key(k)).collect();
     let keys: Robj = match ints {
         Some(v) if !v.is_empty() => col_uint(&v),
-        _ => dl
-            .keys
+        _ => key_table
             .iter()
             .map(|s| s.as_str())
             .collect::<Strings>()
@@ -282,6 +320,11 @@ pub(super) fn encode(dl: DisplayList, w: f64, h: f64) -> List {
         keys = keys,
         panels = dl.panels.iter().map(|s| s.as_str()).collect::<Strings>()
     );
+    // VR-22: `record$key` indexes `c(given, keys)`; say how many come first.
+    let out = match given {
+        Some(g) => with_field(out, "keys_given", Robj::from(g.len() as i32)),
+        None => out,
+    };
     if !v2 {
         return out;
     }
@@ -387,9 +430,51 @@ pub(super) fn encode(dl: DisplayList, w: f64, h: f64) -> List {
 
 impl Scene {
     /// Walk the scene through the display-list backend and encode the result.
-    pub(super) fn display_list(&self, panels: Option<Vec<String>>, version: u32) -> List {
+    /// `keys` (VR-22): the caller's key table for `record$key` to index.
+    pub(super) fn display_list(
+        &self,
+        panels: Option<Vec<String>>,
+        version: u32,
+        keys: Option<Vec<Option<String>>>,
+    ) -> List {
         let mut b = DisplayListBackend::with_options(panels, version);
         let _ = self.render_to(&mut b);
-        encode(b.finish(), self.w_px as f64, self.h_px as f64)
+        encode(
+            b.finish(),
+            self.w_px as f64,
+            self.h_px as f64,
+            keys.as_deref(),
+        )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::key_refs;
+
+    fn s(v: &[&str]) -> Vec<String> {
+        v.iter().map(|x| x.to_string()).collect()
+    }
+
+    #[test]
+    fn key_refs_without_given_is_identity() {
+        let (refs, table) = key_refs(&s(&["a", "b"]), &[1, 0, 1], None);
+        assert_eq!(refs, vec![1, 0, 1]);
+        assert_eq!(table, s(&["a", "b"]));
+    }
+
+    #[test]
+    fn key_refs_index_the_given_table_then_the_rest() {
+        let given = vec![
+            Some("x".to_string()),
+            None,
+            Some("b".to_string()),
+            Some("a".to_string()),
+            Some("b".to_string()),
+        ];
+        // "c" and "d" are not given: they follow the given table in first-use order.
+        let (refs, table) = key_refs(&s(&["a", "c", "b", "d"]), &[0, 1, 2, 3, 0], Some(&given));
+        assert_eq!(refs, vec![3, 5, 2, 6, 3]);
+        assert_eq!(table, s(&["c", "d"]));
     }
 }

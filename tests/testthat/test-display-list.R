@@ -419,3 +419,48 @@ test_that("version 2 lists a path clip as device-px clip paths (VW-23)", {
     draw(rect_grob(gp = vl_gpar(fill = linear_gradient(c("red", "blue"), extend = "repeat")), key = "rep"))
   expect_equal(bitwAnd(.dl_decode(scene_display_list(s3, version = 2))$flags, 1L), 1L)
 })
+
+test_that("records can index a key table the caller already has (VR-22)", {
+  n <- 50
+  s <- vl_scene(4, 4, dpi = 72) |>
+    draw(points_grob(
+      x = seq(0, 1, length.out = n),
+      y = 0.5,
+      size = 1,
+      key = as.character(seq_len(n))
+    )) |>
+    draw(rect_grob(x = 0.5, y = 0.5, width = 0.1, height = 0.1, key = "box"))
+  ref <- .dl_decode(scene_display_list(s, version = 2L))
+  # The caller's table in the same order as the records: one sequence, and
+  # the list ships no keys of its own.
+  given <- c(as.character(seq_len(n)), "box")
+  dl <- scene_display_list(s, version = 2L, keys = given)
+  expect_identical(dl$keys_given, as.integer(n + 1))
+  expect_identical(dl$record$key$seq, c(0, 1))
+  expect_length(dl$keys, 0L)
+  expect_identical(.dl_decode(dl, given), ref)
+  # A shuffled table with extra keys, an NA and a duplicate: records point
+  # at the first match, keys it lacks follow it.
+  given2 <- c("zzz", NA, rev(as.character(seq_len(n - 5))), "10")
+  dl2 <- scene_display_list(s, version = 2L, keys = given2)
+  expect_identical(dl2$keys_given, length(given2))
+  expect_identical(.dl_decode(dl2, given2), ref)
+  missing <- c(as.character((n - 4):n), "box")
+  extra <- if (is.list(dl2$keys)) as.character(.dl_col(dl2$keys)) else dl2$keys
+  expect_setequal(extra, missing)
+  k <- .dl_col(dl2$record$key)
+  expect_equal(k[1], match("1", given2) - 1)
+  # Version 1 takes it too; no table leaves the list as before.
+  expect_identical(
+    .dl_decode(scene_display_list(s, keys = given), given),
+    .dl_decode(scene_display_list(s))
+  )
+  expect_null(scene_display_list(s)$keys_given)
+  # Unicode keys survive the round trip.
+  u <- vl_scene(2, 2) |>
+    draw(points_grob(x = c(0.2, 0.8), y = 0.5, key = c("café", "日本")))
+  du <- scene_display_list(u, keys = c("日本", "café"))
+  expect_equal(.dl_col(du$record$key), c(1, 0))
+  expect_length(du$keys, 0L)
+  expect_error(scene_display_list(s, keys = 1:3), "character vector")
+})

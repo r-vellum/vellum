@@ -459,6 +459,8 @@ rs_attractor <- function(kind, n, a, b, c, d, x0, y0) .Call(wrap__rs_attractor, 
 #'device px, as columnar base64 tables. Internal to vellumwidget; see
 #'`scene_display_list()`.
 #'`panels` (`NULL` or names) restricts it to marks in those panels.
+#'`keys` (`NULL` or a character vector, VR-22): the caller's key table;
+#'`record$key` then indexes it, and only the keys it lacks are listed.
 #'}
 #'
 #'\subsection{Method `render_pdf`}{
@@ -660,7 +662,7 @@ Scene$render_svg <- function(path, outline_text) .Call(wrap__Scene__render_svg, 
 
 Scene$render_svg_string <- function(outline_text, layer, panels, run) .Call(wrap__Scene__render_svg_string, self, outline_text, layer, panels, run)
 
-Scene$display_list_raw <- function(panels, version) .Call(wrap__Scene__display_list_raw, self, panels, version)
+Scene$display_list_raw <- function(panels, version, keys) .Call(wrap__Scene__display_list_raw, self, panels, version, keys)
 
 Scene$render_pdf <- function(path) .Call(wrap__Scene__render_pdf, self, path)
 

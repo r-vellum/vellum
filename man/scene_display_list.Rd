@@ -4,7 +4,13 @@
 \alias{scene_display_list}
 \title{Marks-only display list (internal, for vellumwidget)}
 \usage{
-scene_display_list(scene, what = "keyed", panels = NULL, version = 1L)
+scene_display_list(
+  scene,
+  what = "keyed",
+  panels = NULL,
+  version = 1L,
+  keys = NULL
+)
 }
 \arguments{
 \item{scene}{A \code{\link[=vl_scene]{vl_scene()}}, or anything with an \code{\link[=as_vellum_scene]{as_vellum_scene()}} method.}
@@ -19,6 +25,10 @@ panels, which leaves out a legend's keyed swatches.}
 
 \item{version}{The format version, \code{1} (the default) or \code{2} (see the
 \emph{Version 2} section).}
+
+\item{keys}{\code{NULL} (the default), or a character vector of keys for
+\code{record$key} to index, so the list need not repeat them (VR-22). Keys
+it lacks are listed in \code{keys} as usual, after it; \code{NA} matches nothing.}
 }
 \value{
 The display list, as described in the \emph{Format} section.
@@ -60,7 +70,11 @@ device px, or \code{NA} for solid), \code{linecap} and \code{linejoin}.
 \item \code{clips}: rectangles \code{x0}, \code{y0}, \code{x1}, \code{y1} (device px).
 \item \code{keys}: the distinct keys in first-use order, as a character vector, or as
 an integer column (see below) when every key is a plain non-negative
-integer.
+integer. With the \code{keys} argument, only the keys it lacks (see below).
+\item \code{keys_given}: only with the \code{keys} argument, its length. \code{record$key} then
+indexes \verb{c(<the keys argument>, keys)}: a key found in the argument is its
+first position there, and the rest follow in first-use order. A client
+that already has the keys (vellumwidget's element table) ships them once.
 \item \code{panels}: the names of the panels marks are drawn in.
 }
 

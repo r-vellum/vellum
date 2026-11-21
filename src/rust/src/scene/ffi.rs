@@ -1666,7 +1666,9 @@ impl Scene {
     /// device px, as columnar base64 tables. Internal to vellumwidget; see
     /// `scene_display_list()`.
     /// `panels` (`NULL` or names) restricts it to marks in those panels.
-    fn display_list_raw(&self, panels: Robj, version: i32) -> List {
+    /// `keys` (`NULL` or a character vector, VR-22): the caller's key table;
+    /// `record$key` then indexes it, and only the keys it lacks are listed.
+    fn display_list_raw(&self, panels: Robj, version: i32, keys: Robj) -> List {
         let panels = if panels.is_null() {
             None
         } else {
@@ -1677,7 +1679,19 @@ impl Scene {
                     .unwrap_or_default(),
             )
         };
-        self.display_list(panels, version.clamp(1, 2) as u32)
+        let keys = if keys.is_null() {
+            None
+        } else {
+            let v: Strings = keys
+                .try_into()
+                .unwrap_or_else(|_| throw_r_error("`keys` must be a character vector"));
+            Some(
+                v.iter()
+                    .map(|s| (!s.is_na()).then(|| s.to_string()))
+                    .collect(),
+            )
+        };
+        self.display_list(panels, version.clamp(1, 2) as u32, keys)
     }
 
     /// Render the scene to a PDF file. Returns any degradation warnings (e.g. a

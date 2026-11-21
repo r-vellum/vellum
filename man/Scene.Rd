@@ -249,6 +249,8 @@ The marks-only display list (VR-14): every keyed primitive, resolved to
 device px, as columnar base64 tables. Internal to vellumwidget; see
 \code{scene_display_list()}.
 \code{panels} (\code{NULL} or names) restricts it to marks in those panels.
+\code{keys} (\code{NULL} or a character vector, VR-22): the caller's key table;
+\code{record$key} then indexes it, and only the keys it lacks are listed.
 }
 
 \subsection{Method \code{render_pdf}}{
