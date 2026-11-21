@@ -13,7 +13,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">vellum</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.11.1.9000</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.12.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -70,14 +70,14 @@
     </div>
 
     <div class="section level2">
-<h2 class="pkg-version" data-toc-text="0.11.1.9000" id="vellum-01119000-development-version">vellum 0.11.1.9000 (development version)<a class="anchor" aria-label="anchor" href="#vellum-01119000-development-version"></a></h2>
+<h2 class="pkg-version" data-toc-text="0.12.0" id="vellum-0120">vellum 0.12.0<a class="anchor" aria-label="anchor" href="#vellum-0120"></a></h2>
 <div class="section level3">
-<h3 id="new-features-0-11-1-9000">New features<a class="anchor" aria-label="anchor" href="#new-features-0-11-1-9000"></a></h3>
+<h3 id="new-features-0-12-0">New features<a class="anchor" aria-label="anchor" href="#new-features-0-12-0"></a></h3>
 <ul><li><p>A grob’s <code>meta</code> can be columnar: a data frame with one row per element and one column per field, in place of a list of records. <code><a href="../reference/scene_model.html">scene_model()</a></code> gains <code>meta = c("records", "columns")</code>: <code>"records"</code> (the default) returns the <code>meta</code> list-column as before, whatever form the grobs carried, and <code>"columns"</code> returns it as a data-frame column, one column per field, without building a record per element (VR-19).</p></li>
 <li><p><code><a href="../reference/scene_display_list.html">scene_display_list()</a></code> (internal, for vellumwidget) gains <code>keys</code>: a character vector of keys the caller already has, such as vellumwidget’s element table. <code>record$key</code> then indexes it, and the list’s own <code>keys</code> holds only the keys it lacks, with <code>keys_given</code> saying how many come first (VR-22). vellumwidget used to ship every key twice; for a 200,000-point keyed scatter this saves about 1 MB of widget payload.</p></li>
 </ul></div>
 <div class="section level3">
-<h3 id="minor-improvements-and-fixes-0-11-1-9000">Minor improvements and fixes<a class="anchor" aria-label="anchor" href="#minor-improvements-and-fixes-0-11-1-9000"></a></h3>
+<h3 id="minor-improvements-and-fixes-0-12-0">Minor improvements and fixes<a class="anchor" aria-label="anchor" href="#minor-improvements-and-fixes-0-12-0"></a></h3>
 <ul><li>Large clouds of equal-size, fill-only circles (10,000 or more in one grob, e.g. points with <code>col = NA</code>) are drawn in PNG from the same sub-pixel sprite as outlined ones (VR-20). Each mark used to snap to a whole pixel; now it lands within 1/32 px of its exact position, so the image is closer to the exact render (mean difference 0.04/255 instead of 0.39/255 for opaque marks) and about 3x faster to draw. Pixels change slightly. With antialiasing off, these clouds are now drawn per element, aliased as asked, instead of from an antialiased sprite.</li>
 </ul></div>
 </div>
