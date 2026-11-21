@@ -13,7 +13,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">vellum</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.11.0.9000</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.11.1</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -70,14 +70,14 @@
     </div>
 
     <div class="section level2">
-<h2 class="pkg-version" data-toc-text="0.11.0.9000" id="vellum-01109000-development-version">vellum 0.11.0.9000 (development version)<a class="anchor" aria-label="anchor" href="#vellum-01109000-development-version"></a></h2>
+<h2 class="pkg-version" data-toc-text="0.11.1" id="vellum-0111">vellum 0.11.1<a class="anchor" aria-label="anchor" href="#vellum-0111"></a></h2>
 <div class="section level3">
-<h3 id="new-features-0-11-0-9000">New features<a class="anchor" aria-label="anchor" href="#new-features-0-11-0-9000"></a></h3>
+<h3 id="new-features-0-11-1">New features<a class="anchor" aria-label="anchor" href="#new-features-0-11-1"></a></h3>
 <ul><li>
 <code>scene_display_list(version = 2)</code> (internal, for vellumwidget) splits the flagged runs where a blend mode starts or ends and reports how each run composites in <code>run_blend</code>: <code>"normal"</code>, or the CSS <code>mix-blend-mode</code> of the one blended group the run holds (VW-32). Rendered on its own (<code>scene_png(layer = "keyed_flagged", run = k)</code>), such a run is its marks unblended, so a client can composite it with that blend mode instead of falling back to the full mark image.</li>
 </ul></div>
 <div class="section level3">
-<h3 id="bug-fixes-0-11-0-9000">Bug fixes<a class="anchor" aria-label="anchor" href="#bug-fixes-0-11-0-9000"></a></h3>
+<h3 id="bug-fixes-0-11-1">Bug fixes<a class="anchor" aria-label="anchor" href="#bug-fixes-0-11-1"></a></h3>
 <ul><li>
 <code><a href="../reference/scene_svg.html">scene_svg()</a></code> wraps a compositing group’s content in the group again when the group sits inside a named panel. A blend mode, group opacity, mask or blur/shadow effect inside a panel (every layer <code>blend</code>, <code>clip_layer()</code> or layer effect in a vellumplot plot) used to be written as an empty <code>&lt;g&gt;</code> after its marks, so the SVG showed the marks unblended, opaque and unmasked. The raster and PDF output were right.</li>
 </ul></div>
