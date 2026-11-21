@@ -201,3 +201,36 @@ test_that("the stroked-point sprite respects clipping and the keyed layer", {
   expect_true(all(fast[seq_len(floor(0.19 * h)), , 1:3] == 1))
   expect_true(all(fast[, seq_len(floor(0.19 * w)), 1:3] == 1))
 })
+
+# VR-20: fill-only clouds take the same phased sprite (they used to snap each
+# mark to a whole pixel), so they match the exact render as closely.
+test_that("the fill-only point sprite matches the per-element render", {
+  skip_if_not_installed("png")
+  gps <- list(
+    opaque = vl_gpar(fill = "#E69F00", col = NA),
+    translucent = vl_gpar(fill = "steelblue", col = NA, alpha = 0.4)
+  )
+  for (nm in names(gps)) {
+    for (scale in c(1, 2)) {
+      exact <- .premul(scene_png(.stroked_cloud(TRUE, gps[[nm]]), scale = scale))
+      fast <- .premul(scene_png(.stroked_cloud(FALSE, gps[[nm]]), scale = scale))
+      expect_identical(dim(fast), dim(exact))
+      d <- abs(fast - exact)
+      # whole-pixel snapping gave a mean of 0.3-0.8/255 and a max of 64-192/255
+      expect_lt(mean(d), 0.5 / 255, label = paste(nm, scale))
+      expect_lt(max(d), 48 / 255, label = paste(nm, scale))
+    }
+  }
+})
+
+test_that("the fill-only point sprite respects clipping", {
+  skip_if_not_installed("png")
+  gp <- vl_gpar(fill = "#56B4E9", col = NA)
+  fast <- .premul(scene_png(.stroked_cloud(FALSE, gp, clip = TRUE)))
+  exact <- .premul(scene_png(.stroked_cloud(TRUE, gp, clip = TRUE)))
+  expect_lt(mean(abs(fast - exact)), 0.5 / 255)
+  h <- dim(fast)[1]
+  w <- dim(fast)[2]
+  expect_true(all(fast[seq_len(floor(0.19 * h)), , 1:3] == 1))
+  expect_true(all(fast[, seq_len(floor(0.19 * w)), 1:3] == 1))
+})

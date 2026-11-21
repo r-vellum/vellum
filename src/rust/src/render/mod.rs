@@ -551,8 +551,9 @@ pub trait RenderBackend {
     ///
     /// The default places one unit circle per element -- or, for a keyed batch
     /// on a backend that emits keys (SVG), builds each circle in place and tags
-    /// it with its key. The raster backend overrides this to stamp a cached
-    /// sprite for large uniform solid-fill point clouds; the display-list
+    /// it with its key. The raster backend overrides this to stamp a sprite
+    /// (rasterised per sub-pixel phase) for large uniform point clouds with a
+    /// solid fill and/or a solid undashed stroke; the display-list
     /// backend records the batch as one point table.
     #[allow(clippy::too_many_arguments)]
     fn draw_circles(

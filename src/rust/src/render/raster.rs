@@ -54,45 +54,20 @@ fn skia_masktype(k: MaskKind) -> tiny_skia::MaskType {
 
 // --- shared geometry helpers ------------------------------------------------
 
-/// Render a solid AA circle of radius `r` (device px) into a tight square sprite,
-/// centred. Used to stamp large uniform point clouds instead of filling each.
-fn circle_sprite(r: f64, color: Rgba) -> Option<Pixmap> {
-    let dim = ((r + 1.0) * 2.0).ceil() as u32; // +1px AA padding
-    let mut pm = Pixmap::new(dim, dim)?;
-    let c = dim as f32 / 2.0;
-    let mut pb = PathBuilder::new();
-    pb.push_circle(c, c, r as f32);
-    let path = pb.finish()?;
-    let mut paint = Paint::default();
-    paint.set_color(color.to_skia());
-    // Always AA: this sprite is cached and shared across grobs, so it must not
-    // bake in one grob's `antialias` setting. Haloed/aliased text takes the exact
-    // outline path instead.
-    paint.anti_alias = true;
-    pm.fill_path(
-        &path,
-        &paint,
-        FillRule::Winding,
-        Transform::identity(),
-        None,
-    );
-    Some(pm)
-}
-
 /// Sub-pixel placement steps per axis for the stroked-circle sprite (VR-16):
 /// each sprite is rasterised at one of `SPRITE_PHASES^2` fractional offsets, so a
 /// blit lands within `1 / (2 * SPRITE_PHASES)` px (1/32) of the exact centre.
 const SPRITE_PHASES: i64 = 16;
 
-/// A filled-and-stroked AA circle of radius `r` (device px), drawn exactly as the
-/// per-element path draws one (fill, then the solid undashed stroke over it),
-/// into a square sprite whose centre sits at `(c0 + fx, c0 + fy)`. Compositing
-/// the sprite source-over equals the two draws (source-over is associative).
-fn stroked_circle_sprite(
+/// An AA circle of radius `r` (device px), drawn exactly as the per-element path
+/// draws one (the solid fill, then the solid undashed stroke over it, either one
+/// optional), into a square sprite whose centre sits at `(c0 + fx, c0 + fy)`.
+/// Compositing the sprite source-over equals the two draws (source-over is
+/// associative).
+fn phased_circle_sprite(
     r: f64,
     fill: Option<Rgba>,
-    color: Rgba,
-    stroke: &StrokeStyle,
+    stroke: Option<(Rgba, &StrokeStyle)>,
     dim: u32,
     c0: f64,
     fx: f64,
@@ -106,12 +81,20 @@ fn stroked_circle_sprite(
         let mut paint = Paint::default();
         paint.set_color(fc.to_skia());
         paint.anti_alias = true;
-        pm.fill_path(&path, &paint, FillRule::Winding, Transform::identity(), None);
+        pm.fill_path(
+            &path,
+            &paint,
+            FillRule::Winding,
+            Transform::identity(),
+            None,
+        );
     }
-    let mut paint = Paint::default();
-    paint.set_color(color.to_skia());
-    paint.anti_alias = true;
-    pm.stroke_path(&path, &paint, &skia_stroke(stroke), Transform::identity(), None);
+    if let Some((color, st)) = stroke {
+        let mut paint = Paint::default();
+        paint.set_color(color.to_skia());
+        paint.anti_alias = true;
+        pm.stroke_path(&path, &paint, &skia_stroke(st), Transform::identity(), None);
+    }
     Some(pm)
 }
 
@@ -1000,19 +983,22 @@ impl RenderBackend for RasterBackend {
         clip: &Clip,
         _keys: &[String],
     ) {
-        // Sprite fast path: a large cloud of equal-radius, solid-fill, unstroked
-        // markers. Rasterize the marker once and blit it per point (pixel-snapped,
-        // imperceptible at the densities where it triggers). Anything else falls
-        // back to per-element path fills.
+        // Sprite fast path: a large cloud of equal-radius circles with a solid
+        // fill, a solid undashed stroke, or both (vellumplot's points have both).
+        // The circle is rasterised once per sub-pixel phase, exactly as the
+        // per-element path draws it, and blitted, so each mark lands within
+        // 1/32 px of where the exact path would put it (VR-16 for stroked marks;
+        // VR-20 moved fill-only marks here from a whole-pixel-snapped sprite
+        // drawn with `draw_pixmap`). Anything else falls back to per-element path
+        // fills.
         //
         // PERF-4 (measured): the sprite blit beats both alternatives across the
         // whole tested radius range — per-element circle fills (~1.2x slower at
         // r=24px) and a single combined-path fill of all discs (much slower:
         // 3e5 discs in one rasterizer sweep is ~2.7x slower than the sprite).
         // So the sprite is kept for all uniform small-to-large markers; SPRITE_MAX_R
-        // only guards against absurd per-blit areas. The residual ~0.6x vs grid for
-        // big markers is raster throughput (grid's device circle fill is hard to
-        // beat); for huge overplotted clouds use datashade() (PERF-5) instead.
+        // only guards against absurd per-blit areas. For huge overplotted clouds
+        // use datashade() (PERF-5) instead.
         const SPRITE_MIN: usize = 10_000;
         const SPRITE_MAX_R: f64 = 64.0;
         // The fixed-radius sprite is placed at the mapped centre, so it is exact
@@ -1022,59 +1008,30 @@ impl RenderBackend for RasterBackend {
         // A non-unit scale would need a resized sprite, so verify at runtime and
         // fall back to per-element fills (which apply the full CTM) otherwise —
         // keeping raster identical to SVG/PDF even if the invariant is ever broken.
+        // The sprite is antialiased, so with antialiasing off the per-element path
+        // draws instead.
         let m = &transform;
         let unit_scale = (m.sx * m.sx + m.ky * m.ky - 1.0).abs() < 1e-6
             && (m.kx * m.kx + m.sy * m.sy - 1.0).abs() < 1e-6
             && (m.sx * m.kx + m.ky * m.sy).abs() < 1e-6;
         let n = cx.len().min(cy.len()).min(r.len());
-        let uniform_small = n >= SPRITE_MIN
-            && unit_scale
-            && stroke.is_none()
-            && r[0] > 0.0
-            && r[0] <= SPRITE_MAX_R
-            && r[..n].iter().all(|&v| (v - r[0]).abs() < 1e-9);
-        if uniform_small {
-            if let Some(ResolvedPaint::Solid(color)) = fill {
-                if let Some(sprite) = circle_sprite(r[0], *color) {
-                    let mask = self.mask_for(clip);
-                    let off = sprite.width() as f64 / 2.0;
-                    let paint = tiny_skia::PixmapPaint::default();
-                    let target = self.targets.last_mut().expect("at least the page target");
-                    for i in 0..n {
-                        // transform is a rigid isometry, so map the centre directly.
-                        let dx = transform.sx as f64 * cx[i]
-                            + transform.kx as f64 * cy[i]
-                            + transform.tx as f64;
-                        let dy = transform.ky as f64 * cx[i]
-                            + transform.sy as f64 * cy[i]
-                            + transform.ty as f64;
-                        target.draw_pixmap(
-                            (dx - off).round() as i32,
-                            (dy - off).round() as i32,
-                            sprite.as_ref(),
-                            &paint,
-                            Transform::identity(),
-                            mask.as_deref(),
-                        );
-                    }
-                    return;
-                }
-            }
-        }
-        // Stroked sprite (VR-16): the same cloud with a solid, undashed outline
-        // (vellumplot's points: fill and stroke). Per-element fill + stroke
-        // rasterisation dominated a big keyed scatter's PNG; the sprite is drawn
-        // once per sub-pixel phase and blitted, so each mark lands within 1/32 px
-        // of where the exact path would put it.
-        let pen = stroke
-            .as_ref()
-            .filter(|(_, st)| st.width > 0.0 && st.paint.is_none() && st.dash.is_empty());
         let fill_solid = match fill {
             None => Some(None),
             Some(ResolvedPaint::Solid(c)) => Some(Some(*c)),
             _ => None,
         };
-        if let (Some((color, st)), Some(fc)) = (pen, fill_solid) {
+        // (fill, stroke) the sprite bakes: a solid fill alone, or a solid undashed
+        // stroke over a solid (or no) fill.
+        let paint = match (&stroke, fill_solid) {
+            (None, Some(Some(fc))) => Some((Some(fc), None)),
+            (Some((color, st)), Some(fc))
+                if st.width > 0.0 && st.paint.is_none() && st.dash.is_empty() =>
+            {
+                Some((fc, Some((*color, st))))
+            }
+            _ => None,
+        };
+        if let Some((fc, pen)) = paint {
             let uniform = n >= SPRITE_MIN
                 && unit_scale
                 && antialias()
@@ -1082,10 +1039,11 @@ impl RenderBackend for RasterBackend {
                 && r[0] <= SPRITE_MAX_R
                 && r[..n].iter().all(|&v| (v - r[0]).abs() < 1e-9);
             if uniform {
-                let reach = r[0] + st.width as f64 / 2.0;
+                let reach = r[0] + pen.map_or(0.0, |(_, st)| st.width as f64 / 2.0);
                 let dim = ((reach + 2.0) * 2.0).ceil() as u32;
                 let c0 = (dim / 2) as f64;
-                let mut sprites: Vec<Option<Pixmap>> = vec![None; (SPRITE_PHASES * SPRITE_PHASES) as usize];
+                let mut sprites: Vec<Option<Pixmap>> =
+                    vec![None; (SPRITE_PHASES * SPRITE_PHASES) as usize];
                 let mask = self.mask_for(clip);
                 let target = self.targets.last_mut().expect("at least the page target");
                 let p = SPRITE_PHASES as f64;
@@ -1105,11 +1063,10 @@ impl RenderBackend for RasterBackend {
                     let (iy, py) = (qy.div_euclid(SPRITE_PHASES), qy.rem_euclid(SPRITE_PHASES));
                     let slot = (py * SPRITE_PHASES + px) as usize;
                     if sprites[slot].is_none() {
-                        sprites[slot] = stroked_circle_sprite(
+                        sprites[slot] = phased_circle_sprite(
                             r[0],
                             fc,
-                            *color,
-                            st,
+                            pen,
                             dim,
                             c0,
                             px as f64 / p,
