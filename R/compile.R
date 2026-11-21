@@ -828,13 +828,16 @@ S7::method(compile, gtree) <- function(node, scene) {
   # Repaint boundary (FW4c): bracket the subtree so the raster backend can cache
   # its sub-raster, keyed on the subtree `nid`. Requires a normal blend (a blend
   # composites against the live backdrop, which a captured transparent layer
-  # lacks) and a known nid (a cacheable scene). Ignored by SVG/PDF (they render
-  # the subtree as vector). The bracket is outermost, so it captures whatever the
-  # subtree draws, including its own mask/opacity group compositing below.
+  # lacks), no blend inside it that reaches that backdrop either (VR-24, see
+  # `.blend_reaches_out()`), and a known nid (a cacheable scene). Ignored by
+  # SVG/PDF (they render the subtree as vector). The bracket is outermost, so it
+  # captures whatever the subtree draws, including its own mask/opacity group
+  # compositing below.
   cached <- !is.null(node@vp) &&
     isTRUE(node@vp@cache) &&
     blend_code == 0L &&
-    !is.null(node@nid)
+    !is.null(node@nid) &&
+    !.blend_reaches_out(node@children)
   if (cached) {
     scene$subraster_start(node@nid)
   }
@@ -884,6 +887,40 @@ S7::method(compile, gtree) <- function(node, scene) {
     scene$end_panel()
   }
   scene$pop_viewport(1L)
+}
+
+# Whether a non-normal blend among `children` composites against the backdrop
+# below their parent: a blend viewport reached through viewports that open no
+# group of their own. A mask, a sub-1 opacity, a blend or a blur/shadow puts
+# what it holds in an isolated layer, so a blend inside one of those blends
+# against that layer and is not looked into. A cached viewport's sub-raster is
+# such a layer too, so it must not cache a subtree with a blend that reaches out
+# (it would blend against transparency in PNG while SVG and PDF blend against
+# the page, VR-24).
+.blend_reaches_out <- function(children) {
+  for (ch in children) {
+    if (!S7::S7_inherits(ch, gtree)) {
+      next
+    }
+    vp <- ch@vp
+    if (!is.null(vp)) {
+      if (!is.null(vp@blend) && .blend_codes[[vp@blend]] != 0L) {
+        return(TRUE)
+      }
+      if (
+        !is.null(vp@mask) ||
+          (!is.null(vp@alpha) && vp@alpha < 1) ||
+          (vp@blur %||% 0) > 0 ||
+          !is.null(vp@shadow)
+      ) {
+        next
+      }
+    }
+    if (.blend_reaches_out(ch@children)) {
+      return(TRUE)
+    }
+  }
+  FALSE
 }
 
 # The panel name of a viewport for `data-vellum-panel` emission: its non-empty
