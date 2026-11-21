@@ -55,3 +55,79 @@ test_that("PDF applies the blend mode (rasterized check)", {
   expect_gt(a[10, 10, 2], 0.9) # high green  (yellow * cyan = green)
   expect_lt(a[10, 10, 3], 0.1) # low blue
 })
+
+# PDF rasterised by pdftoppm next to the PNG backend, at the same size.
+pdf_vs_png <- function(s) {
+  f <- withr::local_tempfile(fileext = ".pdf", .local_envir = parent.frame())
+  render(s, f)
+  stem <- withr::local_tempfile(.local_envir = parent.frame())
+  system2("pdftoppm", c("-png", "-r", "72", shQuote(f), shQuote(stem)))
+  out <- paste0(stem, "-1.png")
+  if (!file.exists(out)) {
+    return(NULL)
+  }
+  list(pdf = png::readPNG(out), png = png::readPNG(scene_png(s)))
+}
+
+test_that("PDF blends a group as a unit: overlapping marks inside composite first (VR-23)", {
+  skip_if(unname(Sys.which("pdftoppm")) == "", "pdftoppm not available")
+  skip_if_not_installed("png")
+  # two overlapping squares in one multiply group over grey: where they
+  # overlap the later one covers the earlier (normal, inside the group), and
+  # only that result multiplies with the grey
+  s <- vl_scene(1, 1, dpi = 72, bg = "white") |>
+    draw(rect_grob(gp = vl_gpar(fill = "grey50", col = NA))) |>
+    push(vl_viewport(blend = "multiply")) |>
+    draw(rect_grob(
+      0.35,
+      0.5,
+      0.5,
+      0.5,
+      gp = vl_gpar(fill = "#ff8080", col = NA)
+    )) |>
+    draw(rect_grob(
+      0.65,
+      0.5,
+      0.5,
+      0.5,
+      gp = vl_gpar(fill = "#80c0ff", col = NA)
+    )) |>
+    pop()
+  r <- pdf_vs_png(s)
+  skip_if(is.null(r), "pdftoppm produced no output")
+  px <- function(a) a[36, 36, 1:3] # the middle: inside both squares
+  expect_equal(px(r$pdf), px(r$png), tolerance = 0.03)
+  # grey x the blue square, not grey x red x blue
+  expect_gt(px(r$pdf)[3], 0.4)
+})
+
+test_that("PDF nests blend groups as PNG does (VR-23)", {
+  skip_if(unname(Sys.which("pdftoppm")) == "", "pdftoppm not available")
+  skip_if_not_installed("png")
+  # a multiply group inside a screen group: its yellow multiplies with the
+  # screen group's own (transparent) backdrop, not with the page's grey
+  s <- vl_scene(1, 1, dpi = 72, bg = "white") |>
+    draw(rect_grob(gp = vl_gpar(fill = "grey50", col = NA))) |>
+    push(vl_viewport(blend = "screen")) |>
+    draw(rect_grob(
+      0.25,
+      0.5,
+      0.5,
+      1,
+      gp = vl_gpar(fill = "darkred", col = NA)
+    )) |>
+    push(vl_viewport(blend = "multiply")) |>
+    draw(rect_grob(
+      0.75,
+      0.5,
+      0.5,
+      1,
+      gp = vl_gpar(fill = "yellow", col = NA)
+    )) |>
+    pop() |>
+    pop()
+  r <- pdf_vs_png(s)
+  skip_if(is.null(r), "pdftoppm produced no output")
+  px <- function(a) a[36, 60, 1:3] # inside the yellow, outside the dark red
+  expect_equal(px(r$pdf), px(r$png), tolerance = 0.03)
+})

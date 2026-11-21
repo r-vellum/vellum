@@ -657,10 +657,17 @@ impl RenderBackend for PdfBackend<'_, '_> {
                 self.warn("a viewport mask could not be applied to PDF (degenerate mask size); the group was drawn unmasked");
             }
         }
-        // Group blend: blends the group's content against the backdrop below it.
+        // Group blend: the group's content is composited on its own first and the
+        // result blended against the backdrop below it, as PNG and SVG do. A
+        // blend mode in the graphics state applies to each object drawn under it,
+        // so `push_blend_mode` alone blends every mark (and a nested group's
+        // content) against the page; the isolated transparency group pushed after
+        // it collects the content (drawn normally inside) into one XObject, which
+        // is what the blend mode then applies to (VR-23).
         if let Some(kb) = krilla_blend(blend) {
             self.surface.push_blend_mode(kb);
-            pushes += 1;
+            self.surface.push_isolated();
+            pushes += 2;
         }
         // Group opacity: an isolated transparency group composited at `alpha`.
         if alpha < 1.0 {
