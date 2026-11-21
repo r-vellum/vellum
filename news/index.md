@@ -17,6 +17,14 @@
 
 ### Bug fixes
 
+- A `vl_viewport(cache = TRUE)` holding a blend-mode viewport that
+  composites against the page (not inside an opacity, mask, blend or
+  blur/shadow group of its own) is no longer cached in PNG (VR-24). The
+  cached sub-raster is an isolated layer, so the blend mixed with
+  transparency there (a multiply group drew its colours unmultiplied),
+  while SVG and PDF blended against the page. Such a viewport is now
+  drawn inline, as one with its own blend already was.
+
 - PDF output composites a blend-mode group as a unit, as PNG and SVG do
   (VR-23). The blend mode used to apply to each object in the group, so
   overlapping marks in one `blend = "multiply"` viewport multiplied each
