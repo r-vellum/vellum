@@ -71,7 +71,9 @@
 
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.11.0.9000" id="vellum-01109000-development-version">vellum 0.11.0.9000 (development version)<a class="anchor" aria-label="anchor" href="#vellum-01109000-development-version"></a></h2>
-</div>
+<ul><li>
+<code>scene_display_list(version = 2)</code> (internal, for vellumwidget) splits the flagged runs where a blend mode starts or ends and reports how each run composites in <code>run_blend</code>: <code>"normal"</code>, or the CSS <code>mix-blend-mode</code> of the one blended group the run holds (VW-32). Rendered on its own (<code>scene_png(layer = "keyed_flagged", run = k)</code>), such a run is its marks unblended, so a client can composite it with that blend mode instead of falling back to the full mark image.</li>
+</ul></div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.11.0" id="vellum-0110">vellum 0.11.0<a class="anchor" aria-label="anchor" href="#vellum-0110"></a></h2>
 <div class="section level3">

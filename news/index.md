@@ -2,6 +2,14 @@
 
 ## vellum 0.11.0.9000 (development version)
 
+- `scene_display_list(version = 2)` (internal, for vellumwidget) splits
+  the flagged runs where a blend mode starts or ends and reports how
+  each run composites in `run_blend`: `"normal"`, or the CSS
+  `mix-blend-mode` of the one blended group the run holds (VW-32).
+  Rendered on its own (`scene_png(layer = "keyed_flagged", run = k)`),
+  such a run is its marks unblended, so a client can composite it with
+  that blend mode instead of falling back to the full mark image.
+
 ## vellum 0.11.0
 
 ### New features
