@@ -1,6 +1,6 @@
 # Changelog
 
-## vellum 0.12.0.9000 (development version)
+## vellum 0.13.0
 
 ### New features
 

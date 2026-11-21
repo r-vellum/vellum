@@ -13,7 +13,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">vellum</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.12.0.9000</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.13.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -70,14 +70,14 @@
     </div>
 
     <div class="section level2">
-<h2 class="pkg-version" data-toc-text="0.12.0.9000" id="vellum-01209000-development-version">vellum 0.12.0.9000 (development version)<a class="anchor" aria-label="anchor" href="#vellum-01209000-development-version"></a></h2>
+<h2 class="pkg-version" data-toc-text="0.13.0" id="vellum-0130">vellum 0.13.0<a class="anchor" aria-label="anchor" href="#vellum-0130"></a></h2>
 <div class="section level3">
-<h3 id="new-features-0-12-0-9000">New features<a class="anchor" aria-label="anchor" href="#new-features-0-12-0-9000"></a></h3>
+<h3 id="new-features-0-13-0">New features<a class="anchor" aria-label="anchor" href="#new-features-0-13-0"></a></h3>
 <ul><li>
 <code><a href="../reference/scene_display_list.html">scene_display_list()</a></code> gains <code>precision</code> (VR-18) for compact coordinates. <code>"u16"</code> or <code>"u24"</code> quantise each geometry column (point centres and radii, rects, path vertices) to 16 or 24 bits within its own range, shipped as <code>lo</code>, <code>step</code> and the integers; a number is the largest rounding error allowed in device px, and picks the fewest of 8, 16 or 24 bits per column that meets it. At <code>0.005</code> (the precision of <code><a href="../reference/scene_svg.html">scene_svg()</a></code>’s coordinates) a 200k-point scatter’s list shrinks from 2.14 to 1.07 MB. The default, <code>"f32"</code>, is unchanged.</li>
 </ul></div>
 <div class="section level3">
-<h3 id="bug-fixes-0-12-0-9000">Bug fixes<a class="anchor" aria-label="anchor" href="#bug-fixes-0-12-0-9000"></a></h3>
+<h3 id="bug-fixes-0-13-0">Bug fixes<a class="anchor" aria-label="anchor" href="#bug-fixes-0-13-0"></a></h3>
 <ul><li><p>A <code>vl_viewport(cache = TRUE)</code> holding a blend-mode viewport that composites against the page (not inside an opacity, mask, blend or blur/shadow group of its own) is no longer cached in PNG (VR-24). The cached sub-raster is an isolated layer, so the blend mixed with transparency there (a multiply group drew its colours unmultiplied), while SVG and PDF blended against the page. Such a viewport is now drawn inline, as one with its own blend already was.</p></li>
 <li><p>PDF output composites a blend-mode group as a unit, as PNG and SVG do (VR-23). The blend mode used to apply to each object in the group, so overlapping marks in one <code>blend = "multiply"</code> viewport multiplied each other, and a blend nested in another blend group composited against the page. A blend group is now drawn as an isolated transparency group and the mode applies to the result.</p></li>
 <li><p>The raster backend no longer isolates a group that has no mask, opacity, blend mode or effect (VR-21). SVG and PDF never did, and SVG/CSS compositing doesn’t isolate such a group either, so a blend inside one now blends with what is beneath it in PNG output too, instead of with the group’s own transparent layer. <code><a href="../reference/scene_display_list.html">scene_display_list()</a></code> reports such a blend root’s <code>run_blend</code> mode instead of <code>""</code>. <code>compile()</code> never opens such a group, so PNG output of scenes built with vellum’s R API is unchanged; it changes only for a blend group wrapped in a plain group by direct backend calls (<code>Scene$group_start()</code> with no mask, opacity 1, normal blend and no effect).</p></li>
