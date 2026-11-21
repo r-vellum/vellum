@@ -110,6 +110,15 @@ every record of a node with a flagged record, and of an opacity group
 holding one, is in it. \code{scene_png(layer = "keyed_flagged", run = k)}
 draws run \code{k}, so a client can draw the exact records itself and
 composite each run's raster where the run starts.
+\item Blend modes in runs (VW-32): \code{run_blend} gives, per run, how its raster
+composites onto what is beneath it: \code{"normal"}, or a CSS \code{mix-blend-mode}
+keyword (\code{"multiply"}, \code{"screen"}, ...) when the run is exactly the marks
+of one group with that blend mode drawn onto the page (a \emph{blend root};
+a run ends where the blend root changes). Rendered on its own, such a
+run's raster is its marks unblended, and compositing it with that mode
+reproduces the blend. A blend nested inside a mask, an effect or an
+opacity group happens within that group's raster, so its run is
+\code{"normal"}. \code{""} marks a run that cannot be composited from its raster.
 }
 }
 
@@ -125,8 +134,8 @@ nothing (an invisible hover target such as a \code{fill = NA} rect, circle,
 marker or polygon). Its geometry is listed and its paint has \code{fill} and
 \code{stroke} \code{NA}, so a client hit-tests it but draws nothing; \code{32} inside a
 group with a blend mode (with \code{4}): the mark mixes with what is painted
-beneath it, so a separately rendered raster of it (a \code{"keyed_flagged"}
-run) cannot reproduce it either. Images do not appear at all.
+beneath it, so its run's raster reproduces it only when composited with
+the run's \code{run_blend} mode. Images do not appear at all.
 }
 
 \keyword{internal}

@@ -417,6 +417,84 @@ test_that("compositing the runs between the exact marks keeps the paint order", 
   expect_gt(max(abs(wrong - keyed)), 0.3)
 })
 
+# An exact disc, a multiplied disc, a screened disc (two blend roots), an
+# exact disc over them.
+.blend_scene <- function(keys = c("a", "b", "d", "c"), blend = TRUE) {
+  k <- function(x) if (x %in% keys) x else NULL
+  bl <- function(m) if (blend) m else NULL
+  vl_scene(4, 3, dpi = 72, bg = "white") |>
+    draw(circle_grob(0.3, 0.5, r = 0.2, gp = vl_gpar(fill = "steelblue", col = NA), key = k("a"))) |>
+    push(vl_viewport(blend = bl("multiply"))) |>
+    draw(circle_grob(0.42, 0.5, r = 0.2, gp = vl_gpar(fill = "gold", col = NA), key = k("b"))) |>
+    pop() |>
+    push(vl_viewport(blend = bl("screen"))) |>
+    draw(circle_grob(0.54, 0.5, r = 0.2, gp = vl_gpar(fill = "#cc3366", col = NA), key = k("d"))) |>
+    pop() |>
+    draw(circle_grob(0.66, 0.5, r = 0.2, gp = vl_gpar(fill = "tomato", col = NA), key = k("c")))
+}
+
+# W3C separable blending of straight-alpha `top` onto `bot` ([y, x, 4]).
+.blend_over <- function(top, bot, mode) {
+  as <- top[,, 4]
+  ab <- bot[,, 4]
+  ao <- as + ab * (1 - as)
+  out <- bot
+  for (k in 1:3) {
+    cs <- top[,, k]
+    cb <- bot[,, k]
+    b <- switch(mode, multiply = cb * cs, screen = cb + cs - cb * cs)
+    num <- as * (1 - ab) * cs + as * ab * b + (1 - as) * ab * cb
+    out[,, k] <- ifelse(ao > 0, num / ao, 0)
+  }
+  out[,, 4] <- ao
+  out
+}
+
+test_that("runs split at blend roots and report their blend mode (VW-32)", {
+  dl <- scene_display_list(.blend_scene(), version = 2L)
+  run <- .dl_col(dl$record$run)
+  keys <- as.character(dl$keys)[.dl_col(dl$record$key) + 1L]
+  expect_identical(dl$runs, 2L)
+  expect_equal(run[keys == "b"], 1)
+  expect_equal(run[keys == "d"], 2)
+  expect_identical(dl$run_blend, c("multiply", "screen"))
+  # runs without a blend root composite normally
+  expect_identical(scene_display_list(.flag_scene(), version = 2L)$run_blend, c("normal", "normal"))
+  # a blend inside an opacity group blends within that group's raster: the
+  # run (the whole group) composites normally
+  inner <- vl_scene(2, 2, dpi = 72) |>
+    push(vl_viewport(alpha = 0.5)) |>
+    draw(circle_grob(0.4, 0.5, r = 0.2, key = "w")) |>
+    push(vl_viewport(blend = "screen")) |>
+    draw(circle_grob(0.5, 0.5, r = 0.2, key = "x")) |>
+    pop() |>
+    pop()
+  inner_dl <- scene_display_list(inner, version = 2L)
+  expect_identical(inner_dl$runs, 1L)
+  expect_identical(inner_dl$run_blend, "normal")
+  # version 1 lists carry no run_blend
+  expect_null(scene_display_list(.blend_scene())$run_blend)
+})
+
+test_that("a blend run's raster is its marks unblended; blending it reproduces the keyed layer (VW-32)", {
+  skip_if_not_installed("png")
+  s <- .blend_scene()
+  r1 <- .png_arr(scene_png(s, layer = "keyed_flagged", run = 1))
+  r2 <- .png_arr(scene_png(s, layer = "keyed_flagged", run = 2))
+  # blended against the transparent page, each root is just its marks
+  expect_lt(max(abs(r1 - .png_arr(scene_png(.blend_scene("b", blend = FALSE), layer = "keyed")))), 1 / 255)
+  expect_lt(max(abs(r2 - .png_arr(scene_png(.blend_scene("d", blend = FALSE), layer = "keyed")))), 1 / 255)
+  # a client drawing a, blending run 1 (multiply) and run 2 (screen), then c
+  a <- .png_arr(scene_png(.blend_scene("a"), layer = "keyed"))
+  c <- .png_arr(scene_png(.blend_scene("c"), layer = "keyed"))
+  keyed <- .png_arr(scene_png(s, layer = "keyed"))
+  comp <- .over(c, .blend_over(r2, .blend_over(r1, a, "multiply"), "screen"))
+  expect_lt(max(abs(comp - keyed)), 3 / 255)
+  # composited normally instead, the overlaps come out wrong
+  wrong <- .over(c, .over(r2, .over(r1, a)))
+  expect_gt(max(abs(wrong - keyed)), 0.1)
+})
+
 test_that("keyed_flagged follows panels and works in the SVG backend", {
   s <- vl_scene(4, 3, dpi = 72) |>
     push(vl_viewport(width = 0.5, x = 0.25, name = "p1")) |>

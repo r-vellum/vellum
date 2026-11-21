@@ -77,6 +77,9 @@ pub struct Rec {
     /// The flagged run the record belongs to (1-based, 0 = none; see
     /// `assign_runs`).
     pub run: u32,
+    /// The blend root the record is drawn in (1-based into
+    /// `DisplayList::blend_roots`, 0 = none; see `begin_group`).
+    pub blend: u32,
 }
 
 /// A gradient fill (version 2): geometry in the shape's local px, placed in
@@ -151,6 +154,16 @@ pub struct DisplayList {
     pub runs: u32,
     /// Per top-level node holding a flagged run's marks, its run (1-based).
     pub node_runs: HashMap<u32, u32>,
+    /// Blend roots (VW-32): each outermost group with a blend mode that is
+    /// drawn straight onto the page's backdrop, its mode, or `None` when it
+    /// sits inside a plain (effect-free) group, whose layer a client cannot
+    /// reproduce as a backdrop.
+    pub blend_roots: Vec<Option<BlendKind>>,
+    /// Per run, how a client composites its raster onto what is beneath it
+    /// (`assign_runs`): `"normal"`, a CSS `mix-blend-mode` keyword (the run is
+    /// exactly one blend root's marks), or `""` when it cannot be composited
+    /// from its own raster.
+    pub run_blend: Vec<String>,
 }
 
 pub struct DisplayListBackend {
@@ -178,6 +191,8 @@ pub struct DisplayListBackend {
     only_panels: Option<Vec<String>>,
     /// The top-level node being drawn (`begin_draw_node`).
     cur_node: u32,
+    /// Per open group, the blend root its content is drawn in (0 = none).
+    root_stack: Vec<u32>,
 }
 
 impl Default for DisplayListBackend {
@@ -228,6 +243,7 @@ impl DisplayListBackend {
             panel_stack: Vec::new(),
             only_panels: None,
             cur_node: 0,
+            root_stack: Vec::new(),
         }
     }
 
@@ -442,6 +458,7 @@ impl DisplayListBackend {
             group: self.alpha_stack.last().copied().unwrap_or(0),
             node: self.cur_node,
             run: 0,
+            blend: self.root_stack.last().copied().unwrap_or(0),
         });
     }
 
@@ -590,6 +607,10 @@ impl DisplayListBackend {
 /// and the raster. A run is a maximal stretch of flagged nodes' records in
 /// paint order; only a record that paints (unflagged, not pick-only) ends it.
 /// Each record gets its run (0 = none) and `node_runs` its nodes.
+///
+/// A run also ends where the blend root changes (VW-32), so a run is either
+/// free of blend roots (composited normally) or exactly one root's marks
+/// (composited with its blend mode); `run_blend` says which.
 pub fn assign_runs(dl: &mut DisplayList) {
     let drawn_flag = |r: &Rec| r.flags & !FLAG_PICK != 0;
     let root_of = |dl: &DisplayList, mut g: u32| {
@@ -622,12 +643,22 @@ pub fn assign_runs(dl: &mut DisplayList) {
     }
     let mut runs = 0u32;
     let mut in_run = false;
+    let mut run_root = 0u32;
     let mut node_runs = HashMap::new();
+    let mut run_blend: Vec<String> = Vec::new();
     for r in dl.recs.iter_mut() {
         if flagged_nodes.contains(&r.node) {
-            if !in_run {
+            if !in_run || r.blend != run_root {
                 runs += 1;
                 in_run = true;
+                run_root = r.blend;
+                run_blend.push(match r.blend {
+                    0 => "normal".to_string(),
+                    b => match dl.blend_roots.get(b as usize - 1).copied().flatten() {
+                        Some(k) => k.css().unwrap_or("normal").to_string(),
+                        None => String::new(),
+                    },
+                });
             }
             r.run = runs;
             node_runs.entry(r.node).or_insert(runs);
@@ -640,6 +671,7 @@ pub fn assign_runs(dl: &mut DisplayList) {
     }
     dl.runs = runs;
     dl.node_runs = node_runs;
+    dl.run_blend = run_blend;
 }
 
 fn pack(c: Rgba) -> u32 {
@@ -891,6 +923,27 @@ impl RenderBackend for DisplayListBackend {
     ) {
         let other = mask.is_some() || blend != BlendKind::Normal || !effect.is_none();
         self.blend_stack.push(blend != BlendKind::Normal);
+        // Blend roots (VW-32). Inside a root, everything belongs to it. A
+        // blend group drawn straight onto the page is a root a client can
+        // composite with its mode. Inside an isolating group (an effect or a
+        // listed opacity group, whose content is flagged and rasterised
+        // together) the blend happens within that raster: no root. Inside
+        // only plain groups, which the raster backend isolates but a client
+        // doesn't, the root is listed as not compositable.
+        let parent = self.root_stack.last().copied().unwrap_or(0);
+        let root = if parent != 0 {
+            parent
+        } else if blend == BlendKind::Normal || self.groups.iter().any(|&g| g != 0) {
+            0
+        } else {
+            self.dl.blend_roots.push(if self.groups.is_empty() {
+                Some(blend)
+            } else {
+                None
+            });
+            self.dl.blend_roots.len() as u32
+        };
+        self.root_stack.push(root);
         if !other && alpha < 1.0 && self.v2 {
             // Version 2: an opacity-only group is listed; its records carry it.
             self.dl.groups.push(Group {
@@ -909,6 +962,7 @@ impl RenderBackend for DisplayListBackend {
 
     fn end_group(&mut self) {
         self.blend_stack.pop();
+        self.root_stack.pop();
         match self.groups.pop() {
             Some(1) => self.effect_depth -= 1,
             Some(2) => {
@@ -1254,9 +1308,10 @@ mod tests {
     #[test]
     fn flagged_nodes_group_into_ordered_runs() {
         let mut b = DisplayListBackend::with_options(None, 2);
+        // a masked mark: flagged, and (unlike a blend) no blend root
         let blend = |b: &mut DisplayListBackend, node: usize, key: &str| {
             b.begin_draw_node(node);
-            b.begin_group(None, 1.0, BlendKind::Multiply, GroupEffect::default());
+            b.begin_group(Some(mask()), 1.0, BlendKind::Normal, GroupEffect::default());
             one_circle(b, key, &red(), &no_clip());
             b.end_group();
         };
@@ -1301,5 +1356,79 @@ mod tests {
         let dl = b.finish();
         assert_eq!(dl.runs, 0);
         assert!(dl.node_runs.is_empty());
+        // every run of masked marks composites normally
+        let mut b = DisplayListBackend::with_options(None, 2);
+        blend(&mut b, 0, "a");
+        assert_eq!(b.finish().run_blend, vec!["normal".to_string()]);
+    }
+
+    fn mask() -> MaskLayer {
+        MaskLayer {
+            pixmap: tiny_skia::Pixmap::new(1, 1).unwrap(),
+            kind: super::super::MaskKind::Alpha,
+        }
+    }
+
+    #[test]
+    fn runs_split_at_blend_roots_and_report_their_mode() {
+        let mut b = DisplayListBackend::with_options(None, 2);
+        let group = |b: &mut DisplayListBackend, node: usize, mode: BlendKind, keys: &[&str]| {
+            b.begin_draw_node(node);
+            b.begin_group(None, 1.0, mode, GroupEffect::default());
+            for k in keys {
+                one_circle(b, k, &red(), &no_clip());
+            }
+            b.end_group();
+        };
+        let masked = |b: &mut DisplayListBackend, node: usize, key: &str| {
+            b.begin_draw_node(node);
+            b.begin_group(Some(mask()), 1.0, BlendKind::Normal, GroupEffect::default());
+            one_circle(b, key, &red(), &no_clip());
+            b.end_group();
+        };
+        let plain = |b: &mut DisplayListBackend, node: usize, key: &str| {
+            b.begin_draw_node(node);
+            one_circle(b, key, &red(), &no_clip());
+        };
+        plain(&mut b, 0, "a"); // exact
+        masked(&mut b, 1, "b"); // run 1 (normal)
+        group(&mut b, 2, BlendKind::Multiply, &["c", "d"]); // run 2: one root, both marks
+        group(&mut b, 3, BlendKind::Multiply, &["e"]); // run 3: another root, same mode
+        group(&mut b, 4, BlendKind::Screen, &["f"]); // run 4
+        masked(&mut b, 5, "g"); // run 5 (normal)
+        plain(&mut b, 6, "h"); // exact
+                               // a blend nested in a root belongs to it
+        b.begin_draw_node(7);
+        b.begin_group(None, 1.0, BlendKind::Overlay, GroupEffect::default());
+        one_circle(&mut b, "i", &red(), &no_clip());
+        b.begin_group(None, 1.0, BlendKind::Difference, GroupEffect::default());
+        one_circle(&mut b, "j", &red(), &no_clip());
+        b.end_group();
+        b.end_group(); // run 6 (overlay)
+                       // a blend inside a masked group blends within its raster: normal
+        b.begin_draw_node(8);
+        b.begin_group(Some(mask()), 1.0, BlendKind::Normal, GroupEffect::default());
+        one_circle(&mut b, "k", &red(), &no_clip());
+        b.begin_group(None, 1.0, BlendKind::Multiply, GroupEffect::default());
+        one_circle(&mut b, "l", &red(), &no_clip());
+        b.end_group();
+        b.end_group(); // run 7 (normal)
+        plain(&mut b, 9, "m"); // exact
+                               // a blend inside a plain group can't be composited by a client
+        b.begin_draw_node(10);
+        b.begin_group(None, 1.0, BlendKind::Normal, GroupEffect::default());
+        b.begin_group(None, 1.0, BlendKind::Screen, GroupEffect::default());
+        one_circle(&mut b, "n", &red(), &no_clip());
+        b.end_group();
+        b.end_group(); // run 8 ("")
+        let dl = b.finish();
+        let runs: Vec<u32> = dl.recs.iter().map(|r| r.run).collect();
+        assert_eq!(runs, vec![0, 1, 2, 2, 3, 4, 5, 0, 6, 6, 7, 7, 0, 8]);
+        assert_eq!(dl.runs, 8);
+        assert_eq!(
+            dl.run_blend,
+            vec!["normal", "multiply", "multiply", "screen", "normal", "overlay", "normal", ""]
+        );
+        assert_eq!(dl.blend_roots.len(), 5); // c-d, e, f, i-j, n
     }
 }
