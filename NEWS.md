@@ -13,6 +13,13 @@
 
 ## Bug fixes
 
+* PDF output composites a blend-mode group as a unit, as PNG and SVG do
+  (VR-23). The blend mode used to apply to each object in the group, so
+  overlapping marks in one `blend = "multiply"` viewport multiplied each
+  other, and a blend nested in another blend group composited against the
+  page. A blend group is now drawn as an isolated transparency group and the
+  mode applies to the result.
+
 * The raster backend no longer isolates a group that has no mask, opacity,
   blend mode or effect (VR-21). SVG and PDF never did, and SVG/CSS
   compositing doesn't isolate such a group either, so a blend inside one now
