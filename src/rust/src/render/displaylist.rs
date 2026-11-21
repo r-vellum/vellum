@@ -154,15 +154,15 @@ pub struct DisplayList {
     pub runs: u32,
     /// Per top-level node holding a flagged run's marks, its run (1-based).
     pub node_runs: HashMap<u32, u32>,
-    /// Blend roots (VW-32): each outermost group with a blend mode that is
-    /// drawn straight onto the page's backdrop, its mode, or `None` when it
-    /// sits inside a plain (effect-free) group, whose layer a client cannot
-    /// reproduce as a backdrop.
-    pub blend_roots: Vec<Option<BlendKind>>,
+    /// Blend roots (VW-32): the mode of each outermost group with a blend
+    /// mode that is drawn straight onto the page's backdrop, directly or
+    /// inside plain (effect-free) groups, which isolate nothing (VR-21).
+    pub blend_roots: Vec<BlendKind>,
     /// Per run, how a client composites its raster onto what is beneath it
     /// (`assign_runs`): `"normal"`, a CSS `mix-blend-mode` keyword (the run is
     /// exactly one blend root's marks), or `""` when it cannot be composited
-    /// from its own raster.
+    /// from its own raster (a root this list doesn't hold; since plain groups
+    /// stopped isolating, VR-21, a list built here has none).
     pub run_blend: Vec<String>,
 }
 
@@ -654,7 +654,7 @@ pub fn assign_runs(dl: &mut DisplayList) {
                 run_root = r.blend;
                 run_blend.push(match r.blend {
                     0 => "normal".to_string(),
-                    b => match dl.blend_roots.get(b as usize - 1).copied().flatten() {
+                    b => match dl.blend_roots.get(b as usize - 1).copied() {
                         Some(k) => k.css().unwrap_or("normal").to_string(),
                         None => String::new(),
                     },
@@ -927,20 +927,16 @@ impl RenderBackend for DisplayListBackend {
         // blend group drawn straight onto the page is a root a client can
         // composite with its mode. Inside an isolating group (an effect or a
         // listed opacity group, whose content is flagged and rasterised
-        // together) the blend happens within that raster: no root. Inside
-        // only plain groups, which the raster backend isolates but a client
-        // doesn't, the root is listed as not compositable.
+        // together) the blend happens within that raster: no root. Plain
+        // (effect-free) groups don't isolate in any backend (VR-21), so a
+        // blend inside only plain groups is a root like one on the page.
         let parent = self.root_stack.last().copied().unwrap_or(0);
         let root = if parent != 0 {
             parent
         } else if blend == BlendKind::Normal || self.groups.iter().any(|&g| g != 0) {
             0
         } else {
-            self.dl.blend_roots.push(if self.groups.is_empty() {
-                Some(blend)
-            } else {
-                None
-            });
+            self.dl.blend_roots.push(blend);
             self.dl.blend_roots.len() as u32
         };
         self.root_stack.push(root);
@@ -1414,20 +1410,22 @@ mod tests {
         b.end_group();
         b.end_group(); // run 7 (normal)
         plain(&mut b, 9, "m"); // exact
-                               // a blend inside a plain group can't be composited by a client
+                               // a blend inside plain groups is a root like one on the page (VR-21)
         b.begin_draw_node(10);
         b.begin_group(None, 1.0, BlendKind::Normal, GroupEffect::default());
         b.begin_group(None, 1.0, BlendKind::Screen, GroupEffect::default());
         one_circle(&mut b, "n", &red(), &no_clip());
         b.end_group();
-        b.end_group(); // run 8 ("")
+        b.end_group(); // run 8 (screen)
         let dl = b.finish();
         let runs: Vec<u32> = dl.recs.iter().map(|r| r.run).collect();
         assert_eq!(runs, vec![0, 1, 2, 2, 3, 4, 5, 0, 6, 6, 7, 7, 0, 8]);
         assert_eq!(dl.runs, 8);
         assert_eq!(
             dl.run_blend,
-            vec!["normal", "multiply", "multiply", "screen", "normal", "overlay", "normal", ""]
+            vec![
+                "normal", "multiply", "multiply", "screen", "normal", "overlay", "normal", "screen"
+            ]
         );
         assert_eq!(dl.blend_roots.len(), 5); // c-d, e, f, i-j, n
     }

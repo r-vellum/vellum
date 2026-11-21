@@ -127,12 +127,14 @@ composite each run's raster where the run starts.
 \item Blend modes in runs (VW-32): \code{run_blend} gives, per run, how its raster
 composites onto what is beneath it: \code{"normal"}, or a CSS \code{mix-blend-mode}
 keyword (\code{"multiply"}, \code{"screen"}, ...) when the run is exactly the marks
-of one group with that blend mode drawn onto the page (a \emph{blend root};
-a run ends where the blend root changes). Rendered on its own, such a
-run's raster is its marks unblended, and compositing it with that mode
-reproduces the blend. A blend nested inside a mask, an effect or an
-opacity group happens within that group's raster, so its run is
-\code{"normal"}. \code{""} marks a run that cannot be composited from its raster.
+of one group with that blend mode drawn onto the page, directly or
+inside groups with no opacity, mask, blend or effect, which isolate
+nothing (a \emph{blend root}; a run ends where the blend root changes).
+Rendered on its own, such a run's raster is its marks unblended, and
+compositing it with that mode reproduces the blend. A blend nested inside
+a mask, an effect or an opacity group happens within that group's raster,
+so its run is \code{"normal"}. \code{""} would mark a run that cannot be composited
+from its raster; current lists have none.
 }
 }
 
