@@ -121,7 +121,9 @@ export(vl_unit)
 export(vl_viewport)
 export(why_size)
 importFrom(grDevices,as.raster)
-importFrom(vctrs,vec_arith)
-importFrom(vctrs,vec_arith.numeric)
-importFrom(vctrs,vec_ptype_abbr)
+importFrom(vctrs,
+  vec_arith,
+  vec_arith.numeric,
+  vec_ptype_abbr
+)
 useDynLib(vellum, .registration = TRUE)
