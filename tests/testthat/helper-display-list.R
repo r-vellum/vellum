@@ -36,9 +36,14 @@
 # The whole list -> one data frame row per record, with geometry: `cx, cy, r,
 # shape` for points, `x, y, w, h` for rects, and `runs` (a list of 2-column
 # matrices) plus `closed`/`evenodd` for paths.
-.dl_decode <- function(dl) {
+# `given`: the `keys` argument the list was built with (VR-22), if any.
+.dl_decode <- function(dl, given = NULL) {
   rec <- lapply(dl$record, .dl_col)
   keys <- if (is.list(dl$keys)) as.character(.dl_col(dl$keys)) else dl$keys
+  if (!is.null(dl$keys_given)) {
+    stopifnot(length(given) == dl$keys_given)
+    keys <- c(given, keys)
+  }
   n <- dl$n
   out <- data.frame(
     key = keys[rec$key + 1],

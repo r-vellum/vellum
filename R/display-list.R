@@ -34,7 +34,11 @@
 #' * `clips`: rectangles `x0`, `y0`, `x1`, `y1` (device px).
 #' * `keys`: the distinct keys in first-use order, as a character vector, or as
 #'   an integer column (see below) when every key is a plain non-negative
-#'   integer.
+#'   integer. With the `keys` argument, only the keys it lacks (see below).
+#' * `keys_given`: only with the `keys` argument, its length. `record$key` then
+#'   indexes `c(<the keys argument>, keys)`: a key found in the argument is its
+#'   first position there, and the rest follow in first-use order. A client
+#'   that already has the keys (vellumwidget's element table) ships them once.
 #' * `panels`: the names of the panels marks are drawn in.
 #'
 #' Every numeric column except those in `paints` and `clips` is a list
@@ -113,10 +117,19 @@
 #'   panels, which leaves out a legend's keyed swatches.
 #' @param version The format version, `1` (the default) or `2` (see the
 #'   *Version 2* section).
+#' @param keys `NULL` (the default), or a character vector of keys for
+#'   `record$key` to index, so the list need not repeat them (VR-22). Keys
+#'   it lacks are listed in `keys` as usual, after it; `NA` matches nothing.
 #' @return The display list, as described in the *Format* section.
 #' @keywords internal
 #' @export
-scene_display_list <- function(scene, what = "keyed", panels = NULL, version = 1L) {
+scene_display_list <- function(
+  scene,
+  what = "keyed",
+  panels = NULL,
+  version = 1L,
+  keys = NULL
+) {
   what <- match.arg(what)
   if (!is.numeric(version) || length(version) != 1L || !version %in% c(1, 2)) {
     cli::cli_abort("{.arg version} must be 1 or 2.")
@@ -126,7 +139,10 @@ scene_display_list <- function(scene, what = "keyed", panels = NULL, version = 1
       "{.arg panels} must be {.code NULL} or a character vector of panel names."
     )
   }
+  if (!is.null(keys) && !is.character(keys)) {
+    cli::cli_abort("{.arg keys} must be {.code NULL} or a character vector.")
+  }
   scene <- as_vellum_scene(scene)
   s <- .scene_to_backend(scene)
-  s$display_list_raw(panels, as.integer(version))
+  s$display_list_raw(panels, as.integer(version), keys)
 }
