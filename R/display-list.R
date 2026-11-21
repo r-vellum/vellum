@@ -87,12 +87,14 @@
 #' * Blend modes in runs (VW-32): `run_blend` gives, per run, how its raster
 #'   composites onto what is beneath it: `"normal"`, or a CSS `mix-blend-mode`
 #'   keyword (`"multiply"`, `"screen"`, ...) when the run is exactly the marks
-#'   of one group with that blend mode drawn onto the page (a *blend root*;
-#'   a run ends where the blend root changes). Rendered on its own, such a
-#'   run's raster is its marks unblended, and compositing it with that mode
-#'   reproduces the blend. A blend nested inside a mask, an effect or an
-#'   opacity group happens within that group's raster, so its run is
-#'   `"normal"`. `""` marks a run that cannot be composited from its raster.
+#'   of one group with that blend mode drawn onto the page, directly or
+#'   inside groups with no opacity, mask, blend or effect, which isolate
+#'   nothing (a *blend root*; a run ends where the blend root changes).
+#'   Rendered on its own, such a run's raster is its marks unblended, and
+#'   compositing it with that mode reproduces the blend. A blend nested inside
+#'   a mask, an effect or an opacity group happens within that group's raster,
+#'   so its run is `"normal"`. `""` would mark a run that cannot be composited
+#'   from its raster; current lists have none.
 #'
 #' @section What stage 1 does not reproduce:
 #' Such marks are still listed, so they can be hit-tested, but `flags` marks

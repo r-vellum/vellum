@@ -495,6 +495,70 @@ test_that("a blend run's raster is its marks unblended; blending it reproduces t
   expect_gt(max(abs(wrong - keyed)), 0.1)
 })
 
+# Wrap every blend viewport's group in a plain group (no mask, opacity, blend
+# or effect), which `compile()` never emits itself (VR-21). Compiled backends
+# are cached by content id, so the cache is off while it is in place.
+local_plain_groups <- function(env = parent.frame()) {
+  withr::local_options(vellum.cache = FALSE, .local_envir = env)
+  orig <- compile
+  testthat::local_mocked_bindings(
+    compile = function(node, scene) {
+      blend <- isTRUE(tryCatch(!is.null(node@vp@blend), error = function(e) FALSE))
+      if (!blend) {
+        return(orig(node, scene))
+      }
+      scene$group_start(-1L, 1, 0L, 0, numeric(0))
+      orig(node, scene)
+      scene$group_end()
+    },
+    .env = env
+  )
+}
+
+test_that("a plain group isolates nothing: a blend inside it blends with the page (VR-21)", {
+  skip_if_not_installed("png")
+  direct <- .png_arr(scene_png(.blend_scene()))
+  direct_svg <- scene_svg(.blend_scene())
+  direct_runs <- scene_display_list(.blend_scene(), version = 2L)$run_blend
+  local_plain_groups()
+  s <- .blend_scene()
+  # the groups are there: the SVG wraps each blend group in one more <g>
+  expect_gt(
+    lengths(regmatches(scene_svg(s), gregexpr("<g", scene_svg(s), fixed = TRUE))),
+    lengths(regmatches(direct_svg, gregexpr("<g", direct_svg, fixed = TRUE)))
+  )
+  # the raster backend no longer isolates them, as SVG and PDF never did
+  expect_lt(max(abs(.png_arr(scene_png(s)) - direct)), 1 / 255)
+  # so the roots composite as on the page, and the display list says so
+  expect_identical(scene_display_list(s, version = 2L)$run_blend, direct_runs)
+  expect_identical(direct_runs, c("multiply", "screen"))
+  # a client compositing the runs with their modes reproduces the keyed layer
+  r1 <- .png_arr(scene_png(s, layer = "keyed_flagged", run = 1))
+  r2 <- .png_arr(scene_png(s, layer = "keyed_flagged", run = 2))
+  a <- .png_arr(scene_png(.blend_scene("a"), layer = "keyed"))
+  c <- .png_arr(scene_png(.blend_scene("c"), layer = "keyed"))
+  comp <- .over(c, .blend_over(r2, .blend_over(r1, a, "multiply"), "screen"))
+  expect_lt(max(abs(comp - .png_arr(scene_png(s, layer = "keyed")))), 3 / 255)
+})
+
+test_that("a nested blend inside plain groups renders as without them (VR-21)", {
+  skip_if_not_installed("png")
+  nested <- function() {
+    vl_scene(3, 2, dpi = 72, bg = "white") |>
+      draw(rect_grob(gp = vl_gpar(fill = "grey50", col = NA))) |>
+      push(vl_viewport(blend = "screen")) |>
+      draw(circle_grob(0.5, 0.5, r = 0.25, gp = vl_gpar(fill = "darkred", col = NA), key = "s")) |>
+      push(vl_viewport(blend = "multiply")) |>
+      draw(circle_grob(0.6, 0.5, r = 0.2, gp = vl_gpar(fill = "yellow", col = NA), key = "m")) |>
+      pop() |>
+      pop()
+  }
+  direct <- .png_arr(scene_png(nested()))
+  local_plain_groups()
+  expect_lt(max(abs(.png_arr(scene_png(nested())) - direct)), 1 / 255)
+  expect_identical(scene_display_list(nested(), version = 2L)$run_blend, "screen")
+})
+
 test_that("keyed_flagged follows panels and works in the SVG backend", {
   s <- vl_scene(4, 3, dpi = 72) |>
     push(vl_viewport(width = 0.5, x = 0.25, name = "p1")) |>

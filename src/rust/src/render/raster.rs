@@ -189,6 +189,13 @@ pub struct RasterBackend {
     group_alpha: Vec<f32>,
     group_blend: Vec<BlendKind>,
     group_effect: Vec<GroupEffect>,
+    /// Per open group, whether it is a plain (effect-free) group: no mask,
+    /// full opacity, normal blend, no effect. A plain group is not isolated
+    /// (VR-21): its content draws straight onto the current target, as the
+    /// SVG and PDF backends draw it, and as SVG/CSS compositing treats a group
+    /// that has no opacity, mask, filter or blend mode. Only the non-plain
+    /// groups push a layer (and an entry on the stacks above).
+    group_plain: Vec<bool>,
     /// Bounded LRU of compiled clip masks (most-recent first). tiny-skia requires
     /// a clip `Mask` to match the target pixmap size, so each entry is page-sized
     /// and cannot be shrunk to a bounding box; instead we cap how many stay
@@ -390,6 +397,7 @@ impl RasterBackend {
             group_alpha: Vec::new(),
             group_effect: Vec::new(),
             group_blend: Vec::new(),
+            group_plain: Vec::new(),
             clip_cache: Vec::new(),
             w,
             h,
@@ -858,6 +866,15 @@ impl RenderBackend for RasterBackend {
         blend: BlendKind,
         effect: GroupEffect,
     ) {
+        // A plain group composites as if it weren't there (source-over is
+        // associative), except that a blend inside it would blend against its
+        // transparent layer instead of the backdrop: draw it in place (VR-21).
+        let plain =
+            mask.is_none() && alpha >= 1.0 && blend == BlendKind::Normal && effect.is_none();
+        self.group_plain.push(plain);
+        if plain {
+            return;
+        }
         // A transparent isolated layer; subsequent drawing targets it. The mask,
         // opacity, and blend mode are held until the group closes.
         self.targets
@@ -869,6 +886,9 @@ impl RenderBackend for RasterBackend {
     }
 
     fn end_group(&mut self) {
+        if self.group_plain.pop().unwrap_or(false) {
+            return; // its content is already on the target
+        }
         let mask = self.group_masks.pop().flatten();
         let alpha = self.group_alpha.pop().unwrap_or(1.0);
         let blend = self.group_blend.pop().unwrap_or(BlendKind::Normal);
@@ -1124,3 +1144,77 @@ impl RenderBackend for RasterBackend {
 }
 
 // --- SVG backend ------------------------------------------------------------
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn rgba(r: u8, g: u8, b: u8, a: u8) -> Rgba {
+        Rgba { r, g, b, a }
+    }
+
+    // A 10 x 10 grey page, then `inner` filled with `fill` under the groups
+    // `wrap` opens (outermost first); returns the centre pixel.
+    fn render(wrap: &[(f32, BlendKind)], fill: Rgba) -> [u8; 4] {
+        let mut b = RasterBackend::new(10, 10, rgba(128, 128, 128, 255));
+        for &(alpha, blend) in wrap {
+            b.begin_group(None, alpha, blend, GroupEffect::default());
+        }
+        let rect = tiny_skia::PathBuilder::from_rect(
+            tiny_skia::Rect::from_xywh(0.0, 0.0, 10.0, 10.0).unwrap(),
+        );
+        let clip = Clip { id: 0, shapes: &[] };
+        b.fill_path(
+            &rect,
+            Transform::identity(),
+            &ResolvedPaint::Solid(fill),
+            FillRule::Winding,
+            &clip,
+        );
+        for _ in wrap {
+            b.end_group();
+        }
+        let pm = b.into_pixmap();
+        let p = pm.pixel(5, 5).unwrap();
+        [p.red(), p.green(), p.blue(), p.alpha()]
+    }
+
+    #[test]
+    fn a_plain_group_does_not_isolate_a_blend_inside_it() {
+        let yellow = rgba(255, 255, 0, 255);
+        let page = render(&[(1.0, BlendKind::Multiply)], yellow);
+        assert_eq!(page, [128, 128, 0, 255]); // multiply with the grey page
+                                              // the same blend inside one or two plain groups blends with the page too
+        assert_eq!(
+            render(
+                &[(1.0, BlendKind::Normal), (1.0, BlendKind::Multiply)],
+                yellow
+            ),
+            page
+        );
+        assert_eq!(
+            render(
+                &[
+                    (1.0, BlendKind::Normal),
+                    (1.0, BlendKind::Normal),
+                    (1.0, BlendKind::Multiply)
+                ],
+                yellow
+            ),
+            page
+        );
+        // an isolating group (opacity) still blends within its own layer:
+        // multiply against transparent is the source, then composited at 0.99
+        let iso = render(
+            &[(0.99, BlendKind::Normal), (1.0, BlendKind::Multiply)],
+            yellow,
+        );
+        assert!(iso[0] > 240 && iso[1] > 240 && iso[2] < 5, "{iso:?}");
+    }
+
+    #[test]
+    fn a_plain_group_of_normal_content_draws_as_without_it() {
+        let red = rgba(255, 0, 0, 100);
+        assert_eq!(render(&[(1.0, BlendKind::Normal)], red), render(&[], red));
+    }
+}

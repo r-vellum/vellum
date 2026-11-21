@@ -1,5 +1,18 @@
 # vellum 0.12.0.9000 (development version)
 
+## Bug fixes
+
+* The raster backend no longer isolates a group that has no mask, opacity,
+  blend mode or effect (VR-21). SVG and PDF never did, and SVG/CSS
+  compositing doesn't isolate such a group either, so a blend inside one now
+  blends with what is beneath it in PNG output too, instead of with the
+  group's own transparent layer. `scene_display_list()` reports such a blend
+  root's `run_blend` mode instead of `""`. `compile()` never opens such a
+  group, so PNG output of scenes built with vellum's R API is unchanged; it
+  changes only for a blend group wrapped in a plain group by direct backend
+  calls (`Scene$group_start()` with no mask, opacity 1, normal blend and no
+  effect).
+
 # vellum 0.12.0
 
 ## New features
