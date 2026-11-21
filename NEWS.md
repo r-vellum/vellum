@@ -1,5 +1,16 @@
 # vellum 0.11.1.9000 (development version)
 
+## Minor improvements and fixes
+
+* Large clouds of equal-size, fill-only circles (10,000 or more in one grob,
+  e.g. points with `col = NA`) are drawn in PNG from the same sub-pixel sprite
+  as outlined ones (VR-20). Each mark used to snap to a whole pixel; now it
+  lands within 1/32 px of its exact position, so the image is closer to the
+  exact render (mean difference 0.04/255 instead of 0.39/255 for opaque marks)
+  and about 3x faster to draw. Pixels change slightly. With antialiasing off,
+  these clouds are now drawn per element, aliased as asked, instead of from an
+  antialiased sprite.
+
 # vellum 0.11.1
 
 ## New features
