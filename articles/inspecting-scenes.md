@@ -338,9 +338,9 @@ profile_render(heavy, reps = 1)
 #> • raster 0.087 s (drawing)
 #> 
 #> Slowest marks (raster time):
-#> • segments edges 2000 elem 0.0290 s 59.6%
-#> • circle points 20000 elem 0.0174 s 35.9%
-#> • text labels 200 elem 0.0022 s 4.5%
+#> • segments edges 2000 elem 0.0288 s 59.2%
+#> • circle points 20000 elem 0.0177 s 36.4%
+#> • text labels 200 elem 0.0022 s 4.4%
 ```
 
 **Read the phase split first.** A render is three phases: *build*
