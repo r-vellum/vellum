@@ -87,17 +87,25 @@
 #' `vignette("scene-contract")` is the full contract.
 #'
 #' @param scene A [vl_scene()] (or anything coercible via `as_vellum_scene()`).
+#' @param meta The form of the elements' `meta` column. `"records"` (the
+#'   default) is a list-column with one record per element. `"columns"` is a
+#'   data-frame column instead, with one row per element and one column per
+#'   field. In it a field is a plain vector when every element that carries it
+#'   holds one atomic value of one type (`NA` for the elements without it), and
+#'   a list-column (`NULL` where absent) otherwise. The columnar form skips the
+#'   per-element records, so a host reading many elements should ask for it.
 #' @return A list with two data frames:
 #'   * `elements` — one row per element: `key`, `mark`, `id`, `name`, `panel`, the
 #'     device-px bbox `x0,y0,x1,y1`, its centre/size `x,y,w,h`, and a `meta`
-#'     list-column.
+#'     column (see the `meta` argument).
 #'   * `panels` — one row per named panel that encloses at least one element:
 #'     `name`, its elements' bounding box `x0,y0,x1,y1`, the panel viewport's
 #'     device-px rectangle `px0,py0,px1,py1`, its native ranges
 #'     `xscale_lo,xscale_hi,yscale_lo,yscale_hi`, and a `meta` list-column.
 #' @seealso [scene_svg()]
 #' @export
-scene_model <- function(scene) {
+scene_model <- function(scene, meta = c("records", "columns")) {
+  meta_form <- .check_choice(meta, c("records", "columns"), "meta")
   scene <- as_vellum_scene(scene)
   root <- .materialize(scene)
 
@@ -129,11 +137,7 @@ scene_model <- function(scene) {
         return(invisible())
       }
       keys <- k[keep]
-      meta <- if (is.null(node@meta)) {
-        vector("list", length(keys))
-      } else {
-        rep_len(node@meta, n)[keep]
-      }
+      meta <- .sm_meta(node@meta, n, which(keep))
       n <- length(keys)
     } else if (mark %in% .SM_SINGLE) {
       # A single-shape mark: one element, and only in scene_model when keyed
@@ -144,7 +148,7 @@ scene_model <- function(scene) {
       }
       n <- 1L
       keys <- key1
-      meta <- if (is.null(node@meta)) vector("list", 1L) else node@meta[1L]
+      meta <- .sm_meta(node@meta, 1L)
     } else {
       n <- .sm_n(node)
       if (n == 0L) {
@@ -157,11 +161,7 @@ scene_model <- function(scene) {
         k[!nzchar(k)] <- NA_character_
         rep_len(k, n)
       }
-      meta <- if (is.null(node@meta)) {
-        vector("list", n)
-      } else {
-        rep_len(node@meta, n)
-      }
+      meta <- .sm_meta(node@meta, n)
     }
     id <- .meta_str(node@id)
     id <- if (nzchar(id)) id else NA_character_
@@ -172,6 +172,7 @@ scene_model <- function(scene) {
       id = rep(id, n),
       name = rep(as.character(nm), n),
       panel = rep(panel %||% NA_character_, n),
+      n = n,
       meta = meta
     )
     invisible()
@@ -203,7 +204,7 @@ scene_model <- function(scene) {
       h = numeric(),
       stringsAsFactors = FALSE
     )
-    empty$meta <- list()
+    empty$meta <- if (meta_form == "columns") .meta_df(list(), 0L) else list()
     return(list(elements = empty, panels = .sm_empty_panels()))
   }
 
@@ -213,7 +214,11 @@ scene_model <- function(scene) {
   id <- pull("id")
   name <- pull("name")
   panel <- pull("panel")
-  meta <- unlist(lapply(chunks, `[[`, "meta"), recursive = FALSE)
+  meta <- if (meta_form == "columns") {
+    .sm_meta_columns(chunks)
+  } else {
+    .sm_meta_records(chunks)
+  }
 
   gx0 <- et$x0
   gy0 <- et$y0
@@ -267,6 +272,205 @@ scene_model <- function(scene) {
       cap$backend$resolved_geometry()
     )
   )
+}
+
+# --- Element meta: records and columns (VR-19) ---------------------------------
+#
+# A grob's `meta` is either a list of records (one per element) or a data frame
+# (one row per element, one column per field). `scene_model()` hands it on as
+# records (the default, the documented list-column) or as columns
+# (`meta = "columns"`, a data-frame column), converting whichever form a grob
+# carried. The columnar path never builds a per-element list, which is what
+# keeps a big keyed plot cheap end to end: vellumplot writes columns, and
+# vellumwidget reads them.
+#
+# Row `i` of a columnar meta is the record `list(<field> = <column>[[i]], ...)`,
+# fields in column order, where a NULL entry of a list-column leaves its field
+# out. Going the other way, a field becomes a plain vector when every element
+# carrying it holds one plain atomic value of one type (an element without it
+# reads `NA`), and a list-column (`NULL` where absent) otherwise. A factor
+# column of a data-frame meta reads as character. The first entry of a name in a
+# record wins, a NULL value counts as absent, and unnamed entries have no column.
+
+# One grob's meta for the `n` elements it contributes (`idx`: which of them, when
+# not all are kept): NULL, a list of records, or a data frame.
+.sm_meta <- function(meta, n, idx = NULL) {
+  if (is.null(meta)) {
+    return(NULL)
+  }
+  if (is.data.frame(meta)) {
+    m <- nrow(meta)
+    rows <- if (m == n) seq_len(n) else rep_len(seq_len(m), n)
+    if (!is.null(idx)) {
+      rows <- rows[idx]
+    }
+    if (length(rows) == m && identical(rows, seq_len(m))) {
+      return(meta)
+    }
+    return(vctrs::vec_slice(meta, rows))
+  }
+  meta <- rep_len(meta, n)
+  if (is.null(idx)) meta else meta[idx]
+}
+
+# A data frame (one row per element) of `cols`, a named list of n-long columns.
+.meta_df <- function(cols, n) {
+  structure(
+    cols,
+    names = names(cols) %||% character(),
+    class = "data.frame",
+    row.names = .set_row_names(n)
+  )
+}
+
+# Records mode: one record per element, in paint order.
+.sm_meta_records <- function(chunks) {
+  pieces <- lapply(chunks, function(ch) {
+    m <- ch$meta
+    if (is.null(m)) {
+      vector("list", ch$n)
+    } else if (is.data.frame(m)) {
+      .meta_df_records(m)
+    } else {
+      m
+    }
+  })
+  unlist(pieces, recursive = FALSE)
+}
+
+# Columns mode: one data frame, a column per field across every chunk.
+.sm_meta_columns <- function(chunks) {
+  ns <- vapply(chunks, `[[`, integer(1), "n")
+  sets <- lapply(chunks, function(ch) {
+    m <- ch$meta
+    if (is.null(m)) {
+      NULL
+    } else if (is.data.frame(m)) {
+      lapply(as.list(m), .meta_unfactor)
+    } else {
+      .meta_records_cols(m)
+    }
+  })
+  fields <- unique(unlist(lapply(sets, names), use.names = FALSE))
+  cols <- lapply(fields, function(f) {
+    .meta_bind(lapply(sets, `[[`, f), ns)
+  })
+  names(cols) <- fields
+  .meta_df(cols, sum(ns))
+}
+
+.meta_unfactor <- function(v) if (is.factor(v)) as.character(v) else v
+
+# The records of a columnar meta: row i is `list(<field> = <col>[[i]], ...)`,
+# without the fields whose list-column entry is NULL.
+.meta_df_records <- function(df) {
+  n <- nrow(df)
+  if (!length(df)) {
+    return(rep(list(list()), n))
+  }
+  is_lst <- vapply(df, is.list, logical(1))
+  cols <- lapply(as.list(df), function(v) if (is.list(v)) v else as.list(v))
+  recs <- .mapply(list, cols, NULL)
+  if (any(is_lst)) {
+    nul <- Reduce(`|`, lapply(cols[is_lst], function(l) lengths(l) == 0L))
+    nul[nul] <- Reduce(
+      `|`,
+      lapply(cols[is_lst], function(l) vapply(l[nul], is.null, logical(1)))
+    )
+    if (any(nul)) {
+      recs[nul] <- lapply(recs[nul], function(r) {
+        r <- r[!vapply(r, is.null, logical(1))]
+        if (length(r)) r else list()
+      })
+    }
+  }
+  recs
+}
+
+# The columns of a list of records (see the header for the rules).
+.meta_records_cols <- function(recs) {
+  n <- length(recs)
+  recs <- unname(recs)
+  # A named atomic record reads like a list; anything else that is not a list
+  # (or NULL) has no fields.
+  odd <- !vapply(recs, is.list, logical(1)) & !vapply(recs, is.null, logical(1))
+  if (any(odd)) {
+    recs[odd] <- lapply(recs[odd], function(r) {
+      if (is.atomic(r) && !is.null(names(r))) as.list(r) else list()
+    })
+  }
+  flat <- unlist(recs, recursive = FALSE, use.names = TRUE)
+  owner <- rep.int(seq_len(n), lengths(recs))
+  if (length(flat) != length(owner)) {
+    # `unlist()` flattened differently from the records (e.g. a record holding
+    # a data frame): read them one by one.
+    recs <- lapply(recs, function(r) if (is.null(r)) list() else as.list(r))
+    flat <- do.call(c, recs)
+    owner <- rep.int(seq_len(n), lengths(recs))
+  }
+  nm <- names(flat) %||% rep("", length(flat))
+  nm[is.na(nm)] <- ""
+  fields <- unique(nm[nzchar(nm)])
+  cols <- lapply(fields, function(f) {
+    hit <- which(nm == f)
+    hit <- hit[!duplicated(owner[hit])]
+    vals <- unname(flat[hit])
+    own <- owner[hit]
+    nul <- lengths(vals) == 0L
+    nul[nul] <- vapply(vals[nul], is.null, logical(1))
+    if (any(nul)) {
+      vals <- vals[!nul]
+      own <- own[!nul]
+    }
+    kind <- vapply(
+      vals,
+      function(v) {
+        if (is.atomic(v) && length(v) == 1L && !is.object(v)) typeof(v) else ""
+      },
+      character(1)
+    )
+    if (length(vals) && all(nzchar(kind)) && all(kind == kind[[1L]])) {
+      out <- vector(kind[[1L]], n)
+      out[] <- NA
+      out[own] <- unlist(vals, use.names = FALSE)
+    } else {
+      out <- vector("list", n)
+      out[own] <- vals
+    }
+    out
+  })
+  names(cols) <- fields
+  cols
+}
+
+# One field across the chunks: `pieces` holds each chunk's column (NULL where
+# the chunk lacks the field), `ns` the chunk sizes.
+.meta_bind <- function(pieces, ns) {
+  has <- !vapply(pieces, is.null, logical(1))
+  if (sum(has) == 1L && all(has)) {
+    return(pieces[[1L]])
+  }
+  if (!any(vapply(pieces[has], is.list, logical(1)))) {
+    ptype <- tryCatch(
+      do.call(vctrs::vec_ptype_common, unname(pieces[has])),
+      error = function(e) NULL
+    )
+    if (!is.null(ptype)) {
+      pieces[!has] <- lapply(ns[!has], function(k) vctrs::vec_init(ptype, k))
+      return(do.call(vctrs::vec_c, c(unname(pieces), list(.ptype = ptype))))
+    }
+  }
+  pieces <- lapply(seq_along(pieces), function(i) {
+    p <- pieces[[i]]
+    if (is.null(p)) {
+      vector("list", ns[[i]])
+    } else if (is.list(p)) {
+      unname(p)
+    } else {
+      as.list(unname(p))
+    }
+  })
+  do.call(c, pieces)
 }
 
 .sm_empty_panels <- function() {
@@ -324,9 +528,10 @@ scene_model <- function(scene) {
   px0 <- py0 <- px1 <- py1 <- rep(NA_real_, n)
   xsl <- xsh <- ysl <- ysh <- rep(NA_real_, n)
   meta <- vector("list", n)
+  rows <- split(seq_along(panel), factor(panel, levels = pn))
   for (j in seq_len(n)) {
     p <- pn[j]
-    i <- which(!is.na(panel) & panel == p)
+    i <- rows[[j]]
     ex0[j] <- min(x0[i])
     ey0[j] <- min(y0[i])
     ex1[j] <- max(x1[i])

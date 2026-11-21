@@ -1,5 +1,14 @@
 # vellum 0.11.1.9000 (development version)
 
+## New features
+
+* A grob's `meta` can be columnar: a data frame with one row per element and
+  one column per field, in place of a list of records. `scene_model()` gains
+  `meta = c("records", "columns")`: `"records"` (the default) returns the
+  `meta` list-column as before, whatever form the grobs carried, and
+  `"columns"` returns it as a data-frame column, one column per field, without
+  building a record per element (VR-19).
+
 ## Minor improvements and fixes
 
 * Large clouds of equal-size, fill-only circles (10,000 or more in one grob,

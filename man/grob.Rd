@@ -319,8 +319,11 @@ emits nothing (a static render is unchanged). Ignored by raster/PDF.}
 
 \item{meta}{Optional free-form per-element metadata for the batched marks: a
 list with one entry (record) per element (recycled), e.g. tooltip text or
-field values. It never reaches the backend (nothing drawn changes); it rides
-on the scene and is returned by \code{\link[=scene_model]{scene_model()}}. \code{NULL} (default) = none.}
+field values, or a data frame with one row per element and one column per
+field (columnar, cheaper for many elements; row \code{i} stands for the record
+of its values, a \code{NULL} list-column entry leaving its field out). It never
+reaches the backend (nothing drawn changes); it rides on the scene and is
+returned by \code{\link[=scene_model]{scene_model()}}. \code{NULL} (default) = none.}
 
 \item{default_units}{Unit a \strong{bare numeric} is read in, for the position
 and size arguments (\code{x}, \code{y}, \code{width}, \code{height}, \code{x0}..\code{y1}, \code{r},

@@ -62,7 +62,11 @@ single-shape marks `lines_grob()`, `polygon_grob()` and `path_grob()`.
 - `key`: a character vector of **data keys**. This is the join key a host uses
   to tie an on-screen element back to a datum.
 - `meta`: a list of **free-form per-element records**, e.g. a tooltip string or
-  field values.
+  field values. It can also be given **columnar**: a data frame with one row
+  per element and one column per field. Row `i` stands for the record of that
+  row's values (a `NULL` entry in a list-column leaves its field out of the
+  record), and it costs far less than a list of records when there are many
+  elements.
 
 On a batched mark both are per element and must have **length 1** (shared by
 every element) **or exactly the element count**; any other length is an error
@@ -156,7 +160,19 @@ The columns are the contract:
 | `x0, y0, x1, y1` | numeric | device-pixel bounding box |
 | `x, y` | numeric | element centre, `(x0+x1)/2, (y0+y1)/2` |
 | `w, h` | numeric | element size, `x1-x0, y1-y0` |
-| `meta` | list | the free-form per-element record (list-column) |
+| `meta` | list | the free-form per-element record (list-column; see below for the columnar form) |
+
+`scene_model(scene, meta = "columns")` returns the same table with `meta` as a
+**data-frame column** instead: one row per element and one column per field. A
+field is a plain vector when every element carrying it holds one atomic value of
+one type (`NA` for the elements without it), and a list-column (`NULL` where
+absent) otherwise. A host that reads meta for many elements (vellumwidget does)
+asks for this form, so no per-element record is ever built.
+
+```{r}
+#| label: model-columns
+scene_model(s, meta = "columns")$elements$meta
+```
 
 The `mark` vocabulary is these eleven values, and only these:
 `rect`, `point`, `circle`, `hexagon`, `sector`, `segment`, `roundrect`, `text`,
