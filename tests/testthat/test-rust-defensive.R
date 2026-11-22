@@ -114,7 +114,9 @@ test_that("a negative keyframe index is an error, not a wrapped index", {
       gif_dither = FALSE,
       frac_col = 0.5,
       frac_size = 0.5,
-      frac_alpha = 0.5
+      frac_alpha = 0.5,
+      text_variants = list(),
+      text_frame = integer(0)
     ),
     "references keyframe pair"
   )

@@ -1238,8 +1238,104 @@ fn frame_scene(
     }
 }
 
-/// Rasterize a scene to a fresh `Pixmap` (never touches the `raster_cache`, so it
-/// is safe to run on many owned scenes across `rayon` workers).
+/// Per-frame text: the keyed text nodes of one variant scene, by key. A frame
+/// that uses the variant takes each matching text node's string and glyph
+/// layout from it (see `patch_text`).
+type TextVariant = HashMap<String, Node>;
+
+/// The keyed text nodes of each variant scene.
+fn text_variants_of(scenes: &[Scene]) -> Vec<TextVariant> {
+    scenes
+        .iter()
+        .map(|sc| {
+            let mut m = TextVariant::new();
+            for (_, n) in &sc.nodes {
+                if let Node::Text { key: Some(k), .. } = n {
+                    m.entry(k.clone()).or_insert_with(|| n.clone());
+                }
+            }
+            m
+        })
+        .collect()
+}
+
+/// Swap the content of a frame's keyed text nodes for the variant's: the
+/// string, its glyph layout and extent, font and size come from the variant,
+/// while the position, rotation, justification, colour and halo stay as the
+/// tween left them. This is how a label that changes on every frame (a
+/// `{frame_time}` title) is drawn without a keyframe per frame: the R caller
+/// shapes each distinct string once, in a small scene keyed like the node it
+/// replaces.
+fn patch_text(nodes: &mut [(usize, Node)], variant: &TextVariant) {
+    if variant.is_empty() {
+        return;
+    }
+    for (_, n) in nodes.iter_mut() {
+        let Node::Text {
+            key: Some(k),
+            w,
+            h,
+            gid,
+            gx,
+            gy,
+            gsize,
+            gpath,
+            gface,
+            gcol,
+            label,
+            family,
+            face,
+            size,
+            ..
+        } = n
+        else {
+            continue;
+        };
+        let Some(Node::Text {
+            w: vw,
+            h: vh,
+            gid: vgid,
+            gx: vgx,
+            gy: vgy,
+            gsize: vgsize,
+            gpath: vgpath,
+            gface: vgface,
+            gcol: vgcol,
+            label: vlabel,
+            family: vfamily,
+            face: vface,
+            size: vsize,
+            ..
+        }) = variant.get(k.as_str())
+        else {
+            continue;
+        };
+        *w = *vw;
+        *h = *vh;
+        *gid = vgid.clone();
+        *gx = vgx.clone();
+        *gy = vgy.clone();
+        *gsize = vgsize.clone();
+        *gpath = vgpath.clone();
+        *gface = vgface.clone();
+        *gcol = vgcol.clone();
+        *label = vlabel.clone();
+        *family = vfamily.clone();
+        *face = vface.clone();
+        *size = *vsize;
+    }
+}
+
+/// The text variant frame `frame` uses, if any (`text_frame` is 1-based, 0 =
+/// none, and empty when the animation has no per-frame text).
+fn frame_variant<'a>(texts: &'a [TextVariant], text_frame: &[i32], frame: usize) -> Option<&'a TextVariant> {
+    let v = *text_frame.get(frame)?;
+    if v < 1 {
+        return None;
+    }
+    texts.get(v as usize - 1)
+}
+
 /// Build a single animated SVG from the frame schedule.
 ///
 /// Every frame is emitted in full, as a `<g>` shown for its slice of the
@@ -1261,7 +1357,15 @@ fn frame_scene(
 /// So it wins on line art -- an explanatory animation of a few moving marks --
 /// and loses on dense scatter, where a raster format is the right answer. It is
 /// resolution-independent either way, which no raster format is.
-fn animated_svg(kf: &[Scene], seg: &[i32], frac: &[Fracs], delay_num: i32, delay_den: i32) -> String {
+fn animated_svg(
+    kf: &[Scene],
+    seg: &[i32],
+    frac: &[Fracs],
+    delay_num: i32,
+    delay_den: i32,
+    texts: &[TextVariant],
+    text_frame: &[i32],
+) -> String {
     let n = seg.len();
     let dur = (delay_num.max(0) as f64 / delay_den.max(1) as f64) * n as f64;
     let (w, h) = (kf[0].w_px, kf[0].h_px);
@@ -1274,6 +1378,9 @@ fn animated_svg(kf: &[Scene], seg: &[i32], frac: &[Fracs], delay_num: i32, delay
         .map(|frame| {
             let s = seg[frame] as usize;
             let mut sc = tween_scene(&kf[s], &kf[s + 1], plans[s].as_ref(), &frac[frame]);
+            if let Some(v) = frame_variant(texts, text_frame, frame) {
+                patch_text(&mut sc.nodes, v);
+            }
             // The title/desc belong to the document, not to each of its frames:
             // repeating them would have a screen reader announce the figure once
             // per frame.
@@ -1310,7 +1417,12 @@ fn animated_svg(kf: &[Scene], seg: &[i32], frac: &[Fracs], delay_num: i32, delay
     // `transition_time()`, a non-looping `transition_states()` -- the complete
     // picture), otherwise the first (a loop, whose first frame is its first state).
     let still = still_frame(kf.len(), seg, frac);
-    let pct = 100.0 / n as f64;
+    // The visible window, rounded UP to the 6 decimals written: rounded to
+    // nearest it could fall a hair short of the next frame's start, leaving a
+    // sub-nanosecond gap with no frame visible that a seek to a round time can
+    // land in (a blank flash). Rounded up, adjacent frames overlap by as much
+    // instead, and the later one paints over the earlier.
+    let pct = (100.0 / n as f64 * 1e6).ceil() / 1e6;
     out.push_str(&format!(
         "<style>\
          .{C}vf{{visibility:hidden;animation:{C}vc {dur}s steps(1,end) infinite}}\
@@ -1609,6 +1721,11 @@ fn open_gif(path: &str, w: u16, h: u16) -> EncResult<gif::Encoder<BufWriter<File
 ///   (fastest). Ignored by the other formats.
 /// * `gif_dither` — GIF only: apply Floyd–Steinberg dithering.
 ///
+/// * `text_variants`, `text_frame` — per-frame text: a list of compiled scenes
+///   holding keyed text nodes, and per frame the 1-based variant whose text
+///   replaces the frame's same-keyed text nodes (0 = none). An empty
+///   `text_frame` means no per-frame text.
+///
 /// Returns any renderer degradation warnings (currently none for the raster path).
 ///
 /// @keywords internal
@@ -1626,6 +1743,8 @@ fn render_animation(
     frac_col: &[f64],
     frac_size: &[f64],
     frac_alpha: &[f64],
+    text_variants: List,
+    text_frame: &[i32],
 ) -> Vec<String> {
     let k = keyframes.len();
     if k < 2 {
@@ -1654,6 +1773,33 @@ fn render_animation(
         .map(|i| Fracs { pos: frac[i], col: frac_col[i], size: frac_size[i], alpha: frac_alpha[i] })
         .collect();
     let frac = &frac[..];
+
+    // Per-frame text (empty `text_frame` = none): variant scenes whose keyed
+    // text nodes replace the same-keyed nodes of the frames that name them.
+    let variant_scenes: Vec<Scene> = text_variants
+        .values()
+        .map(|robj| {
+            let ep = <ExternalPtr<Scene>>::try_from(robj).unwrap_or_else(|_| {
+                throw_r_error("render_animation(): text_variants must be compiled vellum scenes")
+            });
+            (*ep).clone()
+        })
+        .collect();
+    if !text_frame.is_empty() {
+        if text_frame.len() != n {
+            throw_r_error(&format!(
+                "render_animation(): text_frame must have one entry per frame ({n}), got {}",
+                text_frame.len()
+            ));
+        }
+        if let Some(&bad) = text_frame.iter().find(|&&v| v < 0 || v as usize > variant_scenes.len()) {
+            throw_r_error(&format!(
+                "render_animation(): text_frame entry {bad} is not a text variant (0..{})",
+                variant_scenes.len()
+            ));
+        }
+    }
+    let texts = text_variants_of(&variant_scenes);
 
     // Own the keyframe scenes (clone out of the external pointers) so the tween
     // can read them freely and they outlive the R call cleanly.
@@ -1701,7 +1847,7 @@ fn render_animation(
     // Animated SVG takes its own path: it needs the tweened *scenes*, not
     // rasterised pixmaps, so it cannot go through `Sink`.
     if format == "svg" {
-        let body = animated_svg(&kf, seg, frac, delay_num, delay_den);
+        let body = animated_svg(&kf, seg, frac, delay_num, delay_den, &texts, text_frame);
         if let Err(e) = std::fs::write(path, body) {
             throw_r_error(format!("failed to write {path}: {e}"));
         }
@@ -1754,7 +1900,11 @@ fn render_animation(
         let scenes: Vec<Scene> = (start..end)
             .map(|frame| {
                 let s = seg[frame] as usize;
-                tween_scene(&kf[s], &kf[s + 1], plans[s].as_ref(), &frac[frame])
+                let mut sc = tween_scene(&kf[s], &kf[s + 1], plans[s].as_ref(), &frac[frame]);
+                if let Some(v) = frame_variant(&texts, text_frame, frame) {
+                    patch_text(&mut sc.nodes, v);
+                }
+                sc
             })
             .collect();
         if let Sink::Gif { encoder, w, h, delay_cs, speed, dither } = &mut sink {
@@ -1918,6 +2068,61 @@ mod tests {
         assert_eq!(still_frame(3, &seg, &[fr(0.0), fr(0.5), fr(0.0), fr(0.5)]), 0);
         // Ending on an earlier keyframe pair is not the end either.
         assert_eq!(still_frame(4, &seg, &[fr(0.0), fr(0.5), fr(0.5), fr(1.0)]), 0);
+    }
+
+    fn text_node(label: &str, key: Option<&str>, x: f64, w: f64) -> Node {
+        use crate::units::Unit;
+        Node::Text {
+            x,
+            y: 0.5,
+            xu: Unit::from_code_off(0, 0.0),
+            yu: Unit::from_code_off(0, 0.0),
+            rot: 0.0,
+            hjust: 0.0,
+            vjust: 0.5,
+            w,
+            h: 10.0,
+            gid: vec![1; label.len()],
+            gx: (0..label.len()).map(|i| i as f64).collect(),
+            gy: vec![0.0; label.len()],
+            gsize: vec![12.0; label.len()],
+            gpath: vec![String::new(); label.len()],
+            gface: vec![0; label.len()],
+            gcol: Vec::new(),
+            halo: None,
+            label: label.to_string(),
+            family: "sans".to_string(),
+            face: "plain".to_string(),
+            size: 12.0,
+            tpath: None,
+            key: key.map(|k| k.to_string()),
+            gp: gp(1.0, 1.0),
+        }
+    }
+
+    #[test]
+    fn patch_text_swaps_the_string_but_keeps_the_tweened_position() {
+        let mut nodes = vec![
+            (0, text_node("1952", Some("vp:title"), 0.3, 40.0)),
+            (0, text_node("axis", None, 0.1, 30.0)),
+        ];
+        let mut v = TextVariant::new();
+        v.insert("vp:title".to_string(), text_node("1954.5", Some("vp:title"), 0.9, 60.0));
+        patch_text(&mut nodes, &v);
+        match &nodes[0].1 {
+            Node::Text { label, x, w, gid, .. } => {
+                assert_eq!(label, "1954.5");
+                assert_eq!(*x, 0.3); // position from the tween, not the variant
+                assert_eq!(*w, 60.0); // extent from the variant's layout
+                assert_eq!(gid.len(), 6);
+            }
+            _ => unreachable!(),
+        }
+        match &nodes[1].1 {
+            Node::Text { label, .. } => assert_eq!(label, "axis"), // unkeyed: untouched
+            _ => unreachable!(),
+        }
+        assert!(frame_variant(&[v], &[0, 1], 0).is_none());
     }
 
     #[test]

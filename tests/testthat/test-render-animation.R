@@ -59,7 +59,9 @@ test_that("render_animation interpolates geometry across frames", {
     gif_dither = TRUE,
     frac_col = fracs,
     frac_size = fracs,
-    frac_alpha = fracs
+    frac_alpha = fracs,
+    text_variants = list(),
+    text_frame = integer(0)
   )
   expect_length(warns, 0L)
   files <- sort(list.files(dir, pattern = "\\.png$", full.names = TRUE))
@@ -94,7 +96,9 @@ test_that("endpoints render identically to the keyframes themselves", {
     gif_dither = TRUE,
     frac_col = c(0, 1),
     frac_size = c(0, 1),
-    frac_alpha = c(0, 1)
+    frac_alpha = c(0, 1),
+    text_variants = list(),
+    text_frame = integer(0)
   )
   files <- sort(list.files(dir, pattern = "\\.png$", full.names = TRUE))
   # t = 0 is keyframe A, t = 1 is keyframe B, byte-for-byte on geometry (colour
@@ -121,7 +125,9 @@ test_that("render_animation writes a valid multi-frame APNG", {
     gif_dither = TRUE,
     frac_col = seq(0, 1, length.out = 10),
     frac_size = seq(0, 1, length.out = 10),
-    frac_alpha = seq(0, 1, length.out = 10)
+    frac_alpha = seq(0, 1, length.out = 10),
+    text_variants = list(),
+    text_frame = integer(0)
   )
   expect_true(file.exists(out))
   expect_gt(file.size(out), 100)
@@ -160,7 +166,9 @@ test_that("render_animation writes a valid looping GIF", {
     gif_dither = TRUE,
     frac_col = seq(0, 1, length.out = 8),
     frac_size = seq(0, 1, length.out = 8),
-    frac_alpha = seq(0, 1, length.out = 8)
+    frac_alpha = seq(0, 1, length.out = 8),
+    text_variants = list(),
+    text_frame = integer(0)
   )
   expect_true(file.exists(out))
   info <- magick::image_info(magick::image_read(out))
@@ -231,7 +239,9 @@ test_that("keyed elements enter and exit (per-element fade)", {
     gif_dither = TRUE,
     frac_col = c(0, 0.5, 1),
     frac_size = c(0, 0.5, 1),
-    frac_alpha = c(0, 0.5, 1)
+    frac_alpha = c(0, 0.5, 1),
+    text_variants = list(),
+    text_frame = integer(0)
   )
   files <- sort(list.files(dir, pattern = "\\.png$", full.names = TRUE))
   red_at <- function(png, xnpc) {
@@ -280,7 +290,9 @@ test_that("viewport masks tween (a reveal wipe)", {
     gif_dither = TRUE,
     frac_col = c(0, 0.5, 1),
     frac_size = c(0, 0.5, 1),
-    frac_alpha = c(0, 0.5, 1)
+    frac_alpha = c(0, 0.5, 1),
+    text_variants = list(),
+    text_frame = integer(0)
   )
   files <- sort(list.files(dir, pattern = "\\.png$", full.names = TRUE))
   blue <- vapply(
@@ -315,7 +327,9 @@ one_frame <- function(scenes, pos, col = pos, size = pos, alpha = pos, dir) {
     gif_dither = TRUE,
     frac_col = col,
     frac_size = size,
-    frac_alpha = alpha
+    frac_alpha = alpha,
+    text_variants = list(),
+    text_frame = integer(0)
   )
   sort(list.files(dir, pattern = "\\.png$", full.names = TRUE))[[1]]
 }
@@ -340,7 +354,9 @@ test_that("equal class fractions reproduce single-curve easing byte-for-byte", {
     gif_dither = TRUE,
     frac_col = 0.37,
     frac_size = 0.37,
-    frac_alpha = 0.37
+    frac_alpha = 0.37,
+    text_variants = list(),
+    text_frame = integer(0)
   )
   f2 <- sort(list.files(d2, pattern = "\\.png$", full.names = TRUE))[[1]]
   expect_identical(readBin(f1, "raw", 1e6), readBin(f2, "raw", 1e6))
@@ -491,7 +507,9 @@ test_that("render_animation validates its inputs", {
       TRUE,
       0,
       0,
-      0
+      0,
+      list(),
+      integer(0)
     ),
     "at least 2 keyframes"
   )
@@ -508,7 +526,9 @@ test_that("render_animation validates its inputs", {
       TRUE,
       0,
       0,
-      0
+      0,
+      list(),
+      integer(0)
     ),
     "same length"
   )
@@ -525,7 +545,9 @@ test_that("render_animation validates its inputs", {
       TRUE,
       0.5,
       0.5,
-      0.5
+      0.5,
+      list(),
+      integer(0)
     ),
     "references keyframe pair"
   )
@@ -542,8 +564,78 @@ test_that("render_animation validates its inputs", {
       TRUE,
       0.5,
       0.5,
-      0.5
+      0.5,
+      list(),
+      integer(0)
     ),
     "unknown format"
   )
+})
+
+test_that("per-frame text replaces a keyed label's string on every frame (VP-82)", {
+  # A keyed title whose string changes on every frame though only two
+  # keyframes exist: each frame's variant supplies its string, while the
+  # unkeyed text and the tweened circle are left alone.
+  mk <- function(x, title) {
+    vl_scene(3, 2, bg = "white") |>
+      draw(text_grob(title, y = 0.9, key = "vp:title")) |>
+      draw(text_grob("static", y = 0.1)) |>
+      draw(circle_grob(x = x, y = 0.5, r = 0.1, key = "c1"))
+  }
+  kf <- list(mk(0.2, "t = 0"), mk(0.8, "t = 1"))
+  fr <- seq(0, 1, length.out = 5)
+  labels <- sprintf("t = %.2f", fr)
+  variants <- lapply(labels, function(l) {
+    vl_scene(3, 2) |> draw(text_grob(l, key = "vp:title"))
+  })
+  out <- withr::local_tempfile(fileext = ".svg")
+  vl_render_animation(
+    kf,
+    rep(1L, 5),
+    fr,
+    out,
+    format = "svg",
+    text_variants = variants,
+    text_frame = c(1L, 2L, 3L, 0L, 5L)
+  )
+  doc <- xml2::read_xml(out)
+  frames <- xml2::xml_find_all(doc, "/*[local-name()='svg']/*[local-name()='g']")
+  expect_length(frames, 5L)
+  title_of <- function(g) {
+    tx <- xml2::xml_text(xml2::xml_find_all(g, ".//*[local-name()='text']"))
+    setdiff(tx, "static")
+  }
+  got <- vapply(frames, title_of, character(1))
+  # Frame 4 names no variant, so it keeps the nearer keyframe's string.
+  expect_identical(got, c(labels[1:3], "t = 1", labels[5]))
+  # The static label is in every frame, untouched.
+  expect_true(all(vapply(frames, function(g) {
+    "static" %in% xml2::xml_text(xml2::xml_find_all(g, ".//*[local-name()='text']"))
+  }, logical(1))))
+})
+
+test_that("per-frame text is validated (VP-82)", {
+  s <- anim_scenes()
+  v <- list(vl_scene(3, 2) |> draw(text_grob("x", key = "k")))
+  dir <- withr::local_tempdir()
+  go <- function(...) {
+    vl_render_animation(list(s$a, s$b), rep(1L, 3), c(0, 0.5, 1), dir, format = "frames", ...)
+  }
+  expect_error(go(text_variants = v), "both")
+  expect_error(go(text_variants = v, text_frame = 1:2), "one entry per frame")
+  expect_error(go(text_variants = v, text_frame = c(0L, 1L, 2L)), "0:1")
+  expect_silent(go(text_variants = v, text_frame = c(0L, 1L, NA)))
+})
+
+test_that("animated SVG frame windows leave no gap between frames", {
+  # 100 / 3 written to 6 decimals must round UP (33.333334%): rounded to
+  # nearest, three windows add up to 99.999999% and a seek can land in the
+  # sliver where no frame is visible (found by VW-55's scrubber).
+  s <- anim_scenes()
+  out <- withr::local_tempfile(fileext = ".svg")
+  vl_render_animation(list(s$a, s$b), rep(1L, 3), c(0, 0.5, 1), out, format = "svg")
+  css <- paste(readLines(out, warn = FALSE), collapse = "")
+  pct <- as.numeric(sub(".*visible\\}([0-9.]+)%\\{visibility:hidden.*", "\\1", css))
+  expect_gte(pct * 3, 100)
+  expect_lt(pct * 3, 100 + 1e-5)
 })

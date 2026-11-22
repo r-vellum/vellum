@@ -48,6 +48,18 @@
 #' @param gif_dither GIF only: apply Floyd–Steinberg dithering (default `TRUE`),
 #'   which greatly reduces the banding a 256-colour palette leaves on gradients and
 #'   antialiased edges. A frame that already fits in 256 colours is kept exact.
+#' @param text_variants,text_frame Optional per-frame text, for a label that
+#'   changes on every frame rather than only at keyframes (a title showing the
+#'   current time, say). `text_variants` is a list of scenes (anything with an
+#'   [as_vellum_scene()] method), each holding one or more **keyed** text grobs
+#'   (`text_grob(key = )`); `text_frame` gives, per output frame, the 1-based
+#'   index of the variant that frame uses, or `0` (or `NA`) for none. In a frame
+#'   that uses a variant, every keyed text node of the tweened frame whose key
+#'   matches one of the variant's text grobs takes that grob's string and glyph
+#'   layout (shaping, extent, font and size), while its position, rotation,
+#'   justification and colour stay as the tween put them. So shape each
+#'   distinct string once, with the same font and wrapping width as the node it
+#'   replaces. `NULL` (the default) for neither.
 #' @return `path`, invisibly.
 #' @details
 #' GIF is limited to 256 colours per frame, so on a plot (smooth panels,
@@ -167,7 +179,9 @@ vl_render_animation <- function(
   gif_dither = TRUE,
   frac_col = NULL,
   frac_size = NULL,
-  frac_alpha = NULL
+  frac_alpha = NULL,
+  text_variants = NULL,
+  text_frame = NULL
 ) {
   format <- match.arg(format)
   if (!is.list(keyframes) || length(keyframes) < 2L) {
@@ -211,6 +225,7 @@ vl_render_animation <- function(
   backends <- lapply(keyframes, function(s) {
     .scene_to_backend(as_vellum_scene(s))
   })
+  text <- .frame_text(text_variants, text_frame, length(seg))
 
   # Frame duration = 1 / fps seconds, passed as an exact numerator/denominator so
   # the encoders can round to their own time base (APNG: fraction of a second;
@@ -246,7 +261,9 @@ vl_render_animation <- function(
     gif_dither = isTRUE(gif_dither),
     frac_col = frac_col,
     frac_size = frac_size,
-    frac_alpha = frac_alpha
+    frac_alpha = frac_alpha,
+    text_variants = text$variants,
+    text_frame = text$frame
   )
   .emit_degrade_warnings(warns)
   # An animated SVG emits every frame in full, so a dense scene times a long
@@ -345,6 +362,41 @@ vl_tween_pairing <- function(keyframes) {
     r <- 1 / frac
   }
   as.integer(best)
+}
+
+# Validate the per-frame text of `vl_render_animation()`: the variant scenes as
+# backends and the per-frame 1-based variant index (0 = none); an empty index
+# when there is no per-frame text.
+.frame_text <- function(variants, frame, n) {
+  if (is.null(variants) && is.null(frame)) {
+    return(list(variants = list(), frame = integer(0)))
+  }
+  if (is.null(variants) || is.null(frame)) {
+    cli::cli_abort(
+      "Supply both {.arg text_variants} and {.arg text_frame}, or neither."
+    )
+  }
+  if (!is.list(variants)) {
+    cli::cli_abort("{.arg text_variants} must be a list of scenes.")
+  }
+  frame <- vctrs::vec_cast(frame, integer())
+  frame[is.na(frame)] <- 0L
+  if (length(frame) != n) {
+    cli::cli_abort(
+      "{.arg text_frame} must have one entry per frame ({n}), not {length(frame)}."
+    )
+  }
+  if (any(frame < 0L | frame > length(variants))) {
+    cli::cli_abort(
+      "{.arg text_frame} entries must be in 0:{length(variants)} (0 = no variant)."
+    )
+  }
+  list(
+    variants = lapply(variants, function(s) {
+      .scene_to_backend(as_vellum_scene(s))
+    }),
+    frame = frame
+  )
 }
 
 # One tweened frame between scenes `a` and `b` at fraction `frac`, as a backend
