@@ -164,6 +164,26 @@ impl Vp {
         self.y_len_base(value, u.kind) + u.off_px(self.dpi)
     }
 
+    /// Horizontal size of a centred box (rect, round rect, hexagon, image) in
+    /// local pixels. Like [`Vp::x_len`], but a `native` size is measured against
+    /// the scale's magnitude, so a box on a reversed axis (a decreasing
+    /// `xscale`) keeps a positive width instead of resolving negative and being
+    /// dropped. Grid draws such a box the same way.
+    pub fn x_extent(&self, value: f64, u: Unit) -> f64 {
+        match u.kind {
+            UnitKind::Native => value / span(self.xscale).abs() * self.w + u.off_px(self.dpi),
+            _ => self.x_len(value, u),
+        }
+    }
+
+    /// Vertical size of a centred box; see [`Vp::x_extent`].
+    pub fn y_extent(&self, value: f64, u: Unit) -> f64 {
+        match u.kind {
+            UnitKind::Native => value / span(self.yscale).abs() * self.h + u.off_px(self.dpi),
+            _ => self.y_len(value, u),
+        }
+    }
+
     /// Radius-like length: npc is taken against the smaller viewport dimension
     /// (snpc-style) so circles stay round; native uses the x scale. Kept as a
     /// single-unit resolver — radii must not be split per axis.
@@ -194,5 +214,39 @@ fn span((lo, hi): (f64, f64)) -> f64 {
         1.0
     } else {
         s
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn vp(xscale: (f64, f64), yscale: (f64, f64)) -> Vp {
+        Vp {
+            transform: Transform::identity(),
+            w: 200.0,
+            h: 100.0,
+            xscale,
+            yscale,
+            dpi: 96.0,
+        }
+    }
+
+    #[test]
+    fn box_extent_is_positive_on_a_reversed_axis() {
+        let n = Unit::plain(UnitKind::Native);
+        let fwd = vp((0.0, 10.0), (0.0, 5.0));
+        let rev = vp((10.0, 0.0), (5.0, 0.0));
+        // a signed length flips sign on a reversed axis ...
+        assert!(rev.x_len(1.0, n) < 0.0);
+        assert!(rev.y_len(1.0, n) < 0.0);
+        // ... but a box size keeps its magnitude
+        assert_eq!(rev.x_extent(1.0, n), fwd.x_extent(1.0, n));
+        assert_eq!(rev.y_extent(1.0, n), fwd.y_extent(1.0, n));
+        assert_eq!(fwd.x_extent(1.0, n), 20.0);
+        assert_eq!(fwd.y_extent(1.0, n), 20.0);
+        // non-native units are unchanged
+        let mm = Unit::plain(UnitKind::Mm);
+        assert_eq!(rev.x_extent(10.0, mm), rev.x_len(10.0, mm));
     }
 }

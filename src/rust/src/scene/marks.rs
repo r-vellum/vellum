@@ -30,8 +30,8 @@ pub(super) fn draw_rect<B: RenderBackend>(
     };
     let cx = vp.x_pos(*x, *xu);
     let cy = vp.y_pos(*y, *yu);
-    let pw = vp.x_len(*w, *wu);
-    let ph = vp.y_len(*h, *hu);
+    let pw = vp.x_extent(*w, *wu);
+    let ph = vp.y_extent(*h, *hu);
     if let Some(g) = b.geom_sink() {
         g.rect(0, cx - pw / 2.0, cy - ph / 2.0, pw, ph);
     }
@@ -70,8 +70,8 @@ pub(super) fn draw_round_rect<B: RenderBackend>(
     b.set_element_key(key.as_deref());
     let cx = vp.x_pos(*x, *xu);
     let cy = vp.y_pos(*y, *yu);
-    let pw = vp.x_len(*w, *wu);
-    let ph = vp.y_len(*h, *hu);
+    let pw = vp.x_extent(*w, *wu);
+    let ph = vp.y_extent(*h, *hu);
     let pr = vp.r_len(*r, *ru); // isotropic radius (npc -> min side)
     if let Some(g) = b.geom_sink() {
         // The crisp outline, also for a sketched one: the wobble
@@ -329,7 +329,7 @@ pub(super) fn draw_rects<B: RenderBackend>(
     if let Some(g) = b.geom_sink() {
         for i in 0..n {
             let (cx, cy) = (vp.x_pos(x[i], xu[i]), vp.y_pos(y[i], yu[i]));
-            let (pw, ph) = (vp.x_len(w[i], wu[i]), vp.y_len(h[i], hu[i]));
+            let (pw, ph) = (vp.x_extent(w[i], wu[i]), vp.y_extent(h[i], hu[i]));
             g.rect(i, cx - pw / 2.0, cy - ph / 2.0, pw, ph);
         }
     }
@@ -340,8 +340,8 @@ pub(super) fn draw_rects<B: RenderBackend>(
             b.set_element_key(key_at(keys, i));
             let cx = vp.x_pos(x[i], xu[i]);
             let cy = vp.y_pos(y[i], yu[i]);
-            let pw = vp.x_len(w[i], wu[i]);
-            let ph = vp.y_len(h[i], hu[i]);
+            let pw = vp.x_extent(w[i], wu[i]);
+            let ph = vp.y_extent(h[i], hu[i]);
             if pw <= 0.0 || ph <= 0.0 {
                 continue;
             }
@@ -366,8 +366,8 @@ pub(super) fn draw_rects<B: RenderBackend>(
                     b.set_element_key(key_at(keys, i));
                     let cx = vp.x_pos(x[i], xu[i]);
                     let cy = vp.y_pos(y[i], yu[i]);
-                    let pw = vp.x_len(w[i], wu[i]);
-                    let ph = vp.y_len(h[i], hu[i]);
+                    let pw = vp.x_extent(w[i], wu[i]);
+                    let ph = vp.y_extent(h[i], hu[i]);
                     if pw <= 0.0 || ph <= 0.0 {
                         continue;
                     }
@@ -385,8 +385,8 @@ pub(super) fn draw_rects<B: RenderBackend>(
                     b.set_element_key(key_at(keys, i));
                     let cx = vp.x_pos(x[i], xu[i]);
                     let cy = vp.y_pos(y[i], yu[i]);
-                    let pw = vp.x_len(w[i], wu[i]);
-                    let ph = vp.y_len(h[i], hu[i]);
+                    let pw = vp.x_extent(w[i], wu[i]);
+                    let ph = vp.y_extent(h[i], hu[i]);
                     if pw <= 0.0 || ph <= 0.0 {
                         continue;
                     }
@@ -405,8 +405,8 @@ pub(super) fn draw_rects<B: RenderBackend>(
                 b.set_element_key(key_at(keys, i));
                 let cx = vp.x_pos(x[i], xu[i]);
                 let cy = vp.y_pos(y[i], yu[i]);
-                let pw = vp.x_len(w[i], wu[i]);
-                let ph = vp.y_len(h[i], hu[i]);
+                let pw = vp.x_extent(w[i], wu[i]);
+                let ph = vp.y_extent(h[i], hu[i]);
                 if let Some(path) = rect_path(cx - pw / 2.0, cy - ph / 2.0, pw, ph) {
                     fill_paint_then_stroke(
                         b,
@@ -833,8 +833,8 @@ pub(super) fn draw_hexagons<B: RenderBackend>(
             hexagon_path_xy(
                 cx,
                 cy,
-                vp.x_len(w[i], wu[i]) * 0.5,
-                vp.y_len(h[i], hu[i]) * 0.5,
+                vp.x_extent(w[i], wu[i]) * 0.5,
+                vp.y_extent(h[i], hu[i]) * 0.5,
                 *flat,
             )
         } else {

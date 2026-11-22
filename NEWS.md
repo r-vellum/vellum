@@ -50,6 +50,13 @@
 
 ## Bug fixes
 
+* A rect, round rect, non-regular hexagon or image sized in `native` units on
+  a reversed axis (a decreasing `xscale`/`yscale`) is drawn again (VP-89). Its
+  native width resolved to a negative device size and the box was dropped, so
+  vellumplot's bars on `scale_x_reverse()`/`scale_y_reverse()` (flipped or not)
+  were invisible. A box size is now measured against the scale's magnitude, as
+  grid does; signed lengths (offsets) are unchanged.
+
 * Where marks overlap and their stacking order differs between two keyframes,
   a frame now draws them in the left keyframe's order up to the positional
   midpoint and in the right keyframe's from there on (VR-35), with the other
