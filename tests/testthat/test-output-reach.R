@@ -87,18 +87,30 @@ test_that("per-frame defs ids are unique across the document", {
   expect_equal(anyDuplicated(ids), 0L)
 })
 
-test_that("each frame's clip references resolve inside that frame", {
+test_that("every frame's clip references resolve to one shared, visible def (VR-36)", {
   skip_if_not_installed("xml2")
   sc <- schedule(per = 4)
   f <- withr::local_tempfile(fileext = ".svg")
   vl_render_animation(clipped_keyframes(), sc$seg, sc$frac, f, format = "svg", fps = 12)
   x <- xml2::read_xml(f)
-  for (fr in xml2::xml_find_all(x, frame_xpath)) {
-    refs <- xml2::xml_attr(xml2::xml_find_all(fr, ".//*[@clip-path]"), "clip-path")
-    refs <- unique(sub("^url\\(#(.*)\\)$", "\\1", refs))
-    defined <- xml2::xml_attr(xml2::xml_find_all(fr, ".//*[@id]"), "id")
-    expect_true(all(refs %in% defined))
+  # The definitions live in one document-level <defs>, outside the frames'
+  # visibility:hidden groups (a hidden <clipPath> clips everything away), and
+  # identical ones are written once rather than per frame.
+  frames <- xml2::xml_find_all(x, frame_xpath)
+  expect_length(xml2::xml_find_all(x, "//*[local-name()='defs']"), 1L)
+  for (fr in frames) {
+    expect_length(xml2::xml_find_all(fr, ".//*[local-name()='defs']"), 0L)
   }
+  defs <- xml2::xml_find_first(x, "/*/*[local-name()='defs']")
+  defined <- xml2::xml_attr(xml2::xml_find_all(defs, ".//*[@id]"), "id")
+  refs <- character()
+  for (fr in frames) {
+    r <- xml2::xml_attr(xml2::xml_find_all(fr, ".//*[@clip-path]"), "clip-path")
+    refs <- c(refs, unique(sub("^url\\(#(.*)\\)$", "\\1", r)))
+  }
+  expect_gt(length(refs), 0)
+  expect_true(all(refs %in% defined))
+  expect_lt(length(defined), length(frames))
 })
 
 test_that("the animation carries accessibility text once, not per frame", {
