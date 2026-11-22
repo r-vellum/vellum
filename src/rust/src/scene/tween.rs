@@ -1391,6 +1391,19 @@ fn animated_svg(
             svg_body(&sc.svg_string(false, &format!("f{frame}-")))
         })
         .collect();
+    // Every frame's `<defs>` (gradients, patterns, clip paths, masks, filters)
+    // move into one document-level `<defs>`, each distinct definition once: a
+    // colour bar's 256-stop gradient or a panel's clip path is the same in every
+    // frame, and was written out in full per frame (VR-36).
+    let mut shared = SharedDefs::default();
+    let bodies: Vec<String> = bodies
+        .into_iter()
+        .enumerate()
+        .map(|(frame, b)| {
+            let prefix = format!("{}-f{frame}-", crate::render::ID_TOKEN);
+            hoist_defs(b, &prefix, &mut shared)
+        })
+        .collect();
 
     let mut out = String::with_capacity(bodies.iter().map(|b| b.len()).sum::<usize>() + 4096);
     out.push_str(&format!(
@@ -1431,6 +1444,11 @@ fn animated_svg(
          </style>",
         C = CSS_TOKEN
     ));
+    if !shared.defs.is_empty() {
+        out.push_str("<defs>");
+        out.push_str(&shared.defs);
+        out.push_str("</defs>");
+    }
     for (i, body) in bodies.iter().enumerate() {
         // A negative delay starts each frame that far into the cycle, so frame `i`
         // is in its visible window once the cycle has `dur - i*dur/n` still to run
@@ -1446,6 +1464,131 @@ fn animated_svg(
     let prefix = crate::render::doc_id_prefix(&out, &kf[0].a11y_prefix);
     let out = out.replace(CSS_TOKEN, &format!("{}-", css_ident(&prefix)));
     crate::render::resolve_ids(out, &prefix)
+}
+
+/// The document-level `<defs>` of an animated SVG: each distinct definition
+/// once, by content (its own id blanked, its references already pointing at
+/// shared ids).
+#[derive(Default)]
+struct SharedDefs {
+    defs: String,
+    by_content: HashMap<String, String>,
+}
+
+/// The top-level elements of a run of sibling XML elements (the content of a
+/// `<defs>`), or `None` when it does not split cleanly. Attribute values and
+/// text are escaped by the writer, so a raw `<`/`>` only ever delimits a tag.
+fn split_elements(s: &str) -> Option<Vec<&str>> {
+    let mut out = Vec::new();
+    let (mut depth, mut start, mut i) = (0usize, 0usize, 0usize);
+    let b = s.as_bytes();
+    while i < b.len() {
+        if b[i] != b'<' {
+            if depth == 0 && !b[i].is_ascii_whitespace() {
+                return None;
+            }
+            i += 1;
+            continue;
+        }
+        let j = i + s[i..].find('>')?;
+        if depth == 0 {
+            start = i;
+        }
+        if b[i + 1] == b'/' {
+            depth = depth.checked_sub(1)?;
+            if depth == 0 {
+                out.push(&s[start..=j]);
+            }
+        } else if b[j - 1] == b'/' {
+            if depth == 0 {
+                out.push(&s[start..=j]);
+            }
+        } else if matches!(b[i + 1], b'?' | b'!') {
+            return None;
+        } else {
+            depth += 1;
+        }
+        i = j + 1;
+    }
+    (depth == 0).then_some(out)
+}
+
+/// `s` with every `url(#id)` whose id is in `map` pointed at the mapped id.
+fn remap_urls(s: &str, map: &HashMap<String, String>) -> String {
+    if map.is_empty() {
+        return s.to_string();
+    }
+    let mut out = String::with_capacity(s.len());
+    let mut rest = s;
+    while let Some(k) = rest.find("url(#") {
+        let (head, tail) = rest.split_at(k + 5);
+        out.push_str(head);
+        match tail.find(')') {
+            Some(e) => {
+                let id = &tail[..e];
+                out.push_str(map.get(id).map_or(id, |v| v.as_str()));
+                rest = &tail[e..];
+            }
+            None => {
+                rest = tail;
+                break;
+            }
+        }
+    }
+    out.push_str(rest);
+    out
+}
+
+/// Move one frame's `<defs>` into `shared`, keeping one copy of each distinct
+/// definition across the whole animation, and point the frame's references at
+/// the shared ids. Definitions are compared after their own references are
+/// remapped, so a clip path nested in an already-shared one matches too. Only
+/// ids carrying this frame's prefix are touched; a frame whose `<defs>` does
+/// not parse is left as it was.
+fn hoist_defs(body: String, frame_prefix: &str, shared: &mut SharedDefs) -> String {
+    let Some(open) = body.find("<defs>") else {
+        return body;
+    };
+    let Some(close) = body[open..].find("</defs>").map(|c| open + c) else {
+        return body;
+    };
+    let inner = &body[open + 6..close];
+    let Some(elems) = split_elements(inner) else {
+        return body;
+    };
+    let mut map: HashMap<String, String> = HashMap::new();
+    let mut kept: Vec<String> = Vec::new();
+    for el in elems {
+        let own = el
+            .split_once('>')
+            .and_then(|(tag, _)| tag.split_once(" id=\"").map(|(_, r)| r))
+            .and_then(|r| r.split_once('"'))
+            .map(|(id, _)| id.to_string());
+        let el = remap_urls(el, &map);
+        let Some(own) = own.filter(|id| id.starts_with(frame_prefix)) else {
+            kept.push(el);
+            continue;
+        };
+        let key = el.replacen(&format!(" id=\"{own}\""), " id=\"\"", 1);
+        match shared.by_content.get(&key) {
+            Some(canon) => {
+                map.insert(own, canon.clone());
+            }
+            None => {
+                kept.push(el);
+                shared.by_content.insert(key, own);
+            }
+        }
+    }
+    // A kept definition may reference one defined after it that turned out
+    // to be shared: point it there too.
+    for el in kept {
+        shared.defs.push_str(&remap_urls(&el, &map));
+    }
+    let mut out = String::with_capacity(body.len());
+    out.push_str(&body[..open]);
+    out.push_str(&remap_urls(&body[close + 7..], &map));
+    out
 }
 
 /// Drop every data key from a frame. An animated SVG is a picture, not an
@@ -2123,6 +2266,49 @@ mod tests {
             _ => unreachable!(),
         }
         assert!(frame_variant(&[v], &[0, 1], 0).is_none());
+    }
+
+    #[test]
+    fn hoist_defs_shares_identical_definitions_across_frames() {
+        let t = crate::render::ID_TOKEN;
+        let frame = |f: usize, stop: &str| {
+            format!(
+                "<defs><clipPath id=\"{t}-f{f}-c0\"><path d=\"M0 0\"/></clipPath>\
+                 <clipPath id=\"{t}-f{f}-c1\" clip-path=\"url(#{t}-f{f}-c0)\"><path d=\"M1 1\"/></clipPath>\
+                 <linearGradient id=\"{t}-f{f}-g0\"><stop offset=\"{stop}\"/></linearGradient></defs>\
+                 <rect clip-path=\"url(#{t}-f{f}-c1)\" fill=\"url(#{t}-f{f}-g0)\"/>"
+            )
+        };
+        let mut sh = SharedDefs::default();
+        let b0 = hoist_defs(frame(0, "0"), &format!("{t}-f0-"), &mut sh);
+        let b1 = hoist_defs(frame(1, "0"), &format!("{t}-f1-"), &mut sh);
+        let b2 = hoist_defs(frame(2, "1"), &format!("{t}-f2-"), &mut sh);
+        // No frame keeps a <defs>; frame 1 reuses all of frame 0's (the nested
+        // clip matches once its parent reference is remapped), frame 2 only the
+        // clips, its gradient differs.
+        assert!(!b0.contains("<defs>") && !b1.contains("<defs>") && !b2.contains("<defs>"));
+        assert_eq!(b1, b0);
+        assert!(b2.contains(&format!("url(#{t}-f0-c1)")));
+        assert!(b2.contains(&format!("url(#{t}-f2-g0)")));
+        assert_eq!(sh.defs.matches("<clipPath").count(), 2);
+        assert_eq!(sh.defs.matches("<linearGradient").count(), 2);
+        // A body with no defs, or defs that do not split, is left alone.
+        let raw = "<rect/>".to_string();
+        assert_eq!(hoist_defs(raw.clone(), "x", &mut sh), raw);
+        let odd = format!("<defs>text<a/></defs><rect/>");
+        assert_eq!(hoist_defs(odd.clone(), "x", &mut sh), odd);
+    }
+
+    #[test]
+    fn split_elements_and_remap_urls() {
+        assert_eq!(
+            split_elements("<a x=\"1\"><b/></a><c/> <d></d>").unwrap(),
+            vec!["<a x=\"1\"><b/></a>", "<c/>", "<d></d>"]
+        );
+        assert!(split_elements("<a>").is_none());
+        let m: HashMap<String, String> = [("p1".to_string(), "p0".to_string())].into();
+        let got = remap_urls("url(#p1) url(#p10) url(#p1", &m);
+        assert_eq!(got, "url(#p0) url(#p10) url(#p1");
     }
 
     #[test]

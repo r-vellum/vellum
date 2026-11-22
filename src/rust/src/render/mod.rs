@@ -35,7 +35,7 @@ pub(crate) use pdf::is_decorative;
 pub use pdf::{pdf_tag, PdfBackend};
 pub use raster::RasterBackend;
 pub use svg::SvgBackend;
-pub(crate) use svg::{doc_id_prefix, resolve_ids, xml_escape};
+pub(crate) use svg::{doc_id_prefix, resolve_ids, xml_escape, ID_TOKEN};
 
 /// Resolved stroke style handed to `stroke_path`: width + dash (device px, on/off,
 /// empty = solid) + cap/join/mitre.

@@ -14,6 +14,12 @@
 
 ## Performance
 
+* An animated SVG writes each distinct definition (gradient, pattern, clip
+  path, mask, filter) once, in one document-level `<defs>`, instead of in
+  every frame (VR-36). A continuous colour bar's 256-stop gradient and the
+  panel clip paths were repeated per frame: a 120-frame, five-bar animation
+  with a colour bar shrinks from 2.9 MB to 0.9 MB (35 KB to 15 KB gzipped).
+
 * GIF encoding runs in parallel (VL-17): each frame's palette quantisation and
   Floyd-Steinberg dither now run on the worker threads that rasterise it, and
   only the LZW write stays sequential. `vl_render_animation()`'s `gif_speed`
