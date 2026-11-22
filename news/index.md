@@ -4,6 +4,33 @@
 
 ### New features
 
+- A line, polygon or path whose number of vertices changes between
+  keyframes now morphs instead of switching whole at the midpoint
+  (VR-37). Both outlines are put on one common set of vertices by arc
+  length (every vertex of either, at its fraction along its own outline,
+  with x and y scaled by their joint range); a ring is turned to run the
+  same way round and to start near the other’s start. Each keeps all of
+  its own vertices, so the morph begins and ends on the keyframes
+  exactly. Pairs in mixed or different units, with a stroke-width
+  profile, a broken (non-finite) line or paths with different numbers of
+  sub-paths still switch. Same-count shapes tween as before, byte for
+  byte.
+  [`vl_tween_pairing()`](https://r-vellum.github.io/vellum/reference/vl_tween_pairing.md)
+  no longer counts a morphable pair as `snapped`.
+
+- [`vl_render_frame()`](https://r-vellum.github.io/vellum/reference/vl_render_frame.md)
+  renders one frame of a keyframe animation to a PNG, SVG or PDF file:
+  the frame
+  [`vl_render_animation()`](https://r-vellum.github.io/vellum/reference/vl_render_animation.md)
+  would draw for keyframe pair `seg` at fraction `frac` (with the
+  per-class fractions and a per-frame text variant), at any `scale`
+  (VP-96). vellumplot’s `anim_frame()` uses it.
+
+- Keyed hexagons, sectors and segments are matched by key across
+  keyframes, like points, circles and rectangles: they move with their
+  identity when the order changes, and fade in or out when they come or
+  go (VR-33).
+
 - [`vl_render_animation()`](https://r-vellum.github.io/vellum/reference/vl_render_animation.md)
   gains per-frame text (`text_variants`, `text_frame`; VP-82): a keyed
   text node can show a different string on every frame, not only at
@@ -35,6 +62,13 @@
   APNG 2.2 s).
 
 ### Bug fixes
+
+- Where marks overlap and their stacking order differs between two
+  keyframes, a frame now draws them in the left keyframe’s order up to
+  the positional midpoint and in the right keyframe’s from there on
+  (VR-35), with the other discrete switches, instead of keeping the left
+  order to the end of the move and popping at the keyframe. Elements
+  within one batch follow the same rule.
 
 - An animated SVG’s frame windows are rounded up rather than to nearest,
   so adjacent frames no longer leave a sub-nanosecond gap with nothing

@@ -105,8 +105,9 @@ warn its user.</p>
 indices), <code>paired</code> (<code>FALSE</code> when the two keyframes do not share a viewport
 tree, so the frames cut at the midpoint), <code>nodes_from</code>, <code>nodes_to</code> (the
 node counts), <code>snapped</code> (the nodes that switch whole at the midpoint: a
-matched line or path whose vertex count changes, a matched pair of
-different kinds, or an unkeyed node with no counterpart), and <code>exited</code>,
+matched line or path whose vertex count changes and cannot be morphed, a
+matched pair of different kinds, or an unkeyed node with no counterpart),
+and <code>exited</code>,
 <code>entered</code> (keyed elements with no partner, which fade out or in). The last
 three are <code>NA</code> for a pair that does not pair.</p>
     </div>

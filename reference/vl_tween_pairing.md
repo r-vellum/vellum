@@ -26,11 +26,11 @@ A data frame with one row per adjacent pair: `from`, `to` (keyframe
 indices), `paired` (`FALSE` when the two keyframes do not share a
 viewport tree, so the frames cut at the midpoint), `nodes_from`,
 `nodes_to` (the node counts), `snapped` (the nodes that switch whole at
-the midpoint: a matched line or path whose vertex count changes, a
-matched pair of different kinds, or an unkeyed node with no
-counterpart), and `exited`, `entered` (keyed elements with no partner,
-which fade out or in). The last three are `NA` for a pair that does not
-pair.
+the midpoint: a matched line or path whose vertex count changes and
+cannot be morphed, a matched pair of different kinds, or an unkeyed node
+with no counterpart), and `exited`, `entered` (keyed elements with no
+partner, which fade out or in). The last three are `NA` for a pair that
+does not pair.
 
 ## See also
 
