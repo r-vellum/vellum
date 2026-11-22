@@ -22,7 +22,9 @@ vl_render_animation(
   gif_dither = TRUE,
   frac_col = NULL,
   frac_size = NULL,
-  frac_alpha = NULL
+  frac_alpha = NULL,
+  text_variants = NULL,
+  text_frame = NULL
 )
 ```
 
@@ -94,6 +96,23 @@ vl_render_animation(
   aesthetic travel on its own curve — position arriving on
   `cubic-in-out` while colour crossfades `linear`, say. See
   *Per-aesthetic easing* below.
+
+- text_variants, text_frame:
+
+  Optional per-frame text, for a label that changes on every frame
+  rather than only at keyframes (a title showing the current time, say).
+  `text_variants` is a list of scenes (anything with an
+  [`as_vellum_scene()`](https://r-vellum.github.io/vellum/reference/as_vellum_scene.md)
+  method), each holding one or more **keyed** text grobs
+  (`text_grob(key = )`); `text_frame` gives, per output frame, the
+  1-based index of the variant that frame uses, or `0` (or `NA`) for
+  none. In a frame that uses a variant, every keyed text node of the
+  tweened frame whose key matches one of the variant's text grobs takes
+  that grob's string and glyph layout (shaping, extent, font and size),
+  while its position, rotation, justification and colour stay as the
+  tween put them. So shape each distinct string once, with the same font
+  and wrapping width as the node it replaces. `NULL` (the default) for
+  neither.
 
 ## Value
 

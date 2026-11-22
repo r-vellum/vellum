@@ -45,11 +45,18 @@ render_animation(
   gif_dither,
   frac_col,
   frac_size,
-  frac_alpha
+  frac_alpha,
+  text_variants,
+  text_frame
 )
 ```
 
 ## Details
+
+- `text_variants`, `text_frame` — per-frame text: a list of compiled
+  scenes holding keyed text nodes, and per frame the 1-based variant
+  whose text replaces the frame's same-keyed text nodes (0 = none). An
+  empty `text_frame` means no per-frame text.
 
 Returns any renderer degradation warnings (currently none for the raster
 path).

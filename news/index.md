@@ -4,6 +4,13 @@
 
 ### New features
 
+- [`vl_render_animation()`](https://r-vellum.github.io/vellum/reference/vl_render_animation.md)
+  gains per-frame text (`text_variants`, `text_frame`; VP-82): a keyed
+  text node can show a different string on every frame, not only at
+  keyframes – the string and glyph layout come from a small pre-shaped
+  variant scene, the position and colour from the tween. vellumplot uses
+  it for frame variables such as `{frame_time}` in titles.
+
 - [`vl_tween_pairing()`](https://r-vellum.github.io/vellum/reference/vl_tween_pairing.md)
   reports, before rendering, which adjacent keyframes tween node by node
   and which will cut at the midpoint (VR-26), so a grammar layer can
@@ -21,6 +28,11 @@
   APNG 2.2 s).
 
 ### Bug fixes
+
+- An animated SVG’s frame windows are rounded up rather than to nearest,
+  so adjacent frames no longer leave a sub-nanosecond gap with nothing
+  visible that a seek to a round time could land in (a blank flash;
+  found by VW-55).
 
 - [`vl_render_animation()`](https://r-vellum.github.io/vellum/reference/vl_render_animation.md)
   matches marks across keyframes by their data keys, not by node and row
