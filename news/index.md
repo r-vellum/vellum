@@ -9,6 +9,17 @@
   and which will cut at the midpoint (VR-26), so a grammar layer can
   warn about them.
 
+### Performance
+
+- GIF encoding runs in parallel (VL-17): each frame’s palette
+  quantisation and Floyd-Steinberg dither now run on the worker threads
+  that rasterise it, and only the LZW write stays sequential.
+  [`vl_render_animation()`](https://r-vellum.github.io/vellum/reference/vl_render_animation.md)’s
+  `gif_speed` default moves from 1 to 10, which is visually
+  indistinguishable on a plot with dithering on. A 1200 x 800, 150-frame
+  gapminder GIF drops from 49.9 s to 3.3 s (13.2 s with `gif_speed = 1`;
+  APNG 2.2 s).
+
 ### Bug fixes
 
 - [`vl_render_animation()`](https://r-vellum.github.io/vellum/reference/vl_render_animation.md)
