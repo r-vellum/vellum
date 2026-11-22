@@ -2,15 +2,21 @@
 % Please edit documentation in R/extendr-wrappers.R
 \name{tween_frame}
 \alias{tween_frame}
-\title{The tweened scene of one frame between keyframes \code{a} and \code{b} at fraction
-\code{frac} (one curve for every class), for inspecting a mid-transition frame
-(\verb{$element_table()}, \verb{$pixel()}) without rendering a whole animation.}
+\title{The tweened scene of one frame between keyframes \code{a} and \code{b}, at fraction
+\code{frac} (position) and \code{frac_col} / \code{frac_size} / \code{frac_alpha} (the other
+property classes), with the keyed text of \code{text_variant} (a compiled scene,
+or \code{NULL}) swapped in -- exactly the frame \code{render_animation} would draw for
+that schedule entry. For rendering one frame on its own (\code{vl_render_frame()})
+and for inspecting a mid-transition frame (\verb{$element_table()}, \verb{$pixel()}).}
 \usage{
-tween_frame(a, b, frac)
+tween_frame(a, b, frac, frac_col, frac_size, frac_alpha, text_variant)
 }
 \description{
-The tweened scene of one frame between keyframes \code{a} and \code{b} at fraction
-\code{frac} (one curve for every class), for inspecting a mid-transition frame
-(\verb{$element_table()}, \verb{$pixel()}) without rendering a whole animation.
+The tweened scene of one frame between keyframes \code{a} and \code{b}, at fraction
+\code{frac} (position) and \code{frac_col} / \code{frac_size} / \code{frac_alpha} (the other
+property classes), with the keyed text of \code{text_variant} (a compiled scene,
+or \code{NULL}) swapped in -- exactly the frame \code{render_animation} would draw for
+that schedule entry. For rendering one frame on its own (\code{vl_render_frame()})
+and for inspecting a mid-transition frame (\verb{$element_table()}, \verb{$pixel()}).
 }
 \keyword{internal}

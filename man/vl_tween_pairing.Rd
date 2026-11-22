@@ -14,8 +14,9 @@ A data frame with one row per adjacent pair: \code{from}, \code{to} (keyframe
 indices), \code{paired} (\code{FALSE} when the two keyframes do not share a viewport
 tree, so the frames cut at the midpoint), \code{nodes_from}, \code{nodes_to} (the
 node counts), \code{snapped} (the nodes that switch whole at the midpoint: a
-matched line or path whose vertex count changes, a matched pair of
-different kinds, or an unkeyed node with no counterpart), and \code{exited},
+matched line or path whose vertex count changes and cannot be morphed, a
+matched pair of different kinds, or an unkeyed node with no counterpart),
+and \code{exited},
 \code{entered} (keyed elements with no partner, which fade out or in). The last
 three are \code{NA} for a pair that does not pair.
 }

@@ -184,20 +184,61 @@ test_that("keyed rects and labels slide to their new places", {
   expect_equal(row(0.5), c(0, 100 / 255, 0), tolerance = 0.02)
 })
 
-test_that("a line whose vertex count changes ends on the later shape", {
+test_that("a line whose vertex count changes morphs and ends on the later shape (VR-37)", {
   skip_if_not_installed("png")
-  a <- panel_scene(lines_grob(x = c(0.1, 0.5, 0.9), y = c(0.2, 0.8, 0.2)))
+  a <- panel_scene(lines_grob(x = c(0.1, 0.5, 0.9), y = c(0.2, 0.4, 0.2), key = "L"))
   b <- panel_scene(lines_grob(
     x = c(0.1, 0.3, 0.5, 0.7, 0.9),
-    y = c(0.8, 0.2, 0.8, 0.2, 0.8)
+    y = c(0.2, 0.8, 0.2, 0.8, 0.2),
+    key = "L"
   ))
-  fr <- tween_frames(list(a, b), c(0.4, 0.6, 1))
+  # The keyframes themselves are exact.
+  fr <- tween_frames(list(a, b), c(0, 1))
   expect_equal(fr[[1]], still(a))
   expect_equal(fr[[2]], still(b))
-  expect_equal(fr[[3]], still(b))
   p <- vl_tween_pairing(list(a, b))
   expect_true(p$paired)
-  expect_identical(p$snapped, 1L)
+  expect_identical(p$snapped, 0L)
+  # In between, the outline grows from a's height to b's: the top edge of the
+  # box moves steadily rather than jumping at the midpoint.
+  top <- function(f) {
+    et <- as.data.frame(vellum:::.tween_frame(a, b, f)$element_table())
+    min(et$y0[et$key == "L"])
+  }
+  tops <- vapply(c(0, 0.25, 0.5, 0.75, 1), top, numeric(1))
+  expect_true(all(diff(tops) < 0))
+  expect_gt(tops[3], tops[5] + 5)
+  expect_lt(tops[3], tops[1] - 5)
+})
+
+test_that("polygons and paths with different vertex counts morph (VR-37)", {
+  a <- panel_scene(
+    polygon_grob(x = c(0.1, 0.3, 0.2), y = c(0.6, 0.6, 0.9), key = "P"),
+    path_grob(x = c(0.1, 0.3, 0.2), y = c(0.1, 0.1, 0.3), key = "Q")
+  )
+  b <- panel_scene(
+    polygon_grob(x = c(0.6, 0.9, 0.9, 0.6), y = c(0.6, 0.6, 0.9, 0.9), key = "P"),
+    path_grob(x = c(0.6, 0.9, 0.9, 0.6), y = c(0.1, 0.1, 0.3, 0.3), key = "Q")
+  )
+  expect_identical(vl_tween_pairing(list(a, b))$snapped, 0L)
+  x0 <- function(f, k) {
+    et <- as.data.frame(vellum:::.tween_frame(a, b, f)$element_table())
+    et$x0[et$key == k]
+  }
+  for (k in c("P", "Q")) {
+    xs <- vapply(c(0, 0.5, 1), x0, numeric(1), k = k)
+    expect_true(xs[1] < xs[2] && xs[2] < xs[3])
+  }
+})
+
+test_that("a line in mixed units still switches at the midpoint", {
+  a <- panel_scene(lines_grob(x = c(0.1, 0.9), y = c(0.2, 0.2), key = "L"))
+  b <- panel_scene(lines_grob(
+    x = vl_unit(c(0.1, 0.5, 0.9), "npc"),
+    y = vl_unit(c(10, 20, 10), "mm"),
+    key = "L"
+  ))
+  expect_identical(vl_tween_pairing(list(a, b))$snapped, 1L)
 })
 
 test_that("an equal-shape line still tweens (no snap)", {
@@ -418,4 +459,100 @@ test_that("an animated SVG carries no data keys", {
   b <- keyed_scene(list(grp("red", c("b", "a"), c(0.6, 0.8))))
   svg <- anim_svg(list(a, b), rep(1L, 3), c(0, 0.5, 1))
   expect_false(grepl("data-key", svg, fixed = TRUE))
+})
+
+test_that("keyed hexagons, sectors and segments match by key, not order (VR-33)", {
+  xs <- c(0.2, 0.5, 0.8)
+  k <- c("a", "b", "c")
+  build <- function(o) {
+    panel_scene(
+      hexagon_grob(x = xs, y = 0.8, size = vl_unit(1, "mm"), key = k[o]),
+      sector_grob(x = xs, y = 0.5, r1 = 0.05, key = paste0("s", k[o])),
+      segments_grob(x0 = xs, y0 = 0.2, x1 = xs + 0.05, y1 = 0.25, key = paste0("g", k[o]))
+    )
+  }
+  a <- build(1:3)
+  b <- build(c(3, 1, 2)) # the keys move one place along
+  p <- vl_tween_pairing(list(a, b))
+  expect_identical(c(p$snapped, p$exited, p$entered), c(0L, 0L, 0L))
+  cx <- function(f) {
+    et <- as.data.frame(vellum:::.tween_frame(a, b, f)$element_table())
+    et <- et[et$key != "", ]
+    stats::setNames((et$x0 + et$x1) / 2, et$key)
+  }
+  c0 <- cx(0)
+  c1 <- cx(1)
+  mid <- cx(0.5)
+  for (key in c("a", "sa", "ga", "c", "sc", "gc")) {
+    # Each element travels from its own place to its own new place.
+    expect_equal(mid[[key]], (c0[[key]] + c1[[key]]) / 2, tolerance = 0.02)
+  }
+  # "c" moves from the right to the left: by order it would have stayed put.
+  expect_lt(c1[["c"]], c0[["c"]])
+  # A keyed hexagon that leaves fades out instead of switching.
+  b2 <- panel_scene(
+    hexagon_grob(x = xs[1:2], y = 0.8, size = vl_unit(1, "mm"), key = k[1:2]),
+    sector_grob(x = xs, y = 0.5, r1 = 0.05, key = paste0("s", k)),
+    segments_grob(x0 = xs, y0 = 0.2, x1 = xs + 0.05, y1 = 0.25, key = paste0("g", k))
+  )
+  p2 <- vl_tween_pairing(list(a, b2))
+  expect_identical(c(p2$snapped, p2$exited), c(0L, 1L))
+})
+
+test_that("overlapping marks swap paint order at the midpoint, not the keyframe (VR-35)", {
+  sq <- function(key, fill, x) {
+    rect_grob(x = x, y = 0.5, width = 0.4, height = 0.6, key = key, gp = vl_gpar(fill = fill, col = NA))
+  }
+  # Red over blue in `a`, blue over red in `b`; the squares overlap throughout.
+  a <- panel_scene(sq("blue", "blue", 0.45), sq("red", "red", 0.55))
+  b <- panel_scene(sq("red", "red", 0.55), sq("blue", "blue", 0.45))
+  order_at <- function(f) {
+    et <- as.data.frame(vellum:::.tween_frame(a, b, f)$element_table())
+    et$key[et$key != ""]
+  }
+  expect_identical(order_at(0), c("blue", "red"))
+  expect_identical(order_at(0.25), c("blue", "red"))
+  expect_identical(order_at(0.5), c("red", "blue"))
+  expect_identical(order_at(0.75), c("red", "blue"))
+  # Within one batch too.
+  a1 <- panel_scene(rect_grob(x = c(0.45, 0.55), y = 0.5, width = 0.4, height = 0.6, key = c("p", "q")))
+  b1 <- panel_scene(rect_grob(x = c(0.55, 0.45), y = 0.5, width = 0.4, height = 0.6, key = c("q", "p")))
+  ord1 <- function(f) {
+    et <- as.data.frame(vellum:::.tween_frame(a1, b1, f)$element_table())
+    et$key[et$key != ""]
+  }
+  expect_identical(ord1(0.25), c("p", "q"))
+  expect_identical(ord1(0.75), c("q", "p"))
+})
+
+test_that("vl_render_frame() draws the animation's frame on its own (VP-96)", {
+  skip_if_not_installed("png")
+  dot <- function(x, r, lab) {
+    panel_scene(
+      circle_grob(x = x, y = 0.5, r = r, gp = vl_gpar(fill = "steelblue", col = NA)),
+      text_grob(lab, x = 0.5, y = 0.9, key = "t")
+    )
+  }
+  a <- dot(0.2, 0.1, "A")
+  b <- dot(0.8, 0.3, "B")
+  v <- vl_scene(2, 1.5, dpi = 60) |> draw(text_grob("mid", key = "t"))
+  fr <- tween_frames(list(a, b), c(0.3, 0.6), text_variants = list(v), text_frame = c(0L, 1L))
+  one <- function(frac, ...) {
+    f <- withr::local_tempfile(fileext = ".png", .local_envir = parent.frame())
+    vl_render_frame(list(a, b), 1, frac, f, ...)
+    png::readPNG(f)
+  }
+  expect_equal(one(0.3), fr[[1]])
+  expect_equal(one(0.6, text_variant = v), fr[[2]])
+  # SVG and PDF too; `scale` multiplies the resolution.
+  s <- withr::local_tempfile(fileext = ".svg")
+  vl_render_frame(list(a, b), 1, 0.5, s)
+  expect_match(paste(readLines(s, warn = FALSE), collapse = ""), "<svg")
+  p <- withr::local_tempfile(fileext = ".pdf")
+  vl_render_frame(list(a, b), 1, 0.5, p)
+  expect_gt(file.size(p), 0)
+  big <- one(0.3, scale = 2)
+  expect_identical(dim(big)[1:2], 2L * dim(fr[[1]])[1:2])
+  expect_error(vl_render_frame(list(a, b), 2, 0.5, s), "seg")
+  expect_error(vl_render_frame(list(a, b), 1, 0.5, "x.gif"), "Unsupported")
 })
