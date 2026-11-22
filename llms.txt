@@ -424,6 +424,8 @@ picks the backend (PNG / SVG / PDF) from the file extension.
   : Coerce an object to a vellum scene
 - [`vl_render_animation()`](https://r-vellum.github.io/vellum/reference/vl_render_animation.md)
   : Render a keyframe animation
+- [`vl_tween_pairing()`](https://r-vellum.github.io/vellum/reference/vl_tween_pairing.md)
+  : Check how adjacent keyframes will tween
 
 ## Graphical objects (grobs)
 

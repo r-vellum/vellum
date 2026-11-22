@@ -62,7 +62,11 @@ vl_render_animation(
 
 - fps:
 
-  Frames per second (sets each frame's on-screen duration).
+  Frames per second (sets each frame's on-screen duration). Need not be
+  whole: `12.5` or `0.5` (a two-second slideshow frame) are kept
+  exactly. A GIF stores delays in whole centiseconds, so its rate is the
+  nearest `100 / n` fps, and above 50 fps browsers play it slower, not
+  faster (a warning says so).
 
 - gif_speed:
 
@@ -128,7 +132,28 @@ any web server with compression on); uncompressed it is several times
 larger again.
 
 It also honours `prefers-reduced-motion`: a reader who has asked their
-system not to animate gets the first frame, held.
+system not to animate gets one still frame. That is the last frame when
+the schedule ends exactly on the final keyframe (a reveal, a time
+series, a sequence that does not loop: the complete picture), and the
+first frame otherwise (a loop).
+
+Its CSS class and animation names carry the document's id prefix, so
+several animated SVGs inlined into one HTML page play independently.
+
+## Keyframes that do not pair
+
+Two adjacent keyframes tween node by node only when they have the same
+number of drawn nodes over the same viewports. When they do not – a
+colour group present in one state and absent from the next, say – the
+frames show the left keyframe up to the midpoint (`frac < 0.5`) and the
+right one from there on: a cut, but every keyframe is shown. Likewise a
+single line, polygon or path whose vertex count changes, or a batch
+whose element count changes without keys to match its elements, switches
+whole at the midpoint, and a text label takes its string and layout from
+the nearer keyframe while its position tweens. Easing curves that
+overshoot (`back`, `elastic`) may carry positions past their targets,
+but sizes, radii and line widths stay at or above zero and opacity
+within `[0, 1]`.
 
 ## Per-aesthetic easing
 
@@ -166,9 +191,10 @@ if (FALSE) { # \dontrun{
 grow <- lapply(c(0.1, 0.3, 0.2), function(r) {
   vl_scene(3, 2) |> draw(circle_grob(r = r, gp = vl_gpar(fill = "tomato")))
 })
-# 30 frames across the 3 keyframes, held on the last one.
-seg <- rep(1:2, each = 15)
-frac <- rep(seq(0, 1, length.out = 15), 2)
+# 15 frames per move (fraction 0 up to, not including, 1 -- the next move
+# starts on that keyframe), then 10 frames held on the last keyframe.
+seg <- c(rep(1:2, each = 15), rep(2, 10))
+frac <- c(rep((0:14) / 15, 2), rep(1, 10))
 vl_render_animation(grow, seg, frac, tempfile(fileext = ".gif"))
 } # }
 ```

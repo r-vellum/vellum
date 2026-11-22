@@ -2,6 +2,56 @@
 
 ## vellum 0.13.0.9000 (development version)
 
+### New features
+
+- [`vl_tween_pairing()`](https://r-vellum.github.io/vellum/reference/vl_tween_pairing.md)
+  reports, before rendering, which adjacent keyframes tween node by node
+  and which will cut at the midpoint (VR-26), so a grammar layer can
+  warn about them.
+
+### Bug fixes
+
+- [`vl_render_animation()`](https://r-vellum.github.io/vellum/reference/vl_render_animation.md):
+  when two keyframes draw a different number of nodes (a colour group
+  present in one state and absent from the next), the frames now switch
+  to the later keyframe at the positional midpoint instead of showing
+  the earlier one for the whole segment, which meant the later keyframe
+  never appeared (VR-26).
+- A line, polygon or path whose vertex count changes between keyframes
+  (or an unkeyed batch whose element count changes) now switches whole
+  to the later shape at the midpoint; the last frame used to draw a
+  truncated shape (VR-27). Resampling both shapes to a common vertex
+  count, for a true morph, is left for later.
+- A text label’s string, glyph layout, font and halo now come from the
+  nearer keyframe while its position tweens, so a changed label switches
+  at the midpoint and the final keyframe’s text is shown (VR-28).
+  Per-segment colours and widths of a segments batch follow the same
+  rule.
+- The animated SVG’s CSS class and `@keyframes` names now carry the
+  document’s id prefix, so two animated SVGs (or two widgets) on one
+  HTML page no longer drive each other’s timing and blank out (VR-29).
+- Under `prefers-reduced-motion`, the animated SVG now holds its last
+  frame when the schedule ends on the final keyframe (a reveal, a time
+  series, a non-looping sequence) and its first frame otherwise; a
+  reveal used to show an empty plot (VR-30).
+- Easing overshoot (`back`, `elastic`) no longer drives sizes, radii,
+  line widths or an enter/exit fade below 0, or opacity above 1 (VR-31).
+- `fps` is no longer rounded to a whole number: the frame delay is
+  passed as an exact fraction, so 12.5 fps is 2/25 s and 0.5 fps a
+  two-second frame (VL-15). A GIF above 50 fps warns that browsers will
+  play it slower.
+- Per-node metadata and pick ids stay aligned with the drawn nodes when
+  a keyed batch splits into entering, exiting and matched parts
+  mid-tween.
+
+### Documentation
+
+- The
+  [`vl_render_animation()`](https://r-vellum.github.io/vellum/reference/vl_render_animation.md)
+  example and `inst/examples/animation.R` no longer repeat each boundary
+  keyframe (a one-frame stutter) and now really hold on the last
+  keyframe as their comments say (VL-16).
+
 ## vellum 0.13.0
 
 ### New features

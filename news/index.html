@@ -71,6 +71,28 @@
 
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.13.0.9000" id="vellum-01309000-development-version">vellum 0.13.0.9000 (development version)<a class="anchor" aria-label="anchor" href="#vellum-01309000-development-version"></a></h2>
+<div class="section level3">
+<h3 id="new-features-0-13-0-9000">New features<a class="anchor" aria-label="anchor" href="#new-features-0-13-0-9000"></a></h3>
+<ul><li>
+<code><a href="../reference/vl_tween_pairing.html">vl_tween_pairing()</a></code> reports, before rendering, which adjacent keyframes tween node by node and which will cut at the midpoint (VR-26), so a grammar layer can warn about them.</li>
+</ul></div>
+<div class="section level3">
+<h3 id="bug-fixes-0-13-0-9000">Bug fixes<a class="anchor" aria-label="anchor" href="#bug-fixes-0-13-0-9000"></a></h3>
+<ul><li>
+<code><a href="../reference/vl_render_animation.html">vl_render_animation()</a></code>: when two keyframes draw a different number of nodes (a colour group present in one state and absent from the next), the frames now switch to the later keyframe at the positional midpoint instead of showing the earlier one for the whole segment, which meant the later keyframe never appeared (VR-26).</li>
+<li>A line, polygon or path whose vertex count changes between keyframes (or an unkeyed batch whose element count changes) now switches whole to the later shape at the midpoint; the last frame used to draw a truncated shape (VR-27). Resampling both shapes to a common vertex count, for a true morph, is left for later.</li>
+<li>A text label’s string, glyph layout, font and halo now come from the nearer keyframe while its position tweens, so a changed label switches at the midpoint and the final keyframe’s text is shown (VR-28). Per-segment colours and widths of a segments batch follow the same rule.</li>
+<li>The animated SVG’s CSS class and <code>@keyframes</code> names now carry the document’s id prefix, so two animated SVGs (or two widgets) on one HTML page no longer drive each other’s timing and blank out (VR-29).</li>
+<li>Under <code>prefers-reduced-motion</code>, the animated SVG now holds its last frame when the schedule ends on the final keyframe (a reveal, a time series, a non-looping sequence) and its first frame otherwise; a reveal used to show an empty plot (VR-30).</li>
+<li>Easing overshoot (<code>back</code>, <code>elastic</code>) no longer drives sizes, radii, line widths or an enter/exit fade below 0, or opacity above 1 (VR-31).</li>
+<li>
+<code>fps</code> is no longer rounded to a whole number: the frame delay is passed as an exact fraction, so 12.5 fps is 2/25 s and 0.5 fps a two-second frame (VL-15). A GIF above 50 fps warns that browsers will play it slower.</li>
+<li>Per-node metadata and pick ids stay aligned with the drawn nodes when a keyed batch splits into entering, exiting and matched parts mid-tween.</li>
+</ul></div>
+<div class="section level3">
+<h3 id="documentation-0-13-0-9000">Documentation<a class="anchor" aria-label="anchor" href="#documentation-0-13-0-9000"></a></h3>
+<ul><li>The <code><a href="../reference/vl_render_animation.html">vl_render_animation()</a></code> example and <code>inst/examples/animation.R</code> no longer repeat each boundary keyframe (a one-frame stutter) and now really hold on the last keyframe as their comments say (VL-16).</li>
+</ul></div>
 </div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.13.0" id="vellum-0130">vellum 0.13.0<a class="anchor" aria-label="anchor" href="#vellum-0130"></a></h2>

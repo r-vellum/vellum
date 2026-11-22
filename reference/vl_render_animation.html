@@ -142,7 +142,11 @@ frame into <code>path</code>).</p></dd>
 
 
 <dt id="arg-fps">fps<a class="anchor" aria-label="anchor" href="#arg-fps"></a></dt>
-<dd><p>Frames per second (sets each frame's on-screen duration).</p></dd>
+<dd><p>Frames per second (sets each frame's on-screen duration). Need
+not be whole: <code>12.5</code> or <code>0.5</code> (a two-second slideshow frame) are kept
+exactly. A GIF stores delays in whole centiseconds, so its rate is the
+nearest <code>100 / n</code> fps, and above 50 fps browsers play it slower, not faster
+(a warning says so).</p></dd>
 
 
 <dt id="arg-gif-speed">gif_speed<a class="anchor" aria-label="anchor" href="#arg-gif-speed"></a></dt>
@@ -193,7 +197,25 @@ marks, which is the common case — and loses on a dense scatter, where a raster
 format is the right answer. Serve it gzipped (<code>.svgz</code>, or any web server with
 compression on); uncompressed it is several times larger again.</p>
 <p>It also honours <code>prefers-reduced-motion</code>: a reader who has asked their system
-not to animate gets the first frame, held.</p>
+not to animate gets one still frame. That is the last frame when the schedule
+ends exactly on the final keyframe (a reveal, a time series, a sequence that
+does not loop: the complete picture), and the first frame otherwise (a loop).</p>
+<p>Its CSS class and animation names carry the document's id prefix, so several
+animated SVGs inlined into one HTML page play independently.</p>
+    </div>
+    <div class="section level2">
+    <h2 id="keyframes-that-do-not-pair">Keyframes that do not pair<a class="anchor" aria-label="anchor" href="#keyframes-that-do-not-pair"></a></h2>
+    <p>Two adjacent keyframes tween node by node only when they have the same number
+of drawn nodes over the same viewports. When they do not – a colour group
+present in one state and absent from the next, say – the frames show the left
+keyframe up to the midpoint (<code>frac &lt; 0.5</code>) and the right one from there on: a
+cut, but every keyframe is shown. Likewise a single line, polygon or path whose
+vertex count changes, or a batch whose element count changes without keys to
+match its elements, switches whole at the midpoint, and a text label takes its
+string and layout from the nearer keyframe while its position tweens.
+Easing curves that overshoot (<code>back</code>, <code>elastic</code>) may carry positions past
+their targets, but sizes, radii and line widths stay at or above zero and
+opacity within <code>[0, 1]</code>.</p>
     </div>
     <div class="section level2">
     <h2 id="per-aesthetic-easing">Per-aesthetic easing<a class="anchor" aria-label="anchor" href="#per-aesthetic-easing"></a></h2>
@@ -218,9 +240,10 @@ exactly — the output is byte-identical to omitting them.</p>
 <span class="r-in"><span><span class="va">grow</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/lapply.html" class="external-link">lapply</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.1</span>, <span class="fl">0.3</span>, <span class="fl">0.2</span><span class="op">)</span>, <span class="kw">function</span><span class="op">(</span><span class="va">r</span><span class="op">)</span> <span class="op">{</span></span></span>
 <span class="r-in"><span>  <span class="fu"><a href="vl_scene.html">vl_scene</a></span><span class="op">(</span><span class="fl">3</span>, <span class="fl">2</span><span class="op">)</span> <span class="op">|&gt;</span> <span class="fu"><a href="vl_scene.html">draw</a></span><span class="op">(</span><span class="fu"><a href="grob.html">circle_grob</a></span><span class="op">(</span>r <span class="op">=</span> <span class="va">r</span>, gp <span class="op">=</span> <span class="fu"><a href="vl_gpar.html">vl_gpar</a></span><span class="op">(</span>fill <span class="op">=</span> <span class="st">"tomato"</span><span class="op">)</span><span class="op">)</span><span class="op">)</span></span></span>
 <span class="r-in"><span><span class="op">}</span><span class="op">)</span></span></span>
-<span class="r-in"><span><span class="co"># 30 frames across the 3 keyframes, held on the last one.</span></span></span>
-<span class="r-in"><span><span class="va">seg</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/rep.html" class="external-link">rep</a></span><span class="op">(</span><span class="fl">1</span><span class="op">:</span><span class="fl">2</span>, each <span class="op">=</span> <span class="fl">15</span><span class="op">)</span></span></span>
-<span class="r-in"><span><span class="va">frac</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/rep.html" class="external-link">rep</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/seq.html" class="external-link">seq</a></span><span class="op">(</span><span class="fl">0</span>, <span class="fl">1</span>, length.out <span class="op">=</span> <span class="fl">15</span><span class="op">)</span>, <span class="fl">2</span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="co"># 15 frames per move (fraction 0 up to, not including, 1 -- the next move</span></span></span>
+<span class="r-in"><span><span class="co"># starts on that keyframe), then 10 frames held on the last keyframe.</span></span></span>
+<span class="r-in"><span><span class="va">seg</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/rep.html" class="external-link">rep</a></span><span class="op">(</span><span class="fl">1</span><span class="op">:</span><span class="fl">2</span>, each <span class="op">=</span> <span class="fl">15</span><span class="op">)</span>, <span class="fu"><a href="https://rdrr.io/r/base/rep.html" class="external-link">rep</a></span><span class="op">(</span><span class="fl">2</span>, <span class="fl">10</span><span class="op">)</span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="va">frac</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/rep.html" class="external-link">rep</a></span><span class="op">(</span><span class="op">(</span><span class="fl">0</span><span class="op">:</span><span class="fl">14</span><span class="op">)</span> <span class="op">/</span> <span class="fl">15</span>, <span class="fl">2</span><span class="op">)</span>, <span class="fu"><a href="https://rdrr.io/r/base/rep.html" class="external-link">rep</a></span><span class="op">(</span><span class="fl">1</span>, <span class="fl">10</span><span class="op">)</span><span class="op">)</span></span></span>
 <span class="r-in"><span><span class="fu">vl_render_animation</span><span class="op">(</span><span class="va">grow</span>, <span class="va">seg</span>, <span class="va">frac</span>, <span class="fu"><a href="https://rdrr.io/r/base/tempfile.html" class="external-link">tempfile</a></span><span class="op">(</span>fileext <span class="op">=</span> <span class="st">".gif"</span><span class="op">)</span><span class="op">)</span></span></span>
 <span class="r-in"><span><span class="op">}</span> <span class="co"># }</span></span></span>
 </code></pre></div>
