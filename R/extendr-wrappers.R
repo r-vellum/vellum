@@ -203,10 +203,15 @@ rs_pdf_pages_raw <- function(scenes) .Call(wrap__rs_pdf_pages_raw, scenes)
 #'   (fastest). Ignored by the other formats.
 #' * `gif_dither` — GIF only: apply Floyd–Steinberg dithering.
 #'
+#' * `text_variants`, `text_frame` — per-frame text: a list of compiled scenes
+#'   holding keyed text nodes, and per frame the 1-based variant whose text
+#'   replaces the frame's same-keyed text nodes (0 = none). An empty
+#'   `text_frame` means no per-frame text.
+#'
 #' Returns any renderer degradation warnings (currently none for the raster path).
 #'
 #' @keywords internal
-render_animation <- function(keyframes, seg, frac, format, path, delay_num, delay_den, gif_speed, gif_dither, frac_col, frac_size, frac_alpha) .Call(wrap__render_animation, keyframes, seg, frac, format, path, delay_num, delay_den, gif_speed, gif_dither, frac_col, frac_size, frac_alpha)
+render_animation <- function(keyframes, seg, frac, format, path, delay_num, delay_den, gif_speed, gif_dither, frac_col, frac_size, frac_alpha, text_variants, text_frame) .Call(wrap__render_animation, keyframes, seg, frac, format, path, delay_num, delay_den, gif_speed, gif_dither, frac_col, frac_size, frac_alpha, text_variants, text_frame)
 
 #' How each adjacent keyframe pair will tween, for a caller that wants to warn
 #' before rendering. One entry per pair `(i, i + 1)`:

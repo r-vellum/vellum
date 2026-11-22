@@ -15,7 +15,9 @@ vl_render_animation(
   gif_dither = TRUE,
   frac_col = NULL,
   frac_size = NULL,
-  frac_alpha = NULL
+  frac_alpha = NULL,
+  text_variants = NULL,
+  text_frame = NULL
 )
 }
 \arguments{
@@ -61,6 +63,19 @@ classes respectively. \code{NULL} (the default) uses \code{frac}, so one easing 
 shapes the whole scene. Supplying a differently-eased vector lets each
 aesthetic travel on its own curve — position arriving on \verb{cubic-in-out}
 while colour crossfades \code{linear}, say. See \emph{Per-aesthetic easing} below.}
+
+\item{text_variants, text_frame}{Optional per-frame text, for a label that
+changes on every frame rather than only at keyframes (a title showing the
+current time, say). \code{text_variants} is a list of scenes (anything with an
+\code{\link[=as_vellum_scene]{as_vellum_scene()}} method), each holding one or more \strong{keyed} text grobs
+(\code{text_grob(key = )}); \code{text_frame} gives, per output frame, the 1-based
+index of the variant that frame uses, or \code{0} (or \code{NA}) for none. In a frame
+that uses a variant, every keyed text node of the tweened frame whose key
+matches one of the variant's text grobs takes that grob's string and glyph
+layout (shaping, extent, font and size), while its position, rotation,
+justification and colour stay as the tween put them. So shape each
+distinct string once, with the same font and wrapping width as the node it
+replaces. \code{NULL} (the default) for neither.}
 }
 \value{
 \code{path}, invisibly.
