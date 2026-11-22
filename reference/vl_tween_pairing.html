@@ -5,15 +5,15 @@
       fontURL: "https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/output/chtml/fonts/woff-v2"
     }
   };
-</script><script src="../deps/jquery-3.6.0/jquery-3.6.0.min.js"></script><meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no"><link href="../deps/bootstrap-5.3.8/bootstrap.min.css" rel="stylesheet"><script src="../deps/bootstrap-5.3.8/bootstrap.bundle.min.js"></script><link href="../deps/Spectral-0.5.0/font.css" rel="stylesheet"><link href="../deps/JetBrains_Mono-0.5.0/font.css" rel="stylesheet"><link href="../deps/Spectral_SC-0.5.0/font.css" rel="stylesheet"><link href="../deps/font-awesome-6.5.2/css/all.min.css" rel="stylesheet"><link href="../deps/font-awesome-6.5.2/css/v4-shims.min.css" rel="stylesheet"><script src="../deps/headroom-0.11.0/headroom.min.js"></script><script src="../deps/headroom-0.11.0/jQuery.headroom.min.js"></script><script src="../deps/bootstrap-toc-1.0.1/bootstrap-toc.min.js"></script><script src="../deps/clipboard.js-2.0.11/clipboard.min.js"></script><script src="../deps/search-1.0.0/autocomplete.jquery.min.js"></script><script src="../deps/search-1.0.0/fuse.min.js"></script><script src="../deps/search-1.0.0/mark.min.js"></script><!-- pkgdown --><script src="../pkgdown.js"></script><link href="../extra.css" rel="stylesheet"><meta property="og:title" content="Check how adjacent keyframes will tween — vl_tween_pairing"><meta name="description" content="vl_render_animation() tweens two keyframes node by node only when they
-draw the same number of nodes over the same viewports (see Keyframes that do
-not pair there). vl_tween_pairing() reports, before anything is rendered,
-which adjacent pairs will tween and which will cut at the midpoint, so a
-grammar layer can warn its user."><meta property="og:description" content="vl_render_animation() tweens two keyframes node by node only when they
-draw the same number of nodes over the same viewports (see Keyframes that do
-not pair there). vl_tween_pairing() reports, before anything is rendered,
-which adjacent pairs will tween and which will cut at the midpoint, so a
-grammar layer can warn its user."><meta property="og:image" content="https://r-vellum.github.io/vellum/logo.png"><meta name="twitter:card" content="summary_large_image"><meta name="twitter:creator" content="@schochastics"><meta name="twitter:site" content="@schochastics"><meta name="theme-color" content="#efe6d2"></head><body>
+</script><script src="../deps/jquery-3.6.0/jquery-3.6.0.min.js"></script><meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no"><link href="../deps/bootstrap-5.3.8/bootstrap.min.css" rel="stylesheet"><script src="../deps/bootstrap-5.3.8/bootstrap.bundle.min.js"></script><link href="../deps/Spectral-0.5.0/font.css" rel="stylesheet"><link href="../deps/JetBrains_Mono-0.5.0/font.css" rel="stylesheet"><link href="../deps/Spectral_SC-0.5.0/font.css" rel="stylesheet"><link href="../deps/font-awesome-6.5.2/css/all.min.css" rel="stylesheet"><link href="../deps/font-awesome-6.5.2/css/v4-shims.min.css" rel="stylesheet"><script src="../deps/headroom-0.11.0/headroom.min.js"></script><script src="../deps/headroom-0.11.0/jQuery.headroom.min.js"></script><script src="../deps/bootstrap-toc-1.0.1/bootstrap-toc.min.js"></script><script src="../deps/clipboard.js-2.0.11/clipboard.min.js"></script><script src="../deps/search-1.0.0/autocomplete.jquery.min.js"></script><script src="../deps/search-1.0.0/fuse.min.js"></script><script src="../deps/search-1.0.0/mark.min.js"></script><!-- pkgdown --><script src="../pkgdown.js"></script><link href="../extra.css" rel="stylesheet"><meta property="og:title" content="Check how adjacent keyframes will tween — vl_tween_pairing"><meta name="description" content="vl_render_animation() matches marks across keyframes by their data keys
+(see Matching marks by identity there). vl_tween_pairing() reports, before
+anything is rendered, how each adjacent pair will tween – what still switches
+at the midpoint and how many marks enter or leave – so a grammar layer can
+warn its user."><meta property="og:description" content="vl_render_animation() matches marks across keyframes by their data keys
+(see Matching marks by identity there). vl_tween_pairing() reports, before
+anything is rendered, how each adjacent pair will tween – what still switches
+at the midpoint and how many marks enter or leave – so a grammar layer can
+warn its user."><meta property="og:image" content="https://r-vellum.github.io/vellum/logo.png"><meta name="twitter:card" content="summary_large_image"><meta name="twitter:creator" content="@schochastics"><meta name="twitter:site" content="@schochastics"><meta name="theme-color" content="#efe6d2"></head><body>
     <a href="#main" class="visually-hidden-focusable">Skip to contents</a>
 
 
@@ -79,11 +79,11 @@ grammar layer can warn its user."><meta property="og:image" content="https://r-v
     </div>
 
     <div class="ref-description section level2">
-    <p><code><a href="vl_render_animation.html">vl_render_animation()</a></code> tweens two keyframes node by node only when they
-draw the same number of nodes over the same viewports (see <em>Keyframes that do
-not pair</em> there). <code>vl_tween_pairing()</code> reports, before anything is rendered,
-which adjacent pairs will tween and which will cut at the midpoint, so a
-grammar layer can warn its user.</p>
+    <p><code><a href="vl_render_animation.html">vl_render_animation()</a></code> matches marks across keyframes by their data keys
+(see <em>Matching marks by identity</em> there). <code>vl_tween_pairing()</code> reports, before
+anything is rendered, how each adjacent pair will tween – what still switches
+at the midpoint and how many marks enter or leave – so a grammar layer can
+warn its user.</p>
     </div>
 
     <div class="section level2">
@@ -102,11 +102,13 @@ grammar layer can warn its user.</p>
     <div class="section level2">
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
     <p>A data frame with one row per adjacent pair: <code>from</code>, <code>to</code> (keyframe
-indices), <code>paired</code> (<code>TRUE</code> when the pair tweens node by node), <code>nodes_from</code>,
-<code>nodes_to</code> (the node counts), and <code>snapped</code> – for a paired segment, the
-number of nodes that still switch whole at the midpoint because their
-variant, vertex count or (unkeyed) element count differs; <code>NA</code> when the pair
-does not pair at all.</p>
+indices), <code>paired</code> (<code>FALSE</code> when the two keyframes do not share a viewport
+tree, so the frames cut at the midpoint), <code>nodes_from</code>, <code>nodes_to</code> (the
+node counts), <code>snapped</code> (the nodes that switch whole at the midpoint: a
+matched line or path whose vertex count changes, a matched pair of
+different kinds, or an unkeyed node with no counterpart), and <code>exited</code>,
+<code>entered</code> (keyed elements with no partner, which fade out or in). The last
+three are <code>NA</code> for a pair that does not pair.</p>
     </div>
     <div class="section level2">
     <h2 id="see-also">See also<a class="anchor" aria-label="anchor" href="#see-also"></a></h2>
@@ -118,9 +120,9 @@ does not pair at all.</p>
     <div class="sourceCode"><pre class="sourceCode r"><code><span class="r-in"><span><span class="va">a</span> <span class="op">&lt;-</span> <span class="fu"><a href="vl_scene.html">vl_scene</a></span><span class="op">(</span><span class="fl">2</span>, <span class="fl">2</span><span class="op">)</span> <span class="op">|&gt;</span> <span class="fu"><a href="vl_scene.html">draw</a></span><span class="op">(</span><span class="fu"><a href="grob.html">circle_grob</a></span><span class="op">(</span>r <span class="op">=</span> <span class="fl">0.2</span><span class="op">)</span><span class="op">)</span></span></span>
 <span class="r-in"><span><span class="va">b</span> <span class="op">&lt;-</span> <span class="va">a</span> <span class="op">|&gt;</span> <span class="fu"><a href="vl_scene.html">draw</a></span><span class="op">(</span><span class="fu"><a href="grob.html">rect_grob</a></span><span class="op">(</span>width <span class="op">=</span> <span class="fl">0.2</span>, height <span class="op">=</span> <span class="fl">0.2</span><span class="op">)</span><span class="op">)</span></span></span>
 <span class="r-in"><span><span class="fu">vl_tween_pairing</span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span><span class="va">a</span>, <span class="va">a</span>, <span class="va">b</span><span class="op">)</span><span class="op">)</span></span></span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>   from to paired nodes_from nodes_to snapped</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 1    1  2   TRUE          1        1       0</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> 2    2  3  FALSE          1        2      NA</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>   from to paired nodes_from nodes_to snapped exited entered</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 1    1  2   TRUE          1        1       0      0       0</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 2    2  3   TRUE          1        2       1      0       0</span>
 </code></pre></div>
     </div>
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>

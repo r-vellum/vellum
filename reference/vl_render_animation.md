@@ -140,20 +140,41 @@ first frame otherwise (a loop).
 Its CSS class and animation names carry the document's id prefix, so
 several animated SVGs inlined into one HTML page play independently.
 
-## Keyframes that do not pair
+## Matching marks by identity
 
-Two adjacent keyframes tween node by node only when they have the same
-number of drawn nodes over the same viewports. When they do not – a
-colour group present in one state and absent from the next, say – the
-frames show the left keyframe up to the midpoint (`frac < 0.5`) and the
-right one from there on: a cut, but every keyframe is shown. Likewise a
-single line, polygon or path whose vertex count changes, or a batch
-whose element count changes without keys to match its elements, switches
-whole at the midpoint, and a text label takes its string and layout from
-the nearer keyframe while its position tweens. Easing curves that
-overshoot (`back`, `elastic`) may carry positions past their targets,
-but sizes, radii and line widths stay at or above zero and opacity
-within `[0, 1]`.
+Marks are matched across keyframes by their **data keys** (a grob's
+`keys`, the same keys interactivity uses), not by where they sit in the
+node list. An element keyed `"k"` in one keyframe tweens into the
+element keyed `"k"` in the next wherever that is drawn: in another node,
+at another index, in another colour group's batch (a point that changes
+group slides and recolours). So the order of rows, and which groups a
+state happens to contain, do not matter. Keys are matched across the
+whole scene, so a caller keeps them unique per layer (vellumplot
+prefixes the layer) and stable across states.
+
+What has no partner enters or leaves:
+
+- keyed points, circles and rectangles (bars, tiles), and keyed lines,
+  polygons, paths, rounded rectangles and text labels **fade** in or out
+  on the alpha schedule;
+
+- unkeyed nodes (axes, gridlines, legends, unkeyed marks) pair in order
+  with the nodes of the same viewport, kind and role in the other
+  keyframe. When that class has a different number of nodes in the two
+  keyframes it cannot be matched, and its nodes **switch** whole at the
+  midpoint (`frac >= 0.5`).
+
+A matched line, polygon or path whose vertex count changes, or a matched
+pair of different kinds, also switches whole at the midpoint, and a text
+label takes its string and layout from the nearer keyframe while its
+position tweens. Keyed hexagons, sectors and segments pair as unkeyed
+nodes do. Two keyframes that do not share a viewport tree cannot be
+matched at all: the frames show the left keyframe up to the midpoint and
+the right one from there on (a cut, but every keyframe is shown).
+[`vl_tween_pairing()`](https://r-vellum.github.io/vellum/reference/vl_tween_pairing.md)
+reports all of this before rendering. Easing curves that overshoot
+(`back`, `elastic`) may carry positions past their targets, but sizes,
+radii and line widths stay at or above zero and opacity within `[0, 1]`.
 
 ## Per-aesthetic easing
 

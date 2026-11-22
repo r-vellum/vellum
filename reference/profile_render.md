@@ -62,9 +62,9 @@ profile_render(s)
 #> Phases (median of the timed reps):
 #> • build 0.001 s (constructing the R value)
 #> • compile 0.002 s (R -> Rust replay, incl. text shaping)
-#> • raster 0.030 s (drawing)
+#> • raster 0.034 s (drawing)
 #> 
 #> Slowest marks (raster time):
-#> • circle - 2000 elem 0.0057 s 99.6%
+#> • circle - 2000 elem 0.0069 s 99.6%
 #> • text - 1 elem 0.0000 s 0.4%
 ```

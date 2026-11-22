@@ -204,15 +204,30 @@ does not loop: the complete picture), and the first frame otherwise (a loop).</p
 animated SVGs inlined into one HTML page play independently.</p>
     </div>
     <div class="section level2">
-    <h2 id="keyframes-that-do-not-pair">Keyframes that do not pair<a class="anchor" aria-label="anchor" href="#keyframes-that-do-not-pair"></a></h2>
-    <p>Two adjacent keyframes tween node by node only when they have the same number
-of drawn nodes over the same viewports. When they do not – a colour group
-present in one state and absent from the next, say – the frames show the left
-keyframe up to the midpoint (<code>frac &lt; 0.5</code>) and the right one from there on: a
-cut, but every keyframe is shown. Likewise a single line, polygon or path whose
-vertex count changes, or a batch whose element count changes without keys to
-match its elements, switches whole at the midpoint, and a text label takes its
-string and layout from the nearer keyframe while its position tweens.
+    <h2 id="matching-marks-by-identity">Matching marks by identity<a class="anchor" aria-label="anchor" href="#matching-marks-by-identity"></a></h2>
+    <p>Marks are matched across keyframes by their <strong>data keys</strong> (a grob's <code>keys</code>,
+the same keys interactivity uses), not by where they sit in the node list. An
+element keyed <code>"k"</code> in one keyframe tweens into the element keyed <code>"k"</code> in the
+next wherever that is drawn: in another node, at another index, in another
+colour group's batch (a point that changes group slides and recolours). So the
+order of rows, and which groups a state happens to contain, do not matter.
+Keys are matched across the whole scene, so a caller keeps them unique per
+layer (vellumplot prefixes the layer) and stable across states.</p>
+<p>What has no partner enters or leaves:</p><ul><li><p>keyed points, circles and rectangles (bars, tiles), and keyed lines,
+polygons, paths, rounded rectangles and text labels <strong>fade</strong> in or out on
+the alpha schedule;</p></li>
+<li><p>unkeyed nodes (axes, gridlines, legends, unkeyed marks) pair in order with
+the nodes of the same viewport, kind and role in the other keyframe. When
+that class has a different number of nodes in the two keyframes it cannot
+be matched, and its nodes <strong>switch</strong> whole at the midpoint (<code>frac &gt;= 0.5</code>).</p></li>
+</ul><p>A matched line, polygon or path whose vertex count changes, or a matched pair
+of different kinds, also switches whole at the midpoint, and a text label takes
+its string and layout from the nearer keyframe while its position tweens.
+Keyed hexagons, sectors and segments pair as unkeyed nodes do. Two keyframes
+that do not share a viewport tree cannot be matched at all: the frames show the
+left keyframe up to the midpoint and the right one from there on (a cut, but
+every keyframe is shown). <code><a href="vl_tween_pairing.html">vl_tween_pairing()</a></code> reports all of this before
+rendering.
 Easing curves that overshoot (<code>back</code>, <code>elastic</code>) may carry positions past
 their targets, but sizes, radii and line widths stay at or above zero and
 opacity within <code>[0, 1]</code>.</p>
