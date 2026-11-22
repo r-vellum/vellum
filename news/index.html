@@ -13,7 +13,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">vellum</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.13.0.9000</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.14.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -70,9 +70,9 @@
     </div>
 
     <div class="section level2">
-<h2 class="pkg-version" data-toc-text="0.13.0.9000" id="vellum-01309000-development-version">vellum 0.13.0.9000 (development version)<a class="anchor" aria-label="anchor" href="#vellum-01309000-development-version"></a></h2>
+<h2 class="pkg-version" data-toc-text="0.14.0" id="vellum-0140">vellum 0.14.0<a class="anchor" aria-label="anchor" href="#vellum-0140"></a></h2>
 <div class="section level3">
-<h3 id="new-features-0-13-0-9000">New features<a class="anchor" aria-label="anchor" href="#new-features-0-13-0-9000"></a></h3>
+<h3 id="new-features-0-14-0">New features<a class="anchor" aria-label="anchor" href="#new-features-0-14-0"></a></h3>
 <ul><li><p>A line, polygon or path whose number of vertices changes between keyframes now morphs instead of switching whole at the midpoint (VR-37). Both outlines are put on one common set of vertices by arc length (every vertex of either, at its fraction along its own outline, with x and y scaled by their joint range); a ring is turned to run the same way round and to start near the other’s start. Each keeps all of its own vertices, so the morph begins and ends on the keyframes exactly. Pairs in mixed or different units, with a stroke-width profile, a broken (non-finite) line or paths with different numbers of sub-paths still switch. Same-count shapes tween as before, byte for byte. <code><a href="../reference/vl_tween_pairing.html">vl_tween_pairing()</a></code> no longer counts a morphable pair as <code>snapped</code>.</p></li>
 <li><p><code><a href="../reference/vl_render_frame.html">vl_render_frame()</a></code> renders one frame of a keyframe animation to a PNG, SVG or PDF file: the frame <code><a href="../reference/vl_render_animation.html">vl_render_animation()</a></code> would draw for keyframe pair <code>seg</code> at fraction <code>frac</code> (with the per-class fractions and a per-frame text variant), at any <code>scale</code> (VP-96). vellumplot’s <code>anim_frame()</code> uses it.</p></li>
 <li><p>Keyed hexagons, sectors and segments are matched by key across keyframes, like points, circles and rectangles: they move with their identity when the order changes, and fade in or out when they come or go (VR-33).</p></li>
@@ -80,12 +80,12 @@
 <li><p><code><a href="../reference/vl_tween_pairing.html">vl_tween_pairing()</a></code> reports, before rendering, which adjacent keyframes tween node by node and which will cut at the midpoint (VR-26), so a grammar layer can warn about them.</p></li>
 </ul></div>
 <div class="section level3">
-<h3 id="performance-0-13-0-9000">Performance<a class="anchor" aria-label="anchor" href="#performance-0-13-0-9000"></a></h3>
+<h3 id="performance-0-14-0">Performance<a class="anchor" aria-label="anchor" href="#performance-0-14-0"></a></h3>
 <ul><li><p>An animated SVG writes each distinct definition (gradient, pattern, clip path, mask, filter) once, in one document-level <code>&lt;defs&gt;</code>, instead of in every frame (VR-36). A continuous colour bar’s 256-stop gradient and the panel clip paths were repeated per frame: a 120-frame, five-bar animation with a colour bar shrinks from 2.9 MB to 0.9 MB (35 KB to 15 KB gzipped).</p></li>
 <li><p>GIF encoding runs in parallel (VL-17): each frame’s palette quantisation and Floyd-Steinberg dither now run on the worker threads that rasterise it, and only the LZW write stays sequential. <code><a href="../reference/vl_render_animation.html">vl_render_animation()</a></code>’s <code>gif_speed</code> default moves from 1 to 10, which is visually indistinguishable on a plot with dithering on. A 1200 x 800, 150-frame gapminder GIF drops from 49.9 s to 3.3 s (13.2 s with <code>gif_speed = 1</code>; APNG 2.2 s).</p></li>
 </ul></div>
 <div class="section level3">
-<h3 id="bug-fixes-0-13-0-9000">Bug fixes<a class="anchor" aria-label="anchor" href="#bug-fixes-0-13-0-9000"></a></h3>
+<h3 id="bug-fixes-0-14-0">Bug fixes<a class="anchor" aria-label="anchor" href="#bug-fixes-0-14-0"></a></h3>
 <ul><li><p>A rect, round rect, non-regular hexagon or image sized in <code>native</code> units on a reversed axis (a decreasing <code>xscale</code>/<code>yscale</code>) is drawn again (VP-89). Its native width resolved to a negative device size and the box was dropped, so vellumplot’s bars on <code><a href="https://ggplot2.tidyverse.org/reference/scale_continuous.html" class="external-link">scale_x_reverse()</a></code>/<code><a href="https://ggplot2.tidyverse.org/reference/scale_continuous.html" class="external-link">scale_y_reverse()</a></code> (flipped or not) were invisible. A box size is now measured against the scale’s magnitude, as grid does; signed lengths (offsets) are unchanged.</p></li>
 <li><p>Where marks overlap and their stacking order differs between two keyframes, a frame now draws them in the left keyframe’s order up to the positional midpoint and in the right keyframe’s from there on (VR-35), with the other discrete switches, instead of keeping the left order to the end of the move and popping at the keyframe. Elements within one batch follow the same rule.</p></li>
 <li><p>An animated SVG’s frame windows are rounded up rather than to nearest, so adjacent frames no longer leave a sub-nanosecond gap with nothing visible that a seek to a round time could land in (a blank flash; found by VW-55).</p></li>
@@ -100,7 +100,7 @@
 <li><p>Per-node metadata and pick ids stay aligned with the drawn nodes when a keyed batch splits into entering, exiting and matched parts mid-tween.</p></li>
 </ul></div>
 <div class="section level3">
-<h3 id="documentation-0-13-0-9000">Documentation<a class="anchor" aria-label="anchor" href="#documentation-0-13-0-9000"></a></h3>
+<h3 id="documentation-0-14-0">Documentation<a class="anchor" aria-label="anchor" href="#documentation-0-14-0"></a></h3>
 <ul><li>The <code><a href="../reference/vl_render_animation.html">vl_render_animation()</a></code> example and <code>inst/examples/animation.R</code> no longer repeat each boundary keyframe (a one-frame stutter) and now really hold on the last keyframe as their comments say (VL-16).</li>
 </ul></div>
 </div>
