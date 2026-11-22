@@ -33,7 +33,11 @@
 #' @param format `"gif"` (looping animated GIF), `"apng"` (animated PNG),
 #'   `"svg"` (a single animated SVG), or `"frames"` (one `frameNNNNN.png` per
 #'   frame into `path`).
-#' @param fps Frames per second (sets each frame's on-screen duration).
+#' @param fps Frames per second (sets each frame's on-screen duration). Need
+#'   not be whole: `12.5` or `0.5` (a two-second slideshow frame) are kept
+#'   exactly. A GIF stores delays in whole centiseconds, so its rate is the
+#'   nearest `100 / n` fps, and above 50 fps browsers play it slower, not faster
+#'   (a warning says so).
 #' @param gif_speed GIF only: the NeuQuant palette sample factor, `1` (best
 #'   quality, slowest) to `30` (fastest). A plot's antialiased edges want the best
 #'   palette, so the default is `1`. Ignored for `"apng"`/`"frames"`.
@@ -68,7 +72,26 @@
 #' compression on); uncompressed it is several times larger again.
 #'
 #' It also honours `prefers-reduced-motion`: a reader who has asked their system
-#' not to animate gets the first frame, held.
+#' not to animate gets one still frame. That is the last frame when the schedule
+#' ends exactly on the final keyframe (a reveal, a time series, a sequence that
+#' does not loop: the complete picture), and the first frame otherwise (a loop).
+#'
+#' Its CSS class and animation names carry the document's id prefix, so several
+#' animated SVGs inlined into one HTML page play independently.
+#'
+#' # Keyframes that do not pair
+#'
+#' Two adjacent keyframes tween node by node only when they have the same number
+#' of drawn nodes over the same viewports. When they do not -- a colour group
+#' present in one state and absent from the next, say -- the frames show the left
+#' keyframe up to the midpoint (`frac < 0.5`) and the right one from there on: a
+#' cut, but every keyframe is shown. Likewise a single line, polygon or path whose
+#' vertex count changes, or a batch whose element count changes without keys to
+#' match its elements, switches whole at the midpoint, and a text label takes its
+#' string and layout from the nearer keyframe while its position tweens.
+#' Easing curves that overshoot (`back`, `elastic`) may carry positions past
+#' their targets, but sizes, radii and line widths stay at or above zero and
+#' opacity within `[0, 1]`.
 #'
 #' # Per-aesthetic easing
 #'
@@ -97,9 +120,10 @@
 #' grow <- lapply(c(0.1, 0.3, 0.2), function(r) {
 #'   vl_scene(3, 2) |> draw(circle_grob(r = r, gp = vl_gpar(fill = "tomato")))
 #' })
-#' # 30 frames across the 3 keyframes, held on the last one.
-#' seg <- rep(1:2, each = 15)
-#' frac <- rep(seq(0, 1, length.out = 15), 2)
+#' # 15 frames per move (fraction 0 up to, not including, 1 -- the next move
+#' # starts on that keyframe), then 10 frames held on the last keyframe.
+#' seg <- c(rep(1:2, each = 15), rep(2, 10))
+#' frac <- c(rep((0:14) / 15, 2), rep(1, 10))
 #' vl_render_animation(grow, seg, frac, tempfile(fileext = ".gif"))
 #' }
 #' @export
@@ -169,14 +193,26 @@ vl_render_animation <- function(
     )
   }
 
+  # A GIF stores its frame delay in whole centiseconds, and browsers replace a
+  # delay of 0 or 1 cs with ~10 cs: above 50 fps the file plays far slower than
+  # asked, not faster.
+  if (identical(format, "gif") && fps > 50) {
+    cli::cli_warn(c(
+      "A GIF cannot play faster than 50 fps; {.arg fps} = {fps} will play much slower in most browsers.",
+      i = "GIF frame delays are whole centiseconds, and browsers stretch a delay under 2 cs to about 10 cs.",
+      i = "Use {.code fps <= 50}, or {.code format = \"apng\"}/{.code \"svg\"}."
+    ))
+  }
+  delay <- .fps_delay(fps)
+
   warns <- render_animation(
     backends,
     seg - 1L,
     frac,
     format,
     path,
-    delay_num = 1L,
-    delay_den = as.integer(round(fps)),
+    delay_num = delay[[1L]],
+    delay_den = delay[[2L]],
     gif_speed = gif_speed,
     gif_dither = isTRUE(gif_dither),
     frac_col = frac_col,
@@ -199,4 +235,81 @@ vl_render_animation <- function(
     }
   }
   invisible(path)
+}
+
+#' Check how adjacent keyframes will tween
+#'
+#' [vl_render_animation()] tweens two keyframes node by node only when they
+#' draw the same number of nodes over the same viewports (see *Keyframes that do
+#' not pair* there). `vl_tween_pairing()` reports, before anything is rendered,
+#' which adjacent pairs will tween and which will cut at the midpoint, so a
+#' grammar layer can warn its user.
+#'
+#' @param keyframes A list of at least two scenes, as for [vl_render_animation()].
+#' @return A data frame with one row per adjacent pair: `from`, `to` (keyframe
+#'   indices), `paired` (`TRUE` when the pair tweens node by node), `nodes_from`,
+#'   `nodes_to` (the node counts), and `snapped` -- for a paired segment, the
+#'   number of nodes that still switch whole at the midpoint because their
+#'   variant, vertex count or (unkeyed) element count differs; `NA` when the pair
+#'   does not pair at all.
+#' @seealso [vl_render_animation()]
+#' @examples
+#' a <- vl_scene(2, 2) |> draw(circle_grob(r = 0.2))
+#' b <- a |> draw(rect_grob(width = 0.2, height = 0.2))
+#' vl_tween_pairing(list(a, a, b))
+#' @export
+vl_tween_pairing <- function(keyframes) {
+  if (!is.list(keyframes) || length(keyframes) < 2L) {
+    cli::cli_abort("{.arg keyframes} must be a list of at least 2 scenes.")
+  }
+  backends <- lapply(keyframes, function(s) {
+    .scene_to_backend(as_vellum_scene(s))
+  })
+  p <- tween_pairing(backends)
+  m <- length(p$paired)
+  data.frame(
+    from = seq_len(m),
+    to = seq_len(m) + 1L,
+    paired = p$paired,
+    nodes_from = p$nodes_a,
+    nodes_to = p$nodes_b,
+    snapped = p$snapped
+  )
+}
+
+# The frame duration 1 / fps seconds as an exact (or, for an irrational-looking
+# fps, the closest) fraction `c(num, den)` with both terms in 1:65535 -- the
+# range an APNG frame delay holds. 12.5 fps is 2/25 s, 0.4 fps is 5/2 s, 29.97
+# fps is 100/2997 s: none of them is rounded to a whole fps.
+.fps_delay <- function(fps, max_term = 65535L) {
+  x <- 1 / fps
+  # Continued-fraction convergents of x, kept while both terms fit.
+  h <- c(0, 1) # numerators h[k-2], h[k-1]
+  k <- c(1, 0) # denominators
+  # Fallback for an fps beyond what the terms can express: the nearest bound.
+  best <- if (x >= 1) {
+    c(min(round(x), max_term), 1)
+  } else {
+    c(1, min(round(1 / x), max_term))
+  }
+  r <- x
+  for (i in seq_len(40L)) {
+    a <- floor(r)
+    hn <- a * h[2L] + h[1L]
+    kn <- a * k[2L] + k[1L]
+    if (hn > max_term || kn > max_term) {
+      break
+    }
+    if (hn >= 1) {
+      best <- c(hn, kn)
+    }
+    h <- c(h[2L], hn)
+    k <- c(k[2L], kn)
+    frac <- r - a
+    if (frac < 1e-12 || abs(hn / kn - x) <= 1e-12 * x) {
+      break
+    }
+    r <- 1 / frac
+  }
+  as.integer(best)
 }

@@ -37,7 +37,11 @@ directory (created if needed) for \code{"frames"}.}
 \code{"svg"} (a single animated SVG), or \code{"frames"} (one \code{frameNNNNN.png} per
 frame into \code{path}).}
 
-\item{fps}{Frames per second (sets each frame's on-screen duration).}
+\item{fps}{Frames per second (sets each frame's on-screen duration). Need
+not be whole: \code{12.5} or \code{0.5} (a two-second slideshow frame) are kept
+exactly. A GIF stores delays in whole centiseconds, so its rate is the
+nearest \code{100 / n} fps, and above 50 fps browsers play it slower, not faster
+(a warning says so).}
 
 \item{gif_speed}{GIF only: the NeuQuant palette sample factor, \code{1} (best
 quality, slowest) to \code{30} (fastest). A plot's antialiased edges want the best
@@ -98,7 +102,26 @@ format is the right answer. Serve it gzipped (\code{.svgz}, or any web server wi
 compression on); uncompressed it is several times larger again.
 
 It also honours \code{prefers-reduced-motion}: a reader who has asked their system
-not to animate gets the first frame, held.
+not to animate gets one still frame. That is the last frame when the schedule
+ends exactly on the final keyframe (a reveal, a time series, a sequence that
+does not loop: the complete picture), and the first frame otherwise (a loop).
+
+Its CSS class and animation names carry the document's id prefix, so several
+animated SVGs inlined into one HTML page play independently.
+}
+
+\section{Keyframes that do not pair}{
+Two adjacent keyframes tween node by node only when they have the same number
+of drawn nodes over the same viewports. When they do not -- a colour group
+present in one state and absent from the next, say -- the frames show the left
+keyframe up to the midpoint (\code{frac < 0.5}) and the right one from there on: a
+cut, but every keyframe is shown. Likewise a single line, polygon or path whose
+vertex count changes, or a batch whose element count changes without keys to
+match its elements, switches whole at the midpoint, and a text label takes its
+string and layout from the nearer keyframe while its position tweens.
+Easing curves that overshoot (\code{back}, \code{elastic}) may carry positions past
+their targets, but sizes, radii and line widths stay at or above zero and
+opacity within \verb{[0, 1]}.
 }
 
 \section{Per-aesthetic easing}{
@@ -128,9 +151,10 @@ exactly — the output is byte-identical to omitting them.
 grow <- lapply(c(0.1, 0.3, 0.2), function(r) {
   vl_scene(3, 2) |> draw(circle_grob(r = r, gp = vl_gpar(fill = "tomato")))
 })
-# 30 frames across the 3 keyframes, held on the last one.
-seg <- rep(1:2, each = 15)
-frac <- rep(seq(0, 1, length.out = 15), 2)
+# 15 frames per move (fraction 0 up to, not including, 1 -- the next move
+# starts on that keyframe), then 10 frames held on the last keyframe.
+seg <- c(rep(1:2, each = 15), rep(2, 10))
+frac <- c(rep((0:14) / 15, 2), rep(1, 10))
 vl_render_animation(grow, seg, frac, tempfile(fileext = ".gif"))
 }
 }

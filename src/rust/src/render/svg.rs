@@ -1359,13 +1359,19 @@ pub(crate) fn resolve_ids(doc: String, prefix: &str) -> String {
     if !doc.contains(ID_TOKEN) {
         return doc;
     }
-    let p = if prefix.is_empty() {
+    // Interpolated into `id`/`url(#…)`/`aria-labelledby` values.
+    let p = xml_escape(&doc_id_prefix(&doc, prefix)).into_owned();
+    doc.replace(ID_TOKEN, &p)
+}
+
+/// The id prefix [`resolve_ids`] would give `doc` (unescaped): `prefix` when
+/// given, else `vl` + a hash of the document.
+pub(crate) fn doc_id_prefix(doc: &str, prefix: &str) -> String {
+    if prefix.is_empty() {
         format!("vl{:08x}", content_hash(doc.as_bytes()))
     } else {
-        // Interpolated into `id`/`url(#…)`/`aria-labelledby` values.
-        xml_escape(prefix).into_owned()
-    };
-    doc.replace(ID_TOKEN, &p)
+        prefix.to_string()
+    }
 }
 
 /// FNV-1a (64-bit) folded to 32 bits: a stable, platform-independent content

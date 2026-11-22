@@ -31,12 +31,22 @@ keys <- list(
   keyframe(0.85, 7, "#31a354")
 )
 
-# --- schedule: ease each segment, hold briefly on the last keyframe ----------
+# --- schedule: ease each segment, then hold on the last keyframe ------------
 ease_in_out <- function(t) ifelse(t < 0.5, 2 * t * t, 1 - (-2 * t + 2)^2 / 2)
 
+# Each move runs from its left keyframe (fraction 0) up to, but not including,
+# its right one: the next move's first frame IS that keyframe, so repeating it
+# at fraction 1 would show the same picture twice (a visible stutter).
 per_seg <- 20
-seg <- rep(seq_len(length(keys) - 1L), each = per_seg)
-frac <- rep(ease_in_out(seq(0, 1, length.out = per_seg)), length(keys) - 1L)
+moves <- length(keys) - 1L
+seg <- rep(seq_len(moves), each = per_seg)
+frac <- rep(ease_in_out((seq_len(per_seg) - 1) / per_seg), moves)
+
+# The hold: the last move at fraction 1 is the last keyframe, shown for `hold`
+# frames. The GIF then loops, cutting back to the first keyframe.
+hold <- 15
+seg <- c(seg, rep(moves, hold))
+frac <- c(frac, rep(1, hold))
 
 # --- render + encode ---------------------------------------------------------
 args <- commandArgs(trailingOnly = TRUE)
