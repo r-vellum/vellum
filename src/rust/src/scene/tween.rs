@@ -107,6 +107,39 @@ fn lerp_rgba_vec(a: &[Rgba], b: &[Rgba], t: f64) -> Vec<Rgba> {
     a.iter().zip(b).map(|(x, y)| lerp_rgba(*x, *y, t)).collect()
 }
 
+/// Easing curves such as `back` and `elastic` overshoot, driving the fraction
+/// outside `[0, 1]`. Position may overshoot (that is the point of the curve), but
+/// a size, radius or stroke width below 0 or an opacity outside `[0, 1]` has no
+/// meaning, so those classes are clamped after the lerp.
+#[inline]
+fn nonneg(v: f64) -> f64 {
+    v.max(0.0)
+}
+
+#[inline]
+fn unit(v: f64) -> f64 {
+    v.clamp(0.0, 1.0)
+}
+
+/// A size-class lerp (radius, marker size, extent): never below 0.
+#[inline]
+fn lerp_size(a: f64, b: f64, t: f64) -> f64 {
+    nonneg(lerp(a, b, t))
+}
+
+fn lerp_vec_size(a: &[f64], b: &[f64], t: f64) -> Vec<f64> {
+    let mut v = lerp_vec(a, b, t);
+    v.iter_mut().for_each(|x| *x = nonneg(*x));
+    v
+}
+
+fn map_inh(v: Inh<f64>, f: fn(f64) -> f64) -> Inh<f64> {
+    match v {
+        Inh::Set(x) => Inh::Set(f(x)),
+        Inh::Inherit => Inh::Inherit,
+    }
+}
+
 #[inline]
 fn snap_slice<'a, T>(a: &'a [T], b: &'a [T], t: f64) -> &'a [T] {
     if t < 0.5 {
@@ -168,9 +201,9 @@ fn lerp_gpar(a: &PartialGpar, b: &PartialGpar, fr: &Fracs) -> PartialGpar {
     PartialGpar {
         fill: lerp_paint_inh(&a.fill, &b.fill, fr.col),
         col: lerp_col_inh(&a.col, &b.col, fr.col),
-        lwd: lerp_f64_inh(&a.lwd, &b.lwd, fr.size),
-        alpha: lerp_f64_inh(&a.alpha, &b.alpha, fr.alpha),
-        linemitre: lerp_f64_inh(&a.linemitre, &b.linemitre, fr.size),
+        lwd: map_inh(lerp_f64_inh(&a.lwd, &b.lwd, fr.size), nonneg),
+        alpha: map_inh(lerp_f64_inh(&a.alpha, &b.alpha, fr.alpha), unit),
+        linemitre: map_inh(lerp_f64_inh(&a.linemitre, &b.linemitre, fr.size), nonneg),
         lty: base.lty.clone(),
         lineend: base.lineend,
         linejoin: base.linejoin,
@@ -198,6 +231,14 @@ fn lerp_gpar(a: &PartialGpar, b: &PartialGpar, fr: &Fracs) -> PartialGpar {
 /// explicitly, and `gp` splits four ways inside `lerp_gpar`.
 fn lerp_node(a: &Node, b: &Node, fr: &Fracs) -> Node {
     let t = fr.pos;
+    // Two nodes whose element or vertex counts differ cannot be lerped
+    // element-wise: the per-element units, styles and keys would come from one
+    // side and the geometry from the other. Show one keyframe's node whole,
+    // switching at the positional midpoint, so the final frame is `b` exactly.
+    // (A real morph -- resampling both to a common vertex count -- is future work.)
+    if !same_shape(a, b) {
+        return snap(a, b, t).clone();
+    }
     match (a, b) {
         (
             Node::Rect { x: ax, y: ay, w: aw, h: ah, xu, yu, wu, hu, gp: agp },
@@ -221,7 +262,7 @@ fn lerp_node(a: &Node, b: &Node, fr: &Fracs) -> Node {
             y: lerp(*ay, *by, t),
             w: lerp(*aw, *bw, t),
             h: lerp(*ah, *bh, t),
-            r: lerp(*ar, *br, fr.size),
+            r: lerp_size(*ar, *br, fr.size),
             xu: *xu,
             yu: *yu,
             wu: *wu,
@@ -237,7 +278,7 @@ fn lerp_node(a: &Node, b: &Node, fr: &Fracs) -> Node {
         ) => Node::Circle {
             x: lerp(*ax, *bx, t),
             y: lerp(*ay, *by, t),
-            r: lerp(*ar, *br, fr.size),
+            r: lerp_size(*ar, *br, fr.size),
             xu: *xu,
             yu: *yu,
             ru: *ru,
@@ -260,10 +301,10 @@ fn lerp_node(a: &Node, b: &Node, fr: &Fracs) -> Node {
             // A stroke width is a size, so the profile rides `frac_size` rather
             // than the position fraction (#45). Tweening between a profiled and
             // an unprofiled frame would change the KIND of mark mid-flight, so
-            // that case snaps to the start frame rather than inventing a ribbon.
+            // that case snaps to the near keyframe rather than inventing a ribbon.
             hw: match (ahw, bhw) {
-                (Some(a2), Some(b2)) => Some(lerp_vec(a2, b2, fr.size)),
-                _ => ahw.clone(),
+                (Some(a2), Some(b2)) => Some(lerp_vec_size(a2, b2, fr.size)),
+                _ => snap(ahw, bhw, t).clone(),
             },
             gp: lerp_gpar(agp, snap_node_gp(b, agp), fr),
             key: key.clone(),
@@ -302,7 +343,7 @@ fn lerp_node(a: &Node, b: &Node, fr: &Fracs) -> Node {
         ) => Node::Circles {
             x: lerp_vec(ax, bx, t),
             y: lerp_vec(ay, by, t),
-            r: lerp_vec(ar, br, fr.size),
+            r: lerp_vec_size(ar, br, fr.size),
             xu: xu.clone(),
             yu: yu.clone(),
             ru: ru.clone(),
@@ -316,7 +357,7 @@ fn lerp_node(a: &Node, b: &Node, fr: &Fracs) -> Node {
         ) => Node::Markers {
             x: lerp_vec(ax, bx, t),
             y: lerp_vec(ay, by, t),
-            size: lerp_vec(asz, bsz, fr.size),
+            size: lerp_vec_size(asz, bsz, fr.size),
             xu: xu.clone(),
             yu: yu.clone(),
             su: su.clone(),
@@ -331,11 +372,11 @@ fn lerp_node(a: &Node, b: &Node, fr: &Fracs) -> Node {
         ) => Node::Hexagons {
             x: lerp_vec(ax, bx, t),
             y: lerp_vec(ay, by, t),
-            size: lerp_vec(asz, bsz, fr.size),
+            size: lerp_vec_size(asz, bsz, fr.size),
             // A hexagon's w/h are its own corner-to-corner extent (the non-regular
             // form of `size`), not a position in the panel -- so they size, not move.
-            w: lerp_vec(aw, bw, fr.size),
-            h: lerp_vec(ah, bh, fr.size),
+            w: lerp_vec_size(aw, bw, fr.size),
+            h: lerp_vec_size(ah, bh, fr.size),
             xu: xu.clone(),
             yu: yu.clone(),
             su: su.clone(),
@@ -368,12 +409,12 @@ fn lerp_node(a: &Node, b: &Node, fr: &Fracs) -> Node {
         },
         (
             Node::Segments { x0: ax0, y0: ay0, x1: ax1, y1: ay1, x0u, y0u, x1u, y1u, scap, ecap, scapu, ecapu, off, offu, arrow, sketch, gp: agp, keys, cols, lwds },
-            Node::Segments { x0: bx0, y0: by0, x1: bx1, y1: by1, gp: bgp, .. },
+            Node::Segments { x0: bx0, y0: by0, x1: bx1, y1: by1, gp: bgp, cols: bcols, lwds: blwds, .. },
         ) => Node::Segments {
             // Per-element stroke style is discrete data, not a continuous
-            // quantity: snap to the left keyframe like keys and sketch.
-            cols: cols.clone(),
-            lwds: lwds.clone(),
+            // quantity: take it from the near keyframe.
+            cols: snap(cols, bcols, t).clone(),
+            lwds: snap(lwds, blwds, t).clone(),
             x0: lerp_vec(ax0, bx0, t),
             y0: lerp_vec(ay0, by0, t),
             x1: lerp_vec(ax1, bx1, t),
@@ -401,15 +442,15 @@ fn lerp_node(a: &Node, b: &Node, fr: &Fracs) -> Node {
             y: lerp_vec(ay, by, t),
             xu: xu.clone(),
             yu: yu.clone(),
-            size: lerp_vec(asz, bsz, fr.size),
+            size: lerp_vec_size(asz, bsz, fr.size),
             su: su.clone(),
             // `foot` is the node radius the loop attaches at and `width` its
             // lateral petal scale: both are extents of the loop, like `size`.
-            foot: lerp_vec(af, bf, fr.size),
+            foot: lerp_vec_size(af, bf, fr.size),
             fu: fu.clone(),
             // The bulge direction is an angle in the panel -- positional.
             angle: lerp_vec(aang, bang, t),
-            width: lerp_vec(aw, bw, fr.size),
+            width: lerp_vec_size(aw, bw, fr.size),
             arrow: arrow.clone(),
             gp: lerp_gpar(agp, bgp, fr),
         },
@@ -427,44 +468,70 @@ fn lerp_node(a: &Node, b: &Node, fr: &Fracs) -> Node {
             gp: lerp_gpar(agp, bgp, fr),
             key: key.clone(),
         },
-        (
-            Node::Text { x: ax, y: ay, xu, yu, rot: arot, hjust, vjust, w, h, gid, gx, gy, gsize, gpath, gface, gcol, halo, label, family, face, size, tpath, key, gp: agp },
-            Node::Text { x: bx, y: by, rot: brot, gp: bgp, .. },
-        ) => Node::Text {
-            // Halo is a discrete style, not a continuous quantity: snap to
-            // the left keyframe's, like the label and font.
-            halo: *halo,
-            // Position and rotation tween; glyph layout / string snap (a changed
-            // label or reflow is a hard case, not a continuous morph).
-            x: lerp(*ax, *bx, t),
-            y: lerp(*ay, *by, t),
-            xu: *xu,
-            yu: *yu,
-            rot: lerp(*arot, *brot, t),
-            hjust: *hjust,
-            vjust: *vjust,
-            w: *w,
-            h: *h,
-            gid: gid.clone(),
-            gx: gx.clone(),
-            gy: gy.clone(),
-            gsize: gsize.clone(),
-            gpath: gpath.clone(),
-            gface: gface.clone(),
-            gcol: gcol.clone(),
-            label: label.clone(),
-            family: family.clone(),
-            face: face.clone(),
-            size: *size,
-            // A baseline path is layout, not a continuous quantity: snap to the
-            // left keyframe's like the glyphs it positions.
-            tpath: tpath.clone(),
-            key: key.clone(),
-            gp: lerp_gpar(agp, bgp, fr),
-        },
+        (Node::Text { x: ax, y: ay, rot: arot, gp: agp, .. }, Node::Text { x: bx, y: by, rot: brot, gp: bgp, .. }) => {
+            // Position and rotation tween. Everything else -- the string, its
+            // glyph layout and extent, font, halo, baseline path -- is layout,
+            // not a continuous quantity: take it whole from the near keyframe, so
+            // a changed label switches at the positional midpoint and the last
+            // keyframe's text is what the final frame shows.
+            let Node::Text {
+                xu, yu, hjust, vjust, w, h, gid, gx, gy, gsize, gpath, gface, gcol, halo, label, family, face, size,
+                tpath, key, ..
+            } = snap(a, b, t)
+            else {
+                unreachable!()
+            };
+            Node::Text {
+                halo: *halo,
+                x: lerp(*ax, *bx, t),
+                y: lerp(*ay, *by, t),
+                xu: *xu,
+                yu: *yu,
+                rot: lerp(*arot, *brot, t),
+                hjust: *hjust,
+                vjust: *vjust,
+                w: *w,
+                h: *h,
+                gid: gid.clone(),
+                gx: gx.clone(),
+                gy: gy.clone(),
+                gsize: gsize.clone(),
+                gpath: gpath.clone(),
+                gface: gface.clone(),
+                gcol: gcol.clone(),
+                label: label.clone(),
+                family: family.clone(),
+                face: face.clone(),
+                size: *size,
+                tpath: tpath.clone(),
+                key: key.clone(),
+                gp: lerp_gpar(agp, bgp, fr),
+            }
+        }
         // Structural nodes (image/group/subraster/panel) and any variant mismatch
         // carry through unchanged from the near side.
         _ => snap(a, b, t).clone(),
+    }
+}
+
+/// Whether two nodes of one variant have the same element count (a batch) or
+/// vertex count (a line, polygon or path, plus the same sub-path split), so they
+/// can be lerped element by element. A variant mismatch also counts as a
+/// different shape. Single-element nodes and text always match: text layout is
+/// taken from the near side inside `lerp_node`.
+fn same_shape(a: &Node, b: &Node) -> bool {
+    match (a, b) {
+        (Node::Lines { x: ax, .. }, Node::Lines { x: bx, .. })
+        | (Node::Polygon { x: ax, .. }, Node::Polygon { x: bx, .. })
+        | (Node::Rects { x: ax, .. }, Node::Rects { x: bx, .. })
+        | (Node::Circles { x: ax, .. }, Node::Circles { x: bx, .. })
+        | (Node::Markers { x: ax, .. }, Node::Markers { x: bx, .. })
+        | (Node::Hexagons { x: ax, .. }, Node::Hexagons { x: bx, .. })
+        | (Node::Sectors { x: ax, .. }, Node::Sectors { x: bx, .. })
+        | (Node::Loop { x: ax, .. }, Node::Loop { x: bx, .. })
+        | (Node::Segments { x0: ax, .. }, Node::Segments { x0: bx, .. }) => ax.len() == bx.len(),
+        (Node::Path { x: ax, nper: an, .. }, Node::Path { x: bx, nper: bn, .. }) => ax.len() == bx.len() && an == bn,
+        _ => std::mem::discriminant(a) == std::mem::discriminant(b),
     }
 }
 
@@ -485,7 +552,7 @@ fn fade_gp(gp: &PartialGpar, factor: f64) -> PartialGpar {
         Inh::Inherit => 1.0,
     };
     let mut g = gp.clone();
-    g.alpha = Inh::Set(base * factor);
+    g.alpha = Inh::Set(unit(base * factor));
     g
 }
 
@@ -560,7 +627,7 @@ fn ee_markers(a: &Node, b: &Node, fr: &Fracs) -> Vec<Node> {
         out.push(Node::Markers {
             x: m.matched.iter().map(|(i, j)| lerp(xa[*i], xb[*j], t)).collect(),
             y: m.matched.iter().map(|(i, j)| lerp(ya[*i], yb[*j], t)).collect(),
-            size: m.matched.iter().map(|(i, j)| lerp(sa[*i], sb[*j], fr.size)).collect(),
+            size: m.matched.iter().map(|(i, j)| lerp_size(sa[*i], sb[*j], fr.size)).collect(),
             xu: gather(xu, &ia),
             yu: gather(yu, &ia),
             su: gather(su, &ia),
@@ -617,7 +684,7 @@ fn ee_circles(a: &Node, b: &Node, fr: &Fracs) -> Vec<Node> {
         out.push(Node::Circles {
             x: m.matched.iter().map(|(i, j)| lerp(xa[*i], xb[*j], t)).collect(),
             y: m.matched.iter().map(|(i, j)| lerp(ya[*i], yb[*j], t)).collect(),
-            r: m.matched.iter().map(|(i, j)| lerp(ra[*i], rb[*j], fr.size)).collect(),
+            r: m.matched.iter().map(|(i, j)| lerp_size(ra[*i], rb[*j], fr.size)).collect(),
             xu: gather(xu, &ia),
             yu: gather(yu, &ia),
             ru: gather(ru, &ia),
@@ -720,10 +787,11 @@ fn ee_rects(a: &Node, b: &Node, fr: &Fracs) -> Vec<Node> {
 /// Tween the viewport masks between keyframes. Masks are the clip/reveal
 /// geometry attached to a viewport; interpolating them lets a `transition_reveal`
 /// grow a clip rectangle so the plot wipes into view. Structurally parallel masks
-/// (same count, same node counts) tween element-wise; anything else keeps `a`'s.
+/// (same count, same node counts) tween element-wise; anything else snaps to the
+/// near keyframe's.
 fn tween_masks(a: &[MaskDef], b: &[MaskDef], fr: &Fracs) -> Vec<MaskDef> {
     if a.len() != b.len() {
-        return a.to_vec();
+        return snap_slice(a, b, fr.pos).to_vec();
     }
     a.iter()
         .zip(b.iter())
@@ -735,50 +803,85 @@ fn tween_masks(a: &[MaskDef], b: &[MaskDef], fr: &Fracs) -> Vec<MaskDef> {
                     .map(|((vp, na), (_, nb))| (*vp, lerp_node(na, nb, fr)))
                     .collect()
             } else {
-                ma.nodes.clone()
+                snap(ma, mb, fr.pos).nodes.clone()
             };
             MaskDef { kind: ma.kind.clone(), nodes }
         })
         .collect()
 }
 
-/// Build the tweened scene for one frame: clone keyframe `a`'s structure
-/// (viewports, masks, meta — identical across keyframes under frozen scales) and
-/// replace its nodes with the interpolated ones. A different node count between
-/// keyframes (a structural change, out of P1 scope) falls back to `a`'s nodes.
+/// Whether two keyframes can be tweened node for node: the same number of nodes
+/// over the same viewport tree. Under frozen scales that holds whenever the two
+/// states draw the same marks in the same groups; a colour group (or any other
+/// node) present in one state and absent from the other breaks it.
+pub(crate) fn scenes_pair(a: &Scene, b: &Scene) -> bool {
+    a.nodes.len() == b.nodes.len() && a.viewports.len() == b.viewports.len()
+}
+
+/// Build the tweened scene for one frame.
+///
+/// Paired keyframes (see [`scenes_pair`]) tween node by node over `a`'s
+/// structure (viewports, meta -- identical across keyframes under frozen
+/// scales). A keyed batch may split into several output nodes (matched, exiting,
+/// entering), so the per-node `picks`/`meta` are rebuilt to stay parallel to the
+/// output nodes.
+///
+/// Keyframes that do not pair cannot be matched node for node, so the frame
+/// shows one keyframe whole: `a` before the positional midpoint, `b` from it on.
+/// That is a hard cut, not a tween, but it guarantees every keyframe is shown
+/// (vellumplot warns when it builds such an animation).
 fn tween_scene(a: &Scene, b: &Scene, fr: &Fracs) -> Scene {
-    let nodes = if a.nodes.len() == b.nodes.len() {
-        a.nodes
-            .iter()
-            .zip(b.nodes.iter())
-            .flat_map(|((vp, na), (_, nb))| {
-                tween_node_multi(na, nb, fr).into_iter().map(move |n| (*vp, n))
-            })
-            .collect()
-    } else {
-        a.nodes.clone()
-    };
+    if !scenes_pair(a, b) {
+        let s = snap(a, b, fr.pos);
+        return frame_scene(s, s.nodes.clone(), s.picks.clone(), s.meta.clone(), s.masks.clone());
+    }
+    let mut nodes = Vec::with_capacity(a.nodes.len());
+    let mut picks = Vec::with_capacity(a.picks.len());
+    let mut meta = Vec::with_capacity(a.meta.len());
+    for (i, ((vp, na), (_, nb))) in a.nodes.iter().zip(b.nodes.iter()).enumerate() {
+        for n in tween_node_multi(na, nb, fr) {
+            nodes.push((*vp, n));
+            if let Some(p) = a.picks.get(i) {
+                picks.push(*p);
+            }
+            if let Some(m) = a.meta.get(i) {
+                meta.push(m.clone());
+            }
+        }
+    }
+    frame_scene(a, nodes, picks, meta, tween_masks(&a.masks, &b.masks, fr))
+}
+
+/// A fresh frame scene with `base`'s page, viewports and document-level fields
+/// and the given drawn content. Caches start empty.
+fn frame_scene(
+    base: &Scene,
+    nodes: Vec<(usize, Node)>,
+    picks: Vec<i32>,
+    meta: Vec<super::NodeMeta>,
+    masks: Vec<MaskDef>,
+) -> Scene {
     Scene {
-        w_px: a.w_px,
-        h_px: a.h_px,
-        dpi: a.dpi,
-        bg: a.bg,
-        viewports: a.viewports.clone(),
-        current: a.current,
+        w_px: base.w_px,
+        h_px: base.h_px,
+        dpi: base.dpi,
+        bg: base.bg,
+        viewports: base.viewports.clone(),
+        current: base.current,
         nodes,
-        masks: tween_masks(&a.masks, &b.masks, fr),
-        mask_target: a.mask_target.clone(),
-        picks: a.picks.clone(),
-        cur_pick: a.cur_pick,
-        meta: a.meta.clone(),
-        cur_meta: a.cur_meta.clone(),
+        masks,
+        mask_target: base.mask_target.clone(),
+        picks,
+        cur_pick: base.cur_pick,
+        meta,
+        cur_meta: base.cur_meta.clone(),
         raster_cache: RefCell::new(None),
         geom_cache: RefCell::new(None),
         spatial_cache: RefCell::new(None),
-        text_glyphs: a.text_glyphs,
-        a11y_title: a.a11y_title.clone(),
-        a11y_desc: a.a11y_desc.clone(),
-        a11y_prefix: a.a11y_prefix.clone(),
+        text_glyphs: base.text_glyphs,
+        a11y_title: base.a11y_title.clone(),
+        a11y_desc: base.a11y_desc.clone(),
+        a11y_prefix: base.a11y_prefix.clone(),
     }
 }
 
@@ -841,13 +944,25 @@ fn animated_svg(kf: &[Scene], seg: &[i32], frac: &[Fracs], delay_num: i32, delay
     // One frame visible at a time. `steps(1, end)` with a per-frame negative
     // delay is the standard sprite-sheet trick: every frame runs the same
     // animation, offset so exactly one is in its visible window at any moment.
+    //
+    // The class and keyframes names carry the document's id prefix (`C` below
+    // stands in for it until the document is finished): an HTML page holding two
+    // animated SVGs -- or two widgets, which inline the SVG -- shares one CSS
+    // namespace, so unprefixed names let the later document's timing drive both.
+    //
+    // Under `prefers-reduced-motion` one still frame is shown instead (`vs`): the
+    // last frame when the timeline ends on the final keyframe (a reveal,
+    // `transition_time()`, a non-looping `transition_states()` -- the complete
+    // picture), otherwise the first (a loop, whose first frame is its first state).
+    let still = still_frame(kf.len(), seg, frac);
     let pct = 100.0 / n as f64;
     out.push_str(&format!(
         "<style>\
-         .vf{{visibility:hidden;animation:vfcycle {dur}s steps(1,end) infinite}}\
-         @keyframes vfcycle{{0%{{visibility:visible}}{pct:.6}%{{visibility:hidden}}}}\
-         @media (prefers-reduced-motion:reduce){{.vf{{animation:none}}.vf:first-of-type{{visibility:visible}}}}\
-         </style>"
+         .{C}vf{{visibility:hidden;animation:{C}vc {dur}s steps(1,end) infinite}}\
+         @keyframes {C}vc{{0%{{visibility:visible}}{pct:.6}%{{visibility:hidden}}}}\
+         @media (prefers-reduced-motion:reduce){{.{C}vf{{animation:none}}.{C}vs{{visibility:visible}}}}\
+         </style>",
+        C = CSS_TOKEN
     ));
     for (i, body) in bodies.iter().enumerate() {
         // A negative delay starts each frame that far into the cycle, so frame `i`
@@ -855,11 +970,40 @@ fn animated_svg(kf: &[Scene], seg: &[i32], frac: &[Fracs], delay_num: i32, delay
         // -- i.e. at wall time `i*dur/n`. Offsetting by `i` rather than `n - i`
         // would run the frames backwards (0, n-1, n-2, ...).
         let delay = -(((n - i) % n) as f64) * dur / n as f64;
-        out.push_str(&format!("<g class=\"vf\" style=\"animation-delay:{delay:.4}s\">{body}</g>"));
+        let class = if i == still { format!("{CSS_TOKEN}vf {CSS_TOKEN}vs") } else { format!("{CSS_TOKEN}vf") };
+        out.push_str(&format!("<g class=\"{class}\" style=\"animation-delay:{delay:.4}s\">{body}</g>"));
     }
     out.push_str("</svg>");
-    // One id prefix for the whole document (the frames left the token in place).
-    crate::render::resolve_ids(out, &kf[0].a11y_prefix)
+    // One prefix for the whole document (the frames left the token in place):
+    // the ids get it as is, the CSS names a CSS-identifier-safe form of it.
+    let prefix = crate::render::doc_id_prefix(&out, &kf[0].a11y_prefix);
+    let out = out.replace(CSS_TOKEN, &format!("{}-", css_ident(&prefix)));
+    crate::render::resolve_ids(out, &prefix)
+}
+
+/// Stands in for the CSS-name prefix while the animated SVG is assembled: two
+/// id tokens, which no id contains (every id token is followed by `-`).
+const CSS_TOKEN: &str = "\0\0";
+
+/// The frame shown, alone, under `prefers-reduced-motion`: the last when it is
+/// the final keyframe exactly, else the first.
+fn still_frame(k: usize, seg: &[i32], frac: &[Fracs]) -> usize {
+    let n = seg.len();
+    match (seg.last(), frac.last()) {
+        (Some(&s), Some(f)) if s as usize + 2 == k && f.pos >= 1.0 => n - 1,
+        _ => 0,
+    }
+}
+
+/// `p` as a CSS identifier: characters outside `[A-Za-z0-9_-]` become `_`, and
+/// a leading digit or dash gets a `v` in front.
+fn css_ident(p: &str) -> String {
+    let mut s: String =
+        p.chars().map(|c| if c.is_ascii_alphanumeric() || c == '_' || c == '-' { c } else { '_' }).collect();
+    if !s.starts_with(|c: char| c.is_ascii_alphabetic() || c == '_') {
+        s.insert(0, 'v');
+    }
+    s
 }
 
 /// The inner content of an SVG document -- everything between the opening `<svg …>`
@@ -1246,7 +1390,125 @@ fn render_animation(
     Vec::new()
 }
 
+/// Whether a node pair snaps whole at the midpoint instead of tweening: a
+/// shape change that no key join can account for. Mirrors `tween_node_multi` ->
+/// `lerp_node`: a keyed marker/circle/rect batch pair joins by key (elements
+/// enter and leave), so its element count may change freely.
+fn node_snaps(a: &Node, b: &Node) -> bool {
+    let keyed = match (a, b) {
+        (Node::Markers { keys: ka, .. }, Node::Markers { keys: kb, .. })
+        | (Node::Circles { keys: ka, .. }, Node::Circles { keys: kb, .. })
+        | (Node::Rects { keys: ka, .. }, Node::Rects { keys: kb, .. }) => !ka.is_empty() && !kb.is_empty(),
+        _ => false,
+    };
+    !keyed && !same_shape(a, b)
+}
+
+/// How each adjacent keyframe pair will tween, for a caller that wants to warn
+/// before rendering. One entry per pair `(i, i + 1)`:
+///
+/// * `paired` -- the keyframes tween node by node (`FALSE`: the frames cut from
+///   one keyframe to the next at the midpoint);
+/// * `nodes_a`, `nodes_b` -- the two node counts;
+/// * `snapped` -- for a paired segment, how many node pairs still switch whole
+///   at the midpoint (a different variant, vertex count or unkeyed element
+///   count); `NA` for an unpaired one.
+///
+/// @keywords internal
+#[extendr]
+fn tween_pairing(keyframes: List) -> List {
+    let kf: Vec<ExternalPtr<Scene>> = keyframes
+        .values()
+        .map(|robj| {
+            <ExternalPtr<Scene>>::try_from(robj)
+                .unwrap_or_else(|_| throw_r_error("tween_pairing(): keyframes must be compiled vellum scenes"))
+        })
+        .collect();
+    let m = kf.len().saturating_sub(1);
+    let (mut paired, mut na, mut nb, mut snapped) =
+        (Vec::with_capacity(m), Vec::with_capacity(m), Vec::with_capacity(m), Vec::with_capacity(m));
+    for w in kf.windows(2) {
+        let (a, b): (&Scene, &Scene) = (&w[0], &w[1]);
+        let p = scenes_pair(a, b);
+        paired.push(p);
+        na.push(a.nodes.len() as i32);
+        nb.push(b.nodes.len() as i32);
+        snapped.push(if p {
+            Some(a.nodes.iter().zip(&b.nodes).filter(|((_, x), (_, y))| node_snaps(x, y)).count() as i32)
+        } else {
+            None
+        });
+    }
+    list!(
+        paired = paired,
+        nodes_a = na,
+        nodes_b = nb,
+        snapped = Integers::from_values(snapped.into_iter().map(|v| v.map(Rint::from).unwrap_or(Rint::na())))
+    )
+}
+
 extendr_module! {
     mod tween;
     fn render_animation;
+    fn tween_pairing;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn fr(pos: f64) -> Fracs {
+        Fracs { pos, col: pos, size: pos, alpha: pos }
+    }
+
+    fn gp(alpha: f64, lwd: f64) -> PartialGpar {
+        PartialGpar {
+            fill: Inh::Inherit,
+            col: Inh::Inherit,
+            lwd: Inh::Set(lwd),
+            alpha: Inh::Set(alpha),
+            lty: Inh::Inherit,
+            lineend: Inh::Inherit,
+            linejoin: Inh::Inherit,
+            linemitre: Inh::Inherit,
+            antialias: Inh::Inherit,
+            crisp: Inh::Inherit,
+            col_paint: Inh::Inherit,
+            dash_phase: Inh::Inherit,
+        }
+    }
+
+    #[test]
+    fn overshoot_clamps_size_and_alpha() {
+        // back-in-out dips below 0 and elastic rises above 1.
+        assert_eq!(lerp_size(1.0, 5.0, -0.5), 0.0);
+        assert_eq!(lerp_vec_size(&[1.0, 2.0], &[3.0, 6.0], -1.0), vec![0.0, 0.0]);
+        let (a, b) = (gp(0.2, 1.0), gp(1.0, 4.0));
+        let g = lerp_gpar(&a, &b, &fr(1.3));
+        assert!(matches!(g.alpha, Inh::Set(x) if x == 1.0));
+        let g = lerp_gpar(&a, &b, &fr(-0.6));
+        assert!(matches!(g.alpha, Inh::Set(x) if x == 0.0));
+        assert!(matches!(g.lwd, Inh::Set(x) if x == 0.0));
+        assert!(matches!(fade_gp(&b, 1.4).alpha, Inh::Set(x) if x == 1.0));
+        assert!(matches!(fade_gp(&b, -0.2).alpha, Inh::Set(x) if x == 0.0));
+    }
+
+    #[test]
+    fn still_frame_holds_the_final_keyframe_only_when_reached() {
+        // A non-looping schedule over 3 keyframes that ends at (seg 1, frac 1).
+        let seg = [0, 0, 1, 1];
+        assert_eq!(still_frame(3, &seg, &[fr(0.0), fr(0.5), fr(0.5), fr(1.0)]), 3);
+        // A loop stops short of its end: hold the first frame.
+        assert_eq!(still_frame(3, &seg, &[fr(0.0), fr(0.5), fr(0.0), fr(0.5)]), 0);
+        // Ending on an earlier keyframe pair is not the end either.
+        assert_eq!(still_frame(4, &seg, &[fr(0.0), fr(0.5), fr(0.5), fr(1.0)]), 0);
+    }
+
+    #[test]
+    fn css_ident_is_always_a_valid_identifier() {
+        assert_eq!(css_ident("vl0a1b2c3d"), "vl0a1b2c3d");
+        assert_eq!(css_ident("my fig.1"), "my_fig_1");
+        assert_eq!(css_ident("1st"), "v1st");
+        assert_eq!(css_ident("-x"), "v-x");
+    }
 }

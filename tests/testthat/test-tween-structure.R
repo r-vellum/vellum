@@ -1,0 +1,263 @@
+# Keyframes that cannot be tweened element by element -- a different number of
+# nodes, a line whose vertex count changes, a changed text label -- must still
+# show every keyframe: the frames switch to the right keyframe at the positional
+# midpoint (VR-26, VR-27, VR-28). These tests look at mid-transition frames, not
+# just the keyframes.
+
+panel_scene <- function(...) {
+  s <- vl_scene(2, 1.5, dpi = 60, bg = "white") |>
+    push(vl_viewport(xscale = c(0, 1), yscale = c(0, 1), name = "panel"))
+  for (g in list(...)) {
+    s <- draw(s, g)
+  }
+  pop(s)
+}
+
+# Render the frames `seg`/`frac` of `keys` and return them as arrays.
+tween_frames <- function(keys, frac, seg = rep(1L, length(frac)), ...) {
+  dir <- withr::local_tempdir(.local_envir = parent.frame())
+  vl_render_animation(keys, seg, frac, dir, format = "frames", ...)
+  lapply(sort(list.files(dir, full.names = TRUE)), png::readPNG)
+}
+
+# A keyframe drawn alone (a one-segment animation held at fraction 0).
+still <- function(s) tween_frames(list(s, s), 0)[[1L]]
+
+test_that("keyframes with different node counts cut to the later one at the midpoint", {
+  skip_if_not_installed("png")
+  a <- panel_scene(circle_grob(
+    x = 0.3,
+    y = 0.5,
+    r = 0.2,
+    gp = vl_gpar(fill = "steelblue", col = NA)
+  ))
+  b <- panel_scene(
+    circle_grob(
+      x = 0.7,
+      y = 0.5,
+      r = 0.2,
+      gp = vl_gpar(fill = "steelblue", col = NA)
+    ),
+    rect_grob(
+      x = 0.2,
+      y = 0.2,
+      width = 0.2,
+      height = 0.2,
+      gp = vl_gpar(fill = "tomato", col = NA)
+    )
+  )
+  fr <- tween_frames(list(a, b), c(0, 0.4, 0.6, 1))
+  expect_equal(fr[[1]], still(a))
+  expect_equal(fr[[2]], still(a))
+  # Before the fix every frame of the segment showed `a`, so `b` never appeared.
+  expect_equal(fr[[3]], still(b))
+  expect_equal(fr[[4]], still(b))
+  p <- vl_tween_pairing(list(a, b, b))
+  expect_identical(p$paired, c(FALSE, TRUE))
+  expect_identical(p$nodes_to[1] - p$nodes_from[1], 1L)
+  expect_identical(p$snapped, c(NA, 0L))
+})
+
+test_that("a line whose vertex count changes ends on the later shape", {
+  skip_if_not_installed("png")
+  a <- panel_scene(lines_grob(x = c(0.1, 0.5, 0.9), y = c(0.2, 0.8, 0.2)))
+  b <- panel_scene(lines_grob(
+    x = c(0.1, 0.3, 0.5, 0.7, 0.9),
+    y = c(0.8, 0.2, 0.8, 0.2, 0.8)
+  ))
+  fr <- tween_frames(list(a, b), c(0.4, 0.6, 1))
+  expect_equal(fr[[1]], still(a))
+  expect_equal(fr[[2]], still(b))
+  expect_equal(fr[[3]], still(b))
+  p <- vl_tween_pairing(list(a, b))
+  expect_true(p$paired)
+  expect_identical(p$snapped, 1L)
+})
+
+test_that("an equal-shape line still tweens (no snap)", {
+  skip_if_not_installed("png")
+  a <- panel_scene(lines_grob(x = c(0.1, 0.9), y = c(0.2, 0.2)))
+  b <- panel_scene(lines_grob(x = c(0.1, 0.9), y = c(0.8, 0.8)))
+  mid <- tween_frames(list(a, b), 0.5)[[1]]
+  expect_false(isTRUE(all.equal(mid, still(a))))
+  expect_false(isTRUE(all.equal(mid, still(b))))
+  expect_identical(vl_tween_pairing(list(a, b))$snapped, 0L)
+})
+
+test_that("a changed text label switches to the later string at the midpoint", {
+  skip_if_not_installed("png")
+  a <- panel_scene(text_grob("first", x = 0.5, y = 0.5))
+  b <- panel_scene(text_grob("third!", x = 0.5, y = 0.5))
+  fr <- tween_frames(list(a, b), c(0.4, 0.6, 1))
+  expect_equal(fr[[1]], still(a))
+  expect_equal(fr[[2]], still(b))
+  expect_equal(fr[[3]], still(b))
+})
+
+test_that("easing overshoot never draws a negative size or out-of-range alpha", {
+  skip_if_not_installed("png")
+  a <- panel_scene(circle_grob(
+    x = 0.5,
+    y = 0.5,
+    r = 0.05,
+    gp = vl_gpar(fill = "black", alpha = 0.2)
+  ))
+  b <- panel_scene(circle_grob(
+    x = 0.5,
+    y = 0.5,
+    r = 0.4,
+    gp = vl_gpar(fill = "black", alpha = 1)
+  ))
+  # Size and alpha far below 0: the circle collapses to nothing (blank page),
+  # rather than a radius of -0.3.
+  fr <- tween_frames(list(a, b), 0, frac_size = -1, frac_alpha = -1)
+  blank <- still(panel_scene())
+  expect_equal(fr[[1]], blank)
+  # Far above 1: alpha clamps at 1, the radius overshoots (sizes may grow).
+  over <- tween_frames(list(a, b), 1, frac_alpha = 3)[[1]]
+  expect_equal(over, still(b))
+})
+
+# --- the animated SVG ---------------------------------------------------------
+
+anim_svg <- function(keys, seg, frac, fps = 10) {
+  f <- withr::local_tempfile(fileext = ".svg", .local_envir = parent.frame())
+  vl_render_animation(keys, seg, frac, f, format = "svg", fps = fps)
+  paste(readLines(f, warn = FALSE), collapse = "\n")
+}
+
+css_names <- function(svg) {
+  st <- regmatches(svg, regexpr("<style>.*?</style>", svg))
+  list(
+    class = unique(regmatches(
+      st,
+      gregexpr("\\.[A-Za-z_][A-Za-z0-9_-]*vf\\b", st)
+    )[[1]]),
+    keyframes = regmatches(st, regexpr("@keyframes [^{]+", st))
+  )
+}
+
+test_that("two animated SVGs use distinct CSS names (no page-wide collision)", {
+  k1 <- list(
+    panel_scene(circle_grob(x = 0.2, r = 0.1)),
+    panel_scene(circle_grob(x = 0.8, r = 0.1))
+  )
+  k2 <- list(
+    panel_scene(rect_grob(x = 0.2, width = 0.1)),
+    panel_scene(rect_grob(x = 0.8, width = 0.1))
+  )
+  s1 <- anim_svg(k1, rep(1L, 4), (0:3) / 3)
+  s2 <- anim_svg(k2, rep(1L, 8), (0:7) / 7, fps = 4)
+  n1 <- css_names(s1)
+  n2 <- css_names(s2)
+  # No bare, global `.vf` / `vfcycle` any more.
+  expect_false(grepl("\\.vf\\{|vfcycle", s1))
+  expect_length(n1$class, 1L)
+  expect_false(identical(n1$class, n2$class))
+  expect_false(identical(n1$keyframes, n2$keyframes))
+  # Every frame group carries the prefixed class, and no NUL token survives.
+  cls <- sub("^\\.", "", n1$class)
+  expect_identical(
+    lengths(regmatches(s1, gregexpr(paste0("class=\"", cls), s1))),
+    4L
+  )
+  expect_false(grepl("\\x01|\\x00", s1, useBytes = TRUE))
+  # Element ids stay unique within the document.
+  ids <- regmatches(s1, gregexpr(" id=\"[^\"]+\"", s1))[[1]]
+  expect_false(anyDuplicated(ids) > 0)
+})
+
+test_that("an explicit a11y prefix becomes a valid CSS identifier", {
+  k <- list(
+    panel_scene(circle_grob(x = 0.2, r = 0.1)),
+    panel_scene(circle_grob(x = 0.8, r = 0.1))
+  )
+  k <- lapply(k, function(s) {
+    s@a11y_prefix <- "my fig.1"
+    s
+  })
+  svg <- anim_svg(k, rep(1L, 3), c(0, 0.5, 1))
+  expect_identical(css_names(svg)$class, ".my_fig_1-vf")
+})
+
+test_that("reduced motion holds the last frame when the schedule ends on the last keyframe", {
+  k <- list(
+    panel_scene(circle_grob(x = 0.2, r = 0.1)),
+    panel_scene(circle_grob(x = 0.8, r = 0.1))
+  )
+  still_index <- function(svg) {
+    g <- regmatches(
+      svg,
+      gregexpr("<g class=\"[^\"]*\" style=\"animation-delay", svg)
+    )[[1]]
+    which(grepl("-vs\"", g))
+  }
+  # Ends at fraction 1 (a reveal, a time series): the complete picture.
+  expect_identical(still_index(anim_svg(k, rep(1L, 5), (0:4) / 4)), 5L)
+  # A loop (stops short of the end): its first frame.
+  expect_identical(still_index(anim_svg(k, rep(1L, 5), (0:4) / 5)), 1L)
+  svg <- anim_svg(k, rep(1L, 5), (0:4) / 4)
+  expect_match(
+    svg,
+    "prefers-reduced-motion:reduce\\)\\{\\.[^{]+-vf\\{animation:none\\}\\.[^{]+-vs\\{visibility:visible\\}"
+  )
+})
+
+# --- frame timing -------------------------------------------------------------
+
+test_that("fps becomes an exact rational frame delay", {
+  expect_identical(.fps_delay(25), c(1L, 25L))
+  expect_identical(.fps_delay(12.5), c(2L, 25L))
+  expect_identical(.fps_delay(0.5), c(2L, 1L))
+  expect_identical(.fps_delay(0.4), c(5L, 2L))
+  expect_identical(.fps_delay(0.25), c(4L, 1L))
+  expect_identical(.fps_delay(29.97), c(100L, 2997L))
+  # Beyond what 16-bit terms can hold: the nearest bound, never 0.
+  expect_identical(.fps_delay(1e5), c(1L, 65535L))
+  expect_identical(.fps_delay(1e-6), c(65535L, 1L))
+})
+
+test_that("the APNG and animated SVG carry the exact delay", {
+  skip_if_not_installed("png")
+  k <- list(
+    panel_scene(circle_grob(x = 0.2, r = 0.1)),
+    panel_scene(circle_grob(x = 0.8, r = 0.1))
+  )
+  out <- withr::local_tempfile(fileext = ".png")
+  vl_render_animation(
+    k,
+    rep(1L, 3),
+    c(0, 0.5, 1),
+    out,
+    format = "apng",
+    fps = 12.5
+  )
+  raw <- readBin(out, "raw", n = file.size(out))
+  # First fcTL: seq(4) w(4) h(4) x(4) y(4) delay_num(2) delay_den(2).
+  pos <- grepRaw("fcTL", raw)
+  u16 <- function(i) sum(as.integer(raw[i:(i + 1L)]) * c(256, 1))
+  expect_identical(c(u16(pos + 24L), u16(pos + 26L)), c(2, 25))
+  # Animated SVG: 4 frames at 0.5 fps = 8 s, not the 4 s a rounded 1 fps gives.
+  svg <- anim_svg(k, rep(1L, 4), (0:3) / 3, fps = 0.5)
+  expect_match(svg, "vc 8s steps")
+})
+
+test_that("a GIF above 50 fps warns that it will play slower", {
+  k <- list(
+    panel_scene(circle_grob(x = 0.2, r = 0.1)),
+    panel_scene(circle_grob(x = 0.8, r = 0.1))
+  )
+  out <- withr::local_tempfile(fileext = ".gif")
+  expect_warning(
+    vl_render_animation(k, rep(1L, 2), c(0, 1), out, format = "gif", fps = 60),
+    "50 fps"
+  )
+  expect_no_warning(vl_render_animation(
+    k,
+    rep(1L, 2),
+    c(0, 1),
+    out,
+    format = "gif",
+    fps = 50
+  ))
+})

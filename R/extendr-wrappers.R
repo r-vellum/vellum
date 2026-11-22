@@ -208,6 +208,19 @@ rs_pdf_pages_raw <- function(scenes) .Call(wrap__rs_pdf_pages_raw, scenes)
 #' @keywords internal
 render_animation <- function(keyframes, seg, frac, format, path, delay_num, delay_den, gif_speed, gif_dither, frac_col, frac_size, frac_alpha) .Call(wrap__render_animation, keyframes, seg, frac, format, path, delay_num, delay_den, gif_speed, gif_dither, frac_col, frac_size, frac_alpha)
 
+#' How each adjacent keyframe pair will tween, for a caller that wants to warn
+#' before rendering. One entry per pair `(i, i + 1)`:
+#'
+#' * `paired` -- the keyframes tween node by node (`FALSE`: the frames cut from
+#'   one keyframe to the next at the midpoint);
+#' * `nodes_a`, `nodes_b` -- the two node counts;
+#' * `snapped` -- for a paired segment, how many node pairs still switch whole
+#'   at the midpoint (a different variant, vertex count or unkeyed element
+#'   count); `NA` for an unpaired one.
+#'
+#' @keywords internal
+tween_pairing <- function(keyframes) .Call(wrap__tween_pairing, keyframes)
+
 rs_aggregate_2d <- function(x, y, w, nx, ny, x0, x1, y0, y1) .Call(wrap__rs_aggregate_2d, x, y, w, nx, ny, x0, x1, y0, y1)
 
 rs_aggregate_2d_cat <- function(x, y, cat, ncat, w, nx, ny, x0, x1, y0, y1) .Call(wrap__rs_aggregate_2d_cat, x, y, cat, ncat, w, nx, ny, x0, x1, y0, y1)

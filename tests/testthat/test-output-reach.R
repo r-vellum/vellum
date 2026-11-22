@@ -24,13 +24,17 @@ schedule <- function(k = 3, per = 8) {
 
 # --- animated SVG -------------------------------------------------------------
 
+# A frame group: its class is `<document prefix>-vf` (plus `-vs` on the frame
+# held under reduced motion), namespaced so two animations can share a page.
+frame_xpath <- "//*[contains(concat(@class, ' '), '-vf ')]"
+
 test_that("animated SVG emits one group per frame", {
   sc <- schedule()
   f <- withr::local_tempfile(fileext = ".svg")
   vl_render_animation(keyframes(), sc$seg, sc$frac, f, format = "svg", fps = 24)
   txt <- paste(readLines(f, warn = FALSE), collapse = "")
   expect_equal(
-    lengths(regmatches(txt, gregexpr('class="vf"', txt, fixed = TRUE))),
+    lengths(regmatches(txt, gregexpr('class="[^"]*-vf[" ]', txt))),
     length(sc$seg)
   )
 })
@@ -43,7 +47,7 @@ test_that("the animated SVG is well-formed XML with the right page box", {
   x <- xml2::read_xml(f)
   expect_equal(xml2::xml_name(x), "svg")
   expect_equal(xml2::xml_attr(x, "viewBox"), "0 0 288 192") # 3x2in at 96dpi
-  expect_length(xml2::xml_find_all(x, '//*[@class="vf"]'), length(sc$seg))
+  expect_length(xml2::xml_find_all(x, frame_xpath), length(sc$seg))
 })
 
 test_that("frames are staggered so exactly one is visible at a time", {
@@ -52,7 +56,7 @@ test_that("frames are staggered so exactly one is visible at a time", {
   f <- withr::local_tempfile(fileext = ".svg")
   vl_render_animation(keyframes(), sc$seg, sc$frac, f, format = "svg", fps = 10)
   x <- xml2::read_xml(f)
-  styles <- xml2::xml_attr(xml2::xml_find_all(x, '//*[@class="vf"]'), "style")
+  styles <- xml2::xml_attr(xml2::xml_find_all(x, frame_xpath), "style")
   delays <- as.numeric(sub(".*animation-delay:(-?[0-9.]+)s.*", "\\1", styles))
   n <- length(delays)
   # One cycle is n/fps seconds and the delays step evenly through it, negatively.
@@ -89,7 +93,7 @@ test_that("each frame's clip references resolve inside that frame", {
   f <- withr::local_tempfile(fileext = ".svg")
   vl_render_animation(clipped_keyframes(), sc$seg, sc$frac, f, format = "svg", fps = 12)
   x <- xml2::read_xml(f)
-  for (fr in xml2::xml_find_all(x, '//*[@class="vf"]')) {
+  for (fr in xml2::xml_find_all(x, frame_xpath)) {
     refs <- xml2::xml_attr(xml2::xml_find_all(fr, ".//*[@clip-path]"), "clip-path")
     refs <- unique(sub("^url\\(#(.*)\\)$", "\\1", refs))
     defined <- xml2::xml_attr(xml2::xml_find_all(fr, ".//*[@id]"), "id")
@@ -131,7 +135,7 @@ test_that("frame content actually differs between frames", {
   vl_render_animation(keyframes(), sc$seg, sc$frac, f, format = "svg", fps = 12)
   x <- xml2::read_xml(f)
   bodies <- vapply(
-    xml2::xml_find_all(x, '//*[@class="vf"]'),
+    xml2::xml_find_all(x, frame_xpath),
     as.character,
     character(1)
   )
