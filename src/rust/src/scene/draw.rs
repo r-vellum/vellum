@@ -363,8 +363,8 @@ impl Scene {
                     };
                     let cx = vp.x_pos(*x, *xu);
                     let cy = vp.y_pos(*y, *yu);
-                    let pw = vp.x_len(*w, *wu);
-                    let ph = vp.y_len(*h, *hu);
+                    let pw = vp.x_extent(*w, *wu);
+                    let ph = vp.y_extent(*h, *hu);
                     if let Some(g) = b.geom_sink() {
                         g.rect(0, cx - pw / 2.0, cy - ph / 2.0, pw, ph);
                     }
