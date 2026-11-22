@@ -11,8 +11,8 @@
 //! This is a **child module of `scene`**, so it reaches `Scene`/`Node` and the
 //! private `render_to`/`want_bitmap_text` directly, with no visibility widening.
 //! The interpolation: unit geometry lerps its resolved value on a matching base
-//! code (mismatched bases and vertex counts snap here — the clean, frozen-scale
-//! P1 scope keeps them matched); colours lerp in Oklab (reusing `oklab.rs`);
+//! code (mismatched bases snap; a line, polygon or path whose vertex count
+//! changes morphs, see `morph_pair`); colours lerp in Oklab (reusing `oklab.rs`);
 //! bounded gpar numerics lerp; discrete fields snap at `t >= 0.5`.
 //!
 //! The fraction is not one number but a [`Fracs`] — one per property class
@@ -233,10 +233,16 @@ fn lerp_node(a: &Node, b: &Node, fr: &Fracs) -> Node {
     let t = fr.pos;
     // Two nodes whose element or vertex counts differ cannot be lerped
     // element-wise: the per-element units, styles and keys would come from one
-    // side and the geometry from the other. Show one keyframe's node whole,
-    // switching at the positional midpoint, so the final frame is `b` exactly.
-    // (A real morph -- resampling both to a common vertex count -- is future work.)
+    // side and the geometry from the other. A line, polygon or path is morphed
+    // instead (both resampled onto a common set of vertices, VR-37); anything
+    // else shows one keyframe's node whole, switching at the positional
+    // midpoint, so the final frame is `b` exactly.
     if !same_shape(a, b) {
+        if t > 0.0 && t < 1.0 {
+            if let Some((a2, b2)) = morph_pair(a, b) {
+                return lerp_node(&a2, &b2, fr);
+            }
+        }
         return snap(a, b, t).clone();
     }
     match (a, b) {
@@ -535,6 +541,358 @@ fn same_shape(a: &Node, b: &Node) -> bool {
     }
 }
 
+/// Whether two nodes tween rather than switch: the same shape, or a line,
+/// polygon or path pair that [`morph_pair`] can bring to one.
+fn tweenable(a: &Node, b: &Node) -> bool {
+    same_shape(a, b) || morph_pair(a, b).is_some()
+}
+
+// --- morphing lines, polygons and paths (VR-37) -------------------------------
+//
+// A line whose number of points changes between keyframes (a series gaining a
+// year, a polygon simplified differently) is morphed rather than switched: both
+// are put on one common parameterisation by arc length -- every vertex of
+// either shape, at its fraction of the way along its own outline -- and each is
+// evaluated at all of those fractions. Each shape keeps every one of its own
+// vertices (the extra ones fall on its edges), so the morph starts and ends on
+// the keyframes' exact outlines. A ring (polygon, path sub-path) is first
+// turned to run the same way round as the other and to start at the vertex
+// nearest the other's start, so it does not twist. Arc length is measured with
+// x and y each scaled by their joint range, so neither axis's units dominate.
+
+/// The single unit all of `v` share, if any.
+fn uniform_unit(v: &[crate::units::Unit]) -> Option<crate::units::Unit> {
+    let u = *v.first()?;
+    v.iter()
+        .all(|w| w.kind == u.kind && w.off_mm == u.off_mm)
+        .then_some(u)
+}
+
+fn same_unit(a: crate::units::Unit, b: crate::units::Unit) -> bool {
+    a.kind == b.kind && a.off_mm == b.off_mm
+}
+
+/// Both shapes' units, when each is uniform and they agree.
+fn morph_units(
+    axu: &[crate::units::Unit],
+    ayu: &[crate::units::Unit],
+    bxu: &[crate::units::Unit],
+    byu: &[crate::units::Unit],
+) -> Option<(crate::units::Unit, crate::units::Unit)> {
+    let (ux, uy) = (uniform_unit(axu)?, uniform_unit(ayu)?);
+    (same_unit(ux, uniform_unit(bxu)?) && same_unit(uy, uniform_unit(byu)?)).then_some((ux, uy))
+}
+
+/// Cumulative arc length fraction of each vertex (and, for a ring, of the
+/// closing edge's end, `1.0`, appended), with x and y scaled by `sx`, `sy`.
+/// `None` for a degenerate (zero-length) outline.
+fn arc_fracs(x: &[f64], y: &[f64], sx: f64, sy: f64, closed: bool) -> Option<Vec<f64>> {
+    let n = x.len();
+    let mut c = Vec::with_capacity(n + 1);
+    c.push(0.0);
+    let seg = |i: usize, j: usize| ((x[j] - x[i]) / sx).hypot((y[j] - y[i]) / sy);
+    for i in 1..n {
+        c.push(c[i - 1] + seg(i - 1, i));
+    }
+    if closed {
+        c.push(c[n - 1] + seg(n - 1, 0));
+    }
+    let total = *c.last()?;
+    if !(total > 0.0) || !total.is_finite() {
+        return None;
+    }
+    Some(c.iter().map(|v| v / total).collect())
+}
+
+/// The point at arc fraction `u` along the outline (`fr` from [`arc_fracs`]).
+fn point_at(x: &[f64], y: &[f64], fr: &[f64], u: f64) -> (f64, f64) {
+    let n = x.len();
+    // The edge [k, k+1] holding `u` (k+1 wraps to 0 on a ring's closing edge).
+    let k = match fr.partition_point(|&v| v <= u) {
+        0 => 0,
+        p => (p - 1).min(fr.len() - 2),
+    };
+    let (i, j) = (k, (k + 1) % n);
+    let span = fr[k + 1] - fr[k];
+    let w = if span > 0.0 {
+        ((u - fr[k]) / span).clamp(0.0, 1.0)
+    } else {
+        0.0
+    };
+    (lerp(x[i], x[j], w), lerp(y[i], y[j], w))
+}
+
+/// Twice the signed area of a ring (positive anticlockwise).
+fn ring_area2(x: &[f64], y: &[f64]) -> f64 {
+    let n = x.len();
+    (0..n)
+        .map(|i| {
+            let j = (i + 1) % n;
+            x[i] * y[j] - x[j] * y[i]
+        })
+        .sum()
+}
+
+/// Ring `b` turned to run the same way round as ring `a` and rotated to start
+/// at its vertex nearest `a`'s first.
+fn align_ring(
+    ax: &[f64],
+    ay: &[f64],
+    bx: &[f64],
+    by: &[f64],
+    sx: f64,
+    sy: f64,
+) -> (Vec<f64>, Vec<f64>) {
+    let (mut x, mut y) = (bx.to_vec(), by.to_vec());
+    if ring_area2(ax, ay).signum() * ring_area2(&x, &y).signum() < 0.0 {
+        x.reverse();
+        y.reverse();
+    }
+    let d = |i: usize| ((x[i] - ax[0]) / sx).hypot((y[i] - ay[0]) / sy);
+    let start = (0..x.len())
+        .min_by(|&i, &j| d(i).partial_cmp(&d(j)).unwrap_or(std::cmp::Ordering::Equal))
+        .unwrap_or(0);
+    x.rotate_left(start);
+    y.rotate_left(start);
+    (x, y)
+}
+
+/// Two outlines on one common set of arc fractions (see the section comment):
+/// `(ax', ay', bx', by')`, or `None` when either is degenerate.
+#[allow(clippy::type_complexity)]
+fn morph_outline(
+    ax: &[f64],
+    ay: &[f64],
+    bx: &[f64],
+    by: &[f64],
+    sx: f64,
+    sy: f64,
+    closed: bool,
+) -> Option<(Vec<f64>, Vec<f64>, Vec<f64>, Vec<f64>)> {
+    if ax.len() < 2 || bx.len() < 2 {
+        return None;
+    }
+    let (bx, by) = if closed {
+        align_ring(ax, ay, bx, by, sx, sy)
+    } else {
+        (bx.to_vec(), by.to_vec())
+    };
+    let fa = arc_fracs(ax, ay, sx, sy, closed)?;
+    let fb = arc_fracs(&bx, &by, sx, sy, closed)?;
+    // Every vertex's fraction, merged; a ring's closing `1.0` is its start again.
+    let ka = if closed { fa.len() - 1 } else { fa.len() };
+    let kb = if closed { fb.len() - 1 } else { fb.len() };
+    let mut us: Vec<f64> = fa[..ka].iter().chain(&fb[..kb]).copied().collect();
+    us.sort_by(|p, q| p.partial_cmp(q).unwrap_or(std::cmp::Ordering::Equal));
+    us.dedup_by(|p, q| (*p - *q).abs() < 1e-12);
+    let eval = |x: &[f64], y: &[f64], f: &[f64]| -> (Vec<f64>, Vec<f64>) {
+        us.iter().map(|&u| point_at(x, y, f, u)).unzip()
+    };
+    let (ax2, ay2) = eval(ax, ay, &fa);
+    let (bx2, by2) = eval(&bx, &by, &fb);
+    Some((ax2, ay2, bx2, by2))
+}
+
+/// The joint x and y ranges of two point sets, as the scales arc length is
+/// measured in (1 for a zero range).
+fn joint_scale(ax: &[f64], ay: &[f64], bx: &[f64], by: &[f64]) -> Option<(f64, f64)> {
+    let range = |a: &[f64], b: &[f64]| -> Option<f64> {
+        let (mut lo, mut hi) = (f64::INFINITY, f64::NEG_INFINITY);
+        for &v in a.iter().chain(b) {
+            if !v.is_finite() {
+                return None;
+            }
+            lo = lo.min(v);
+            hi = hi.max(v);
+        }
+        let r = hi - lo;
+        Some(if r > 0.0 { r } else { 1.0 })
+    };
+    Some((range(ax, bx)?, range(ay, by)?))
+}
+
+/// A unit vector for `n` vertices: per-vertex when the original was, else the
+/// original (recycled) one.
+fn units_for(
+    orig: &[crate::units::Unit],
+    u: crate::units::Unit,
+    n_orig: usize,
+    n: usize,
+) -> Vec<crate::units::Unit> {
+    if orig.len() == n_orig && n_orig != 1 {
+        vec![u; n]
+    } else {
+        orig.to_vec()
+    }
+}
+
+/// Two lines, polygons or paths of one kind whose vertex counts differ,
+/// brought to a common vertex count so `lerp_node` can morph them (see the
+/// section comment). `None` for any other pair, or one that cannot be morphed:
+/// mixed or mismatched units, non-finite coordinates (a broken line), a
+/// stroke-width profile, paths with different numbers of sub-paths, or a
+/// degenerate outline.
+fn morph_pair(a: &Node, b: &Node) -> Option<(Node, Node)> {
+    match (a, b) {
+        (
+            Node::Lines {
+                x: ax,
+                y: ay,
+                xu: axu,
+                yu: ayu,
+                hw: ahw,
+                ..
+            },
+            Node::Lines {
+                x: bx,
+                y: by,
+                xu: bxu,
+                yu: byu,
+                hw: bhw,
+                ..
+            },
+        ) if ax.len() != bx.len() && ahw.is_none() && bhw.is_none() => {
+            let (ux, uy) = morph_units(axu, ayu, bxu, byu)?;
+            let (sx, sy) = joint_scale(ax, ay, bx, by)?;
+            let (ax2, ay2, bx2, by2) = morph_outline(ax, ay, bx, by, sx, sy, false)?;
+            let n = ax2.len();
+            let mut a2 = a.clone();
+            let mut b2 = b.clone();
+            if let Node::Lines { x, y, xu, yu, .. } = &mut a2 {
+                *xu = units_for(xu, ux, x.len(), n);
+                *yu = units_for(yu, uy, x.len(), n);
+                *x = ax2;
+                *y = ay2;
+            }
+            if let Node::Lines { x, y, xu, yu, .. } = &mut b2 {
+                *xu = units_for(xu, ux, x.len(), n);
+                *yu = units_for(yu, uy, x.len(), n);
+                *x = bx2;
+                *y = by2;
+            }
+            Some((a2, b2))
+        }
+        (
+            Node::Polygon {
+                x: ax,
+                y: ay,
+                xu: axu,
+                yu: ayu,
+                ..
+            },
+            Node::Polygon {
+                x: bx,
+                y: by,
+                xu: bxu,
+                yu: byu,
+                ..
+            },
+        ) if ax.len() != bx.len() => {
+            let (ux, uy) = morph_units(axu, ayu, bxu, byu)?;
+            let (sx, sy) = joint_scale(ax, ay, bx, by)?;
+            let (ax2, ay2, bx2, by2) = morph_outline(ax, ay, bx, by, sx, sy, true)?;
+            let n = ax2.len();
+            let mut a2 = a.clone();
+            let mut b2 = b.clone();
+            if let Node::Polygon { x, y, xu, yu, .. } = &mut a2 {
+                *xu = units_for(xu, ux, x.len(), n);
+                *yu = units_for(yu, uy, x.len(), n);
+                *x = ax2;
+                *y = ay2;
+            }
+            if let Node::Polygon { x, y, xu, yu, .. } = &mut b2 {
+                *xu = units_for(xu, ux, x.len(), n);
+                *yu = units_for(yu, uy, x.len(), n);
+                *x = bx2;
+                *y = by2;
+            }
+            Some((a2, b2))
+        }
+        (
+            Node::Path {
+                x: ax,
+                y: ay,
+                xu: axu,
+                yu: ayu,
+                nper: an,
+                ..
+            },
+            Node::Path {
+                x: bx,
+                y: by,
+                xu: bxu,
+                yu: byu,
+                nper: bn,
+                ..
+            },
+        ) if an.len() == bn.len()
+            && !an.is_empty()
+            && (ax.len() != bx.len() || an != bn)
+            && an.iter().sum::<usize>() == ax.len()
+            && bn.iter().sum::<usize>() == bx.len() =>
+        {
+            let (ux, uy) = morph_units(axu, ayu, bxu, byu)?;
+            let (sx, sy) = joint_scale(ax, ay, bx, by)?;
+            let (mut xa, mut ya, mut xb, mut yb) = (Vec::new(), Vec::new(), Vec::new(), Vec::new());
+            let mut nper = Vec::with_capacity(an.len());
+            let (mut oa, mut ob) = (0usize, 0usize);
+            for (&ka, &kb) in an.iter().zip(bn) {
+                let (p, q, r, t) = morph_outline(
+                    &ax[oa..oa + ka],
+                    &ay[oa..oa + ka],
+                    &bx[ob..ob + kb],
+                    &by[ob..ob + kb],
+                    sx,
+                    sy,
+                    true,
+                )?;
+                nper.push(p.len());
+                xa.extend(p);
+                ya.extend(q);
+                xb.extend(r);
+                yb.extend(t);
+                oa += ka;
+                ob += kb;
+            }
+            let n = xa.len();
+            let mut a2 = a.clone();
+            let mut b2 = b.clone();
+            if let Node::Path {
+                x,
+                y,
+                xu,
+                yu,
+                nper: np,
+                ..
+            } = &mut a2
+            {
+                *xu = units_for(xu, ux, x.len(), n);
+                *yu = units_for(yu, uy, x.len(), n);
+                *x = xa;
+                *y = ya;
+                *np = nper.clone();
+            }
+            if let Node::Path {
+                x,
+                y,
+                xu,
+                yu,
+                nper: np,
+                ..
+            } = &mut b2
+            {
+                *xu = units_for(xu, ux, x.len(), n);
+                *yu = units_for(yu, uy, x.len(), n);
+                *x = xb;
+                *y = yb;
+                *np = nper;
+            }
+            Some((a2, b2))
+        }
+        _ => None,
+    }
+}
+
 /// A `Lines`/`Polygon`/etc. gp lookup fallback: `Node::gp()` returns the node's
 /// own gpar, used when the `b` arm didn't bind it. (Lines binds `gp` on `a` but
 /// the `b` pattern elides it with `..`; pull it back out.)
@@ -571,10 +929,20 @@ fn gather<T: Clone>(v: &[T], idx: &[usize]) -> Vec<T> {
     idx.iter().map(|&i| v[i].clone()).collect()
 }
 
-/// The elements `idx` of a keyed batch (markers, circles or rects) as a batch of
-/// their own, alpha scaled by `fade`: the leaving (`1 - alpha`) or entering
-/// (`alpha`) part of a node.
-fn batch_take(n: &Node, idx: &[usize], fade: f64) -> Node {
+/// `v` restricted to the elements `idx` when it is per-element (`n` long);
+/// left as is when empty or recycled.
+fn gather_per<T: Clone>(v: &[T], idx: &[usize], n: usize) -> Vec<T> {
+    if v.len() == n {
+        gather(v, idx)
+    } else {
+        v.to_vec()
+    }
+}
+
+/// The elements `idx` of a keyed batch (markers, circles, rects, hexagons,
+/// sectors or segments) as a batch of their own, every per-element field
+/// gathered and the shared fields kept. Any other node comes back whole.
+fn batch_select(n: &Node, idx: &[usize]) -> Node {
     match n {
         Node::Markers {
             x,
@@ -596,7 +964,7 @@ fn batch_take(n: &Node, idx: &[usize], fade: f64) -> Node {
             su: gather(su, idx),
             shape: gather(shape, idx),
             sketch: sketch.clone(),
-            gp: fade_gp(gp, fade),
+            gp: gp.clone(),
             keys: gather(keys, idx),
         },
         Node::Circles {
@@ -617,7 +985,7 @@ fn batch_take(n: &Node, idx: &[usize], fade: f64) -> Node {
             yu: gather(yu, idx),
             ru: gather(ru, idx),
             sketch: sketch.clone(),
-            gp: fade_gp(gp, fade),
+            gp: gp.clone(),
             keys: gather(keys, idx),
         },
         Node::Rects {
@@ -642,11 +1010,133 @@ fn batch_take(n: &Node, idx: &[usize], fade: f64) -> Node {
             wu: gather(wu, idx),
             hu: gather(hu, idx),
             sketch: sketch.clone(),
-            gp: fade_gp(gp, fade),
+            gp: gp.clone(),
             keys: gather(keys, idx),
         },
-        _ => fade_node(n, fade),
+        Node::Hexagons {
+            x,
+            y,
+            size,
+            w,
+            h,
+            xu,
+            yu,
+            su,
+            wu,
+            hu,
+            fill,
+            flat,
+            gp,
+            keys,
+        } => {
+            let m = x.len();
+            Node::Hexagons {
+                x: gather(x, idx),
+                y: gather(y, idx),
+                size: gather_per(size, idx, m),
+                w: gather_per(w, idx, m),
+                h: gather_per(h, idx, m),
+                xu: gather_per(xu, idx, m),
+                yu: gather_per(yu, idx, m),
+                su: gather_per(su, idx, m),
+                wu: gather_per(wu, idx, m),
+                hu: gather_per(hu, idx, m),
+                fill: gather_per(fill, idx, m),
+                flat: *flat,
+                gp: gp.clone(),
+                keys: gather_per(keys, idx, m),
+            }
+        }
+        Node::Sectors {
+            x,
+            y,
+            r0,
+            r1,
+            theta0,
+            theta1,
+            xu,
+            yu,
+            r0u,
+            r1u,
+            fill,
+            arrow,
+            sketch,
+            gp,
+            keys,
+        } => {
+            let m = x.len();
+            Node::Sectors {
+                x: gather(x, idx),
+                y: gather(y, idx),
+                r0: gather_per(r0, idx, m),
+                r1: gather_per(r1, idx, m),
+                theta0: gather_per(theta0, idx, m),
+                theta1: gather_per(theta1, idx, m),
+                xu: gather_per(xu, idx, m),
+                yu: gather_per(yu, idx, m),
+                r0u: gather_per(r0u, idx, m),
+                r1u: gather_per(r1u, idx, m),
+                fill: gather_per(fill, idx, m),
+                arrow: arrow.clone(),
+                sketch: sketch.clone(),
+                gp: gp.clone(),
+                keys: gather_per(keys, idx, m),
+            }
+        }
+        Node::Segments {
+            x0,
+            y0,
+            x1,
+            y1,
+            x0u,
+            y0u,
+            x1u,
+            y1u,
+            scap,
+            ecap,
+            scapu,
+            ecapu,
+            off,
+            offu,
+            arrow,
+            sketch,
+            gp,
+            keys,
+            cols,
+            lwds,
+        } => {
+            let m = x0.len();
+            Node::Segments {
+                x0: gather(x0, idx),
+                y0: gather(y0, idx),
+                x1: gather(x1, idx),
+                y1: gather(y1, idx),
+                x0u: gather_per(x0u, idx, m),
+                y0u: gather_per(y0u, idx, m),
+                x1u: gather_per(x1u, idx, m),
+                y1u: gather_per(y1u, idx, m),
+                scap: gather_per(scap, idx, m),
+                ecap: gather_per(ecap, idx, m),
+                scapu: gather_per(scapu, idx, m),
+                ecapu: gather_per(ecapu, idx, m),
+                off: gather_per(off, idx, m),
+                offu: gather_per(offu, idx, m),
+                arrow: arrow.clone(),
+                sketch: sketch.clone(),
+                gp: gp.clone(),
+                keys: gather_per(keys, idx, m),
+                cols: gather_per(cols, idx, m),
+                lwds: gather_per(lwds, idx, m),
+            }
+        }
+        _ => n.clone(),
     }
+}
+
+/// The elements `idx` of a keyed batch as a batch of their own, alpha scaled
+/// by `fade`: the leaving (`1 - alpha`) or entering (`alpha`) part of a node.
+fn batch_take(n: &Node, idx: &[usize], fade: f64) -> Node {
+    fade_node(&batch_select(n, idx), fade)
 }
 
 /// Matched elements of two keyed batches of one variant, tweened: `pairs` are
@@ -655,118 +1145,9 @@ fn batch_take(n: &Node, idx: &[usize], fade: f64) -> Node {
 /// -- so the shared gpar lerps too (the colour crossfades along the move).
 /// Units, shapes and keys come from `a`.
 fn batch_pair(a: &Node, b: &Node, pairs: &[(usize, usize)], fr: &Fracs) -> Node {
-    let t = fr.pos;
     let ia: Vec<usize> = pairs.iter().map(|p| p.0).collect();
-    let pos = |va: &[f64], vb: &[f64]| -> Vec<f64> {
-        pairs.iter().map(|&(i, j)| lerp(va[i], vb[j], t)).collect()
-    };
-    let size = |va: &[f64], vb: &[f64]| -> Vec<f64> {
-        pairs
-            .iter()
-            .map(|&(i, j)| lerp_size(va[i], vb[j], fr.size))
-            .collect()
-    };
-    match (a, b) {
-        (
-            Node::Markers {
-                x: xa,
-                y: ya,
-                size: sa,
-                xu,
-                yu,
-                su,
-                shape,
-                sketch,
-                gp: gpa,
-                keys,
-            },
-            Node::Markers {
-                x: xb,
-                y: yb,
-                size: sb,
-                gp: gpb,
-                ..
-            },
-        ) => Node::Markers {
-            x: pos(xa, xb),
-            y: pos(ya, yb),
-            size: size(sa, sb),
-            xu: gather(xu, &ia),
-            yu: gather(yu, &ia),
-            su: gather(su, &ia),
-            shape: gather(shape, &ia),
-            sketch: sketch.clone(),
-            gp: lerp_gpar(gpa, gpb, fr),
-            keys: gather(keys, &ia),
-        },
-        (
-            Node::Circles {
-                x: xa,
-                y: ya,
-                r: ra,
-                xu,
-                yu,
-                ru,
-                sketch,
-                gp: gpa,
-                keys,
-            },
-            Node::Circles {
-                x: xb,
-                y: yb,
-                r: rb,
-                gp: gpb,
-                ..
-            },
-        ) => Node::Circles {
-            x: pos(xa, xb),
-            y: pos(ya, yb),
-            r: size(ra, rb),
-            xu: gather(xu, &ia),
-            yu: gather(yu, &ia),
-            ru: gather(ru, &ia),
-            sketch: sketch.clone(),
-            gp: lerp_gpar(gpa, gpb, fr),
-            keys: gather(keys, &ia),
-        },
-        (
-            Node::Rects {
-                x: xa,
-                y: ya,
-                w: wa,
-                h: ha,
-                xu,
-                yu,
-                wu,
-                hu,
-                sketch,
-                gp: gpa,
-                keys,
-            },
-            Node::Rects {
-                x: xb,
-                y: yb,
-                w: wb,
-                h: hb,
-                gp: gpb,
-                ..
-            },
-        ) => Node::Rects {
-            x: pos(xa, xb),
-            y: pos(ya, yb),
-            w: pos(wa, wb),
-            h: pos(ha, hb),
-            xu: gather(xu, &ia),
-            yu: gather(yu, &ia),
-            wu: gather(wu, &ia),
-            hu: gather(hu, &ia),
-            sketch: sketch.clone(),
-            gp: lerp_gpar(gpa, gpb, fr),
-            keys: gather(keys, &ia),
-        },
-        // `plan_pair` only pairs batches of one variant.
-        _ => snap(a, b, t).clone(),
-    }
+    let ib: Vec<usize> = pairs.iter().map(|p| p.1).collect();
+    lerp_node(&batch_select(a, &ia), &batch_select(b, &ib), fr)
 }
 
 // --- identity: pairing two keyframes ----------------------------------------
@@ -778,14 +1159,17 @@ fn batch_pair(a: &Node, b: &Node, pairs: &[(usize, usize)], fr: &Fracs) -> Node 
 // (vellumplot prefixes the layer) and stable across states (a `data_id`, or a
 // group-plus-occurrence default).
 //
-// * Keyed batch elements (markers, circles, rects) match across ALL nodes. The
+// * Keyed batch elements (markers, circles, rects, hexagons, sectors,
+//   segments) match across ALL nodes. The
 //   matched elements of one node pair tween as one batch whose gpar lerps
 //   between the two nodes' (a point changing colour group slides and recolours);
 //   an element with no partner fades out (leaving) or in (entering) on the alpha
 //   fraction.
 // * Keyed single-element nodes (lines, polygons, paths, rounded rects, labels)
 //   match by their key and tween through `lerp_node` (a vertex-count change
-//   still switches whole at the midpoint); unmatched ones fade.
+//   morphs); unmatched ones fade.
+// * Paint order follows `a` up to the positional midpoint and `b` from there on
+//   (`Plan::order_b`).
 // * Unkeyed nodes (axes, grid, legend, unkeyed marks) pair in order within their
 //   class -- same viewport, variant and role. A class with the same number of
 //   nodes in both keyframes pairs one to one, as before; a class whose count
@@ -797,7 +1181,8 @@ fn batch_pair(a: &Node, b: &Node, pairs: &[(usize, usize)], fr: &Fracs) -> Node 
 /// How a node is keyed, for identity matching.
 enum Keys<'a> {
     None,
-    /// A batch with per-element keys (markers, circles, rects).
+    /// A batch with per-element keys (markers, circles, rects, hexagons,
+    /// sectors, segments).
     Batch(&'a [String]),
     /// A single-element node with a key.
     One(&'a str),
@@ -805,7 +1190,12 @@ enum Keys<'a> {
 
 fn node_keys(n: &Node) -> Keys<'_> {
     match n {
-        Node::Markers { keys, .. } | Node::Circles { keys, .. } | Node::Rects { keys, .. }
+        Node::Markers { keys, .. }
+        | Node::Circles { keys, .. }
+        | Node::Rects { keys, .. }
+        | Node::Hexagons { keys, .. }
+        | Node::Sectors { keys, .. }
+        | Node::Segments { keys, .. }
             if keys.iter().any(|k| !k.is_empty()) =>
         {
             Keys::Batch(keys)
@@ -883,9 +1273,25 @@ impl Op {
     }
 }
 
+impl Op {
+    /// The node of `b` this op draws into, if any.
+    fn b_node(&self) -> Option<usize> {
+        match self {
+            Op::Pair(_, j) | Op::Batch(_, j, _) | Op::OnlyB(j) | Op::FadeB(j) | Op::Enter(j, _) => {
+                Some(*j)
+            }
+            Op::OnlyA(_) | Op::FadeA(_) | Op::Exit(_, _) => None,
+        }
+    }
+}
+
 /// How one keyframe pair tweens: the frame recipe plus what it reports.
 pub(crate) struct Plan {
+    /// In `a`'s paint order.
     ops: Vec<Op>,
+    /// The same ops in `b`'s paint order, used from the positional midpoint on
+    /// (VR-35); `None` when the two orders agree.
+    order_b: Option<Vec<usize>>,
     /// Nodes (or node pairs) that switch whole at the midpoint.
     snapped: usize,
     /// Keyed elements with no partner in the next / previous keyframe.
@@ -915,10 +1321,11 @@ pub(crate) fn plan_pair(a: &Scene, b: &Scene) -> Option<Plan> {
             .nodes
             .iter()
             .zip(&b.nodes)
-            .filter(|((_, x), (_, y))| !same_shape(x, y))
+            .filter(|((_, x), (_, y))| !tweenable(x, y))
             .count();
         return Some(Plan {
             ops,
+            order_b: None,
             snapped,
             exited: 0,
             entered: 0,
@@ -983,7 +1390,7 @@ pub(crate) fn plan_pair(a: &Scene, b: &Scene) -> Option<Plan> {
         match node_keys(na) {
             Keys::None => match a_partner[i] {
                 Some(j) => {
-                    if !same_shape(na, &b.nodes[j].1) {
+                    if !tweenable(na, &b.nodes[j].1) {
                         snapped += 1;
                     }
                     b_at[j] = Some(ops.len());
@@ -1001,7 +1408,7 @@ pub(crate) fn plan_pair(a: &Scene, b: &Scene) -> Option<Plan> {
                         && disc(na) == disc(&b.nodes[j].1) =>
                 {
                     used[j][0] = true;
-                    if !same_shape(na, &b.nodes[j].1) {
+                    if !tweenable(na, &b.nodes[j].1) {
                         snapped += 1;
                     }
                     b_at[j] = Some(ops.len());
@@ -1096,12 +1503,39 @@ pub(crate) fn plan_pair(a: &Scene, b: &Scene) -> Option<Plan> {
         merged.extend(late.map(|(_, op)| op));
         ops = merged;
     }
+    let order_b = paint_order_b(&ops);
     Some(Plan {
         ops,
+        order_b,
         snapped,
         exited,
         entered,
     })
+}
+
+/// The ops (given in `a`'s paint order) in `b`'s paint order: by the `b` node
+/// each draws into, ties kept in `a`'s order; an op only `a` has (a leaving
+/// mark) stays right after the op it follows in `a`. `None` when that is the
+/// order the ops are already in.
+fn paint_order_b(ops: &[Op]) -> Option<Vec<usize>> {
+    let mut prev: i64 = -1;
+    let mut rank: Vec<(i64, u8, usize)> = Vec::with_capacity(ops.len());
+    for (k, op) in ops.iter().enumerate() {
+        match op.b_node() {
+            Some(j) => {
+                prev = j as i64;
+                rank.push((prev, 0, k));
+            }
+            None => rank.push((prev, 1, k)),
+        }
+    }
+    let mut order: Vec<usize> = (0..ops.len()).collect();
+    order.sort_by_key(|&k| rank[k]);
+    if order.iter().enumerate().all(|(i, &k)| i == k) {
+        None
+    } else {
+        Some(order)
+    }
 }
 
 /// Build one frame from a plan.
@@ -1113,7 +1547,17 @@ fn apply_plan(plan: &Plan, a: &Scene, b: &Scene, fr: &Fracs) -> Scene {
     let mut nodes = Vec::with_capacity(plan.ops.len());
     let mut picks = Vec::new();
     let mut meta = Vec::new();
-    for op in &plan.ops {
+    // Paint order: `a`'s until the positional midpoint, then `b`'s, so marks
+    // that overlap swap their stacking halfway through the move -- with the
+    // other discrete switches -- rather than popping at the next keyframe
+    // (VR-35). A batch's elements follow the same rule.
+    let late = t >= 0.5;
+    let order: Vec<usize> = match (&plan.order_b, late) {
+        (Some(o), true) => o.clone(),
+        _ => (0..plan.ops.len()).collect(),
+    };
+    for &k in &order {
+        let op = &plan.ops[k];
         let node = match op {
             Op::Pair(i, j) => lerp_node(&a.nodes[*i].1, &b.nodes[*j].1, fr),
             Op::OnlyA(i) if t < 0.5 => a.nodes[*i].1.clone(),
@@ -1121,6 +1565,11 @@ fn apply_plan(plan: &Plan, a: &Scene, b: &Scene, fr: &Fracs) -> Scene {
             Op::OnlyA(_) | Op::OnlyB(_) => continue,
             Op::FadeA(i) => fade_node(&a.nodes[*i].1, 1.0 - fr.alpha),
             Op::FadeB(j) => fade_node(&b.nodes[*j].1, fr.alpha),
+            Op::Batch(i, j, pairs) if late && !pairs.windows(2).all(|w| w[0].1 < w[1].1) => {
+                let mut p = pairs.clone();
+                p.sort_by_key(|q| q.1);
+                batch_pair(&a.nodes[*i].1, &b.nodes[*j].1, &p, fr)
+            }
             Op::Batch(i, j, pairs) => batch_pair(&a.nodes[*i].1, &b.nodes[*j].1, pairs, fr),
             Op::Exit(i, els) => batch_take(&a.nodes[*i].1, els, 1.0 - fr.alpha),
             Op::Enter(j, els) => batch_take(&b.nodes[*j].1, els, fr.alpha),
@@ -2132,28 +2581,38 @@ fn tween_pairing(keyframes: List) -> List {
         entered = Integers::from_values(entered)
     )
 }
-/// The tweened scene of one frame between keyframes `a` and `b` at fraction
-/// `frac` (one curve for every class), for inspecting a mid-transition frame
-/// (`$element_table()`, `$pixel()`) without rendering a whole animation.
+/// The tweened scene of one frame between keyframes `a` and `b`, at fraction
+/// `frac` (position) and `frac_col` / `frac_size` / `frac_alpha` (the other
+/// property classes), with the keyed text of `text_variant` (a compiled scene,
+/// or `NULL`) swapped in -- exactly the frame `render_animation` would draw for
+/// that schedule entry. For rendering one frame on its own (`vl_render_frame()`)
+/// and for inspecting a mid-transition frame (`$element_table()`, `$pixel()`).
 ///
 /// @keywords internal
 #[extendr]
-fn tween_frame(a: Robj, b: Robj, frac: f64) -> Scene {
+fn tween_frame(a: Robj, b: Robj, frac: f64, frac_col: f64, frac_size: f64, frac_alpha: f64, text_variant: Robj) -> Scene {
     let get = |r: Robj| {
-        <ExternalPtr<Scene>>::try_from(r).unwrap_or_else(|_| {
-            throw_r_error("tween_frame(): keyframes must be compiled vellum scenes")
-        })
+        <ExternalPtr<Scene>>::try_from(r)
+            .unwrap_or_else(|_| throw_r_error("tween_frame(): keyframes must be compiled vellum scenes"))
     };
     let (a, b) = (get(a), get(b));
     let (a, b): (&Scene, &Scene) = (&a, &b);
     let plan = plan_pair(a, b);
     let fr = Fracs {
         pos: frac,
-        col: frac,
-        size: frac,
-        alpha: frac,
+        col: frac_col,
+        size: frac_size,
+        alpha: frac_alpha,
     };
-    tween_scene(a, b, plan.as_ref(), &fr)
+    let mut sc = tween_scene(a, b, plan.as_ref(), &fr);
+    if !text_variant.is_null() {
+        let v = get(text_variant);
+        let v: &Scene = &v;
+        if let Some(t) = text_variants_of(std::slice::from_ref(v)).first() {
+            patch_text(&mut sc.nodes, t);
+        }
+    }
+    sc
 }
 extendr_module! {
     mod tween;
@@ -2266,6 +2725,40 @@ mod tests {
             _ => unreachable!(),
         }
         assert!(frame_variant(&[v], &[0, 1], 0).is_none());
+    }
+
+    #[test]
+    fn morph_outline_keeps_every_vertex_of_both_shapes() {
+        let (ax, ay) = (vec![0.0, 1.0, 2.0], vec![0.0, 1.0, 0.0]);
+        let (bx, by) = (vec![0.0, 0.5, 1.0, 1.5, 2.0], vec![0.0, 1.0, 0.0, 1.0, 0.0]);
+        let (ax2, ay2, bx2, by2) = morph_outline(&ax, &ay, &bx, &by, 2.0, 1.0, false).unwrap();
+        assert_eq!(ax2.len(), bx2.len());
+        let has = |xs: &[f64], ys: &[f64], x: f64, y: f64| {
+            xs.iter()
+                .zip(ys)
+                .any(|(p, q)| (p - x).abs() < 1e-9 && (q - y).abs() < 1e-9)
+        };
+        for i in 0..3 {
+            assert!(has(&ax2, &ay2, ax[i], ay[i]));
+        }
+        for i in 0..5 {
+            assert!(has(&bx2, &by2, bx[i], by[i]));
+        }
+        // Ends meet ends.
+        assert_eq!((ax2[0], bx2[0]), (0.0, 0.0));
+        assert_eq!((*ax2.last().unwrap(), *bx2.last().unwrap()), (2.0, 2.0));
+        // A degenerate outline cannot be morphed.
+        assert!(morph_outline(&[1.0, 1.0], &[1.0, 1.0], &bx, &by, 1.0, 1.0, false).is_none());
+    }
+
+    #[test]
+    fn align_ring_matches_direction_and_start() {
+        // a anticlockwise from (0,0); b clockwise, starting elsewhere.
+        let (ax, ay) = (vec![0.0, 1.0, 1.0, 0.0], vec![0.0, 0.0, 1.0, 1.0]);
+        let (bx, by) = (vec![1.0, 1.0, 0.0, 0.0, 0.5], vec![1.0, 0.0, 0.0, 1.0, 1.0]);
+        let (x, y) = align_ring(&ax, &ay, &bx, &by, 1.0, 1.0);
+        assert_eq!((x[0], y[0]), (0.0, 0.0));
+        assert!(ring_area2(&x, &y) > 0.0);
     }
 
     #[test]

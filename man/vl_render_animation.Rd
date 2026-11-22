@@ -147,20 +147,32 @@ layer (vellumplot prefixes the layer) and stable across states.
 
 What has no partner enters or leaves:
 \itemize{
-\item keyed points, circles and rectangles (bars, tiles), and keyed lines,
-polygons, paths, rounded rectangles and text labels \strong{fade} in or out on
-the alpha schedule;
+\item keyed points, circles, rectangles (bars, tiles), hexagons, sectors and
+segments, and keyed lines, polygons, paths, rounded rectangles and text
+labels \strong{fade} in or out on the alpha schedule;
 \item unkeyed nodes (axes, gridlines, legends, unkeyed marks) pair in order with
 the nodes of the same viewport, kind and role in the other keyframe. When
 that class has a different number of nodes in the two keyframes it cannot
 be matched, and its nodes \strong{switch} whole at the midpoint (\code{frac >= 0.5}).
 }
 
-A matched line, polygon or path whose vertex count changes, or a matched pair
-of different kinds, also switches whole at the midpoint, and a text label takes
-its string and layout from the nearer keyframe while its position tweens.
-Keyed hexagons, sectors and segments pair as unkeyed nodes do. Two keyframes
-that do not share a viewport tree cannot be matched at all: the frames show the
+A matched line, polygon or path whose vertex count changes \strong{morphs}: both
+outlines are put on one common set of vertices by arc length (every vertex of
+either, at its fraction of the way along its own outline), and a ring is
+first turned to run the same way round and start near the other's start. Each
+keeps all of its own vertices, so the morph starts and ends on the keyframes
+exactly. A pair in mixed or different units, with a stroke-width profile, a
+broken (non-finite) line, or paths with different numbers of sub-paths,
+switches whole at the midpoint instead, as does a matched pair of different
+kinds; a text label takes its string and layout from the nearer keyframe while
+its position tweens.
+
+Marks that overlap are drawn in the left keyframe's order up to the midpoint
+and in the right keyframe's from there on, so a mark that moves in front of
+another swaps over halfway through the move, along with the other discrete
+switches, rather than popping at the next keyframe.
+
+Two keyframes that do not share a viewport tree cannot be matched at all: the frames show the
 left keyframe up to the midpoint and the right one from there on (a cut, but
 every keyframe is shown). \code{\link[=vl_tween_pairing]{vl_tween_pairing()}} reports all of this before
 rendering.

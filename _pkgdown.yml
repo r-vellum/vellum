@@ -123,6 +123,7 @@ reference:
   - scene_png
   - as_vellum_scene
   - vl_render_animation
+  - vl_render_frame
   - vl_tween_pairing
 
 - title: Graphical objects (grobs)

@@ -114,19 +114,31 @@
 #'
 #' What has no partner enters or leaves:
 #'
-#' * keyed points, circles and rectangles (bars, tiles), and keyed lines,
-#'   polygons, paths, rounded rectangles and text labels **fade** in or out on
-#'   the alpha schedule;
+#' * keyed points, circles, rectangles (bars, tiles), hexagons, sectors and
+#'   segments, and keyed lines, polygons, paths, rounded rectangles and text
+#'   labels **fade** in or out on the alpha schedule;
 #' * unkeyed nodes (axes, gridlines, legends, unkeyed marks) pair in order with
 #'   the nodes of the same viewport, kind and role in the other keyframe. When
 #'   that class has a different number of nodes in the two keyframes it cannot
 #'   be matched, and its nodes **switch** whole at the midpoint (`frac >= 0.5`).
 #'
-#' A matched line, polygon or path whose vertex count changes, or a matched pair
-#' of different kinds, also switches whole at the midpoint, and a text label takes
-#' its string and layout from the nearer keyframe while its position tweens.
-#' Keyed hexagons, sectors and segments pair as unkeyed nodes do. Two keyframes
-#' that do not share a viewport tree cannot be matched at all: the frames show the
+#' A matched line, polygon or path whose vertex count changes **morphs**: both
+#' outlines are put on one common set of vertices by arc length (every vertex of
+#' either, at its fraction of the way along its own outline), and a ring is
+#' first turned to run the same way round and start near the other's start. Each
+#' keeps all of its own vertices, so the morph starts and ends on the keyframes
+#' exactly. A pair in mixed or different units, with a stroke-width profile, a
+#' broken (non-finite) line, or paths with different numbers of sub-paths,
+#' switches whole at the midpoint instead, as does a matched pair of different
+#' kinds; a text label takes its string and layout from the nearer keyframe while
+#' its position tweens.
+#'
+#' Marks that overlap are drawn in the left keyframe's order up to the midpoint
+#' and in the right keyframe's from there on, so a mark that moves in front of
+#' another swaps over halfway through the move, along with the other discrete
+#' switches, rather than popping at the next keyframe.
+#'
+#' Two keyframes that do not share a viewport tree cannot be matched at all: the frames show the
 #' left keyframe up to the midpoint and the right one from there on (a cut, but
 #' every keyframe is shown). [vl_tween_pairing()] reports all of this before
 #' rendering.
@@ -296,8 +308,9 @@ vl_render_animation <- function(
 #'   indices), `paired` (`FALSE` when the two keyframes do not share a viewport
 #'   tree, so the frames cut at the midpoint), `nodes_from`, `nodes_to` (the
 #'   node counts), `snapped` (the nodes that switch whole at the midpoint: a
-#'   matched line or path whose vertex count changes, a matched pair of
-#'   different kinds, or an unkeyed node with no counterpart), and `exited`,
+#'   matched line or path whose vertex count changes and cannot be morphed, a
+#'   matched pair of different kinds, or an unkeyed node with no counterpart),
+#'   and `exited`,
 #'   `entered` (keyed elements with no partner, which fade out or in). The last
 #'   three are `NA` for a pair that does not pair.
 #' @seealso [vl_render_animation()]
@@ -403,9 +416,103 @@ vl_tween_pairing <- function(keyframes) {
 # scene to query (`$element_table()`, `$pixel()`): a mid-transition frame
 # without rendering a whole animation (tests, debugging).
 .tween_frame <- function(a, b, frac) {
+  frac <- as.double(frac)
   tween_frame(
     .scene_to_backend(as_vellum_scene(a)),
     .scene_to_backend(as_vellum_scene(b)),
-    as.double(frac)
+    frac,
+    frac,
+    frac,
+    frac,
+    NULL
   )
+}
+
+#' Render one frame of a keyframe animation
+#'
+#' `vl_render_frame()` draws the single frame that [vl_render_animation()]
+#' would draw for one schedule entry -- keyframe pair `seg` at fraction `frac`
+#' -- and writes it as a still image: a poster for an animation, a thumbnail,
+#' or the frame to put in print. The marks are matched and tweened exactly as
+#' in the animation (see *Matching marks by identity* in
+#' [vl_render_animation()]), and a per-frame text variant is swapped in the
+#' same way.
+#'
+#' @inheritParams vl_render_animation
+#' @param seg The 1-based index of the left keyframe of the pair (a single
+#'   integer in `1:(length(keyframes) - 1)`).
+#' @param frac The positional fraction between keyframe `seg` and `seg + 1`
+#'   (a single number; `0` is keyframe `seg`, `1` is keyframe `seg + 1`).
+#' @param frac_col,frac_size,frac_alpha The fractions of the other property
+#'   classes; default `frac`.
+#' @param path Output file path; the format is taken from the extension
+#'   (`.png`, `.svg` or `.pdf`), as for [render()].
+#' @param text_variant A scene whose keyed text replaces the frame's text with
+#'   the same keys (one entry of `text_variants` in [vl_render_animation()]),
+#'   or `NULL`.
+#' @inheritParams vl_scene
+#' @return `path`, invisibly.
+#' @seealso [vl_render_animation()], [render()]
+#' @examples
+#' a <- vl_scene(2, 2) |> draw(circle_grob(r = 0.1, gp = vl_gpar(fill = "tomato")))
+#' b <- vl_scene(2, 2) |> draw(circle_grob(r = 0.4, gp = vl_gpar(fill = "tomato")))
+#' vl_render_frame(list(a, b), 1, 0.5, tempfile(fileext = ".png"))
+#' @export
+vl_render_frame <- function(
+  keyframes,
+  seg,
+  frac,
+  path,
+  frac_col = frac,
+  frac_size = frac,
+  frac_alpha = frac,
+  text_variant = NULL,
+  text = c("native", "outline"),
+  scale = 1
+) {
+  text <- match.arg(text)
+  if (!is.list(keyframes) || length(keyframes) < 2L) {
+    cli::cli_abort("{.arg keyframes} must be a list of at least 2 scenes.")
+  }
+  one <- function(x, arg, cast) {
+    x <- vctrs::vec_cast(x, cast, x_arg = arg)
+    if (length(x) != 1L || is.na(x)) {
+      cli::cli_abort("{.arg {arg}} must be a single number.")
+    }
+    x
+  }
+  seg <- one(seg, "seg", integer())
+  if (seg < 1L || seg >= length(keyframes)) {
+    cli::cli_abort(
+      "{.arg seg} must be in 1:{length(keyframes) - 1L} (a 1-based left-keyframe index)."
+    )
+  }
+  frac <- one(frac, "frac", double())
+  frac_col <- one(frac_col, "frac_col", double())
+  frac_size <- one(frac_size, "frac_size", double())
+  frac_alpha <- one(frac_alpha, "frac_alpha", double())
+  ext <- tolower(tools::file_ext(path))
+  if (!ext %in% c("png", "svg", "pdf")) {
+    cli::cli_abort(
+      "Unsupported output format {.val {ext}}; use .png, .svg, or .pdf."
+    )
+  }
+  backend <- function(s) .scene_to_backend(.apply_scale(as_vellum_scene(s), scale))
+  s <- tween_frame(
+    backend(keyframes[[seg]]),
+    backend(keyframes[[seg + 1L]]),
+    frac,
+    frac_col,
+    frac_size,
+    frac_alpha,
+    if (is.null(text_variant)) NULL else backend(text_variant)
+  )
+  warns <- switch(
+    ext,
+    png = s$render_png(path),
+    svg = s$render_svg(path, identical(text, "outline")),
+    pdf = s$render_pdf(path)
+  )
+  .emit_degrade_warnings(warns)
+  invisible(path)
 }
