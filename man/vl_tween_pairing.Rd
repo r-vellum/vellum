@@ -11,18 +11,20 @@ vl_tween_pairing(keyframes)
 }
 \value{
 A data frame with one row per adjacent pair: \code{from}, \code{to} (keyframe
-indices), \code{paired} (\code{TRUE} when the pair tweens node by node), \code{nodes_from},
-\code{nodes_to} (the node counts), and \code{snapped} -- for a paired segment, the
-number of nodes that still switch whole at the midpoint because their
-variant, vertex count or (unkeyed) element count differs; \code{NA} when the pair
-does not pair at all.
+indices), \code{paired} (\code{FALSE} when the two keyframes do not share a viewport
+tree, so the frames cut at the midpoint), \code{nodes_from}, \code{nodes_to} (the
+node counts), \code{snapped} (the nodes that switch whole at the midpoint: a
+matched line or path whose vertex count changes, a matched pair of
+different kinds, or an unkeyed node with no counterpart), and \code{exited},
+\code{entered} (keyed elements with no partner, which fade out or in). The last
+three are \code{NA} for a pair that does not pair.
 }
 \description{
-\code{\link[=vl_render_animation]{vl_render_animation()}} tweens two keyframes node by node only when they
-draw the same number of nodes over the same viewports (see \emph{Keyframes that do
-not pair} there). \code{vl_tween_pairing()} reports, before anything is rendered,
-which adjacent pairs will tween and which will cut at the midpoint, so a
-grammar layer can warn its user.
+\code{\link[=vl_render_animation]{vl_render_animation()}} matches marks across keyframes by their data keys
+(see \emph{Matching marks by identity} there). \code{vl_tween_pairing()} reports, before
+anything is rendered, how each adjacent pair will tween -- what still switches
+at the midpoint and how many marks enter or leave -- so a grammar layer can
+warn its user.
 }
 \examples{
 a <- vl_scene(2, 2) |> draw(circle_grob(r = 0.2))
