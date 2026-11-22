@@ -556,42 +556,14 @@ fn fade_gp(gp: &PartialGpar, factor: f64) -> PartialGpar {
     g
 }
 
-/// A per-element join between two keyed batches: `matched` are `(a_index,
-/// b_index)` pairs present in both (in A's order), `a_only` exit, `b_only` enter.
-struct KeyMatch {
-    matched: Vec<(usize, usize)>,
-    a_only: Vec<usize>,
-    b_only: Vec<usize>,
-}
-
-/// Join two element-key vectors by value. Returns `None` (caller falls back to a
-/// plain element-wise tween) when either side is unkeyed — so the stable-element
-/// path is unchanged — or when the two are already identical (no enter/exit, no
-/// reorder), so the common case skips the map entirely. A blank key never matches.
-fn match_keys(ka: &[String], kb: &[String]) -> Option<KeyMatch> {
-    if ka.is_empty() || kb.is_empty() || ka == kb {
-        return None;
+/// A whole node with its alpha scaled by `factor`: an entering or leaving
+/// single-element node (a keyed line, polygon, path, rounded rect or label).
+fn fade_node(n: &Node, factor: f64) -> Node {
+    let mut n = n.clone();
+    if let Some(gp) = n.gp_mut() {
+        *gp = fade_gp(gp, factor);
     }
-    let mut bmap: HashMap<&str, usize> = HashMap::with_capacity(kb.len());
-    for (j, k) in kb.iter().enumerate() {
-        if !k.is_empty() {
-            bmap.entry(k.as_str()).or_insert(j);
-        }
-    }
-    let mut matched = Vec::new();
-    let mut a_only = Vec::new();
-    let mut used = vec![false; kb.len()];
-    for (i, k) in ka.iter().enumerate() {
-        match (!k.is_empty()).then(|| bmap.get(k.as_str())).flatten() {
-            Some(&j) if !used[j] => {
-                matched.push((i, j));
-                used[j] = true;
-            }
-            _ => a_only.push(i),
-        }
-    }
-    let b_only = (0..kb.len()).filter(|&j| !used[j]).collect();
-    Some(KeyMatch { matched, a_only, b_only })
+    n
 }
 
 #[inline]
@@ -599,189 +571,572 @@ fn gather<T: Clone>(v: &[T], idx: &[usize]) -> Vec<T> {
     idx.iter().map(|&i| v[i].clone()).collect()
 }
 
-/// Tween one node pair, splitting a keyed batch into matched (tweened),
-/// exiting (faded out), and entering (faded in) sub-batches. Non-batched or
-/// unkeyed nodes fall through to the single-node tween.
-fn tween_node_multi(a: &Node, b: &Node, fr: &Fracs) -> Vec<Node> {
-    match (a, b) {
-        (Node::Markers { .. }, Node::Markers { .. }) => ee_markers(a, b, fr),
-        (Node::Circles { .. }, Node::Circles { .. }) => ee_circles(a, b, fr),
-        (Node::Rects { .. }, Node::Rects { .. }) => ee_rects(a, b, fr),
-        _ => vec![lerp_node(a, b, fr)],
+/// The elements `idx` of a keyed batch (markers, circles or rects) as a batch of
+/// their own, alpha scaled by `fade`: the leaving (`1 - alpha`) or entering
+/// (`alpha`) part of a node.
+fn batch_take(n: &Node, idx: &[usize], fade: f64) -> Node {
+    match n {
+        Node::Markers {
+            x,
+            y,
+            size,
+            xu,
+            yu,
+            su,
+            shape,
+            sketch,
+            gp,
+            keys,
+        } => Node::Markers {
+            x: gather(x, idx),
+            y: gather(y, idx),
+            size: gather(size, idx),
+            xu: gather(xu, idx),
+            yu: gather(yu, idx),
+            su: gather(su, idx),
+            shape: gather(shape, idx),
+            sketch: sketch.clone(),
+            gp: fade_gp(gp, fade),
+            keys: gather(keys, idx),
+        },
+        Node::Circles {
+            x,
+            y,
+            r,
+            xu,
+            yu,
+            ru,
+            sketch,
+            gp,
+            keys,
+        } => Node::Circles {
+            x: gather(x, idx),
+            y: gather(y, idx),
+            r: gather(r, idx),
+            xu: gather(xu, idx),
+            yu: gather(yu, idx),
+            ru: gather(ru, idx),
+            sketch: sketch.clone(),
+            gp: fade_gp(gp, fade),
+            keys: gather(keys, idx),
+        },
+        Node::Rects {
+            x,
+            y,
+            w,
+            h,
+            xu,
+            yu,
+            wu,
+            hu,
+            sketch,
+            gp,
+            keys,
+        } => Node::Rects {
+            x: gather(x, idx),
+            y: gather(y, idx),
+            w: gather(w, idx),
+            h: gather(h, idx),
+            xu: gather(xu, idx),
+            yu: gather(yu, idx),
+            wu: gather(wu, idx),
+            hu: gather(hu, idx),
+            sketch: sketch.clone(),
+            gp: fade_gp(gp, fade),
+            keys: gather(keys, idx),
+        },
+        _ => fade_node(n, fade),
     }
 }
 
-fn ee_markers(a: &Node, b: &Node, fr: &Fracs) -> Vec<Node> {
+/// Matched elements of two keyed batches of one variant, tweened: `pairs` are
+/// `(element of a, element of b)`. The two batches may be different nodes -- a
+/// point whose colour group changes moves from one colour's batch to another's
+/// -- so the shared gpar lerps too (the colour crossfades along the move).
+/// Units, shapes and keys come from `a`.
+fn batch_pair(a: &Node, b: &Node, pairs: &[(usize, usize)], fr: &Fracs) -> Node {
     let t = fr.pos;
-    let (
-        Node::Markers { x: xa, y: ya, size: sa, xu, yu, su, shape: sha, sketch, keys: ka, gp: gpa },
-        Node::Markers { x: xb, y: yb, size: sb, xu: xub, yu: yub, su: sub, shape: shb, keys: kb, gp: gpb, .. },
-    ) = (a, b)
-    else {
-        return vec![lerp_node(a, b, fr)];
+    let ia: Vec<usize> = pairs.iter().map(|p| p.0).collect();
+    let pos = |va: &[f64], vb: &[f64]| -> Vec<f64> {
+        pairs.iter().map(|&(i, j)| lerp(va[i], vb[j], t)).collect()
     };
-    let Some(m) = match_keys(ka, kb) else { return vec![lerp_node(a, b, fr)] };
-    let mut out = Vec::new();
-    if !m.matched.is_empty() {
-        let ia: Vec<usize> = m.matched.iter().map(|p| p.0).collect();
-        out.push(Node::Markers {
-            x: m.matched.iter().map(|(i, j)| lerp(xa[*i], xb[*j], t)).collect(),
-            y: m.matched.iter().map(|(i, j)| lerp(ya[*i], yb[*j], t)).collect(),
-            size: m.matched.iter().map(|(i, j)| lerp_size(sa[*i], sb[*j], fr.size)).collect(),
+    let size = |va: &[f64], vb: &[f64]| -> Vec<f64> {
+        pairs
+            .iter()
+            .map(|&(i, j)| lerp_size(va[i], vb[j], fr.size))
+            .collect()
+    };
+    match (a, b) {
+        (
+            Node::Markers {
+                x: xa,
+                y: ya,
+                size: sa,
+                xu,
+                yu,
+                su,
+                shape,
+                sketch,
+                gp: gpa,
+                keys,
+            },
+            Node::Markers {
+                x: xb,
+                y: yb,
+                size: sb,
+                gp: gpb,
+                ..
+            },
+        ) => Node::Markers {
+            x: pos(xa, xb),
+            y: pos(ya, yb),
+            size: size(sa, sb),
             xu: gather(xu, &ia),
             yu: gather(yu, &ia),
             su: gather(su, &ia),
-            shape: gather(sha, &ia),
+            shape: gather(shape, &ia),
             sketch: sketch.clone(),
             gp: lerp_gpar(gpa, gpb, fr),
-            keys: gather(ka, &ia),
-        });
-    }
-    if !m.a_only.is_empty() {
-        out.push(Node::Markers {
-            x: gather(xa, &m.a_only),
-            y: gather(ya, &m.a_only),
-            size: gather(sa, &m.a_only),
-            xu: gather(xu, &m.a_only),
-            yu: gather(yu, &m.a_only),
-            su: gather(su, &m.a_only),
-            shape: gather(sha, &m.a_only),
-            sketch: sketch.clone(),
-            gp: fade_gp(gpa, 1.0 - fr.alpha),
-            keys: gather(ka, &m.a_only),
-        });
-    }
-    if !m.b_only.is_empty() {
-        out.push(Node::Markers {
-            x: gather(xb, &m.b_only),
-            y: gather(yb, &m.b_only),
-            size: gather(sb, &m.b_only),
-            xu: gather(xub, &m.b_only),
-            yu: gather(yub, &m.b_only),
-            su: gather(sub, &m.b_only),
-            shape: gather(shb, &m.b_only),
-            sketch: sketch.clone(),
-            gp: fade_gp(gpb, fr.alpha),
-            keys: gather(kb, &m.b_only),
-        });
-    }
-    out
-}
-
-fn ee_circles(a: &Node, b: &Node, fr: &Fracs) -> Vec<Node> {
-    let t = fr.pos;
-    let (
-        Node::Circles { x: xa, y: ya, r: ra, xu, yu, ru, sketch, keys: ka, gp: gpa },
-        Node::Circles { x: xb, y: yb, r: rb, xu: xub, yu: yub, ru: rub, keys: kb, gp: gpb, .. },
-    ) = (a, b)
-    else {
-        return vec![lerp_node(a, b, fr)];
-    };
-    let Some(m) = match_keys(ka, kb) else { return vec![lerp_node(a, b, fr)] };
-    let mut out = Vec::new();
-    if !m.matched.is_empty() {
-        let ia: Vec<usize> = m.matched.iter().map(|p| p.0).collect();
-        out.push(Node::Circles {
-            x: m.matched.iter().map(|(i, j)| lerp(xa[*i], xb[*j], t)).collect(),
-            y: m.matched.iter().map(|(i, j)| lerp(ya[*i], yb[*j], t)).collect(),
-            r: m.matched.iter().map(|(i, j)| lerp_size(ra[*i], rb[*j], fr.size)).collect(),
+            keys: gather(keys, &ia),
+        },
+        (
+            Node::Circles {
+                x: xa,
+                y: ya,
+                r: ra,
+                xu,
+                yu,
+                ru,
+                sketch,
+                gp: gpa,
+                keys,
+            },
+            Node::Circles {
+                x: xb,
+                y: yb,
+                r: rb,
+                gp: gpb,
+                ..
+            },
+        ) => Node::Circles {
+            x: pos(xa, xb),
+            y: pos(ya, yb),
+            r: size(ra, rb),
             xu: gather(xu, &ia),
             yu: gather(yu, &ia),
             ru: gather(ru, &ia),
             sketch: sketch.clone(),
             gp: lerp_gpar(gpa, gpb, fr),
-            keys: gather(ka, &ia),
-        });
-    }
-    if !m.a_only.is_empty() {
-        out.push(Node::Circles {
-            x: gather(xa, &m.a_only),
-            y: gather(ya, &m.a_only),
-            r: gather(ra, &m.a_only),
-            xu: gather(xu, &m.a_only),
-            yu: gather(yu, &m.a_only),
-            ru: gather(ru, &m.a_only),
-            sketch: sketch.clone(),
-            gp: fade_gp(gpa, 1.0 - fr.alpha),
-            keys: gather(ka, &m.a_only),
-        });
-    }
-    if !m.b_only.is_empty() {
-        out.push(Node::Circles {
-            x: gather(xb, &m.b_only),
-            y: gather(yb, &m.b_only),
-            r: gather(rb, &m.b_only),
-            xu: gather(xub, &m.b_only),
-            yu: gather(yub, &m.b_only),
-            ru: gather(rub, &m.b_only),
-            sketch: sketch.clone(),
-            gp: fade_gp(gpb, fr.alpha),
-            keys: gather(kb, &m.b_only),
-        });
-    }
-    out
-}
-
-fn ee_rects(a: &Node, b: &Node, fr: &Fracs) -> Vec<Node> {
-    let t = fr.pos;
-    let (
-        Node::Rects { x: xa, y: ya, w: wa, h: ha, xu, yu, wu, hu, sketch, keys: ka, gp: gpa },
-        Node::Rects { x: xb, y: yb, w: wb, h: hb, xu: xub, yu: yub, wu: wub, hu: hub, keys: kb, gp: gpb, .. },
-    ) = (a, b)
-    else {
-        return vec![lerp_node(a, b, fr)];
-    };
-    let Some(m) = match_keys(ka, kb) else { return vec![lerp_node(a, b, fr)] };
-    let mut out = Vec::new();
-    if !m.matched.is_empty() {
-        let ia: Vec<usize> = m.matched.iter().map(|p| p.0).collect();
-        out.push(Node::Rects {
-            x: m.matched.iter().map(|(i, j)| lerp(xa[*i], xb[*j], t)).collect(),
-            y: m.matched.iter().map(|(i, j)| lerp(ya[*i], yb[*j], t)).collect(),
-            w: m.matched.iter().map(|(i, j)| lerp(wa[*i], wb[*j], t)).collect(),
-            h: m.matched.iter().map(|(i, j)| lerp(ha[*i], hb[*j], t)).collect(),
+            keys: gather(keys, &ia),
+        },
+        (
+            Node::Rects {
+                x: xa,
+                y: ya,
+                w: wa,
+                h: ha,
+                xu,
+                yu,
+                wu,
+                hu,
+                sketch,
+                gp: gpa,
+                keys,
+            },
+            Node::Rects {
+                x: xb,
+                y: yb,
+                w: wb,
+                h: hb,
+                gp: gpb,
+                ..
+            },
+        ) => Node::Rects {
+            x: pos(xa, xb),
+            y: pos(ya, yb),
+            w: pos(wa, wb),
+            h: pos(ha, hb),
             xu: gather(xu, &ia),
             yu: gather(yu, &ia),
             wu: gather(wu, &ia),
             hu: gather(hu, &ia),
             sketch: sketch.clone(),
             gp: lerp_gpar(gpa, gpb, fr),
-            keys: gather(ka, &ia),
-        });
+            keys: gather(keys, &ia),
+        },
+        // `plan_pair` only pairs batches of one variant.
+        _ => snap(a, b, t).clone(),
     }
-    if !m.a_only.is_empty() {
-        out.push(Node::Rects {
-            x: gather(xa, &m.a_only),
-            y: gather(ya, &m.a_only),
-            w: gather(wa, &m.a_only),
-            h: gather(ha, &m.a_only),
-            xu: gather(xu, &m.a_only),
-            yu: gather(yu, &m.a_only),
-            wu: gather(wu, &m.a_only),
-            hu: gather(hu, &m.a_only),
-            sketch: sketch.clone(),
-            gp: fade_gp(gpa, 1.0 - fr.alpha),
-            keys: gather(ka, &m.a_only),
-        });
-    }
-    if !m.b_only.is_empty() {
-        out.push(Node::Rects {
-            x: gather(xb, &m.b_only),
-            y: gather(yb, &m.b_only),
-            w: gather(wb, &m.b_only),
-            h: gather(hb, &m.b_only),
-            xu: gather(xub, &m.b_only),
-            yu: gather(yub, &m.b_only),
-            wu: gather(wub, &m.b_only),
-            hu: gather(hub, &m.b_only),
-            sketch: sketch.clone(),
-            gp: fade_gp(gpb, fr.alpha),
-            keys: gather(kb, &m.b_only),
-        });
-    }
-    out
 }
 
+// --- identity: pairing two keyframes ----------------------------------------
+//
+// Marks tween by *identity*, not by where they sit in the node list. Every
+// element carrying a data key is matched to the element with the same key in
+// the other keyframe, wherever it is drawn: in another node, at another index,
+// with another style. A grammar layer therefore makes its keys unique per layer
+// (vellumplot prefixes the layer) and stable across states (a `data_id`, or a
+// group-plus-occurrence default).
+//
+// * Keyed batch elements (markers, circles, rects) match across ALL nodes. The
+//   matched elements of one node pair tween as one batch whose gpar lerps
+//   between the two nodes' (a point changing colour group slides and recolours);
+//   an element with no partner fades out (leaving) or in (entering) on the alpha
+//   fraction.
+// * Keyed single-element nodes (lines, polygons, paths, rounded rects, labels)
+//   match by their key and tween through `lerp_node` (a vertex-count change
+//   still switches whole at the midpoint); unmatched ones fade.
+// * Unkeyed nodes (axes, grid, legend, unkeyed marks) pair in order within their
+//   class -- same viewport, variant and role. A class with the same number of
+//   nodes in both keyframes pairs one to one, as before; a class whose count
+//   differs cannot be matched, so its nodes switch whole at the midpoint.
+//
+// Two keyframes whose nodes line up one to one with identical keys (the common
+// case: same groups, same rows) skip all of this and tween node by node.
+
+/// How a node is keyed, for identity matching.
+enum Keys<'a> {
+    None,
+    /// A batch with per-element keys (markers, circles, rects).
+    Batch(&'a [String]),
+    /// A single-element node with a key.
+    One(&'a str),
+}
+
+fn node_keys(n: &Node) -> Keys<'_> {
+    match n {
+        Node::Markers { keys, .. } | Node::Circles { keys, .. } | Node::Rects { keys, .. }
+            if keys.iter().any(|k| !k.is_empty()) =>
+        {
+            Keys::Batch(keys)
+        }
+        Node::RoundRect { key, .. }
+        | Node::Lines { key, .. }
+        | Node::Polygon { key, .. }
+        | Node::Path { key, .. }
+        | Node::Text { key, .. } => match key.as_deref() {
+            Some(k) if !k.is_empty() => Keys::One(k),
+            _ => Keys::None,
+        },
+        _ => Keys::None,
+    }
+}
+
+/// Whether two nodes carry the same keys (both unkeyed counts as the same).
+fn same_keys(a: &Node, b: &Node) -> bool {
+    match (node_keys(a), node_keys(b)) {
+        (Keys::None, Keys::None) => true,
+        (Keys::Batch(x), Keys::Batch(y)) => x == y,
+        (Keys::One(x), Keys::One(y)) => x == y,
+        _ => false,
+    }
+}
+
+/// Whether two keyframes line up node for node with identical keys, so the
+/// index-wise tween is the identity tween (and byte-identical to it).
+fn scenes_aligned(a: &Scene, b: &Scene) -> bool {
+    a.nodes.len() == b.nodes.len()
+        && a.viewports.len() == b.viewports.len()
+        && a.nodes
+            .iter()
+            .zip(&b.nodes)
+            .all(|((_, x), (_, y))| same_keys(x, y))
+}
+
+/// Whether two keyframes can be tweened at all: they must share a viewport tree
+/// (under frozen scales they always do). Keyframes that do not are cut at the
+/// positional midpoint instead.
+pub(crate) fn scenes_pair(a: &Scene, b: &Scene) -> bool {
+    a.viewports.len() == b.viewports.len()
+}
+
+/// One step of a frame, in paint order. Indices are into `a.nodes` or
+/// `b.nodes` as named.
+enum Op {
+    /// A node pair tweened whole (`lerp_node`; a shape change snaps).
+    Pair(usize, usize),
+    /// An unkeyed node of `a` with no counterpart: shown until the midpoint.
+    OnlyA(usize),
+    /// An unkeyed node of `b` with no counterpart: shown from the midpoint.
+    OnlyB(usize),
+    /// A keyed single-element node of `a` leaving (fades out).
+    FadeA(usize),
+    /// A keyed single-element node of `b` entering (fades in).
+    FadeB(usize),
+    /// Matched elements `(of a[.0], of b[.1])`, tweened as one batch.
+    Batch(usize, usize, Vec<(usize, usize)>),
+    /// Elements of batch `a[.0]` with no partner, fading out.
+    Exit(usize, Vec<usize>),
+    /// Elements of batch `b[.0]` with no partner, fading in.
+    Enter(usize, Vec<usize>),
+}
+
+impl Op {
+    /// The node the output takes its viewport, pick and metadata from.
+    fn source(&self) -> (bool, usize) {
+        match self {
+            Op::Pair(i, _) | Op::OnlyA(i) | Op::FadeA(i) | Op::Batch(i, _, _) | Op::Exit(i, _) => {
+                (false, *i)
+            }
+            Op::OnlyB(j) | Op::FadeB(j) | Op::Enter(j, _) => (true, *j),
+        }
+    }
+}
+
+/// How one keyframe pair tweens: the frame recipe plus what it reports.
+pub(crate) struct Plan {
+    ops: Vec<Op>,
+    /// Nodes (or node pairs) that switch whole at the midpoint.
+    snapped: usize,
+    /// Keyed elements with no partner in the next / previous keyframe.
+    exited: usize,
+    entered: usize,
+}
+
+/// The class an unkeyed node pairs within: viewport, variant, role.
+fn class_of<'a>(s: &'a Scene, i: usize) -> (usize, std::mem::Discriminant<Node>, &'a str) {
+    let (vp, n) = &s.nodes[i];
+    (
+        *vp,
+        std::mem::discriminant(n),
+        s.meta.get(i).map_or("", |m| m.role.as_str()),
+    )
+}
+
+/// Match two keyframes by identity (see the section comment). `None` when they
+/// do not share a viewport tree and cannot be tweened at all.
+pub(crate) fn plan_pair(a: &Scene, b: &Scene) -> Option<Plan> {
+    if !scenes_pair(a, b) {
+        return None;
+    }
+    if scenes_aligned(a, b) {
+        let ops: Vec<Op> = (0..a.nodes.len()).map(|i| Op::Pair(i, i)).collect();
+        let snapped = a
+            .nodes
+            .iter()
+            .zip(&b.nodes)
+            .filter(|((_, x), (_, y))| !same_shape(x, y))
+            .count();
+        return Some(Plan {
+            ops,
+            snapped,
+            exited: 0,
+            entered: 0,
+        });
+    }
+
+    // Every keyed element of `b`, by key: (node, element). The first wins.
+    let mut bmap: HashMap<&str, (usize, usize)> = HashMap::new();
+    let mut used: Vec<Vec<bool>> = Vec::with_capacity(b.nodes.len());
+    for (j, (_, n)) in b.nodes.iter().enumerate() {
+        match node_keys(n) {
+            Keys::Batch(ks) => {
+                for (e, k) in ks.iter().enumerate() {
+                    if !k.is_empty() {
+                        bmap.entry(k.as_str()).or_insert((j, e));
+                    }
+                }
+                used.push(vec![false; ks.len()]);
+            }
+            Keys::One(k) => {
+                bmap.entry(k).or_insert((j, 0));
+                used.push(vec![false]);
+            }
+            Keys::None => used.push(Vec::new()),
+        }
+    }
+
+    // Unkeyed nodes, per class, in order.
+    type Class<'s> = (usize, std::mem::Discriminant<Node>, &'s str);
+    let mut a_cls: HashMap<Class<'_>, Vec<usize>> = HashMap::new();
+    let mut b_cls: HashMap<Class<'_>, Vec<usize>> = HashMap::new();
+    for i in 0..a.nodes.len() {
+        if matches!(node_keys(&a.nodes[i].1), Keys::None) {
+            a_cls.entry(class_of(a, i)).or_default().push(i);
+        }
+    }
+    for j in 0..b.nodes.len() {
+        if matches!(node_keys(&b.nodes[j].1), Keys::None) {
+            b_cls.entry(class_of(b, j)).or_default().push(j);
+        }
+    }
+    // The partner of each unkeyed node of `a` (classes of equal size pair in order).
+    let mut a_partner: Vec<Option<usize>> = vec![None; a.nodes.len()];
+    let mut b_paired = vec![false; b.nodes.len()];
+    for (c, ia) in &a_cls {
+        if let Some(jb) = b_cls.get(c) {
+            if ia.len() == jb.len() {
+                for (&i, &j) in ia.iter().zip(jb) {
+                    a_partner[i] = Some(j);
+                    b_paired[j] = true;
+                }
+            }
+        }
+    }
+
+    let disc = |n: &Node| std::mem::discriminant(n);
+    let mut ops: Vec<Op> = Vec::new();
+    // For each node of `b`, the last op index it was matched at (its anchor).
+    let mut b_at: Vec<Option<usize>> = vec![None; b.nodes.len()];
+    let (mut snapped, mut exited) = (0usize, 0usize);
+    for (i, (_, na)) in a.nodes.iter().enumerate() {
+        match node_keys(na) {
+            Keys::None => match a_partner[i] {
+                Some(j) => {
+                    if !same_shape(na, &b.nodes[j].1) {
+                        snapped += 1;
+                    }
+                    b_at[j] = Some(ops.len());
+                    ops.push(Op::Pair(i, j));
+                }
+                None => {
+                    snapped += 1;
+                    ops.push(Op::OnlyA(i));
+                }
+            },
+            Keys::One(k) => match bmap.get(k) {
+                Some(&(j, 0))
+                    if !used[j][0]
+                        && matches!(node_keys(&b.nodes[j].1), Keys::One(_))
+                        && disc(na) == disc(&b.nodes[j].1) =>
+                {
+                    used[j][0] = true;
+                    if !same_shape(na, &b.nodes[j].1) {
+                        snapped += 1;
+                    }
+                    b_at[j] = Some(ops.len());
+                    ops.push(Op::Pair(i, j));
+                }
+                _ => {
+                    exited += 1;
+                    ops.push(Op::FadeA(i));
+                }
+            },
+            Keys::Batch(ks) => {
+                // Matched elements grouped by the `b` node they land in, in order
+                // of first appearance; the rest leave.
+                let mut groups: Vec<(usize, Vec<(usize, usize)>)> = Vec::new();
+                let mut gi: HashMap<usize, usize> = HashMap::new();
+                let mut gone = Vec::new();
+                for (e, k) in ks.iter().enumerate() {
+                    let hit = if k.is_empty() {
+                        None
+                    } else {
+                        bmap.get(k.as_str()).copied()
+                    };
+                    match hit {
+                        Some((j, f))
+                            if !used[j][f]
+                                && matches!(node_keys(&b.nodes[j].1), Keys::Batch(_))
+                                && disc(na) == disc(&b.nodes[j].1) =>
+                        {
+                            used[j][f] = true;
+                            let g = *gi.entry(j).or_insert_with(|| {
+                                groups.push((j, Vec::new()));
+                                groups.len() - 1
+                            });
+                            groups[g].1.push((e, f));
+                        }
+                        _ => gone.push(e),
+                    }
+                }
+                for (j, pairs) in groups {
+                    b_at[j] = Some(ops.len());
+                    ops.push(Op::Batch(i, j, pairs));
+                }
+                if !gone.is_empty() {
+                    exited += gone.len();
+                    ops.push(Op::Exit(i, gone));
+                }
+            }
+        }
+    }
+
+    // What only `b` has, each placed after the last op of an earlier-or-same `b`
+    // node that was matched, so it keeps its place in `b`'s paint order.
+    let mut late: Vec<(usize, Op)> = Vec::new(); // (insert after op index + 1, op)
+    let mut anchor = 0usize; // 0 = before everything
+    let mut entered = 0usize;
+    for (j, (_, nb)) in b.nodes.iter().enumerate() {
+        if let Some(p) = b_at[j] {
+            anchor = anchor.max(p + 1);
+        }
+        match node_keys(nb) {
+            Keys::None => {
+                if !b_paired[j] {
+                    snapped += 1;
+                    late.push((anchor, Op::OnlyB(j)));
+                }
+            }
+            Keys::One(_) => {
+                if !used[j][0] {
+                    entered += 1;
+                    late.push((anchor, Op::FadeB(j)));
+                }
+            }
+            Keys::Batch(_) => {
+                let new: Vec<usize> = (0..used[j].len()).filter(|&f| !used[j][f]).collect();
+                if !new.is_empty() {
+                    entered += new.len();
+                    late.push((anchor, Op::Enter(j, new)));
+                }
+            }
+        }
+    }
+    if !late.is_empty() {
+        // `late` is already in anchor order (anchors never decrease).
+        let mut merged = Vec::with_capacity(ops.len() + late.len());
+        let mut late = late.into_iter().peekable();
+        for (k, op) in ops.into_iter().enumerate() {
+            while late.peek().is_some_and(|(at, _)| *at <= k) {
+                merged.push(late.next().unwrap().1);
+            }
+            merged.push(op);
+        }
+        merged.extend(late.map(|(_, op)| op));
+        ops = merged;
+    }
+    Some(Plan {
+        ops,
+        snapped,
+        exited,
+        entered,
+    })
+}
+
+/// Build one frame from a plan.
+fn apply_plan(plan: &Plan, a: &Scene, b: &Scene, fr: &Fracs) -> Scene {
+    let t = fr.pos;
+    // Picks and metadata are parallel to the nodes when present at all.
+    let with_picks = a.picks.len() == a.nodes.len() && b.picks.len() == b.nodes.len();
+    let with_meta = a.meta.len() == a.nodes.len() && b.meta.len() == b.nodes.len();
+    let mut nodes = Vec::with_capacity(plan.ops.len());
+    let mut picks = Vec::new();
+    let mut meta = Vec::new();
+    for op in &plan.ops {
+        let node = match op {
+            Op::Pair(i, j) => lerp_node(&a.nodes[*i].1, &b.nodes[*j].1, fr),
+            Op::OnlyA(i) if t < 0.5 => a.nodes[*i].1.clone(),
+            Op::OnlyB(j) if t >= 0.5 => b.nodes[*j].1.clone(),
+            Op::OnlyA(_) | Op::OnlyB(_) => continue,
+            Op::FadeA(i) => fade_node(&a.nodes[*i].1, 1.0 - fr.alpha),
+            Op::FadeB(j) => fade_node(&b.nodes[*j].1, fr.alpha),
+            Op::Batch(i, j, pairs) => batch_pair(&a.nodes[*i].1, &b.nodes[*j].1, pairs, fr),
+            Op::Exit(i, els) => batch_take(&a.nodes[*i].1, els, 1.0 - fr.alpha),
+            Op::Enter(j, els) => batch_take(&b.nodes[*j].1, els, fr.alpha),
+        };
+        let (from_b, k) = op.source();
+        let s = if from_b { b } else { a };
+        nodes.push((s.nodes[k].0, node));
+        if with_picks {
+            picks.push(s.picks[k]);
+        }
+        if with_meta {
+            meta.push(s.meta[k].clone());
+        }
+    }
+    frame_scene(a, nodes, picks, meta, tween_masks(&a.masks, &b.masks, fr))
+}
 // --- per-frame scene assembly + render --------------------------------------
 
 /// Tween the viewport masks between keyframes. Masks are the clip/reveal
@@ -810,48 +1165,46 @@ fn tween_masks(a: &[MaskDef], b: &[MaskDef], fr: &Fracs) -> Vec<MaskDef> {
         .collect()
 }
 
-/// Whether two keyframes can be tweened node for node: the same number of nodes
-/// over the same viewport tree. Under frozen scales that holds whenever the two
-/// states draw the same marks in the same groups; a colour group (or any other
-/// node) present in one state and absent from the other breaks it.
-pub(crate) fn scenes_pair(a: &Scene, b: &Scene) -> bool {
-    a.nodes.len() == b.nodes.len() && a.viewports.len() == b.viewports.len()
-}
-
-/// Build the tweened scene for one frame.
+/// Build the tweened scene for one frame from keyframes `a` and `b`, matched by
+/// [`plan_pair`] (computed once per keyframe pair, see [`plans_for`]).
 ///
-/// Paired keyframes (see [`scenes_pair`]) tween node by node over `a`'s
-/// structure (viewports, meta -- identical across keyframes under frozen
-/// scales). A keyed batch may split into several output nodes (matched, exiting,
-/// entering), so the per-node `picks`/`meta` are rebuilt to stay parallel to the
-/// output nodes.
-///
-/// Keyframes that do not pair cannot be matched node for node, so the frame
-/// shows one keyframe whole: `a` before the positional midpoint, `b` from it on.
-/// That is a hard cut, not a tween, but it guarantees every keyframe is shown
-/// (vellumplot warns when it builds such an animation).
-fn tween_scene(a: &Scene, b: &Scene, fr: &Fracs) -> Scene {
-    if !scenes_pair(a, b) {
-        let s = snap(a, b, fr.pos);
-        return frame_scene(s, s.nodes.clone(), s.picks.clone(), s.meta.clone(), s.masks.clone());
-    }
-    let mut nodes = Vec::with_capacity(a.nodes.len());
-    let mut picks = Vec::with_capacity(a.picks.len());
-    let mut meta = Vec::with_capacity(a.meta.len());
-    for (i, ((vp, na), (_, nb))) in a.nodes.iter().zip(b.nodes.iter()).enumerate() {
-        for n in tween_node_multi(na, nb, fr) {
-            nodes.push((*vp, n));
-            if let Some(p) = a.picks.get(i) {
-                picks.push(*p);
-            }
-            if let Some(m) = a.meta.get(i) {
-                meta.push(m.clone());
-            }
+/// Keyframes that do not pair at all (different viewport trees, so no plan)
+/// cannot be matched, so the frame shows one keyframe whole: `a` before the
+/// positional midpoint, `b` from it on.
+fn tween_scene(a: &Scene, b: &Scene, plan: Option<&Plan>, fr: &Fracs) -> Scene {
+    match plan {
+        Some(p) => apply_plan(p, a, b, fr),
+        None => {
+            let s = snap(a, b, fr.pos);
+            frame_scene(
+                s,
+                s.nodes.clone(),
+                s.picks.clone(),
+                s.meta.clone(),
+                s.masks.clone(),
+            )
         }
     }
-    frame_scene(a, nodes, picks, meta, tween_masks(&a.masks, &b.masks, fr))
 }
 
+/// The plan of every keyframe pair `(k, k + 1)` the schedule uses, computed
+/// once per pair rather than once per frame.
+fn plans_for(kf: &[Scene], seg: &[i32]) -> Vec<Option<Plan>> {
+    let mut want = vec![false; kf.len().saturating_sub(1)];
+    for &s in seg {
+        want[s as usize] = true;
+    }
+    want.iter()
+        .enumerate()
+        .map(|(k, &w)| {
+            if w {
+                plan_pair(&kf[k], &kf[k + 1])
+            } else {
+                None
+            }
+        })
+        .collect()
+}
 /// A fresh frame scene with `base`'s page, viewports and document-level fields
 /// and the given drawn content. Caches start empty.
 fn frame_scene(
@@ -916,14 +1269,16 @@ fn animated_svg(kf: &[Scene], seg: &[i32], frac: &[Fracs], delay_num: i32, delay
     // Sequential, unlike the raster path: the SVG backend holds a non-`Send`
     // glyph-outline cache. It is also much the cheaper of the two -- emitting
     // markup rather than rasterising -- so there is little to win here.
+    let plans = plans_for(kf, seg);
     let bodies: Vec<String> = (0..n)
         .map(|frame| {
             let s = seg[frame] as usize;
-            let mut sc = tween_scene(&kf[s], &kf[s + 1], &frac[frame]);
+            let mut sc = tween_scene(&kf[s], &kf[s + 1], plans[s].as_ref(), &frac[frame]);
             // The title/desc belong to the document, not to each of its frames:
             // repeating them would have a screen reader announce the figure once
             // per frame.
             sc.clear_a11y();
+            clear_keys(&mut sc);
             // Every frame is a separate render with its own id counters, but they
             // all end up in ONE document, so the ids need a per-frame namespace.
             svg_body(&sc.svg_string(false, &format!("f{frame}-")))
@@ -981,6 +1336,27 @@ fn animated_svg(kf: &[Scene], seg: &[i32], frac: &[Fracs], delay_num: i32, delay
     crate::render::resolve_ids(out, &prefix)
 }
 
+/// Drop every data key from a frame. An animated SVG is a picture, not an
+/// interactive scene: the keys the tween matched marks by would otherwise put a
+/// `data-key` on every element of every frame.
+fn clear_keys(sc: &mut Scene) {
+    for (_, n) in sc.nodes.iter_mut() {
+        match n {
+            Node::Rects { keys, .. }
+            | Node::Circles { keys, .. }
+            | Node::Markers { keys, .. }
+            | Node::Hexagons { keys, .. }
+            | Node::Sectors { keys, .. }
+            | Node::Segments { keys, .. } => keys.clear(),
+            Node::RoundRect { key, .. }
+            | Node::Lines { key, .. }
+            | Node::Polygon { key, .. }
+            | Node::Path { key, .. }
+            | Node::Text { key, .. } => *key = None,
+            _ => {}
+        }
+    }
+}
 /// Stands in for the CSS-name prefix while the animated SVG is assembled: two
 /// id tokens, which no id contains (every id token is followed by `-`).
 const CSS_TOKEN: &str = "\0\0";
@@ -1371,13 +1747,14 @@ fn render_animation(
     // Chunk the frames so at most one chunk of pixmaps is resident: tween each
     // chunk's frames (cheap, sequential), rasterize them across cores, then feed
     // the encoder in order. Bounded memory + parallel render + streaming encode.
+    let plans = plans_for(&kf, seg);
     let chunk = (rayon::current_num_threads() * 8).max(1);
     for start in (0..n).step_by(chunk) {
         let end = (start + chunk).min(n);
         let scenes: Vec<Scene> = (start..end)
             .map(|frame| {
                 let s = seg[frame] as usize;
-                tween_scene(&kf[s], &kf[s + 1], &frac[frame])
+                tween_scene(&kf[s], &kf[s + 1], plans[s].as_ref(), &frac[frame])
             })
             .collect();
         let pixmaps: Vec<Pixmap> = scenes.into_par_iter().map(|s| render_frame(&s)).collect();
@@ -1390,29 +1767,17 @@ fn render_animation(
     Vec::new()
 }
 
-/// Whether a node pair snaps whole at the midpoint instead of tweening: a
-/// shape change that no key join can account for. Mirrors `tween_node_multi` ->
-/// `lerp_node`: a keyed marker/circle/rect batch pair joins by key (elements
-/// enter and leave), so its element count may change freely.
-fn node_snaps(a: &Node, b: &Node) -> bool {
-    let keyed = match (a, b) {
-        (Node::Markers { keys: ka, .. }, Node::Markers { keys: kb, .. })
-        | (Node::Circles { keys: ka, .. }, Node::Circles { keys: kb, .. })
-        | (Node::Rects { keys: ka, .. }, Node::Rects { keys: kb, .. }) => !ka.is_empty() && !kb.is_empty(),
-        _ => false,
-    };
-    !keyed && !same_shape(a, b)
-}
-
 /// How each adjacent keyframe pair will tween, for a caller that wants to warn
 /// before rendering. One entry per pair `(i, i + 1)`:
 ///
-/// * `paired` -- the keyframes tween node by node (`FALSE`: the frames cut from
-///   one keyframe to the next at the midpoint);
+/// * `paired` -- the keyframes can be matched (`FALSE`: they do not share a
+///   viewport tree, so the frames cut from one to the next at the midpoint);
 /// * `nodes_a`, `nodes_b` -- the two node counts;
-/// * `snapped` -- for a paired segment, how many node pairs still switch whole
-///   at the midpoint (a different variant, vertex count or unkeyed element
-///   count); `NA` for an unpaired one.
+/// * `snapped` -- for a paired segment, how many nodes (or node pairs) still
+///   switch whole at the midpoint: a matched pair whose variant or vertex count
+///   differs, or an unkeyed node with no counterpart; `NA` for an unpaired one;
+/// * `exited`, `entered` -- keyed elements with no partner, which fade out or
+///   in; `NA` for an unpaired segment.
 ///
 /// @keywords internal
 #[extendr]
@@ -1420,37 +1785,70 @@ fn tween_pairing(keyframes: List) -> List {
     let kf: Vec<ExternalPtr<Scene>> = keyframes
         .values()
         .map(|robj| {
-            <ExternalPtr<Scene>>::try_from(robj)
-                .unwrap_or_else(|_| throw_r_error("tween_pairing(): keyframes must be compiled vellum scenes"))
+            <ExternalPtr<Scene>>::try_from(robj).unwrap_or_else(|_| {
+                throw_r_error("tween_pairing(): keyframes must be compiled vellum scenes")
+            })
         })
         .collect();
     let m = kf.len().saturating_sub(1);
-    let (mut paired, mut na, mut nb, mut snapped) =
-        (Vec::with_capacity(m), Vec::with_capacity(m), Vec::with_capacity(m), Vec::with_capacity(m));
+    let (mut paired, mut na, mut nb) = (
+        Vec::with_capacity(m),
+        Vec::with_capacity(m),
+        Vec::with_capacity(m),
+    );
+    let (mut snapped, mut exited, mut entered) = (
+        Vec::with_capacity(m),
+        Vec::with_capacity(m),
+        Vec::with_capacity(m),
+    );
+    let na_or = |v: Option<usize>| v.map(|x| Rint::from(x as i32)).unwrap_or(Rint::na());
     for w in kf.windows(2) {
         let (a, b): (&Scene, &Scene) = (&w[0], &w[1]);
-        let p = scenes_pair(a, b);
-        paired.push(p);
+        let plan = plan_pair(a, b);
+        paired.push(plan.is_some());
         na.push(a.nodes.len() as i32);
         nb.push(b.nodes.len() as i32);
-        snapped.push(if p {
-            Some(a.nodes.iter().zip(&b.nodes).filter(|((_, x), (_, y))| node_snaps(x, y)).count() as i32)
-        } else {
-            None
-        });
+        snapped.push(na_or(plan.as_ref().map(|p| p.snapped)));
+        exited.push(na_or(plan.as_ref().map(|p| p.exited)));
+        entered.push(na_or(plan.as_ref().map(|p| p.entered)));
     }
     list!(
         paired = paired,
         nodes_a = na,
         nodes_b = nb,
-        snapped = Integers::from_values(snapped.into_iter().map(|v| v.map(Rint::from).unwrap_or(Rint::na())))
+        snapped = Integers::from_values(snapped),
+        exited = Integers::from_values(exited),
+        entered = Integers::from_values(entered)
     )
 }
-
+/// The tweened scene of one frame between keyframes `a` and `b` at fraction
+/// `frac` (one curve for every class), for inspecting a mid-transition frame
+/// (`$element_table()`, `$pixel()`) without rendering a whole animation.
+///
+/// @keywords internal
+#[extendr]
+fn tween_frame(a: Robj, b: Robj, frac: f64) -> Scene {
+    let get = |r: Robj| {
+        <ExternalPtr<Scene>>::try_from(r).unwrap_or_else(|_| {
+            throw_r_error("tween_frame(): keyframes must be compiled vellum scenes")
+        })
+    };
+    let (a, b) = (get(a), get(b));
+    let (a, b): (&Scene, &Scene) = (&a, &b);
+    let plan = plan_pair(a, b);
+    let fr = Fracs {
+        pos: frac,
+        col: frac,
+        size: frac,
+        alpha: frac,
+    };
+    tween_scene(a, b, plan.as_ref(), &fr)
+}
 extendr_module! {
     mod tween;
     fn render_animation;
     fn tween_pairing;
+    fn tween_frame;
 }
 
 #[cfg(test)]

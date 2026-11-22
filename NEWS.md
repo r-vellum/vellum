@@ -8,6 +8,18 @@
 
 ## Bug fixes
 
+* `vl_render_animation()` matches marks across keyframes by their data keys,
+  not by node and row position (VR-32). A keyed element tweens into the
+  element with the same key wherever that is drawn -- another node, another
+  index, another colour group's batch (a point that changes group slides and
+  recolours) -- so reordered rows, a dropped row or a sorted bar race no longer
+  blend unrelated marks. Keyed points, circles, rects, lines, polygons, paths
+  and labels with no partner fade in or out; unkeyed nodes pair in order within
+  their viewport/kind/role class and switch at the midpoint when that class
+  changes size. Only keyframes on different viewport trees still cut whole.
+  The matching is computed once per keyframe pair with hash maps.
+  `vl_tween_pairing()` gains `exited` and `entered` counts.
+
 * `vl_render_animation()`: when two keyframes draw a different number of nodes
   (a colour group present in one state and absent from the next), the frames
   now switch to the later keyframe at the positional midpoint instead of

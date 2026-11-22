@@ -395,6 +395,28 @@ impl Node {
         }
     }
 
+    /// Mutable access to the node's own gpar (see [`Node::gp`]): the animation
+    /// tween fades an entering or leaving element through it.
+    pub(super) fn gp_mut(&mut self) -> Option<&mut PartialGpar> {
+        match self {
+            Node::Rect { gp, .. }
+            | Node::RoundRect { gp, .. }
+            | Node::Lines { gp, .. }
+            | Node::Polygon { gp, .. }
+            | Node::Circle { gp, .. }
+            | Node::Rects { gp, .. }
+            | Node::Circles { gp, .. }
+            | Node::Markers { gp, .. }
+            | Node::Hexagons { gp, .. }
+            | Node::Sectors { gp, .. }
+            | Node::Segments { gp, .. }
+            | Node::Loop { gp, .. }
+            | Node::Path { gp, .. }
+            | Node::Text { gp, .. } => Some(gp),
+            _ => None,
+        }
+    }
+
     /// Whether this node carries an interactivity data key on any element: the
     /// same notion as a non-NA `key` in `scene_model()$elements`, which is what
     /// the widget counts to decide raster mode. Structural nodes and images are
