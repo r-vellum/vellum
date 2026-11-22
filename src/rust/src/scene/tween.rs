@@ -1757,6 +1757,24 @@ fn render_animation(
                 tween_scene(&kf[s], &kf[s + 1], plans[s].as_ref(), &frac[frame])
             })
             .collect();
+        if let Sink::Gif { encoder, w, h, delay_cs, speed, dither } = &mut sink {
+            // A GIF frame's palette quantisation and dither cost far more than
+            // its rasterisation (NeuQuant + Floyd-Steinberg over every pixel), so
+            // they run on the workers too, each frame independently; only the
+            // LZW write stays sequential, in frame order.
+            let (w, h, speed, dither) = (*w, *h, *speed, *dither);
+            let frames: Vec<gif::Frame<'static>> = scenes
+                .into_par_iter()
+                .map(|s| gif_frame(&straight_rgba(&render_frame(&s)), w, h, speed, dither))
+                .collect();
+            for mut frame in frames {
+                frame.delay = *delay_cs;
+                encoder
+                    .write_frame(&frame)
+                    .unwrap_or_else(|e| throw_r_error(format!("GIF frame write failed: {e}")));
+            }
+            continue;
+        }
         let pixmaps: Vec<Pixmap> = scenes.into_par_iter().map(|s| render_frame(&s)).collect();
         for pm in &pixmaps {
             sink.consume(pm).unwrap_or_else(|e| throw_r_error(e));

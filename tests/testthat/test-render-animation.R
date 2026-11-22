@@ -168,6 +168,38 @@ test_that("render_animation writes a valid looping GIF", {
   expect_equal(info$width[1], .scene_to_backend(s$a)$dim()[1])
 })
 
+test_that("a GIF quantised in parallel keeps its frames in order (VL-17)", {
+  skip_if_not_installed("magick")
+  # More frames than one render chunk (8 per worker thread), so frames from
+  # several parallel chunks must reach the encoder in schedule order: the
+  # circle's ink centroid moves steadily left to right through every frame.
+  s <- anim_scenes()
+  n <- 150L
+  out <- withr::local_tempfile(fileext = ".gif")
+  vl_render_animation(
+    list(s$a, s$b),
+    rep(1L, n),
+    seq(0, 1, length.out = n),
+    out,
+    format = "gif",
+    fps = 50
+  )
+  im <- magick::image_read(out)
+  expect_equal(length(im), n)
+  cx <- vapply(seq_len(n), function(i) {
+    a <- as.integer(magick::image_data(im[i], "rgb"))
+    ink <- a[,, 1] < 200 | a[,, 3] < 200
+    per_col <- colSums(ink)
+    weighted.mean(seq_along(per_col), per_col)
+  }, numeric(1))
+  expect_true(all(diff(cx) >= -0.5))
+  expect_gt(cx[n] - cx[1], 0.4 * ncol(as.integer(magick::image_data(im[1], "rgb"))[,, 1]))
+})
+
+test_that("vl_render_animation's default gif_speed is 10 (VL-17)", {
+  expect_identical(formals(vl_render_animation)$gif_speed, 10)
+})
+
 test_that("keyed elements enter and exit (per-element fade)", {
   skip_if_not_installed("png")
   # One point batch, keyed. A has {a, b}; B has {b, c}: `a` exits, `c` enters,
