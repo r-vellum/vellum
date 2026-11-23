@@ -152,3 +152,33 @@ test_that("a space before a styled run keeps its width", {
     .md_extent_pt(md("**mass**"), "", "plain", 12)[1]
   )
 })
+
+test_that("PDF draws a superscript run at its own glyph size", {
+  # The PDF backend drew every glyph of a rich label at the label's size, at
+  # the positions shaped for the smaller superscript, so "x^0.75^" overprinted.
+  pdf_text_sizes <- function(path) {
+    r <- readBin(path, "raw", file.size(path))
+    ends <- grepRaw("endstream", r, fixed = TRUE, all = TRUE)
+    starts <- setdiff(grepRaw("stream", r, fixed = TRUE, all = TRUE), ends + 3L)
+    txt <- vapply(starts, function(s) {
+      b <- s + 6L
+      if (r[b] == as.raw(13L)) b <- b + 1L
+      if (r[b] == as.raw(10L)) b <- b + 1L
+      e <- ends[ends > b][1] - 1L
+      tryCatch(rawToChar(memDecompress(r[b:e], "gzip")), error = function(e) "")
+    }, character(1))
+    # Font programs decompress too; keep the text content streams only.
+    txt <- txt[validUTF8(txt) & grepl(" Tf", txt, useBytes = TRUE)]
+    m <- regmatches(txt, gregexpr("[0-9.]+ Tf", txt))
+    sort(unique(as.numeric(sub(" Tf", "", unlist(m)))))
+  }
+  s <- vl_scene(width = 3, height = 1) |>
+    draw(text_grob(md("mass^0.75^"), gp = vl_gpar(fontsize = 20)))
+  f <- withr::local_tempfile(fileext = ".pdf")
+  render(s, f)
+  sizes <- pdf_text_sizes(f)
+  expect_length(sizes, 2L)
+  # the superscript is drawn smaller than the base run, as on the raster
+  g <- .md_compose(md("mass^0.75^"), "", "plain", 20, "black")
+  expect_equal(sizes[1] / sizes[2], min(g$gsize) / max(g$gsize), tolerance = 1e-3)
+})
