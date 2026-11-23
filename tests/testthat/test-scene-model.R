@@ -295,3 +295,31 @@ test_that("incompatible per-element lengths fail up front, naming the args", {
   )
   expect_error(hexagon_grob(0.5, c(0.2, 0.8), size = 1:3), "compatible")
 })
+
+test_that("scene_model() lists a meta-carrying panel that holds no element", {
+  # Lines are not elements, so a panel with only a line (no background rect)
+  # used to be missing from `panels`, and a host lost its geometry + scales.
+  s <- vl_scene(4, 3) |>
+    push(vl_viewport(
+      width = 0.8,
+      height = 0.8,
+      xscale = c(0, 10),
+      yscale = c(0, 5),
+      name = "panel-1-1",
+      meta = list(scales = list(cartesian = TRUE))
+    )) |>
+    draw(lines_grob(vl_unit(c(1, 9), "native"), vl_unit(c(1, 4), "native"))) |>
+    pop()
+  m <- scene_model(s)
+  expect_identical(m$panels$name, "panel-1-1")
+  expect_true(is.na(m$panels$x0))
+  expect_equal(m$panels$xscale_hi, 10)
+  expect_true(isTRUE(m$panels$meta[[1]]$scales$cartesian))
+  expect_equal(m$panels$px1 - m$panels$px0, 0.8 * 4 * 96, tolerance = 0.5)
+  # a named viewport without meta is still not a panel
+  s2 <- vl_scene(4, 3) |>
+    push(vl_viewport(name = "deco")) |>
+    draw(lines_grob(c(0.1, 0.9), c(0.1, 0.9))) |>
+    pop()
+  expect_identical(nrow(scene_model(s2)$panels), 0L)
+})

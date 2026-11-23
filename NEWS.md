@@ -2,6 +2,12 @@
 
 ## Bug fixes
 
+* `scene_model()` lists every named viewport that carries `meta` in `panels`,
+  even when no element sits in it. Lines are not elements, so a line-only
+  panel with a blank background and no gridlines (a `theme_minimal()` strip
+  with `panel.grid = element_blank()`) was missing, and an interactive host
+  lost its geometry and scales. Such a panel's element bbox is `NA`.
+
 * PDF output draws each run of an `md()` label at its own size: a
   superscript, subscript or size span was drawn at the label's full size, at
   positions shaped for the smaller run, so `md("mass^0.75^")` overprinted its
