@@ -12,6 +12,7 @@ scene_inset(
   width = 0.3,
   height = 0.3,
   name = NULL,
+  fit = c("auto", "fill", "contain"),
   ...
 )
 }
@@ -25,6 +26,14 @@ carried over — it becomes a region of the host, which owns those.}
 
 \item{name}{Optional name for the region's viewport, so the inset can later
 be found with \code{\link[=node_names]{node_names()}} and edited with \code{\link[=edit_node]{edit_node()}}.}
+
+\item{fit}{How the guest fills the region: \code{"auto"} (the default) fits a
+guest that declares a fixed-aspect content box (see Details) inside the
+region and fills the region with any other guest; \code{"fill"} always fills
+the region; \code{"contain"} is \code{"auto"} but an error when the guest declares
+no content box. Fitting needs the region's physical size, so it applies
+when the region is placed at the host's top level, in \code{npc} numbers or
+absolute units; inside a pushed viewport the guest fills the region.}
 
 \item{...}{Further arguments to \code{\link[=vl_viewport]{vl_viewport()}} (\code{clip}, \code{angle}, \code{gp},
 \code{mask}, \code{blur}, \code{shadow}, ...).}
@@ -49,6 +58,16 @@ engine provides is the ability to nest one scene in another at all.
 The guest's \code{npc} coordinates become relative to the region it is placed in,
 so a guest built on a square page and inset into a wide region will stretch.
 Match the aspect ratio, or build the guest at the aspect you want.
+
+A guest whose content has a fixed aspect ratio (a map, or a plot with a
+fixed coordinate ratio) can say so, and then \code{fit = "auto"} shrinks the
+region around it, so its background and border hug the content instead of
+framing empty bands. The guest declares it with an attribute
+\code{vellum_content_fit}: \code{c(fixed_w, fixed_h, null_w, null_h)}, the fixed
+(absolute, mm) width and height of its frame and the weights of its
+aspect-locked \code{null} tracks (one null unit is the same size both ways, as
+under \code{grid_layout(respect = TRUE)}). vellumplot sets it on an aspect-locked
+plot. The region keeps its centre; it is shrunk in one direction only.
 }
 \examples{
 main <- vl_scene(4, 3) |>

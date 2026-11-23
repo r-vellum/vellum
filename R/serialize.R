@@ -611,12 +611,29 @@ print.vellum_diff <- function(x, ...) {
 #' so a guest built on a square page and inset into a wide region will stretch.
 #' Match the aspect ratio, or build the guest at the aspect you want.
 #'
+#' A guest whose content has a fixed aspect ratio (a map, or a plot with a
+#' fixed coordinate ratio) can say so, and then `fit = "auto"` shrinks the
+#' region around it, so its background and border hug the content instead of
+#' framing empty bands. The guest declares it with an attribute
+#' `vellum_content_fit`: `c(fixed_w, fixed_h, null_w, null_h)`, the fixed
+#' (absolute, mm) width and height of its frame and the weights of its
+#' aspect-locked `null` tracks (one null unit is the same size both ways, as
+#' under `grid_layout(respect = TRUE)`). vellumplot sets it on an aspect-locked
+#' plot. The region keeps its centre; it is shrunk in one direction only.
+#'
 #' @param host The scene to place into.
 #' @param guest The scene to place. Its page size, background and dpi are *not*
 #'   carried over — it becomes a region of the host, which owns those.
 #' @param x,y,width,height The region, in the host's current coordinates.
 #' @param name Optional name for the region's viewport, so the inset can later
 #'   be found with [node_names()] and edited with [edit_node()].
+#' @param fit How the guest fills the region: `"auto"` (the default) fits a
+#'   guest that declares a fixed-aspect content box (see Details) inside the
+#'   region and fills the region with any other guest; `"fill"` always fills
+#'   the region; `"contain"` is `"auto"` but an error when the guest declares
+#'   no content box. Fitting needs the region's physical size, so it applies
+#'   when the region is placed at the host's top level, in `npc` numbers or
+#'   absolute units; inside a pushed viewport the guest fills the region.
 #' @param ... Further arguments to [vl_viewport()] (`clip`, `angle`, `gp`,
 #'   `mask`, `blur`, `shadow`, ...).
 #' @return A `vellum_scene`.
@@ -636,14 +653,29 @@ scene_inset <- function(
   width = 0.3,
   height = 0.3,
   name = NULL,
+  fit = c("auto", "fill", "contain"),
   ...
 ) {
+  fit <- .check_choice(fit, c("auto", "fill", "contain"), "fit")
   host <- as_vellum_scene(host)
   guest <- as_vellum_scene(guest)
   groot <- .materialize(guest)
   kids <- .node_children(groot)
   if (!length(kids)) {
     return(host)
+  }
+  if (!identical(fit, "fill")) {
+    box <- .inset_fit_box(host, guest, width, height)
+    if (is.null(box) && identical(fit, "contain")) {
+      cli::cli_abort(c(
+        "{.code fit = \"contain\"} needs a guest with a fixed-aspect content box and a region of known size.",
+        i = "See the Details of {.fn scene_inset}, or use {.code fit = \"auto\"}."
+      ))
+    }
+    if (!is.null(box)) {
+      width <- box$width
+      height <- box$height
+    }
   }
   out <- push(
     host,
@@ -655,4 +687,53 @@ scene_inset <- function(
     out <- draw(out, k)
   }
   pop(out)
+}
+
+# The region `scene_inset()` shrinks to for a guest that declares a fixed-aspect
+# content box (`attr(guest, "vellum_content_fit")`, see its Details), or NULL to
+# leave the region as given: no declaration, a region not at the host's top
+# level (its physical size is unknown here), or one too small for the frame.
+# Returns the new width / height in the units they came in.
+.inset_fit_box <- function(host, guest, width, height) {
+  cf <- attr(guest, "vellum_content_fit", exact = TRUE)
+  if (
+    !is.numeric(cf) ||
+      length(cf) != 4L ||
+      !all(is.finite(cf)) ||
+      any(cf[3:4] <= 0) ||
+      any(cf[1:2] < 0)
+  ) {
+    return(NULL)
+  }
+  bs <- host@bstate
+  if (!is.null(bs) && length(bs$open) > 1L) {
+    return(NULL)
+  }
+  page <- c(.to_inches(host@width), .to_inches(host@height, "height")) * 25.4
+  as_mm <- function(v, total) {
+    if (inherits(v, "vellum_unit")) {
+      tryCatch(vl_convert(v, "mm"), error = function(e) NA_real_)
+    } else if (is.numeric(v) && length(v) == 1L) {
+      v * total
+    } else {
+      NA_real_
+    }
+  }
+  rw <- as_mm(width, page[1])
+  rh <- as_mm(height, page[2])
+  if (!is.finite(rw) || !is.finite(rh)) {
+    return(NULL)
+  }
+  aw <- rw - cf[1]
+  ah <- rh - cf[2]
+  if (aw <= 0 || ah <= 0) {
+    return(NULL)
+  }
+  u <- min(aw / cf[3], ah / cf[4])
+  cw <- cf[1] + u * cf[3]
+  ch <- cf[2] + u * cf[4]
+  rescale <- function(v, old, new) {
+    if (inherits(v, "vellum_unit")) vl_unit(new, "mm") else v * new / old
+  }
+  list(width = rescale(width, rw, cw), height = rescale(height, rh, ch))
 }

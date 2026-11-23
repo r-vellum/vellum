@@ -1,5 +1,15 @@
 # vellum 0.14.0.9000 (development version)
 
+## New features
+
+* `scene_inset()` gains `fit = c("auto", "fill", "contain")` (VP-120). A
+  guest that declares a fixed-aspect content box, as an aspect-locked
+  vellumplot plot (a map, `coord_fixed()`) now does through the
+  `vellum_content_fit` attribute, is fitted inside the region: the region
+  shrinks in one direction around its centre, so the guest's background and
+  border hug its content instead of framing empty bands. Other guests fill
+  the region as before.
+
 ## Bug fixes
 
 * PDF output draws each run of an `md()` label at its own size: a
