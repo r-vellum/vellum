@@ -1,5 +1,12 @@
 # vellum 0.14.0.9000 (development version)
 
+## Bug fixes
+
+* A space before a styled run of an `md()` label keeps its width:
+  `md("Body mass *M* (kg)")` set as "Body massM (kg)", because the text
+  shaper leaves trailing white space out of a run's width. The space is now
+  added back whenever another run follows on the same line.
+
 # vellum 0.14.0
 
 ## New features

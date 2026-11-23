@@ -131,3 +131,24 @@ test_that("a plain md() label measures like the equivalent character string", {
     tolerance = 1e-6
   )
 })
+
+test_that("a space before a styled run keeps its width", {
+  # The shaper drops trailing white space from a run's width, so the space in
+  # "mass *M*" vanished and the label set as "massM".
+  spaced <- .md_extent_pt(md("mass *M*"), "", "plain", 12)[1]
+  joined <- .md_extent_pt(md("mass*M*"), "", "plain", 12)[1]
+  space <- .md_extent_pt(md("a b"), "", "plain", 12)[1] -
+    .md_extent_pt(md("ab"), "", "plain", 12)[1]
+  expect_gt(space, 0)
+  expect_equal(spaced - joined, space, tolerance = 1e-6)
+  # the glyph after the space starts one space further on
+  g1 <- .md_compose(md("mass *M*"), "", "plain", 12, "black")
+  g2 <- .md_compose(md("mass*M*"), "", "plain", 12, "black")
+  expect_equal(utils::tail(g1$gx, 1) - utils::tail(g2$gx, 1), space,
+               tolerance = 1e-6)
+  # a trailing space at the end of a label still adds nothing, as for plain text
+  expect_equal(
+    .md_extent_pt(md("**mass** "), "", "plain", 12)[1],
+    .md_extent_pt(md("**mass**"), "", "plain", 12)[1]
+  )
+})
