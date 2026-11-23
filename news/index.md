@@ -4,6 +4,14 @@
 
 ### Bug fixes
 
+- PDF output draws each run of an
+  [`md()`](https://r-vellum.github.io/vellum/reference/md.md) label at
+  its own size: a superscript, subscript or size span was drawn at the
+  label’s full size, at positions shaped for the smaller run, so
+  `md("mass^0.75^")` overprinted its exponent in a PDF while PNG and SVG
+  were right. Glyph runs are now split on a size change, as on the other
+  backends.
+
 - A space before a styled run of an
   [`md()`](https://r-vellum.github.io/vellum/reference/md.md) label
   keeps its width: `md("Body mass *M* (kg)")` set as “Body massM (kg)”,
