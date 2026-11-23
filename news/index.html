@@ -72,6 +72,11 @@
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.14.0.9000" id="vellum-01409000-development-version">vellum 0.14.0.9000 (development version)<a class="anchor" aria-label="anchor" href="#vellum-01409000-development-version"></a></h2>
 <div class="section level3">
+<h3 id="new-features-0-14-0-9000">New features<a class="anchor" aria-label="anchor" href="#new-features-0-14-0-9000"></a></h3>
+<ul><li>
+<code><a href="../reference/scene_inset.html">scene_inset()</a></code> gains <code>fit = c("auto", "fill", "contain")</code> (VP-120). A guest that declares a fixed-aspect content box, as an aspect-locked vellumplot plot (a map, <code><a href="https://ggplot2.tidyverse.org/reference/coord_fixed.html" class="external-link">coord_fixed()</a></code>) now does through the <code>vellum_content_fit</code> attribute, is fitted inside the region: the region shrinks in one direction around its centre, so the guest’s background and border hug its content instead of framing empty bands. Other guests fill the region as before.</li>
+</ul></div>
+<div class="section level3">
 <h3 id="bug-fixes-0-14-0-9000">Bug fixes<a class="anchor" aria-label="anchor" href="#bug-fixes-0-14-0-9000"></a></h3>
 <ul><li><p>PDF output draws each run of an <code><a href="../reference/md.html">md()</a></code> label at its own size: a superscript, subscript or size span was drawn at the label’s full size, at positions shaped for the smaller run, so <code>md("mass^0.75^")</code> overprinted its exponent in a PDF while PNG and SVG were right. Glyph runs are now split on a size change, as on the other backends.</p></li>
 <li><p>A space before a styled run of an <code><a href="../reference/md.html">md()</a></code> label keeps its width: <code>md("Body mass *M* (kg)")</code> set as “Body massM (kg)”, because the text shaper leaves trailing white space out of a run’s width. The space is now added back whenever another run follows on the same line.</p></li>

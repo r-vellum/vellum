@@ -96,6 +96,7 @@ again.</p>
 <span>  width <span class="op">=</span> <span class="fl">0.3</span>,</span>
 <span>  height <span class="op">=</span> <span class="fl">0.3</span>,</span>
 <span>  name <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  fit <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"auto"</span>, <span class="st">"fill"</span>, <span class="st">"contain"</span><span class="op">)</span>,</span>
 <span>  <span class="va">...</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
@@ -122,6 +123,16 @@ carried over — it becomes a region of the host, which owns those.</p></dd>
 be found with <code><a href="node_names.html">node_names()</a></code> and edited with <code><a href="node_names.html">edit_node()</a></code>.</p></dd>
 
 
+<dt id="arg-fit">fit<a class="anchor" aria-label="anchor" href="#arg-fit"></a></dt>
+<dd><p>How the guest fills the region: <code>"auto"</code> (the default) fits a
+guest that declares a fixed-aspect content box (see Details) inside the
+region and fills the region with any other guest; <code>"fill"</code> always fills
+the region; <code>"contain"</code> is <code>"auto"</code> but an error when the guest declares
+no content box. Fitting needs the region's physical size, so it applies
+when the region is placed at the host's top level, in <code>npc</code> numbers or
+absolute units; inside a pushed viewport the guest fills the region.</p></dd>
+
+
 <dt id="arg--">...<a class="anchor" aria-label="anchor" href="#arg--"></a></dt>
 <dd><p>Further arguments to <code><a href="vl_viewport.html">vl_viewport()</a></code> (<code>clip</code>, <code>angle</code>, <code>gp</code>,
 <code>mask</code>, <code>blur</code>, <code>shadow</code>, ...).</p></dd>
@@ -141,6 +152,15 @@ engine provides is the ability to nest one scene in another at all.</p>
 <p>The guest's <code>npc</code> coordinates become relative to the region it is placed in,
 so a guest built on a square page and inset into a wide region will stretch.
 Match the aspect ratio, or build the guest at the aspect you want.</p>
+<p>A guest whose content has a fixed aspect ratio (a map, or a plot with a
+fixed coordinate ratio) can say so, and then <code>fit = "auto"</code> shrinks the
+region around it, so its background and border hug the content instead of
+framing empty bands. The guest declares it with an attribute
+<code>vellum_content_fit</code>: <code>c(fixed_w, fixed_h, null_w, null_h)</code>, the fixed
+(absolute, mm) width and height of its frame and the weights of its
+aspect-locked <code>null</code> tracks (one null unit is the same size both ways, as
+under <code>grid_layout(respect = TRUE)</code>). vellumplot sets it on an aspect-locked
+plot. The region keeps its centre; it is shrunk in one direction only.</p>
     </div>
     <div class="section level2">
     <h2 id="see-also">See also<a class="anchor" aria-label="anchor" href="#see-also"></a></h2>

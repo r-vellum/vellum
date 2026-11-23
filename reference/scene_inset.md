@@ -17,6 +17,7 @@ scene_inset(
   width = 0.3,
   height = 0.3,
   name = NULL,
+  fit = c("auto", "fill", "contain"),
   ...
 )
 ```
@@ -44,6 +45,17 @@ scene_inset(
   and edited with
   [`edit_node()`](https://r-vellum.github.io/vellum/reference/node_names.md).
 
+- fit:
+
+  How the guest fills the region: `"auto"` (the default) fits a guest
+  that declares a fixed-aspect content box (see Details) inside the
+  region and fills the region with any other guest; `"fill"` always
+  fills the region; `"contain"` is `"auto"` but an error when the guest
+  declares no content box. Fitting needs the region's physical size, so
+  it applies when the region is placed at the host's top level, in `npc`
+  numbers or absolute units; inside a pushed viewport the guest fills
+  the region.
+
 - ...:
 
   Further arguments to
@@ -67,6 +79,17 @@ The guest's `npc` coordinates become relative to the region it is placed
 in, so a guest built on a square page and inset into a wide region will
 stretch. Match the aspect ratio, or build the guest at the aspect you
 want.
+
+A guest whose content has a fixed aspect ratio (a map, or a plot with a
+fixed coordinate ratio) can say so, and then `fit = "auto"` shrinks the
+region around it, so its background and border hug the content instead
+of framing empty bands. The guest declares it with an attribute
+`vellum_content_fit`: `c(fixed_w, fixed_h, null_w, null_h)`, the fixed
+(absolute, mm) width and height of its frame and the weights of its
+aspect-locked `null` tracks (one null unit is the same size both ways,
+as under `grid_layout(respect = TRUE)`). vellumplot sets it on an
+aspect-locked plot. The region keeps its centre; it is shrunk in one
+direction only.
 
 ## See also
 
