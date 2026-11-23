@@ -1050,10 +1050,9 @@ md <- function(text) {
   for (li in seq_len(nl)) {
     loff <- ((nl - 1) / 2 - (li - 1)) * lead # line baseline, centred about 0 (+up)
     adv <- 0
-    for (run in lines[[li]]) {
-      if (!nzchar(run$text)) {
-        next
-      }
+    runs <- Filter(function(r) nzchar(r$text), lines[[li]])
+    for (ri in seq_along(runs)) {
+      run <- runs[[ri]]
       face <- .rs_face(.md_run_face(fontface, run))
       rsize <- fontsize * run$size
       sh <- .shape_cached(
@@ -1076,6 +1075,12 @@ md <- function(text) {
         cols <- c(cols, rep(rc, sh$n))
       }
       adv <- adv + sh$w
+      # The shaper's width leaves out trailing white space, so "mass " and
+      # "mass" measure the same. Before another run that space is part of the
+      # line: add its advance, or "mass *M*" sets as "massM".
+      if (ri < length(runs)) {
+        adv <- adv + .md_trailing_space(run$text, family, face, rsize, features)
+      }
       top <- max(top, dyp + sh$h)
       bot <- min(bot, dyp)
     }
@@ -1092,6 +1097,24 @@ md <- function(text) {
     w = wmax,
     h = top - bot
   )
+}
+
+# The advance of the white space that ends `text` (0 when there is none), in
+# the run's face and size: shaped as leading space, which the shaper counts.
+.md_trailing_space <- function(text, family, face, size, features = NULL) {
+  ws <- regmatches(text, regexpr("[[:space:]]+$", text))
+  if (!length(ws)) {
+    return(0)
+  }
+  probe <- .shape_cached(
+    c("x", paste0(ws, "x")),
+    family,
+    face$italic,
+    face$weight,
+    size,
+    features
+  )
+  probe[[2]]$w - probe[[1]]$w
 }
 
 # Draw rich (markdown) labels at the `x`/`y` positions. `label` is either a single
