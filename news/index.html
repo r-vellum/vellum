@@ -78,7 +78,8 @@
 </ul></div>
 <div class="section level3">
 <h3 id="bug-fixes-0-14-0-9000">Bug fixes<a class="anchor" aria-label="anchor" href="#bug-fixes-0-14-0-9000"></a></h3>
-<ul><li><p>PDF output draws each run of an <code><a href="../reference/md.html">md()</a></code> label at its own size: a superscript, subscript or size span was drawn at the label’s full size, at positions shaped for the smaller run, so <code>md("mass^0.75^")</code> overprinted its exponent in a PDF while PNG and SVG were right. Glyph runs are now split on a size change, as on the other backends.</p></li>
+<ul><li><p><code><a href="../reference/scene_model.html">scene_model()</a></code> lists every named viewport that carries <code>meta</code> in <code>panels</code>, even when no element sits in it. Lines are not elements, so a line-only panel with a blank background and no gridlines (a <code><a href="https://ggplot2.tidyverse.org/reference/ggtheme.html" class="external-link">theme_minimal()</a></code> strip with <code>panel.grid = element_blank()</code>) was missing, and an interactive host lost its geometry and scales. Such a panel’s element bbox is <code>NA</code>.</p></li>
+<li><p>PDF output draws each run of an <code><a href="../reference/md.html">md()</a></code> label at its own size: a superscript, subscript or size span was drawn at the label’s full size, at positions shaped for the smaller run, so <code>md("mass^0.75^")</code> overprinted its exponent in a PDF while PNG and SVG were right. Glyph runs are now split on a size change, as on the other backends.</p></li>
 <li><p>A space before a styled run of an <code><a href="../reference/md.html">md()</a></code> label keeps its width: <code>md("Body mass *M* (kg)")</code> set as “Body massM (kg)”, because the text shaper leaves trailing white space out of a run’s width. The space is now added back whenever another run follows on the same line.</p></li>
 </ul></div>
 </div>

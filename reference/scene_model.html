@@ -117,7 +117,9 @@ per-element records, so a host reading many elements should ask for it.</p></dd>
     <p>A list with two data frames:</p><ul><li><p><code>elements</code> — one row per element: <code>key</code>, <code>mark</code>, <code>id</code>, <code>name</code>, <code>panel</code>, the
 device-px bbox <code>x0,y0,x1,y1</code>, its centre/size <code>x,y,w,h</code>, and a <code>meta</code>
 column (see the <code>meta</code> argument).</p></li>
-<li><p><code>panels</code> — one row per named panel that encloses at least one element:
+<li><p><code>panels</code> — one row per named panel that encloses at least one element,
+plus any named viewport carrying <code>meta</code> (a declared data panel, whose
+element bbox is <code>NA</code> when it holds no element):
 <code>name</code>, its elements' bounding box <code>x0,y0,x1,y1</code>, the panel viewport's
 device-px rectangle <code>px0,py0,px1,py1</code>, its native ranges
 <code>xscale_lo,xscale_hi,yscale_lo,yscale_hi</code>, and a <code>meta</code> list-column.</p></li>

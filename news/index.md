@@ -16,6 +16,15 @@
 
 ### Bug fixes
 
+- [`scene_model()`](https://r-vellum.github.io/vellum/reference/scene_model.md)
+  lists every named viewport that carries `meta` in `panels`, even when
+  no element sits in it. Lines are not elements, so a line-only panel
+  with a blank background and no gridlines (a
+  [`theme_minimal()`](https://ggplot2.tidyverse.org/reference/ggtheme.html)
+  strip with `panel.grid = element_blank()`) was missing, and an
+  interactive host lost its geometry and scales. Such a panel’s element
+  bbox is `NA`.
+
 - PDF output draws each run of an
   [`md()`](https://r-vellum.github.io/vellum/reference/md.md) label at
   its own size: a superscript, subscript or size span was drawn at the

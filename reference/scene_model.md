@@ -43,9 +43,11 @@ A list with two data frames:
   `panel`, the device-px bbox `x0,y0,x1,y1`, its centre/size `x,y,w,h`,
   and a `meta` column (see the `meta` argument).
 
-- `panels` — one row per named panel that encloses at least one element:
-  `name`, its elements' bounding box `x0,y0,x1,y1`, the panel viewport's
-  device-px rectangle `px0,py0,px1,py1`, its native ranges
+- `panels` — one row per named panel that encloses at least one element,
+  plus any named viewport carrying `meta` (a declared data panel, whose
+  element bbox is `NA` when it holds no element): `name`, its elements'
+  bounding box `x0,y0,x1,y1`, the panel viewport's device-px rectangle
+  `px0,py0,px1,py1`, its native ranges
   `xscale_lo,xscale_hi,yscale_lo,yscale_hi`, and a `meta` list-column.
 
 ## Details
