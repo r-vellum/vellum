@@ -98,7 +98,9 @@
 #'   * `elements` — one row per element: `key`, `mark`, `id`, `name`, `panel`, the
 #'     device-px bbox `x0,y0,x1,y1`, its centre/size `x,y,w,h`, and a `meta`
 #'     column (see the `meta` argument).
-#'   * `panels` — one row per named panel that encloses at least one element:
+#'   * `panels` — one row per named panel that encloses at least one element,
+#'     plus any named viewport carrying `meta` (a declared data panel, whose
+#'     element bbox is `NA` when it holds no element):
 #'     `name`, its elements' bounding box `x0,y0,x1,y1`, the panel viewport's
 #'     device-px rectangle `px0,py0,px1,py1`, its native ranges
 #'     `xscale_lo,xscale_hi,yscale_lo,yscale_hi`, and a `meta` list-column.
@@ -205,7 +207,16 @@ scene_model <- function(scene, meta = c("records", "columns")) {
       stringsAsFactors = FALSE
     )
     empty$meta <- if (meta_form == "columns") .meta_df(list(), 0L) else list()
-    return(list(elements = empty, panels = .sm_empty_panels()))
+    panels <- .sm_panels(
+      character(),
+      numeric(),
+      numeric(),
+      numeric(),
+      numeric(),
+      cap$items,
+      cap$backend$resolved_geometry()
+    )
+    return(list(elements = empty, panels = panels))
   }
 
   pull <- function(field) unlist(lapply(chunks, `[[`, field), use.names = FALSE)
@@ -520,6 +531,19 @@ scene_model <- function(scene, meta = c("records", "columns")) {
 # / `NULL` for a panel whose viewport was not captured (e.g. a foreign scene).
 .sm_panels <- function(panel, x0, y0, x1, y1, items, geom) {
   pn <- unique(panel[!is.na(panel)])
+  # A named viewport carrying `meta` is a declared data panel even when no
+  # element sits in it (a line-only panel with no background or gridlines: lines
+  # are not elements). Append those, so a host still gets the panel's geometry
+  # and scales; their element-extent bbox is NA.
+  declared <- unique(unlist(lapply(items, function(t) {
+    nm <- t$name
+    if (
+      !is.null(t$vp@meta) && length(nm) == 1L && !is.na(nm) && nzchar(nm)
+    ) {
+      as.character(nm)
+    }
+  })))
+  pn <- c(pn, setdiff(declared, pn))
   n <- length(pn)
   if (!n) {
     return(.sm_empty_panels())
@@ -532,10 +556,14 @@ scene_model <- function(scene, meta = c("records", "columns")) {
   for (j in seq_len(n)) {
     p <- pn[j]
     i <- rows[[j]]
-    ex0[j] <- min(x0[i])
-    ey0[j] <- min(y0[i])
-    ex1[j] <- max(x1[i])
-    ey1[j] <- max(y1[i])
+    if (length(i)) {
+      ex0[j] <- min(x0[i])
+      ey0[j] <- min(y0[i])
+      ex1[j] <- max(x1[i])
+      ey1[j] <- max(y1[i])
+    } else {
+      ex0[j] <- ey0[j] <- ex1[j] <- ey1[j] <- NA_real_
+    }
     it <- Find(function(t) identical(as.character(t$name), p), items)
     if (!is.null(it)) {
       r <- .sm_vp_rect(geom, it$id)

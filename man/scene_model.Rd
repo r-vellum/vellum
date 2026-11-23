@@ -23,7 +23,9 @@ A list with two data frames:
 \item \code{elements} — one row per element: \code{key}, \code{mark}, \code{id}, \code{name}, \code{panel}, the
 device-px bbox \verb{x0,y0,x1,y1}, its centre/size \verb{x,y,w,h}, and a \code{meta}
 column (see the \code{meta} argument).
-\item \code{panels} — one row per named panel that encloses at least one element:
+\item \code{panels} — one row per named panel that encloses at least one element,
+plus any named viewport carrying \code{meta} (a declared data panel, whose
+element bbox is \code{NA} when it holds no element):
 \code{name}, its elements' bounding box \verb{x0,y0,x1,y1}, the panel viewport's
 device-px rectangle \verb{px0,py0,px1,py1}, its native ranges
 \verb{xscale_lo,xscale_hi,yscale_lo,yscale_hi}, and a \code{meta} list-column.
