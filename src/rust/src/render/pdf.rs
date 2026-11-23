@@ -560,18 +560,22 @@ impl RenderBackend for PdfBackend<'_, '_> {
                 }
             }
 
-            // Draw in runs of consecutive glyphs sharing a font AND a baseline (so a
-            // line break, which changes gy, starts a new run handles font fallback too).
-            // Rich labels additionally break on a colour change so each run gets its fill.
+            // Draw in runs of consecutive glyphs sharing a font, a size AND a baseline
+            // (so a line break, which changes gy, starts a new run; handles font
+            // fallback too). Rich labels additionally break on a colour change so each
+            // run gets its fill, and on a size change: a superscript or a `size`
+            // span is drawn at its own glyph size, as the raster and SVG backends do.
             let mut i = 0;
             while i < n {
                 let (gpath, gface, gy0) = (&run.gpath[i], run.gface[i], run.gy[i]);
+                let gsize0 = run.gsize[i];
                 let col0 = run.gcolor.get(i).copied();
                 let mut j = i;
                 while j < n
                     && &run.gpath[j] == gpath
                     && run.gface[j] == gface
                     && run.gy[j] == gy0
+                    && run.gsize[j] == gsize0
                     && run.gcolor.get(j).copied() == col0
                 {
                     j += 1;
@@ -586,13 +590,15 @@ impl RenderBackend for PdfBackend<'_, '_> {
                     }));
                 }
                 let start_y = (run.ay - (gy0 - run.vjust * run.h)) as f32;
+                // The run's own glyph size (px); fall back to the label size.
+                let run_px = if gsize0 > 0.0 { gsize0 as f32 } else { size_px };
                 if let Some(font) = self.font_for(gpath, gface) {
                     let glyphs: Vec<KrillaGlyph> = (i..j)
                         .map(|k| {
                             KrillaGlyph::new(
                                 GlyphId::new(run.gid[k]),
-                                0.0,                        // x_advance (positions via x_offset)
-                                run.gx[k] as f32 / size_px, // x_offset, normalized
+                                0.0,                       // x_advance (positions via x_offset)
+                                run.gx[k] as f32 / run_px, // x_offset, normalized
                                 0.0,
                                 0.0,
                                 range_for(k),
@@ -605,7 +611,7 @@ impl RenderBackend for PdfBackend<'_, '_> {
                         &glyphs,
                         font,
                         run.label,
-                        size_px,
+                        run_px,
                         false,
                     );
                 }

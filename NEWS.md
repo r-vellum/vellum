@@ -2,6 +2,12 @@
 
 ## Bug fixes
 
+* PDF output draws each run of an `md()` label at its own size: a
+  superscript, subscript or size span was drawn at the label's full size, at
+  positions shaped for the smaller run, so `md("mass^0.75^")` overprinted its
+  exponent in a PDF while PNG and SVG were right. Glyph runs are now split on
+  a size change, as on the other backends.
+
 * A space before a styled run of an `md()` label keeps its width:
   `md("Body mass *M* (kg)")` set as "Body massM (kg)", because the text
   shaper leaves trailing white space out of a run's width. The space is now
