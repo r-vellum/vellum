@@ -315,3 +315,36 @@ test_that("a spec from the old encoder (no names field) still reads", {
     as_scene_spec(from_scene_spec(spec))
   )
 })
+
+test_that("scene_inset() fits a guest that declares a fixed-aspect content box (VP-120)", {
+  host <- vl_scene(6, 4)
+  # a guest whose content is a 2:1 null-track panel plus a 10 mm frame each way
+  guest <- vl_scene(2, 2) |>
+    draw(rect_grob(gp = vl_gpar(fill = "tomato", col = NA)))
+  npc <- function(u) vctrs::field(u, "value")
+  # no declaration: the region is left as given (fill)
+  plain <- scene_inset(host, guest, width = 0.5, height = 0.5)
+  expect_equal(.node_children(.materialize(plain))[[1]]@vp@width, vl_unit(0.5, "npc"))
+  attr(guest, "vellum_content_fit") <- c(10, 10, 2, 1)
+  fitted <- scene_inset(host, guest, width = 0.5, height = 0.5, name = "ins")
+  vp <- .node_children(.materialize(fitted))[[1]]@vp
+  # region 76.2 x 50.8 mm; null space 66.2 x 40.8 -> u = min(33.1, 40.8) = 33.1
+  expect_equal(npc(vp@width), 0.5, tolerance = 1e-9)
+  h_mm <- npc(vp@height) * 4 * 25.4
+  expect_equal(h_mm, 10 + 33.1, tolerance = 1e-6)
+  # fill keeps the region; contain without a declaration is an error
+  kept <- scene_inset(host, guest, width = 0.5, height = 0.5, fit = "fill")
+  expect_equal(.node_children(.materialize(kept))[[1]]@vp@height, vl_unit(0.5, "npc"))
+  attr(guest, "vellum_content_fit") <- NULL
+  expect_error(
+    scene_inset(host, guest, width = 0.5, height = 0.5, fit = "contain"),
+    "content box"
+  )
+  # absolute units work too
+  attr(guest, "vellum_content_fit") <- c(0, 0, 1, 1)
+  sq <- scene_inset(host, guest, width = vl_unit(2, "in"), height = vl_unit(1, "in"))
+  vp <- .node_children(.materialize(sq))[[1]]@vp
+  expect_equal(vl_convert(vp@width, "mm"), 25.4, tolerance = 1e-6)
+  expect_equal(vl_convert(vp@height, "mm"), 25.4, tolerance = 1e-6)
+  expect_error(scene_inset(host, guest, fit = "squash"), "fit")
+})
