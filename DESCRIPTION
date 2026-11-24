@@ -74,6 +74,7 @@ Collate:
     'paint.R'
     'pick.R'
     'place.R'
+    'plotmath.R'
     'raster.R'
     'render.R'
     'scene-model.R'

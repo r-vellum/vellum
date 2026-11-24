@@ -795,6 +795,16 @@ vl_strheight <- function(
 #' * `*italic*` or `_italic_`
 #' * `^sup^` (superscript) and `~sub~` (subscript)
 #' * `[text]{#c00}` — a coloured span (any R colour: name or hex)
+#' * `$...$` — inline math in [tex()]'s notation, typeset by the same engine
+#'   and set on the line's baseline (`"electron mass $m_e$ in **kg**"`)
+#'
+#' Math follows pandoc's rules for `$`: the opening `$` must be followed by a
+#' non-space and the closing `$` preceded by a non-space and not followed by a
+#' digit, so `"costs $5 to $10"` stays prose. Write `\\$` for a literal dollar
+#' sign. Display math (`$$...$$`) is not supported; `$$` is kept as literal
+#' text. Markup inside `$...$` is TeX, not markdown; the formula takes its
+#' span's colour and size, and a tall formula makes its line taller. Math that
+#' does not parse is an error naming its position in the label.
 #'
 #' Spans nest (e.g. `**a^2^**`). `md()` with no markup is equivalent to the plain
 #' string. Embedded newlines (`\n`) start a new line (stacked baseline-to-baseline).
@@ -808,6 +818,7 @@ vl_strheight <- function(
 #' @examples
 #' lab <- md("R^2^ = **0.91**")
 #' labs <- md(c("*a*", "**b**")) # a list of two labels
+#' md("kinetic energy $\\frac{1}{2}mv^2$ in **J**")
 #' @export
 md <- function(text) {
   text <- as.character(text)
@@ -815,14 +826,14 @@ md <- function(text) {
     return(list())
   }
   if (length(text) == 1L) {
-    return(.md_one(text))
+    return(.md_one(text, call = environment()))
   }
-  lapply(text, .md_one)
+  lapply(text, .md_one, call = environment())
 }
 
 # Build one `vellum_md_label` from a single markup string, splitting on "\n" into
 # lines whose run lists are joined by a break marker (`list(brk = TRUE)`).
-.md_one <- function(text) {
+.md_one <- function(text, call = parent.frame()) {
   if (is.na(text)) {
     text <- ""
   }
@@ -835,13 +846,149 @@ md <- function(text) {
     if (i > 1L) {
       runs[[length(runs) + 1L]] <- list(brk = TRUE)
     }
-    runs <- c(runs, .md_parse(lines[i]))
+    # Inline math first: each `$...$` span becomes one placeholder character,
+    # so the markdown delimiters inside math (`_`, `^`, `*`) are never seen by
+    # the markdown parser. A line without `$` passes through untouched.
+    ex <- .md_math_extract(lines[i], call = call)
+    line_runs <- .md_parse(ex$text)
+    if (length(ex$math) || ex$escaped) {
+      line_runs <- .md_math_splice(line_runs, ex$math)
+    }
+    runs <- c(runs, line_runs)
   }
   plain <- paste0(
     vapply(runs, function(r) r$text %||% "\n", character(1)),
     collapse = ""
   )
   vellum_md_label(runs = runs, text = plain)
+}
+
+# --- inline math in md() (F-31) -------------------------------------------------
+
+# Placeholders: a math span is one private-use character U+E000 + k; an escaped
+# `\$` is U+E0FF until the runs are spliced, then a literal "$".
+.MD_MATH_BASE <- 0xE000L
+.MD_DOLLAR <- intToUtf8(0xE0FFL)
+
+# Find the `$...$` math spans of one line with pandoc's rules: an opening `$`
+# has a non-space right after it; a closing `$` has a non-space right before
+# it and no digit right after it; `\$` is a literal dollar; `$$` (display
+# math, unsupported) stays two literal dollars. A `$` that opens nothing is
+# literal, so "costs $5 to $10" is plain text. Each span's TeX is checked here,
+# so a bad formula fails at md() time like tex() does.
+.md_math_extract <- function(text, call = parent.frame()) {
+  none <- list(text = text, math = character(0), escaped = FALSE)
+  if (!grepl("$", text, fixed = TRUE)) {
+    return(none)
+  }
+  ch <- strsplit(text, "", fixed = TRUE)[[1]]
+  n <- length(ch)
+  out <- character(0)
+  math <- character(0)
+  escaped <- FALSE
+  is_space <- function(x) grepl("^[[:space:]]$", x)
+  i <- 1L
+  while (i <= n) {
+    c <- ch[i]
+    if (c == "\\" && i < n && ch[i + 1L] == "$") {
+      out <- c(out, .MD_DOLLAR)
+      escaped <- TRUE
+      i <- i + 2L
+      next
+    }
+    if (c != "$") {
+      out <- c(out, c)
+      i <- i + 1L
+      next
+    }
+    if (i < n && ch[i + 1L] == "$") {
+      out <- c(out, "$", "$")
+      i <- i + 2L
+      next
+    }
+    close <- NA_integer_
+    if (i < n && !is_space(ch[i + 1L])) {
+      j <- i + 2L
+      while (j <= n) {
+        if (
+          ch[j] == "$" &&
+            ch[j - 1L] != "\\" &&
+            !is_space(ch[j - 1L]) &&
+            !(j < n && grepl("[0-9]", ch[j + 1L]))
+        ) {
+          close <- j
+          break
+        }
+        j <- j + 1L
+      }
+    }
+    if (is.na(close)) {
+      out <- c(out, "$")
+      i <- i + 1L
+      next
+    }
+    src <- paste(ch[(i + 1L):(close - 1L)], collapse = "")
+    bad <- rs_math_check(src)
+    if (!is.null(bad)) {
+      cli::cli_abort(
+        c(
+          "Can't parse the math in the {.fn md} label.",
+          x = "{bad$message} at position {i + bad$position} of the label.",
+          i = "In {.code {text}}."
+        ),
+        call = call,
+        class = "vellum_tex_error"
+      )
+    }
+    math <- c(math, src)
+    if (length(math) > 255L) {
+      cli::cli_abort(
+        "An {.fn md} label line can hold at most 255 formulas.",
+        call = call
+      )
+    }
+    out <- c(out, intToUtf8(.MD_MATH_BASE + length(math) - 1L))
+    i <- close + 1L
+  }
+  list(text = paste(out, collapse = ""), math = math, escaped = escaped)
+}
+
+# Split parsed runs at the math placeholders: text pieces keep their run's
+# style; each placeholder becomes a math run (`math` = the TeX source, `text`
+# = "$source$" for the label's plain text) with the same size, baseline shift
+# and colour, so `^$x$^` or `[$y$]{red}` style the formula too.
+.md_math_splice <- function(runs, math) {
+  out <- list()
+  pat <- sprintf(
+    "([%s-%s])",
+    intToUtf8(.MD_MATH_BASE),
+    intToUtf8(.MD_MATH_BASE + 254L)
+  )
+  for (r in runs) {
+    pieces <- regmatches(r$text, gregexpr(pat, r$text), invert = NA)[[1]]
+    for (p in pieces) {
+      if (!nzchar(p)) {
+        next
+      }
+      code <- utf8ToInt(p)
+      if (
+        length(code) == 1L &&
+          code >= .MD_MATH_BASE &&
+          code < .MD_MATH_BASE + 255L
+      ) {
+        src <- math[code - .MD_MATH_BASE + 1L]
+        mr <- r
+        mr$text <- paste0("$", src, "$")
+        mr$math <- src
+        out[[length(out) + 1L]] <- mr
+      } else {
+        tr <- r
+        tr$text <- gsub(.MD_DOLLAR, "$", p, fixed = TRUE)
+        out[[length(out) + 1L]] <- tr
+      }
+    }
+  }
+  if (!length(out)) list(.md_run("", .md_style())) else out
 }
 
 # A run-style descriptor. `size` is a multiplier on the base fontsize; `dy` is a
@@ -1021,6 +1168,18 @@ md <- function(text) {
   base_col,
   features = NULL
 ) {
+  # A label with inline math takes the math-aware composer; every other label
+  # keeps this path exactly, so its glyphs (and scenes) are unchanged.
+  if (any(vapply(label@runs, function(r) !is.null(r$math), logical(1)))) {
+    return(.md_compose_math(
+      label,
+      family,
+      fontface,
+      fontsize,
+      base_col,
+      features
+    ))
+  }
   # Split the flat run list into lines at the `brk` markers (single-line labels
   # yield one line and a zero line-offset, so their output is unchanged).
   lines <- list()
@@ -1096,6 +1255,176 @@ md <- function(text) {
     cols = cols,
     w = wmax,
     h = top - bot
+  )
+}
+
+# Compose an md() label that has inline math. Text runs are shaped exactly as
+# in `.md_compose()`; a math run is laid out by the math engine at the run's
+# size and set on the run's baseline (the shaped descent of the label's font
+# at that size above the run's box bottom, as a text run's glyphs sit). Line
+# extents use the formula's TeX box (and its ink, should that reach further),
+# so a fraction makes its line taller; lines stack at the usual leading or
+# further apart when tall math needs it. The whole label is then lifted so the
+# box's bottom is at 0 and holds every glyph and rule (measure == draw).
+.md_compose_math <- function(
+  label,
+  family,
+  fontface,
+  fontsize,
+  base_col,
+  features = NULL
+) {
+  lines <- list()
+  cur <- list()
+  for (run in label@runs) {
+    if (isTRUE(run$brk)) {
+      lines[[length(lines) + 1L]] <- cur
+      cur <- list()
+    } else {
+      cur[[length(cur) + 1L]] <- run
+    }
+  }
+  lines[[length(lines) + 1L]] <- cur
+  nl <- length(lines)
+  lead <- fontsize * .LINEHEIGHT
+  f <- .math_font()
+
+  # Pass 1: lay out each line at baseline offset 0.
+  laid <- vector("list", nl)
+  for (li in seq_len(nl)) {
+    g <- list(
+      gid = integer(0),
+      gx = numeric(0),
+      gy = numeric(0),
+      gsize = numeric(0),
+      gpath = character(0),
+      gface = integer(0),
+      cols = character(0),
+      rx = numeric(0),
+      ry = numeric(0),
+      rw = numeric(0),
+      rh = numeric(0),
+      rcols = character(0),
+      gtext = character(0)
+    )
+    adv <- 0
+    top <- 0
+    bot <- 0
+    runs <- Filter(function(r) nzchar(r$text), lines[[li]])
+    for (ri in seq_along(runs)) {
+      run <- runs[[ri]]
+      rface <- .md_run_face(fontface, run)
+      face <- .rs_face(rface)
+      rsize <- fontsize * run$size
+      dyp <- run$dy * fontsize
+      rc <- if (is.na(run$col)) base_col else run$col
+      if (!is.null(run$math)) {
+        m <- rs_math_layout(run$math, f$path, f$index, rsize, FALSE)
+        if (is.null(m$gid)) {
+          cli::cli_abort("Can't typeset {.code {run$math}}: {m$message}.")
+        }
+        if (nzchar(m$missing)) {
+          .tex_missing_warning(m$missing, f$path)
+        }
+        strut <- .tex_strut(family, rface, rsize)
+        base <- dyp + strut[["depth"]]
+        n <- length(m$gid)
+        g$gid <- c(g$gid, m$gid)
+        g$gx <- c(g$gx, m$gx + adv)
+        g$gy <- c(g$gy, m$gy + base)
+        g$gsize <- c(g$gsize, m$gsize)
+        g$gpath <- c(g$gpath, rep(f$path, n))
+        g$gface <- c(g$gface, rep(f$index, n))
+        g$cols <- c(g$cols, rep(rc, n))
+        g$gtext <- c(g$gtext, m$text)
+        nr <- length(m$rx)
+        g$rx <- c(g$rx, m$rx + adv)
+        g$ry <- c(g$ry, m$ry + base)
+        g$rw <- c(g$rw, m$rw)
+        g$rh <- c(g$rh, m$rh)
+        g$rcols <- c(g$rcols, rep(rc, nr))
+        adv <- adv + m$width
+        above <- max(m$box_height, m$ascent, strut[["height"]])
+        below <- max(m$box_depth, m$depth, strut[["depth"]])
+        top <- max(top, base + above)
+        bot <- min(bot, base - below)
+        next
+      }
+      sh <- .shape_cached(
+        run$text,
+        family,
+        face$italic,
+        face$weight,
+        rsize,
+        features
+      )[[1]]
+      if (sh$n > 0L) {
+        g$gid <- c(g$gid, sh$index)
+        g$gx <- c(g$gx, sh$xoff + adv)
+        g$gy <- c(g$gy, sh$yoff + dyp)
+        g$gsize <- c(g$gsize, sh$fsize)
+        g$gpath <- c(g$gpath, sh$fpath)
+        g$gface <- c(g$gface, sh$findex)
+        g$cols <- c(g$cols, rep(rc, sh$n))
+        # One character per glyph for PDF text: exact when the shaper made one
+        # glyph per character, else padded so the count still matches.
+        chars <- strsplit(run$text, "", fixed = TRUE)[[1]]
+        chars <- if (length(chars) >= sh$n) {
+          chars[seq_len(sh$n)]
+        } else {
+          c(chars, rep("\u200b", sh$n - length(chars)))
+        }
+        g$gtext <- c(g$gtext, paste(chars, collapse = ""))
+      }
+      adv <- adv + sh$w
+      if (ri < length(runs)) {
+        adv <- adv + .md_trailing_space(run$text, family, face, rsize, features)
+      }
+      top <- max(top, dyp + sh$h)
+      bot <- min(bot, dyp)
+    }
+    g$w <- adv
+    g$top <- top
+    g$bot <- bot
+    laid[[li]] <- g
+  }
+
+  # Pass 2: stack the lines (baseline-to-baseline at least the leading),
+  # centred about 0 as `.md_compose()` centres them.
+  off <- numeric(nl)
+  if (nl > 1L) {
+    for (li in 2:nl) {
+      gap <- max(lead, laid[[li]]$top - laid[[li - 1L]]$bot)
+      off[li] <- off[li - 1L] - gap
+    }
+    off <- off - (off[1] + off[nl]) / 2
+  }
+  top <- max(vapply(seq_len(nl), function(k) off[k] + laid[[k]]$top, 1))
+  bot <- min(vapply(seq_len(nl), function(k) off[k] + laid[[k]]$bot, 1))
+  lift <- -bot
+  cat_field <- function(name, shift = NULL) {
+    unlist(lapply(seq_len(nl), function(k) {
+      v <- laid[[k]][[name]]
+      if (is.null(shift)) v else v + off[k] + shift
+    }))
+  }
+  list(
+    gid = as.integer(cat_field("gid")),
+    gx = as.numeric(cat_field("gx")),
+    gy = as.numeric(cat_field("gy", lift)),
+    gsize = as.numeric(cat_field("gsize")),
+    gpath = as.character(cat_field("gpath")),
+    gface = as.integer(cat_field("gface")),
+    cols = as.character(cat_field("cols")),
+    w = max(vapply(laid, function(g) g$w, 1)),
+    h = top - bot,
+    rx = as.numeric(cat_field("rx")),
+    ry = as.numeric(cat_field("ry", lift)),
+    rw = as.numeric(cat_field("rw")),
+    rh = as.numeric(cat_field("rh")),
+    rcols = as.character(cat_field("rcols")),
+    gtext = paste(cat_field("gtext"), collapse = ""),
+    baseline = lift + off[1]
   )
 }
 

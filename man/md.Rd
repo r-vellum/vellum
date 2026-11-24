@@ -25,7 +25,17 @@ Supported markup:
 \item \verb{*italic*} or \verb{_italic_}
 \item \verb{^sup^} (superscript) and \verb{~sub~} (subscript)
 \item \verb{[text]\{#c00\}} — a coloured span (any R colour: name or hex)
+\item \verb{$...$} — inline math in \code{\link[=tex]{tex()}}'s notation, typeset by the same engine
+and set on the line's baseline (\code{"electron mass $m_e$ in **kg**"})
 }
+
+Math follows pandoc's rules for \code{$}: the opening \code{$} must be followed by a
+non-space and the closing \code{$} preceded by a non-space and not followed by a
+digit, so \code{"costs $5 to $10"} stays prose. Write \verb{\\\\$} for a literal dollar
+sign. Display math (\verb{$$...$$}) is not supported; \verb{$$} is kept as literal
+text. Markup inside \verb{$...$} is TeX, not markdown; the formula takes its
+span's colour and size, and a tall formula makes its line taller. Math that
+does not parse is an error naming its position in the label.
 
 Spans nest (e.g. \verb{**a^2^**}). \code{md()} with no markup is equivalent to the plain
 string. Embedded newlines (\verb{\\n}) start a new line (stacked baseline-to-baseline).
@@ -37,4 +47,5 @@ carry a per-datum rich label.
 \examples{
 lab <- md("R^2^ = **0.91**")
 labs <- md(c("*a*", "**b**")) # a list of two labels
+md("kinetic energy $\\\\frac{1}{2}mv^2$ in **J**")
 }

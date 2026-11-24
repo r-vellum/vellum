@@ -390,11 +390,16 @@ S7::method(.label_compose, vellum_md_label) <- function(
   features = NULL
 ) {
   g <- .md_compose(label, family, fontface, fontsize, base_col, features)
-  g$rx <- g$ry <- g$rw <- g$rh <- numeric(0)
-  g$rcols <- character(0)
+  # A label with inline math brings its own rules, per-glyph text and
+  # baseline; a plain md label has none of them.
+  g$rx <- g$rx %||% numeric(0)
+  g$ry <- g$ry %||% numeric(0)
+  g$rw <- g$rw %||% numeric(0)
+  g$rh <- g$rh %||% numeric(0)
+  g$rcols <- g$rcols %||% character(0)
   g$text <- label@text
-  g$gtext <- ""
-  g$baseline <- 0
+  g$gtext <- g$gtext %||% ""
+  g$baseline <- g$baseline %||% 0
   g
 }
 

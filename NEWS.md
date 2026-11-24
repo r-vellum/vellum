@@ -20,6 +20,29 @@
   family and size (grown where the formula reaches past it), so formulas share
   a baseline. An unknown command is an error that names it and its position.
 
+* `md()` labels take inline math between `$` signs (F-31):
+  `md("electron mass $m_e$ in **kg**")` typesets each formula with the
+  `tex()` engine and sets it on the line's baseline, in its span's colour and
+  size; a tall formula makes its line taller. The `$` rules are pandoc's
+  (`"costs $5 to $10"` stays prose), `"\\$"` is a literal dollar, and `$$` is
+  kept as text (display math is not supported). Labels without math are drawn
+  exactly as before. Queries see the md source; the PDF text layer has the
+  prose and the formula's characters.
+
+* `plotmath()` reads strings in R's plotmath notation, and `tex()` accepts
+  plotmath unevaluated (`tex(quote(x[i]^2))`, `tex(expression(alpha, beta))`,
+  `tex(bquote(...))`) (F-31). The expression is translated to TeX, which
+  becomes the label's text, and typeset by the same engine. The documented
+  plotmath vocabulary is covered (scripts, the `%op%` operators, `frac()`,
+  `atop()`, `sqrt()`, accents, Greek, big operators with limits, `group()`
+  and `bgroup()`, font and style calls, `phantom()`, strings and numbers);
+  anything else is an error. Single letters are set in math italic, the TeX
+  convention.
+
+* `tex()` learns TeX's infix `\over`, `\atop` and `\choose`, `\phantom`
+  (and `\hphantom`, `\vphantom`), `\textit`, `\textbf`, `\textbfit`,
+  `\mathbfit` / `\boldsymbol` and `\mathring` (F-31).
+
 * `text_grob()` accepts a list of rich labels (one per position), as
   `md(c(...))` and `tex(c(...))` return. It used to coerce the list to text
   and draw `<object>`.
