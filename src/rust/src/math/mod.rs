@@ -33,6 +33,8 @@ pub struct Formula {
     pub depth: f64,
     pub box_height: f64,
     pub box_depth: f64,
+    /// Characters the font has no glyph for (drawn as `.notdef`).
+    pub missing: String,
 }
 
 /// Parse and lay out `src` at `size` points in `font`.
@@ -43,7 +45,7 @@ pub fn typeset(
     display: bool,
 ) -> Result<Formula, ParseError> {
     let nodes = parse::parse(src)?;
-    let ctx = Ctx { font, size };
+    let ctx = Ctx::new(font, size);
     let b = ctx.hlist(&nodes, Style::new(display));
     // Ink extents over every glyph outline and rule.
     let mut top = f64::NEG_INFINITY;
@@ -66,6 +68,7 @@ pub fn typeset(
     } else {
         (0.0, 0.0)
     };
+    let missing: String = ctx.missing.borrow().iter().collect();
     Ok(Formula {
         glyphs: b.glyphs,
         rules: b.rules,
@@ -74,6 +77,7 @@ pub fn typeset(
         depth,
         box_height: b.h,
         box_depth: b.d,
+        missing,
     })
 }
 
@@ -134,7 +138,8 @@ fn rs_math_layout(src: &str, path: &str, face: i32, size: f64, display: bool) ->
                 ascent = m.ascent,
                 depth = m.depth,
                 box_height = m.box_height,
-                box_depth = m.box_depth
+                box_depth = m.box_depth,
+                missing = m.missing
             )
             .into()
         }

@@ -170,6 +170,15 @@ impl MathConstants {
     }
 }
 
+/// A glyph corner for math kerning, in `MathKernInfoRecord` order.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Corner {
+    TopRight = 0,
+    TopLeft = 1,
+    BottomRight = 2,
+    BottomLeft = 3,
+}
+
 /// One size variant of a stretchy glyph: the glyph and its full advance along
 /// the stretch direction (height for vertical, width for horizontal).
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -203,6 +212,7 @@ pub struct MathTable {
     italics: Option<usize>,
     top_accent: Option<usize>,
     extended: Option<usize>,
+    kern_info: Option<usize>,
     pub min_connector_overlap: u16,
     variants: Option<usize>,
 }
@@ -219,9 +229,14 @@ impl MathTable {
         let constants = MathConstants::read(b, b.sub(0, 4)?)?;
         let glyph_info = b.sub(0, 6);
         let variants = b.sub(0, 8);
-        let (italics, top_accent, extended) = match glyph_info {
-            Some(gi) => (b.sub(gi, gi), b.sub(gi, gi + 2), b.sub(gi, gi + 4)),
-            None => (None, None, None),
+        let (italics, top_accent, extended, kern_info) = match glyph_info {
+            Some(gi) => (
+                b.sub(gi, gi),
+                b.sub(gi, gi + 2),
+                b.sub(gi, gi + 4),
+                b.sub(gi, gi + 6),
+            ),
+            None => (None, None, None, None),
         };
         let min_connector_overlap = variants.and_then(|v| b.u16(v)).unwrap_or(0);
         Some(MathTable {
@@ -230,6 +245,7 @@ impl MathTable {
             italics,
             top_accent,
             extended,
+            kern_info,
             min_connector_overlap,
             variants,
         })
@@ -257,6 +273,46 @@ impl MathTable {
         self.extended
             .and_then(|c| coverage_index(self.b(), c, glyph))
             .is_some()
+    }
+
+    /// The math kern ("cut-in") of `glyph` at one corner, as
+    /// `(correction heights, kern values)` in font units; `kerns` has one
+    /// more entry than `heights`. `None` when the font lists none.
+    pub fn math_kern(&self, glyph: u16, corner: Corner) -> Option<(Vec<i16>, Vec<i16>)> {
+        let b = self.b();
+        let at = self.kern_info?;
+        let cov = b.sub(at, at)?;
+        let count = b.u16(at + 2)? as usize;
+        let idx = coverage_index(b, cov, glyph)?;
+        if idx >= count {
+            return None;
+        }
+        let rec = at + 4 + 8 * idx + 2 * corner as usize;
+        let k = b.sub(at, rec)?;
+        let n = b.u16(k)? as usize;
+        let mut heights = Vec::with_capacity(n);
+        for i in 0..n {
+            heights.push(b.i16(k + 2 + 4 * i)?);
+        }
+        let mut kerns = Vec::with_capacity(n + 1);
+        for i in 0..=n {
+            kerns.push(b.i16(k + 2 + 4 * n + 4 * i)?);
+        }
+        Some((heights, kerns))
+    }
+
+    /// The kern of `glyph` at `corner` for a height (font units): the value
+    /// of the first band whose correction height is above `height`. 0 when
+    /// the glyph has no kern at that corner.
+    pub fn kern_at(&self, glyph: u16, corner: Corner, height: f64) -> f64 {
+        let Some((heights, kerns)) = self.math_kern(glyph, corner) else {
+            return 0.0;
+        };
+        let i = heights
+            .iter()
+            .position(|h| height < *h as f64)
+            .unwrap_or(heights.len());
+        kerns.get(i).copied().unwrap_or(0) as f64
     }
 
     /// A `{coverage, count, MathValueRecord[count]}` list lookup.

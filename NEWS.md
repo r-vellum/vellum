@@ -15,8 +15,10 @@
   it renders the same in PNG, SVG and PDF and is measured exactly as drawn.
   The default math font is STIX Two Math, bundled (SIL Open Font License,
   see `inst/COPYRIGHTS`); `options(vellum.math_font = )` picks another font
-  with a MATH table by family name or file. An unknown command is an error
-  that names it and its position.
+  with a MATH table by family name or file. Scripts use the font's math
+  kerning, and a label's box is the line box of a plain label of the same
+  family and size (grown where the formula reaches past it), so formulas share
+  a baseline. An unknown command is an error that names it and its position.
 
 * `text_grob()` accepts a list of rich labels (one per position), as
   `md(c(...))` and `tex(c(...))` return. It used to coerce the list to text

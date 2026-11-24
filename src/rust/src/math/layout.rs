@@ -8,7 +8,7 @@
 use super::font::MathFont;
 use super::parse::{ForceStyle, Node, Space};
 use super::symbols::{Class, Limits};
-use super::table::{MathConstants, Part};
+use super::table::{Corner, MathConstants, Part};
 
 /// TeX's \nulldelimiterspace (1.2pt at 10pt), as a fraction of the base size.
 const NULL_DELIMITER_EM: f64 = 0.12;
@@ -171,9 +171,33 @@ pub struct Ctx<'a> {
     pub font: &'a MathFont,
     /// Base size in points (text/display style).
     pub size: f64,
+    /// Characters the font has no glyph for (drawn as `.notdef`).
+    pub missing: std::cell::RefCell<Vec<char>>,
 }
 
 impl<'a> Ctx<'a> {
+    pub fn new(font: &'a MathFont, size: f64) -> Ctx<'a> {
+        Ctx {
+            font,
+            size,
+            missing: std::cell::RefCell::new(Vec::new()),
+        }
+    }
+
+    /// The nominal glyph for `ch`, or `.notdef` (0), remembering the miss.
+    fn gid_of(&self, ch: char) -> u16 {
+        match self.font.glyph(ch) {
+            Some(g) => g,
+            None => {
+                let mut m = self.missing.borrow_mut();
+                if !m.contains(&ch) {
+                    m.push(ch);
+                }
+                0
+            }
+        }
+    }
+
     fn c(&self) -> &MathConstants {
         &self.font.math.constants
     }
@@ -228,7 +252,7 @@ impl<'a> Ctx<'a> {
     /// The glyph for `ch` (`.notdef` when the font lacks it), with the
     /// script-style alternate in script styles.
     fn char_box(&self, ch: char, st: Style) -> MBox {
-        let gid = self.font.glyph(ch).unwrap_or(0);
+        let gid = self.gid_of(ch);
         let gid = self.font.script_variant(gid, st.ssty());
         self.glyph_box(gid, ch, st)
     }
@@ -236,7 +260,7 @@ impl<'a> Ctx<'a> {
     /// The smallest vertical variant of `ch` at least `target` points tall,
     /// else a glyph assembly, else the largest variant.
     fn vertical(&self, ch: char, target: f64, st: Style) -> MBox {
-        let gid = self.font.glyph(ch).unwrap_or(0);
+        let gid = self.gid_of(ch);
         let k = self.k(st);
         let Some(con) = self.font.math.vertical(gid) else {
             return self.glyph_box(gid, ch, st);
@@ -259,25 +283,19 @@ impl<'a> Ctx<'a> {
         }
     }
 
-    /// Like `vertical`, for horizontal growth (wide accents).
-    fn horizontal(&self, ch: char, target: f64, st: Style) -> MBox {
-        let gid = self.font.glyph(ch).unwrap_or(0);
+    /// The widest horizontal variant of `ch` no wider than `width` points
+    /// (TeX's rule for `\\widehat`/`\\widetilde`), else the base glyph.
+    fn widest_within(&self, ch: char, width: f64, st: Style) -> MBox {
+        let gid = self.gid_of(ch);
         let k = self.k(st);
-        let Some(con) = self.font.math.horizontal(gid) else {
-            return self.glyph_box(gid, ch, st);
-        };
-        for v in &con.variants {
-            if v.advance as f64 * k >= target {
-                return self.glyph_box(v.glyph, ch, st);
-            }
-        }
-        if !con.assembly.is_empty() {
-            return self.assemble(&con.assembly, target / k, ch, st, false);
-        }
-        match con.variants.last() {
-            Some(v) => self.glyph_box(v.glyph, ch, st),
-            None => self.glyph_box(gid, ch, st),
-        }
+        let pick = self.font.math.horizontal(gid).and_then(|con| {
+            con.variants
+                .iter()
+                .filter(|v| v.advance as f64 * k <= width)
+                .max_by_key(|v| v.advance)
+                .map(|v| v.glyph)
+        });
+        self.glyph_box(pick.unwrap_or(gid), ch, st)
     }
 
     /// Build a glyph assembly at least `target` font units long. Vertical
@@ -372,7 +390,9 @@ impl<'a> Ctx<'a> {
                 den,
                 rule,
                 style,
-            } => (Class::Ord, self.frac(num, den, *rule, *style, st)),
+                delims,
+            } => (Class::Ord, self.frac(num, den, *rule, *style, *delims, st)),
+            Node::BigDelim { ch, scale, class } => (*class, self.big_delim(*ch, *scale, st)),
             Node::Sqrt { index, body } => (Class::Ord, self.sqrt(index.as_deref(), body, st)),
             Node::BigOp { ch, .. } => (Class::Op, self.big_op(*ch, st)),
             Node::OpName { name, .. } => (Class::Op, self.op_name(name, st)),
@@ -491,6 +511,65 @@ impl<'a> Ctx<'a> {
             }
             _ => {}
         }
+        // OpenType math kerning (cut-ins): a single-glyph base and the
+        // script's first glyph each carry a kern by height at the facing
+        // corners. It is read at two heights -- the base's top or bottom and
+        // the script's bottom or top -- and the larger (looser) sum is used.
+        let base_g = if b.is_char && b.glyphs.len() == 1 && !is_op {
+            Some(&b.glyphs[0])
+        } else {
+            None
+        };
+        let kern_pair = |script: &MBox,
+                         shift: f64,
+                         base_corner: Corner,
+                         script_corner: Corner,
+                         heights: [f64; 2]| {
+            let first = script.glyphs.iter().find(|g| g.x.abs() < 1e-9);
+            if base_g.is_none() && first.is_none() {
+                return 0.0;
+            }
+            let mut best = f64::NEG_INFINITY;
+            for hgt in heights {
+                let mut k = 0.0;
+                if let Some(g) = base_g {
+                    let s = g.size / self.font.upem;
+                    k += self.font.math.kern_at(g.gid, base_corner, (hgt - g.y) / s) * s;
+                }
+                if let Some(g) = first {
+                    let s = g.size / self.font.upem;
+                    k += self
+                        .font
+                        .math
+                        .kern_at(g.gid, script_corner, (hgt - shift - g.y) / s)
+                        * s;
+                }
+                best = best.max(k);
+            }
+            best
+        };
+        let sup_kern = sup.as_ref().map_or(0.0, |sp| {
+            kern_pair(
+                sp,
+                sup_shift,
+                Corner::TopRight,
+                Corner::BottomLeft,
+                [b.h, sup_shift - sp.d],
+            )
+        });
+        let sub_kern = sub.as_ref().map_or(0.0, |sb| {
+            kern_pair(
+                sb,
+                -sub_shift,
+                Corner::BottomRight,
+                Corner::TopLeft,
+                [-b.d, sb.h - sub_shift],
+            )
+        });
+        // The cut-in adds to the italic correction (measured against
+        // LuaLaTeX: W^2, V^2 and T^2 sit at advance + correction + kern).
+        let sup_x = sup_x + sup_kern;
+        let sub_x = sub_x + sub_kern;
         let mut right = b.w;
         if let Some(sp) = &sup {
             out.put(sp, sup_x, sup_shift);
@@ -541,7 +620,7 @@ impl<'a> Ctx<'a> {
     /// A big operator glyph, its display-size variant in display style,
     /// centred on the math axis.
     fn big_op(&self, ch: char, st: Style) -> MBox {
-        let gid = self.font.glyph(ch).unwrap_or(0);
+        let gid = self.gid_of(ch);
         let mut b = if st.is_display() {
             let min_h = self.c().display_operator_min_height as f64;
             let g = self
@@ -594,6 +673,7 @@ impl<'a> Ctx<'a> {
         den: &[Node],
         rule: bool,
         force: Option<ForceStyle>,
+        delims: Option<(char, char)>,
         st: Style,
     ) -> MBox {
         let fs = match force {
@@ -604,6 +684,8 @@ impl<'a> Ctx<'a> {
         let n = self.hlist(num, fs.num());
         let d = self.hlist(den, fs.den());
         let axis = c(|m| m.axis_height);
+        // A bar-less fraction (\\binom's zero-thickness \\genfrac) uses the
+        // stack shifts and gap, as LuaTeX does for a zero rule thickness.
         let (mut u, mut v) = match (rule, fs.is_display()) {
             (true, true) => (
                 c(|m| m.fraction_numerator_display_style_shift_up),
@@ -660,9 +742,9 @@ impl<'a> Ctx<'a> {
                 v += half;
             }
         }
-        // \nulldelimiterspace pads a fraction on both sides; a ruleless stack
-        // (\binom) sits between real delimiters instead.
-        let pad = if rule {
+        // \nulldelimiterspace pads a fraction on both sides, unless it sits
+        // between real delimiters (\binom).
+        let pad = if delims.is_none() {
             NULL_DELIMITER_EM * self.size
         } else {
             0.0
@@ -684,7 +766,27 @@ impl<'a> Ctx<'a> {
                 h: theta,
             });
         }
-        out
+        match delims {
+            None => out,
+            Some((l, r)) => {
+                // \genfrac's delimiters take TeX's fraction-delimiter size
+                // (\delim1 = 2.39 em in display, \delim2 = 1.01 em otherwise,
+                // as LuaLaTeX gives them), centred on the axis.
+                let size = self.size_of(fs) * if fs.is_display() { 2.39 } else { 1.01 };
+                let lb = self.delimiter(Some(l), size, fs);
+                let rb = self.delimiter(Some(r), size, fs);
+                let mut b = MBox {
+                    w: lb.w + out.w + rb.w,
+                    h: out.h.max(lb.h).max(rb.h),
+                    d: out.d.max(lb.d).max(rb.d),
+                    ..MBox::default()
+                };
+                b.put(&lb, 0.0, 0.0);
+                b.put(&out, lb.w, 0.0);
+                b.put(&rb, lb.w + out.w, 0.0);
+                b
+            }
+        }
     }
 
     fn sqrt(&self, index: Option<&[Node]>, body: &[Node], st: Style) -> MBox {
@@ -764,6 +866,16 @@ impl<'a> Ctx<'a> {
         b
     }
 
+    /// `\\big(` and friends: a delimiter at least `scale` x amsmath's
+    /// `\\big@size` tall (1.2 x the strut height 0.7 x 1.2 em), centred on
+    /// the axis.
+    fn big_delim(&self, ch: Option<char>, scale: f64, st: Style) -> MBox {
+        // LuaTeX picks the first variant at least that tall (no
+        // \\delimiterfactor), which is what LuaLaTeX shows.
+        let h = scale * 1.2 * 0.84 * self.size_of(st);
+        self.delimiter(ch, h, st)
+    }
+
     fn left_right(
         &self,
         left: Option<char>,
@@ -816,7 +928,7 @@ impl<'a> Ctx<'a> {
             b.w / 2.0
         };
         let acc = if stretchy {
-            self.horizontal(ch, b.w, st)
+            self.widest_within(ch, b.w, st)
         } else {
             self.char_box(ch, st)
         };
@@ -909,7 +1021,7 @@ impl<'a> Ctx<'a> {
                 out.w += self.word_space(st);
                 continue;
             }
-            let gid = self.font.glyph(ch).unwrap_or(0);
+            let gid = self.gid_of(ch);
             let g = self.glyph_box(gid, ch, st);
             out.put(&g, out.w, 0.0);
             out.h = out.h.max(g.h);
@@ -920,14 +1032,19 @@ impl<'a> Ctx<'a> {
     }
 }
 
-fn forced(f: ForceStyle, st: Style) -> Style {
+fn forced(f: ForceStyle, _st: Style) -> Style {
     let level = match f {
         ForceStyle::Display => Level::Display,
         ForceStyle::Text => Level::Text,
         ForceStyle::Script => Level::Script,
         ForceStyle::ScriptScript => Level::ScriptScript,
     };
-    Style { level, ..st }
+    // An explicit style switch is never cramped (TeX: \\displaystyle is D,
+    // not D').
+    Style {
+        level,
+        cramped: false,
+    }
 }
 
 /// Inter-atom space in mu (TeXbook ch. 18). Parenthesised entries of the
@@ -1054,46 +1171,66 @@ fn join(items: Vec<Item>, st: Style, ctx: &Ctx) -> MBox {
 /// Place the parts of a glyph assembly so the whole is at least `target`
 /// font units long: repeat the extenders as few times as needed, then
 /// spread the connector overlaps evenly. Returns `(glyph, offset)` pairs.
+///
+/// The repeat count is solved directly (the maximum length grows linearly
+/// with it), so the cost is linear in the number of parts placed. It is
+/// capped at `MAX_REPEATS`, far beyond any height a formula within the
+/// parser's nesting limit can ask for.
 pub fn assembly_offsets(parts: &[Part], target: f64, min_overlap: f64) -> Vec<(u16, f64)> {
+    const MAX_REPEATS: usize = 10_000;
     if parts.is_empty() {
         return Vec::new();
     }
-    let has_ext = parts.iter().any(|p| p.extender);
-    let mut reps = 0usize;
-    loop {
-        let seq: Vec<&Part> = parts
-            .iter()
-            .flat_map(|p| std::iter::repeat_n(p, if p.extender { reps } else { 1 }))
-            .collect();
-        if seq.is_empty() {
-            reps += 1;
-            continue;
-        }
-        let full: f64 = seq.iter().map(|p| p.full_advance as f64).sum();
-        let joints = seq.len() - 1;
-        let max_len = full - joints as f64 * min_overlap;
-        if max_len >= target || !has_ext || reps > 500 {
-            let maxo: Vec<f64> = (0..joints)
-                .map(|i| {
-                    (seq[i].end_connector.min(seq[i + 1].start_connector) as f64).max(min_overlap)
-                })
-                .collect();
-            let shrinkable: f64 = maxo.iter().map(|m| m - min_overlap).sum();
-            let t = if shrinkable > 0.0 {
-                ((max_len - target) / shrinkable).clamp(0.0, 1.0)
-            } else {
-                0.0
-            };
-            let mut out = Vec::with_capacity(seq.len());
-            let mut pos = 0.0;
-            for (i, p) in seq.iter().enumerate() {
-                out.push((p.glyph, pos));
-                if i < joints {
-                    pos += p.full_advance as f64 - (min_overlap + t * (maxo[i] - min_overlap));
-                }
-            }
-            return out;
-        }
-        reps += 1;
+    let n_fixed = parts.iter().filter(|p| !p.extender).count();
+    let n_ext = parts.len() - n_fixed;
+    let fixed_len: f64 = parts
+        .iter()
+        .filter(|p| !p.extender)
+        .map(|p| p.full_advance as f64)
+        .sum();
+    let ext_len: f64 = parts
+        .iter()
+        .filter(|p| p.extender)
+        .map(|p| p.full_advance as f64)
+        .sum();
+    // Max length with r repeats: fixed + r*ext - (count - 1) * min_overlap,
+    // count = n_fixed + r * n_ext.
+    let max_len = |r: usize| {
+        let count = n_fixed + r * n_ext;
+        fixed_len + r as f64 * ext_len - (count.max(1) - 1) as f64 * min_overlap
+    };
+    let gain = ext_len - n_ext as f64 * min_overlap;
+    let mut reps = if n_fixed == 0 { 1 } else { 0 };
+    if n_ext > 0 && gain > 0.0 && max_len(reps) < target {
+        let need = ((target - max_len(reps)) / gain).ceil().max(0.0) as usize;
+        reps = (reps + need).min(MAX_REPEATS);
     }
+    let seq: Vec<&Part> = parts
+        .iter()
+        .flat_map(|p| std::iter::repeat_n(p, if p.extender { reps } else { 1 }))
+        .collect();
+    if seq.is_empty() {
+        return Vec::new();
+    }
+    let joints = seq.len() - 1;
+    let full: f64 = seq.iter().map(|p| p.full_advance as f64).sum();
+    let longest = full - joints as f64 * min_overlap;
+    let maxo: Vec<f64> = (0..joints)
+        .map(|i| (seq[i].end_connector.min(seq[i + 1].start_connector) as f64).max(min_overlap))
+        .collect();
+    let shrinkable: f64 = maxo.iter().map(|m| m - min_overlap).sum();
+    let t = if shrinkable > 0.0 {
+        ((longest - target) / shrinkable).clamp(0.0, 1.0)
+    } else {
+        0.0
+    };
+    let mut out = Vec::with_capacity(seq.len());
+    let mut pos = 0.0;
+    for (i, p) in seq.iter().enumerate() {
+        out.push((p.glyph, pos));
+        if i < joints {
+            pos += p.full_advance as f64 - (min_overlap + t * (maxo[i] - min_overlap));
+        }
+    }
+    out
 }

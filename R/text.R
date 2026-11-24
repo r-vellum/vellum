@@ -1195,6 +1195,7 @@ md <- function(text) {
   rules <- numeric(0)
   rcol <- integer(0)
   nodelab <- character(np)
+  gtext <- character(np)
   for (j in seq_len(np)) {
     g <- comp[[keytxt[j]]]
     ng <- length(g$gid)
@@ -1202,6 +1203,7 @@ md <- function(text) {
     w[j] <- g$w * scale
     h[j] <- g$h * scale
     nodelab[j] <- g$text
+    gtext[j] <- g$gtext
     nr <- length(g$rx)
     nrule[j] <- nr
     if (nr > 0L) {
@@ -1257,7 +1259,8 @@ md <- function(text) {
     if (is.null(keys)) character(0) else keys[drawn],
     if (any(nrule > 0L)) nrule else integer(0),
     rules,
-    rcol
+    rcol,
+    if (any(nzchar(gtext))) gtext else character(0)
   )
   invisible()
 }

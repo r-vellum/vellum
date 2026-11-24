@@ -222,6 +222,9 @@ pub struct TextRun<'a> {
     /// overbars of a `tex()` label), in the glyphs' frame. Empty for every
     /// other label, which then renders exactly as before.
     pub rules: &'a [TextRule],
+    /// One character per glyph for PDF text extraction when `label` is not
+    /// that (a `tex()` label's `label` is its TeX source). Empty: `label`.
+    pub gtext: &'a str,
     /// Optional halo: `(colour, width in local px)`. Backends stroke the glyph
     /// outlines in this colour **under** the fill (SVG native text uses
     /// `paint-order`). `None` leaves every text path exactly as it was.

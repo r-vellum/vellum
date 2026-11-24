@@ -39,11 +39,22 @@ pub enum Node {
         sub: Option<Vec<Node>>,
         sup: Option<Vec<Node>>,
     },
+    /// A fraction. `rule` false is a bar-less fraction (`\\binom`'s
+    /// zero-thickness `\\genfrac`); `delims` are its fraction-sized
+    /// delimiters (`\\binom`'s parentheses).
     Frac {
         num: Vec<Node>,
         den: Vec<Node>,
         rule: bool,
         style: Option<ForceStyle>,
+        delims: Option<(char, char)>,
+    },
+    /// A fixed-size delimiter (`\\big(`, `\\Bigl[`, ...): `scale` is 1,
+    /// 1.5, 2 or 2.5 (amsmath's `\\big@size` multiples). `None` is `.`.
+    BigDelim {
+        ch: Option<char>,
+        scale: f64,
+        class: Class,
     },
     Sqrt {
         index: Option<Vec<Node>>,
@@ -103,6 +114,7 @@ pub fn parse(src: &str) -> Result<Vec<Node>, ParseError> {
     let mut p = Parser {
         s: src.chars().collect(),
         i: 0,
+        depth: 0,
     };
     let nodes = p.expr(Stop::Eof, Alphabet::Normal)?;
     Ok(nodes)
@@ -130,7 +142,16 @@ enum Tok {
 struct Parser {
     s: Vec<char>,
     i: usize,
+    /// Current nesting depth (groups, arguments, atoms), bounded by
+    /// `MAX_DEPTH` so a pathological formula is an error, not a stack
+    /// overflow in the parser or the (equally recursive) layout.
+    depth: usize,
 }
+
+/// Nesting limit. Each brace level costs about two (the group's list and
+/// its atom), so this allows roughly 100 levels -- far past any real
+/// formula, and well inside the stack.
+const MAX_DEPTH: usize = 200;
 
 fn err<T>(msg: impl Into<String>, pos: usize) -> Result<T, ParseError> {
     Err(ParseError {
@@ -193,6 +214,28 @@ impl Parser {
     /// Parse atoms until `stop`. The closing token is left for the caller
     /// (except that EOF needs none).
     fn expr(&mut self, stop: Stop, alpha: Alphabet) -> Result<Vec<Node>, ParseError> {
+        self.enter()?;
+        let r = self.expr_inner(stop, alpha);
+        self.depth -= 1;
+        r
+    }
+
+    fn enter(&mut self) -> Result<(), ParseError> {
+        self.depth += 1;
+        if self.depth > MAX_DEPTH {
+            self.depth -= 1;
+            return err(
+                format!(
+                    "Formula nested too deeply (more than {} levels)",
+                    MAX_DEPTH / 2
+                ),
+                self.i.min(self.s.len()),
+            );
+        }
+        Ok(())
+    }
+
+    fn expr_inner(&mut self, stop: Stop, alpha: Alphabet) -> Result<Vec<Node>, ParseError> {
         let mut out: Vec<Node> = Vec::new();
         loop {
             let Some((pos, tok)) = self.peek() else {
@@ -293,12 +336,15 @@ impl Parser {
             }
         }
         if primes > 0 {
-            let p = match primes {
-                1 => "′",
-                2 => "″",
-                3 => "‴",
-                _ => "⁗",
-            };
+            // Unicode has single glyphs for up to four primes; more are a
+            // quadruple prime followed by the rest.
+            let mut p = String::new();
+            let mut left = primes;
+            while left > 0 {
+                let k = left.min(4);
+                p.push(['′', '″', '‴', '⁗'][k - 1]);
+                left -= k;
+            }
             let mut list: Vec<Node> = p
                 .chars()
                 .map(|ch| Node::Char {
@@ -391,6 +437,13 @@ impl Parser {
 
     /// One atom (no scripts).
     fn atom(&mut self, alpha: Alphabet) -> Result<Node, ParseError> {
+        self.enter()?;
+        let r = self.atom_inner(alpha);
+        self.depth -= 1;
+        r
+    }
+
+    fn atom_inner(&mut self, alpha: Alphabet) -> Result<Node, ParseError> {
         let Some((pos, tok)) = self.next() else {
             return err("Unexpected end of input", self.s.len());
         };
@@ -469,22 +522,34 @@ impl Parser {
                     "tfrac" => Some(ForceStyle::Text),
                     _ => None,
                 };
-                let frac = Node::Frac {
+                // amsmath's \binom is \genfrac(){0pt}: a zero-thickness
+                // fraction between fraction-sized parentheses.
+                let binom = name == "binom";
+                Ok(Node::Frac {
                     num,
                     den,
-                    rule: name != "binom",
+                    rule: !binom,
                     style,
+                    delims: if binom { Some(('(', ')')) } else { None },
+                })
+            }
+            "big" | "Big" | "bigg" | "Bigg" | "bigl" | "Bigl" | "biggl" | "Biggl" | "bigr"
+            | "Bigr" | "biggr" | "Biggr" | "bigm" | "Bigm" | "biggm" | "Biggm" => {
+                let stem = name.trim_end_matches(['l', 'r', 'm']);
+                let scale = match stem {
+                    "big" => 1.0,
+                    "Big" => 1.5,
+                    "bigg" => 2.0,
+                    _ => 2.5,
                 };
-                if name == "binom" {
-                    // amsmath braces it: an Ord, not an Inner.
-                    Ok(Node::Group(vec![Node::LeftRight {
-                        left: Some('('),
-                        right: Some(')'),
-                        body: vec![frac],
-                    }]))
-                } else {
-                    Ok(frac)
-                }
+                let class = match name.chars().last() {
+                    Some('l') => Class::Open,
+                    Some('r') => Class::Close,
+                    Some('m') => Class::Rel,
+                    _ => Class::Ord,
+                };
+                let ch = self.delimiter(name, pos)?;
+                Ok(Node::BigDelim { ch, scale, class })
             }
             "sqrt" => {
                 let index = match self.peek() {

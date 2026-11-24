@@ -148,6 +148,8 @@ pub fn symbol(cmd: &str) -> Option<(char, Class)> {
         "degree" => ('°', Ord),
         "hbar" => ('ℏ', Ord),
         "ell" => ('ℓ', Ord),
+        "imath" => ('\u{1D6A4}', Ord),
+        "jmath" => ('\u{1D6A5}', Ord),
         "Re" => ('ℜ', Ord),
         "Im" => ('ℑ', Ord),
         "aleph" => ('ℵ', Ord),

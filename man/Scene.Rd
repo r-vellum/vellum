@@ -153,6 +153,8 @@ colour is absent (it never is here, but keeps the gpar resolve consistent).
 \code{tex()} label's fraction bars and radical overbars): a rule count per
 label, then \verb{x, y, w, h} in the glyph frame (px, y up from the box
 bottom) and an RGBA colour per rule. Empty vectors mean no rules.
+\code{gtext} optionally gives each label's per-glyph text for PDF
+extraction (empty: the label itself).
 }
 
 \subsection{Method \code{mask_begin}}{

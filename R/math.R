@@ -32,13 +32,22 @@
 #'   \sup \inf \log \exp \sin \cos \tan \ln` (limits go above and below in
 #'   display style; `\limits` / `\nolimits` override)
 #' * growing delimiters `\left( ... \right)`, with `[ ] \{ \} | \| \langle
-#'   \rangle` and the empty `\left.`
+#'   \rangle` and the empty `\left.`; fixed sizes `\big \Big \bigg \Bigg`
+#'   (and their `l`/`r`/`m` forms)
 #' * alphabets `\mathrm \mathbf \mathit \mathsf \mathtt \mathcal \mathbb`, and
 #'   upright `\text{...}`
 #' * accents `\hat \bar \tilde \vec \dot \ddot \widehat \overline \underline`
 #' * spacing `\, \: \; \! \quad \qquad ~`, and `\displaystyle` etc.
 #'
-#' A command outside this subset is an error, not silently dropped.
+#' Scripts are placed with the font's italic correction and math kerning
+#' (cut-ins), as LuaTeX does. A label's box is baseline-stable: it is the line
+#' box a plain or [md()] label of the same `fontfamily` and `fontsize` gets,
+#' grown only where the formula reaches past it, so formulas set side by side
+#' share a baseline.
+#'
+#' A command outside this subset is an error, not silently dropped, and so is
+#' nesting more than 100 levels deep. Characters the math font has no glyph
+#' for are drawn as its empty box, with a warning.
 #'
 #' @param x A TeX math string, without `$` delimiters (or a character vector,
 #'   for one label per element).
@@ -123,9 +132,20 @@ tex <- function(x, display = FALSE) {
         call = call
       )
     }
+    looks_like_path <- grepl("[/\\\\]", opt) ||
+      grepl("\\.(otf|ttf|ttc)$", opt, ignore.case = TRUE)
     if (file.exists(opt)) {
       path <- normalizePath(opt)
       index <- 0L
+    } else if (looks_like_path) {
+      cli::cli_abort(
+        c(
+          "{.code options(vellum.math_font)} names a font file that doesn't exist.",
+          x = "No file at {.file {opt}}."
+        ),
+        call = call,
+        class = "vellum_math_font_error"
+      )
     } else {
       m <- systemfonts::match_fonts(opt)
       path <- m$path[1]
@@ -156,11 +176,16 @@ tex <- function(x, display = FALSE) {
 # --- composition -----------------------------------------------------------------
 
 # Lay out a tex label with the math engine and return it in `.md_compose()`'s
-# form: per-glyph arrays in points with y up from the label box's bottom, so a
-# tex label draws and measures through exactly the plumbing an md label uses.
-# The engine works baseline-relative; lifting everything by the ink depth puts
-# the box bottom at 0, so the box (w x h) is the drawn ink, vertically. Rules
-# (fraction bars, radical overbars) come back as rx/ry/rw/rh with a colour each.
+# form: per-glyph arrays in points, y up from the label box's bottom, so a tex
+# label draws and measures through exactly the plumbing an md label uses.
+#
+# The box is baseline-stable, like a plain or md label: it is a strut taken
+# from the label's own family/face/size (the shaped line height, with the
+# baseline at the shaped descent above the bottom), extended up or down only
+# where the formula's ink reaches past it. So `tex("a")`, `tex("y")` and
+# `md("a")` share a baseline under any vjust, and the box still holds all the
+# ink (measure == draw). Rules (fraction bars, radical overbars) come back as
+# rx/ry/rw/rh with a colour each.
 S7::method(.label_compose, vellum_tex_label) <- function(
   label,
   family,
@@ -175,27 +200,57 @@ S7::method(.label_compose, vellum_tex_label) <- function(
   if (is.null(m$gid)) {
     cli::cli_abort("Can't typeset {.code {label@tex}}: {m$message}.")
   }
-  lift <- m$depth
+  if (nzchar(m$missing)) {
+    .tex_missing_warning(m$missing, f$path)
+  }
+  strut <- .tex_strut(family, fontface, fontsize)
+  depth <- max(strut[["depth"]], m$depth)
+  height <- max(strut[["height"]], m$ascent)
   n <- length(m$gid)
   list(
     gid = m$gid,
     gx = m$gx,
-    gy = m$gy + lift,
+    gy = m$gy + depth,
     gsize = m$gsize,
     gpath = rep(f$path, n),
     gface = rep(f$index, n),
     cols = rep(base_col, n),
     w = m$width,
-    h = m$ascent + m$depth,
+    h = height + depth,
     rx = m$rx,
-    ry = m$ry + lift,
+    ry = m$ry + depth,
     rw = m$rw,
     rh = m$rh,
     rcols = rep(base_col, length(m$rx)),
+    text = label@text,
     # One character per glyph, so PDF text extraction maps each glyph to the
-    # character it came from.
-    text = m$text,
-    baseline = lift
+    # character it came from (the node label keeps the TeX source).
+    gtext = m$text,
+    baseline = depth
+  )
+}
+
+# The strut a plain/md label of this family, face and size gets: the shaped
+# line's height above and below the baseline (points). Shaped like md() shapes
+# a run, so the baselines agree exactly.
+.tex_strut <- function(family, fontface, fontsize) {
+  face <- .rs_face(fontface)
+  sh <- .shape_cached("x", family, face$italic, face$weight, fontsize)[[1]]
+  d <- if (sh$n > 0L) sh$yoff[1] else 0
+  c(depth = d, height = sh$h - d)
+}
+
+# Warn (once per session per font and set of characters) that the math font
+# lacks glyphs; they still draw, as the font's .notdef box.
+.tex_missing_warning <- function(chars, path) {
+  cli::cli_warn(
+    c(
+      "The math font has no glyph for {.val {strsplit(chars, '')[[1]]}}.",
+      i = "They are drawn as empty boxes; font: {.file {path}}."
+    ),
+    class = "vellum_tex_missing_glyph",
+    .frequency = "once",
+    .frequency_id = paste0("vellum_tex_missing:", path, ":", chars)
   )
 }
 

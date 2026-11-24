@@ -39,14 +39,14 @@ test_that("parse errors name the problem and its position", {
   expect_match(conditionMessage(e), "position 3")
 })
 
-test_that("measured extent equals the composed glyph box, and the ink fills it", {
+test_that("the measured box is the drawn box and holds all the ink", {
   lab <- tex("\\sum_{i=1}^n \\frac{x_i^2}{\\sqrt{y}}", display = TRUE)
   ext <- vl_strwidth(lab, fontsize = 20, unit = "pt")
   g <- .label_compose(lab, "", "plain", 20, "black")
   expect_equal(ext, g$w)
   expect_equal(vl_strheight(lab, fontsize = 20, unit = "pt"), g$h)
-  # Draw it bottom-left justified at a known point and compare the ink box
-  # with the measured box (height: the box is the ink; width: advance).
+  # Draw it bottom-left justified at a known point: this tall formula
+  # extends the strut both ways, so its box is its ink vertically.
   dpi <- 288
   s <- vl_scene(3, 2, dpi = dpi, bg = "white") |>
     draw(text_grob(
@@ -59,9 +59,8 @@ test_that("measured extent equals the composed glyph box, and the ink fills it",
   b <- ink_box(scene_raster(s))
   px <- dpi / 72
   h_ink <- (b[["y1"]] - b[["y0"]] + 1) / px
-  expect_lt(abs(h_ink - g$h), 2 / px * 2)
-  # bottom of the ink sits on the anchor (y grows down in the raster)
-  expect_lt(abs((2 * 72 - 36) - (b[["y1"]] + 1) / px), 2 / px * 2)
+  expect_lt(abs(h_ink - g$h), 1)
+  expect_lt(abs((2 * 72 - 36) - (b[["y1"]] + 1) / px), 1)
   w_ink <- (b[["x1"]] - b[["x0"]] + 1) / px
   expect_lt(w_ink, g$w + 1)
   expect_gt(w_ink, g$w - 3)
@@ -70,27 +69,111 @@ test_that("measured extent equals the composed glyph box, and the ink fills it",
   expect_equal(.grob_extent(gr), c(g$w, g$h) / 72 * 25.4)
 })
 
+test_that("ordinary tex labels share the baseline and box of plain/md labels", {
+  comp <- function(l) .label_compose(l, "", "plain", 14, "black")
+  ref <- comp(md("a"))
+  for (l in list(tex("a"), tex("b"), tex("y"), tex("x+1"))) {
+    g <- comp(l)
+    expect_equal(g$h, ref$h)
+    expect_equal(g$baseline, ref$gy[1])
+  }
+  # Ink taller than the strut extends the box upward only; the baseline
+  # stays put.
+  tall <- comp(tex("\\frac{a}{b}", display = TRUE))
+  expect_gt(tall$h, ref$h)
+  # Drawn in a row under vjust 1 and vjust 0, the baselines line up: the
+  # lowest ink row of "a", "b" (no descender) and md "a" coincide.
+  for (vj in c(0, 1)) {
+    bottoms <- vapply(
+      list(tex("a"), tex("b"), md("a"), tex("x")),
+      function(l) {
+        s <- vl_scene(1, 1, dpi = 200, bg = "white") |>
+          draw(text_grob(
+            l,
+            y = 0.5,
+            just = c(0.5, vj),
+            gp = vl_gpar(fontsize = 40)
+          ))
+        ink_box(scene_raster(s))[["y1"]]
+      },
+      numeric(1)
+    )
+    expect_lte(max(bottoms) - min(bottoms), 2)
+  }
+})
+
+# Rule paths in an SVG: straight-sided closed paths (glyph outlines of these
+# formulas all have curves).
+svg_rect_paths <- function(txt, stroke = FALSE) {
+  pat <- if (stroke) {
+    '<path d="M[^"CQ]*Z" fill="none" stroke='
+  } else {
+    '<path d="M[^"CQ]*Z" fill="#'
+  }
+  lengths(regmatches(txt, gregexpr(pat, txt)))
+}
+svg_text <- function(s) {
+  f <- withr::local_tempfile(fileext = ".svg", .local_envir = parent.frame())
+  render(s, f)
+  paste(readLines(f, warn = FALSE), collapse = "")
+}
+one <- function(l, ...) {
+  vl_scene(2, 1, dpi = 96) |>
+    draw(text_grob(l, gp = vl_gpar(fontsize = 16, ...)))
+}
+
 test_that("tex labels render to png, svg and pdf, rules included", {
-  s <- vl_scene(3, 1.5, dpi = 96) |>
-    draw(text_grob(
-      tex("x = \\frac{-b \\pm \\sqrt{b^2 - 4ac}}{2a}", display = TRUE),
-      gp = vl_gpar(fontsize = 16, col = "navy")
-    ))
+  s <- one(
+    tex("x = \\frac{-b \\pm \\sqrt{b^2 - 4ac}}{2a}", display = TRUE),
+    col = "navy"
+  )
   for (ext in c("png", "svg", "pdf")) {
     f <- withr::local_tempfile(fileext = paste0(".", ext))
     expect_no_error(render(s, f))
     expect_gt(file.size(f), 100)
   }
-  svg <- withr::local_tempfile(fileext = ".svg")
-  render(s, svg)
-  txt <- paste(readLines(svg, warn = FALSE), collapse = "")
-  # Two rules (the fraction bar and the radical's overbar) as filled paths
-  # in the label colour, next to the glyph outlines.
-  n_rule <- lengths(regmatches(
-    txt,
-    gregexpr('fill="#000080" fill-opacity="1" transform', txt)
-  ))
-  expect_gte(n_rule, 2L)
+  # One rule per bar, in the SVG, in the label colour.
+  expect_equal(svg_rect_paths(svg_text(one(tex("\\frac{a}{b}")))), 1L)
+  expect_equal(
+    svg_rect_paths(svg_text(one(tex("\\frac{a}{\\overline{b}}")))),
+    2L
+  )
+  expect_equal(svg_rect_paths(svg_text(one(tex("ab")))), 0L)
+  expect_match(
+    svg_text(one(tex("\\frac{a}{b}"), col = "navy")),
+    'Z" fill="#000080"'
+  )
+})
+
+test_that("labels made only of rules draw in every backend", {
+  # (\\frac{}{} has a zero-width bar, invisible in LaTeX too.)
+  for (src in c(
+    "\\overline{\\quad}",
+    "\\underline{~}",
+    "\\frac{\\quad}{\\quad}"
+  )) {
+    s <- one(tex(src))
+    # PNG: some ink.
+    expect_true(any(scene_raster(s)[1, , ] < 128), info = src)
+    # SVG: the rule is there.
+    expect_equal(svg_rect_paths(svg_text(s)), 1L, info = src)
+    # PDF: the rule is drawn (rasterised when poppler is around; else the
+    # file must at least differ from the same label without its rule).
+    f <- withr::local_tempfile(fileext = ".pdf")
+    render(s, f)
+    g <- withr::local_tempfile(fileext = ".pdf")
+    render(one(tex("\\quad")), g)
+    expect_false(
+      identical(readBin(f, "raw", 1e6), readBin(g, "raw", 1e6)),
+      info = src
+    )
+    if (nzchar(Sys.which("pdftoppm"))) {
+      png <- withr::local_tempfile()
+      system2("pdftoppm", c("-r", "72", "-png", "-singlefile", f, png))
+      px <- png::readPNG(paste0(png, ".png"))
+      expect_true(any(px[,, 1] < 0.5), info = src)
+    }
+  }
 })
 
 test_that("a fraction bar is drawn in the raster", {
@@ -133,20 +216,34 @@ test_that("a rotated tex label rotates glyphs and rules together", {
 })
 
 test_that("a haloed tex label strokes its rules too", {
-  s <- vl_scene(1, 1, dpi = 150, bg = "black") |>
+  s <- vl_scene(1.5, 1, dpi = 150, bg = "black") |>
     draw(text_grob(
-      tex("\\frac{a}{b}"),
+      tex("\\frac{\\cdot}{\\cdot}"),
       gp = vl_gpar(
-        fontsize = 40,
+        fontsize = 48,
         col = "black",
         halo_col = "white",
-        halo_width = 1
+        halo_width = 1.5
       )
     ))
-  expect_no_error(scene_raster(s))
-  for (ext in c("svg", "pdf")) {
-    f <- withr::local_tempfile(fileext = paste0(".", ext))
-    expect_no_error(render(s, f))
+  # SVG: the bar is stroked in the halo colour under its fill.
+  expect_equal(svg_rect_paths(svg_text(s), stroke = TRUE), 1L)
+  # PNG: the white halo spans the bar's width, far wider than the two dots.
+  r <- scene_raster(s)
+  white <- r[1, , ] > 200
+  cols <- which(apply(white, 1, any))
+  g <- .label_compose(tex("\\frac{\\cdot}{\\cdot}"), "", "plain", 48, "black")
+  bar_px <- g$rw * 150 / 72
+  expect_gt(diff(range(cols)), bar_px)
+  # PDF: the same, rasterised when poppler is around.
+  f <- withr::local_tempfile(fileext = ".pdf")
+  expect_no_error(render(s, f))
+  if (nzchar(Sys.which("pdftoppm"))) {
+    png <- withr::local_tempfile()
+    system2("pdftoppm", c("-r", "150", "-png", "-singlefile", f, png))
+    px <- png::readPNG(paste0(png, ".png"))
+    wcols <- which(apply(px[,, 1] > 0.8, 2, any))
+    expect_gt(diff(range(wcols)), bar_px)
   }
 })
 
@@ -164,6 +261,44 @@ test_that("options(vellum.math_font) with a non-math font fails clearly", {
   writeLines("not a font", bad)
   withr::local_options(vellum.math_font = bad)
   expect_error(vl_strwidth(tex("x")), class = "vellum_math_font_error")
+  # Something that looks like a path but isn't there.
+  withr::local_options(vellum.math_font = "/no/such/font.otf")
+  expect_error(
+    vl_strwidth(tex("x")),
+    "doesn't exist",
+    class = "vellum_math_font_error"
+  )
+  withr::local_options(vellum.math_font = "missing.ttf")
+  expect_error(vl_strwidth(tex("x")), "doesn't exist")
+})
+
+test_that("very deep nesting is a parse error, not a crash", {
+  expect_error(
+    tex(paste0(strrep("{", 5000), "x", strrep("}", 5000))),
+    class = "vellum_tex_error"
+  )
+  expect_error(tex(strrep("{", 10000)), "nested too deeply")
+  expect_error(
+    tex(paste0(strrep("x^{", 10000), "x", strrep("}", 10000))),
+    "nested too deeply"
+  )
+  expect_s3_class(
+    tex(paste0(strrep("{", 50), "x", strrep("}", 50))),
+    "vellum::vellum_tex_label"
+  )
+})
+
+test_that("characters the math font lacks warn and still draw", {
+  expect_warning(
+    vl_strwidth(tex("a\u65e5\\text{\u672c}")),
+    class = "vellum_tex_missing_glyph"
+  )
+})
+
+test_that("queries see the TeX source; the PDF keeps per-glyph text", {
+  s <- vl_scene(2, 1) |> draw(text_grob(tex("E = mc^2")))
+  nodes <- as.data.frame(.scene_to_backend(s)$lint_table())
+  expect_equal(nodes$label[nodes$kind == "text"], "E = mc^2")
 })
 
 test_that("options(vellum.math_font) accepts a math font file", {

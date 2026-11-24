@@ -393,6 +393,7 @@ S7::method(.label_compose, vellum_md_label) <- function(
   g$rx <- g$ry <- g$rw <- g$rh <- numeric(0)
   g$rcols <- character(0)
   g$text <- label@text
+  g$gtext <- ""
   g$baseline <- 0
   g
 }

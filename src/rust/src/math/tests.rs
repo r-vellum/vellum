@@ -397,3 +397,179 @@ fn every_subset_command_lays_out() {
         assert!(!m.glyphs.iter().any(|g| g.gid == 0), "notdef in {s}");
     }
 }
+
+#[test]
+fn deep_nesting_is_an_error_not_a_stack_overflow() {
+    for src in [
+        format!("{}x{}", "{".repeat(5000), "}".repeat(5000)),
+        "{".repeat(10000),
+        format!("{}x{}", "x^{".repeat(10000), "}".repeat(10000)),
+        "\\sqrt".repeat(3000) + "x",
+    ] {
+        let e = parse::parse(&src).expect_err("too deep");
+        assert!(e.msg.contains("nested too deeply"), "{}", e.msg);
+    }
+    // Ordinary depth is fine, and lays out.
+    let f = stix();
+    let ok = format!("{}x{}", "{".repeat(90), "}".repeat(90));
+    assert!(typeset(&ok, &f, 10.0, false).is_ok());
+    let sq = "\\sqrt{".repeat(60) + "x" + &"}".repeat(60);
+    let t = std::time::Instant::now();
+    assert!(typeset(&sq, &f, 10.0, true).is_ok());
+    assert!(
+        t.elapsed().as_secs_f64() < 2.0,
+        "60 nested radicals took {:?}",
+        t.elapsed()
+    );
+}
+
+#[test]
+fn assembly_is_linear_and_uncapped_in_practice() {
+    let f = stix();
+    let paren = f.math.vertical(f.glyph('(').unwrap()).unwrap();
+    // A delimiter 5000 em tall: the solved repeat count reaches it.
+    let target = 5_000_000.0;
+    let t = std::time::Instant::now();
+    let placed = assembly_offsets(&paren.assembly, target, 100.0);
+    assert!(t.elapsed().as_secs_f64() < 0.5);
+    let last = placed.last().unwrap();
+    assert!(
+        last.1 + 1273.0 >= target - 1e-3,
+        "reached {}",
+        last.1 + 1273.0
+    );
+}
+
+#[test]
+fn many_primes_count_right() {
+    let n = parse::parse("a'''''").unwrap();
+    match &n[0] {
+        parse::Node::Scripts { sup: Some(s), .. } => {
+            let chars: String = s
+                .iter()
+                .map(|x| match x {
+                    parse::Node::Char { ch, .. } => *ch,
+                    _ => '?',
+                })
+                .collect();
+            assert_eq!(chars, "⁗′");
+        }
+        _ => panic!("primes become a superscript"),
+    }
+}
+
+#[test]
+fn math_kern_matches_fonttools() {
+    use super::table::Corner;
+    let f = stix();
+    let p = f.glyph('\u{1D443}').unwrap(); // italic P
+    assert_eq!(
+        f.math.math_kern(p, Corner::BottomRight),
+        Some((vec![277], vec![-219, -70]))
+    );
+    assert_eq!(f.math.math_kern(p, Corner::TopRight), None);
+    let a = f.glyph('\u{1D434}').unwrap(); // italic A
+    assert_eq!(
+        f.math.math_kern(a, Corner::TopRight),
+        Some((vec![213, 350], vec![58, -58, -70]))
+    );
+    assert_eq!(
+        f.math.math_kern(a, Corner::BottomLeft),
+        Some((vec![], vec![86]))
+    );
+    assert_eq!(f.math.kern_at(a, Corner::TopRight, 100.0), 58.0);
+    assert_eq!(f.math.kern_at(a, Corner::TopRight, 300.0), -58.0);
+    assert_eq!(f.math.kern_at(a, Corner::TopRight, 900.0), -70.0);
+}
+
+#[test]
+fn math_kerning_tucks_scripts_in() {
+    let f = stix();
+    // P_i: P's bottom-right cut-in pulls the subscript left of P's advance.
+    let m = typeset("P_i", &f, 10.0, false).unwrap();
+    let pg = glyph_of(&m, '\u{1D443}');
+    let i = glyph_of(&m, '\u{1D456}');
+    let adv = f.advance(pg.gid) / 100.0;
+    assert!(i.x < adv - 0.5, "P_i subscript at {} vs advance {adv}", i.x);
+    // A^T: A's top-right kern (-58 at the superscript's height band) and
+    // T's bottom-left: the superscript moves left of the advance.
+    let m = typeset("A^T", &f, 10.0, false).unwrap();
+    let ag = glyph_of(&m, '\u{1D434}');
+    let t = glyph_of(&m, '\u{1D447}');
+    assert!(t.x < f.advance(ag.gid) / 100.0, "A^T at {}", t.x);
+}
+
+#[test]
+fn display_binom_has_fraction_sized_parens() {
+    let f = stix();
+    let height = |display: bool| {
+        let m = typeset("\\binom{n}{k}", &f, 10.0, display).unwrap();
+        let p = m.glyphs.iter().find(|g| g.ch == '(').unwrap();
+        let (_, y0, _, y1) = f.bounds(p.gid);
+        (y1 - y0) / 100.0
+    };
+    // \delim1 = 2.39 em in display, \delim2 = 1.01 em in text.
+    assert!(height(true) >= 23.9 - 1e-6, "display {}", height(true));
+    assert!(
+        height(false) >= 10.1 - 1e-6 && height(false) < 15.0,
+        "text {}",
+        height(false)
+    );
+    // No bar.
+    assert!(typeset("\\binom{n}{k}", &f, 10.0, true)
+        .unwrap()
+        .rules
+        .is_empty());
+}
+
+#[test]
+fn wide_accents_fit_within_the_body() {
+    let f = stix();
+    let m = typeset("\\widehat{xyz}", &f, 10.0, false).unwrap();
+    let hat = m.glyphs.iter().find(|g| g.ch == '\u{0302}').unwrap();
+    let body: f64 = ["\u{1D465}", "\u{1D466}", "\u{1D467}"]
+        .iter()
+        .map(|c| f.advance(f.glyph(c.chars().next().unwrap()).unwrap()) / 100.0)
+        .sum();
+    assert!(f.advance(hat.gid) / 100.0 <= body + 1e-9 || hat.gid == f.glyph('\u{0302}').unwrap());
+    let (x0, _, x1, _) = f.bounds(hat.gid);
+    assert!(
+        (x1 - x0) / 100.0 <= body,
+        "hat ink {} > body {body}",
+        (x1 - x0) / 100.0
+    );
+}
+
+#[test]
+fn style_switches_are_uncramped() {
+    let f = stix();
+    // In a denominator (cramped), \displaystyle x^2 uses the uncramped shift.
+    let m = typeset("\\frac{1}{\\displaystyle x^2}", &f, 10.0, false).unwrap();
+    let x = glyph_of(&m, '\u{1D465}');
+    let two = m.glyphs.iter().rfind(|g| g.ch == '2').unwrap();
+    assert!(approx(two.y - x.y, 3.6), "shift {}", two.y - x.y);
+}
+
+#[test]
+fn big_delimiters_grow_by_step() {
+    let f = stix();
+    let h = |src: &str| {
+        let m = typeset(src, &f, 10.0, false).unwrap();
+        let g = m.glyphs.iter().find(|g| g.ch == '(').unwrap();
+        let (_, y0, _, y1) = f.bounds(g.gid);
+        (y1 - y0) / 100.0
+    };
+    let hs = [h("("), h("\\big("), h("\\Big("), h("\\bigg("), h("\\Bigg(")];
+    for w in hs.windows(2) {
+        assert!(w[0] < w[1], "{hs:?}");
+    }
+    assert!(typeset("\\bigl( x \\bigr) \\bigm| \\imath \\jmath", &f, 10.0, false).is_ok());
+}
+
+#[test]
+fn missing_glyphs_are_reported() {
+    let f = stix();
+    let m = typeset("a日\\text{本}", &f, 10.0, false).unwrap();
+    assert_eq!(m.missing, "日本");
+    assert!(typeset("a", &f, 10.0, false).unwrap().missing.is_empty());
+}

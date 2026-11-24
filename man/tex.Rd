@@ -48,17 +48,27 @@ Supported notation:
 and more
 \item big operators \verb{\\sum \\prod \\int \\oint} and operator names \verb{\\lim \\max \\min \\sup \\inf \\log \\exp \\sin \\cos \\tan \\ln} (limits go above and below in
 display style; \verb{\\limits} / \verb{\\nolimits} override)
-\item growing delimiters \verb{\\left( ... \\right)}, with \verb{[ ] \\\{ \\\} | \\| \\langle \\rangle} and the empty \verb{\\left.}
+\item growing delimiters \verb{\\left( ... \\right)}, with \verb{[ ] \\\{ \\\} | \\| \\langle \\rangle} and the empty \verb{\\left.}; fixed sizes \verb{\\big \\Big \\bigg \\Bigg}
+(and their \code{l}/\code{r}/\code{m} forms)
 \item alphabets \verb{\\mathrm \\mathbf \\mathit \\mathsf \\mathtt \\mathcal \\mathbb}, and
 upright \verb{\\text\{...\}}
 \item accents \verb{\\hat \\bar \\tilde \\vec \\dot \\ddot \\widehat \\overline \\underline}
 \item spacing \verb{\\, \\: \\; \\! \\quad \\qquad ~}, and \verb{\\displaystyle} etc.
 }
 
-A command outside this subset is an error, not silently dropped.
+Scripts are placed with the font's italic correction and math kerning
+(cut-ins), as LuaTeX does. A label's box is baseline-stable: it is the line
+box a plain or [md()] label of the same \code{fontfamily} and \code{fontsize} gets,
+grown only where the formula reaches past it, so formulas set side by side
+share a baseline.
+
+A command outside this subset is an error, not silently dropped, and so is
+nesting more than 100 levels deep. Characters the math font has no glyph
+for are drawn as its empty box, with a warning.
 
 [ ]: R:\%20
 [ ]: R:\%20
+[md()]: R:md()
 }
 \examples{
 lab <- tex("E = mc^2")

@@ -408,6 +408,8 @@ rs_math_layout <- function(src, path, face, size, display) .Call(wrap__rs_math_l
 #'`tex()` label's fraction bars and radical overbars): a rule count per
 #'label, then `x, y, w, h` in the glyph frame (px, y up from the box
 #'bottom) and an RGBA colour per rule. Empty vectors mean no rules.
+#'`gtext` optionally gives each label's per-glyph text for PDF
+#'extraction (empty: the label itself).
 #'}
 #'
 #'\subsection{Method `mask_begin`}{
@@ -680,7 +682,7 @@ Scene$text_path <- function(px, py, pxu, pxoff, pyu, pyoff, offset, hjust, vjust
 
 Scene$texts <- function(x, y, xu, xoff, yu, yoff, rot, hjust, vjust, w, h, nper, gid, gx, gy, gsize, gpath, gface, label, family, face, size, col, alpha, halo_col, halo_width, keys) .Call(wrap__Scene__texts, self, x, y, xu, xoff, yu, yoff, rot, hjust, vjust, w, h, nper, gid, gx, gy, gsize, gpath, gface, label, family, face, size, col, alpha, halo_col, halo_width, keys)
 
-Scene$texts_rich <- function(x, y, xu, xoff, yu, yoff, rot, hjust, vjust, w, h, nper, gid, gx, gy, gsize, gpath, gface, gcol, label, family, face, size, col, alpha, halo_col, halo_width, keys, nrules, rules, rcol) .Call(wrap__Scene__texts_rich, self, x, y, xu, xoff, yu, yoff, rot, hjust, vjust, w, h, nper, gid, gx, gy, gsize, gpath, gface, gcol, label, family, face, size, col, alpha, halo_col, halo_width, keys, nrules, rules, rcol)
+Scene$texts_rich <- function(x, y, xu, xoff, yu, yoff, rot, hjust, vjust, w, h, nper, gid, gx, gy, gsize, gpath, gface, gcol, label, family, face, size, col, alpha, halo_col, halo_width, keys, nrules, rules, rcol, gtext) .Call(wrap__Scene__texts_rich, self, x, y, xu, xoff, yu, yoff, rot, hjust, vjust, w, h, nper, gid, gx, gy, gsize, gpath, gface, gcol, label, family, face, size, col, alpha, halo_col, halo_width, keys, nrules, rules, rcol, gtext)
 
 Scene$mask_begin <- function(kind) .Call(wrap__Scene__mask_begin, self, kind)
 

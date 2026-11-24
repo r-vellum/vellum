@@ -1162,6 +1162,7 @@ impl Scene {
             gface: gface.iter().map(|&v| v.max(0) as u32).collect(),
             gcol: Vec::new(),
             rules: Vec::new(),
+            gtext: String::new(),
             halo,
             label: label.to_string(),
             family: family.to_string(),
@@ -1234,6 +1235,7 @@ impl Scene {
             gface: gface.iter().map(|&v| v.max(0) as u32).collect(),
             gcol: Vec::new(),
             rules: Vec::new(),
+            gtext: String::new(),
             halo,
             label: label.to_string(),
             family: family.to_string(),
@@ -1340,6 +1342,7 @@ impl Scene {
                 gface: gface[lo..hi].iter().map(|&v| v.max(0) as u32).collect(),
                 gcol: Vec::new(),
                 rules: Vec::new(),
+                gtext: String::new(),
                 halo,
                 label: label[i].clone(),
                 family: family.to_string(),
@@ -1362,6 +1365,8 @@ impl Scene {
     /// `tex()` label's fraction bars and radical overbars): a rule count per
     /// label, then `x, y, w, h` in the glyph frame (px, y up from the box
     /// bottom) and an RGBA colour per rule. Empty vectors mean no rules.
+    /// `gtext` optionally gives each label's per-glyph text for PDF
+    /// extraction (empty: the label itself).
     #[allow(clippy::too_many_arguments)]
     fn texts_rich(
         &mut self,
@@ -1396,6 +1401,7 @@ impl Scene {
         nrules: &[i32],
         rules: &[f64],
         rcol: &[i32],
+        gtext: Vec<String>,
     ) {
         let gp = PartialGpar::from_robj(&rnull(), &col, &rnull(), &alpha, &rnull());
         let halo = halo_of(&halo_col, halo_width);
@@ -1480,6 +1486,7 @@ impl Scene {
                     })
                     .collect(),
                 rules: label_rules,
+                gtext: gtext.get(i).cloned().unwrap_or_default(),
                 halo,
                 label: label[i].clone(),
                 family: family.to_string(),
