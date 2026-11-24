@@ -8,7 +8,10 @@ tex(x, display = FALSE)
 }
 \arguments{
 \item{x}{A TeX math string, without \code{$} delimiters (or a character vector,
-for one label per element).}
+for one label per element). Or R's plotmath notation, unevaluated: a call
+or symbol (\code{quote(x[i]^2)}, \code{bquote()}) or an expression vector
+(\code{expression(alpha, beta)}, one label per element), translated to TeX as
+\code{\link[=plotmath]{plotmath()}} describes.}
 
 \item{display}{\code{TRUE} sets the formula in TeX's display style (big
 operators larger, limits above and below, fractions full size); the
@@ -41,7 +44,8 @@ Supported notation:
 \item superscripts and subscripts, \code{x^2}, \code{x_i}, \code{x_i^2}, \code{x^{a_b}}, and primes
 \verb{f'}
 \item \verb{\\frac\{a\}\{b\}}, \verb{\\dfrac}, \verb{\\tfrac}, \verb{\\binom\{n\}\{k\}}, \verb{\\sqrt\{x\}},
-\verb{\\sqrt[n]\{x\}}
+\verb{\\sqrt[n]\{x\}}, and TeX's infix \verb{\{a \\over b\}}, \verb{\{n \\choose k\}} and
+\verb{\{a \\atop b\}}
 \item Greek letters \verb{\\alpha} ... \verb{\\omega}, \verb{\\Gamma} ... \verb{\\Omega}, \verb{\\varepsilon},
 \verb{\\varphi}, \verb{\\vartheta}, ...
 \item operators and relations with TeX's spacing: \verb{\\pm \\mp \\times \\div \\cdot \\leq \\geq \\neq \\approx \\sim \\equiv \\propto \\in \\subset \\cup \\cap \\to \\Rightarrow \\mapsto \\infty \\partial \\nabla \\forall \\exists \\ldots \\cdots}
@@ -50,9 +54,10 @@ and more
 display style; \verb{\\limits} / \verb{\\nolimits} override)
 \item growing delimiters \verb{\\left( ... \\right)}, with \verb{[ ] \\\{ \\\} | \\| \\langle \\rangle} and the empty \verb{\\left.}; fixed sizes \verb{\\big \\Big \\bigg \\Bigg}
 (and their \code{l}/\code{r}/\code{m} forms)
-\item alphabets \verb{\\mathrm \\mathbf \\mathit \\mathsf \\mathtt \\mathcal \\mathbb}, and
-upright \verb{\\text\{...\}}
-\item accents \verb{\\hat \\bar \\tilde \\vec \\dot \\ddot \\widehat \\overline \\underline}
+\item alphabets \verb{\\mathrm \\mathbf \\mathit \\mathbfit \\boldsymbol \\mathsf \\mathtt \\mathcal \\mathbb}, upright \verb{\\text\{...\}}, and \verb{\\textit\{\}}, \verb{\\textbf\{\}},
+\verb{\\textbfit\{\}}
+\item accents \verb{\\hat \\bar \\tilde \\vec \\dot \\ddot \\mathring \\widehat \\overline \\underline}
+\item \verb{\\phantom\{\}}, \verb{\\hphantom\{\}} and \verb{\\vphantom\{\}}: space with no ink
 \item spacing \verb{\\, \\: \\; \\! \\quad \\qquad ~}, and \verb{\\displaystyle} etc.
 }
 
@@ -80,5 +85,6 @@ s <- vl_scene(3, 1.2) |>
 vl_strwidth(tex("\\\\frac{a}{b}"), fontsize = 12, unit = "pt")
 }
 \seealso{
-\code{\link[=md]{md()}} for styled prose.
+\code{\link[=md]{md()}} for styled prose, which takes inline \verb{$...$} math;
+\code{\link[=plotmath]{plotmath()}} for strings in R's plotmath notation.
 }

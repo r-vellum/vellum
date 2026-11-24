@@ -1124,7 +1124,9 @@ raster_grob <- function(
 }
 
 #' @rdname grob
-#' @param label Character string(s) to draw.
+#' @param label Character string(s) to draw, a rich label ([md()], [tex()]),
+#'   or a list of labels, one per position. A list may mix rich labels with
+#'   plain strings, which are drawn literally (no markup is read).
 #' @param just Justification: `c(hjust, vjust)` as names (`"left"`, `"centre"`,
 #'   `"right"`, `"bottom"`, `"top"`) or numbers in `[0, 1]`.
 #' @param rot Rotation in degrees, counter-clockwise.
@@ -1157,7 +1159,11 @@ text_grob <- function(
 ) {
   du <- .check_default_units(default_units)
   # Rich labels (one, or a list of them: one per datum) pass through
-  # untouched; everything else coerces to character.
+  # untouched -- plain strings in such a list are drawn literally; everything
+  # else coerces to character.
+  if (.is_mixed_label_list(label)) {
+    label <- .as_label_list(label)
+  }
   if (!.is_rich_label(label)) {
     label <- as.character(label)
   }

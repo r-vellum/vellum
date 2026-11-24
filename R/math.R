@@ -21,7 +21,8 @@
 #' * superscripts and subscripts, `x^2`, `x_i`, `x_i^2`, `x^{a_b}`, and primes
 #'   `f'`
 #' * `\frac{a}{b}`, `\dfrac`, `\tfrac`, `\binom{n}{k}`, `\sqrt{x}`,
-#'   `\sqrt[n]{x}`
+#'   `\sqrt[n]{x}`, and TeX's infix `{a \over b}`, `{n \choose k}` and
+#'   `{a \atop b}`
 #' * Greek letters `\alpha` ... `\omega`, `\Gamma` ... `\Omega`, `\varepsilon`,
 #'   `\varphi`, `\vartheta`, ...
 #' * operators and relations with TeX's spacing: `\pm \mp \times \div \cdot
@@ -34,9 +35,12 @@
 #' * growing delimiters `\left( ... \right)`, with `[ ] \{ \} | \| \langle
 #'   \rangle` and the empty `\left.`; fixed sizes `\big \Big \bigg \Bigg`
 #'   (and their `l`/`r`/`m` forms)
-#' * alphabets `\mathrm \mathbf \mathit \mathsf \mathtt \mathcal \mathbb`, and
-#'   upright `\text{...}`
-#' * accents `\hat \bar \tilde \vec \dot \ddot \widehat \overline \underline`
+#' * alphabets `\mathrm \mathbf \mathit \mathbfit \boldsymbol \mathsf \mathtt
+#'   \mathcal \mathbb`, upright `\text{...}`, and `\textit{}`, `\textbf{}`,
+#'   `\textbfit{}`
+#' * accents `\hat \bar \tilde \vec \dot \ddot \mathring \widehat \overline
+#'   \underline`
+#' * `\phantom{}`, `\hphantom{}` and `\vphantom{}`: space with no ink
 #' * spacing `\, \: \; \! \quad \qquad ~`, and `\displaystyle` etc.
 #'
 #' Scripts are placed with the font's italic correction and math kerning
@@ -50,12 +54,16 @@
 #' for are drawn as its empty box, with a warning.
 #'
 #' @param x A TeX math string, without `$` delimiters (or a character vector,
-#'   for one label per element).
+#'   for one label per element). Or R's plotmath notation, unevaluated: a call
+#'   or symbol (`quote(x[i]^2)`, `bquote()`) or an expression vector
+#'   (`expression(alpha, beta)`, one label per element), translated to TeX as
+#'   [plotmath()] describes.
 #' @param display `TRUE` sets the formula in TeX's display style (big
 #'   operators larger, limits above and below, fractions full size); the
 #'   default is inline text style.
 #' @return A `vellum_tex_label` (length-1 `x`) or a list of them.
-#' @seealso [md()] for styled prose.
+#' @seealso [md()] for styled prose, which takes inline `$...$` math;
+#'   [plotmath()] for strings in R's plotmath notation.
 #' @examples
 #' lab <- tex("E = mc^2")
 #' s <- vl_scene(3, 1.2) |>
@@ -66,10 +74,19 @@
 #' vl_strwidth(tex("\\frac{a}{b}"), fontsize = 12, unit = "pt")
 #' @export
 tex <- function(x, display = FALSE) {
-  x <- as.character(x)
   if (!is.logical(display) || length(display) != 1L || is.na(display)) {
     cli::cli_abort("{.arg display} must be {.code TRUE} or {.code FALSE}.")
   }
+  # Unevaluated plotmath: a call or symbol is one label, an expression vector
+  # one label per element.
+  if (is.call(x) || is.name(x)) {
+    return(.plotmath_label(x, display, call = environment()))
+  }
+  if (is.expression(x)) {
+    out <- lapply(x, .plotmath_label, display = display, call = environment())
+    return(if (length(out) == 1L) out[[1]] else out)
+  }
+  x <- as.character(x)
   if (length(x) == 0L) {
     return(list())
   }

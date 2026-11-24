@@ -455,7 +455,9 @@ takes a fast path that skips the per-pixel colour-string round-trip
 \item{interpolate}{Smoothly interpolate when scaling (default \code{TRUE})? \code{FALSE}
 keeps hard pixel edges.}
 
-\item{label}{Character string(s) to draw.}
+\item{label}{Character string(s) to draw, a rich label (\code{\link[=md]{md()}}, \code{\link[=tex]{tex()}}),
+or a list of labels, one per position. A list may mix rich labels with
+plain strings, which are drawn literally (no markup is read).}
 
 \item{just}{Justification: \code{c(hjust, vjust)} as names (\code{"left"}, \code{"centre"},
 \code{"right"}, \code{"bottom"}, \code{"top"}) or numbers in \verb{[0, 1]}.}

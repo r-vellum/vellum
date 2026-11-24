@@ -81,8 +81,16 @@ pub enum Node {
     Overline(Vec<Node>),
     Underline(Vec<Node>),
     Space(Space),
-    /// Upright text from the math font (`\text{}`), spaces kept.
-    Text(String),
+    /// Text from the math font (`\text{}` upright, `\textit{}` and
+    /// friends in their alphabet), spaces kept.
+    Text(String, Alphabet),
+    /// `\phantom{}` and friends: the body's space (width if `h`, height and
+    /// depth if `v`) with nothing drawn.
+    Phantom {
+        body: Vec<Node>,
+        h: bool,
+        v: bool,
+    },
     /// `\displaystyle` etc.: the rest of the enclosing group in that style.
     Style(ForceStyle, Vec<Node>),
 }
@@ -103,6 +111,12 @@ pub enum Alphabet {
     Rm,
     It,
     Bf,
+    /// Bold italic (`\mathbfit`).
+    BfIt,
+    /// `\boldsymbol`: each symbol bold in the shape it already has (amsmath's
+    /// meaning): Latin and lowercase Greek bold italic, capital Greek and
+    /// digits bold upright.
+    BoldSym,
     Sf,
     Tt,
     Cal,
@@ -115,6 +129,8 @@ pub fn parse(src: &str) -> Result<Vec<Node>, ParseError> {
         s: src.chars().collect(),
         i: 0,
         depth: 0,
+        in_infix: false,
+        split_by_infix: false,
     };
     let nodes = p.expr(Stop::Eof, Alphabet::Normal)?;
     Ok(nodes)
@@ -146,6 +162,12 @@ struct Parser {
     /// `MAX_DEPTH` so a pathological formula is an error, not a stack
     /// overflow in the parser or the (equally recursive) layout.
     depth: usize,
+    /// Inside the denominator of an infix fraction of the current list,
+    /// where a second `\over` is ambiguous (TeX's error too).
+    in_infix: bool,
+    /// Set when the list just parsed was split by an infix fraction (read
+    /// by a style switch, which then keeps its style to the numerator).
+    split_by_infix: bool,
 }
 
 /// Nesting limit. Each brace level costs about two (the group's list and
@@ -215,7 +237,10 @@ impl Parser {
     /// (except that EOF needs none).
     fn expr(&mut self, stop: Stop, alpha: Alphabet) -> Result<Vec<Node>, ParseError> {
         self.enter()?;
+        let infix = std::mem::replace(&mut self.in_infix, false);
         let r = self.expr_inner(stop, alpha);
+        self.in_infix = infix;
+        self.split_by_infix = false;
         self.depth -= 1;
         r
     }
@@ -256,6 +281,39 @@ impl Parser {
                 }
                 _ => {}
             }
+            // TeX's infix fractions: `{a \over b}`, `{n \choose k}`,
+            // `{a \atop b}` split the enclosing list.
+            if let Tok::Cmd(c) = &tok {
+                if matches!(c.as_str(), "over" | "atop" | "choose") {
+                    let kind = c.clone();
+                    if self.in_infix {
+                        return err(
+                            format!("Ambiguous `\\{kind}`: group one of the fractions in braces"),
+                            pos,
+                        );
+                    }
+                    self.next();
+                    self.in_infix = true;
+                    let den = self.expr_inner(stop, alpha);
+                    self.in_infix = false;
+                    let den = den?;
+                    let num = std::mem::take(&mut out);
+                    let frac = Node::Frac {
+                        num,
+                        den,
+                        rule: kind == "over",
+                        style: None,
+                        delims: if kind == "choose" {
+                            Some(('(', ')'))
+                        } else {
+                            None
+                        },
+                    };
+                    out.push(frac);
+                    self.split_by_infix = true;
+                    return Ok(out);
+                }
+            }
             // Style switches swallow the rest of the list.
             if let Tok::Cmd(c) = &tok {
                 let force = match c.as_str() {
@@ -267,7 +325,24 @@ impl Parser {
                 };
                 if let Some(f) = force {
                     self.next();
-                    let rest = self.expr(stop, alpha)?;
+                    // The rest of this same list: an infix fraction in it
+                    // splits this list (a second one is ambiguous), and the
+                    // style then applies to the numerator only, as in TeX.
+                    self.enter()?;
+                    self.split_by_infix = false;
+                    let rest = self.expr_inner(stop, alpha);
+                    self.depth -= 1;
+                    let mut rest = rest?;
+                    if std::mem::take(&mut self.split_by_infix) {
+                        if let Some(Node::Frac { num, .. }) = rest.first_mut() {
+                            let inner = std::mem::take(num);
+                            let mut new_num = std::mem::take(&mut out);
+                            new_num.push(Node::Style(f, inner));
+                            *num = new_num;
+                        }
+                        self.split_by_infix = true;
+                        return Ok(rest);
+                    }
                     out.push(Node::Style(f, rest));
                     return Ok(out);
                 }
@@ -572,8 +647,10 @@ impl Parser {
                 Ok(Node::LeftRight { left, right, body })
             }
             "mathrm" | "mathit" | "mathbf" | "mathsf" | "mathtt" | "mathcal" | "mathbb"
-            | "mathnormal" => {
+            | "mathnormal" | "mathbfit" | "boldsymbol" => {
                 let a = match name {
+                    "mathbfit" => Alphabet::BfIt,
+                    "boldsymbol" => Alphabet::BoldSym,
                     "mathrm" => Alphabet::Rm,
                     "mathit" => Alphabet::It,
                     "mathbf" => Alphabet::Bf,
@@ -587,7 +664,18 @@ impl Parser {
                 Ok(Node::Group(body))
             }
             "text" | "textrm" | "mbox" | "textup" | "textnormal" => {
-                Ok(Node::Text(self.raw_group(name, pos)?))
+                Ok(Node::Text(self.raw_group(name, pos)?, Alphabet::Rm))
+            }
+            "textit" => Ok(Node::Text(self.raw_group(name, pos)?, Alphabet::It)),
+            "textbf" => Ok(Node::Text(self.raw_group(name, pos)?, Alphabet::Bf)),
+            "textbfit" => Ok(Node::Text(self.raw_group(name, pos)?, Alphabet::BfIt)),
+            "phantom" | "hphantom" | "vphantom" => {
+                let body = self.group_arg(alpha, name, pos)?;
+                Ok(Node::Phantom {
+                    body,
+                    h: name != "vphantom",
+                    v: name != "hphantom",
+                })
             }
             "operatorname" => {
                 let star = self.s.get(self.i) == Some(&'*');
@@ -696,6 +784,27 @@ pub fn map_alpha(c: char, alpha: Alphabet) -> char {
             }
             if let Some(k) = glo {
                 return from_u32(0x1D6C2 + k, c);
+            }
+            c
+        }
+        Alphabet::BoldSym => {
+            if gup {
+                return from_u32(0x1D6A8 + (c as u32 - 0x0391), c);
+            }
+            map_alpha(c, Alphabet::BfIt)
+        }
+        Alphabet::BfIt => {
+            if upper || lower {
+                return latin(0x1D468, 0x1D482);
+            }
+            if digit {
+                return from_u32(0x1D7CE + (c as u32 - '0' as u32), c);
+            }
+            if gup {
+                return from_u32(0x1D71C + (c as u32 - 0x0391), c);
+            }
+            if let Some(k) = glo {
+                return from_u32(0x1D736 + k, c);
             }
             c
         }

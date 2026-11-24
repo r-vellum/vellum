@@ -573,3 +573,98 @@ fn missing_glyphs_are_reported() {
     assert_eq!(m.missing, "日本");
     assert!(typeset("a", &f, 10.0, false).unwrap().missing.is_empty());
 }
+
+fn same_layout(a: &str, b: &str) {
+    let f = stix();
+    let x = typeset(a, &f, 10.0, false).unwrap();
+    let y = typeset(b, &f, 10.0, false).unwrap();
+    let key = |m: &Formula| {
+        m.glyphs
+            .iter()
+            .map(|g| (g.gid, (g.x * 1e6).round(), (g.y * 1e6).round()))
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(key(&x), key(&y), "{a} vs {b}");
+    assert_eq!(x.rules.len(), y.rules.len(), "{a} vs {b}");
+    assert!(approx(x.width, y.width), "{a} vs {b}");
+}
+
+#[test]
+fn infix_fractions_match_their_prefix_forms() {
+    same_layout("{a \\over b}", "\\frac{a}{b}");
+    same_layout("{n \\choose k}", "\\binom{n}{k}");
+    same_layout("1 + {a+b \\over c}", "1 + \\frac{a+b}{c}");
+    let f = stix();
+    // \atop stacks without a bar.
+    let m = typeset("{a \\atop b}", &f, 10.0, false).unwrap();
+    assert!(m.rules.is_empty());
+    assert_eq!(m.glyphs.len(), 2);
+    assert!(glyph_of(&m, '\u{1D44E}').y > glyph_of(&m, '\u{1D44F}').y);
+    // Two infix operators in one group are an error, as in TeX.
+    assert!(typeset("{a \\over b \\over c}", &f, 10.0, false).is_err());
+}
+
+#[test]
+fn phantoms_take_space_but_draw_nothing() {
+    let f = stix();
+    let p = typeset("x\\phantom{\\frac{a}{b}}y", &f, 10.0, false).unwrap();
+    let q = typeset("x\\frac{a}{b}y", &f, 10.0, false).unwrap();
+    assert_eq!(p.glyphs.len(), 2);
+    assert!(p.rules.is_empty());
+    assert!(approx(p.width, q.width));
+    assert!(approx(p.box_height, q.box_height));
+    // \hphantom keeps only the width, \vphantom only the height.
+    let h = typeset("\\hphantom{\\frac{a}{b}}", &f, 10.0, false).unwrap();
+    let v = typeset("\\vphantom{\\frac{a}{b}}", &f, 10.0, false).unwrap();
+    assert!(h.box_height < q.box_height && h.width > 0.0);
+    assert!(approx(v.width, 0.0) && approx(v.box_height, q.box_height));
+}
+
+#[test]
+fn text_and_bold_italic_alphabets() {
+    let f = stix();
+    let m = typeset("\\textit{ab}\\textbf{c}\\textbfit{d}", &f, 10.0, false).unwrap();
+    let chars: Vec<char> = m.glyphs.iter().map(|g| g.ch).collect();
+    assert_eq!(
+        chars,
+        vec!['\u{1D44E}', '\u{1D44F}', '\u{1D41C}', '\u{1D485}']
+    );
+    let m = typeset("\\mathbfit{x}\\boldsymbol{\\alpha}", &f, 10.0, false).unwrap();
+    let chars: Vec<char> = m.glyphs.iter().map(|g| g.ch).collect();
+    assert_eq!(chars, vec!['\u{1D499}', '\u{1D736}']);
+    // \boldsymbol keeps each symbol's shape: capital Greek and digits bold
+    // upright, Latin bold italic (amsmath); \mathbfit makes all italic.
+    let m = typeset(
+        "\\boldsymbol{\\Gamma x 1}\\mathbfit{\\Gamma}",
+        &f,
+        10.0,
+        false,
+    )
+    .unwrap();
+    let chars: Vec<char> = m.glyphs.iter().map(|g| g.ch).collect();
+    assert_eq!(
+        chars,
+        vec!['\u{1D6AA}', '\u{1D499}', '\u{1D7CF}', '\u{1D71E}']
+    );
+    // \mathring is an accent.
+    let m = typeset("\\mathring{A}", &f, 10.0, false).unwrap();
+    assert!(m.glyphs.iter().any(|g| g.ch == '\u{030A}'));
+}
+
+#[test]
+fn style_switches_and_infix_fractions() {
+    let f = stix();
+    // A second infix fraction behind a style switch is still ambiguous.
+    assert!(typeset("a \\over \\displaystyle b \\over c", &f, 10.0, false).is_err());
+    assert!(typeset("\\displaystyle a \\over b \\over c", &f, 10.0, false).is_err());
+    // `\displaystyle a \over b` sets only the numerator in display style.
+    same_layout("\\displaystyle a \\over b", "\\frac{\\displaystyle a}{b}");
+    same_layout(
+        "x \\displaystyle a \\over b",
+        "\\frac{x \\displaystyle a}{b}",
+    );
+    // The denominator keeps the text-style fraction's script size.
+    let m = typeset("\\displaystyle a \\over b", &f, 10.0, false).unwrap();
+    assert!(approx(glyph_of(&m, '\u{1D44F}').size, 7.0));
+    assert!(approx(glyph_of(&m, '\u{1D44E}').size, 10.0));
+}

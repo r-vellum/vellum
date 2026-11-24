@@ -390,21 +390,41 @@ S7::method(.label_compose, vellum_md_label) <- function(
   features = NULL
 ) {
   g <- .md_compose(label, family, fontface, fontsize, base_col, features)
-  g$rx <- g$ry <- g$rw <- g$rh <- numeric(0)
-  g$rcols <- character(0)
+  # A label with inline math brings its own rules, per-glyph text and
+  # baseline; a plain md label has none of them.
+  g$rx <- g$rx %||% numeric(0)
+  g$ry <- g$ry %||% numeric(0)
+  g$rw <- g$rw %||% numeric(0)
+  g$rh <- g$rh %||% numeric(0)
+  g$rcols <- g$rcols %||% character(0)
   g$text <- label@text
-  g$gtext <- ""
-  g$baseline <- 0
+  g$gtext <- g$gtext %||% ""
+  g$baseline <- g$baseline %||% 0
   g
 }
 
-# Key that identifies a rich label's composition (draw-time dedupe).
+# Key that identifies a rich label's composition (draw-time dedupe). It covers
+# everything the composer reads -- the TeX source and style of a tex label, every
+# run's text and style of an md label -- and the class, so labels that merely
+# share their plain text (`md("**a**")` and `md("a")`, or an md label and a tex
+# label) never share a composition. Never empty, so it is always a usable name.
 .label_key <- function(label) {
   if (S7::S7_inherits(label, vellum_tex_label)) {
-    paste0("\001tex:", label@display, ":", label@tex)
-  } else {
-    label@text
+    return(paste0("\001tex:", label@display, ":", label@tex))
   }
+  runs <- vapply(
+    label@runs,
+    function(r) {
+      paste(
+        names(r),
+        vapply(r, paste, "", collapse = ","),
+        sep = "=",
+        collapse = "\002"
+      )
+    },
+    character(1)
+  )
+  paste0("\001md:", paste(runs, collapse = "\003"))
 }
 
 # Is `label` rich (a single `vellum_label`, or a non-empty list of them -- one

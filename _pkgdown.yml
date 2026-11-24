@@ -185,6 +185,7 @@ reference:
   - vl_strwidth
   - md
   - tex
+  - plotmath
   - text_path_grob
 
 - title: Placement

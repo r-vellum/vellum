@@ -404,7 +404,19 @@ impl<'a> Ctx<'a> {
             }
             Node::Overline(body) => (Class::Ord, self.overline(body, st)),
             Node::Underline(body) => (Class::Ord, self.underline(body, st)),
-            Node::Text(s) => (Class::Ord, self.text(s, st)),
+            Node::Text(s, a) => (Class::Ord, self.text(s, *a, st)),
+            Node::Phantom { body, h, v } => {
+                let b = self.hlist(body, st);
+                (
+                    Class::Ord,
+                    MBox {
+                        w: if *h { b.w } else { 0.0 },
+                        h: if *v { b.h } else { 0.0 },
+                        d: if *v { b.d } else { 0.0 },
+                        ..MBox::default()
+                    },
+                )
+            }
             // Handled in `items`; as a lone atom (a script argument) they
             // still lay out sensibly.
             Node::Space(s) => (
@@ -1014,13 +1026,14 @@ impl<'a> Ctx<'a> {
 
     /// `\text{}`: upright glyphs from the math font, spaces kept, no
     /// script alternates.
-    fn text(&self, s: &str, st: Style) -> MBox {
+    fn text(&self, s: &str, alpha: super::parse::Alphabet, st: Style) -> MBox {
         let mut out = MBox::default();
         for ch in s.chars() {
             if ch.is_whitespace() {
                 out.w += self.word_space(st);
                 continue;
             }
+            let ch = super::parse::map_alpha(ch, alpha);
             let gid = self.gid_of(ch);
             let g = self.glyph_box(gid, ch, st);
             out.put(&g, out.w, 0.0);
