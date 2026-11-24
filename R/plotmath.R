@@ -200,13 +200,13 @@ plotmath <- function(text, display = FALSE) {
   "%<=>%" = "\\Leftrightarrow",
   "%=>%" = "\\Rightarrow",
   "%<=%" = "\\Leftarrow",
-  "%dblup%" = "⇑",
-  "%dbldown%" = "⇓",
+  "%dblup%" = "\u21d1",
+  "%dbldown%" = "\u21d3",
   "%subset%" = "\\subset",
   "%subseteq%" = "\\subseteq",
   "%supset%" = "\\supset",
   "%supseteq%" = "\\supseteq",
-  "%notsubset%" = "⊄",
+  "%notsubset%" = "\u2284",
   "%in%" = "\\in",
   "%notin%" = "\\notin"
 )
