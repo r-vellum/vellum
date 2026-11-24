@@ -297,3 +297,33 @@ display(
 ```
 
 ![](typography_files/figure-html/unnamed-chunk-10-1.png)
+
+## Math
+
+[`tex()`](https://r-vellum.github.io/vellum/reference/tex.md) takes TeX
+math notation and gives a label that goes wherever an
+[`md()`](https://r-vellum.github.io/vellum/reference/md.md) label goes.
+vellum typesets it itself, from the sizes and glyph variants in the
+font’s OpenType MATH table, so it needs no LaTeX installation and draws
+the same formula in every output format. The bundled font is STIX Two
+Math; `options(vellum.math_font = "Latin Modern Math")` or a font file
+picks another.
+
+``` r
+
+display(
+  vl_scene(6, 1.6, dpi = 96) |>
+    draw(text_grob(tex("\\hat\\beta = (X^\\top X)^{-1} X^\\top y"),
+                   x = 0.25, gp = vl_gpar(fontsize = 18))) |>
+    draw(text_grob(tex("\\sum_{i=1}^n \\frac{1}{i^2} \\to \\frac{\\pi^2}{6}",
+                       display = TRUE),
+                   x = 0.72, gp = vl_gpar(fontsize = 18, col = "#1b5e8c")))
+)
+```
+
+![](typography_files/figure-html/unnamed-chunk-11-1.png)
+
+Like [`md()`](https://r-vellum.github.io/vellum/reference/md.md), a
+formula is measured exactly as it is drawn, so a
+[`grobwidth()`](https://r-vellum.github.io/vellum/reference/grobwidth.md)
+track or a plot margin reserves the space the ink needs.

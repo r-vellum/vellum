@@ -390,6 +390,30 @@ features renders byte-for-byte as it did before either existed.</p>
 <span><span class="op">)</span></span></code></pre></div>
 <p><img src="typography_files/figure-html/unnamed-chunk-10-1.png" class="r-plt" alt="" width="576"></p>
 </div>
+<div class="section level2">
+<h2 id="math">Math<a class="anchor" aria-label="anchor" href="#math"></a>
+</h2>
+<p><code><a href="../reference/tex.html">tex()</a></code> takes TeX math notation and gives a label that
+goes wherever an <code><a href="../reference/md.html">md()</a></code> label goes. vellum typesets it
+itself, from the sizes and glyph variants in the font’s OpenType MATH
+table, so it needs no LaTeX installation and draws the same formula in
+every output format. The bundled font is STIX Two Math;
+<code>options(vellum.math_font = "Latin Modern Math")</code> or a font
+file picks another.</p>
+<div class="sourceCode" id="cb10"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="../reference/display.html">display</a></span><span class="op">(</span></span>
+<span>  <span class="fu"><a href="../reference/vl_scene.html">vl_scene</a></span><span class="op">(</span><span class="fl">6</span>, <span class="fl">1.6</span>, dpi <span class="op">=</span> <span class="fl">96</span><span class="op">)</span> <span class="op">|&gt;</span></span>
+<span>    <span class="fu"><a href="../reference/vl_scene.html">draw</a></span><span class="op">(</span><span class="fu"><a href="../reference/grob.html">text_grob</a></span><span class="op">(</span><span class="fu"><a href="../reference/tex.html">tex</a></span><span class="op">(</span><span class="st">"\\hat\\beta = (X^\\top X)^{-1} X^\\top y"</span><span class="op">)</span>,</span>
+<span>                   x <span class="op">=</span> <span class="fl">0.25</span>, gp <span class="op">=</span> <span class="fu"><a href="../reference/vl_gpar.html">vl_gpar</a></span><span class="op">(</span>fontsize <span class="op">=</span> <span class="fl">18</span><span class="op">)</span><span class="op">)</span><span class="op">)</span> <span class="op">|&gt;</span></span>
+<span>    <span class="fu"><a href="../reference/vl_scene.html">draw</a></span><span class="op">(</span><span class="fu"><a href="../reference/grob.html">text_grob</a></span><span class="op">(</span><span class="fu"><a href="../reference/tex.html">tex</a></span><span class="op">(</span><span class="st">"\\sum_{i=1}^n \\frac{1}{i^2} \\to \\frac{\\pi^2}{6}"</span>,</span>
+<span>                       display <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span>,</span>
+<span>                   x <span class="op">=</span> <span class="fl">0.72</span>, gp <span class="op">=</span> <span class="fu"><a href="../reference/vl_gpar.html">vl_gpar</a></span><span class="op">(</span>fontsize <span class="op">=</span> <span class="fl">18</span>, col <span class="op">=</span> <span class="st">"#1b5e8c"</span><span class="op">)</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="op">)</span></span></code></pre></div>
+<p><img src="typography_files/figure-html/unnamed-chunk-11-1.png" class="r-plt" alt="" width="576"></p>
+<p>Like <code><a href="../reference/md.html">md()</a></code>, a formula is measured exactly as it is drawn,
+so a <code><a href="../reference/grobwidth.html">grobwidth()</a></code> track or a plot margin reserves the space
+the ink needs.</p>
+</div>
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>
     </nav></aside>
 </div>

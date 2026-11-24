@@ -160,6 +160,14 @@ label. Everything else matches `texts`; the shared `col` becomes the
 fallback only when a glyph's colour is absent (it never is here, but
 keeps the gpar resolve consistent).
 
+`nrules`/`rules`/`rcol` optionally add filled rectangles per label (a
+[`tex()`](https://r-vellum.github.io/vellum/reference/tex.md) label's
+fraction bars and radical overbars): a rule count per label, then
+`x, y, w, h` in the glyph frame (px, y up from the box bottom) and an
+RGBA colour per rule. Empty vectors mean no rules. `gtext` optionally
+gives each label's per-glyph text for PDF extraction (empty: the label
+itself).
+
 ### Method `mask_begin`
 
 Begin collecting a mask's content for the current viewport. Until the

@@ -4,6 +4,9 @@
 
 - **David Schoch**. Author, maintainer.
 
+- **The STIX Fonts Project Authors**. Copyright holder.  
+  STIX Two Math font, inst/fonts; see inst/COPYRIGHTS
+
 ## Citation
 
 Source:

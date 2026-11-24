@@ -26,3 +26,8 @@ Useful links:
 Authors:
 
 - David Schoch <david.schoch@cynkra.com>
+
+Other contributors:
+
+- The STIX Fonts Project Authors (STIX Two Math font, inst/fonts; see
+  inst/COPYRIGHTS) \[copyright holder\]
