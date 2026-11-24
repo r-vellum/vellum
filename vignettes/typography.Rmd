@@ -322,9 +322,10 @@ display(
 )
 ```
 
-The `$` rules are pandoc's: the opening `$` must be followed by a non-space
-and the closing one preceded by a non-space and not followed by a digit, so
-`"costs $5 to $10"` stays prose. Write `\\$` for a literal dollar sign.
+The `$` rules are pandoc's, with a stricter close: the opening `$` must be
+followed by a non-space, and the closing one preceded by a non-space and not
+followed by a letter or a digit. So prices stay prose: `"costs $5 to $10"`,
+`"Revenue ($M) vs cost ($K)"`. Write `\\$` for a literal dollar sign.
 Display math (`$$...$$`) is not supported and stays as written.
 
 ### Plotmath
@@ -350,5 +351,6 @@ display(
 ```
 
 One difference from base graphics: single letters are set in math italic, as
-TeX sets them; wrap them in `plain()` for upright letters. `?plotmath` lists
+TeX sets them; wrap them in `plain()` for upright letters. Longer names
+(`mpg`, `Temperature`) are upright words, as in base R. `?plotmath` lists
 the supported notation; anything outside it is an error.

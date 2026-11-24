@@ -403,13 +403,28 @@ S7::method(.label_compose, vellum_md_label) <- function(
   g
 }
 
-# Key that identifies a rich label's composition (draw-time dedupe).
+# Key that identifies a rich label's composition (draw-time dedupe). It covers
+# everything the composer reads -- the TeX source and style of a tex label, every
+# run's text and style of an md label -- and the class, so labels that merely
+# share their plain text (`md("**a**")` and `md("a")`, or an md label and a tex
+# label) never share a composition. Never empty, so it is always a usable name.
 .label_key <- function(label) {
   if (S7::S7_inherits(label, vellum_tex_label)) {
-    paste0("\001tex:", label@display, ":", label@tex)
-  } else {
-    label@text
+    return(paste0("\001tex:", label@display, ":", label@tex))
   }
+  runs <- vapply(
+    label@runs,
+    function(r) {
+      paste(
+        names(r),
+        vapply(r, paste, "", collapse = ","),
+        sep = "=",
+        collapse = "\002"
+      )
+    },
+    character(1)
+  )
+  paste0("\001md:", paste(runs, collapse = "\003"))
 }
 
 # Is `label` rich (a single `vellum_label`, or a non-empty list of them -- one

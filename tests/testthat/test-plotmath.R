@@ -59,12 +59,12 @@ pm_cases <- list(
   c("atop(n, k)", "{n \\atop k}"),
   c("hat(x)", "\\hat{x}"),
   c("bar(x)", "\\bar{x}"),
-  c("bar(xy)", "\\overline{xy}"),
+  c("bar(xy)", "\\overline{\\mathrm{xy}}"),
   c("tilde(x)", "\\tilde{x}"),
   c("dot(x)", "\\dot{x}"),
   c("ring(A)", "\\mathring{A}"),
-  c("widehat(xy)", "\\widehat{xy}"),
-  c("widetilde(xy)", "\\widetilde{xy}"),
+  c("widehat(xy)", "\\widehat{\\mathrm{xy}}"),
+  c("widetilde(xy)", "\\widetilde{\\mathrm{xy}}"),
   c("underline(x)", "\\underline{x}"),
   c("alpha + omega", "\\alpha + \\omega"),
   c("Gamma + Omega", "\\Gamma + \\Omega"),
@@ -81,7 +81,7 @@ pm_cases <- list(
   c("x[1] * ... * x[n]", "x_1 \\ldots x_n"),
   c("sum(x[i], i == 1, n)", "\\sum\\limits_{i=1}^n x_i"),
   c("prod(x[i], i)", "\\prod\\limits_i x_i"),
-  c("integral(f(x) * dx, a, b)", "\\int\\limits_a^b f(x)dx"),
+  c("integral(f(x) * dx, a, b)", "\\int\\limits_a^b f(x)\\mathrm{dx}"),
   c("union(A[i], i == 1, n)", "\\bigcup\\limits_{i=1}^n A_i"),
   c("intersect(A[i], i == 1, n)", "\\bigcap\\limits_{i=1}^n A_i"),
   c("lim(f(x), x %->% 0)", "\\lim\\limits_{x \\to 0} f(x)"),
@@ -151,4 +151,58 @@ test_that("unsupported plotmath is an error", {
   expect_error(plotmath("group('<<', x, ')')"), class = "vellum_plotmath_error")
   expect_error(plotmath("x +"), class = "vellum_plotmath_error")
   expect_error(tex(quote(a$b)), class = "vellum_plotmath_error")
+  expect_error(plotmath("x", display = NA), "display")
+})
+
+test_that("plotmath functions with the wrong argument count are errors", {
+  for (bad in c(
+    "frac(a)",
+    "over(a, b, c)",
+    "group('(', x)",
+    "bgroup('(', x)",
+    "sqrt(a, b, c)",
+    "italic(a, b)",
+    "hat(a, b)",
+    "sum(a, b, c, d)",
+    "lim(a, b, c)",
+    "displaystyle(a, b)"
+  )) {
+    e <- tryCatch(plotmath(bad), error = identity)
+    expect_s3_class(e, "vellum_plotmath_error")
+    expect_match(conditionMessage(e), sub("\\(.*", "", bad), fixed = TRUE)
+  }
+  expect_match(
+    conditionMessage(tryCatch(plotmath("frac(a)"), error = identity)),
+    "takes 2 arguments"
+  )
+})
+
+test_that("multi-letter symbols are upright, single letters italic", {
+  expect_equal(plotmath("mpg")@tex, "\\mathrm{mpg}")
+  expect_equal(plotmath("x")@tex, "x")
+  expect_equal(plotmath("Temperature(t)")@tex, "\\mathrm{Temperature}(t)")
+  # Inside a font call the font decides.
+  expect_equal(plotmath("bold(mpg)")@tex, "\\mathbf{mpg}")
+  expect_equal(
+    lay(plotmath("mpg ~ (mi~gal^-1)")),
+    lay(tex("\\mathrm{mpg}\\ (\\mathrm{mi}\\ \\mathrm{gal}^{-1})"))
+  )
+})
+
+test_that("NA, NaN, Inf and odd symbol names are set as text", {
+  expect_equal(tex(bquote(x == .(NA_real_)))@tex, "x = \\mathrm{NA}")
+  expect_equal(tex(bquote(x == .(NaN)))@tex, "x = \\mathrm{NaN}")
+  expect_equal(tex(bquote(x == .(-Inf)))@tex, "x = -\\mathrm{Inf}")
+  expect_equal(tex(bquote(x == .(NA)))@tex, "x = \\mathrm{NA}")
+  # A backtick symbol never reaches the TeX parser as markup.
+  lab <- plotmath("`\\\\frac{1}{2}`")
+  expect_length(.label_compose(lab, "", "plain", 12, "black")$rx, 0L)
+  expect_match(lab@tex, "^\\\\text\\{")
+  # A `$` in a string is escaped, so the TeX also survives inside md() math.
+  lab <- plotmath("'a$'")
+  expect_equal(lab@tex, "\\text{a\\$}")
+  m <- md(paste0("$", lab@tex, "$"))
+  expect_equal(m@runs[[1]]$math, lab@tex)
+  # plotmath's Upsilon1 is the hooked upsilon.
+  expect_equal(plotmath("Upsilon1")@tex, "\u03d2")
 })

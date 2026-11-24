@@ -64,6 +64,9 @@ vl_strheight <- function(
 ) {
   unit <- match.arg(unit, c("in", "pt", "mm", "cm"))
   .check_font_size(fontsize * cex)
+  if (.is_mixed_label_list(label)) {
+    label <- .as_label_list(label)
+  }
   # Rich md() labels are measured through the same composition path the renderer
   # draws (`.label_extent_pt`), so reserved layout space matches drawn glyphs. A
   # single label or a list of them is accepted; family/fontface/fontsize give the
@@ -123,6 +126,48 @@ vl_strheight <- function(
 }
 
 # TRUE for a single md() label or a non-empty list of them.
+# A list of labels may mix rich labels with plain strings (one per datum, as
+# a legend's or a text mark's labels do). The strings are drawn literally:
+# each becomes a markup-free md label (no `**`, `_` or `$` is read), shaped
+# exactly as the plain string. A list with no rich label is left alone.
+.is_mixed_label_list <- function(x) {
+  is.list(x) &&
+    length(x) > 0L &&
+    any(vapply(x, S7::S7_inherits, logical(1), vellum_label)) &&
+    all(vapply(
+      x,
+      function(l) {
+        S7::S7_inherits(l, vellum_label) || (is.atomic(l) && length(l) == 1L)
+      },
+      logical(1)
+    ))
+}
+.as_label_list <- function(x) {
+  lapply(x, function(l) {
+    if (S7::S7_inherits(l, vellum_label)) l else .md_literal(l)
+  })
+}
+
+# A plain string as an md label, literally: one unstyled run per line.
+.md_literal <- function(x) {
+  x <- as.character(x)
+  if (is.na(x)) {
+    x <- ""
+  }
+  lines <- strsplit(x, "\n", fixed = TRUE)[[1]]
+  if (!length(lines)) {
+    lines <- ""
+  }
+  runs <- list()
+  for (i in seq_along(lines)) {
+    if (i > 1L) {
+      runs[[length(runs) + 1L]] <- list(brk = TRUE)
+    }
+    runs[[length(runs) + 1L]] <- .md_run(lines[i], .md_style())
+  }
+  vellum_md_label(runs = runs, text = x)
+}
+
 .is_md_labelish <- function(x) {
   S7::S7_inherits(x, vellum_label) ||
     (is.list(x) &&
@@ -255,6 +300,9 @@ vl_strheight <- function(
 # Line spacing as a multiple of the font size (baseline-to-baseline), matching
 # grid's default `lineheight`.
 .LINEHEIGHT <- 1.2
+# TeX's \lineskip (1pt at 10pt), as a fraction of the font size: the least
+# gap between two line boxes that the leading would set too close.
+.LINESKIP <- 0.1
 
 # Split a label into its lines, matching `strsplit()`'s handling of a trailing or
 # lone separator (a label is never empty here — callers filter those out).
@@ -798,9 +846,11 @@ vl_strheight <- function(
 #' * `$...$` — inline math in [tex()]'s notation, typeset by the same engine
 #'   and set on the line's baseline (`"electron mass $m_e$ in **kg**"`)
 #'
-#' Math follows pandoc's rules for `$`: the opening `$` must be followed by a
-#' non-space and the closing `$` preceded by a non-space and not followed by a
-#' digit, so `"costs $5 to $10"` stays prose. Write `\\$` for a literal dollar
+#' Math follows pandoc's rules for `$`, with a stricter close: the opening `$`
+#' must be followed by a non-space, and the closing `$` preceded by a non-space
+#' and not followed by a letter or a digit (pandoc only rules out a digit). So
+#' prices stay prose: `"costs $5 to $10"`, `"Revenue ($M) vs cost ($K)"` and
+#' `"(US$bn) and (US$m)"` have no math. Write `\\$` for a literal dollar
 #' sign. Display math (`$$...$$`) is not supported; `$$` is kept as literal
 #' text. Markup inside `$...$` is TeX, not markdown; the formula takes its
 #' span's colour and size, and a tall formula makes its line taller. Math that
@@ -870,9 +920,10 @@ md <- function(text) {
 .MD_MATH_BASE <- 0xE000L
 .MD_DOLLAR <- intToUtf8(0xE0FFL)
 
-# Find the `$...$` math spans of one line with pandoc's rules: an opening `$`
-# has a non-space right after it; a closing `$` has a non-space right before
-# it and no digit right after it; `\$` is a literal dollar; `$$` (display
+# Find the `$...$` math spans of one line with pandoc's rules, the close made
+# stricter: an opening `$` has a non-space right after it; a closing `$` has a
+# non-space right before it and no letter or digit right after it (pandoc bans
+# only a digit; currency such as "($M) vs ($K)" is common in axis titles); `\$` is a literal dollar; `$$` (display
 # math, unsupported) stays two literal dollars. A `$` that opens nothing is
 # literal, so "costs $5 to $10" is plain text. Each span's TeX is checked here,
 # so a bad formula fails at md() time like tex() does.
@@ -914,7 +965,7 @@ md <- function(text) {
           ch[j] == "$" &&
             ch[j - 1L] != "\\" &&
             !is_space(ch[j - 1L]) &&
-            !(j < n && grepl("[0-9]", ch[j + 1L]))
+            !(j < n && grepl("[[:alnum:]]", ch[j + 1L]))
         ) {
           close <- j
           break
@@ -1245,17 +1296,30 @@ md <- function(text) {
     }
     wmax <- max(wmax, adv)
   }
+  # Lift the block so its box's bottom is at 0: the lines were stacked about
+  # the first line's origin, so a multi-line label (or a subscript) reached
+  # below its own box.
+  lift <- -bot
   list(
     gid = gid,
     gx = gx,
-    gy = gy,
+    gy = gy + lift,
     gsize = gsize,
     gpath = gpath,
     gface = gface,
     cols = cols,
     w = wmax,
-    h = top - bot
+    h = top - bot,
+    baseline = lift +
+      (nl - 1) / 2 * lead +
+      .md_strut_depth(family, fontface, fontsize)
   )
+}
+
+# The shaped descent of the label's font: where a line's baseline sits above
+# the bottom of its line box.
+.md_strut_depth <- function(family, fontface, fontsize) {
+  .tex_strut(family, fontface, fontsize)[["depth"]]
 }
 
 # Compose an md() label that has inline math. Text runs are shaped exactly as
@@ -1394,7 +1458,11 @@ md <- function(text) {
   off <- numeric(nl)
   if (nl > 1L) {
     for (li in 2:nl) {
-      gap <- max(lead, laid[[li]]$top - laid[[li - 1L]]$bot)
+      # TeX's rule: lines a leading apart, unless their boxes would then
+      # come closer than \lineskip (1pt at 10pt, scaled), in which case they
+      # are set that far apart.
+      need <- laid[[li]]$top - laid[[li - 1L]]$bot
+      gap <- if (need > lead) need + fontsize * .LINESKIP else lead
       off[li] <- off[li - 1L] - gap
     }
     off <- off - (off[1] + off[nl]) / 2
@@ -1424,7 +1492,7 @@ md <- function(text) {
     rh = as.numeric(cat_field("rh")),
     rcols = as.character(cat_field("rcols")),
     gtext = paste(cat_field("gtext"), collapse = ""),
-    baseline = lift + off[1]
+    baseline = lift + off[1] + .md_strut_depth(family, fontface, fontsize)
   )
 }
 

@@ -111,8 +111,12 @@ pub enum Alphabet {
     Rm,
     It,
     Bf,
-    /// Bold italic (`\mathbfit`, `\boldsymbol`).
+    /// Bold italic (`\mathbfit`).
     BfIt,
+    /// `\boldsymbol`: each symbol bold in the shape it already has (amsmath's
+    /// meaning): Latin and lowercase Greek bold italic, capital Greek and
+    /// digits bold upright.
+    BoldSym,
     Sf,
     Tt,
     Cal,
@@ -126,6 +130,7 @@ pub fn parse(src: &str) -> Result<Vec<Node>, ParseError> {
         i: 0,
         depth: 0,
         in_infix: false,
+        split_by_infix: false,
     };
     let nodes = p.expr(Stop::Eof, Alphabet::Normal)?;
     Ok(nodes)
@@ -160,6 +165,9 @@ struct Parser {
     /// Inside the denominator of an infix fraction of the current list,
     /// where a second `\over` is ambiguous (TeX's error too).
     in_infix: bool,
+    /// Set when the list just parsed was split by an infix fraction (read
+    /// by a style switch, which then keeps its style to the numerator).
+    split_by_infix: bool,
 }
 
 /// Nesting limit. Each brace level costs about two (the group's list and
@@ -232,6 +240,7 @@ impl Parser {
         let infix = std::mem::replace(&mut self.in_infix, false);
         let r = self.expr_inner(stop, alpha);
         self.in_infix = infix;
+        self.split_by_infix = false;
         self.depth -= 1;
         r
     }
@@ -301,6 +310,7 @@ impl Parser {
                         },
                     };
                     out.push(frac);
+                    self.split_by_infix = true;
                     return Ok(out);
                 }
             }
@@ -315,7 +325,24 @@ impl Parser {
                 };
                 if let Some(f) = force {
                     self.next();
-                    let rest = self.expr(stop, alpha)?;
+                    // The rest of this same list: an infix fraction in it
+                    // splits this list (a second one is ambiguous), and the
+                    // style then applies to the numerator only, as in TeX.
+                    self.enter()?;
+                    self.split_by_infix = false;
+                    let rest = self.expr_inner(stop, alpha);
+                    self.depth -= 1;
+                    let mut rest = rest?;
+                    if std::mem::take(&mut self.split_by_infix) {
+                        if let Some(Node::Frac { num, .. }) = rest.first_mut() {
+                            let inner = std::mem::take(num);
+                            let mut new_num = std::mem::take(&mut out);
+                            new_num.push(Node::Style(f, inner));
+                            *num = new_num;
+                        }
+                        self.split_by_infix = true;
+                        return Ok(rest);
+                    }
                     out.push(Node::Style(f, rest));
                     return Ok(out);
                 }
@@ -622,7 +649,8 @@ impl Parser {
             "mathrm" | "mathit" | "mathbf" | "mathsf" | "mathtt" | "mathcal" | "mathbb"
             | "mathnormal" | "mathbfit" | "boldsymbol" => {
                 let a = match name {
-                    "mathbfit" | "boldsymbol" => Alphabet::BfIt,
+                    "mathbfit" => Alphabet::BfIt,
+                    "boldsymbol" => Alphabet::BoldSym,
                     "mathrm" => Alphabet::Rm,
                     "mathit" => Alphabet::It,
                     "mathbf" => Alphabet::Bf,
@@ -758,6 +786,12 @@ pub fn map_alpha(c: char, alpha: Alphabet) -> char {
                 return from_u32(0x1D6C2 + k, c);
             }
             c
+        }
+        Alphabet::BoldSym => {
+            if gup {
+                return from_u32(0x1D6A8 + (c as u32 - 0x0391), c);
+            }
+            map_alpha(c, Alphabet::BfIt)
         }
         Alphabet::BfIt => {
             if upper || lower {

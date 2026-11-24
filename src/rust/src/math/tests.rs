@@ -632,7 +632,39 @@ fn text_and_bold_italic_alphabets() {
     let m = typeset("\\mathbfit{x}\\boldsymbol{\\alpha}", &f, 10.0, false).unwrap();
     let chars: Vec<char> = m.glyphs.iter().map(|g| g.ch).collect();
     assert_eq!(chars, vec!['\u{1D499}', '\u{1D736}']);
+    // \boldsymbol keeps each symbol's shape: capital Greek and digits bold
+    // upright, Latin bold italic (amsmath); \mathbfit makes all italic.
+    let m = typeset(
+        "\\boldsymbol{\\Gamma x 1}\\mathbfit{\\Gamma}",
+        &f,
+        10.0,
+        false,
+    )
+    .unwrap();
+    let chars: Vec<char> = m.glyphs.iter().map(|g| g.ch).collect();
+    assert_eq!(
+        chars,
+        vec!['\u{1D6AA}', '\u{1D499}', '\u{1D7CF}', '\u{1D71E}']
+    );
     // \mathring is an accent.
     let m = typeset("\\mathring{A}", &f, 10.0, false).unwrap();
     assert!(m.glyphs.iter().any(|g| g.ch == '\u{030A}'));
+}
+
+#[test]
+fn style_switches_and_infix_fractions() {
+    let f = stix();
+    // A second infix fraction behind a style switch is still ambiguous.
+    assert!(typeset("a \\over \\displaystyle b \\over c", &f, 10.0, false).is_err());
+    assert!(typeset("\\displaystyle a \\over b \\over c", &f, 10.0, false).is_err());
+    // `\displaystyle a \over b` sets only the numerator in display style.
+    same_layout("\\displaystyle a \\over b", "\\frac{\\displaystyle a}{b}");
+    same_layout(
+        "x \\displaystyle a \\over b",
+        "\\frac{x \\displaystyle a}{b}",
+    );
+    // The denominator keeps the text-style fraction's script size.
+    let m = typeset("\\displaystyle a \\over b", &f, 10.0, false).unwrap();
+    assert!(approx(glyph_of(&m, '\u{1D44F}').size, 7.0));
+    assert!(approx(glyph_of(&m, '\u{1D44E}').size, 10.0));
 }

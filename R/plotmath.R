@@ -35,7 +35,9 @@
 #'
 #' One deliberate difference from base R graphics: single-letter symbols are
 #' set in math italic, the TeX convention, where base R sets them upright.
-#' Use `plain()` for upright letters. Limits of `sum()`, `integral()`, `lim()`
+#' Use `plain()` for upright letters. Longer names (`mpg`, `Temperature`) are
+#' set upright as one word, as in base R. Functions given the wrong number of
+#' arguments (`frac(a)`) are errors. Limits of `sum()`, `integral()`, `lim()`
 #' and friends go above and below the operator, as in base R. Anything else
 #' (`symbol()`, assignment, `if`, ...) is an error, not silently dropped.
 #'
@@ -53,6 +55,9 @@
 #' tex(bquote(x^.(k)))
 #' @export
 plotmath <- function(text, display = FALSE) {
+  if (!is.logical(display) || length(display) != 1L || is.na(display)) {
+    cli::cli_abort("{.arg display} must be {.code TRUE} or {.code FALSE}.")
+  }
   text <- as.character(text)
   call <- environment()
   exprs <- lapply(text, function(s) {
@@ -153,7 +158,7 @@ plotmath <- function(text, display = FALSE) {
   phi1 = "\\varphi",
   sigma1 = "\\varsigma",
   omega1 = "\\varpi",
-  Upsilon1 = "\\Upsilon",
+  Upsilon1 = "\u03d2",
   epsilon1 = "\\varepsilon",
   infinity = "\\infty",
   partialdiff = "\\partial",
@@ -315,14 +320,16 @@ plotmath <- function(text, display = FALSE) {
 # ("default" outside any), which decides how strings are set.
 .pm <- function(e, font, call) {
   if (is.name(e)) {
-    return(.pm_name(as.character(e)))
+    return(.pm_name(as.character(e), font))
   }
   if (is.character(e) && length(e) == 1L) {
     return(paste0(.PM_TEXT[[font]], "{", .pm_escape(e), "}"))
   }
   if ((is.numeric(e) || is.logical(e)) && length(e) == 1L) {
-    if (is.logical(e)) {
-      return(paste0("\\text{", as.character(e), "}"))
+    if (is.logical(e) || !is.finite(e)) {
+      # TRUE, NA, NaN, Inf: set upright, as R prints them
+      neg <- isTRUE(e < 0)
+      return(paste0(if (neg) "-", "\\mathrm{", format(if (neg) -e else e), "}"))
     }
     if (e < 0) {
       return(paste0("-", .pm(-e, font, call)))
@@ -340,6 +347,7 @@ plotmath <- function(text, display = FALSE) {
   }
   fn <- as.character(f)
   n <- length(args)
+  .pm_check_arity(fn, n, e, call)
   a <- function(i) .pm(args[[i]], font, call)
   if (fn %in% names(.PM_BINARY)) {
     op <- .PM_BINARY[[fn]]
@@ -445,12 +453,17 @@ plotmath <- function(text, display = FALSE) {
   # `symbol()` selects base R's Adobe Symbol font, which has no TeX analogue.
   if (make.names(fn) == fn && fn != "symbol") {
     # a generic function call, f(x)
-    return(paste0(.pm_name(fn), "(", .pm_list(args, font, call), ")"))
+    return(paste0(.pm_name(fn, font), "(", .pm_list(args, font, call), ")"))
   }
   .pm_unsupported(e, call)
 }
 
-.pm_name <- function(x) {
+# A symbol. Greek and the special names map to TeX; a single letter is math
+# italic (the TeX convention); a longer name (`mpg`, `Temperature`) is set
+# upright as one word, as base R sets it -- inside a font call it takes that
+# font instead. A name that is not a plain identifier (a backtick symbol) is
+# set as text, so its characters never reach the TeX parser as markup.
+.pm_name <- function(x, font = "default") {
   if (x %in% .PM_GREEK) {
     return(paste0("\\", x))
   }
@@ -460,7 +473,67 @@ plotmath <- function(text, display = FALSE) {
   if (!nzchar(x)) {
     return("")
   }
-  gsub("_", "\\_", x, fixed = TRUE)
+  if (!grepl("^[A-Za-z.][A-Za-z0-9._]*$", x)) {
+    return(paste0(.PM_TEXT[[font]], "{", .pm_escape(x), "}"))
+  }
+  x <- gsub("_", "\\_", x, fixed = TRUE)
+  if (nchar(x) > 1L && font == "default") {
+    return(paste0("\\mathrm{", x, "}"))
+  }
+  x
+}
+
+# The argument counts the plotmath functions take; any other count is an
+# error rather than a silent ordinary call.
+.PM_ARITY <- c(
+  list(
+    frac = 2L,
+    over = 2L,
+    atop = 2L,
+    sqrt = 1:2,
+    group = 3L,
+    bgroup = 3L,
+    bar = 1L,
+    "^" = 2L,
+    "*" = 2L,
+    "~" = 1:2,
+    "!" = 1L,
+    "(" = 1L,
+    "{" = 1L
+  ),
+  lapply(.PM_ACCENT, function(x) 1L),
+  lapply(.PM_FONT, function(x) 1L),
+  structure(rep(list(1L), length(.PM_STYLE)), names = .PM_STYLE),
+  lapply(.PM_BIGOP, function(x) 1:3),
+  lapply(.PM_LIMOP, function(x) 1:2),
+  structure(
+    lapply(names(.PM_BINARY), function(op) {
+      if (op %in% c("+", "-")) 1:2 else 2L
+    }),
+    names = names(.PM_BINARY)
+  )
+)
+
+.pm_check_arity <- function(fn, n, e, call) {
+  ok <- .PM_ARITY[[fn]]
+  if (fn == "[" && n < 2L) {
+    ok <- 2L
+  } else if (is.null(ok) || n %in% ok) {
+    return(invisible())
+  }
+  want <- if (length(ok) == 1L) {
+    if (ok == 1L) "1 argument" else paste(ok, "arguments")
+  } else {
+    paste(min(ok), "to", max(ok), "arguments")
+  }
+  cli::cli_abort(
+    c(
+      "{.code {fn}} takes {want} in plotmath, not {n}.",
+      i = "In {.code {paste(deparse(e), collapse = ' ')}}."
+    ),
+    call = call,
+    class = "vellum_plotmath_error"
+  )
 }
 
 .pm_list <- function(args, font, call) {
@@ -479,8 +552,10 @@ plotmath <- function(text, display = FALSE) {
   if (.pm_atomic(x)) x else paste0("{", x, "}")
 }
 
+# Escape text for `\text{}`: backslashes and braces, and `$`, so the TeX
+# source can also sit inside an md() `$...$` span (a stacked facet strip).
 .pm_escape <- function(x) {
-  gsub("([\\\\{}])", "\\\\\\1", x, perl = TRUE)
+  gsub("([\\\\{}$])", "\\\\\\1", x, perl = TRUE)
 }
 
 .pm_delim <- function(d, call) {

@@ -46,7 +46,9 @@ function calls such as \code{f(x)} or \code{log(x)}.
 
 One deliberate difference from base R graphics: single-letter symbols are
 set in math italic, the TeX convention, where base R sets them upright.
-Use \code{plain()} for upright letters. Limits of \code{sum()}, \code{integral()}, \code{lim()}
+Use \code{plain()} for upright letters. Longer names (\code{mpg}, \code{Temperature}) are
+set upright as one word, as in base R. Functions given the wrong number of
+arguments (\code{frac(a)}) are errors. Limits of \code{sum()}, \code{integral()}, \code{lim()}
 and friends go above and below the operator, as in base R. Anything else
 (\code{symbol()}, assignment, \code{if}, ...) is an error, not silently dropped.
 }
