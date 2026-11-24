@@ -13,7 +13,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">vellum</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.15.0.9000</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.16.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -70,9 +70,9 @@
     </div>
 
     <div class="section level2">
-<h2 class="pkg-version" data-toc-text="development version" id="vellum-development-version">vellum (development version)<a class="anchor" aria-label="anchor" href="#vellum-development-version"></a></h2>
+<h2 class="pkg-version" data-toc-text="0.16.0" id="vellum-0160">vellum 0.16.0<a class="anchor" aria-label="anchor" href="#vellum-0160"></a></h2>
 <div class="section level3">
-<h3 id="new-features-development-version">New features<a class="anchor" aria-label="anchor" href="#new-features-development-version"></a></h3>
+<h3 id="new-features-0-16-0">New features<a class="anchor" aria-label="anchor" href="#new-features-0-16-0"></a></h3>
 <ul><li><p><code><a href="../reference/tex.html">tex()</a></code> typesets math (F-22): <code>tex("E = mc^2")</code> or <code>tex("\\sum_{i=1}^n x_i^2", display = TRUE)</code> is a label for <code><a href="../reference/grob.html">text_grob()</a></code>, <code><a href="../reference/vl_strwidth.html">vl_strwidth()</a></code>, <code><a href="../reference/grobwidth.html">grobwidth()</a></code> and vellumplot’s titles, guides and text marks, wherever an <code><a href="../reference/md.html">md()</a></code> label goes. vellum lays it out itself, with no LaTeX installation: a TeX-subset parser and a TeX-style layout in Rust, sized by the font’s OpenType MATH table (scripts and primes, fractions, radicals, Greek, operators and relations with TeX’s spacing, big operators with limits, growing <code>\left</code>/<code>\right</code> delimiters, math alphabets, <code>\text{}</code>, accents, the four TeX styles). A formula is drawn as positioned glyphs plus rules (fraction bars, radical overbars), so it renders the same in PNG, SVG and PDF and is measured exactly as drawn. The default math font is STIX Two Math, bundled (SIL Open Font License, see <code>inst/COPYRIGHTS</code>); <code>options(vellum.math_font = )</code> picks another font with a MATH table by family name or file. Scripts use the font’s math kerning, and a label’s box is the line box of a plain label of the same family and size (grown where the formula reaches past it), so formulas share a baseline. An unknown command is an error that names it and its position.</p></li>
 <li><p><code>$...$</code> in an <code><a href="../reference/md.html">md()</a></code> label is now inline math (F-31); write <code>\$</code> for a literal dollar sign. Prices stay prose: a closing <code>$</code> may not be followed by a letter or digit, so <code>"Revenue ($M) vs cost ($K)"</code> has no math.</p></li>
 <li><p>A list of labels for <code><a href="../reference/grob.html">text_grob()</a></code> may mix rich labels with plain strings, which are drawn literally (F-31).</p></li>
@@ -82,7 +82,7 @@
 <li><p><code><a href="../reference/grob.html">text_grob()</a></code> accepts a list of rich labels (one per position), as <code>md(c(...))</code> and <code>tex(c(...))</code> return. It used to coerce the list to text and draw <code>&lt;object&gt;</code>.</p></li>
 </ul></div>
 <div class="section level3">
-<h3 id="bug-fixes-development-version">Bug fixes<a class="anchor" aria-label="anchor" href="#bug-fixes-development-version"></a></h3>
+<h3 id="bug-fixes-0-16-0">Bug fixes<a class="anchor" aria-label="anchor" href="#bug-fixes-0-16-0"></a></h3>
 <ul><li><p>Multi-line <code><a href="../reference/md.html">md()</a></code> labels sat (lines - 1) / 2 leadings too low and overran their own box under a top or bottom <code>vjust</code>; a subscript reached below the box. The box now holds every line (F-31).</p></li>
 <li><p>Rich labels were deduplicated by their plain text, so <code>md("**a**")</code> and <code>md("a")</code> in one text grob drew alike; an empty <code>md("")</code> in a list failed (F-31).</p></li>
 </ul></div>
