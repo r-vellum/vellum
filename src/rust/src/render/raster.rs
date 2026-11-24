@@ -783,6 +783,15 @@ impl RenderBackend for RasterBackend {
                         mask.as_deref(),
                     );
             }
+            // A tex() label's bars take the halo with its glyphs.
+            for r in run.rules {
+                if let Some(p) = text_rule_path(run, r) {
+                    self.targets
+                        .last_mut()
+                        .expect("at least the page target")
+                        .stroke_path(&p, &hpaint, &stroke, base, mask.as_deref());
+                }
+            }
         }
         for i in 0..n {
             let ox = run.ax + run.gx[i] - run.hjust * run.w;
@@ -856,6 +865,16 @@ impl RenderBackend for RasterBackend {
                     base.pre_concat(place),
                     mask.as_deref(),
                 );
+        }
+        // Rules (a tex() label's fraction bars and radical overbars), in the
+        // label's own transform.
+        for r in run.rules {
+            if let Some(p) = text_rule_path(run, r) {
+                self.targets
+                    .last_mut()
+                    .expect("at least the page target")
+                    .fill_path(&p, &solid_paint(r.col), FillRule::Winding, base, mask.as_deref());
+            }
         }
     }
 

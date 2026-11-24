@@ -24,6 +24,7 @@ NULL
     class_grid_layout = class_grid_layout,
     style = style,
     vellum_md_label = vellum_md_label,
+    vellum_tex_label = vellum_tex_label,
     grob_rect = grob_rect,
     grob_roundrect = grob_roundrect,
     grob_lines = grob_lines,

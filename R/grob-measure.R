@@ -33,12 +33,19 @@ grobheight <- function(grob, mult = 1) vl_unit(mult, "grobheight", data = grob)
     fam <- g@gp@fontfamily %||% ""
     face <- g@gp@fontface %||% "plain"
     feat <- .gp_features(g@gp)
-    if (S7::S7_inherits(g@label, vellum_label)) {
+    if (.is_rich_label(g@label)) {
       # Rich label: measure the composed multi-run extent (points -> mm) so axis
-      # gutters/tracks reserve the right space (shares `.md_compose` with drawing).
-      ext <- .md_extent_pt(g@label, fam, face, fs, feat)
-      w <- ext[1] / 72 * 25.4
-      h <- ext[2] / 72 * 25.4
+      # gutters/tracks reserve the right space (shares `.label_compose()` with
+      # drawing, for md() and tex() labels alike). A list (one label per
+      # datum) reserves the largest.
+      labs <- if (is.list(g@label)) g@label else list(g@label)
+      ext <- vapply(
+        labs,
+        function(l) .label_extent_pt(l, fam, face, fs, feat),
+        numeric(2)
+      )
+      w <- max(ext[1, ]) / 72 * 25.4
+      h <- max(ext[2, ]) / 72 * 25.4
     } else if (!is.na(g@width)) {
       # Width-constrained (wrapping / auto-fit) plain text: measure the *wrapped*
       # block, not the natural line, or a `grobheight`-sized track reserves one

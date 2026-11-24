@@ -65,7 +65,7 @@ vl_strheight <- function(
   unit <- match.arg(unit, c("in", "pt", "mm", "cm"))
   .check_font_size(fontsize * cex)
   # Rich md() labels are measured through the same composition path the renderer
-  # draws (`.md_extent_pt`), so reserved layout space matches drawn glyphs. A
+  # draws (`.label_extent_pt`), so reserved layout space matches drawn glyphs. A
   # single label or a list of them is accepted; family/fontface/fontsize give the
   # base style the label's runs are relative to.
   if (.is_md_labelish(label)) {
@@ -74,7 +74,7 @@ vl_strheight <- function(
     pt <- vapply(
       labs,
       function(l) {
-        .md_extent_pt(l, family, fontface, fontsize * cex, features)[col]
+        .label_extent_pt(l, family, fontface, fontsize * cex, features)[col]
       },
       numeric(1)
     )
@@ -1163,10 +1163,10 @@ md <- function(text) {
     }
     label[((drawn - 1L) %% m) + 1L]
   }
-  keytxt <- vapply(labs, function(l) l@text, character(1))
+  keytxt <- vapply(labs, .label_key, character(1))
   uk <- unique(keytxt)
   comp <- lapply(uk, function(t) {
-    .md_compose(
+    .label_compose(
       labs[[match(t, keytxt)]],
       family,
       fontface,
@@ -1188,12 +1188,32 @@ md <- function(text) {
   nper <- integer(np)
   w <- numeric(np)
   h <- numeric(np)
+  # Rules (a tex() label's fraction bars and radical overbars): a count per
+  # label, then x, y, w, h and an RGBA colour per rule. Labels without rules
+  # (every md() label) send empty vectors, which the backend reads as none.
+  nrule <- integer(np)
+  rules <- numeric(0)
+  rcol <- integer(0)
+  nodelab <- character(np)
+  gtext <- character(np)
   for (j in seq_len(np)) {
     g <- comp[[keytxt[j]]]
     ng <- length(g$gid)
     nper[j] <- ng
     w[j] <- g$w * scale
     h[j] <- g$h * scale
+    nodelab[j] <- g$text
+    gtext[j] <- g$gtext
+    nr <- length(g$rx)
+    nrule[j] <- nr
+    if (nr > 0L) {
+      rules <- c(rules, rbind(g$rx, g$ry, g$rw, g$rh) * scale)
+      m <- grDevices::col2rgb(g$rcols, alpha = TRUE)
+      if (!is.null(alpha) && !is.na(alpha)) {
+        m[4L, ] <- round(m[4L, ] * alpha)
+      }
+      rcol <- c(rcol, as.integer(m))
+    }
     if (ng > 0L) {
       gid <- c(gid, g$gid)
       gx <- c(gx, g$gx * scale)
@@ -1228,7 +1248,7 @@ md <- function(text) {
     gpath,
     gface,
     gcol,
-    keytxt,
+    nodelab,
     family,
     fontface,
     fontsize,
@@ -1236,15 +1256,26 @@ md <- function(text) {
     .rs_num_inh(alpha),
     .rs_col_inh(halo$col),
     (halo$width %||% 0) * scale,
-    if (is.null(keys)) character(0) else keys[drawn]
+    if (is.null(keys)) character(0) else keys[drawn],
+    if (any(nrule > 0L)) nrule else integer(0),
+    rules,
+    rcol,
+    if (any(nzchar(gtext))) gtext else character(0)
   )
   invisible()
 }
 
 # Composed extent of a rich label in points (w, h) — measurement path. Shares
-# `.md_compose` with the draw path so reserved layout space matches drawn text.
-.md_extent_pt <- function(label, family, fontface, fontsize, features = NULL) {
-  g <- .md_compose(label, family, fontface, fontsize, "black", features)
+# `.label_compose()` with the draw path so reserved layout space matches drawn
+# glyphs (and, for a tex() label, its rules).
+.label_extent_pt <- function(
+  label,
+  family,
+  fontface,
+  fontsize,
+  features = NULL
+) {
+  g <- .label_compose(label, family, fontface, fontsize, "black", features)
   c(g$w, g$h)
 }
 

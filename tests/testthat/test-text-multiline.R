@@ -31,8 +31,8 @@ test_that("md() is vectorised and handles embedded newlines", {
     logical(1)
   )))
 
-  h1 <- .md_extent_pt(md("ab"), "", "plain", 12)[2]
-  h2 <- .md_extent_pt(md("ab\ncd"), "", "plain", 12)[2]
+  h1 <- .label_extent_pt(md("ab"), "", "plain", 12)[2]
+  h2 <- .label_extent_pt(md("ab\ncd"), "", "plain", 12)[2]
   expect_gt(h2, h1) # a newline adds a line -> taller
 })
 

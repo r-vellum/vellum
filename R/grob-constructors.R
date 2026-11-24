@@ -1156,8 +1156,9 @@ text_grob <- function(
   default_units = "npc"
 ) {
   du <- .check_default_units(default_units)
-  # Rich labels pass through untouched; everything else coerces to character.
-  if (!S7::S7_inherits(label, vellum_label)) {
+  # Rich labels (one, or a list of them: one per datum) pass through
+  # untouched; everything else coerces to character.
+  if (!.is_rich_label(label)) {
     label <- as.character(label)
   }
   align <- match.arg(align, c("left", "centre", "center", "right", "justify"))

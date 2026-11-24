@@ -148,6 +148,13 @@ int stream, 4 ints per glyph, parallel to the glyph arrays). Used by rich
 (multi-run) labels where colour varies within a single label. Everything else
 matches \code{texts}; the shared \code{col} becomes the fallback only when a glyph's
 colour is absent (it never is here, but keeps the gpar resolve consistent).
+
+\code{nrules}/\code{rules}/\code{rcol} optionally add filled rectangles per label (a
+\code{tex()} label's fraction bars and radical overbars): a rule count per
+label, then \verb{x, y, w, h} in the glyph frame (px, y up from the box
+bottom) and an RGBA colour per rule. Empty vectors mean no rules.
+\code{gtext} optionally gives each label's per-glyph text for PDF
+extraction (empty: the label itself).
 }
 
 \subsection{Method \code{mask_begin}}{

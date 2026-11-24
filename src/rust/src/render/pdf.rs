@@ -488,8 +488,11 @@ impl RenderBackend for PdfBackend<'_, '_> {
             .min(run.gsize.len())
             .min(run.gpath.len())
             .min(run.gface.len());
-        if n == 0 || run.label.is_empty() {
-            return; // n includes gy.len(), so gy[0] below is safe
+        // Rules (a tex() label's bars) draw even when there are no glyphs
+        // (`\\overline{\\quad}`); with neither there is nothing to do. The
+        // glyph loop below only indexes gy when n > 0.
+        if run.rules.is_empty() && (n == 0 || run.label.is_empty()) {
+            return;
         }
         let size_px = (run.size * run.dpi / 72.0) as f32;
         if size_px <= 0.0 {
@@ -506,19 +509,21 @@ impl RenderBackend for PdfBackend<'_, '_> {
             transform
         };
 
+        // The text glyphs map back to: a tex() label carries one character
+        // per glyph separately from its label (the TeX source).
+        let text: &str = if run.gtext.is_empty() { run.label } else { run.gtext };
         // char byte boundaries for ToUnicode (exact when glyphs == chars).
-        let bounds: Vec<usize> = run
-            .label
+        let bounds: Vec<usize> = text
             .char_indices()
             .map(|(b, _)| b)
-            .chain(std::iter::once(run.label.len()))
+            .chain(std::iter::once(text.len()))
             .collect();
         let exact = n + 1 == bounds.len();
         let range_for = |i: usize| {
             if exact {
                 bounds[i]..bounds[i + 1]
             } else if i == 0 {
-                0..run.label.len()
+                0..text.len()
             } else {
                 0..0
             }
@@ -610,12 +615,27 @@ impl RenderBackend for PdfBackend<'_, '_> {
                         KPoint::from_xy(start_x, start_y),
                         &glyphs,
                         font,
-                        run.label,
+                        text,
                         run_px,
                         false,
                     );
                 }
                 i = j;
+            }
+            // A tex() label's fraction bars and radical overbars: stroked
+            // with the halo on the halo pass, filled on the fill pass.
+            for r in run.rules {
+                let Some(kp) = text_rule_path(run, r).as_ref().and_then(to_kpath) else {
+                    continue;
+                };
+                if !halo_pass {
+                    self.surface.set_fill(Some(Fill {
+                        paint: rgb::Color::new(r.col.r, r.col.g, r.col.b).into(),
+                        opacity: norm(r.col.a),
+                        rule: KFillRule::NonZero,
+                    }));
+                }
+                self.surface.draw_path(&kp);
             }
         }
         self.surface.set_stroke(None);

@@ -652,6 +652,10 @@ pub(super) fn draw_text_on_path<B: RenderBackend>(
                 } else {
                     &[]
                 },
+                // tex() labels can't be set on a path (text_path_grob takes
+                // plain strings), so a path run never has rules or gtext.
+                rules: &[],
+                gtext: "",
                 halo: if halo_pass { run.halo } else { None },
                 label: glyph_label,
                 family: run.family,

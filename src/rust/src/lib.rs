@@ -8,6 +8,7 @@ mod cvd;
 mod color;
 mod font;
 mod geom;
+mod math;
 mod oklab;
 mod pick;
 mod place;
@@ -551,4 +552,5 @@ extendr_module! {
     fn rs_pdf_pages_raw;
     use scene;
     use aggregate;
+    use math;
 }

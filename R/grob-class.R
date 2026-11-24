@@ -345,11 +345,67 @@ vellum_md_label <- S7::new_class(
   )
 )
 
+# A concrete rich label: TeX math (see `tex()` in math.R). `tex` is the source,
+# `display` selects TeX's display style. The math engine lays it out from the
+# math font (`.math_font()`), so the label carries no font of its own. `text` is
+# the source again, used by the `.text_labels()` seam (alt text, the plain
+# fallback) like `vellum_md_label@text`.
+vellum_tex_label <- S7::new_class(
+  "vellum_tex_label",
+  parent = vellum_label,
+  package = "vellum",
+  properties = list(
+    tex = S7::new_property(S7::class_character, default = ""),
+    display = S7::new_property(S7::class_logical, default = FALSE),
+    text = S7::new_property(S7::class_character, default = "")
+  )
+)
+
 # The single place a label becomes the character vector the backend shapes.
 .text_labels <- S7::new_generic("text_labels", "label")
 S7::method(.text_labels, S7::class_character) <- function(label) label
 S7::method(.text_labels, S7::class_any) <- function(label) as.character(label)
 S7::method(.text_labels, vellum_md_label) <- function(label) label@text
+S7::method(.text_labels, vellum_tex_label) <- function(label) label@text
+
+# Compose a rich label into positioned glyphs for drawing and measuring: one
+# generic so md() and tex() labels share `.draw_richtext_batch()` and
+# `.label_extent_pt()` instead of branching. Returns `.md_compose()`'s lists
+# (gid, gx, gy, gsize, gpath, gface, cols, w, h; points, y up from the label
+# box's bottom) plus rules (rx, ry, rw, rh, rcols; the same frame) and `text`,
+# the string the backend keeps as the node's label.
+.label_compose <- S7::new_generic(
+  "label_compose",
+  "label",
+  function(label, family, fontface, fontsize, base_col, features = NULL) {
+    S7::S7_dispatch()
+  }
+)
+S7::method(.label_compose, vellum_md_label) <- function(
+  label,
+  family,
+  fontface,
+  fontsize,
+  base_col,
+  features = NULL
+) {
+  g <- .md_compose(label, family, fontface, fontsize, base_col, features)
+  g$rx <- g$ry <- g$rw <- g$rh <- numeric(0)
+  g$rcols <- character(0)
+  g$text <- label@text
+  g$gtext <- ""
+  g$baseline <- 0
+  g
+}
+
+# Key that identifies a rich label's composition (draw-time dedupe).
+.label_key <- function(label) {
+  if (S7::S7_inherits(label, vellum_tex_label)) {
+    paste0("\001tex:", label@display, ":", label@tex)
+  } else {
+    label@text
+  }
+}
 
 # Is `label` rich (a single `vellum_label`, or a non-empty list of them -- one
 # per datum)? Rich labels are drawn at every position, so they don't count

@@ -624,12 +624,13 @@ impl RenderBackend for SvgBackend {
     }
 
     fn draw_text(&mut self, run: &TextRun, transform: Transform, clip: &Clip) {
-        if run.label.is_empty() {
+        if run.label.is_empty() && run.rules.is_empty() {
             return;
         }
         // A rich (per-glyph colour) label can't be a single `<text>` element, so it
         // always takes the outline path even when native text is otherwise preferred.
-        let rich = !run.gcolor.is_empty();
+        // Neither can a label with rules (a tex() label, even one with no glyphs).
+        let rich = !run.gcolor.is_empty() || !run.rules.is_empty();
         // Glyph runs grouped into lines by a change of baseline. SVG `<text>`
         // ignores newlines outright, so a multi-line run emitted as one element
         // would silently collapse onto one line -- which it did until wrapped
@@ -685,6 +686,16 @@ impl RenderBackend for SvgBackend {
                         transform_attr(place)
                     ));
                 }
+                for r in run.rules {
+                    if let Some(p) = text_rule_path(run, r) {
+                        paths.push_str(&format!(
+                            "<path d=\"{}\" fill=\"none\" stroke=\"{}\" stroke-opacity=\"{}\" \
+                             stroke-width=\"{}\" stroke-linejoin=\"round\"{}/>",
+                            path_to_d(&p, None, None), rgb_hex(hcol), opacity(hcol), hw * 2.0,
+                            transform_attr(base)
+                        ));
+                    }
+                }
             }
             for i in 0..n {
                 let outline = match glyph_outline_cached(
@@ -712,6 +723,18 @@ impl RenderBackend for SvgBackend {
                     fill_attr,
                     transform_attr(place)
                 ));
+            }
+            // A tex() label's fraction bars and radical overbars.
+            for r in run.rules {
+                if let Some(p) = text_rule_path(run, r) {
+                    paths.push_str(&format!(
+                        "<path d=\"{}\" fill=\"{}\" fill-opacity=\"{}\"{}/>",
+                        path_to_d(&p, None, None),
+                        rgb_hex(r.col),
+                        opacity(r.col),
+                        transform_attr(base)
+                    ));
+                }
             }
             if !paths.is_empty() {
                 let element = format!(

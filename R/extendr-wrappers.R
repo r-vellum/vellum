@@ -248,6 +248,21 @@ rs_aggregate_lines <- function(x, y, brk, w, nx, ny, x0d, x1d, y0d, y1d) .Call(w
 
 rs_attractor <- function(kind, n, a, b, c, d, x0, y0) .Call(wrap__rs_attractor, kind, n, a, b, c, d, x0, y0)
 
+#' Parse only (no font needed): `NULL` when `src` is valid, else
+#' `list(message, position)`.
+#' @keywords internal
+rs_math_check <- function(src) .Call(wrap__rs_math_check, src)
+
+#' `""` when the font at `path`/`face` can typeset math, else why not.
+#' @keywords internal
+rs_math_font_check <- function(path, face) .Call(wrap__rs_math_font_check, path, face)
+
+#' Lay out a formula. Returns the glyph and rule arrays (points, y up,
+#' baseline 0) and the extents, or `list(message, position)` on a parse
+#' error (`position` NA for a font error).
+#' @keywords internal
+rs_math_layout <- function(src, path, face, size, display) .Call(wrap__rs_math_layout, src, path, face, size, display)
+
 #' A drawing scene held in the Rust backend. Internal: the public R API is the
 #' S7 layer (`vl_scene()`, grobs, `render()`), which compiles to this object.
 #' @keywords internal
@@ -388,6 +403,13 @@ rs_attractor <- function(kind, n, a, b, c, d, x0, y0) .Call(wrap__rs_attractor, 
 #'(multi-run) labels where colour varies within a single label. Everything else
 #'matches `texts`; the shared `col` becomes the fallback only when a glyph's
 #'colour is absent (it never is here, but keeps the gpar resolve consistent).
+#'
+#'`nrules`/`rules`/`rcol` optionally add filled rectangles per label (a
+#'`tex()` label's fraction bars and radical overbars): a rule count per
+#'label, then `x, y, w, h` in the glyph frame (px, y up from the box
+#'bottom) and an RGBA colour per rule. Empty vectors mean no rules.
+#'`gtext` optionally gives each label's per-glyph text for PDF
+#'extraction (empty: the label itself).
 #'}
 #'
 #'\subsection{Method `mask_begin`}{
@@ -660,7 +682,7 @@ Scene$text_path <- function(px, py, pxu, pxoff, pyu, pyoff, offset, hjust, vjust
 
 Scene$texts <- function(x, y, xu, xoff, yu, yoff, rot, hjust, vjust, w, h, nper, gid, gx, gy, gsize, gpath, gface, label, family, face, size, col, alpha, halo_col, halo_width, keys) .Call(wrap__Scene__texts, self, x, y, xu, xoff, yu, yoff, rot, hjust, vjust, w, h, nper, gid, gx, gy, gsize, gpath, gface, label, family, face, size, col, alpha, halo_col, halo_width, keys)
 
-Scene$texts_rich <- function(x, y, xu, xoff, yu, yoff, rot, hjust, vjust, w, h, nper, gid, gx, gy, gsize, gpath, gface, gcol, label, family, face, size, col, alpha, halo_col, halo_width, keys) .Call(wrap__Scene__texts_rich, self, x, y, xu, xoff, yu, yoff, rot, hjust, vjust, w, h, nper, gid, gx, gy, gsize, gpath, gface, gcol, label, family, face, size, col, alpha, halo_col, halo_width, keys)
+Scene$texts_rich <- function(x, y, xu, xoff, yu, yoff, rot, hjust, vjust, w, h, nper, gid, gx, gy, gsize, gpath, gface, gcol, label, family, face, size, col, alpha, halo_col, halo_width, keys, nrules, rules, rcol, gtext) .Call(wrap__Scene__texts_rich, self, x, y, xu, xoff, yu, yoff, rot, hjust, vjust, w, h, nper, gid, gx, gy, gsize, gpath, gface, gcol, label, family, face, size, col, alpha, halo_col, halo_width, keys, nrules, rules, rcol, gtext)
 
 Scene$mask_begin <- function(kind) .Call(wrap__Scene__mask_begin, self, kind)
 

@@ -1161,6 +1161,8 @@ impl Scene {
             gpath,
             gface: gface.iter().map(|&v| v.max(0) as u32).collect(),
             gcol: Vec::new(),
+            rules: Vec::new(),
+            gtext: String::new(),
             halo,
             label: label.to_string(),
             family: family.to_string(),
@@ -1232,6 +1234,8 @@ impl Scene {
             gpath,
             gface: gface.iter().map(|&v| v.max(0) as u32).collect(),
             gcol: Vec::new(),
+            rules: Vec::new(),
+            gtext: String::new(),
             halo,
             label: label.to_string(),
             family: family.to_string(),
@@ -1337,6 +1341,8 @@ impl Scene {
                 gpath: gpath[lo..hi].to_vec(),
                 gface: gface[lo..hi].iter().map(|&v| v.max(0) as u32).collect(),
                 gcol: Vec::new(),
+                rules: Vec::new(),
+                gtext: String::new(),
                 halo,
                 label: label[i].clone(),
                 family: family.to_string(),
@@ -1354,6 +1360,13 @@ impl Scene {
     /// (multi-run) labels where colour varies within a single label. Everything else
     /// matches `texts`; the shared `col` becomes the fallback only when a glyph's
     /// colour is absent (it never is here, but keeps the gpar resolve consistent).
+    ///
+    /// `nrules`/`rules`/`rcol` optionally add filled rectangles per label (a
+    /// `tex()` label's fraction bars and radical overbars): a rule count per
+    /// label, then `x, y, w, h` in the glyph frame (px, y up from the box
+    /// bottom) and an RGBA colour per rule. Empty vectors mean no rules.
+    /// `gtext` optionally gives each label's per-glyph text for PDF
+    /// extraction (empty: the label itself).
     #[allow(clippy::too_many_arguments)]
     fn texts_rich(
         &mut self,
@@ -1385,6 +1398,10 @@ impl Scene {
         halo_col: Robj,
         halo_width: f64,
         keys: Vec<String>,
+        nrules: &[i32],
+        rules: &[f64],
+        rcol: &[i32],
+        gtext: Vec<String>,
     ) {
         let gp = PartialGpar::from_robj(&rnull(), &col, &rnull(), &alpha, &rnull());
         let halo = halo_of(&halo_col, halo_width);
@@ -1415,7 +1432,29 @@ impl Scene {
         .min()
         .unwrap_or(0);
         let mut off = 0usize;
+        // Rules (a tex() label's bars) are optional: `nrules` empty means none
+        // for any label. 4 numbers (x, y, w, h) and 4 colour ints per rule.
+        let rmax = (rules.len() / 4).min(rcol.len() / 4);
+        let mut roff = 0usize;
         for i in 0..nlab {
+            let rcnt = nrules.get(i).copied().unwrap_or(0).max(0) as usize;
+            let rlo = roff.min(rmax);
+            let rhi = (roff + rcnt).min(rmax);
+            roff = rhi;
+            let label_rules: Vec<crate::render::TextRule> = (rlo..rhi)
+                .map(|k| crate::render::TextRule {
+                    x: rules[4 * k],
+                    y: rules[4 * k + 1],
+                    w: rules[4 * k + 2],
+                    h: rules[4 * k + 3],
+                    col: Rgba {
+                        r: rcol[4 * k].clamp(0, 255) as u8,
+                        g: rcol[4 * k + 1].clamp(0, 255) as u8,
+                        b: rcol[4 * k + 2].clamp(0, 255) as u8,
+                        a: rcol[4 * k + 3].clamp(0, 255) as u8,
+                    },
+                })
+                .collect();
             let cnt = nper[i].max(0) as usize;
             let lo = off.min(gmax);
             let hi = (off + cnt).min(gmax);
@@ -1446,6 +1485,8 @@ impl Scene {
                         a: c[3].clamp(0, 255) as u8,
                     })
                     .collect(),
+                rules: label_rules,
+                gtext: gtext.get(i).cloned().unwrap_or_default(),
                 halo,
                 label: label[i].clone(),
                 family: family.to_string(),

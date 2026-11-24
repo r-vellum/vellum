@@ -28,5 +28,10 @@ Authors:
   \item David Schoch \email{david.schoch@cynkra.com}
 }
 
+Other contributors:
+\itemize{
+  \item The STIX Fonts Project Authors (STIX Two Math font, inst/fonts; see inst/COPYRIGHTS) [copyright holder]
+}
+
 }
 \keyword{internal}
