@@ -125,6 +125,10 @@ pub(super) enum Node {
         /// plain single-style path leaves this empty so its rendering is unchanged.
         /// A rich (multi-run) label fills it with one `Rgba` per glyph.
         gcol: Vec<Rgba>,
+        /// Filled rectangles drawn with the label (a `tex()` label's fraction
+        /// bars and radical overbars), in the glyph frame. Empty for every
+        /// other label.
+        rules: Vec<crate::render::TextRule>,
         /// Optional halo (shadowtext): `(colour, width_px)`. The glyph outlines are
         /// stroked in this colour *under* the fill, so a label stays legible over
         /// busy marks or map imagery. `None` (the default) leaves every backend's

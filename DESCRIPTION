@@ -10,6 +10,7 @@ Description: A grid-like low-level graphics system for R. Text metrics and
     device-pixel box) or be queried by point. The scene graph, unit/layout
     engine, and rendering run in a Rust backend.
 License: MIT + file LICENSE
+Copyright: see file inst/COPYRIGHTS
 URL: https://github.com/r-vellum/vellum,
     https://r-vellum.github.io/vellum/,
     https://schochastics.r-universe.dev/vellum
@@ -40,7 +41,7 @@ Imports:
     grDevices,
     grid,
     S7,
-    systemfonts,
+    systemfonts (>= 1.1.0),
     textshaping,
     vctrs
 Collate:
@@ -64,6 +65,7 @@ Collate:
     'grob-constructors.R'
     'grob-measure.R'
     'lint.R'
+    'math.R'
     'output.R'
     'paint.R'
     'pick.R'

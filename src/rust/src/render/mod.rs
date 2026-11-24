@@ -218,6 +218,10 @@ pub struct TextRun<'a> {
     /// Per-glyph fill colour. **Empty** ⇒ every glyph uses `color` (the plain path).
     /// Non-empty ⇒ one entry per glyph (a rich multi-run label).
     pub gcolor: &'a [Rgba],
+    /// Filled rectangles drawn with the label (fraction bars and radical
+    /// overbars of a `tex()` label), in the glyphs' frame. Empty for every
+    /// other label, which then renders exactly as before.
+    pub rules: &'a [TextRule],
     /// Optional halo: `(colour, width in local px)`. Backends stroke the glyph
     /// outlines in this colour **under** the fill (SVG native text uses
     /// `paint-order`). `None` leaves every text path exactly as it was.
@@ -227,6 +231,29 @@ pub struct TextRun<'a> {
     pub face: &'a str,
     pub size: f64,
     pub dpi: f64,
+}
+
+/// A filled rectangle that belongs to a text label, in label-local px in the
+/// same frame as the glyph offsets: `x` from the label's left edge, `y` up
+/// from the label box's bottom (`gy`'s origin), `(x, y)` the rule's
+/// bottom-left corner. Drawn in the label's own transform, so it rotates,
+/// justifies and takes the halo with the glyphs.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct TextRule {
+    pub x: f64,
+    pub y: f64,
+    pub w: f64,
+    pub h: f64,
+    pub col: Rgba,
+}
+
+/// The rule as a path in local px (y down, before the label's rotation),
+/// placed by the same anchor/justification as the glyphs.
+pub fn text_rule_path(run: &TextRun, r: &TextRule) -> Option<Path> {
+    let x0 = run.ax - run.hjust * run.w + r.x;
+    let y0 = run.ay - (r.y + r.h - run.vjust * run.h);
+    tiny_skia::Rect::from_xywh(x0 as f32, y0 as f32, r.w.max(0.0) as f32, r.h.max(0.0) as f32)
+        .map(tiny_skia::PathBuilder::from_rect)
 }
 
 /// A drop shadow cast by a group: the group's own coverage, tinted, blurred and

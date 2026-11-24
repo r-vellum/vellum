@@ -1,5 +1,27 @@
 # vellum (development version)
 
+## New features
+
+* `tex()` typesets math (F-22): `tex("E = mc^2")` or
+  `tex("\\sum_{i=1}^n x_i^2", display = TRUE)` is a label for
+  `text_grob()`, `vl_strwidth()`, `grobwidth()` and vellumplot's titles,
+  guides and text marks, wherever an `md()` label goes. vellum lays it out
+  itself, with no LaTeX installation: a TeX-subset parser and a TeX-style
+  layout in Rust, sized by the font's OpenType MATH table (scripts and
+  primes, fractions, radicals, Greek, operators and relations with TeX's
+  spacing, big operators with limits, growing `\left`/`\right` delimiters,
+  math alphabets, `\text{}`, accents, the four TeX styles). A formula is
+  drawn as positioned glyphs plus rules (fraction bars, radical overbars), so
+  it renders the same in PNG, SVG and PDF and is measured exactly as drawn.
+  The default math font is STIX Two Math, bundled (SIL Open Font License,
+  see `inst/COPYRIGHTS`); `options(vellum.math_font = )` picks another font
+  with a MATH table by family name or file. An unknown command is an error
+  that names it and its position.
+
+* `text_grob()` accepts a list of rich labels (one per position), as
+  `md(c(...))` and `tex(c(...))` return. It used to coerce the list to text
+  and draw `<object>`.
+
 # vellum 0.15.0
 
 ## New features

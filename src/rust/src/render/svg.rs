@@ -685,6 +685,16 @@ impl RenderBackend for SvgBackend {
                         transform_attr(place)
                     ));
                 }
+                for r in run.rules {
+                    if let Some(p) = text_rule_path(run, r) {
+                        paths.push_str(&format!(
+                            "<path d=\"{}\" fill=\"none\" stroke=\"{}\" stroke-opacity=\"{}\" \
+                             stroke-width=\"{}\" stroke-linejoin=\"round\"{}/>",
+                            path_to_d(&p, None, None), rgb_hex(hcol), opacity(hcol), hw * 2.0,
+                            transform_attr(base)
+                        ));
+                    }
+                }
             }
             for i in 0..n {
                 let outline = match glyph_outline_cached(
@@ -712,6 +722,18 @@ impl RenderBackend for SvgBackend {
                     fill_attr,
                     transform_attr(place)
                 ));
+            }
+            // A tex() label's fraction bars and radical overbars.
+            for r in run.rules {
+                if let Some(p) = text_rule_path(run, r) {
+                    paths.push_str(&format!(
+                        "<path d=\"{}\" fill=\"{}\" fill-opacity=\"{}\"{}/>",
+                        path_to_d(&p, None, None),
+                        rgb_hex(r.col),
+                        opacity(r.col),
+                        transform_attr(base)
+                    ));
+                }
             }
             if !paths.is_empty() {
                 let element = format!(

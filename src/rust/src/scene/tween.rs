@@ -481,7 +481,7 @@ fn lerp_node(a: &Node, b: &Node, fr: &Fracs) -> Node {
             // a changed label switches at the positional midpoint and the last
             // keyframe's text is what the final frame shows.
             let Node::Text {
-                xu, yu, hjust, vjust, w, h, gid, gx, gy, gsize, gpath, gface, gcol, halo, label, family, face, size,
+                xu, yu, hjust, vjust, w, h, gid, gx, gy, gsize, gpath, gface, gcol, rules, halo, label, family, face, size,
                 tpath, key, ..
             } = snap(a, b, t)
             else {
@@ -505,6 +505,7 @@ fn lerp_node(a: &Node, b: &Node, fr: &Fracs) -> Node {
                 gpath: gpath.clone(),
                 gface: gface.clone(),
                 gcol: gcol.clone(),
+                rules: rules.clone(),
                 label: label.clone(),
                 family: family.clone(),
                 face: face.clone(),
@@ -1731,6 +1732,7 @@ fn patch_text(nodes: &mut [(usize, Node)], variant: &TextVariant) {
             gpath,
             gface,
             gcol,
+            rules,
             label,
             family,
             face,
@@ -1750,6 +1752,7 @@ fn patch_text(nodes: &mut [(usize, Node)], variant: &TextVariant) {
             gpath: vgpath,
             gface: vgface,
             gcol: vgcol,
+            rules: vrules,
             label: vlabel,
             family: vfamily,
             face: vface,
@@ -1768,6 +1771,7 @@ fn patch_text(nodes: &mut [(usize, Node)], variant: &TextVariant) {
         *gpath = vgpath.clone();
         *gface = vgface.clone();
         *gcol = vgcol.clone();
+        *rules = vrules.clone();
         *label = vlabel.clone();
         *family = vfamily.clone();
         *face = vface.clone();
@@ -2691,6 +2695,7 @@ mod tests {
             gpath: vec![String::new(); label.len()],
             gface: vec![0; label.len()],
             gcol: Vec::new(),
+            rules: Vec::new(),
             halo: None,
             label: label.to_string(),
             family: "sans".to_string(),

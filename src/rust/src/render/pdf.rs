@@ -617,6 +617,21 @@ impl RenderBackend for PdfBackend<'_, '_> {
                 }
                 i = j;
             }
+            // A tex() label's fraction bars and radical overbars: stroked
+            // with the halo on the halo pass, filled on the fill pass.
+            for r in run.rules {
+                let Some(kp) = text_rule_path(run, r).as_ref().and_then(to_kpath) else {
+                    continue;
+                };
+                if !halo_pass {
+                    self.surface.set_fill(Some(Fill {
+                        paint: rgb::Color::new(r.col.r, r.col.g, r.col.b).into(),
+                        opacity: norm(r.col.a),
+                        rule: KFillRule::NonZero,
+                    }));
+                }
+                self.surface.draw_path(&kp);
+            }
         }
         self.surface.set_stroke(None);
         self.pop_state(pushes);

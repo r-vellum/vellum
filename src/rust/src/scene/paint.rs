@@ -652,6 +652,7 @@ pub(super) fn draw_text_on_path<B: RenderBackend>(
                 } else {
                     &[]
                 },
+                rules: &[],
                 halo: if halo_pass { run.halo } else { None },
                 label: glyph_label,
                 family: run.family,
