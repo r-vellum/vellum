@@ -106,7 +106,18 @@ spans override per run.</p>
 <li><p><code>*italic*</code> or <code>_italic_</code></p></li>
 <li><p><code>^sup^</code> (superscript) and <code>~sub~</code> (subscript)</p></li>
 <li><p><code>[text]{#c00}</code> — a coloured span (any R colour: name or hex)</p></li>
-</ul><p>Spans nest (e.g. <code>**a^2^**</code>). <code>md()</code> with no markup is equivalent to the plain
+<li><p><code>$...$</code> — inline math in <code><a href="tex.html">tex()</a></code>'s notation, typeset by the same engine
+and set on the line's baseline (<code>"electron mass $m_e$ in **kg**"</code>)</p></li>
+</ul><p>Math follows pandoc's rules for <code>$</code>, with a stricter close: the opening <code>$</code>
+must be followed by a non-space, and the closing <code>$</code> preceded by a non-space
+and not followed by a letter or a digit (pandoc only rules out a digit). So
+prices stay prose: <code>"costs $5 to $10"</code>, <code>"Revenue ($M) vs cost ($K)"</code> and
+<code>"(US$bn) and (US$m)"</code> have no math. Write <code>\\$</code> for a literal dollar
+sign. Display math (<code>$$...$$</code>) is not supported; <code>$$</code> is kept as literal
+text. Markup inside <code>$...$</code> is TeX, not markdown; the formula takes its
+span's colour and size, and a tall formula makes its line taller. Math that
+does not parse is an error naming its position in the label.</p>
+<p>Spans nest (e.g. <code>**a^2^**</code>). <code>md()</code> with no markup is equivalent to the plain
 string. Embedded newlines (<code>\n</code>) start a new line (stacked baseline-to-baseline).</p>
 <p><code>md()</code> is vectorised: a length-1 input returns a single <code>vellum_md_label</code>; a
 longer vector returns a list of them (one per element), so a <code>vellumplot</code> mark can
@@ -117,6 +128,39 @@ carry a per-datum rich label.</p>
     <h2 id="ref-examples">Examples<a class="anchor" aria-label="anchor" href="#ref-examples"></a></h2>
     <div class="sourceCode"><pre class="sourceCode r"><code><span class="r-in"><span><span class="va">lab</span> <span class="op">&lt;-</span> <span class="fu">md</span><span class="op">(</span><span class="st">"R^2^ = **0.91**"</span><span class="op">)</span></span></span>
 <span class="r-in"><span><span class="va">labs</span> <span class="op">&lt;-</span> <span class="fu">md</span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"*a*"</span>, <span class="st">"**b**"</span><span class="op">)</span><span class="op">)</span> <span class="co"># a list of two labels</span></span></span>
+<span class="r-in"><span><span class="fu">md</span><span class="op">(</span><span class="st">"kinetic energy $\\frac{1}{2}mv^2$ in **J**"</span><span class="op">)</span></span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> &lt;vellum::vellum_md_label&gt;</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>  @ runs: List of 4</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>  .. $ :List of 6</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>  ..  ..$ text  : chr "kinetic energy "</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>  ..  ..$ bold  : logi FALSE</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>  ..  ..$ italic: logi FALSE</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>  ..  ..$ size  : num 1</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>  ..  ..$ dy    : num 0</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>  ..  ..$ col   : chr NA</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>  .. $ :List of 7</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>  ..  ..$ text  : chr "$\\frac{1}{2}mv^2$"</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>  ..  ..$ bold  : logi FALSE</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>  ..  ..$ italic: logi FALSE</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>  ..  ..$ size  : num 1</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>  ..  ..$ dy    : num 0</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>  ..  ..$ col   : chr NA</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>  ..  ..$ math  : chr "\\frac{1}{2}mv^2"</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>  .. $ :List of 6</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>  ..  ..$ text  : chr " in "</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>  ..  ..$ bold  : logi FALSE</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>  ..  ..$ italic: logi FALSE</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>  ..  ..$ size  : num 1</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>  ..  ..$ dy    : num 0</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>  ..  ..$ col   : chr NA</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>  .. $ :List of 6</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>  ..  ..$ text  : chr "J"</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>  ..  ..$ bold  : logi TRUE</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>  ..  ..$ italic: logi FALSE</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>  ..  ..$ size  : num 1</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>  ..  ..$ dy    : num 0</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>  ..  ..$ col   : chr NA</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>  @ text: chr "kinetic energy $\\frac{1}{2}mv^2$ in J"</span>
 </code></pre></div>
     </div>
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>

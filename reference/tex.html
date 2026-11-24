@@ -103,7 +103,10 @@ exactly what it draws.</p>
 
 <dl><dt id="arg-x">x<a class="anchor" aria-label="anchor" href="#arg-x"></a></dt>
 <dd><p>A TeX math string, without <code>$</code> delimiters (or a character vector,
-for one label per element).</p></dd>
+for one label per element). Or R's plotmath notation, unevaluated: a call
+or symbol (<code>quote(x[i]^2)</code>, <code><a href="https://rdrr.io/r/base/bquote.html" class="external-link">bquote()</a></code>) or an expression vector
+(<code>expression(alpha, beta)</code>, one label per element), translated to TeX as
+<code><a href="plotmath.html">plotmath()</a></code> describes.</p></dd>
 
 
 <dt id="arg-display">display<a class="anchor" aria-label="anchor" href="#arg-display"></a></dt>
@@ -129,7 +132,8 @@ or a path to a font file. The font must have a <code>MATH</code> table.</p>
 <li><p>superscripts and subscripts, <code>x^2</code>, <code>x_i</code>, <code>x_i^2</code>, <code>x^{a_b}</code>, and primes
 <code>f'</code></p></li>
 <li><p><code>\frac{a}{b}</code>, <code>\dfrac</code>, <code>\tfrac</code>, <code>\binom{n}{k}</code>, <code>\sqrt{x}</code>,
-<code>\sqrt[n]{x}</code></p></li>
+<code>\sqrt[n]{x}</code>, and TeX's infix <code>{a \over b}</code>, <code>{n \choose k}</code> and
+<code>{a \atop b}</code></p></li>
 <li><p>Greek letters <code>\alpha</code> ... <code>\omega</code>, <code>\Gamma</code> ... <code>\Omega</code>, <code>\varepsilon</code>,
 <code>\varphi</code>, <code>\vartheta</code>, ...</p></li>
 <li><p>operators and relations with TeX's spacing: <code>\pm \mp \times \div \cdot \leq \geq \neq \approx \sim \equiv \propto \in \subset \cup \cap \to \Rightarrow \mapsto \infty \partial \nabla \forall \exists \ldots \cdots</code>
@@ -138,9 +142,10 @@ and more</p></li>
 display style; <code>\limits</code> / <code>\nolimits</code> override)</p></li>
 <li><p>growing delimiters <code>\left( ... \right)</code>, with <code>[ ] \{ \} | \| \langle \rangle</code> and the empty <code>\left.</code>; fixed sizes <code>\big \Big \bigg \Bigg</code>
 (and their <code>l</code>/<code>r</code>/<code>m</code> forms)</p></li>
-<li><p>alphabets <code>\mathrm \mathbf \mathit \mathsf \mathtt \mathcal \mathbb</code>, and
-upright <code>\text{...}</code></p></li>
-<li><p>accents <code>\hat \bar \tilde \vec \dot \ddot \widehat \overline \underline</code></p></li>
+<li><p>alphabets <code>\mathrm \mathbf \mathit \mathbfit \boldsymbol \mathsf \mathtt \mathcal \mathbb</code>, upright <code>\text{...}</code>, and <code>\textit{}</code>, <code>\textbf{}</code>,
+<code>\textbfit{}</code></p></li>
+<li><p>accents <code>\hat \bar \tilde \vec \dot \ddot \mathring \widehat \overline \underline</code></p></li>
+<li><p><code>\phantom{}</code>, <code>\hphantom{}</code> and <code>\vphantom{}</code>: space with no ink</p></li>
 <li><p>spacing <code>\, \: \; \! \quad \qquad ~</code>, and <code>\displaystyle</code> etc.</p></li>
 </ul><p>Scripts are placed with the font's italic correction and math kerning
 (cut-ins), as LuaTeX does. A label's box is baseline-stable: it is the line
@@ -156,7 +161,8 @@ for are drawn as its empty box, with a warning.</p>
     </div>
     <div class="section level2">
     <h2 id="see-also">See also<a class="anchor" aria-label="anchor" href="#see-also"></a></h2>
-    <div class="dont-index"><p><code><a href="md.html">md()</a></code> for styled prose.</p></div>
+    <div class="dont-index"><p><code><a href="md.html">md()</a></code> for styled prose, which takes inline <code>$...$</code> math;
+<code><a href="plotmath.html">plotmath()</a></code> for strings in R's plotmath notation.</p></div>
     </div>
 
     <div class="section level2">

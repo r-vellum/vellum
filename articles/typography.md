@@ -327,3 +327,66 @@ Like [`md()`](https://r-vellum.github.io/vellum/reference/md.md), a
 formula is measured exactly as it is drawn, so a
 [`grobwidth()`](https://r-vellum.github.io/vellum/reference/grobwidth.md)
 track or a plot margin reserves the space the ink needs.
+
+### Inline math in prose
+
+Inside an [`md()`](https://r-vellum.github.io/vellum/reference/md.md)
+label, `$...$` is inline math: the formula is typeset by the same engine
+and set on the line’s baseline, in the colour and size of its span,
+while the words keep the label’s font. A tall formula makes its line
+taller rather than overlapping the next.
+
+``` r
+
+display(
+  vl_scene(6, 1.4, dpi = 96) |>
+    draw(text_grob(
+      md("electron mass $m_e$ in **kg**, [$E = \\frac{1}{2}mv^2$]{#b5482a}\nfor speeds $v \\ll c$"),
+      gp = vl_gpar(fontsize = 16)
+    ))
+)
+```
+
+![](typography_files/figure-html/unnamed-chunk-12-1.png)
+
+The `$` rules are pandoc’s, with a stricter close: the opening `$` must
+be followed by a non-space, and the closing one preceded by a non-space
+and not followed by a letter or a digit. So prices stay prose:
+`"costs $5 to $10"`, `"Revenue ($M) vs cost ($K)"`. Write `\\$` for a
+literal dollar sign. Display math (`$$...$$`) is not supported and stays
+as written.
+
+### Plotmath
+
+R’s own plotmath notation, as
+[`expression()`](https://rdrr.io/r/base/expression.html),
+[`bquote()`](https://rdrr.io/r/base/bquote.html) and ggplot2’s
+`parse = TRUE` use it, is translated to TeX and typeset the same way:
+[`tex()`](https://r-vellum.github.io/vellum/reference/tex.md) accepts an
+unevaluated expression, and
+[`plotmath()`](https://r-vellum.github.io/vellum/reference/plotmath.md)
+parses strings.
+
+``` r
+
+k <- 2
+display(
+  vl_scene(6, 1.2, dpi = 96) |>
+    draw(text_grob(
+      list(
+        tex(bquote(hat(beta)[1] == bar(y) - x^.(k))),
+        plotmath("sqrt(x, 3) %+-% frac(alpha, n)")
+      ),
+      x = c(0.28, 0.72),
+      gp = vl_gpar(fontsize = 16)
+    ))
+)
+```
+
+![](typography_files/figure-html/unnamed-chunk-13-1.png)
+
+One difference from base graphics: single letters are set in math
+italic, as TeX sets them; wrap them in `plain()` for upright letters.
+Longer names (`mpg`, `Temperature`) are upright words, as in base R.
+[`?plotmath`](https://r-vellum.github.io/vellum/reference/plotmath.md)
+lists the supported notation; anything outside it is an error.

@@ -24,7 +24,13 @@ tex(x, display = FALSE)
 - x:
 
   A TeX math string, without `$` delimiters (or a character vector, for
-  one label per element).
+  one label per element). Or R's plotmath notation, unevaluated: a call
+  or symbol (`quote(x[i]^2)`,
+  [`bquote()`](https://rdrr.io/r/base/bquote.html)) or an expression
+  vector (`expression(alpha, beta)`, one label per element), translated
+  to TeX as
+  [`plotmath()`](https://r-vellum.github.io/vellum/reference/plotmath.md)
+  describes.
 
 - display:
 
@@ -54,7 +60,8 @@ Supported notation:
   primes `f'`
 
 - `\frac{a}{b}`, `\dfrac`, `\tfrac`, `\binom{n}{k}`, `\sqrt{x}`,
-  `\sqrt[n]{x}`
+  `\sqrt[n]{x}`, and TeX's infix `{a \over b}`, `{n \choose k}` and
+  `{a \atop b}`
 
 - Greek letters `\alpha` ... `\omega`, `\Gamma` ... `\Omega`,
   `\varepsilon`, `\varphi`, `\vartheta`, ...
@@ -71,11 +78,14 @@ Supported notation:
   `[ ] \{ \} | \| \langle \rangle` and the empty `\left.`; fixed sizes
   `\big \Big \bigg \Bigg` (and their `l`/`r`/`m` forms)
 
-- alphabets `\mathrm \mathbf \mathit \mathsf \mathtt \mathcal \mathbb`,
-  and upright `\text{...}`
+- alphabets
+  `\mathrm \mathbf \mathit \mathbfit \boldsymbol \mathsf \mathtt \mathcal \mathbb`,
+  upright `\text{...}`, and `\textit{}`, `\textbf{}`, `\textbfit{}`
 
 - accents
-  `\hat \bar \tilde \vec \dot \ddot \widehat \overline \underline`
+  `\hat \bar \tilde \vec \dot \ddot \mathring \widehat \overline \underline`
+
+- `\phantom{}`, `\hphantom{}` and `\vphantom{}`: space with no ink
 
 - spacing `\, \: \; \! \quad \qquad ~`, and `\displaystyle` etc.
 
@@ -94,7 +104,9 @@ glyph for are drawn as its empty box, with a warning.
 ## See also
 
 [`md()`](https://r-vellum.github.io/vellum/reference/md.md) for styled
-prose.
+prose, which takes inline `$...$` math;
+[`plotmath()`](https://r-vellum.github.io/vellum/reference/plotmath.md)
+for strings in R's plotmath notation.
 
 ## Examples
 

@@ -150,6 +150,8 @@ and layout: text wrapped to a box or set along a curve.
   Rich-text labels (markdown subset)
 - [`tex()`](https://r-vellum.github.io/vellum/reference/tex.md) : Math
   labels (a TeX subset)
+- [`plotmath()`](https://r-vellum.github.io/vellum/reference/plotmath.md)
+  : Math labels from R's plotmath notation
 - [`text_path_grob()`](https://r-vellum.github.io/vellum/reference/text_path_grob.md)
   : Text set along a path
 

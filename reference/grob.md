@@ -555,7 +555,11 @@ text_grob(
 
 - label:
 
-  Character string(s) to draw.
+  Character string(s) to draw, a rich label
+  ([`md()`](https://r-vellum.github.io/vellum/reference/md.md),
+  [`tex()`](https://r-vellum.github.io/vellum/reference/tex.md)), or a
+  list of labels, one per position. A list may mix rich labels with
+  plain strings, which are drawn literally (no markup is read).
 
 - just:
 

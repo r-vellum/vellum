@@ -413,6 +413,59 @@ file picks another.</p>
 <p>Like <code><a href="../reference/md.html">md()</a></code>, a formula is measured exactly as it is drawn,
 so a <code><a href="../reference/grobwidth.html">grobwidth()</a></code> track or a plot margin reserves the space
 the ink needs.</p>
+<div class="section level3">
+<h3 id="inline-math-in-prose">Inline math in prose<a class="anchor" aria-label="anchor" href="#inline-math-in-prose"></a>
+</h3>
+<p>Inside an <code><a href="../reference/md.html">md()</a></code> label, <code>$...$</code> is inline math:
+the formula is typeset by the same engine and set on the line’s
+baseline, in the colour and size of its span, while the words keep the
+label’s font. A tall formula makes its line taller rather than
+overlapping the next.</p>
+<div class="sourceCode" id="cb11"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="../reference/display.html">display</a></span><span class="op">(</span></span>
+<span>  <span class="fu"><a href="../reference/vl_scene.html">vl_scene</a></span><span class="op">(</span><span class="fl">6</span>, <span class="fl">1.4</span>, dpi <span class="op">=</span> <span class="fl">96</span><span class="op">)</span> <span class="op">|&gt;</span></span>
+<span>    <span class="fu"><a href="../reference/vl_scene.html">draw</a></span><span class="op">(</span><span class="fu"><a href="../reference/grob.html">text_grob</a></span><span class="op">(</span></span>
+<span>      <span class="fu"><a href="../reference/md.html">md</a></span><span class="op">(</span><span class="st">"electron mass $m_e$ in **kg**, [$E = \\frac{1}{2}mv^2$]{#b5482a}\nfor speeds $v \\ll c$"</span><span class="op">)</span>,</span>
+<span>      gp <span class="op">=</span> <span class="fu"><a href="../reference/vl_gpar.html">vl_gpar</a></span><span class="op">(</span>fontsize <span class="op">=</span> <span class="fl">16</span><span class="op">)</span></span>
+<span>    <span class="op">)</span><span class="op">)</span></span>
+<span><span class="op">)</span></span></code></pre></div>
+<p><img src="typography_files/figure-html/unnamed-chunk-12-1.png" class="r-plt" alt="" width="576"></p>
+<p>The <code>$</code> rules are pandoc’s, with a stricter close: the
+opening <code>$</code> must be followed by a non-space, and the closing
+one preceded by a non-space and not followed by a letter or a digit. So
+prices stay prose: <code>"costs $5 to $10"</code>,
+<code>"Revenue ($M) vs cost ($K)"</code>. Write <code>\\$</code> for a
+literal dollar sign. Display math (<code>$$...$$</code>) is not
+supported and stays as written.</p>
+</div>
+<div class="section level3">
+<h3 id="plotmath">Plotmath<a class="anchor" aria-label="anchor" href="#plotmath"></a>
+</h3>
+<p>R’s own plotmath notation, as <code><a href="https://rdrr.io/r/base/expression.html" class="external-link">expression()</a></code>,
+<code><a href="https://rdrr.io/r/base/bquote.html" class="external-link">bquote()</a></code> and ggplot2’s <code>parse = TRUE</code> use it, is
+translated to TeX and typeset the same way: <code><a href="../reference/tex.html">tex()</a></code> accepts
+an unevaluated expression, and <code><a href="../reference/plotmath.html">plotmath()</a></code> parses
+strings.</p>
+<div class="sourceCode" id="cb12"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">k</span> <span class="op">&lt;-</span> <span class="fl">2</span></span>
+<span><span class="fu"><a href="../reference/display.html">display</a></span><span class="op">(</span></span>
+<span>  <span class="fu"><a href="../reference/vl_scene.html">vl_scene</a></span><span class="op">(</span><span class="fl">6</span>, <span class="fl">1.2</span>, dpi <span class="op">=</span> <span class="fl">96</span><span class="op">)</span> <span class="op">|&gt;</span></span>
+<span>    <span class="fu"><a href="../reference/vl_scene.html">draw</a></span><span class="op">(</span><span class="fu"><a href="../reference/grob.html">text_grob</a></span><span class="op">(</span></span>
+<span>      <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span></span>
+<span>        <span class="fu"><a href="../reference/tex.html">tex</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/bquote.html" class="external-link">bquote</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/stats/influence.measures.html" class="external-link">hat</a></span><span class="op">(</span><span class="va">beta</span><span class="op">)</span><span class="op">[</span><span class="fl">1</span><span class="op">]</span> <span class="op">==</span> <span class="fu">bar</span><span class="op">(</span><span class="va">y</span><span class="op">)</span> <span class="op">-</span> <span class="va">x</span><span class="op">^</span><span class="fu">.</span><span class="op">(</span><span class="va">k</span><span class="op">)</span><span class="op">)</span><span class="op">)</span>,</span>
+<span>        <span class="fu"><a href="../reference/plotmath.html">plotmath</a></span><span class="op">(</span><span class="st">"sqrt(x, 3) %+-% frac(alpha, n)"</span><span class="op">)</span></span>
+<span>      <span class="op">)</span>,</span>
+<span>      x <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.28</span>, <span class="fl">0.72</span><span class="op">)</span>,</span>
+<span>      gp <span class="op">=</span> <span class="fu"><a href="../reference/vl_gpar.html">vl_gpar</a></span><span class="op">(</span>fontsize <span class="op">=</span> <span class="fl">16</span><span class="op">)</span></span>
+<span>    <span class="op">)</span><span class="op">)</span></span>
+<span><span class="op">)</span></span></code></pre></div>
+<p><img src="typography_files/figure-html/unnamed-chunk-13-1.png" class="r-plt" alt="" width="576"></p>
+<p>One difference from base graphics: single letters are set in math
+italic, as TeX sets them; wrap them in <code>plain()</code> for upright
+letters. Longer names (<code>mpg</code>, <code>Temperature</code>) are
+upright words, as in base R. <code><a href="../reference/plotmath.html">?plotmath</a></code> lists the supported
+notation; anything outside it is an error.</p>
+</div>
 </div>
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>
     </nav></aside>

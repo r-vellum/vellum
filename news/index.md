@@ -28,10 +28,65 @@
   formulas share a baseline. An unknown command is an error that names
   it and its position.
 
+- `$...$` in an
+  [`md()`](https://r-vellum.github.io/vellum/reference/md.md) label is
+  now inline math (F-31); write `\$` for a literal dollar sign. Prices
+  stay prose: a closing `$` may not be followed by a letter or digit, so
+  `"Revenue ($M) vs cost ($K)"` has no math.
+
+- A list of labels for
+  [`text_grob()`](https://r-vellum.github.io/vellum/reference/grob.md)
+  may mix rich labels with plain strings, which are drawn literally
+  (F-31).
+
+- [`md()`](https://r-vellum.github.io/vellum/reference/md.md) labels
+  take inline math between `$` signs (F-31):
+  `md("electron mass $m_e$ in **kg**")` typesets each formula with the
+  [`tex()`](https://r-vellum.github.io/vellum/reference/tex.md) engine
+  and sets it on the line’s baseline, in its span’s colour and size; a
+  tall formula makes its line taller. The `$` rules are pandoc’s
+  (`"costs $5 to $10"` stays prose), `"\\$"` is a literal dollar, and
+  `$$` is kept as text (display math is not supported). Labels without
+  math are drawn exactly as before. Queries see the md source; the PDF
+  text layer has the prose and the formula’s characters.
+
+- [`plotmath()`](https://r-vellum.github.io/vellum/reference/plotmath.md)
+  reads strings in R’s plotmath notation, and
+  [`tex()`](https://r-vellum.github.io/vellum/reference/tex.md) accepts
+  plotmath unevaluated (`tex(quote(x[i]^2))`,
+  `tex(expression(alpha, beta))`, `tex(bquote(...))`) (F-31). The
+  expression is translated to TeX, which becomes the label’s text, and
+  typeset by the same engine. The documented plotmath vocabulary is
+  covered (scripts, the `%op%` operators, `frac()`, `atop()`,
+  [`sqrt()`](https://rdrr.io/r/base/MathFun.html), accents, Greek, big
+  operators with limits, `group()` and `bgroup()`, font and style calls,
+  `phantom()`, strings and numbers); anything else, or a function given
+  the wrong number of arguments, is an error. Single letters are set in
+  math italic, the TeX convention; longer names (`mpg`) are upright
+  words, as in base R.
+
+- [`tex()`](https://r-vellum.github.io/vellum/reference/tex.md) learns
+  TeX’s infix `\over`, `\atop` and `\choose`, `\phantom` (and
+  `\hphantom`, `\vphantom`), `\textit`, `\textbf`, `\textbfit`,
+  `\mathbfit`, `\boldsymbol` (amsmath’s meaning: capital Greek and
+  digits bold upright, letters bold italic) and `\mathring` (F-31). A
+  style switch before `\over` styles the numerator only, as in TeX.
+
 - [`text_grob()`](https://r-vellum.github.io/vellum/reference/grob.md)
   accepts a list of rich labels (one per position), as `md(c(...))` and
   `tex(c(...))` return. It used to coerce the list to text and draw
   `<object>`.
+
+### Bug fixes
+
+- Multi-line [`md()`](https://r-vellum.github.io/vellum/reference/md.md)
+  labels sat (lines - 1) / 2 leadings too low and overran their own box
+  under a top or bottom `vjust`; a subscript reached below the box. The
+  box now holds every line (F-31).
+
+- Rich labels were deduplicated by their plain text, so `md("**a**")`
+  and `md("a")` in one text grob drew alike; an empty `md("")` in a list
+  failed (F-31).
 
 ## vellum 0.15.0
 
