@@ -141,8 +141,13 @@ test_that("a weight the family lacks snaps to its nearest face", {
   skip_if_not_installed("systemfonts", "1.2.0")
   otf <- system.file("fonts", "STIXTwoMath-Regular.otf", package = "vellum")
   skip_if(!nzchar(otf), "bundled STIX Two Math not found")
-  systemfonts::add_fonts(otf)
   fam <- "STIX Two Math"
+  if (!fam %in% systemfonts::system_fonts()$family) {
+    # not there yet: the weight passes through, and is memoised...
+    expect_identical(vellum:::.snap_weight(fam, FALSE, 300L), 300L)
+  }
+  systemfonts::add_fonts(otf)
+  # ...but the memo notices the newly added face (the matched file changed)
   skip_if(
     !fam %in% systemfonts::system_fonts()$family,
     "added font not listed by system_fonts()"
@@ -154,5 +159,21 @@ test_that("a weight the family lacks snaps to its nearest face", {
   expect_identical(
     vl_strwidth("Hamburg", family = fam, fontweight = 300),
     vl_strwidth("Hamburg", family = fam)
+  )
+})
+
+test_that("adding a heavier face of a family re-snaps a cached weight", {
+  # Uses Aller from hexSticker when installed (regular, light and bold files).
+  skip_if_not_installed("systemfonts", "1.2.0")
+  dir <- system.file("fonts", "Aller", package = "hexSticker")
+  skip_if(!nzchar(dir), "hexSticker's Aller fonts not installed")
+  skip_if("Aller" %in% systemfonts::system_fonts()$family, "Aller already listed")
+  systemfonts::add_fonts(file.path(dir, "Aller_Rg.ttf"))
+  expect_identical(vellum:::.snap_weight("Aller", FALSE, 700L), 400L)
+  systemfonts::add_fonts(file.path(dir, "Aller_Bd.ttf"))
+  expect_identical(vellum:::.snap_weight("Aller", FALSE, 700L), 700L)
+  expect_identical(
+    vl_strwidth("Hamburg", family = "Aller", fontweight = 700),
+    vl_strwidth("Hamburg", family = "Aller", fontface = "bold")
   )
 })

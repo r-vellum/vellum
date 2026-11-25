@@ -1698,23 +1698,34 @@ md <- function(text) {
 # does this for installed fonts, but a font added for the session
 # (`systemfonts::add_fonts()`, `require_font()`) only matches its exact
 # weights; asking such a family for 300 when it ships 400 silently gave the
-# default sans-serif. Names ("bold"/"normal") and unknown families pass
-# through. Memoised per family/italic/weight once the family is found.
+# default sans-serif. Names ("bold"/"normal") pass through, and so does a
+# weight for a family systemfonts does not list (e.g. the "sans" alias).
+#
+# Listing the fonts costs ~40 ms, so the answer is memoised per family /
+# italic / weight. Each entry also keeps the file systemfonts matches for the
+# requested weight (a ~25 us lookup); when that file changes -- a face was
+# added with `add_fonts()` since -- the entry is recomputed, so adding the
+# bold file of a family makes 700 resolve to it.
 .weight_cache <- new.env(parent = emptyenv())
 .snap_weight <- function(family, italic, weight) {
   if (!is.numeric(weight) || !nzchar(family)) {
     return(weight)
   }
   key <- paste(family, italic, weight, sep = "\r")
+  probe <- systemfonts::match_fonts(family, italic = italic, weight = weight)
+  probe <- paste(probe$path, probe$index)
   hit <- .weight_cache[[key]]
-  if (!is.null(hit)) {
-    return(hit)
+  if (!is.null(hit) && identical(hit$probe, probe)) {
+    return(hit$weight)
   }
+  snapped <- .nearest_weight(family, italic, weight)
+  .weight_cache[[key]] <- list(weight = snapped, probe = probe)
+  snapped
+}
+
+.nearest_weight <- function(family, italic, weight) {
   sf <- systemfonts::system_fonts()
   faces <- sf[tolower(sf$family) == tolower(family), , drop = FALSE]
-  if (nrow(faces) == 0L) {
-    return(weight)
-  }
   same_style <- faces[faces$italic == italic, , drop = FALSE]
   if (nrow(same_style)) {
     faces <- same_style
@@ -1724,10 +1735,8 @@ md <- function(text) {
   if (!length(have)) {
     return(weight)
   }
-  # nearest weight; a tie goes to the heavier face, as CSS does above 500
-  snapped <- have[order(abs(have - weight), -have)][1]
-  .weight_cache[[key]] <- snapped
-  snapped
+  # nearest weight; a tie goes to the heavier face
+  have[order(abs(have - weight), -have)][1]
 }
 
 # Map an R fontface to textshaping's italic/weight arguments. Memoised: there are
