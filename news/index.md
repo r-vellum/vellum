@@ -2,6 +2,23 @@
 
 ## vellum (development version)
 
+### New features
+
+- Numeric font weights (F-26): `vl_gpar(fontweight = )` takes a weight
+  from 100 to 900 or a CSS name (`"light"`, `"semi-bold"`, `"black"`, …)
+  and draws text,
+  [`md()`](https://r-vellum.github.io/vellum/reference/md.md) and
+  [`tex()`](https://r-vellum.github.io/vellum/reference/tex.md) labels
+  in that face of a multi-weight family, picked through systemfonts (the
+  nearest installed weight when the exact one is missing). It sits
+  beside `fontface`: the weight replaces the bold a face implies, the
+  italic still applies, and a `**bold**` run in a rich label is drawn at
+  least 700. Measurement (`vl_strwidth(fontweight = )`,
+  [`grobwidth()`](https://r-vellum.github.io/vellum/reference/grobwidth.md),
+  `strwidth` units) follows the weight, and native SVG text gets
+  `font-weight="300"`. Text with no weight is unchanged, and so are its
+  scene spec and hash.
+
 ## vellum 0.16.0
 
 ### New features

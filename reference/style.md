@@ -31,6 +31,7 @@ style(
   antialias = NULL,
   crisp = NULL,
   dash_phase = NULL,
+  fontweight = NULL,
   name = NULL
 )
 ```
@@ -163,6 +164,26 @@ style(
   do). Use it to line up dashes across adjacent strokes, or animate it
   for marching ants. `NULL` (default) means 0. Ignored for a solid line.
 
+- fontweight:
+
+  Font weight, for families that ship more than regular and bold: a
+  number from `100` to `900` in steps of 100 (CSS numbering: 300 is
+  light, 400 regular, 600 semi-bold, 700 bold, 900 black), or one of the
+  CSS names `"thin"`, `"extra-light"`, `"light"`,
+  `"normal"`/`"regular"`, `"medium"`, `"semi-bold"`, `"bold"`,
+  `"extra-bold"`, `"black"` (hyphens and spaces optional, so
+  `"semibold"` works). It picks the face file through systemfonts; a
+  family without that exact weight uses its nearest one (fonts added for
+  the session with
+  [`systemfonts::add_fonts()`](https://systemfonts.r-lib.org/reference/add_fonts.html)
+  or
+  [`systemfonts::require_font()`](https://systemfonts.r-lib.org/reference/require_font.html)
+  included). When set it replaces the weight `fontface` implies; the
+  italic part of `fontface` still applies, so
+  `fontface = "italic", fontweight = 300` is light italic. A `**bold**`
+  run in a rich label is drawn at least 700. `NULL` (default) keeps
+  `fontface` alone.
+
 - name:
 
   Optional style-class name, for identification only; it is ignored by
@@ -207,6 +228,7 @@ vl_viewport(gp = accent)
 #>  .. @ linemitre : NULL
 #>  .. @ fontfamily: NULL
 #>  .. @ fontface  : NULL
+#>  .. @ fontweight: NULL
 #>  .. @ fontsize  : NULL
 #>  .. @ cex       : NULL
 #>  .. @ lineheight: NULL

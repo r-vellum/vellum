@@ -16,7 +16,8 @@ vl_strwidth(
   fontsize = 12,
   cex = 1,
   unit = "in",
-  features = NULL
+  features = NULL,
+  fontweight = NULL
 )
 
 vl_strheight(
@@ -26,7 +27,8 @@ vl_strheight(
   fontsize = 12,
   cex = 1,
   unit = "in",
-  features = NULL
+  features = NULL,
+  fontweight = NULL
 )
 ```
 
@@ -69,6 +71,12 @@ vl_strheight(
   [`vl_gpar()`](https://r-vellum.github.io/vellum/reference/vl_gpar.md)'s
   `features`. Measurement must use the same features as drawing, or
   reserved space will not match.
+
+- fontweight:
+
+  Font weight, `100` to `900` or a CSS weight name, as in
+  [`vl_gpar()`](https://r-vellum.github.io/vellum/reference/vl_gpar.md).
+  `NULL` (default) uses the weight `fontface` implies.
 
 ## Value
 

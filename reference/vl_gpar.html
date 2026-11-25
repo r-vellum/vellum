@@ -17,7 +17,7 @@ the viewport tree. A colour value sets it; NA means &quot;no paint&quot;."><meta
 
     <a class="navbar-brand me-2" href="../index.html">vellum</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.16.0.9000</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.16.0.9001</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -101,7 +101,8 @@ the viewport tree. A colour value sets it; <code>NA</code> means "no paint".</p>
 <span>  features <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  antialias <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  crisp <span class="op">=</span> <span class="cn">NULL</span>,</span>
-<span>  dash_phase <span class="op">=</span> <span class="cn">NULL</span></span>
+<span>  dash_phase <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  fontweight <span class="op">=</span> <span class="cn">NULL</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
 
@@ -222,6 +223,22 @@ multiple of <code>lwd</code> (so it scales with the line width exactly as the da
 nibbles do). Use it to line up dashes across adjacent strokes, or animate it
 for marching ants. <code>NULL</code> (default) means 0. Ignored for a solid line.</p></dd>
 
+
+<dt id="arg-fontweight">fontweight<a class="anchor" aria-label="anchor" href="#arg-fontweight"></a></dt>
+<dd><p>Font weight, for families that ship more than regular and
+bold: a number from <code>100</code> to <code>900</code> in steps of 100 (CSS numbering: 300 is
+light, 400 regular, 600 semi-bold, 700 bold, 900 black), or one of the
+CSS names <code>"thin"</code>, <code>"extra-light"</code>, <code>"light"</code>, <code>"normal"</code>/<code>"regular"</code>,
+<code>"medium"</code>, <code>"semi-bold"</code>, <code>"bold"</code>, <code>"extra-bold"</code>, <code>"black"</code> (hyphens
+and spaces optional, so <code>"semibold"</code> works). It picks the face file
+through <span class="pkg">systemfonts</span>; a family without that exact weight uses its
+nearest one (fonts added for the session with
+<code><a href="https://systemfonts.r-lib.org/reference/add_fonts.html" class="external-link">systemfonts::add_fonts()</a></code> or <code><a href="https://systemfonts.r-lib.org/reference/require_font.html" class="external-link">systemfonts::require_font()</a></code> included).
+When set it replaces the weight <code>fontface</code> implies; the italic part of
+<code>fontface</code> still applies, so <code>fontface = "italic", fontweight = 300</code> is
+light italic. A <code>**bold**</code> run in a rich label is drawn at least 700.
+<code>NULL</code> (default) keeps <code>fontface</code> alone.</p></dd>
+
 </dl></div>
     <div class="section level2">
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
@@ -242,6 +259,7 @@ for marching ants. <code>NULL</code> (default) means 0. Ignored for a solid line
 <span class="r-out co"><span class="r-pr">#&gt;</span>  @ linemitre : NULL</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>  @ fontfamily: NULL</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>  @ fontface  : NULL</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>  @ fontweight: NULL</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>  @ fontsize  : NULL</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>  @ cex       : NULL</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>  @ lineheight: NULL</span>

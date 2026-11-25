@@ -235,6 +235,7 @@ vl_viewport(xscale = c(0, 10), yscale = c(0, 100))
 #>  .. @ linemitre : NULL
 #>  .. @ fontfamily: NULL
 #>  .. @ fontface  : NULL
+#>  .. @ fontweight: NULL
 #>  .. @ fontsize  : NULL
 #>  .. @ cex       : NULL
 #>  .. @ lineheight: NULL

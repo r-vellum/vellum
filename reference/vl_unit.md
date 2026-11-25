@@ -26,9 +26,9 @@ is_unit(x)
 - data:
 
   Optional list supplying context for derived units: `label`,
-  `fontfamily`, `fontface`, `fontsize`, `lineheight`. `label` is
-  recycled to the length of `values` (it must have length 1 or that
-  length), so each string unit measures its own label.
+  `fontfamily`, `fontface`, `fontweight`, `fontsize`, `lineheight`.
+  `label` is recycled to the length of `values` (it must have length 1
+  or that length), so each string unit measures its own label.
 
 - x:
 

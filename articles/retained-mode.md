@@ -58,6 +58,7 @@ get_node(dots, "b")
 #>  .. @ linemitre : NULL
 #>  .. @ fontfamily: NULL
 #>  .. @ fontface  : NULL
+#>  .. @ fontweight: NULL
 #>  .. @ fontsize  : NULL
 #>  .. @ cex       : NULL
 #>  .. @ lineheight: NULL
