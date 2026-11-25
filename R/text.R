@@ -1702,18 +1702,18 @@ md <- function(text) {
 # weight for a family systemfonts does not list (e.g. the "sans" alias).
 #
 # Listing the fonts costs ~40 ms, so the answer is memoised per family /
-# italic / weight. Each entry also keeps the file systemfonts matches for the
-# requested weight (a ~25 us lookup); when that file changes -- a face was
-# added with `add_fonts()` since -- the entry is recomputed, so adding the
-# bold file of a family makes 700 resolve to it.
+# italic / weight. Each entry also keeps the files systemfonts matches for
+# that weight, regular and bold (`.weight_probe()`); when they change -- a
+# face was added with `add_fonts()` since -- the entry is recomputed, so
+# adding the bold file of a family makes 700 resolve to it. (Adding an
+# in-between face, say a 500 while 600 is memoised as 700, is not noticed.)
 .weight_cache <- new.env(parent = emptyenv())
 .snap_weight <- function(family, italic, weight) {
   if (!is.numeric(weight) || !nzchar(family)) {
     return(weight)
   }
   key <- paste(family, italic, weight, sep = "\r")
-  probe <- systemfonts::match_fonts(family, italic = italic, weight = weight)
-  probe <- paste(probe$path, probe$index)
+  probe <- .weight_probe(family, italic, weight)
   hit <- .weight_cache[[key]]
   if (!is.null(hit) && identical(hit$probe, probe)) {
     return(hit$weight)
@@ -1721,6 +1721,20 @@ md <- function(text) {
   snapped <- .nearest_weight(family, italic, weight)
   .weight_cache[[key]] <- list(weight = snapped, probe = probe)
   snapped
+}
+
+# What systemfonts matches for `family` at the requested weight, at regular
+# and at bold (three ~25 us lookups). An added face changes at least one of
+# them: its own weight, or -- for a family that was missing, where a font
+# added for the session matches only exact weights and every other weight
+# falls back to the default font -- the regular or bold match.
+.weight_probe <- function(family, italic, weight) {
+  m <- systemfonts::match_fonts(
+    rep(family, 3L),
+    italic = italic,
+    weight = c(weight, 400L, 700L)
+  )
+  paste(m$path, m$index, collapse = "\r")
 }
 
 .nearest_weight <- function(family, italic, weight) {
