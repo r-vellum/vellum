@@ -100,7 +100,7 @@ vl_strheight <- function(
     label,
     family = family,
     italic = face$italic,
-    weight = face$weight,
+    weight = .snap_weight(family, face$italic, face$weight),
     size = fontsize * cex,
     res = 72,
     features = .as_font_feature(features)
@@ -208,6 +208,7 @@ vl_strheight <- function(
 # present only when n > 0). Cache-missing strings are shaped together in one call.
 .shape_cached <- function(uniq, family, italic, weight, size, features = NULL) {
   .check_font_size(size)
+  weight <- .snap_weight(family, italic, weight)
   # The feature set is part of the font's identity for shaping: the same string
   # in the same font shapes to different glyphs under `smcp` or `onum`, so it
   # must be in the key, or a second grob would be served the first one's glyphs.
@@ -1690,6 +1691,43 @@ md <- function(text) {
 ) {
   g <- .label_compose(label, family, fontface, fontsize, "black", features)
   c(g$w, g$h)
+}
+
+# A numeric weight snapped to the nearest weight `family` has, so a family
+# without the exact weight still draws in its own face. The OS font matcher
+# does this for installed fonts, but a font added for the session
+# (`systemfonts::add_fonts()`, `require_font()`) only matches its exact
+# weights; asking such a family for 300 when it ships 400 silently gave the
+# default sans-serif. Names ("bold"/"normal") and unknown families pass
+# through. Memoised per family/italic/weight once the family is found.
+.weight_cache <- new.env(parent = emptyenv())
+.snap_weight <- function(family, italic, weight) {
+  if (!is.numeric(weight) || !nzchar(family)) {
+    return(weight)
+  }
+  key <- paste(family, italic, weight, sep = "\r")
+  hit <- .weight_cache[[key]]
+  if (!is.null(hit)) {
+    return(hit)
+  }
+  sf <- systemfonts::system_fonts()
+  faces <- sf[tolower(sf$family) == tolower(family), , drop = FALSE]
+  if (nrow(faces) == 0L) {
+    return(weight)
+  }
+  same_style <- faces[faces$italic == italic, , drop = FALSE]
+  if (nrow(same_style)) {
+    faces <- same_style
+  }
+  have <- 100L * as.integer(faces$weight)
+  have <- have[!is.na(have)]
+  if (!length(have)) {
+    return(weight)
+  }
+  # nearest weight; a tie goes to the heavier face, as CSS does above 500
+  snapped <- have[order(abs(have - weight), -have)][1]
+  .weight_cache[[key]] <- snapped
+  snapped
 }
 
 # Map an R fontface to textshaping's italic/weight arguments. Memoised: there are

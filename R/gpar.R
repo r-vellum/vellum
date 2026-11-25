@@ -33,7 +33,9 @@
 #'   CSS names `"thin"`, `"extra-light"`, `"light"`, `"normal"`/`"regular"`,
 #'   `"medium"`, `"semi-bold"`, `"bold"`, `"extra-bold"`, `"black"` (hyphens
 #'   and spaces optional, so `"semibold"` works). It picks the face file
-#'   through \pkg{systemfonts}, falling back to the nearest installed weight.
+#'   through \pkg{systemfonts}; a family without that exact weight uses its
+#'   nearest one (fonts added for the session with
+#'   [systemfonts::add_fonts()] or [systemfonts::require_font()] included).
 #'   When set it replaces the weight `fontface` implies; the italic part of
 #'   `fontface` still applies, so `fontface = "italic", fontweight = 300` is
 #'   light italic. A `**bold**` run in a rich label is drawn at least 700.

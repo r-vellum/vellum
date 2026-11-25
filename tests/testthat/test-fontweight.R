@@ -134,3 +134,25 @@ test_that("rich labels take the weight as their base", {
   w_reg <- vl_strwidth(md("Ham**burg**"), family = fam)
   expect_false(identical(w_light, w_reg))
 })
+
+test_that("a weight the family lacks snaps to its nearest face", {
+  # A font added for the session matches only its exact weights in
+  # systemfonts; without snapping, weight 300 fell back to the default family.
+  skip_if_not_installed("systemfonts", "1.2.0")
+  otf <- system.file("fonts", "STIXTwoMath-Regular.otf", package = "vellum")
+  skip_if(!nzchar(otf), "bundled STIX Two Math not found")
+  systemfonts::add_fonts(otf)
+  fam <- "STIX Two Math"
+  skip_if(
+    !fam %in% systemfonts::system_fonts()$family,
+    "added font not listed by system_fonts()"
+  )
+  expect_identical(vellum:::.snap_weight(fam, FALSE, 300L), 400L)
+  expect_identical(vellum:::.snap_weight(fam, FALSE, 900L), 400L)
+  expect_identical(vellum:::.snap_weight(fam, FALSE, "bold"), "bold")
+  expect_identical(vellum:::.snap_weight("No Such Family", FALSE, 300L), 300L)
+  expect_identical(
+    vl_strwidth("Hamburg", family = fam, fontweight = 300),
+    vl_strwidth("Hamburg", family = fam)
+  )
+})

@@ -111,7 +111,9 @@ light, 400 regular, 600 semi-bold, 700 bold, 900 black), or one of the
 CSS names \code{"thin"}, \code{"extra-light"}, \code{"light"}, \code{"normal"}/\code{"regular"},
 \code{"medium"}, \code{"semi-bold"}, \code{"bold"}, \code{"extra-bold"}, \code{"black"} (hyphens
 and spaces optional, so \code{"semibold"} works). It picks the face file
-through \pkg{systemfonts}, falling back to the nearest installed weight.
+through \pkg{systemfonts}; a family without that exact weight uses its
+nearest one (fonts added for the session with
+\code{\link[systemfonts:add_fonts]{systemfonts::add_fonts()}} or \code{\link[systemfonts:require_font]{systemfonts::require_font()}} included).
 When set it replaces the weight \code{fontface} implies; the italic part of
 \code{fontface} still applies, so \verb{fontface = "italic", fontweight = 300} is
 light italic. A \verb{**bold**} run in a rich label is drawn at least 700.
