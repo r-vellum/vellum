@@ -235,6 +235,7 @@ gpar_scene <- function() {
     linemitre = 4,
     fontfamily = "sans",
     fontface = "bold",
+    fontweight = 600L,
     fontsize = 13,
     cex = 1.1,
     lineheight = 1.3,

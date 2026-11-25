@@ -759,12 +759,8 @@ impl RenderBackend for SvgBackend {
         // Local-px font size (the viewport transform is isometric, so 1 local
         // unit == 1 device px); shape_text size is in points.
         let font_px = run.size * run.dpi / 72.0;
-        let weight = if run.face.contains("bold") {
-            " font-weight=\"bold\""
-        } else {
-            ""
-        };
-        let style = if run.face.contains("italic") || run.face.contains("oblique") {
+        let (face, weight) = face_weight_attr(run.face);
+        let style = if face.contains("italic") || face.contains("oblique") {
             " font-style=\"italic\""
         } else {
             ""
@@ -1429,6 +1425,22 @@ pub(crate) fn xml_escape(s: &str) -> Cow<'_, str> {
 
 // --- PDF backend (krilla) ---------------------------------------------------
 
+/// Split a text run's face string into its fontface part and the SVG
+/// `font-weight` attribute. The R side appends a numeric weight as
+/// `"<face>@<weight>"` when `fontweight` is set (e.g. `"italic@300"`); that
+/// number is the attribute. Without a suffix the face name decides: bold or
+/// nothing, exactly as before weights existed.
+fn face_weight_attr(face: &str) -> (&str, String) {
+    match face.split_once('@') {
+        Some((f, w)) => match w.parse::<u16>() {
+            Ok(n) => (f, format!(" font-weight=\"{n}\"")),
+            Err(_) => (f, String::new()),
+        },
+        None if face.contains("bold") => (face, " font-weight=\"bold\"".to_string()),
+        None => (face, String::new()),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1535,5 +1547,27 @@ mod tests {
         assert_eq!(bake_circle(c, t), Some((10.0, 20.0, 3.0)));
         assert!(bake_circle(c, Transform::from_scale(3.0, 2.0)).is_none());
         assert!(bake_circle(c, Transform::from_scale(-1.0, 1.0)).is_none());
+    }
+
+    #[test]
+    fn face_weight_plain_faces_keep_their_old_attributes() {
+        assert_eq!(face_weight_attr("plain"), ("plain", String::new()));
+        assert_eq!(
+            face_weight_attr("bold.italic"),
+            ("bold.italic", " font-weight=\"bold\"".to_string())
+        );
+    }
+
+    #[test]
+    fn face_weight_a_numeric_weight_becomes_the_attribute() {
+        assert_eq!(
+            face_weight_attr("italic@300"),
+            ("italic", " font-weight=\"300\"".to_string())
+        );
+        // the number wins over a bold face name
+        assert_eq!(
+            face_weight_attr("bold@600"),
+            ("bold", " font-weight=\"600\"".to_string())
+        );
     }
 }

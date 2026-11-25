@@ -20,6 +20,8 @@
 #'   (e.g. `c(tnum = 1)`), matching [vl_gpar()]'s `features`. Measurement must
 #'   use the same features as drawing, or reserved space will not match.
 #' @param unit Output unit: one of `"in"`, `"pt"`, `"mm"`, `"cm"`.
+#' @param fontweight Font weight, `100` to `900` or a CSS weight name, as in
+#'   [vl_gpar()]. `NULL` (default) uses the weight `fontface` implies.
 #' @return A numeric vector (one per `label`) of widths/heights in `unit`.
 #' @examples
 #' vl_strwidth(c("short", "a longer label"), fontsize = 14)
@@ -31,9 +33,11 @@ vl_strwidth <- function(
   fontsize = 12,
   cex = 1,
   unit = "in",
-  features = NULL
+  features = NULL,
+  fontweight = NULL
 ) {
-  .text_metric(label, family, fontface, fontsize, cex, unit, "width", features)
+  face <- .face_weight(fontface, .check_fontweight(fontweight))
+  .text_metric(label, family, face, fontsize, cex, unit, "width", features)
 }
 
 #' @rdname vl_strwidth
@@ -45,9 +49,11 @@ vl_strheight <- function(
   fontsize = 12,
   cex = 1,
   unit = "in",
-  features = NULL
+  features = NULL,
+  fontweight = NULL
 ) {
-  .text_metric(label, family, fontface, fontsize, cex, unit, "height", features)
+  face <- .face_weight(fontface, .check_fontweight(fontweight))
+  .text_metric(label, family, face, fontsize, cex, unit, "height", features)
 }
 
 # Shared width/height measurement (vectorised over `label`); `which` is the
@@ -94,7 +100,7 @@ vl_strheight <- function(
     label,
     family = family,
     italic = face$italic,
-    weight = face$weight,
+    weight = .snap_weight(family, face$italic, face$weight),
     size = fontsize * cex,
     res = 72,
     features = .as_font_feature(features)
@@ -202,6 +208,7 @@ vl_strheight <- function(
 # present only when n > 0). Cache-missing strings are shaped together in one call.
 .shape_cached <- function(uniq, family, italic, weight, size, features = NULL) {
   .check_font_size(size)
+  weight <- .snap_weight(family, italic, weight)
   # The feature set is part of the font's identity for shaping: the same string
   # in the same font shapes to different glyphs under `smcp` or `onum`, so it
   # must be in the key, or a second grob would be served the first one's glyphs.
@@ -1190,9 +1197,19 @@ md <- function(text) {
   runs
 }
 
-# Combine the base fontface with a run's bold/italic flags.
+# Combine the base fontface with a run's bold/italic flags. A weighted base
+# (`"<face>@<weight>"`, see `.gp_face()`) keeps its weight, raised to at least
+# 700 by a bold run, so `**x**` still stands out from a light or regular base.
 .md_run_face <- function(base, run) {
   base <- tolower(as.character(base)[1])
+  if (grepl("@", base, fixed = TRUE)) {
+    w <- as.integer(sub(".*@", "", base))
+    it <- isTRUE(run$italic) || grepl("italic|oblique", base)
+    if (isTRUE(run$bold)) {
+      w <- max(w, 700L)
+    }
+    return(paste0(if (it) "italic" else "plain", "@", w))
+  }
   b <- isTRUE(run$bold) || grepl("bold", base)
   it <- isTRUE(run$italic) || grepl("italic|oblique", base)
   if (b && it) {
@@ -1676,8 +1693,71 @@ md <- function(text) {
   c(g$w, g$h)
 }
 
+# A numeric weight snapped to the nearest weight `family` has, so a family
+# without the exact weight still draws in its own face. The OS font matcher
+# does this for installed fonts, but a font added for the session
+# (`systemfonts::add_fonts()`, `require_font()`) only matches its exact
+# weights; asking such a family for 300 when it ships 400 silently gave the
+# default sans-serif. Names ("bold"/"normal") pass through, and so does a
+# weight for a family systemfonts does not list (e.g. the "sans" alias).
+#
+# Listing the fonts costs ~40 ms, so the answer is memoised per family /
+# italic / weight. Each entry also keeps the files systemfonts matches for
+# that weight, regular and bold (`.weight_probe()`); when they change -- a
+# face was added with `add_fonts()` since -- the entry is recomputed, so
+# adding the bold file of a family makes 700 resolve to it. (Adding an
+# in-between face, say a 500 while 600 is memoised as 700, is not noticed.)
+.weight_cache <- new.env(parent = emptyenv())
+.snap_weight <- function(family, italic, weight) {
+  if (!is.numeric(weight) || !nzchar(family)) {
+    return(weight)
+  }
+  key <- paste(family, italic, weight, sep = "\r")
+  probe <- .weight_probe(family, italic, weight)
+  hit <- .weight_cache[[key]]
+  if (!is.null(hit) && identical(hit$probe, probe)) {
+    return(hit$weight)
+  }
+  snapped <- .nearest_weight(family, italic, weight)
+  .weight_cache[[key]] <- list(weight = snapped, probe = probe)
+  snapped
+}
+
+# What systemfonts matches for `family` at the requested weight, at regular
+# and at bold (three ~25 us lookups). An added face changes at least one of
+# them: its own weight, or -- for a family that was missing, where a font
+# added for the session matches only exact weights and every other weight
+# falls back to the default font -- the regular or bold match.
+.weight_probe <- function(family, italic, weight) {
+  m <- systemfonts::match_fonts(
+    rep(family, 3L),
+    italic = italic,
+    weight = c(weight, 400L, 700L)
+  )
+  paste(m$path, m$index, collapse = "\r")
+}
+
+.nearest_weight <- function(family, italic, weight) {
+  sf <- systemfonts::system_fonts()
+  faces <- sf[tolower(sf$family) == tolower(family), , drop = FALSE]
+  same_style <- faces[faces$italic == italic, , drop = FALSE]
+  if (nrow(same_style)) {
+    faces <- same_style
+  }
+  have <- 100L * as.integer(faces$weight)
+  have <- have[!is.na(have)]
+  if (!length(have)) {
+    return(weight)
+  }
+  # nearest weight; a tie goes to the heavier face
+  have[order(abs(have - weight), -have)][1]
+}
+
 # Map an R fontface to textshaping's italic/weight arguments. Memoised: there are
 # only a handful of distinct fontfaces but `.rs_face` is called once per text grob.
+# A face carrying a numeric weight (`"italic@300"`, built by `.gp_face()`) passes
+# that number to textshaping, which picks the matching face file through
+# systemfonts; otherwise the weight is "bold" or "normal" as before.
 .face_cache <- new.env(parent = emptyenv())
 .rs_face <- function(fontface) {
   f <- tolower(as.character(fontface)[1])
@@ -1686,10 +1766,18 @@ md <- function(text) {
   }
   v <- .face_cache[[f]]
   if (is.null(v)) {
-    v <- list(
-      italic = grepl("italic|oblique", f),
-      weight = if (grepl("bold", f)) "bold" else "normal"
-    )
+    at <- regexpr("@", f, fixed = TRUE)
+    v <- if (at > 0L) {
+      list(
+        italic = grepl("italic|oblique", substr(f, 1L, at - 1L)),
+        weight = as.integer(substr(f, at + 1L, nchar(f)))
+      )
+    } else {
+      list(
+        italic = grepl("italic|oblique", f),
+        weight = if (grepl("bold", f)) "bold" else "normal"
+      )
+    }
     .face_cache[[f]] <- v
   }
   v

@@ -52,6 +52,7 @@ style <- S7::new_class(
     antialias = NULL,
     crisp = NULL,
     dash_phase = NULL,
+    fontweight = NULL,
     name = NULL
   ) {
     S7::new_object(
@@ -74,7 +75,8 @@ style <- S7::new_class(
         features = features,
         antialias = antialias,
         crisp = crisp,
-        dash_phase = dash_phase
+        dash_phase = dash_phase,
+        fontweight = fontweight
       ),
       name = name
     )

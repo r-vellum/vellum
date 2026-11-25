@@ -27,6 +27,19 @@
 #' @param fontface One of `"plain"`, `"bold"`, `"italic"`, `"bold.italic"`
 #'   (also `"oblique"`/`"bold.oblique"`), or grid's integer code `1:4` for the
 #'   first four. Anything else is an error.
+#' @param fontweight Font weight, for families that ship more than regular and
+#'   bold: a number from `100` to `900` in steps of 100 (CSS numbering: 300 is
+#'   light, 400 regular, 600 semi-bold, 700 bold, 900 black), or one of the
+#'   CSS names `"thin"`, `"extra-light"`, `"light"`, `"normal"`/`"regular"`,
+#'   `"medium"`, `"semi-bold"`, `"bold"`, `"extra-bold"`, `"black"` (hyphens
+#'   and spaces optional, so `"semibold"` works). It picks the face file
+#'   through \pkg{systemfonts}; a family without that exact weight uses its
+#'   nearest one (fonts added for the session with
+#'   [systemfonts::add_fonts()] or [systemfonts::require_font()] included).
+#'   When set it replaces the weight `fontface` implies; the italic part of
+#'   `fontface` still applies, so `fontface = "italic", fontweight = 300` is
+#'   light italic. A `**bold**` run in a rich label is drawn at least 700.
+#'   `NULL` (default) keeps `fontface` alone.
 #' @param fontsize Font size in points (positive).
 #' @param cex Multiplier applied to `fontsize` (grid semantics), so a theme can
 #'   ask for a relative size without knowing the base one. `cex = 2` is exactly
@@ -79,6 +92,7 @@ vl_gpar <- S7::new_class(
     linemitre = S7::new_property(S7::class_any, default = NULL),
     fontfamily = S7::new_property(S7::class_any, default = NULL),
     fontface = S7::new_property(S7::class_any, default = NULL),
+    fontweight = S7::new_property(S7::class_any, default = NULL),
     fontsize = S7::new_property(S7::class_any, default = NULL),
     cex = S7::new_property(S7::class_any, default = NULL),
     lineheight = S7::new_property(S7::class_any, default = NULL),
@@ -110,7 +124,8 @@ vl_gpar <- S7::new_class(
     features = NULL,
     antialias = NULL,
     crisp = NULL,
-    dash_phase = NULL
+    dash_phase = NULL,
+    fontweight = NULL
   ) {
     if (!is.null(col) && !.is_paint(col)) {
       .check_colour(col, "col")
@@ -133,6 +148,7 @@ vl_gpar <- S7::new_class(
       allow_null = TRUE
     )
     fontface <- .check_fontface(fontface, "fontface")
+    fontweight <- .check_fontweight(fontweight, "fontweight")
     S7::new_object(
       S7::S7_object(),
       col = col,
@@ -145,6 +161,7 @@ vl_gpar <- S7::new_class(
       linemitre = linemitre,
       fontfamily = fontfamily,
       fontface = fontface,
+      fontweight = fontweight,
       fontsize = fontsize,
       cex = cex,
       lineheight = lineheight,
@@ -218,6 +235,71 @@ vl_gpar <- S7::new_class(
     )
   }
   x
+}
+
+# CSS weight names -> numeric weights (the names brand.yml and CSS accept,
+# compared with hyphens, underscores and spaces removed).
+.fontweight_names <- c(
+  thin = 100L,
+  hairline = 100L,
+  extralight = 200L,
+  ultralight = 200L,
+  light = 300L,
+  normal = 400L,
+  regular = 400L,
+  medium = 500L,
+  semibold = 600L,
+  demibold = 600L,
+  bold = 700L,
+  extrabold = 800L,
+  ultrabold = 800L,
+  black = 900L,
+  heavy = 900L
+)
+
+# Validate `fontweight` and normalise it to a single integer in 100..900 (a
+# multiple of 100): NULL passes through, a name maps through
+# `.fontweight_names`.
+.check_fontweight <- function(x, arg = "fontweight", call = parent.frame()) {
+  if (is.null(x)) {
+    return(NULL)
+  }
+  ok <- length(x) == 1L && !is.na(x)
+  if (ok && is.character(x)) {
+    w <- .fontweight_names[gsub("[-_ ]", "", tolower(x))]
+    ok <- !is.na(w)
+    x <- unname(w)
+  } else if (ok && is.numeric(x)) {
+    ok <- x >= 100 && x <= 900 && x %% 100 == 0
+  } else {
+    ok <- FALSE
+  }
+  if (!ok) {
+    cli::cli_abort(
+      c(
+        "{.arg {arg}} must be a single weight from 100 to 900 in steps of 100, or a weight name.",
+        i = "Names: {.or {.val {names(.fontweight_names)}}}."
+      ),
+      class = "vellum_error_fontweight",
+      call = call
+    )
+  }
+  as.integer(x)
+}
+
+# The face string the text stack carries for `gp`: `fontface` alone, or with
+# the numeric weight appended as `"<face>@<weight>"` when `fontweight` is set.
+# `.rs_face()` and the SVG backend read the suffix; with no weight the string
+# is exactly the old `fontface %||% "plain"`, so unweighted text is unchanged.
+.gp_face <- function(gp) {
+  .face_weight(gp@fontface %||% "plain", gp@fontweight)
+}
+
+.face_weight <- function(fontface, fontweight = NULL) {
+  if (is.null(fontweight)) {
+    return(fontface)
+  }
+  paste0(as.character(fontface)[1], "@", fontweight)
 }
 
 # A copy of `gp` with no `fill`, for batched marks whose per-element fill
