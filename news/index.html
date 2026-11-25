@@ -13,7 +13,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">vellum</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.16.0.9001</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.17.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -70,9 +70,9 @@
     </div>
 
     <div class="section level2">
-<h2 class="pkg-version" data-toc-text="development version" id="vellum-development-version">vellum (development version)<a class="anchor" aria-label="anchor" href="#vellum-development-version"></a></h2>
+<h2 class="pkg-version" data-toc-text="0.17.0" id="vellum-0170">vellum 0.17.0<a class="anchor" aria-label="anchor" href="#vellum-0170"></a></h2>
 <div class="section level3">
-<h3 id="new-features-development-version">New features<a class="anchor" aria-label="anchor" href="#new-features-development-version"></a></h3>
+<h3 id="new-features-0-17-0">New features<a class="anchor" aria-label="anchor" href="#new-features-0-17-0"></a></h3>
 <ul><li>Numeric font weights (F-26): <code>vl_gpar(fontweight = )</code> takes a weight from 100 to 900 or a CSS name (<code>"light"</code>, <code>"semi-bold"</code>, <code>"black"</code>, …) and draws text, <code><a href="../reference/md.html">md()</a></code> and <code><a href="../reference/tex.html">tex()</a></code> labels in that face of a multi-weight family, picked through systemfonts (the nearest installed weight when the exact one is missing). It sits beside <code>fontface</code>: the weight replaces the bold a face implies, the italic still applies, and a <code>**bold**</code> run in a rich label is drawn at least 700. Measurement (<code>vl_strwidth(fontweight = )</code>, <code><a href="../reference/grobwidth.html">grobwidth()</a></code>, <code>strwidth</code> units) follows the weight, and native SVG text gets <code>font-weight="300"</code>. Text with no weight is unchanged, and so are its scene spec and hash.</li>
 </ul></div>
 </div>
