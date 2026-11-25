@@ -30,7 +30,7 @@
 #' @param values Numeric vector of magnitudes.
 #' @param units Character vector of unit names, recycled against `values`.
 #' @param data Optional list supplying context for derived units:
-#'   `label`, `fontfamily`, `fontface`, `fontsize`, `lineheight`. `label` is
+#'   `label`, `fontfamily`, `fontface`, `fontweight`, `fontsize`, `lineheight`. `label` is
 #'   recycled to the length of `values` (it must have length 1 or that length),
 #'   so each string unit measures its own label.
 #' @return A `unit` vector.
@@ -281,7 +281,14 @@ as_unit <- function(x, default = "npc") {
   }
   lineheight <- if (is_grob) 1.2 else (data$lineheight %||% 1.2)[1]
   family <- if (is_grob) "" else (data$fontfamily %||% "")[1]
-  face <- if (is_grob) "plain" else (data$fontface %||% "plain")[1]
+  face <- if (is_grob) {
+    "plain"
+  } else {
+    .face_weight(
+      (data$fontface %||% "plain")[1],
+      .check_fontweight(data$fontweight, "data$fontweight")
+    )
+  }
   # Measure the grob once (its extent is shared across all grobwidth/grobheight
   # values), eagerly to device-independent mm.
   ext <- if (any(units %in% c("grobwidth", "grobheight"))) {

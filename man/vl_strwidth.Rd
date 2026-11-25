@@ -12,7 +12,8 @@ vl_strwidth(
   fontsize = 12,
   cex = 1,
   unit = "in",
-  features = NULL
+  features = NULL,
+  fontweight = NULL
 )
 
 vl_strheight(
@@ -22,7 +23,8 @@ vl_strheight(
   fontsize = 12,
   cex = 1,
   unit = "in",
-  features = NULL
+  features = NULL,
+  fontweight = NULL
 )
 }
 \arguments{
@@ -46,6 +48,9 @@ family name). \code{""} uses the system default.}
 \item{features}{OpenType features as a named vector of four-character tags
 (e.g. \code{c(tnum = 1)}), matching \code{\link[=vl_gpar]{vl_gpar()}}'s \code{features}. Measurement must
 use the same features as drawing, or reserved space will not match.}
+
+\item{fontweight}{Font weight, \code{100} to \code{900} or a CSS weight name, as in
+\code{\link[=vl_gpar]{vl_gpar()}}. \code{NULL} (default) uses the weight \code{fontface} implies.}
 }
 \value{
 A numeric vector (one per \code{label}) of widths/heights in \code{unit}.

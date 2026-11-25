@@ -140,6 +140,11 @@ from_scene_spec <- function(spec) {
     # and therefore hash and diff -- differently, which is the opposite of what
     # a content fingerprint is for. It is regenerated on read.
     props$nid <- NULL
+    # An unset `fontweight` (added to vl_gpar later) is left out, so a scene
+    # that sets no weight serializes -- and hashes -- exactly as before.
+    if ("fontweight" %in% names(props) && is.null(props$fontweight)) {
+      props$fontweight <- NULL
+    }
     return(c(list(`_t` = "s7", class = cls), lapply(props, .spec_encode)))
   }
   if (

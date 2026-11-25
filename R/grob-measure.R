@@ -31,7 +31,7 @@ grobheight <- function(grob, mult = 1) vl_unit(mult, "grobheight", data = grob)
   if (S7::S7_inherits(g, grob_text)) {
     fs <- .gp_fontsize(g@gp)
     fam <- g@gp@fontfamily %||% ""
-    face <- g@gp@fontface %||% "plain"
+    face <- .gp_face(g@gp)
     feat <- .gp_features(g@gp)
     if (.is_rich_label(g@label)) {
       # Rich label: measure the composed multi-run extent (points -> mm) so axis

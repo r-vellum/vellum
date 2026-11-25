@@ -15,7 +15,7 @@ is_unit(x)
 \item{units}{Character vector of unit names, recycled against \code{values}.}
 
 \item{data}{Optional list supplying context for derived units:
-\code{label}, \code{fontfamily}, \code{fontface}, \code{fontsize}, \code{lineheight}. \code{label} is
+\code{label}, \code{fontfamily}, \code{fontface}, \code{fontweight}, \code{fontsize}, \code{lineheight}. \code{label} is
 recycled to the length of \code{values} (it must have length 1 or that length),
 so each string unit measures its own label.}
 

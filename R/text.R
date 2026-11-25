@@ -20,6 +20,8 @@
 #'   (e.g. `c(tnum = 1)`), matching [vl_gpar()]'s `features`. Measurement must
 #'   use the same features as drawing, or reserved space will not match.
 #' @param unit Output unit: one of `"in"`, `"pt"`, `"mm"`, `"cm"`.
+#' @param fontweight Font weight, `100` to `900` or a CSS weight name, as in
+#'   [vl_gpar()]. `NULL` (default) uses the weight `fontface` implies.
 #' @return A numeric vector (one per `label`) of widths/heights in `unit`.
 #' @examples
 #' vl_strwidth(c("short", "a longer label"), fontsize = 14)
@@ -31,9 +33,11 @@ vl_strwidth <- function(
   fontsize = 12,
   cex = 1,
   unit = "in",
-  features = NULL
+  features = NULL,
+  fontweight = NULL
 ) {
-  .text_metric(label, family, fontface, fontsize, cex, unit, "width", features)
+  face <- .face_weight(fontface, .check_fontweight(fontweight))
+  .text_metric(label, family, face, fontsize, cex, unit, "width", features)
 }
 
 #' @rdname vl_strwidth
@@ -45,9 +49,11 @@ vl_strheight <- function(
   fontsize = 12,
   cex = 1,
   unit = "in",
-  features = NULL
+  features = NULL,
+  fontweight = NULL
 ) {
-  .text_metric(label, family, fontface, fontsize, cex, unit, "height", features)
+  face <- .face_weight(fontface, .check_fontweight(fontweight))
+  .text_metric(label, family, face, fontsize, cex, unit, "height", features)
 }
 
 # Shared width/height measurement (vectorised over `label`); `which` is the
@@ -1190,9 +1196,19 @@ md <- function(text) {
   runs
 }
 
-# Combine the base fontface with a run's bold/italic flags.
+# Combine the base fontface with a run's bold/italic flags. A weighted base
+# (`"<face>@<weight>"`, see `.gp_face()`) keeps its weight, raised to at least
+# 700 by a bold run, so `**x**` still stands out from a light or regular base.
 .md_run_face <- function(base, run) {
   base <- tolower(as.character(base)[1])
+  if (grepl("@", base, fixed = TRUE)) {
+    w <- as.integer(sub(".*@", "", base))
+    it <- isTRUE(run$italic) || grepl("italic|oblique", base)
+    if (isTRUE(run$bold)) {
+      w <- max(w, 700L)
+    }
+    return(paste0(if (it) "italic" else "plain", "@", w))
+  }
   b <- isTRUE(run$bold) || grepl("bold", base)
   it <- isTRUE(run$italic) || grepl("italic|oblique", base)
   if (b && it) {
@@ -1678,6 +1694,9 @@ md <- function(text) {
 
 # Map an R fontface to textshaping's italic/weight arguments. Memoised: there are
 # only a handful of distinct fontfaces but `.rs_face` is called once per text grob.
+# A face carrying a numeric weight (`"italic@300"`, built by `.gp_face()`) passes
+# that number to textshaping, which picks the matching face file through
+# systemfonts; otherwise the weight is "bold" or "normal" as before.
 .face_cache <- new.env(parent = emptyenv())
 .rs_face <- function(fontface) {
   f <- tolower(as.character(fontface)[1])
@@ -1686,10 +1705,18 @@ md <- function(text) {
   }
   v <- .face_cache[[f]]
   if (is.null(v)) {
-    v <- list(
-      italic = grepl("italic|oblique", f),
-      weight = if (grepl("bold", f)) "bold" else "normal"
-    )
+    at <- regexpr("@", f, fixed = TRUE)
+    v <- if (at > 0L) {
+      list(
+        italic = grepl("italic|oblique", substr(f, 1L, at - 1L)),
+        weight = as.integer(substr(f, at + 1L, nchar(f)))
+      )
+    } else {
+      list(
+        italic = grepl("italic|oblique", f),
+        weight = if (grepl("bold", f)) "bold" else "normal"
+      )
+    }
     .face_cache[[f]] <- v
   }
   v
