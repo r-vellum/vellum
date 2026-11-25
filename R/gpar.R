@@ -280,6 +280,7 @@ vl_gpar <- S7::new_class(
         "{.arg {arg}} must be a single weight from 100 to 900 in steps of 100, or a weight name.",
         i = "Names: {.or {.val {names(.fontweight_names)}}}."
       ),
+      class = "vellum_error_fontweight",
       call = call
     )
   }

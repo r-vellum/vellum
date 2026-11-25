@@ -42,6 +42,7 @@ test_that("fontweight validates and normalises names to numbers", {
   expect_identical(vl_gpar(fontweight = "light")@fontweight, 300L)
   expect_identical(style(fontweight = "black")@fontweight, 900L)
   expect_error(vl_gpar(fontweight = 350), "steps of 100")
+  expect_error(vl_gpar(fontweight = 350), class = "vellum_error_fontweight")
   expect_error(vl_gpar(fontweight = 1000), "steps of 100")
   expect_error(vl_gpar(fontweight = "chunky"), "weight name")
   expect_error(vl_gpar(fontweight = c(300, 400)), "single weight")
