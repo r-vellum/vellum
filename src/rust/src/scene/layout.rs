@@ -341,19 +341,34 @@ impl Scene {
         };
 
         let mut clip_chain = parent.clip_chain.clone();
-        if let Some(cp) = &node.clip_path {
-            if let Some(path) = build_subpaths(&cp.x, &cp.y, &cp.xu, &cp.yu, &cp.nper, &vp) {
-                clip_chain.push(ClipShape::Path {
-                    path,
-                    evenodd: cp.evenodd,
-                    transform,
-                });
-            }
+        let shape = if let Some(cp) = &node.clip_path {
+            // A clip path that cannot be built (a missing vertex, or bounds that
+            // overflow) clips everything away rather than nothing (VR-42).
+            Some(
+                build_subpaths(&cp.x, &cp.y, &cp.xu, &cp.yu, &cp.nper, &vp)
+                    .map(|path| ClipShape::Path {
+                        path,
+                        evenodd: cp.evenodd,
+                        transform,
+                    })
+                    .unwrap_or_else(ClipShape::nothing),
+            )
         } else if node.clip {
-            clip_chain.push(ClipShape::Rect {
+            Some(ClipShape::Rect {
                 w: cw,
                 h: ch,
                 transform,
+            })
+        } else {
+            None
+        };
+        if let Some(shape) = shape {
+            // Normalised here, once, so every backend (and hit-testing) sees the
+            // same empty region for a clip it could not represent (VR-42).
+            clip_chain.push(if shape.is_finite() {
+                shape
+            } else {
+                ClipShape::nothing()
             });
         }
 

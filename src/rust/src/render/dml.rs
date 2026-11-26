@@ -1095,7 +1095,7 @@ impl DmlBackend {
         if let Some(r) = self.regions.get(&clip.id) {
             return Some(Rc::clone(r));
         }
-        let r = Rc::new(Region::new(clip));
+        let r = Rc::new(Region::new(clip, self.w, self.h));
         self.regions.insert(clip.id, Rc::clone(&r));
         Some(r)
     }
@@ -1761,7 +1761,7 @@ pub(super) struct Region {
 }
 
 impl Region {
-    fn new(clip: &Clip) -> Region {
+    fn new(clip: &Clip, w: u32, h: u32) -> Region {
         use i_overlay::core::fill_rule::FillRule as IFill;
         use i_overlay::core::overlay_rule::OverlayRule;
         use i_overlay::float::simplify::SimplifyShape;
@@ -1785,27 +1785,52 @@ impl Region {
                 contours,
             };
         }
+        // A region's rings in device px. One reaching far beyond the page is
+        // cut to it first (in f64, see `fit`): `i_overlay` snaps to an integer
+        // grid scaled to the input's extent, so at 1e20 px the page shrank to
+        // nothing and everything under the clip was dropped.
+        let rings_of = |path: &Path, t: Transform| -> Vec<Vec<[f64; 2]>> {
+            let dp = match super::fit::fit_fill(path, t, w, h) {
+                super::fit::Fit::Keep(p) => DevPath::from_path(p, t),
+                super::fit::Fit::Clipped(dev) => DevPath::from_path(&dev, Transform::identity()),
+                super::fit::Fit::Outline | super::fit::Fit::Skip => return Vec::new(),
+            };
+            dp.flatten()
+                .into_iter()
+                .filter(|(c, _)| c.len() >= 3)
+                .map(|(c, _)| c.into_iter().map(|(x, y)| [x, y]).collect())
+                .collect()
+        };
         let mut acc: Option<Vec<Vec<[f64; 2]>>> = None;
         for shape in clip.shapes {
             let (rings, fr) = match shape {
-                ClipShape::Rect { w, h, transform } => (
-                    vec![rect_corners(*w, *h, *transform)
+                ClipShape::Rect {
+                    w: rw,
+                    h: rh,
+                    transform,
+                } => {
+                    let c = rect_corners(*rw, *rh, *transform);
+                    let near = c
                         .iter()
-                        .map(|p| [p.0, p.1])
-                        .collect::<Vec<_>>()],
-                    IFill::NonZero,
-                ),
+                        .all(|p| p.0.abs().max(p.1.abs()) <= super::fit::SAFE);
+                    let mut pb = PathBuilder::new();
+                    pb.move_to(0.0, 0.0);
+                    pb.line_to(*rw as f32, 0.0);
+                    pb.line_to(*rw as f32, *rh as f32);
+                    pb.line_to(0.0, *rh as f32);
+                    pb.close();
+                    let rings = match (near, pb.finish()) {
+                        (false, Some(p)) => rings_of(&p, *transform),
+                        _ => vec![c.iter().map(|p| [p.0, p.1]).collect::<Vec<_>>()],
+                    };
+                    (rings, IFill::NonZero)
+                }
                 ClipShape::Path {
                     path,
                     evenodd,
                     transform,
                 } => (
-                    DevPath::from_path(path, *transform)
-                        .flatten()
-                        .into_iter()
-                        .filter(|(c, _)| c.len() >= 3)
-                        .map(|(c, _)| c.into_iter().map(|(x, y)| [x, y]).collect())
-                        .collect(),
+                    rings_of(path, *transform),
                     if *evenodd {
                         IFill::EvenOdd
                     } else {

@@ -1,5 +1,6 @@
 //! The tiny-skia raster backend (PNG and in-memory RGBA).
 
+use super::fit::{self, Fit};
 use super::*;
 
 /// Snap a device coordinate so a stroke of `width` covers whole pixels: an
@@ -49,6 +50,174 @@ fn skia_masktype(k: MaskKind) -> tiny_skia::MaskType {
     match k {
         MaskKind::Alpha => tiny_skia::MaskType::Alpha,
         MaskKind::Luminance => tiny_skia::MaskType::Luminance,
+    }
+}
+
+// --- range-safe tiny-skia calls (VR-43) ---------------------------------------
+//
+// Every path the backend draws goes through these, so geometry far beyond the
+// page is cut to it before tiny-skia sees it, and geometry beyond the PDF
+// coordinate cap is skipped as PDF skips it (see `fit`). In range, each is
+// exactly the tiny-skia call it wraps.
+
+fn fill_fit(
+    pm: &mut Pixmap,
+    path: &Path,
+    paint: &Paint,
+    rule: FillRule,
+    t: Transform,
+    mask: Option<&Mask>,
+) {
+    if fit::beyond_cap(path, t) {
+        return;
+    }
+    let (w, h) = fit::dims(pm);
+    match fit::fit_fill(path, t, w, h) {
+        Fit::Keep(p) => pm.fill_path(p, paint, rule, t, mask),
+        Fit::Clipped(dev) => {
+            // Device-px geometry: move the shader to device space too, which is
+            // what tiny-skia does itself under a non-identity transform.
+            let mut paint = paint.clone();
+            paint.shader.transform(t);
+            pm.fill_path(&dev, &paint, rule, Transform::identity(), mask);
+        }
+        Fit::Outline | Fit::Skip => {}
+    }
+}
+
+/// How far (device px) a pen reaches from its centreline under `t`, with room
+/// for a mitre or square cap and a pixel of anti-aliasing.
+fn pen_reach(sk: &Stroke, t: &Transform) -> f64 {
+    // The largest singular value of the linear part: the most `t` stretches
+    // any direction, so a skewed pen is covered too.
+    let (a, b, c, d) = (t.sx as f64, t.ky as f64, t.kx as f64, t.sy as f64);
+    let sq = a * a + b * b + c * c + d * d;
+    let det = a * d - b * c;
+    let scale = (0.5 * (sq + (sq * sq - 4.0 * det * det).max(0.0).sqrt())).sqrt();
+    let mut k: f64 = 1.0;
+    if matches!(
+        sk.line_join,
+        tiny_skia::LineJoin::Miter | tiny_skia::LineJoin::MiterClip
+    ) {
+        k = k.max(sk.miter_limit as f64);
+    }
+    if matches!(sk.line_cap, tiny_skia::LineCap::Square) {
+        k = k.max(std::f64::consts::SQRT_2);
+    }
+    sk.width as f64 * 0.5 * scale * k + 2.0
+}
+
+/// Stroke `path`. `dash` is the stroke's dash pattern and phase as given (so
+/// a fitted dashed stroke can keep its phase); `None` for a solid stroke.
+fn stroke_fit(
+    pm: &mut Pixmap,
+    path: &Path,
+    paint: &Paint,
+    sk: &Stroke,
+    t: Transform,
+    mask: Option<&Mask>,
+    dash: Option<(&[f32], f32)>,
+) {
+    if fit::beyond_cap(path, t) {
+        return;
+    }
+    let reach = pen_reach(sk, &t);
+    let (w, h) = fit::dims(pm);
+    if let Some((intervals, phase)) = dash.filter(|_| sk.dash.is_some()) {
+        match fit::fit_dashed(path, t, reach, w, h, intervals, phase) {
+            fit::DashFit::Keep(p) => pm.stroke_path(p, paint, sk, t, mask),
+            fit::DashFit::Runs(runs) => {
+                for (run, offset) in runs {
+                    let mut sk = sk.clone();
+                    sk.dash = StrokeDash::new(intervals.to_vec(), offset);
+                    pm.stroke_path(&run, paint, &sk, t, mask);
+                }
+            }
+            fit::DashFit::Outline => stroke_outline(pm, path, paint, sk, t, mask),
+            fit::DashFit::Skip => {}
+        }
+        return;
+    }
+    match fit::fit_stroke(path, t, reach, w, h) {
+        Fit::Keep(p) => pm.stroke_path(p, paint, sk, t, mask),
+        Fit::Clipped(local) => pm.stroke_path(&local, paint, sk, t, mask),
+        Fit::Outline => stroke_outline(pm, path, paint, sk, t, mask),
+        Fit::Skip => {}
+    }
+}
+
+/// A stroke whose pen alone reaches past the safe range: stroked to its
+/// outline as tiny-skia would (dashed first, at the same resolution scale),
+/// and the outline filled through [`fill_fit`].
+fn stroke_outline(
+    pm: &mut Pixmap,
+    path: &Path,
+    paint: &Paint,
+    sk: &Stroke,
+    t: Transform,
+    mask: Option<&Mask>,
+) {
+    let res = tiny_skia::PathStroker::compute_resolution_scale(&t);
+    let dashed = match &sk.dash {
+        Some(d) => match path.dash(d, res) {
+            Some(p) => Some(p),
+            None => return,
+        },
+        None => None,
+    };
+    let solid = Stroke {
+        dash: None,
+        ..sk.clone()
+    };
+    if let Some(outline) = dashed.as_ref().unwrap_or(path).stroke(&solid, res) {
+        fill_fit(pm, &outline, paint, FillRule::Winding, t, mask);
+    }
+}
+
+/// Intersect a clip mask with `path`. Geometry that cannot be drawn at all
+/// (not finite) clips everything away, as tiny-skia's own failed fill does.
+fn intersect_fit(m: &mut Mask, path: &Path, rule: FillRule, t: Transform) {
+    match fit::fitted_fill(path, t, m.width(), m.height()) {
+        Some((p, t)) => m.intersect_path(&p, rule, true, t),
+        None => m.clear(),
+    }
+}
+
+/// `draw_pixmap(0, 0, src, ..)` under `t`. Out of range, the same pattern fill
+/// tiny-skia would do, over the image rect cut to the page.
+fn draw_pixmap_fit(
+    pm: &mut Pixmap,
+    src: &Pixmap,
+    ppaint: &tiny_skia::PixmapPaint,
+    t: Transform,
+    mask: Option<&Mask>,
+) {
+    let (w, h) = fit::dims(pm);
+    let Some(rect) = rect_path(0.0, 0.0, src.width() as f64, src.height() as f64) else {
+        return;
+    };
+    if fit::beyond_cap(&rect, t) {
+        return;
+    }
+    match fit::fit_fill(&rect, t, w, h) {
+        Fit::Keep(_) => pm.draw_pixmap(0, 0, src.as_ref(), ppaint, t, mask),
+        Fit::Clipped(dev) => {
+            let mut paint = Paint {
+                shader: tiny_skia::Pattern::new(
+                    src.as_ref(),
+                    tiny_skia::SpreadMode::Pad,
+                    ppaint.quality,
+                    ppaint.opacity,
+                    Transform::identity(),
+                ),
+                blend_mode: ppaint.blend_mode,
+                anti_alias: false,
+                ..Paint::default()
+            };
+            paint.shader.transform(t);
+            pm.fill_path(&dev, &paint, FillRule::Winding, Transform::identity(), mask);
+        }
+        Fit::Outline | Fit::Skip => {}
     }
 }
 
@@ -248,7 +417,7 @@ fn stroke_polyline(
             pb.line_to(x, y);
         }
         if let Some(p) = pb.finish() {
-            target.stroke_path(&p, paint, sk, transform, mask);
+            stroke_fit(target, &p, paint, sk, transform, mask, None);
         }
     };
     if nseg <= STROKE_RUN {
@@ -354,7 +523,15 @@ fn stroke_polyline(
             Some(lm)
         });
         let t = transform.post_translate(-(j.x0 as f32), -(j.y0 as f32));
-        scratch.stroke_path(&local, paint, sk, t, local_mask.as_ref());
+        stroke_fit(
+            &mut scratch,
+            &local,
+            paint,
+            sk,
+            t,
+            local_mask.as_ref(),
+            None,
+        );
         let data = target.data_mut();
         let row_len = j.w as usize * 4;
         for row in 0..j.h as usize {
@@ -439,7 +616,7 @@ impl RasterBackend {
         for shape in clip.shapes {
             match shape {
                 ClipShape::Rect { w, h, transform } => match rect_path(0.0, 0.0, *w, *h) {
-                    Some(rect) => m.intersect_path(&rect, FillRule::Winding, true, *transform),
+                    Some(rect) => intersect_fit(&mut m, &rect, FillRule::Winding, *transform),
                     None => m.clear(),
                 },
                 ClipShape::Path {
@@ -452,7 +629,7 @@ impl RasterBackend {
                     } else {
                         FillRule::Winding
                     };
-                    m.intersect_path(path, rule, true, *transform);
+                    intersect_fit(&mut m, path, rule, *transform);
                 }
             }
         }
@@ -581,8 +758,7 @@ impl RenderBackend for RasterBackend {
     ) {
         let mask = self.mask_for(clip);
         with_paint(paint, |p| {
-            self.target()
-                .fill_path(path, p, rule, transform, mask.as_deref())
+            fill_fit(self.target(), path, p, rule, transform, mask.as_deref())
         });
     }
 
@@ -599,19 +775,34 @@ impl RenderBackend for RasterBackend {
         }
         let mask = self.mask_for(clip);
         let sk = skia_stroke(stroke);
+        let dash = (!stroke.dash.is_empty()).then_some((stroke.dash.as_slice(), stroke.phase));
         // A gradient/pattern stroke is the same shader a fill would use, applied
         // to the stroked region instead of the enclosed one.
         match &stroke.paint {
             Some(paint) => {
                 with_paint(paint, |p| {
-                    self.target()
-                        .stroke_path(path, p, &sk, transform, mask.as_deref())
+                    stroke_fit(
+                        self.target(),
+                        path,
+                        p,
+                        &sk,
+                        transform,
+                        mask.as_deref(),
+                        dash,
+                    )
                 });
             }
             None => {
                 let p = solid_paint(color);
-                self.target()
-                    .stroke_path(path, &p, &sk, transform, mask.as_deref());
+                stroke_fit(
+                    self.target(),
+                    path,
+                    &p,
+                    &sk,
+                    transform,
+                    mask.as_deref(),
+                    dash,
+                );
             }
         }
     }
@@ -777,24 +968,28 @@ impl RenderBackend for RasterBackend {
                 let ox = run.ax + run.gx[i] - run.hjust * run.w;
                 let oy = run.ay - (run.gy[i] - run.vjust * run.h);
                 let place = Transform::from_row(1.0, 0.0, 0.0, -1.0, ox as f32, oy as f32);
-                self.targets
-                    .last_mut()
-                    .expect("at least the page target")
-                    .stroke_path(
-                        outline.as_ref(),
-                        &hpaint,
-                        &stroke,
-                        base.pre_concat(place),
-                        mask.as_deref(),
-                    );
+                stroke_fit(
+                    self.targets.last_mut().expect("at least the page target"),
+                    outline.as_ref(),
+                    &hpaint,
+                    &stroke,
+                    base.pre_concat(place),
+                    mask.as_deref(),
+                    None,
+                );
             }
             // A tex() label's bars take the halo with its glyphs.
             for r in run.rules {
                 if let Some(p) = text_rule_path(run, r) {
-                    self.targets
-                        .last_mut()
-                        .expect("at least the page target")
-                        .stroke_path(&p, &hpaint, &stroke, base, mask.as_deref());
+                    stroke_fit(
+                        self.targets.last_mut().expect("at least the page target"),
+                        &p,
+                        &hpaint,
+                        &stroke,
+                        base,
+                        mask.as_deref(),
+                        None,
+                    );
                 }
             }
         }
@@ -860,25 +1055,27 @@ impl RenderBackend for RasterBackend {
                 Some(&c) => solid_paint(c),
                 None => paint.clone(),
             };
-            self.targets
-                .last_mut()
-                .expect("at least the page target")
-                .fill_path(
-                    outline.as_ref(),
-                    &glyph_paint,
-                    FillRule::Winding,
-                    base.pre_concat(place),
-                    mask.as_deref(),
-                );
+            fill_fit(
+                self.targets.last_mut().expect("at least the page target"),
+                outline.as_ref(),
+                &glyph_paint,
+                FillRule::Winding,
+                base.pre_concat(place),
+                mask.as_deref(),
+            );
         }
         // Rules (a tex() label's fraction bars and radical overbars), in the
         // label's own transform.
         for r in run.rules {
             if let Some(p) = text_rule_path(run, r) {
-                self.targets
-                    .last_mut()
-                    .expect("at least the page target")
-                    .fill_path(&p, &solid_paint(r.col), FillRule::Winding, base, mask.as_deref());
+                fill_fit(
+                    self.targets.last_mut().expect("at least the page target"),
+                    &p,
+                    &solid_paint(r.col),
+                    FillRule::Winding,
+                    base,
+                    mask.as_deref(),
+                );
             }
         }
     }
@@ -1160,10 +1357,13 @@ impl RenderBackend for RasterBackend {
         } else {
             FilterQuality::Nearest
         };
-        self.targets
-            .last_mut()
-            .expect("at least the page target")
-            .draw_pixmap(0, 0, pm.as_ref(), &paint, place, mask.as_deref());
+        draw_pixmap_fit(
+            self.targets.last_mut().expect("at least the page target"),
+            &pm,
+            &paint,
+            place,
+            mask.as_deref(),
+        );
     }
 }
 
