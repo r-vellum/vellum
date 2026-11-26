@@ -10,8 +10,16 @@
   box sized to vellum's own measurement, aligned from `hjust`/`vjust` so a
   substituted font grows away from the anchor, and rotated like the label;
   `md()` and `tex()` labels, halos and text on a path are glyph outlines, as
-  in SVG. Panels become named shape groups. The user-facing entry points
-  (officer's `ph_with()` and `.pptx` files) follow in the next changes.
+  in SVG. Panels become named shape groups.
+
+* Scenes go onto PowerPoint slides through officer (F-24, part 2):
+  `officer::ph_with(doc, scene, location)` works for a `vl_scene()`, and
+  `as_dml(x)` wraps anything `as_vellum_scene()` compiles (a vellumplot plot)
+  for the same call. The scene is laid out again at the location's size
+  (`resize = FALSE` keeps its own), `text = "outline"` trades editable text for
+  glyph outlines, and the scene's title and description become the group's
+  name and alt text. officer stays in Suggests: the methods are registered
+  when it loads.
 
 # vellum 0.17.0
 

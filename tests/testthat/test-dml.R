@@ -187,3 +187,78 @@ test_that("a blank line keeps a label native", {
     c("a", "b")
   )
 })
+
+test_that("as_dml() validates and prints", {
+  d <- as_dml(dml_scene(), text = "outline")
+  expect_s3_class(d, "vellum_dml")
+  expect_output(print(d), "2 x 1 in scene, text = \"outline\"")
+  expect_error(as_dml(dml_scene(), resize = NA), "resize")
+})
+
+test_that("the scene's title and description become the group's alt text", {
+  skip_if_not_installed("xml2")
+  sc <- S7::set_props(dml_scene(), title = "A chart", desc = "Bars & a line")
+  doc <- xml2::read_xml(.dml_fragment(sc)$xml)
+  cnv <- xml2::xml_find_first(doc, "p:nvGrpSpPr/p:cNvPr", xml2::xml_ns(doc))
+  expect_identical(xml2::xml_attr(cnv, "name"), "A chart")
+  expect_identical(xml2::xml_attr(cnv, "descr"), "Bars & a line")
+  # control characters in the description cannot break the XML
+  bad <- S7::set_props(dml_scene(), desc = "x\"y\001")
+  doc <- xml2::read_xml(.dml_fragment(bad)$xml)
+  cnv <- xml2::xml_find_first(doc, "p:nvGrpSpPr/p:cNvPr", xml2::xml_ns(doc))
+  expect_identical(xml2::xml_attr(cnv, "descr"), "x\"y")
+})
+
+test_that("ph_with() puts a scene on a slide as editable shapes", {
+  skip_if_not_installed("officer")
+  skip_if_not_installed("xml2")
+  sc <- dml_scene() |>
+    draw(text_grob("label", x = 0.5, y = 0.9)) |>
+    draw(raster_grob(
+      matrix(c("red", "blue"), 1),
+      x = 0.9,
+      width = 0.1,
+      height = 0.1
+    ))
+  doc <- officer::read_pptx()
+  doc <- officer::add_slide(doc, layout = "Blank", master = "Office Theme")
+  loc <- officer::ph_location(left = 1, top = 2, width = 4, height = 2)
+  doc <- officer::ph_with(doc, sc, location = loc)
+  doc <- officer::add_slide(doc, layout = "Blank", master = "Office Theme")
+  doc <- officer::ph_with(doc, as_dml(sc, resize = FALSE), location = loc)
+  f <- withr::local_tempfile(fileext = ".pptx")
+  print(doc, target = f)
+
+  s <- officer::pptx_summary(officer::read_pptx(f))
+  expect_true("label" %in% s$text)
+  # the raster was copied into the package
+  files <- utils::unzip(f, list = TRUE)$Name
+  expect_true(any(grepl("^ppt/media/.*\\.png$", files)))
+
+  dir <- withr::local_tempdir()
+  utils::unzip(f, exdir = dir)
+  slide <- xml2::read_xml(file.path(dir, "ppt/slides/slide1.xml"))
+  ns <- xml2::xml_ns(slide)
+  grp <- xml2::xml_find_first(slide, "//p:spTree/p:grpSp", ns)
+  off <- xml2::xml_find_first(grp, "p:grpSpPr/a:xfrm/a:off", ns)
+  expect_identical(xml2::xml_attr(off, "x"), "914400")
+  ext <- xml2::xml_find_first(grp, "p:grpSpPr/a:xfrm/a:ext", ns)
+  expect_identical(xml2::xml_attr(ext, "cx"), "3657600")
+  # resized to the location: the background spans the 4 in width
+  bg <- xml2::xml_find_first(grp, "p:sp/p:spPr/a:xfrm/a:ext", ns)
+  expect_identical(xml2::xml_attr(bg, "cx"), "3657600")
+  # every child shape lies inside the location
+  offs <- xml2::xml_find_all(grp, ".//p:sp/p:spPr/a:xfrm/a:off", ns)
+  x <- as.numeric(xml2::xml_attr(offs, "x"))
+  y <- as.numeric(xml2::xml_attr(offs, "y"))
+  expect_true(all(x >= 914400 & x < 5 * 914400))
+  expect_true(all(y >= 2 * 914400 & y < 4 * 914400))
+  # the picture references the package part, not a file path
+  embed <- xml2::xml_attr(xml2::xml_find_first(grp, ".//a:blip", ns), "embed")
+  expect_match(embed, "^rId[0-9]+$")
+
+  # resize = FALSE keeps the scene's own 2 x 1 in size
+  slide2 <- xml2::read_xml(file.path(dir, "ppt/slides/slide2.xml"))
+  bg2 <- xml2::xml_find_first(slide2, "//p:grpSp/p:sp/p:spPr/a:xfrm/a:ext", ns)
+  expect_identical(xml2::xml_attr(bg2, "cx"), "1828800")
+})

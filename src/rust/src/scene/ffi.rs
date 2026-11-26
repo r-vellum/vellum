@@ -1697,7 +1697,7 @@ impl Scene {
             top.round() as i64,
             outline_text,
         );
-        b.set_name(&self.a11y_title);
+        b.set_a11y(&self.a11y_title, &self.a11y_desc);
         let warnings = self.render_to(&mut b);
         let (xml, media, _) = b.finish();
         let files: Vec<String> = if media_dir.is_empty() {
