@@ -349,7 +349,13 @@ impl Scene {
         } else {
             Some(surface.start_tagged(krilla::tagging::ContentTag::Other))
         };
-        let (warnings, marks) = {
+        // The walk is guarded against the geometry krilla cannot take (see
+        // `render::pdf::drawable`), but a panic inside krilla must still never
+        // reach the `Surface` / `Page` destructors: they assert that every push
+        // was popped, and a panic in a destructor while unwinding aborts the R
+        // process (VR-38). So catch it here, leak the half-built page rather
+        // than run those destructors, and raise an ordinary R error.
+        let drawn = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             let mut b = PdfBackend::new(&mut surface);
             // With the whole-content span open, per-node tagging stands down (no
             // nested spans); the decorative marks draw as the figure's content.
@@ -357,6 +363,17 @@ impl Scene {
             b.fill_background(self.w_px, self.h_px, self.bg);
             let w = self.render_to(&mut b);
             (w, b.take_tagged())
+        }));
+        let (warnings, marks) = match drawn {
+            Ok(v) => v,
+            Err(payload) => {
+                std::mem::forget(surface);
+                std::mem::forget(page);
+                throw_r_error(format!(
+                    "PDF rendering failed: {}",
+                    crate::render::panic_message(payload.as_ref())
+                ));
+            }
         };
         if tag_id.is_some() {
             surface.end_tagged();

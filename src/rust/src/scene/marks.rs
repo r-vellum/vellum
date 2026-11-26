@@ -471,7 +471,7 @@ pub(super) fn draw_circles<B: RenderBackend>(
             let cx = vp.x_pos(x[i], xu[i]);
             let cy = vp.y_pos(y[i], yu[i]);
             let rr = vp.r_len(r[i], ru[i]);
-            if rr <= 0.0 {
+            if !crate::render::drawable_disc(cx, cy, rr) {
                 continue;
             }
             let mut oi = o.clone();
@@ -600,7 +600,7 @@ pub(super) fn draw_markers<B: RenderBackend>(
             let cx = vp.x_pos(x[i], xu[i]);
             let cy = vp.y_pos(y[i], yu[i]);
             let rr = vp.r_len(size[i], su[i]);
-            if rr <= 0.0 || !cx.is_finite() || !cy.is_finite() {
+            if !crate::render::drawable_disc(cx, cy, rr) {
                 continue;
             }
             let mut oi = o.clone();
@@ -689,8 +689,8 @@ pub(super) fn draw_markers<B: RenderBackend>(
         let cx = vp.x_pos(x[i], xu[i]);
         let cy = vp.y_pos(y[i], yu[i]);
         let rr = vp.r_len(size[i], su[i]);
-        // Drop a marker at a non-finite position (an R `NA`).
-        if rr <= 0.0 || !cx.is_finite() || !cy.is_finite() {
+        // Drop a marker at a non-finite position or size (an R `NA`).
+        if !crate::render::drawable_disc(cx, cy, rr) {
             continue;
         }
         let sh = shape[i];

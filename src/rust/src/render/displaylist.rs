@@ -29,8 +29,8 @@ use crate::color::{Extend, LineCap, LineJoin, Rgba, Stop};
 use crate::units::rotation_about;
 
 use super::{
-    BlendKind, Clip, ClipShape, GroupEffect, MaskLayer, RenderBackend, ResolvedPaint, StrokeStyle,
-    TextRun,
+    drawable_disc, BlendKind, Clip, ClipShape, GroupEffect, MaskLayer, RenderBackend,
+    ResolvedPaint, StrokeStyle, TextRun,
 };
 
 /// Record kinds (`record$kind`).
@@ -1012,7 +1012,7 @@ impl RenderBackend for DisplayListBackend {
                 Some(k) if !k.is_empty() => k,
                 _ => continue,
             };
-            if r[i] <= 0.0 || !cx[i].is_finite() || !cy[i].is_finite() {
+            if !drawable_disc(cx[i], cy[i], r[i]) {
                 continue;
             }
             let ki = self.intern_key(k);

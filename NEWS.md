@@ -46,6 +46,17 @@
   officer route places, and the file is byte-for-byte reproducible: no
   timestamps, user name or software version.
 
+## Bug fixes
+
+* Rendering to PDF no longer aborts the R process when a point marker or
+  circle has a missing (`NA`) or infinite size, e.g. a vellumplot `size`
+  mapping over data with `NA`s (VR-38). Such elements are now skipped by every
+  backend, as the PNG backend already did (SVG used to write `NaN` paths). The
+  PDF writer also skips any other geometry it cannot take (a non-finite
+  transform, stroke width, text size or gradient coordinate) instead of
+  panicking, and an unexpected failure inside it is now an R error rather
+  than a crash.
+
 # vellum 0.17.0
 
 ## New features
