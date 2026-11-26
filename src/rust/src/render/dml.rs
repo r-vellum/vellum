@@ -908,8 +908,10 @@ impl DmlBackend {
         };
         // A filled shape with an outline paints the inner half of the line
         // over its fill; overlapping glyph paths paint twice too.
+        // A merged shape's marks are disjoint by construction (they may only
+        // touch), so only a lone shape's paths are checked against each other.
         let overlaps_itself = (!fill.is_empty() && !ln.is_empty())
-            || (paths.len() > 1 && {
+            || (paths.len() > 1 && items.is_none() && {
                 let boxes: Vec<[f64; 4]> = paths.iter().filter_map(|p| p.bounds()).collect();
                 any_overlap(&boxes)
             });
@@ -2877,20 +2879,39 @@ fn group_reason(mask: bool, blend: BlendKind, effect: GroupEffect) -> &'static s
 }
 
 /// How far a stroke drawn under a uniform `scale` reaches past its geometry,
-/// in device px: half the line width, or the miter limit's worth at a miter
-/// join.
+/// in device px: half the line width; a square cap reaches a half-width
+/// diagonal (`half * sqrt 2`) past an end, and a miter join up to the miter
+/// limit's worth.
 fn stroke_reach(st: &StrokeStyle, scale: f64) -> f64 {
     let half = st.width as f64 * scale / 2.0;
-    match st.join {
+    let cap = match st.cap {
+        crate::color::LineCap::Square => half * std::f64::consts::SQRT_2,
+        _ => half,
+    };
+    let join = match st.join {
         crate::color::LineJoin::Mitre => half * (st.miter as f64).max(1.0),
         _ => half,
-    }
+    };
+    cap.max(join)
 }
 
 /// The level of each box (see [`DmlBackend::flush_points`]): one above the
-/// highest earlier box it overlaps (touching edges do not count), found
-/// through a uniform grid of cells about one typical box in size.
+/// highest earlier box it overlaps (touching edges do not count).
+///
+/// Boxes are found through a uniform grid of cells half a typical box in
+/// size, so a typical box covers at least one cell whole. A box covering a
+/// cell overlaps every later box reaching into that cell and outranks every
+/// earlier one there, so the cell keeps only the highest such level (its
+/// floor) and the boxes registered since that only reach in partly. A dense
+/// layer then stays linear: each cell holds a handful of boxes.
 fn point_levels(boxes: &[[f64; 4]]) -> Vec<usize> {
+    #[derive(Default)]
+    struct Cell {
+        /// One above the highest level of a box covering the cell (0: none).
+        floor: usize,
+        /// Boxes reaching partly into the cell, above the floor.
+        part: Vec<usize>,
+    }
     let n = boxes.len();
     let mut level = vec![0usize; n];
     if n < 2 {
@@ -2899,20 +2920,23 @@ fn point_levels(boxes: &[[f64; 4]]) -> Vec<usize> {
     let mut sizes: Vec<f64> = boxes
         .iter()
         .map(|b| (b[2] - b[0]).max(b[3] - b[1]))
-        .filter(|v| v.is_finite())
+        .filter(|v| v.is_finite() && *v > 0.0)
         .collect();
     sizes.sort_by(|a, b| a.total_cmp(b));
-    let cell = sizes.get(sizes.len() / 2).copied().unwrap_or(1.0).max(1.0);
+    let cell = (sizes.get(sizes.len() / 2).copied().unwrap_or(1.0) / 2.0).max(0.5);
     let overlap =
         |a: &[f64; 4], b: &[f64; 4]| a[0] < b[2] && b[0] < a[2] && a[1] < b[3] && b[1] < a[3];
-    let mut grid: HashMap<(i64, i64), Vec<usize>> = HashMap::new();
-    // Boxes spanning too many cells are checked against every later box.
+    let mut grid: HashMap<(i64, i64), Cell> = HashMap::new();
+    // Boxes spanning too many cells are checked against every other box.
     let mut wide: Vec<usize> = Vec::new();
     const MAX_CELLS: i64 = 256;
     for i in 0..n {
         let b = &boxes[i];
-        let c = |v: f64| (v / cell).floor().clamp(-1e15, 1e15) as i64;
-        let (cx0, cy0, cx1, cy1) = (c(b[0]), c(b[1]), c(b[2]), c(b[3]));
+        // The cells the box's interior reaches into.
+        let lo = |v: f64| (v / cell).floor().clamp(-1e15, 1e15) as i64;
+        let hi = |v: f64| (v / cell).ceil().clamp(-1e15, 1e15) as i64 - 1;
+        let (cx0, cy0) = (lo(b[0]), lo(b[1]));
+        let (cx1, cy1) = (hi(b[2]).max(cx0), hi(b[3]).max(cy0));
         let many = (cx1 - cx0 + 1).saturating_mul(cy1 - cy0 + 1) > MAX_CELLS;
         let mut lv = 0usize;
         for &j in &wide {
@@ -2932,10 +2956,11 @@ fn point_levels(boxes: &[[f64; 4]]) -> Vec<usize> {
         }
         for gx in cx0..=cx1 {
             for gy in cy0..=cy1 {
-                if let Some(v) = grid.get(&(gx, gy)) {
-                    for &j in v {
-                        if overlap(b, &boxes[j]) {
-                            lv = lv.max(level[j] + 1);
+                if let Some(c) = grid.get(&(gx, gy)) {
+                    lv = lv.max(c.floor);
+                    for &j in &c.part {
+                        if level[j] + 1 > lv && overlap(b, &boxes[j]) {
+                            lv = level[j] + 1;
                         }
                     }
                 }
@@ -2944,7 +2969,20 @@ fn point_levels(boxes: &[[f64; 4]]) -> Vec<usize> {
         level[i] = lv;
         for gx in cx0..=cx1 {
             for gy in cy0..=cy1 {
-                grid.entry((gx, gy)).or_default().push(i);
+                let c = grid.entry((gx, gy)).or_default();
+                let covers = b[0] <= gx as f64 * cell
+                    && b[2] >= (gx + 1) as f64 * cell
+                    && b[1] <= gy as f64 * cell
+                    && b[3] >= (gy + 1) as f64 * cell;
+                if covers {
+                    // Every box already here reaches into the cell, so it
+                    // overlaps this one and sits below it.
+                    c.floor = c.floor.max(lv + 1);
+                    let floor = c.floor;
+                    c.part.retain(|&j| level[j] + 1 > floor);
+                } else {
+                    c.part.push(i);
+                }
             }
         }
     }
@@ -3770,6 +3808,78 @@ mod tests {
         wide.push([-100.0, -100.0, 100.0, 100.0]);
         wide.push([50.0, 50.0, 51.0, 51.0]);
         assert_eq!(point_levels(&wide), vec![0, 0, 1, 2]);
+    }
+
+    #[test]
+    fn point_levels_match_the_pairwise_definition() {
+        // A deterministic scatter, dense in the middle, of mixed sizes.
+        let mut seed = 12345u64;
+        let mut rnd = || {
+            seed = seed
+                .wrapping_mul(6364136223846793005)
+                .wrapping_add(1442695040888963407);
+            (seed >> 11) as f64 / (1u64 << 53) as f64
+        };
+        let boxes: Vec<[f64; 4]> = (0..3000)
+            .map(|_| {
+                let (x, y) = (rnd() * rnd() * 300.0, rnd() * rnd() * 200.0);
+                let r = if rnd() < 0.05 {
+                    30.0
+                } else {
+                    1.0 + rnd() * 4.0
+                };
+                [x - r, y - r, x + r, y + r]
+            })
+            .collect();
+        let got = point_levels(&boxes);
+        let ov =
+            |a: &[f64; 4], b: &[f64; 4]| a[0] < b[2] && b[0] < a[2] && a[1] < b[3] && b[1] < a[3];
+        let mut want = vec![0usize; boxes.len()];
+        for i in 0..boxes.len() {
+            for j in 0..i {
+                if ov(&boxes[i], &boxes[j]) {
+                    want[i] = want[i].max(want[j] + 1);
+                }
+            }
+        }
+        assert_eq!(got, want);
+    }
+
+    #[test]
+    fn touching_merged_marks_still_fold_a_group_opacity() {
+        // Two squares sharing an edge merge into one shape; a group opacity
+        // over them folds into the shape instead of becoming a picture.
+        let mut b = blank(200, 100);
+        let red = ResolvedPaint::Solid(RED);
+        b.begin_group(None, 0.5, BlendKind::Normal, GroupEffect::default());
+        for x in [10.0, 20.0] {
+            b.set_element_key(None);
+            b.begin_marker(1, x + 5.0, 45.0, 5.0, Transform::identity(), &clip0());
+            let sq = rect_path(x, 40.0, 10.0, 10.0).unwrap();
+            b.fill_path(
+                &sq,
+                Transform::identity(),
+                &red,
+                FillRule::Winding,
+                &clip0(),
+            );
+        }
+        b.end_group();
+        let (xml, media, warns) = b.finish();
+        assert!(media.is_empty() && warns.is_empty(), "{warns:?}");
+        assert_eq!(xml.matches("<p:sp>").count(), 1, "{xml}");
+        assert!(xml.contains("<a:alpha val=\"50000\"/>"), "{xml}");
+    }
+
+    #[test]
+    fn a_square_cap_reaches_a_half_width_diagonal() {
+        let mut st = pen(10.0);
+        st.join = LineJoin::Round;
+        assert!((stroke_reach(&st, 1.0) - 5.0).abs() < 1e-9);
+        st.cap = LineCap::Square;
+        assert!((stroke_reach(&st, 1.0) - 5.0 * std::f64::consts::SQRT_2).abs() < 1e-9);
+        st.join = LineJoin::Mitre;
+        assert!((stroke_reach(&st, 1.0) - 50.0).abs() < 1e-9);
     }
 
     #[test]
