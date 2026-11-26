@@ -1986,6 +1986,19 @@ impl DmlBackend {
         if matches!(paint, ResolvedPaint::Hatch { .. }) {
             return;
         }
+        // Far geometry is cut to the page first, as on PNG (VR-44). Clamping
+        // each point to `MAX_PX` alone bent a long line's visible part.
+        let fitted;
+        let solid = matches!(paint, ResolvedPaint::Solid(_));
+        let (path, transform) =
+            match super::fit::vector_fill(path, transform, self.w, self.h, solid) {
+                super::fit::VecFill::Keep => (path, transform),
+                super::fit::VecFill::Draw(p, t) => {
+                    fitted = p;
+                    (&fitted, t)
+                }
+                super::fit::VecFill::Skip => return,
+            };
         let dp = match self.clip_area(DevPath::from_path(path, transform), rule, clip) {
             Clipped::Drop => return,
             // A cut is already free of overlaps (the overlay resolved them).
@@ -2013,6 +2026,33 @@ impl DmlBackend {
         if stroke.width <= 0.0 {
             return;
         }
+        // Far geometry is cut to the page first, as on PNG (VR-44).
+        use super::fit::VecStroke;
+        match super::fit::vector_stroke_style(path, transform, stroke, self.w, self.h) {
+            VecStroke::Keep => self.vec_stroke_unfitted(path, transform, color, stroke, clip),
+            VecStroke::Runs(runs) => {
+                for (run, phase) in runs {
+                    let style = StrokeStyle {
+                        phase,
+                        ..stroke.clone()
+                    };
+                    self.vec_stroke_unfitted(&run, transform, color, &style, clip);
+                }
+            }
+            VecStroke::Outline => self.stroke_outline(path, transform, color, stroke, clip),
+            VecStroke::Skip => {}
+        }
+    }
+
+    /// A stroke whose geometry is in range (see `vec_stroke`).
+    fn vec_stroke_unfitted(
+        &mut self,
+        path: &Path,
+        transform: Transform,
+        color: Rgba,
+        stroke: &StrokeStyle,
+        clip: &Clip,
+    ) {
         // DrawingML lines take no picture fill: a patterned stroke is drawn as
         // its outline, filled with the pattern.
         let patterned = matches!(stroke.paint, Some(ResolvedPaint::Pattern { .. }));
@@ -2062,6 +2102,10 @@ impl DmlBackend {
             || matches!(paint, ResolvedPaint::Hatch { .. })
             || matches!(stroke.paint, Some(ResolvedPaint::Pattern { .. }))
             || stroke.width <= 0.0
+            || !matches!(
+                super::fit::vector_stroke_style(path, transform, stroke, self.w, self.h),
+                super::fit::VecStroke::Keep
+            )
         {
             self.vec_fill(path, transform, paint, rule, clip);
             self.vec_stroke(path, transform, color, stroke, clip);
@@ -3029,7 +3073,8 @@ mod tests {
             FillRule::Winding,
             &clip0(),
         );
-        // from the page to 1e12: kept, clamped
+        // from the page to 1e12, with a pen 1e9 px wide: kept, cut to the
+        // page (VR-44); a pen that wide is drawn as its filled outline
         let mut pb = PathBuilder::new();
         pb.move_to(10.0, 10.0);
         pb.line_to(1e12, 50.0);
@@ -3046,8 +3091,11 @@ mod tests {
             .split('"')
             .filter_map(|t| t.parse::<i64>().ok())
             .collect();
-        assert!(nums.iter().all(|v| v.abs() <= 27_273_042_316_900), "{xml}");
-        assert!(xml.contains("<a:ln w=\"20116800\""), "{xml}");
+        assert!(nums.iter().all(|v| v.abs() <= 10_000_000), "{xml}");
+        assert!(
+            xml.contains("<a:solidFill><a:srgbClr val=\"FF0000\"/>"),
+            "{xml}"
+        );
     }
 
     #[test]

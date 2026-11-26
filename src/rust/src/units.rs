@@ -92,9 +92,124 @@ impl Unit {
     }
 }
 
+/// Device or local coordinates (px) below which `f32` still resolves 1/128 px,
+/// so geometry there is built and placed in `f32` as it always was. Beyond it,
+/// geometry is placed in `f64` before it is narrowed (VR-45): at 1e7 px an
+/// `f32` coordinate snaps to whole pixels, at 1e9 px to 64 px.
+pub const PRECISE_PX: f64 = 65536.0;
+
+/// An affine map in `f64`, laid out like tiny-skia's [`Transform`]
+/// (`x' = sx x + kx y + tx`, `y' = ky x + sy y + ty`). Viewport placement is
+/// composed in it so a large offset cancelled further down the tree is not
+/// rounded first (VR-45).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Affine {
+    pub sx: f64,
+    pub ky: f64,
+    pub kx: f64,
+    pub sy: f64,
+    pub tx: f64,
+    pub ty: f64,
+}
+
+impl Affine {
+    pub const IDENTITY: Affine = Affine {
+        sx: 1.0,
+        ky: 0.0,
+        kx: 0.0,
+        sy: 1.0,
+        tx: 0.0,
+        ty: 0.0,
+    };
+
+    pub fn from_transform(t: Transform) -> Affine {
+        Affine {
+            sx: t.sx as f64,
+            ky: t.ky as f64,
+            kx: t.kx as f64,
+            sy: t.sy as f64,
+            tx: t.tx as f64,
+            ty: t.ty as f64,
+        }
+    }
+
+    /// Narrowed to tiny-skia's `f32` transform.
+    pub fn to_transform(self) -> Transform {
+        Transform::from_row(
+            self.sx as f32,
+            self.ky as f32,
+            self.kx as f32,
+            self.sy as f32,
+            self.tx as f32,
+            self.ty as f32,
+        )
+    }
+
+    pub fn translate(x: f64, y: f64) -> Affine {
+        Affine {
+            tx: x,
+            ty: y,
+            ..Affine::IDENTITY
+        }
+    }
+
+    /// `self` after `o` (`o` applied first), as [`Transform::pre_concat`].
+    pub fn pre_concat(self, o: Affine) -> Affine {
+        Affine {
+            sx: self.sx * o.sx + self.kx * o.ky,
+            ky: self.ky * o.sx + self.sy * o.ky,
+            kx: self.sx * o.kx + self.kx * o.sy,
+            sy: self.ky * o.kx + self.sy * o.sy,
+            tx: self.sx * o.tx + self.kx * o.ty + self.tx,
+            ty: self.ky * o.tx + self.sy * o.ty + self.ty,
+        }
+    }
+
+    /// [`rotation_about`] in `f64`.
+    pub fn rotation_about(angle_deg: f64, cx: f64, cy: f64) -> Affine {
+        let v = (-angle_deg).to_radians();
+        let (s, c) = v.sin_cos();
+        let rot = Affine {
+            sx: c,
+            ky: s,
+            kx: -s,
+            sy: c,
+            tx: 0.0,
+            ty: 0.0,
+        };
+        Affine::translate(cx, cy)
+            .pre_concat(rot)
+            .pre_concat(Affine::translate(-cx, -cy))
+    }
+
+    pub fn is_finite(&self) -> bool {
+        [self.sx, self.ky, self.kx, self.sy, self.tx, self.ty]
+            .iter()
+            .all(|v| v.is_finite())
+    }
+
+    /// The point that maps to the device origin, `None` if not invertible.
+    pub fn preimage_of_origin(&self) -> Option<(f64, f64)> {
+        let det = self.sx * self.sy - self.kx * self.ky;
+        if det == 0.0 || !det.is_finite() {
+            return None;
+        }
+        let x = (-self.sy * self.tx + self.kx * self.ty) / det;
+        let y = (self.ky * self.tx - self.sx * self.ty) / det;
+        (x.is_finite() && y.is_finite()).then_some((x, y))
+    }
+}
+
 /// A resolved viewport: its local pixel size and native scales, plus the affine
 /// transform mapping local pixels to device pixels. Geometry is built in local
 /// pixels and drawn through `transform`.
+///
+/// A viewport placed far from the device origin (beyond [`PRECISE_PX`]) is
+/// *rebased* (VR-45): its local frame is shifted by `origin`, chosen so that
+/// `transform` carries no large offset, and every position the resolvers
+/// return is shifted with it. Geometry the viewport puts back on the page then
+/// has small local coordinates, which `f32` holds exactly enough. Every other
+/// viewport has `origin` `(0, 0)` and is unchanged.
 #[derive(Clone, Copy, Debug)]
 pub struct Vp {
     pub transform: Transform,
@@ -103,6 +218,10 @@ pub struct Vp {
     pub xscale: (f64, f64),
     pub yscale: (f64, f64),
     pub dpi: f64,
+    /// The local frame's shift (local px): positions are `unshifted - origin`.
+    pub origin: (f64, f64),
+    /// The unshifted local -> device map, in `f64`.
+    pub exact: Affine,
 }
 
 impl Vp {
@@ -140,7 +259,7 @@ impl Vp {
             UnitKind::Native => (value - self.xscale.0) / span(self.xscale) * self.w,
             _ => self.x_len_base(value, u.kind),
         };
-        base + u.off_px(self.dpi)
+        base + u.off_px(self.dpi) - self.origin.0
     }
 
     /// Y position in local pixels (flips R's bottom-left convention into the
@@ -151,7 +270,7 @@ impl Vp {
             UnitKind::Native => (value - self.yscale.0) / span(self.yscale) * self.h,
             _ => self.y_len_base(value, u.kind),
         };
-        self.h - (from_bottom + u.off_px(self.dpi))
+        self.h - (from_bottom + u.off_px(self.dpi)) - self.origin.1
     }
 
     /// Horizontal length in local pixels.
@@ -229,6 +348,8 @@ mod tests {
             xscale,
             yscale,
             dpi: 96.0,
+            origin: (0.0, 0.0),
+            exact: Affine::IDENTITY,
         }
     }
 
@@ -248,5 +369,52 @@ mod tests {
         // non-native units are unchanged
         let mm = Unit::plain(UnitKind::Mm);
         assert_eq!(rev.x_extent(10.0, mm), rev.x_len(10.0, mm));
+    }
+
+    #[test]
+    fn affine_matches_tiny_skia() {
+        let a = Transform::from_translate(12.5, -3.25)
+            .pre_concat(rotation_about(30.0, 40.0, 20.0))
+            .pre_concat(Transform::from_translate(7.0, 9.0));
+        let b = Affine::translate(12.5, -3.25)
+            .pre_concat(Affine::rotation_about(30.0, 40.0, 20.0))
+            .pre_concat(Affine::translate(7.0, 9.0))
+            .to_transform();
+        for (x, y) in [
+            (a.sx, b.sx),
+            (a.ky, b.ky),
+            (a.kx, b.kx),
+            (a.sy, b.sy),
+            (a.tx, b.tx),
+            (a.ty, b.ty),
+        ] {
+            assert!((x - y).abs() < 1e-4, "{x} vs {y}");
+        }
+    }
+
+    #[test]
+    fn the_preimage_of_the_origin_maps_to_it() {
+        let a = Affine::translate(-2e9, 3e8).pre_concat(Affine::rotation_about(20.0, 5.0, 5.0));
+        let (x, y) = a.preimage_of_origin().unwrap();
+        let back = a.pre_concat(Affine::translate(x, y));
+        assert!(back.tx.abs() < 1e-5 && back.ty.abs() < 1e-5);
+        assert!(Affine {
+            sx: 0.0,
+            sy: 0.0,
+            ..Affine::IDENTITY
+        }
+        .preimage_of_origin()
+        .is_none());
+    }
+
+    #[test]
+    fn a_rebased_frame_shifts_positions_only() {
+        let mut v = vp((0.0, 10.0), (0.0, 5.0));
+        let pt = Unit::plain(UnitKind::Pt);
+        let (x, y) = (v.x_pos(3.0, pt), v.y_pos(3.0, pt));
+        v.origin = (1e7, -2e7);
+        assert_eq!(v.x_pos(3.0, pt), x - 1e7);
+        assert_eq!(v.y_pos(3.0, pt), y + 2e7);
+        assert_eq!(v.x_len(3.0, pt), 4.0);
     }
 }

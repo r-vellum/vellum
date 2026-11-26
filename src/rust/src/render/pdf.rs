@@ -1,5 +1,6 @@
 //! The PDF backend, built on krilla.
 
+use super::fit::{self, VecFill, VecStroke};
 use super::*;
 use krilla::blend::BlendMode as KBlend;
 use krilla::color::rgb;
@@ -73,14 +74,17 @@ pub struct PdfBackend<'a, 'b> {
     /// applies on top of every primitive transform; `drawable()` checks boxes
     /// under it too, since at a low dpi it enlarges them.
     root: Transform,
+    /// The page size in device px, the box far geometry is cut to (VR-44).
+    page: (u32, u32),
 }
 
 impl<'a, 'b> PdfBackend<'a, 'b> {
     /// `root_scale` is the uniform px -> pt scale the caller pushed as the
-    /// page's root transform.
-    pub fn new(surface: &'a mut Surface<'b>, root_scale: f32) -> Self {
+    /// page's root transform; the page is `w` x `h` device px.
+    pub fn new(surface: &'a mut Surface<'b>, root_scale: f32, w: u32, h: u32) -> Self {
         PdfBackend {
             root: Transform::from_scale(root_scale, root_scale),
+            page: (w, h),
             surface,
             fonts: HashMap::new(),
             group_pushes: Vec::new(),
@@ -286,7 +290,21 @@ impl<'a, 'b> PdfBackend<'a, 'b> {
         let mut n = 0;
         for shape in clip.shapes {
             // The device path, and whether its box has any area.
+            let (pw, ph) = self.page;
             let (kpath, rule, area) = match shape {
+                // A region reaching far beyond the page is cut to it first, as
+                // on PNG: poppler drops a clip path at 1e12 px (VR-44).
+                ClipShape::Rect { w, h, transform }
+                    if !fit::rect_corners_near(&rect_corners(*w, *h, *transform)) =>
+                {
+                    let dev = rect_path(0.0, 0.0, *w, *h)
+                        .and_then(|p| fit::vector_clip(&p, *transform, pw, ph))
+                        .flatten();
+                    let area = dev
+                        .as_ref()
+                        .is_some_and(|p| p.bounds().width() > 0.0 && p.bounds().height() > 0.0);
+                    (dev.and_then(|p| to_kpath(&p)), KFillRule::NonZero, area)
+                }
                 ClipShape::Rect { w, h, transform } => {
                     let c = rect_corners(*w, *h, *transform);
                     let span = |f: fn(&(f64, f64)) -> f64| {
@@ -305,7 +323,10 @@ impl<'a, 'b> PdfBackend<'a, 'b> {
                     evenodd,
                     transform,
                 } => {
-                    let dev = path.clone().transform(*transform);
+                    let dev = match fit::vector_clip(path, *transform, pw, ph) {
+                        Some(fitted) => fitted,
+                        None => path.clone().transform(*transform),
+                    };
                     let area = dev
                         .as_ref()
                         .is_some_and(|p| p.bounds().width() > 0.0 && p.bounds().height() > 0.0);
@@ -339,6 +360,70 @@ impl<'a, 'b> PdfBackend<'a, 'b> {
         for _ in 0..n {
             self.surface.pop();
         }
+    }
+
+    /// A stroke whose geometry is in range (see `stroke_path`).
+    fn stroke_unfitted(
+        &mut self,
+        path: &Path,
+        transform: Transform,
+        color: Rgba,
+        stroke: &StrokeStyle,
+        clip: &Clip,
+    ) {
+        // Written so a NaN width (an R `NA`) is skipped too: `NaN <= 0.0` is false.
+        if !(stroke.width > 0.0 && stroke.width.is_finite())
+            || !drawable(path, transform, self.root)
+        {
+            return;
+        }
+        let kp = match to_kpath(path) {
+            Some(p) => p,
+            None => return,
+        };
+        // A gradient/pattern stroke uses the same krilla paint a fill would.
+        let (kpaint, kopacity) = match &stroke.paint {
+            Some(p) => match self.pdf_paint(p, PaintRole::Stroke) {
+                Some(kp) => kp,
+                None => return,
+            },
+            None => (
+                rgb::Color::new(color.r, color.g, color.b).into(),
+                norm(color.a),
+            ),
+        };
+        let Some(n) = self.push_state(transform, clip) else {
+            return;
+        };
+        self.surface.set_fill(None);
+        self.surface.set_stroke(Some(KStroke {
+            paint: kpaint,
+            width: stroke.width,
+            opacity: kopacity,
+            miter_limit: if stroke.miter.is_finite() {
+                stroke.miter
+            } else {
+                KStroke::default().miter_limit
+            },
+            line_cap: krilla_cap(stroke.cap),
+            line_join: krilla_join(stroke.join),
+            // A dash with a missing or negative entry draws solid, as tiny-skia
+            // (the raster backend) rejects such a dash.
+            dash: if stroke.dash.is_empty()
+                || !stroke.dash.iter().all(|d| d.is_finite() && *d >= 0.0)
+                || !stroke.phase.is_finite()
+            {
+                None
+            } else {
+                Some(KStrokeDash {
+                    array: stroke.dash.clone(),
+                    offset: stroke.phase,
+                })
+            },
+            ..KStroke::default()
+        }));
+        self.surface.draw_path(&kp);
+        self.pop_state(n);
     }
 
     fn font_for(&mut self, path: &str, index: u32) -> Option<Font> {
@@ -463,6 +548,18 @@ impl RenderBackend for PdfBackend<'_, '_> {
         rule: FillRule,
         clip: &Clip,
     ) {
+        // Far geometry is cut to the page first, as on PNG (VR-44).
+        let fitted;
+        let (w, h) = self.page;
+        let solid = matches!(paint, ResolvedPaint::Solid(_));
+        let (path, transform) = match fit::vector_fill(path, transform, w, h, solid) {
+            VecFill::Keep => (path, transform),
+            VecFill::Draw(p, t) => {
+                fitted = p;
+                (&fitted, t)
+            }
+            VecFill::Skip => return,
+        };
         if !drawable(path, transform, self.root) {
             return;
         }
@@ -502,58 +599,30 @@ impl RenderBackend for PdfBackend<'_, '_> {
         clip: &Clip,
     ) {
         // Written so a NaN width (an R `NA`) is skipped too: `NaN <= 0.0` is false.
-        if !(stroke.width > 0.0 && stroke.width.is_finite())
-            || !drawable(path, transform, self.root)
-        {
+        if !(stroke.width > 0.0 && stroke.width.is_finite()) {
             return;
         }
-        let kp = match to_kpath(path) {
-            Some(p) => p,
-            None => return,
-        };
-        // A gradient/pattern stroke uses the same krilla paint a fill would.
-        let (kpaint, kopacity) = match &stroke.paint {
-            Some(p) => match self.pdf_paint(p, PaintRole::Stroke) {
-                Some(kp) => kp,
-                None => return,
-            },
-            None => (
-                rgb::Color::new(color.r, color.g, color.b).into(),
-                norm(color.a),
-            ),
-        };
-        let Some(n) = self.push_state(transform, clip) else {
-            return;
-        };
-        self.surface.set_fill(None);
-        self.surface.set_stroke(Some(KStroke {
-            paint: kpaint,
-            width: stroke.width,
-            opacity: kopacity,
-            miter_limit: if stroke.miter.is_finite() {
-                stroke.miter
-            } else {
-                KStroke::default().miter_limit
-            },
-            line_cap: krilla_cap(stroke.cap),
-            line_join: krilla_join(stroke.join),
-            // A dash with a missing or negative entry draws solid, as tiny-skia
-            // (the raster backend) rejects such a dash.
-            dash: if stroke.dash.is_empty()
-                || !stroke.dash.iter().all(|d| d.is_finite() && *d >= 0.0)
-                || !stroke.phase.is_finite()
-            {
-                None
-            } else {
-                Some(KStrokeDash {
-                    array: stroke.dash.clone(),
-                    offset: stroke.phase,
-                })
-            },
-            ..KStroke::default()
-        }));
-        self.surface.draw_path(&kp);
-        self.pop_state(n);
+        // Far geometry is cut to the page first, as on PNG (VR-44).
+        let (w, h) = self.page;
+        match fit::vector_stroke_style(path, transform, stroke, w, h) {
+            VecStroke::Keep => self.stroke_unfitted(path, transform, color, stroke, clip),
+            VecStroke::Runs(runs) => {
+                for (run, phase) in runs {
+                    let style = StrokeStyle {
+                        phase,
+                        ..stroke.clone()
+                    };
+                    self.stroke_unfitted(&run, transform, color, &style, clip);
+                }
+            }
+            VecStroke::Outline => {
+                if let Some(outline) = fit::stroke_outline_path(path, transform, stroke) {
+                    let paint = stroke.paint.clone().unwrap_or(ResolvedPaint::Solid(color));
+                    self.fill_path(&outline, transform, &paint, FillRule::Winding, clip);
+                }
+            }
+            VecStroke::Skip => {}
+        }
     }
 
     fn draw_text(&mut self, run: &TextRun, transform: Transform, clip: &Clip) {
@@ -1020,7 +1089,7 @@ mod tests {
         let mut surface = page.surface();
         surface.push_transform(&KTransform::from_scale(0.75, 0.75));
         let warnings = {
-            let mut b = PdfBackend::new(&mut surface, 0.75);
+            let mut b = PdfBackend::new(&mut surface, 0.75, 100, 100);
             draw(&mut b);
             b.take_warnings()
         };
@@ -1428,7 +1497,7 @@ mod tests {
             let mut surface = page.surface();
             surface.push_transform(&KTransform::from_scale(2.0, 2.0));
             {
-                let _ = PdfBackend::new(&mut surface, 2.0);
+                let _ = PdfBackend::new(&mut surface, 2.0, 37, 37);
             }
             surface.pop();
             surface.finish();
@@ -1441,7 +1510,7 @@ mod tests {
         let mut surface = page.surface();
         surface.push_transform(&KTransform::from_scale(2.0, 2.0));
         {
-            let mut b = PdfBackend::new(&mut surface, 2.0);
+            let mut b = PdfBackend::new(&mut surface, 2.0, 37, 37);
             let huge = tiny_skia::PathBuilder::from_rect(
                 tiny_skia::Rect::from_xywh(2.0e38, 0.0, 1.0e38, 10.0).unwrap(),
             );

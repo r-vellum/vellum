@@ -278,7 +278,7 @@ pub(super) fn draw_circle<B: RenderBackend>(
         paint_sketch(b, &s, gp, t, clip, vp, o.fill_weight);
     } else {
         let mut pb = PathBuilder::new();
-        pb.push_circle(cx as f32, cy as f32, rr as f32);
+        crate::render::push_circle_precise(&mut pb, cx, cy, rr);
         if let Some(path) = pb.finish() {
             fill_then_stroke(b, &path, gp, t, clip, vp, FillRule::Winding);
         }
@@ -371,6 +371,14 @@ pub(super) fn draw_rects<B: RenderBackend>(
                     if pw <= 0.0 || ph <= 0.0 {
                         continue;
                     }
+                    // Far from the origin the f32 placement would move the
+                    // rect's edges (VR-45): build it in place instead.
+                    if far_box(cx, cy, pw, ph) {
+                        if let Some(path) = rect_path(cx - pw / 2.0, cy - ph / 2.0, pw, ph) {
+                            fill_or_hatch(b, &path, t, rp, FillRule::Winding, clip);
+                        }
+                        continue;
+                    }
                     let tr = t.pre_concat(Transform::from_row(
                         pw as f32, 0.0, 0.0, ph as f32, cx as f32, cy as f32,
                     ));
@@ -388,6 +396,12 @@ pub(super) fn draw_rects<B: RenderBackend>(
                     let pw = vp.x_extent(w[i], wu[i]);
                     let ph = vp.y_extent(h[i], hu[i]);
                     if pw <= 0.0 || ph <= 0.0 {
+                        continue;
+                    }
+                    if far_box(cx, cy, pw, ph) {
+                        if let Some(path) = rect_path(cx - pw / 2.0, cy - ph / 2.0, pw, ph) {
+                            b.pick_only_path(&path, t, FillRule::Winding, clip);
+                        }
                         continue;
                     }
                     let tr = t.pre_concat(Transform::from_row(
@@ -524,7 +538,7 @@ pub(super) fn draw_circles<B: RenderBackend>(
             let cy = vp.y_pos(y[i], yu[i]);
             let rr = vp.r_len(r[i], ru[i]);
             let mut pb = PathBuilder::new();
-            pb.push_circle(cx as f32, cy as f32, rr as f32);
+            crate::render::push_circle_precise(&mut pb, cx, cy, rr);
             if let Some(path) = pb.finish() {
                 fill_paint_then_stroke(
                     b,
@@ -1568,4 +1582,12 @@ pub(super) fn draw_path<B: RenderBackend>(
         };
         fill_then_stroke(b, &path, gp, t, clip, vp, rule);
     }
+}
+
+/// Does a box centred at `(cx, cy)`, `pw` x `ph` local px, reach past
+/// [`crate::units::PRECISE_PX`]? Placing a unit shape there with an `f32`
+/// transform would round its edges, so it is built in place (VR-45).
+fn far_box(cx: f64, cy: f64, pw: f64, ph: f64) -> bool {
+    let lim = crate::units::PRECISE_PX;
+    cx.abs() + pw.abs() / 2.0 > lim || cy.abs() + ph.abs() / 2.0 > lim
 }
