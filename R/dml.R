@@ -59,13 +59,25 @@
 #' labels, halos and text set on a path are always outlines, as in SVG.
 #'
 #' @section What cannot be expressed:
-#' DrawingML has no clipping, blend modes, masks or group opacity. Clipped
-#' geometry is cut in advance: fills to the visible area, strokes along their
-#' centreline (a round or square cap at a cut end reaches half a line width past
-#' the edge), pictures cropped. Native text cannot be cut: a label crossing a
-#' clip edge is drawn whole, with a warning (outlined text is cut exactly).
-#' Blend modes, masks and group opacity are not yet applied, and a warning says
-#' so. Rasters become pictures.
+#' DrawingML has no clipping, blend modes, masks or group opacity.
+#'
+#' * Clipped geometry is cut in advance: fills to the visible area, strokes
+#'   along their centreline (a round or square cap at a cut end reaches half a
+#'   line width past the edge), pictures cropped. Native text cannot be cut: a
+#'   label crossing a clip edge is drawn whole, with a warning (outlined text is
+#'   cut exactly).
+#' * Group opacity over shapes that do not overlap is folded into their
+#'   colours, which is exactly what the group composites to.
+#' * Blend modes, masks, blur and shadow effects, and group opacity over
+#'   overlapping shapes are drawn as a picture of the region they cover, with
+#'   a warning: the slide looks right, but that part is not editable.
+#' * Linear and radial gradients are native gradient fills, patterns a tiled
+#'   picture fill. A radial gradient's focal point moves to its centre (with a
+#'   warning). Rasters become pictures.
+#'
+#' LibreOffice is not a reliable preview for these: it drops gradients with
+#' translucent stops and the transparency of tiled pattern pictures, and places
+#' an off-centre radial gradient differently.
 #'
 #' For charts whose *data* stays editable in PowerPoint, see the mschart
 #' package; this writes the drawing, not the data.

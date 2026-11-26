@@ -448,6 +448,20 @@ struct Frame {
     body: String,
     bbox: Option<Bounds>,
     name: String,
+    /// The bounds of each element written into this frame, so a group whose
+    /// opacity could be folded into its children can check they do not overlap.
+    items: Vec<Bounds>,
+}
+
+impl Frame {
+    fn new(name: &str) -> Frame {
+        Frame {
+            body: String::new(),
+            bbox: None,
+            name: name.to_string(),
+            items: Vec::new(),
+        }
+    }
 }
 
 /// What a `begin_group` turned into, so `end_group` can close it.
@@ -455,6 +469,30 @@ enum GroupKind {
     /// A plain compositing group means nothing in DrawingML: its children are
     /// written straight into the enclosing frame.
     Plain,
+    /// The group that opened the active capture (see [`Capture`]).
+    Capture,
+}
+
+/// A group DrawingML cannot express, being drawn through the raster backend.
+///
+/// An *exclusive* capture (a mask, a blend mode, a blur or shadow) takes every
+/// draw until the group closes and becomes a picture of the region it covers.
+/// A *shadow* capture is for group opacity alone: the shapes are written as
+/// usual into their own frame while the capture draws them too, and when the
+/// group closes, opacity over non-overlapping shapes is folded into their
+/// colours (exactly what the group would composite to) and the capture is
+/// thrown away; only when shapes overlap does the picture replace them.
+struct Capture {
+    rb: RasterBackend,
+    /// Open groups inside the capture, the opening one included.
+    depth: usize,
+    exclusive: bool,
+    /// For a blend mode: colour comes from the mirror, coverage from `rb`.
+    blend: bool,
+    alpha: f32,
+    /// A shadow capture that met something folding cannot express.
+    failed: bool,
+    reason: &'static str,
 }
 
 /// The DrawingML backend. Coordinates are written in EMU, offset by
@@ -479,6 +517,10 @@ pub struct DmlBackend {
     /// Each viewport's clip region, resolved once (keyed like the SVG
     /// backend's `<clipPath>` cache, by the clip's viewport id).
     regions: HashMap<usize, Rc<Region>>,
+    capture: Option<Capture>,
+    /// A full-page raster of everything drawn so far, kept only when the scene
+    /// has a blend mode: a blended group's pixels depend on what lies beneath.
+    mirror: Option<RasterBackend>,
 }
 
 impl DmlBackend {
@@ -506,11 +548,7 @@ impl DmlBackend {
             left,
             top,
             outline_text,
-            frames: vec![Frame {
-                body: String::new(),
-                bbox: None,
-                name: "vellum".to_string(),
-            }],
+            frames: vec![Frame::new("vellum")],
             groups: Vec::new(),
             next_id: 2,
             media: Vec::new(),
@@ -518,6 +556,8 @@ impl DmlBackend {
             warnings: Vec::new(),
             descr: String::new(),
             regions: HashMap::new(),
+            capture: None,
+            mirror: None,
         };
         if bg.a > 0 {
             if let Some(p) = rect_path(0.0, 0.0, w as f64, h as f64) {
@@ -576,6 +616,7 @@ impl DmlBackend {
         let f = self.out();
         f.body.push_str(xml);
         f.bbox = Some(union(f.bbox, b));
+        f.items.push(b);
     }
 
     /// The `a:custGeom` for `paths` (one `a:path` each) in the box at
@@ -695,27 +736,246 @@ impl DmlBackend {
         true
     }
 
-    /// The fill XML for a paint (empty for no fill).
-    fn fill_xml(&mut self, paint: &ResolvedPaint) -> String {
+    /// The fill XML for a paint (empty for no fill). Gradient and pattern
+    /// geometry is in local px placed by `t`; DrawingML lays them out relative
+    /// to the shape's box, `bb` (device px).
+    fn fill_xml(&mut self, paint: &ResolvedPaint, t: Transform, bb: Option<[f64; 4]>) -> String {
+        let bb = bb.unwrap_or([0.0, 0.0, 1.0, 1.0]);
         match paint {
             ResolvedPaint::Solid(c) => solid_fill(*c, 1.0),
             ResolvedPaint::Hatch { .. } => String::new(),
-            ResolvedPaint::Linear { stops, .. } | ResolvedPaint::Radial { stops, .. } => {
-                self.warn("gradient fills are drawn in their middle colour");
-                match stops.get(stops.len() / 2) {
-                    Some(s) => solid_fill(s.color, 1.0),
-                    None => String::new(),
+            ResolvedPaint::Linear {
+                x1,
+                y1,
+                x2,
+                y2,
+                stops,
+                extend,
+            } => {
+                let p1 = map_pt(t, tiny_skia::Point::from_xy(*x1 as f32, *y1 as f32));
+                let p2 = map_pt(t, tiny_skia::Point::from_xy(*x2 as f32, *y2 as f32));
+                let (dx, dy) = (p2.0 - p1.0, p2.1 - p1.1);
+                let d = dx.hypot(dy);
+                if !(d > 0.0) || stops.is_empty() {
+                    return solid_fill(stops.last().map(|s| s.color).unwrap_or(Rgba::BLACK), 1.0);
                 }
+                let (ux, uy) = (dx / d, dy / d);
+                // DrawingML's linear gradient runs along `ang` across the box:
+                // 0 where the line through the box's trailing corner crosses the
+                // axis, 1 at the leading corner (the box projected on the axis).
+                let (w, h) = (bb[2] - bb[0], bb[3] - bb[1]);
+                let len = (w * ux).abs() + (h * uy).abs();
+                let (cx, cy) = ((bb[0] + bb[2]) / 2.0, (bb[1] + bb[3]) / 2.0);
+                let c = (cx - p1.0) * ux + (cy - p1.1) * uy;
+                let (t0, t1) = ((c - len / 2.0) / d, (c + len / 2.0) / d);
+                let gs = self.gradient_stops(stops, *extend, t0, t1);
+                let ang = (uy.atan2(ux).to_degrees().rem_euclid(360.0) * 60_000.0).round() as i64
+                    % 21_600_000;
+                format!("<a:gradFill flip=\"none\" rotWithShape=\"1\">{gs}<a:lin ang=\"{ang}\" scaled=\"0\"/></a:gradFill>")
             }
-            ResolvedPaint::Pattern { .. } => {
-                self.warn("pattern fills are not drawn");
-                String::new()
+            ResolvedPaint::Radial {
+                cx,
+                cy,
+                r,
+                fx,
+                fy,
+                fr,
+                stops,
+                extend,
+            } => {
+                if stops.is_empty() {
+                    return String::new();
+                }
+                if fx != cx || fy != cy {
+                    self.warn("a radial gradient's focal point is moved to its centre");
+                }
+                let (ccx, ccy) = map_pt(t, tiny_skia::Point::from_xy(*cx as f32, *cy as f32));
+                let det = (t.sx as f64 * t.sy as f64 - t.kx as f64 * t.ky as f64).abs();
+                let sc = det.sqrt();
+                let (rr, ff) = (r * sc, fr * sc);
+                // A circle path gradient runs from the centre (0) to the
+                // corner of the box farthest from it (1).
+                let far = [
+                    (bb[0], bb[1]),
+                    (bb[2], bb[1]),
+                    (bb[0], bb[3]),
+                    (bb[2], bb[3]),
+                ]
+                .iter()
+                .map(|(x, y)| (x - ccx).hypot(y - ccy))
+                .fold(0.0, f64::max);
+                let span = rr - ff;
+                if !(span > 0.0) || !(far > 0.0) {
+                    return solid_fill(stops.last().unwrap().color, 1.0);
+                }
+                let (t0, t1) = (-ff / span, (far - ff) / span);
+                let gs = self.gradient_stops(stops, *extend, t0, t1);
+                let (w, h) = ((bb[2] - bb[0]).max(1e-9), (bb[3] - bb[1]).max(1e-9));
+                let pc = |v: f64| (v * 100_000.0).round() as i64;
+                format!(
+                    "<a:gradFill flip=\"none\" rotWithShape=\"1\">{gs}<a:path path=\"circle\">\
+                     <a:fillToRect l=\"{}\" t=\"{}\" r=\"{}\" b=\"{}\"/></a:path></a:gradFill>",
+                    pc((ccx - bb[0]) / w),
+                    pc((ccy - bb[1]) / h),
+                    pc((bb[2] - ccx) / w),
+                    pc((bb[3] - ccy) / h),
+                )
+            }
+            ResolvedPaint::Pattern {
+                tile,
+                tw,
+                th,
+                x,
+                y,
+                w,
+                h,
+                extend,
+                opacity,
+            } => {
+                // A tiled picture fill. The tile's PNG declares the resolution
+                // that makes one tile exactly one cell, so it tiles at 100%.
+                let (sx, sy) = (
+                    (t.sx as f64).hypot(t.ky as f64),
+                    (t.kx as f64).hypot(t.sy as f64),
+                );
+                let (cw, ch) = (w * sx, h * sy);
+                if !(cw > 0.0 && ch > 0.0) || *tw == 0 || *th == 0 {
+                    return String::new();
+                }
+                let o = map_pt(
+                    t,
+                    tiny_skia::Point::from_xy((x - w / 2.0) as f32, (y - h / 2.0) as f32),
+                );
+                let dpi = EMU_PER_INCH / self.k;
+                let ppm = |px: u32, dev: f64| {
+                    ((px as f64) / (dev / dpi * 0.0254)).round().max(1.0) as u32
+                };
+                let Some(png) = png_with_density(tile, *tw, *th, ppm(*tw, cw), ppm(*th, ch)) else {
+                    return String::new();
+                };
+                let token = self.media_ref(png);
+                let (cwe, che) = (cw * self.k, ch * self.k);
+                let tx = ((o.0 - bb[0]) * self.k).rem_euclid(cwe).round() as i64;
+                let ty = ((o.1 - bb[1]) * self.k).rem_euclid(che).round() as i64;
+                let flip = if matches!(extend, Extend::Reflect) {
+                    "xy"
+                } else {
+                    "none"
+                };
+                let alpha = if *opacity < 1.0 {
+                    format!(
+                        "<a:alphaModFix amt=\"{}\"/>",
+                        (opacity.max(0.0) as f64 * 100_000.0).round() as i64
+                    )
+                } else {
+                    String::new()
+                };
+                format!(
+                    "<a:blipFill dpi=\"0\" rotWithShape=\"1\"><a:blip r:embed=\"{token}\">{alpha}</a:blip><a:srcRect/>\
+                     <a:tile tx=\"{tx}\" ty=\"{ty}\" sx=\"100000\" sy=\"100000\" flip=\"{flip}\" algn=\"tl\"/></a:blipFill>"
+                )
             }
         }
     }
 
+    /// `a:gsLst` for the part `[t0, t1]` of a gradient's parameter (`t` = 0 at
+    /// the first stop's position, 1 at the last's), stretched to DrawingML's
+    /// 0..100%: the colour at every stop crossing (both sides of a hard stop),
+    /// at both ends, minus stops a straight blend between their neighbours
+    /// already reproduces.
+    fn gradient_stops(&mut self, stops: &[Stop], extend: Extend, t0: f64, t1: f64) -> String {
+        let span = t1 - t0;
+        let mut pts: Vec<(f64, Rgba)> = Vec::new();
+        if !(span > 0.0) || !span.is_finite() {
+            let c = grad_color(stops, extend, t0);
+            pts.push((0.0, c));
+            pts.push((1.0, c));
+        } else {
+            let mut ts: Vec<f64> = vec![t0, t1];
+            let periods = span.ceil() + 2.0;
+            if matches!(extend, Extend::Pad) || periods <= 64.0 {
+                let (k0, k1) = match extend {
+                    Extend::Pad => (0i64, 0i64),
+                    _ => (t0.floor() as i64 - 1, t1.ceil() as i64 + 1),
+                };
+                for k in k0..=k1 {
+                    for st in stops {
+                        let o = st.offset as f64;
+                        ts.push(k as f64 + o);
+                        if matches!(extend, Extend::Reflect) {
+                            ts.push(k as f64 + 1.0 - o);
+                        }
+                    }
+                }
+            } else {
+                self.warn("a gradient repeating many times is approximated");
+                for i in 0..=256 {
+                    ts.push(t0 + span * i as f64 / 256.0);
+                }
+            }
+            ts.retain(|t| *t >= t0 && *t <= t1);
+            ts.sort_by(f64::total_cmp);
+            ts.dedup();
+            let eps = 1e-9 * span.max(1.0);
+            for &tt in &ts {
+                let a = grad_color(stops, extend, (tt - eps).max(t0));
+                let b = grad_color(stops, extend, (tt + eps).min(t1));
+                let pos = (tt - t0) / span;
+                pts.push((pos, a));
+                if a != b {
+                    pts.push((pos, b));
+                }
+            }
+        }
+        // Drop stops that interpolation between their neighbours reproduces.
+        let mut keep: Vec<(f64, Rgba)> = Vec::with_capacity(pts.len());
+        for (i, p) in pts.iter().enumerate() {
+            if i == 0 || i == pts.len() - 1 {
+                keep.push(*p);
+                continue;
+            }
+            let prev = *keep.last().unwrap();
+            let next = pts[i + 1];
+            let span = next.0 - prev.0;
+            let f = if span > 0.0 {
+                (p.0 - prev.0) / span
+            } else {
+                0.0
+            };
+            let lerp = |a: u8, b: u8| a as f64 + (b as f64 - a as f64) * f;
+            let near = |a: u8, b: u8, c: u8| (lerp(a, b) - c as f64).abs() <= 1.0;
+            let redundant = span > 0.0
+                && p.0 > prev.0
+                && p.0 < next.0
+                && near(prev.1.r, next.1.r, p.1.r)
+                && near(prev.1.g, next.1.g, p.1.g)
+                && near(prev.1.b, next.1.b, p.1.b)
+                && near(prev.1.a, next.1.a, p.1.a);
+            if !redundant {
+                keep.push(*p);
+            }
+        }
+        let mut out = String::from("<a:gsLst>");
+        for (pos, c) in keep {
+            out.push_str(&format!(
+                "<a:gs pos=\"{}\">{}</a:gs>",
+                (pos.clamp(0.0, 1.0) * 100_000.0).round() as i64,
+                srgb(c, 1.0)
+            ));
+        }
+        out.push_str("</a:gsLst>");
+        out
+    }
+
     /// The `a:ln` for a stroke whose lengths scale by `scale` into device px.
-    fn ln_xml(&mut self, color: Rgba, st: &StrokeStyle, scale: f64) -> String {
+    fn ln_xml(
+        &mut self,
+        color: Rgba,
+        st: &StrokeStyle,
+        scale: f64,
+        t: Transform,
+        bb: Option<[f64; 4]>,
+    ) -> String {
         // DrawingML caps a line at 20116800 EMU (1584 pt).
         let w = self.len(st.width as f64 * scale).clamp(1, 20_116_800);
         let cap = match st.cap {
@@ -726,7 +986,7 @@ impl DmlBackend {
         let fill = match &st.paint {
             None => solid_fill(color, 1.0),
             Some(p) => {
-                let f = self.fill_xml(p);
+                let f = self.fill_xml(p, t, bb);
                 if f.is_empty() {
                     "<a:noFill/>".to_string()
                 } else {
@@ -940,7 +1200,7 @@ impl DmlBackend {
             Some(p) => p.clone(),
             None => ResolvedPaint::Solid(color),
         };
-        self.fill_path(&outline, t, &paint, FillRule::Winding, clip);
+        self.vec_fill(&outline, t, &paint, FillRule::Winding, clip);
     }
 
     /// Text that has to be drawn as glyph outlines: one shape per colour (each
@@ -1017,11 +1277,8 @@ impl DmlBackend {
         if all.is_empty() {
             return;
         }
-        self.frames.push(Frame {
-            body: String::new(),
-            bbox: None,
-            name: format!("Text: {}", run.label),
-        });
+        self.frames
+            .push(Frame::new(&format!("Text: {}", run.label)));
         if let Some((hcol, hw)) = run.halo {
             if hcol.a > 0 {
                 let scale = uniform_scale(base).unwrap_or(1.0);
@@ -1035,7 +1292,7 @@ impl DmlBackend {
                     paint: None,
                     phase: 0.0,
                 };
-                let ln = self.ln_xml(hcol, &st, scale);
+                let ln = self.ln_xml(hcol, &st, scale, base, None);
                 // The halo is an outline of whole glyphs; where the clip cuts
                 // the glyphs, outline the cut shapes instead.
                 let paths = if self.coverage(bounds_of(&halo_paths), clip) == Coverage::Inside {
@@ -1256,6 +1513,12 @@ impl DmlBackend {
             body = root.body,
         );
         (xml, self.media, self.warnings)
+    }
+
+    /// Keep a raster mirror of the page (call before drawing, with the page
+    /// background), so blended groups can be drawn over what lies beneath.
+    pub fn enable_mirror(&mut self, bg: Rgba) {
+        self.mirror = Some(RasterBackend::new(self.w, self.h, bg));
     }
 
     /// Name the root group after the scene's title and give it the scene's
@@ -1561,6 +1824,75 @@ impl Region {
     }
 }
 
+/// A gradient's colour at parameter `t`, with `extend` applied outside 0..1,
+/// interpolated in straight RGBA between the stops around it.
+fn grad_color(stops: &[Stop], extend: Extend, t: f64) -> Rgba {
+    let Some(first) = stops.first() else {
+        return Rgba::BLACK;
+    };
+    let t = match extend {
+        Extend::Pad => t.clamp(0.0, 1.0),
+        Extend::Repeat => t - t.floor(),
+        Extend::Reflect => {
+            let m = t.rem_euclid(2.0);
+            if m > 1.0 {
+                2.0 - m
+            } else {
+                m
+            }
+        }
+    };
+    if t <= first.offset as f64 {
+        return first.color;
+    }
+    for w in stops.windows(2) {
+        let (a, b) = (&w[0], &w[1]);
+        if t <= b.offset as f64 {
+            let span = (b.offset - a.offset) as f64;
+            let f = if span > 0.0 {
+                (t - a.offset as f64) / span
+            } else {
+                1.0
+            };
+            let l = |x: u8, y: u8| {
+                (x as f64 + (y as f64 - x as f64) * f)
+                    .round()
+                    .clamp(0.0, 255.0) as u8
+            };
+            return Rgba {
+                r: l(a.color.r, b.color.r),
+                g: l(a.color.g, b.color.g),
+                b: l(a.color.b, b.color.b),
+                a: l(a.color.a, b.color.a),
+            };
+        }
+    }
+    stops.last().unwrap().color
+}
+
+/// Encode straight RGBA as PNG declaring `xppm` x `yppm` pixels per metre, so
+/// an application that sizes a picture from its resolution sizes it exactly.
+fn png_with_density(rgba: &[u8], w: u32, h: u32, xppm: u32, yppm: u32) -> Option<Vec<u8>> {
+    let n = (w as usize).checked_mul(h as usize)?;
+    if rgba.len() < n * 4 {
+        return None;
+    }
+    let mut out = Vec::new();
+    {
+        let mut enc = png::Encoder::new(&mut out, w, h);
+        enc.set_color(png::ColorType::Rgba);
+        enc.set_depth(png::BitDepth::Eight);
+        enc.set_pixel_dims(Some(png::PixelDimensions {
+            xppu: xppm,
+            yppu: yppm,
+            unit: png::Unit::Meter,
+        }));
+        let mut writer = enc.write_header().ok()?;
+        writer.write_image_data(&rgba[..n * 4]).ok()?;
+    }
+    Some(out)
+}
+
 /// FNV-1a over bytes: a stable key for de-duplicating media.
 pub(super) fn fnv64(bytes: &[u8]) -> u64 {
     let mut h: u64 = 0xcbf2_9ce4_8422_2325;
@@ -1589,8 +1921,8 @@ fn upscale_nearest(rgba: &[u8], iw: u32, ih: u32, f: u32) -> Vec<u8> {
     out
 }
 
-impl RenderBackend for DmlBackend {
-    fn fill_path(
+impl DmlBackend {
+    fn vec_fill(
         &mut self,
         path: &Path,
         transform: Transform,
@@ -1610,14 +1942,14 @@ impl RenderBackend for DmlBackend {
         if dp.is_empty() {
             return;
         }
-        let fill = self.fill_xml(paint);
+        let fill = self.fill_xml(paint, transform, dp.bounds());
         if fill.is_empty() {
             return;
         }
         self.emit_geom("Freeform", &[dp], &fill, "", true);
     }
 
-    fn stroke_path(
+    fn vec_stroke(
         &mut self,
         path: &Path,
         transform: Transform,
@@ -1628,7 +1960,10 @@ impl RenderBackend for DmlBackend {
         if stroke.width <= 0.0 {
             return;
         }
-        let Some(scale) = uniform_scale(transform) else {
+        // DrawingML lines take no picture fill: a patterned stroke is drawn as
+        // its outline, filled with the pattern.
+        let patterned = matches!(stroke.paint, Some(ResolvedPaint::Pattern { .. }));
+        let Some(scale) = uniform_scale(transform).filter(|_| !patterned) else {
             self.stroke_outline(path, transform, color, stroke, clip);
             return;
         };
@@ -1639,13 +1974,13 @@ impl RenderBackend for DmlBackend {
         if dp.is_empty() {
             return;
         }
-        let ln = self.ln_xml(color, stroke, scale);
+        let ln = self.ln_xml(color, stroke, scale, transform, dp.bounds());
         let closed = dp_all_closed(&dp);
         self.emit_geom("Line", &[dp], "", &ln, closed);
     }
 
     #[allow(clippy::too_many_arguments)]
-    fn fill_and_stroke_path(
+    fn vec_fill_stroke(
         &mut self,
         path: &Path,
         transform: Transform,
@@ -1672,21 +2007,23 @@ impl RenderBackend for DmlBackend {
             || scale.is_none()
             || !plain
             || matches!(paint, ResolvedPaint::Hatch { .. })
+            || matches!(stroke.paint, Some(ResolvedPaint::Pattern { .. }))
             || stroke.width <= 0.0
         {
-            self.fill_path(path, transform, paint, rule, clip);
-            self.stroke_path(path, transform, color, stroke, clip);
+            self.vec_fill(path, transform, paint, rule, clip);
+            self.vec_stroke(path, transform, color, stroke, clip);
             return;
         }
         if dp.is_empty() {
             return;
         }
-        let fill = self.fill_xml(paint);
-        let ln = self.ln_xml(color, stroke, scale.unwrap_or(1.0));
+        let bb = dp.bounds();
+        let fill = self.fill_xml(paint, transform, bb);
+        let ln = self.ln_xml(color, stroke, scale.unwrap_or(1.0), transform, bb);
         self.emit_geom("Freeform", &[dp], &fill, &ln, true);
     }
 
-    fn draw_text(&mut self, run: &TextRun, transform: Transform, clip: &Clip) {
+    fn vec_text(&mut self, run: &TextRun, transform: Transform, clip: &Clip) {
         if run.label.is_empty() && run.rules.is_empty() {
             return;
         }
@@ -1839,35 +2176,7 @@ impl RenderBackend for DmlBackend {
         self.push(&xml, b);
     }
 
-    fn begin_group(
-        &mut self,
-        mask: Option<MaskLayer>,
-        alpha: f32,
-        blend: BlendKind,
-        effect: GroupEffect,
-    ) {
-        if mask.is_some() {
-            self.warn("masks are not applied");
-        }
-        if alpha < 1.0 {
-            self.warn("group opacity is not applied");
-        }
-        if blend != BlendKind::Normal {
-            self.warn("blend modes are not applied");
-        }
-        if !effect.is_none() {
-            self.warn("blur and shadow effects are not applied");
-        }
-        self.groups.push(GroupKind::Plain);
-    }
-
-    fn end_group(&mut self) {
-        match self.groups.pop() {
-            Some(GroupKind::Plain) | None => {}
-        }
-    }
-
-    fn draw_image(
+    fn vec_image(
         &mut self,
         rgba: &[u8],
         iw: u32,
@@ -1968,16 +2277,212 @@ impl RenderBackend for DmlBackend {
         let Some(png) = png else { return };
         self.emit_picture(png, cx, cy, dw, dh, rot, flip, crop);
     }
+}
+
+/// Mirror a call to the page raster, if kept, then route it to the active
+/// capture (returning) or fall through to the vector writer.
+macro_rules! route {
+    ($self:ident, $call:ident ( $($arg:expr),* )) => {
+        if let Some(m) = $self.mirror.as_mut() {
+            m.$call($($arg),*);
+        }
+        if let Some(c) = $self.capture.as_mut() {
+            c.rb.$call($($arg),*);
+            if c.exclusive {
+                return;
+            }
+        }
+    };
+}
+
+fn copy_mask(m: &Option<MaskLayer>) -> Option<MaskLayer> {
+    m.as_ref().map(|m| MaskLayer {
+        pixmap: m.pixmap.clone(),
+        kind: m.kind,
+    })
+}
+
+impl RenderBackend for DmlBackend {
+    fn fill_path(
+        &mut self,
+        path: &Path,
+        transform: Transform,
+        paint: &ResolvedPaint,
+        rule: FillRule,
+        clip: &Clip,
+    ) {
+        route!(self, fill_path(path, transform, paint, rule, clip));
+        self.vec_fill(path, transform, paint, rule, clip);
+    }
+
+    fn stroke_path(
+        &mut self,
+        path: &Path,
+        transform: Transform,
+        color: Rgba,
+        stroke: &StrokeStyle,
+        clip: &Clip,
+    ) {
+        route!(self, stroke_path(path, transform, color, stroke, clip));
+        self.vec_stroke(path, transform, color, stroke, clip);
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn fill_and_stroke_path(
+        &mut self,
+        path: &Path,
+        transform: Transform,
+        paint: &ResolvedPaint,
+        rule: FillRule,
+        color: Rgba,
+        stroke: &StrokeStyle,
+        clip: &Clip,
+    ) {
+        route!(
+            self,
+            fill_and_stroke_path(path, transform, paint, rule, color, stroke, clip)
+        );
+        self.vec_fill_stroke(path, transform, paint, rule, color, stroke, clip);
+    }
+
+    fn draw_text(&mut self, run: &TextRun, transform: Transform, clip: &Clip) {
+        route!(self, draw_text(run, transform, clip));
+        self.vec_text(run, transform, clip);
+    }
+
+    fn draw_image(
+        &mut self,
+        rgba: &[u8],
+        iw: u32,
+        ih: u32,
+        x: f64,
+        y: f64,
+        w: f64,
+        h: f64,
+        interpolate: bool,
+        transform: Transform,
+        clip: &Clip,
+    ) {
+        route!(
+            self,
+            draw_image(rgba, iw, ih, x, y, w, h, interpolate, transform, clip)
+        );
+        self.vec_image(rgba, iw, ih, x, y, w, h, interpolate, transform, clip);
+    }
+
+    fn begin_group(
+        &mut self,
+        mask: Option<MaskLayer>,
+        alpha: f32,
+        blend: BlendKind,
+        effect: GroupEffect,
+    ) {
+        if let Some(m) = self.mirror.as_mut() {
+            m.begin_group(copy_mask(&mask), alpha, blend, effect);
+        }
+        let plain =
+            mask.is_none() && alpha >= 1.0 && blend == BlendKind::Normal && effect.is_none();
+        if let Some(c) = self.capture.as_mut() {
+            c.depth += 1;
+            if !plain {
+                c.failed = true;
+            }
+            c.rb.begin_group(mask, alpha, blend, effect);
+            self.groups.push(GroupKind::Plain);
+            return;
+        }
+        if plain {
+            self.groups.push(GroupKind::Plain);
+            return;
+        }
+        let reason = if mask.is_some() {
+            "masks"
+        } else if blend != BlendKind::Normal {
+            "blend modes"
+        } else if !effect.is_none() {
+            "blur and shadow effects"
+        } else {
+            "group opacity over overlapping shapes"
+        };
+        let exclusive = mask.is_some() || blend != BlendKind::Normal || !effect.is_none();
+        let is_blend = blend != BlendKind::Normal && self.mirror.is_some();
+        let mut rb = RasterBackend::new(
+            self.w,
+            self.h,
+            Rgba {
+                r: 0,
+                g: 0,
+                b: 0,
+                a: 0,
+            },
+        );
+        // For a blend, the capture only measures coverage: composite normally.
+        let cap_blend = if is_blend { BlendKind::Normal } else { blend };
+        rb.begin_group(mask, alpha, cap_blend, effect);
+        if !exclusive {
+            self.frames.push(Frame::new("Group"));
+        }
+        self.capture = Some(Capture {
+            rb,
+            depth: 1,
+            exclusive,
+            blend: is_blend,
+            alpha,
+            failed: false,
+            reason,
+        });
+        self.groups.push(GroupKind::Capture);
+    }
+
+    fn end_group(&mut self) {
+        if let Some(m) = self.mirror.as_mut() {
+            m.end_group();
+        }
+        let kind = self.groups.pop();
+        let Some(c) = self.capture.as_mut() else {
+            return;
+        };
+        c.rb.end_group();
+        c.depth -= 1;
+        if c.depth > 0 || !matches!(kind, Some(GroupKind::Capture)) {
+            return;
+        }
+        let c = self.capture.take().expect("capture");
+        if !c.exclusive {
+            let frame = self.frames.pop().expect("group frame");
+            if !c.failed && !any_overlap_bounds(&frame.items) {
+                // Opacity over shapes that do not overlap is each shape's own.
+                if let Some(b) = frame.bbox {
+                    let body = fold_alpha(&frame.body, c.alpha);
+                    let f = self.out();
+                    f.body.push_str(&body);
+                    f.bbox = Some(union(f.bbox, b));
+                    f.items.extend(frame.items);
+                }
+                return;
+            }
+        }
+        let mut pm = c.rb.into_pixmap();
+        if c.blend {
+            // The blended result, where the group reaches.
+            if let Some(m) = self.mirror.as_ref() {
+                blend_from_mirror(&mut pm, m.page());
+            }
+        }
+        if self.emit_pixmap_region(&pm, [0.0, 0.0, self.w as f64, self.h as f64]) {
+            self.warn(&format!(
+                "{} are drawn as a picture of the region they cover",
+                c.reason
+            ));
+        }
+    }
 
     fn begin_panel(&mut self, name: &str, _pannable: bool) {
-        self.frames.push(Frame {
-            body: String::new(),
-            bbox: None,
-            name: name.to_string(),
-        });
+        self.frames.push(Frame::new(name));
     }
 
     fn end_panel(&mut self) {
+        // A panel opened inside a capture frame closes into it.
         if self.frames.len() > 1 {
             self.close_frame(false);
         }
@@ -1986,6 +2491,96 @@ impl RenderBackend for DmlBackend {
     fn take_warnings(&mut self) -> Vec<String> {
         self.warnings.clone()
     }
+}
+
+/// Whether any two EMU boxes overlap (touching edges do not count).
+fn any_overlap_bounds(items: &[Bounds]) -> bool {
+    let boxes: Vec<[f64; 4]> = items
+        .iter()
+        .map(|b| {
+            [
+                b[0] as f64 + 0.5,
+                b[1] as f64 + 0.5,
+                b[2] as f64 - 0.5,
+                b[3] as f64 - 0.5,
+            ]
+        })
+        .collect();
+    boxes.len() > 1 && any_overlap(&boxes)
+}
+
+/// Replace a capture with the page mirror wherever the capture covers
+/// anything. The mirror already holds the blended result composited over
+/// everything beneath, so where the group reaches, the picture shows the
+/// mirror as it is (a faint glow included); elsewhere it stays transparent.
+fn blend_from_mirror(pm: &mut Pixmap, page: &Pixmap) {
+    let src = page.pixels();
+    for (i, p) in pm.pixels_mut().iter_mut().enumerate() {
+        if p.alpha() > 0 {
+            *p = src[i];
+        }
+    }
+}
+
+/// Multiply the number after every `key` (an attribute value ending in `"`)
+/// by `a`.
+fn scale_values(xml: &str, key: &str, a: f64) -> String {
+    let mut out = String::with_capacity(xml.len());
+    let mut rest = xml;
+    while let Some(i) = rest.find(key) {
+        let j = i + key.len();
+        out.push_str(&rest[..j]);
+        let end = rest[j..].find('"').map(|e| j + e).unwrap_or(rest.len());
+        let v: f64 = rest[j..end].parse().unwrap_or(100_000.0);
+        out.push_str(&((v * a).round() as i64).to_string());
+        rest = &rest[end..];
+    }
+    out.push_str(rest);
+    out
+}
+
+/// Multiply the opacity of every colour and picture in a run of shapes by `a`.
+fn fold_alpha(xml: &str, a: f32) -> String {
+    let a = a.clamp(0.0, 1.0) as f64;
+    // Existing alpha values (colours and pictures) scale.
+    let mut s = scale_values(xml, "<a:alpha val=\"", a);
+    s = scale_values(&s, "<a:alphaModFix amt=\"", a);
+    let amt = (a * 100_000.0).round() as i64;
+    // Opaque colours gain an alpha.
+    let mut o = String::with_capacity(s.len() + 64);
+    let key = "<a:srgbClr val=\"";
+    let mut r = s.as_str();
+    while let Some(i) = r.find(key) {
+        let j = i + key.len() + 6; // the six hex digits
+        o.push_str(&r[..j]);
+        let tail = &r[j..];
+        if let Some(stripped) = tail.strip_prefix("\"/>") {
+            o.push_str(&format!("\"><a:alpha val=\"{amt}\"/></a:srgbClr>"));
+            r = stripped;
+        } else {
+            r = tail;
+        }
+    }
+    o.push_str(r);
+    s = o;
+    // Pictures without an alpha gain one.
+    let mut o = String::with_capacity(s.len() + 64);
+    let mut r = s.as_str();
+    let key = "<a:blip r:embed=\"";
+    while let Some(i) = r.find(key) {
+        let j = i + key.len();
+        let end = r[j..].find('"').map(|e| j + e).unwrap_or(r.len());
+        o.push_str(&r[..end]);
+        let tail = &r[end..];
+        if let Some(stripped) = tail.strip_prefix("\"/>") {
+            o.push_str(&format!("\"><a:alphaModFix amt=\"{amt}\"/></a:blip>"));
+            r = stripped;
+        } else {
+            r = tail;
+        }
+    }
+    o.push_str(r);
+    o
 }
 
 /// The alignment a multi-line label's lines were set with, read back from the
@@ -2557,5 +3152,118 @@ mod tests {
             xml.contains("<a:off x=\"381000\" y=\"381000\"/><a:ext cx=\"190500\" cy=\"190500\"/>"),
             "{xml}"
         );
+    }
+
+    #[test]
+    fn a_linear_gradient_maps_onto_the_shape_box() {
+        let mut b = DmlBackend::new(
+            100,
+            100,
+            96.0,
+            Rgba {
+                r: 0,
+                g: 0,
+                b: 0,
+                a: 0,
+            },
+            0,
+            0,
+            false,
+        );
+        let stops = vec![
+            Stop {
+                offset: 0.0,
+                color: RED,
+            },
+            Stop {
+                offset: 1.0,
+                color: Rgba::BLACK,
+            },
+        ];
+        // the gradient line spans the middle half of a 0..100 box
+        let paint = ResolvedPaint::Linear {
+            x1: 25.0,
+            y1: 0.0,
+            x2: 75.0,
+            y2: 0.0,
+            stops,
+            extend: Extend::Pad,
+        };
+        let x = b.fill_xml(&paint, Transform::identity(), Some([0.0, 0.0, 100.0, 50.0]));
+        assert!(x.contains("<a:lin ang=\"0\" scaled=\"0\"/>"), "{x}");
+        // padded ends, the stops at 25% and 75%
+        assert!(x.contains("<a:gs pos=\"0\"><a:srgbClr val=\"FF0000\"/></a:gs><a:gs pos=\"25000\"><a:srgbClr val=\"FF0000\"/></a:gs>"), "{x}");
+        assert!(x.contains("<a:gs pos=\"75000\"><a:srgbClr val=\"000000\"/></a:gs><a:gs pos=\"100000\"><a:srgbClr val=\"000000\"/></a:gs>"), "{x}");
+        // a vertical gradient points down: 90 degrees clockwise
+        let down = ResolvedPaint::Linear {
+            x1: 0.0,
+            y1: 0.0,
+            x2: 0.0,
+            y2: 50.0,
+            stops: vec![
+                Stop {
+                    offset: 0.0,
+                    color: RED,
+                },
+                Stop {
+                    offset: 1.0,
+                    color: Rgba::BLACK,
+                },
+            ],
+            extend: Extend::Pad,
+        };
+        let y = b.fill_xml(&down, Transform::identity(), Some([0.0, 0.0, 100.0, 50.0]));
+        assert!(y.contains("ang=\"5400000\""), "{y}");
+        assert_eq!(y.matches("<a:gs ").count(), 2, "{y}");
+    }
+
+    #[test]
+    fn fold_alpha_scales_every_colour_and_picture() {
+        let xml = "<a:srgbClr val=\"FF0000\"/><a:srgbClr val=\"00FF00\"><a:alpha val=\"50000\"/></a:srgbClr><a:blip r:embed=\"x\"/>";
+        let out = fold_alpha(xml, 0.5);
+        assert_eq!(
+            out,
+            "<a:srgbClr val=\"FF0000\"><a:alpha val=\"50000\"/></a:srgbClr><a:srgbClr val=\"00FF00\"><a:alpha val=\"25000\"/></a:srgbClr><a:blip r:embed=\"x\"><a:alphaModFix amt=\"50000\"/></a:blip>"
+        );
+    }
+
+    #[test]
+    fn group_opacity_folds_over_disjoint_shapes_and_rasterises_overlaps() {
+        let run = |second_x: f64| {
+            let mut b = DmlBackend::new(
+                100,
+                100,
+                96.0,
+                Rgba {
+                    r: 0,
+                    g: 0,
+                    b: 0,
+                    a: 0,
+                },
+                0,
+                0,
+                false,
+            );
+            b.begin_group(None, 0.5, BlendKind::Normal, GroupEffect::default());
+            for x in [10.0, second_x] {
+                let p = rect_path(x, 10.0, 20.0, 20.0).unwrap();
+                b.fill_path(
+                    &p,
+                    Transform::identity(),
+                    &ResolvedPaint::Solid(RED),
+                    FillRule::Winding,
+                    &clip0(),
+                );
+            }
+            b.end_group();
+            b.finish()
+        };
+        let (xml, media, warns) = run(50.0);
+        assert!(media.is_empty() && warns.is_empty(), "{warns:?}");
+        assert_eq!(xml.matches("<a:alpha val=\"50000\"/>").count(), 2, "{xml}");
+        let (xml, media, warns) = run(20.0);
+        assert_eq!(media.len(), 1);
+        assert_eq!(warns.len(), 1);
+        assert!(xml.contains("<p:pic>") && !xml.contains("<p:sp>"), "{xml}");
     }
 }

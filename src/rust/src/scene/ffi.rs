@@ -1698,6 +1698,13 @@ impl Scene {
             outline_text,
         );
         b.set_a11y(&self.a11y_title, &self.a11y_desc);
+        // A blended group composites onto what lies beneath it, so the backend
+        // keeps a raster of the page when the scene has one.
+        if self.nodes.iter().any(|(_, n)| {
+            matches!(n, Node::GroupStart { blend, .. } if *blend != BlendKind::Normal)
+        }) {
+            b.enable_mirror(self.bg);
+        }
         let warnings = self.render_to(&mut b);
         let (xml, media, _) = b.finish();
         let files: Vec<String> = if media_dir.is_empty() {

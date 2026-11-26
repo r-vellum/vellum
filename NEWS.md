@@ -29,6 +29,16 @@
   express is drawn as a picture of its visible part. Native text crossing a clip
   edge is drawn whole, with a warning; outlined text is cut exactly.
 
+* PowerPoint output draws gradients, patterns and group effects (F-24,
+  part 4): linear and radial gradients become native gradient fills mapped
+  onto each shape's box (a radial focal point moves to the centre, with a
+  warning), patterns a tiled picture fill at the cell's size, and gradient
+  strokes gradient lines. Group opacity over shapes that do not overlap is
+  folded into their colours; masks, blend modes, blur and shadow effects and
+  opacity over overlapping shapes are drawn through the raster backend as a
+  picture of the region they cover (a blend over the page beneath it), with a
+  warning.
+
 # vellum 0.17.0
 
 ## New features
