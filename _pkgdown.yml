@@ -214,6 +214,7 @@ reference:
   contents:
   - pdf_pages
   - render_all
+  - as_dml
 
 - title: Accessibility & fonts
   desc: >
