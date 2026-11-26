@@ -253,6 +253,14 @@ Render the scene to an SVG file. `outline_text` emits glyph outlines
 instead of selectable `<text>` (pixel-faithful, matches raster/PDF).
 Returns any degradation warnings.
 
+### Method `render_dml`
+
+Render the scene as a DrawingML fragment: one `<p:grpSp>` placed `left`,
+`top` EMU from the slide corner, for officer's `ph_with()`. Rasters are
+written to `media_dir` as PNG files and referenced by path (officer
+copies them into the package on save); an empty `media_dir` leaves
+placeholder names instead (tests). `list(xml, files, warnings)`.
+
 ### Method `render_svg_string`
 
 Render the scene and return the SVG document as a string (rather than

@@ -350,6 +350,15 @@ Returns any degradation warnings.</p>
 </div>
 
 <div class="section">
+<h3 id="method-render-dml">Method <code>render_dml</code><a class="anchor" aria-label="anchor" href="#method-render-dml"></a></h3>
+<p>Render the scene as a DrawingML fragment: one <code>&lt;p:grpSp&gt;</code> placed <code>left</code>,
+<code>top</code> EMU from the slide corner, for officer's <code>ph_with()</code>. Rasters are
+written to <code>media_dir</code> as PNG files and referenced by path (officer copies
+them into the package on save); an empty <code>media_dir</code> leaves placeholder
+names instead (tests). <code>list(xml, files, warnings)</code>.</p>
+</div>
+
+<div class="section">
 <h3 id="method-render-svg-string">Method <code>render_svg_string</code><a class="anchor" aria-label="anchor" href="#method-render-svg-string"></a></h3>
 <p>Render the scene and return the SVG document as a string (rather than
 writing it to a file). Same output as <code>render_svg</code>; the interactivity
