@@ -374,6 +374,33 @@ fn typeface(run: &TextRun) -> String {
     }
 }
 
+/// The largest device-px coordinate written: far inside DrawingML's
+/// coordinate range (about 2.7e13 EMU) at any resolution, and far enough off
+/// the page that clamping a long line's end leaves its visible part straight.
+const MAX_PX: f64 = 1.0e8;
+
+fn clamp_px(v: f64) -> f64 {
+    if v.is_nan() {
+        0.0
+    } else {
+        v.clamp(-MAX_PX, MAX_PX)
+    }
+}
+
+/// Escape text for DrawingML XML: drop the characters XML 1.0 cannot carry
+/// (C0 controls other than tab, newline and carriage return, U+FFFE, U+FFFF),
+/// then escape markup. A label holding a stray control character would
+/// otherwise make the whole slide unreadable.
+pub(crate) fn dml_escape(s: &str) -> String {
+    let clean: String = s
+        .chars()
+        .filter(|&c| {
+            !(c < ' ' && c != '\t' && c != '\n' && c != '\r') && c != '\u{FFFE}' && c != '\u{FFFF}'
+        })
+        .collect();
+    xml_escape(&clean).into_owned()
+}
+
 /// Bounds in EMU (`[x0, y0, x1, y1]`).
 type Bounds = [i64; 4];
 
@@ -481,16 +508,29 @@ impl DmlBackend {
         id
     }
 
-    /// Device px to slide EMU.
+    /// Device px to slide EMU. Coordinates are clamped to [`MAX_PX`], so a
+    /// point far off the page (an unclipped mark at 1e12) cannot overflow
+    /// DrawingML's coordinate range.
     fn ex(&self, x: f64) -> i64 {
-        self.left + (x * self.k).round() as i64
+        self.left + (clamp_px(x) * self.k).round() as i64
     }
     fn ey(&self, y: f64) -> i64 {
-        self.top + (y * self.k).round() as i64
+        self.top + (clamp_px(y) * self.k).round() as i64
     }
     /// A device-px length in EMU.
     fn len(&self, v: f64) -> i64 {
-        (v * self.k).round() as i64
+        (clamp_px(v) * self.k).round() as i64
+    }
+
+    /// Whether device-px bounds lie wholly outside the page grown by one page
+    /// size on each side: such geometry cannot be seen and is dropped.
+    fn off_page(&self, b: [f64; 4]) -> bool {
+        let (w, h) = (self.w as f64, self.h as f64);
+        !(b.iter().all(|v| v.is_finite() || v.is_nan()))
+            || b[2] < -w
+            || b[0] > 2.0 * w
+            || b[3] < -h
+            || b[1] > 2.0 * h
     }
 
     fn out(&mut self) -> &mut Frame {
@@ -595,6 +635,9 @@ impl DmlBackend {
             }
         }
         let Some(bb) = bb else { return false };
+        if self.off_page(bb) {
+            return false;
+        }
         let (x0, y0, w, h) = self.emu_box(bb);
         let geom = match (paths, rect_of(paths)) {
             // An axis-aligned rectangle stays a real rectangle when edited.
@@ -639,7 +682,8 @@ impl DmlBackend {
 
     /// The `a:ln` for a stroke whose lengths scale by `scale` into device px.
     fn ln_xml(&mut self, color: Rgba, st: &StrokeStyle, scale: f64) -> String {
-        let w = self.len(st.width as f64 * scale).max(1);
+        // DrawingML caps a line at 20116800 EMU (1584 pt).
+        let w = self.len(st.width as f64 * scale).clamp(1, 20_116_800);
         let cap = match st.cap {
             LineCap::Butt => "flat",
             LineCap::Round => "rnd",
@@ -678,15 +722,21 @@ impl DmlBackend {
         let mut cyc: Vec<f64> = st.dash.iter().map(|d| *d as f64).collect();
         let total: f64 = cyc.iter().sum();
         let mut phase = (st.phase as f64).rem_euclid(total.max(f64::MIN_POSITIVE));
-        if phase > 0.0 && phase.is_finite() {
-            // Rotate the cycle so it starts `phase` in: entries alternate
-            // dash/gap, so keep the parity by padding with zero-length entries.
-            let mut rot: Vec<f64> = Vec::with_capacity(cyc.len() + 2);
-            let mut i = 0;
-            while phase >= cyc[i] {
+        // Find the entry the phase falls in. Rounding can leave the phase a
+        // whisker short of a whole cycle (`rem_euclid` of a tiny negative
+        // phase), past the last entry: that is no phase at all.
+        let mut i = 0;
+        let shifted = phase > 0.0 && phase.is_finite();
+        if shifted {
+            while i < cyc.len() && phase >= cyc[i] {
                 phase -= cyc[i];
                 i += 1;
             }
+        }
+        if shifted && i < cyc.len() {
+            // Rotate the cycle so it starts `phase` in: entries alternate
+            // dash/gap, so keep the parity by padding with zero-length entries.
+            let mut rot: Vec<f64> = Vec::with_capacity(cyc.len() + 2);
             if i % 2 == 1 {
                 rot.push(0.0); // the pattern now opens in a gap
             }
@@ -867,7 +917,7 @@ impl DmlBackend {
             "<p:grpSp><p:nvGrpSpPr><p:cNvPr id=\"{id}\" name=\"{name}\"/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr>\
              <p:grpSpPr><a:xfrm><a:off x=\"{x}\" y=\"{y}\"/><a:ext cx=\"{w}\" cy=\"{h}\"/>\
              <a:chOff x=\"{x}\" y=\"{y}\"/><a:chExt cx=\"{w}\" cy=\"{h}\"/></a:xfrm></p:grpSpPr>{body}</p:grpSp>",
-            name = xml_escape(&truncate(&f.name, 200)),
+            name = dml_escape(&truncate(&f.name, 200)),
             x = b[0],
             y = b[1],
             w = (b[2] - b[0]).max(1),
@@ -958,7 +1008,7 @@ impl DmlBackend {
             "<p:grpSp {DML_NS}><p:nvGrpSpPr><p:cNvPr id=\"1\" name=\"{name}\"/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr>\
              <p:grpSpPr><a:xfrm><a:off x=\"{x}\" y=\"{y}\"/><a:ext cx=\"{w}\" cy=\"{h}\"/>\
              <a:chOff x=\"{x}\" y=\"{y}\"/><a:chExt cx=\"{w}\" cy=\"{h}\"/></a:xfrm></p:grpSpPr>{body}</p:grpSp>",
-            name = xml_escape(&root.name),
+            name = dml_escape(&root.name),
             body = root.body,
         );
         (xml, self.media, self.warnings)
@@ -1266,6 +1316,10 @@ impl RenderBackend for DmlBackend {
         }
         let lines = line_runs(run);
         let label_lines: Vec<&str> = run.label.split('\n').collect();
+        // Indices of the label lines that hold text, in order.
+        let nonblank: Vec<usize> = (0..label_lines.len())
+            .filter(|&i| !label_lines[i].is_empty())
+            .collect();
         let scale = uniform_scale(transform);
         let reflected = (transform.sx as f64 * transform.sy as f64
             - transform.kx as f64 * transform.ky as f64)
@@ -1278,7 +1332,9 @@ impl RenderBackend for DmlBackend {
             || run.color.a == 0
             || scale.is_none()
             || reflected
-            || (lines.len() > 1 && lines.len() != label_lines.len());
+            // Each glyph line must be one of the label's non-blank lines (a
+            // blank line has no glyphs, so it has no glyph line either).
+            || (lines.len() > 1 && lines.len() != nonblank.len());
         // The label's box in local px, before rotation.
         let x0 = run.ax - run.hjust * run.w;
         let y0 = run.ay - (1.0 - run.vjust) * run.h;
@@ -1344,7 +1400,7 @@ impl RenderBackend for DmlBackend {
         let pt = run.size * s;
         let sz = ((pt * 100.0).round() as i64).clamp(100, 400_000);
         let (bold, italic) = face_flags(run.face);
-        let face = xml_escape(&typeface(run)).into_owned();
+        let face = dml_escape(&typeface(run));
         let mut rpr = format!("<a:rPr sz=\"{sz}\"");
         if bold {
             rpr.push_str(" b=\"1\"");
@@ -1360,7 +1416,9 @@ impl RenderBackend for DmlBackend {
         // vellum's spacing rather than the font's default.
         let ln_spc = if lines.len() > 1 {
             let (a, b) = (lines[0].0, lines[1].0);
-            let pitch_px = (run.gy[a] - run.gy[b]).abs() * s;
+            // The first two glyph lines may have blank lines between them.
+            let steps = (nonblank[1] - nonblank[0]).max(1) as f64;
+            let pitch_px = (run.gy[a] - run.gy[b]).abs() * s / steps;
             let pitch_pt = pitch_px * 72.0 / (EMU_PER_INCH / self.k);
             format!(
                 "<a:lnSpc><a:spcPts val=\"{}\"/></a:lnSpc>",
@@ -1369,18 +1427,14 @@ impl RenderBackend for DmlBackend {
         } else {
             String::new()
         };
-        let paras: Vec<&str> = if lines.len() > 1 {
-            label_lines
-        } else {
-            vec![run.label]
-        };
+        let paras: Vec<&str> = label_lines;
         let mut body = String::new();
         for line in paras {
             body.push_str(&format!("<a:p><a:pPr algn=\"{algn}\">{ln_spc}</a:pPr>"));
             if line.is_empty() {
                 body.push_str(&format!("<a:endParaRPr sz=\"{sz}\" dirty=\"0\"/>"));
             } else {
-                body.push_str(&format!("<a:r>{rpr}<a:t>{}</a:t></a:r>", xml_escape(line)));
+                body.push_str(&format!("<a:r>{rpr}<a:t>{}</a:t></a:r>", dml_escape(line)));
             }
             body.push_str("</a:p>");
         }
@@ -1819,5 +1873,72 @@ mod tests {
         assert_eq!(rotated_bounds(0, 0, 10, 2, 0.0), [0, 0, 10, 2]);
         let b = rotated_bounds(0, 0, 10, 2, 90.0);
         assert_eq!(b, [4, -4, 6, 6]);
+    }
+
+    #[test]
+    fn control_characters_are_dropped_from_xml_text() {
+        assert_eq!(
+            dml_escape("a\u{1}b\tc\u{B}d & <e>\u{FFFF}"),
+            "ab\tcd &amp; &lt;e&gt;"
+        );
+    }
+
+    #[test]
+    fn far_coordinates_stay_in_range_and_off_page_shapes_drop() {
+        let mut b = DmlBackend::new(
+            100,
+            100,
+            96.0,
+            Rgba {
+                r: 0,
+                g: 0,
+                b: 0,
+                a: 0,
+            },
+            0,
+            0,
+            false,
+        );
+        let paint = ResolvedPaint::Solid(RED);
+        // wholly off the page: dropped
+        let far = rect_path(1e9, 0.0, 1e9, 10.0).unwrap();
+        b.fill_path(
+            &far,
+            Transform::identity(),
+            &paint,
+            FillRule::Winding,
+            &clip0(),
+        );
+        // from the page to 1e12: kept, clamped
+        let mut pb = PathBuilder::new();
+        pb.move_to(10.0, 10.0);
+        pb.line_to(1e12, 50.0);
+        b.stroke_path(
+            &pb.finish().unwrap(),
+            Transform::identity(),
+            RED,
+            &pen(1e9),
+            &clip0(),
+        );
+        let (xml, _, _) = b.finish();
+        assert_eq!(xml.matches("<p:sp>").count(), 1, "{xml}");
+        let nums: Vec<i64> = xml
+            .split('"')
+            .filter_map(|t| t.parse::<i64>().ok())
+            .collect();
+        assert!(nums.iter().all(|v| v.abs() <= 27_273_042_316_900), "{xml}");
+        assert!(xml.contains("<a:ln w=\"20116800\""), "{xml}");
+    }
+
+    #[test]
+    fn a_phase_rounding_to_a_whole_cycle_does_not_panic() {
+        let mut b = DmlBackend::new(10, 10, 96.0, Rgba::WHITE, 0, 0, false);
+        let mut st = pen(1.0);
+        st.dash = vec![1.0, 3.0];
+        st.phase = -1e-17;
+        assert_eq!(
+            b.dash_xml(&st),
+            "<a:custDash><a:ds d=\"100000\" sp=\"300000\"/></a:custDash>"
+        );
     }
 }

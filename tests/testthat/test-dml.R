@@ -134,3 +134,56 @@ test_that("unsupported effects are reported", {
   fr <- .dml_fragment(sc)
   expect_match(fr$warnings, "gradient", all = FALSE)
 })
+
+test_that("control characters cannot break the XML", {
+  skip_if_not_installed("xml2")
+  sc <- S7::set_props(vl_scene(2, 1, dpi = 96), title = "t\001itle") |>
+    draw(text_grob("x\001yz"))
+  fr <- .dml_fragment(sc)
+  doc <- xml2::read_xml(fr$xml)
+  ns <- xml2::xml_ns(doc)
+  expect_identical(xml2::xml_text(xml2::xml_find_first(doc, ".//a:t", ns)), "xyz")
+  cnv <- xml2::xml_find_first(doc, "p:nvGrpSpPr/p:cNvPr", ns)
+  expect_identical(xml2::xml_attr(cnv, "name"), "title")
+  # a halo label's group name too
+  halo <- vl_scene(2, 1, dpi = 96) |>
+    draw(text_grob("a\002b", gp = vl_gpar(halo_col = "white", halo_width = 2)))
+  expect_no_error(xml2::read_xml(.dml_fragment(halo)$xml))
+})
+
+test_that("coordinates stay inside DrawingML's range", {
+  skip_if_not_installed("xml2")
+  sc <- vl_scene(3, 1, dpi = 96, bg = NA) |>
+    draw(lines_grob(x = c(0.1, 1e12, 0.9), y = c(0.1, 0.5, 0.9))) |>
+    draw(rect_grob(x = 1e9, width = 1e9, gp = vl_gpar(fill = "red")))
+  fr <- .dml_fragment(sc)
+  doc <- xml2::read_xml(fr$xml)
+  ns <- xml2::xml_ns(doc)
+  # the off-page rectangle is dropped, the line kept
+  expect_length(xml2::xml_find_all(doc, ".//p:sp", ns), 1)
+  num <- function(xp, a) {
+    as.numeric(xml2::xml_attr(xml2::xml_find_all(doc, xp, ns), a))
+  }
+  v <- c(
+    num(".//a:off", "x"),
+    num(".//a:off", "y"),
+    num(".//a:ext", "cx"),
+    num(".//a:ext", "cy"),
+    num(".//a:pt", "x"),
+    num(".//a:pt", "y")
+  )
+  expect_true(all(abs(v) <= 27273042316900))
+  expect_true(all(num(".//a:ext", "cx") >= 0))
+})
+
+test_that("a blank line keeps a label native", {
+  skip_if_not_installed("xml2")
+  sc <- vl_scene(2, 2, dpi = 96) |> draw(text_grob("a\n\nb"))
+  doc <- xml2::read_xml(.dml_fragment(sc)$xml)
+  ns <- xml2::xml_ns(doc)
+  expect_length(xml2::xml_find_all(doc, ".//p:txBody/a:p", ns), 3)
+  expect_identical(
+    xml2::xml_text(xml2::xml_find_all(doc, ".//a:t", ns)),
+    c("a", "b")
+  )
+})
