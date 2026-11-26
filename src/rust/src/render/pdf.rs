@@ -276,40 +276,63 @@ impl<'a, 'b> PdfBackend<'a, 'b> {
     }
 
     /// Push clip paths (under the root scale) then the primitive transform;
-    /// returns the number of `pop()`s needed to unwind.
-    fn push_state(&mut self, transform: Transform, clip: &Clip) -> usize {
+    /// returns the number of `pop()`s needed to unwind, or `None` (with nothing
+    /// left pushed) when the clip admits nothing, so the caller draws nothing.
+    ///
+    /// A clip region that cannot be represented (non-finite geometry) or has no
+    /// area clips everything away. It used to be skipped, which drew the
+    /// content unclipped where PNG, SVG and PowerPoint drew nothing (VR-42).
+    fn push_state(&mut self, transform: Transform, clip: &Clip) -> Option<usize> {
         let mut n = 0;
         for shape in clip.shapes {
-            let (kpath, rule) = match shape {
+            // The device path, and whether its box has any area.
+            let (kpath, rule, area) = match shape {
                 ClipShape::Rect { w, h, transform } => {
-                    (clip_rect_kpath(*w, *h, *transform), KFillRule::NonZero)
+                    let c = rect_corners(*w, *h, *transform);
+                    let span = |f: fn(&(f64, f64)) -> f64| {
+                        let v = c.iter().map(f);
+                        v.clone().fold(f64::NEG_INFINITY, f64::max)
+                            - v.fold(f64::INFINITY, f64::min)
+                    };
+                    (
+                        clip_rect_kpath(*w, *h, *transform),
+                        KFillRule::NonZero,
+                        span(|p| p.0) > 0.0 && span(|p| p.1) > 0.0,
+                    )
                 }
                 ClipShape::Path {
                     path,
                     evenodd,
                     transform,
                 } => {
-                    let dev = path
-                        .clone()
-                        .transform(*transform)
-                        .and_then(|p| to_kpath(&p));
+                    let dev = path.clone().transform(*transform);
+                    let area = dev
+                        .as_ref()
+                        .is_some_and(|p| p.bounds().width() > 0.0 && p.bounds().height() > 0.0);
                     (
-                        dev,
+                        dev.and_then(|p| to_kpath(&p)),
                         if *evenodd {
                             KFillRule::EvenOdd
                         } else {
                             KFillRule::NonZero
                         },
+                        area,
                     )
                 }
             };
-            if let Some(p) = kpath {
-                self.surface.push_clip_path(&p, &rule);
-                n += 1;
+            match kpath {
+                Some(p) if area => {
+                    self.surface.push_clip_path(&p, &rule);
+                    n += 1;
+                }
+                _ => {
+                    self.pop_state(n);
+                    return None;
+                }
             }
         }
         self.surface.push_transform(&to_ktransform(transform));
-        n + 1
+        Some(n + 1)
     }
 
     fn pop_state(&mut self, n: usize) {
@@ -457,7 +480,9 @@ impl RenderBackend for PdfBackend<'_, '_> {
             FillRule::EvenOdd => KFillRule::EvenOdd,
             FillRule::Winding => KFillRule::NonZero,
         };
-        let n = self.push_state(transform, clip);
+        let Some(n) = self.push_state(transform, clip) else {
+            return;
+        };
         self.surface.set_stroke(None);
         self.surface.set_fill(Some(Fill {
             paint: kpaint,
@@ -497,7 +522,9 @@ impl RenderBackend for PdfBackend<'_, '_> {
                 norm(color.a),
             ),
         };
-        let n = self.push_state(transform, clip);
+        let Some(n) = self.push_state(transform, clip) else {
+            return;
+        };
         self.surface.set_fill(None);
         self.surface.set_stroke(Some(KStroke {
             paint: kpaint,
@@ -588,7 +615,9 @@ impl RenderBackend for PdfBackend<'_, '_> {
         if !placeable_point(self.root.pre_concat(base), start_x, run.ay as f32) {
             return;
         }
-        let pushes = self.push_state(base, clip);
+        let Some(pushes) = self.push_state(base, clip) else {
+            return;
+        };
         let rich = !run.gcolor.is_empty();
         // A halo means drawing the whole label twice: once stroke-only underneath,
         // then normally on top. PDF has a fill-and-stroke text mode, but it paints
@@ -824,7 +853,9 @@ impl RenderBackend for PdfBackend<'_, '_> {
         {
             return;
         }
-        let n = self.push_state(place, clip);
+        let Some(n) = self.push_state(place, clip) else {
+            return;
+        };
         self.surface.draw_image(img, size);
         self.pop_state(n);
     }
@@ -837,7 +868,7 @@ impl RenderBackend for PdfBackend<'_, '_> {
 /// The largest device coordinate (px or pt) a drawn box may reach. Far beyond
 /// any page, but small enough that a union of such boxes (krilla grows one
 /// bounding box per content stream) cannot overflow `f32`.
-const MAX_COORD: f32 = 1e15;
+pub(super) const MAX_COORD: f32 = 1e15;
 
 /// Can krilla draw `path` under `transform`? krilla maps every drawn object's
 /// bounding box through the current transform (the primitive's, under the

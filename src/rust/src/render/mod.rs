@@ -25,6 +25,7 @@ use crate::units::rotation_about;
 
 mod displaylist;
 mod dml;
+mod fit;
 mod paths;
 mod pdf;
 mod pptx;
@@ -170,6 +171,48 @@ pub enum ClipShape {
         evenodd: bool,
         transform: Transform,
     },
+}
+
+impl ClipShape {
+    /// A clip region that admits nothing: where a viewport's clip cannot be
+    /// represented, everything under it is clipped away (VR-42).
+    pub fn nothing() -> ClipShape {
+        ClipShape::Rect {
+            w: 0.0,
+            h: 0.0,
+            transform: Transform::identity(),
+        }
+    }
+
+    /// Is this region's device geometry finite in `f32`, the precision every
+    /// backend draws clips at? A NaN extent (an `NA` viewport size), a non-finite
+    /// transform, or a region so large its device box overflows is not; the
+    /// raster backend then clipped everything away while PDF dropped the clip
+    /// and drew its content unclipped (VR-42).
+    pub fn is_finite(&self) -> bool {
+        match self {
+            ClipShape::Rect { w, h, transform } => {
+                // The corners and the box's extent, as tiny-skia and krilla
+                // compute a path's bounds.
+                let c = rect_corners(*w, *h, *transform);
+                let span = |v: [f64; 4]| {
+                    let (lo, hi) = (
+                        v.iter().copied().fold(f64::INFINITY, f64::min),
+                        v.iter().copied().fold(f64::NEG_INFINITY, f64::max),
+                    );
+                    (lo as f32).is_finite()
+                        && (hi as f32).is_finite()
+                        && ((hi as f32) - (lo as f32)).is_finite()
+                };
+                transform.is_finite()
+                    && span([c[0].0, c[1].0, c[2].0, c[3].0])
+                    && span([c[0].1, c[1].1, c[2].1, c[3].1])
+            }
+            ClipShape::Path {
+                path, transform, ..
+            } => transform.is_finite() && path.clone().transform(*transform).is_some(),
+        }
+    }
 }
 
 /// The clip applying to a draw: the intersection of `shapes` (empty = no clip).
