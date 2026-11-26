@@ -424,7 +424,8 @@ rs_math_layout <- function(src, path, face, size, display) .Call(wrap__rs_math_l
 #'styled runs (an `md()` label's spans), for backends that write native
 #'rich text (PowerPoint): a run count per label, then per run its text, its
 #'face string and three numbers -- size and baseline shift (points) and glyph
-#'count (`-1` marks a line break). Empty vectors mean no runs.
+#'count (`-1` marks a line break, whose size is the line pitch). Empty
+#'vectors mean no runs.
 #'}
 #'
 #'\subsection{Method `mask_begin`}{

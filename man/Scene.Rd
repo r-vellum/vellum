@@ -160,7 +160,8 @@ extraction (empty: the label itself).
 styled runs (an \code{md()} label's spans), for backends that write native
 rich text (PowerPoint): a run count per label, then per run its text, its
 face string and three numbers -- size and baseline shift (points) and glyph
-count (\code{-1} marks a line break). Empty vectors mean no runs.
+count (\code{-1} marks a line break, whose size is the line pitch). Empty
+vectors mean no runs.
 }
 
 \subsection{Method \code{mask_begin}}{

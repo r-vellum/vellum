@@ -1288,7 +1288,11 @@ md <- function(text) {
   cols <- character(0)
   # The styled runs as the backend can write them as native text (PowerPoint
   # text runs, VR-40): text, face, size and baseline shift (points) and glyph
-  # count per run; a line break is a run with `ng = -1`.
+  # count per run; a line break is a run with `ng = -1` whose size is the line
+  # pitch. The shift is where the run's baseline really sits above the line's:
+  # a run's glyphs are placed from its box bottom, which lies higher in a
+  # smaller font, so a superscript's baseline rises less than its `dy`.
+  ref_yoff <- NULL
   sp_text <- character(0)
   sp_face <- character(0)
   sp_size <- numeric(0)
@@ -1301,7 +1305,7 @@ md <- function(text) {
     if (li > 1L) {
       sp_text <- c(sp_text, "")
       sp_face <- c(sp_face, "")
-      sp_size <- c(sp_size, 0)
+      sp_size <- c(sp_size, lead)
       sp_dy <- c(sp_dy, 0)
       sp_ng <- c(sp_ng, -1L)
     }
@@ -1324,7 +1328,16 @@ md <- function(text) {
       sp_text <- c(sp_text, run$text)
       sp_face <- c(sp_face, .md_run_face(fontface, run))
       sp_size <- c(sp_size, rsize)
-      sp_dy <- c(sp_dy, run$dy * fontsize)
+      rise <- run$dy * fontsize
+      if (run$dy != 0 && sh$n > 0L) {
+        if (is.null(ref_yoff)) {
+          bf <- .rs_face(fontface)
+          ref <- .shape_cached("x", family, bf$italic, bf$weight, fontsize, features)[[1]]
+          ref_yoff <- if (ref$n > 0L) ref$yoff[1] else 0
+        }
+        rise <- rise + sh$yoff[1] - ref_yoff
+      }
+      sp_dy <- c(sp_dy, rise)
       sp_ng <- c(sp_ng, as.integer(sh$n))
       if (sh$n > 0L) {
         gid <- c(gid, sh$index)

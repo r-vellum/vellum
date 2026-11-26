@@ -288,8 +288,9 @@ pub struct TextRun<'a> {
 
 /// One styled run of a rich label, as the label's markup gave it: its text,
 /// face string (`"bold"`, `"italic@300"`), size and baseline shift (points,
-/// +up), and how many of the label's glyphs it shaped to. `brk` marks a line
-/// break between runs (its other fields are empty). Only a backend that writes
+/// +up: where its baseline sits above the line's), and how many of the
+/// label's glyphs it shaped to. `brk` marks a line break between runs; its
+/// `size` is the label's line pitch and its other fields are empty. Only a backend that writes
 /// native rich text reads them (PowerPoint, VR-40); the glyphs stay the
 /// drawing.
 #[derive(Clone, Debug, Default, PartialEq)]

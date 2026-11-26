@@ -2440,16 +2440,21 @@ impl DmlBackend {
             let (a, b) = (lines[0].0, lines[1].0);
             // The first two glyph lines may have blank lines between them.
             let steps = (nonblank[1] - nonblank[0]).max(1) as f64;
-            // A rich line's first glyph may be raised (a superscript): measure
-            // from its run's baseline.
-            let shift = |line: usize| {
-                paras
-                    .as_ref()
-                    .and_then(|ps| ps[nonblank[line]].iter().find(|sp| sp.glyphs > 0))
-                    .map_or(0.0, |sp| sp.dy * run.dpi / 72.0)
+            // A rich label's line breaks carry vellum's line pitch (its glyphs
+            // sit at run-dependent heights, so they cannot give it).
+            let rich_pitch = run
+                .spans
+                .iter()
+                .find(|sp| sp.brk && sp.size > 0.0)
+                .filter(|_| paras.is_some())
+                .map(|sp| sp.size * s);
+            let pitch_pt = match rich_pitch {
+                Some(p) => p,
+                None => {
+                    let pitch_px = (run.gy[a] - run.gy[b]).abs() * s / steps;
+                    pitch_px * 72.0 / (EMU_PER_INCH / self.k)
+                }
             };
-            let pitch_px = ((run.gy[a] - shift(0)) - (run.gy[b] - shift(1))).abs() * s / steps;
-            let pitch_pt = pitch_px * 72.0 / (EMU_PER_INCH / self.k);
             format!(
                 "<a:lnSpc><a:spcPts val=\"{}\"/></a:lnSpc>",
                 (pitch_pt * 100.0).round() as i64

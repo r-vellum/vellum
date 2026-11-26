@@ -140,7 +140,11 @@ test_that("md() labels become one editable run per span (VR-40)", {
   # a raised or lowered run keeps the size around it and shifts its baseline
   # (applications shrink it themselves)
   expect_identical(unique(attr_of("sz")), "2000")
-  expect_identical(attr_of("baseline")[c(2, 10)], c("35000", "-15000"))
+  # at its real height: the 0.7x run's box bottom sits higher than the base
+  # run's, so a superscript rises about 80% of its 0.35 em offset
+  base <- as.numeric(attr_of("baseline")[c(2, 10)])
+  expect_true(base[1] > 25000 && base[1] < 32000)
+  expect_true(base[2] < -15000 && base[2] > -22000)
   expect_true(all(is.na(attr_of("baseline")[-c(2, 10)])))
   # the colour span, and the label's alpha on every run
   cols <- xml2::xml_attr(
@@ -388,6 +392,23 @@ test_that("merged points keep the stacking order of overlapping points", {
   )
   expect_identical(cols, c("FF0000", "0000FF"))
   expect_length(xml2::xml_find_all(doc, ".//p:sp[1]//a:path", ns), 2)
+})
+
+test_that("a leading superscript or subscript keeps the md() line pitch", {
+  skip_if_not_installed("xml2")
+  pitch <- function(lab) {
+    sc <- vl_scene(4, 2, dpi = 96) |> draw(text_grob(lab))
+    doc <- xml2::read_xml(.dml_fragment(sc)$xml)
+    ns <- xml2::xml_ns(doc)
+    unique(xml2::xml_attr(xml2::xml_find_all(doc, ".//a:spcPts", ns), "val"))
+  }
+  # 1.2 x the default 12 pt, as a plain label gets
+  expect_identical(pitch("up line1\nline2"), "1440")
+  expect_identical(pitch(md("^up^ line1\nline2")), "1440")
+  expect_identical(pitch(md("line1\n~dn~ line2")), "1440")
+  expect_identical(pitch(md("line1\n^up^ line2")), "1440")
+  expect_identical(pitch(md("~a~\n^b^")), "1440")
+  expect_identical(pitch(md("**A**\n\n*b*")), "1440")
 })
 
 test_that("a blank line keeps a label native", {
