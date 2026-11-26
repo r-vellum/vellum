@@ -55,7 +55,12 @@
   PDF writer also skips any other geometry it cannot take (a non-finite
   transform, stroke width, text size or gradient coordinate) instead of
   panicking, and an unexpected failure inside it is now an R error rather
-  than a crash.
+  than a crash. `element_geometry()` and `hit_test()` leave the skipped
+  elements out too, so they match what is drawn.
+
+* A text size above 10,000 points is now an error. textshaping crashed the R
+  process on a size past FreeType's limit (about 65,000 px), e.g.
+  `vl_gpar(fontsize = 1e30)` (VR-38).
 
 # vellum 0.17.0
 

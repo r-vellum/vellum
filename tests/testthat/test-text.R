@@ -166,3 +166,25 @@ test_that("text measured outside a render has a finite width, or errors", {
     "finite number of points"
   )
 })
+
+test_that("an absurd font size is an error, not a crash (VR-38 review)", {
+  # textshaping segfaults on a face sized past FreeType's 16-bit ppem; vellum
+  # refuses such a size before shaping. Run in a child so a regression fails
+  # here rather than killing the test run.
+  res <- run_vellum_child(c(
+    "s <- draw(vl_scene(2, 2), text_grob('Hello', gp = vl_gpar(fontsize = 1e30)))",
+    "msg <- tryCatch({render(s, tempfile(fileext = '.png')); 'drawn'},",
+    "  error = function(e) conditionMessage(e))",
+    "cat(gsub('\\n', ' ', msg), '\\n')",
+    "f <- tempfile(fileext = '.pdf')",
+    "render(draw(vl_scene(2, 2), text_grob('Hi', gp = vl_gpar(fontsize = 9000))), f)",
+    "cat('alive\\n')"
+  ))
+  expect_identical(res$status, 0L)
+  expect_match(paste(res$output, collapse = " "), "at most 10000 points")
+  expect_identical(tail(res$output, 1), "alive")
+  expect_error(
+    vl_strwidth("Hello", fontsize = 2e4),
+    "at most 10000 points"
+  )
+})

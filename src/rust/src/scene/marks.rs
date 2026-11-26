@@ -454,12 +454,12 @@ pub(super) fn draw_circles<B: RenderBackend>(
     // path never visits elements one by one.
     if let Some(g) = b.geom_sink() {
         for i in 0..n {
-            g.disc(
-                i,
-                vp.x_pos(x[i], xu[i]),
-                vp.y_pos(y[i], yu[i]),
-                vp.r_len(r[i], ru[i]),
-            );
+            let (cx, cy) = (vp.x_pos(x[i], xu[i]), vp.y_pos(y[i], yu[i]));
+            let rr = vp.r_len(r[i], ru[i]);
+            // Only the discs the walk draws (VR-38).
+            if crate::render::drawable_disc(cx, cy, rr) {
+                g.disc(i, cx, cy, rr);
+            }
         }
     }
     if let Some(sk) = sketch {
@@ -583,7 +583,7 @@ pub(super) fn draw_markers<B: RenderBackend>(
         for i in 0..n {
             let (cx, cy) = (vp.x_pos(x[i], xu[i]), vp.y_pos(y[i], yu[i]));
             let rr = vp.r_len(size[i], su[i]);
-            if rr > 0.0 && cx.is_finite() && cy.is_finite() {
+            if crate::render::drawable_disc(cx, cy, rr) {
                 g.disc(i, cx, cy, rr);
             }
         }

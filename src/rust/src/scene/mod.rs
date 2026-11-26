@@ -354,9 +354,12 @@ impl Scene {
         // reach the `Surface` / `Page` destructors: they assert that every push
         // was popped, and a panic in a destructor while unwinding aborts the R
         // process (VR-38). So catch it here, leak the half-built page rather
-        // than run those destructors, and raise an ordinary R error.
+        // than run those destructors, and keep unwinding with a clear message:
+        // the extendr wrapper of every PDF entry point catches it and raises an
+        // ordinary R error, after the Rust frames between have been dropped
+        // normally (no longjmp over them).
         let drawn = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            let mut b = PdfBackend::new(&mut surface);
+            let mut b = PdfBackend::new(&mut surface, scale);
             // With the whole-content span open, per-node tagging stands down (no
             // nested spans); the decorative marks draw as the figure's content.
             b.set_outer_tagged(tag_id.is_some());
@@ -369,10 +372,10 @@ impl Scene {
             Err(payload) => {
                 std::mem::forget(surface);
                 std::mem::forget(page);
-                throw_r_error(format!(
+                std::panic::resume_unwind(Box::new(format!(
                     "PDF rendering failed: {}",
                     crate::render::panic_message(payload.as_ref())
-                ));
+                )));
             }
         };
         if tag_id.is_some() {
