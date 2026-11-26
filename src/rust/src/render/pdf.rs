@@ -497,6 +497,10 @@ enum PaintRole {
 }
 
 impl RenderBackend for PdfBackend<'_, '_> {
+    fn far_window(&self, transform: Transform) -> FarWin {
+        let (w, h) = self.page;
+        FarWin::for_page(transform, w, h)
+    }
     fn wants_node_meta(&self) -> bool {
         true
     }
@@ -887,6 +891,38 @@ impl RenderBackend for PdfBackend<'_, '_> {
         if iw == 0 || ih == 0 || rgba.len() < (iw as usize) * (ih as usize) * 4 {
             return;
         }
+        let (pw, ph) = self.page;
+        // A far image is cut to the part over the page first (VR-46).
+        let fitted;
+        let (rgba, iw, ih, x, y, w, h, interpolate) = match super::fit::vector_image(
+            rgba,
+            iw,
+            ih,
+            x,
+            y,
+            w,
+            h,
+            interpolate,
+            transform,
+            pw,
+            ph,
+        ) {
+            super::fit::VecImage::Keep => (rgba, iw, ih, x, y, w, h, interpolate),
+            super::fit::VecImage::Draw(f) => {
+                fitted = f;
+                (
+                    &fitted.rgba[..],
+                    fitted.iw,
+                    fitted.ih,
+                    fitted.x,
+                    fitted.y,
+                    fitted.w,
+                    fitted.h,
+                    fitted.interpolate,
+                )
+            }
+            super::fit::VecImage::Skip => return,
+        };
         let size = match KSize::from_wh(w as f32, h as f32) {
             Some(s) => s,
             None => return,

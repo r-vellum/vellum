@@ -758,6 +758,14 @@ pub trait RenderBackend {
     fn geom_sink(&mut self) -> Option<&mut crate::geom::GeomSink> {
         None
     }
+
+    /// Where a shape reaching past [`crate::units::PRECISE_PX`], drawn under
+    /// `transform`, is built exactly (VR-47): the page mapped back to local
+    /// px on a backend that draws a page, else a box about the origin.
+    fn far_window(&self, transform: Transform) -> FarWin {
+        let _ = transform;
+        FarWin::around_origin()
+    }
 }
 
 /// The message of a caught panic (`&str` or `String` payload).
@@ -806,7 +814,7 @@ fn circles_by_path<B: RenderBackend>(
         let lim = crate::units::PRECISE_PX;
         if cx[i].abs() + rr > lim || cy[i].abs() + rr > lim {
             let mut pb = PathBuilder::new();
-            push_circle_precise(&mut pb, cx[i], cy[i], rr);
+            push_circle_precise(&mut pb, cx[i], cy[i], rr, &b.far_window(transform));
             let Some(path) = pb.finish() else { continue };
             let pen = stroke.filter(|(_, s)| s.width > 0.0);
             match (fill, pen) {
@@ -883,7 +891,7 @@ fn circles_keyed<B: RenderBackend>(
     for i in 0..n {
         b.set_element_key(keys.get(i).map(String::as_str).filter(|k| !k.is_empty()));
         let mut pb = PathBuilder::new();
-        push_circle_precise(&mut pb, cx[i], cy[i], r[i]);
+        push_circle_precise(&mut pb, cx[i], cy[i], r[i], &b.far_window(transform));
         let Some(path) = pb.finish() else { continue };
         match (fill, pen) {
             (Some(rp), Some((col, style))) if !matches!(rp, ResolvedPaint::Hatch { .. }) => {

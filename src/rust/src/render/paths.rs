@@ -160,9 +160,12 @@ pub fn rect_path(x: f64, y: f64, w: f64, h: f64) -> Option<Path> {
 /// Append a circle to `pb`. Within [`crate::units::PRECISE_PX`] it is exactly
 /// tiny-skia's `push_circle`. Further out its points are placed in f64 before
 /// narrowing, so a huge circle whose edge crosses the page keeps that edge
-/// where it is (VR-45): four cubic quarter arcs, from the east point and
-/// turning the same way.
-pub fn push_circle_precise(pb: &mut PathBuilder, cx: f64, cy: f64, r: f64) {
+/// where it is (VR-45). Its outline is chords from the east point, turning
+/// the same way, that follow the circle within the window's tolerance where
+/// they pass the window ([`far_arc`]) and stay coarse elsewhere: four cubic
+/// quarter arcs miss a circle by 2.7e-4 of its radius between their ends,
+/// 27 px for a radius of 1e5 px (VR-47).
+pub fn push_circle_precise(pb: &mut PathBuilder, cx: f64, cy: f64, r: f64, win: &FarWin) {
     let lim = crate::units::PRECISE_PX;
     if (cx.abs() + r <= lim && cy.abs() + r <= lim)
         || !(cx.is_finite() && cy.is_finite() && r.is_finite())
@@ -173,22 +176,10 @@ pub fn push_circle_precise(pb: &mut PathBuilder, cx: f64, cy: f64, r: f64) {
     if r <= 0.0 {
         return;
     }
-    const K: f64 = 0.552_284_749_830_793_4;
-    let k = K * r;
-    let f = |x: f64, y: f64| (x as f32, y as f32);
-    let p = [f(cx + r, cy), f(cx, cy + r), f(cx - r, cy), f(cx, cy - r)];
-    let c = [
-        (f(cx + r, cy + k), f(cx + k, cy + r)),
-        (f(cx - k, cy + r), f(cx - r, cy + k)),
-        (f(cx - r, cy - k), f(cx - k, cy - r)),
-        (f(cx + k, cy - r), f(cx + r, cy - k)),
-    ];
-    pb.move_to(p[0].0, p[0].1);
-    for i in 0..4 {
-        let ((a, b), e) = (c[i], p[(i + 1) % 4]);
-        pb.cubic_to(a.0, a.1, b.0, b.1, e.0, e.1);
-    }
-    pb.close();
+    let mut pts = vec![(cx + r, cy)];
+    far_arc(&mut pts, cx, cy, r, 0.0, -std::f64::consts::TAU, win);
+    pts.pop(); // back at the start
+    push_far_poly(pb, &pts, true, win);
 }
 
 /// A rounded rectangle (top-left `(x, y)`, size `w`×`h`, corner radius `r` in the
@@ -266,6 +257,13 @@ pub fn hexagon_path_xy(cx: f64, cy: f64, hx: f64, hy: f64, flat: bool) -> Option
         ]
     };
     let mut pb = PathBuilder::new();
+    let lim = crate::units::PRECISE_PX;
+    if cx.abs() + hx > lim || cy.abs() + hy > lim {
+        // Far: edges cut at the window in f64 (VR-47).
+        let pts: Vec<(f64, f64)> = corners.iter().map(|(dx, dy)| (cx + dx, cy + dy)).collect();
+        push_far_poly(&mut pb, &pts, true, &FarWin::around_origin());
+        return pb.finish();
+    }
     for (k, (dx, dy)) in corners.iter().enumerate() {
         let (px, py) = ((cx + dx) as f32, (cy + dy) as f32);
         if k == 0 {
@@ -298,6 +296,19 @@ pub fn clamp_sweep(dtheta: f64) -> f64 {
 /// the centre (a pie slice); `r0 == r1` yields a zero-area path (an arc outline when
 /// stroked). Returns `None` for a zero angular span or non-positive outer radius.
 pub fn sector_path(cx: f64, cy: f64, r0: f64, r1: f64, theta0: f64, theta1: f64) -> Option<Path> {
+    sector_path_in(cx, cy, r0, r1, theta0, theta1, &FarWin::around_origin())
+}
+
+/// [`sector_path`], with a far sector's outline kept exact within `win`.
+pub fn sector_path_in(
+    cx: f64,
+    cy: f64,
+    r0: f64,
+    r1: f64,
+    theta0: f64,
+    theta1: f64,
+    win: &FarWin,
+) -> Option<Path> {
     let r_out = r1.max(0.0);
     let r_in = r0.max(0.0);
     let dtheta = clamp_sweep(theta1 - theta0);
@@ -305,6 +316,10 @@ pub fn sector_path(cx: f64, cy: f64, r0: f64, r1: f64, theta0: f64, theta1: f64)
         return None;
     }
     let theta1 = theta0 + dtheta;
+    let lim = crate::units::PRECISE_PX;
+    if cx.abs() + r_out > lim || cy.abs() + r_out > lim {
+        return far_sector_path(cx, cy, r_in, r_out, theta0, theta1, win);
+    }
     // ~4 degrees per segment, at least 2 segments across the span. Cap the count so
     // an extreme span (should already be rejected R-side as non-finite/huge, but be
     // defensive) can't blow up the allocation / loop.
@@ -336,6 +351,211 @@ pub fn sector_path(cx: f64, cy: f64, r0: f64, r1: f64, theta0: f64, theta1: f64)
     pb.finish()
 }
 
+/// Local px around the origin where a far shape's outline is kept exact when
+/// the page is not known: four times [`crate::units::PRECISE_PX`] either way.
+/// A viewport placed within `PRECISE_PX` of the page, or rebased onto it, puts
+/// every page in this box.
+const FAR_WINDOW: f64 = 4.0 * crate::units::PRECISE_PX;
+
+/// The largest gap (device px) between a far arc and the chords drawn for it,
+/// where it passes the window.
+const FAR_ARC_TOL: f64 = 1.0 / 32.0;
+
+/// Where a shape reaching past [`crate::units::PRECISE_PX`] is built exactly
+/// (VR-47): a box in local px (the page, grown by a margin, mapped back
+/// through the transform) and the arc tolerance there, in local px. Outside
+/// the box nothing is visible, so arcs stay coarse there.
+#[derive(Clone, Copy, Debug)]
+pub struct FarWin {
+    /// `[x0, y0, x1, y1]`, local px.
+    pub b: [f64; 4],
+    /// Arc tolerance, local px.
+    pub tol: f64,
+}
+
+impl FarWin {
+    /// The window when the page is not known: [`FAR_WINDOW`] about the origin.
+    pub fn around_origin() -> Self {
+        FarWin {
+            b: [-FAR_WINDOW, -FAR_WINDOW, FAR_WINDOW, FAR_WINDOW],
+            tol: FAR_ARC_TOL,
+        }
+    }
+
+    /// The window for a `w` x `h` px page drawn under `t`: the page grown by
+    /// the margin the far fits cut to (`fit_fill`), mapped back to local px.
+    /// Falls back to [`FarWin::around_origin`] if `t` cannot be inverted.
+    pub fn for_page(t: Transform, w: u32, h: u32) -> Self {
+        let (a, b, c, d) = (t.sx as f64, t.ky as f64, t.kx as f64, t.sy as f64);
+        let (e, f) = (t.tx as f64, t.ty as f64);
+        let det = a * d - b * c;
+        if !(det.is_finite() && det != 0.0 && e.is_finite() && f.is_finite()) {
+            return Self::around_origin();
+        }
+        let m = w.max(h) as f64 + 4.0;
+        let mut out = [
+            f64::INFINITY,
+            f64::INFINITY,
+            f64::NEG_INFINITY,
+            f64::NEG_INFINITY,
+        ];
+        for (x, y) in [
+            (-m, -m),
+            (w as f64 + m, -m),
+            (w as f64 + m, h as f64 + m),
+            (-m, h as f64 + m),
+        ] {
+            let (qx, qy) = (x - e, y - f);
+            let (lx, ly) = ((d * qx - c * qy) / det, (a * qy - b * qx) / det);
+            out[0] = out[0].min(lx);
+            out[1] = out[1].min(ly);
+            out[2] = out[2].max(lx);
+            out[3] = out[3].max(ly);
+        }
+        let tol = FAR_ARC_TOL / det.abs().sqrt();
+        if out.iter().all(|v| v.is_finite()) && tol.is_finite() && tol > 0.0 {
+            FarWin { b: out, tol }
+        } else {
+            Self::around_origin()
+        }
+    }
+
+    /// Does the box `[x0, y0, x1, y1]` touch the window?
+    fn touches(&self, x0: f64, y0: f64, x1: f64, y1: f64) -> bool {
+        x0 <= self.b[2] && x1 >= self.b[0] && y0 <= self.b[3] && y1 >= self.b[1]
+    }
+
+    /// Where the segment `p` -> `q` enters and leaves the window, as
+    /// parameters strictly inside `(0, 1)` (Liang-Barsky).
+    fn crossings(&self, p: (f64, f64), q: (f64, f64)) -> [Option<f64>; 2] {
+        let (dx, dy) = (q.0 - p.0, q.1 - p.1);
+        let (mut t0, mut t1) = (0.0f64, 1.0f64);
+        for (den, num) in [
+            (-dx, p.0 - self.b[0]),
+            (dx, self.b[2] - p.0),
+            (-dy, p.1 - self.b[1]),
+            (dy, self.b[3] - p.1),
+        ] {
+            if den == 0.0 {
+                if num < 0.0 {
+                    return [None, None];
+                }
+            } else {
+                let r = num / den;
+                if den < 0.0 {
+                    t0 = t0.max(r);
+                } else {
+                    t1 = t1.min(r);
+                }
+            }
+        }
+        if !(t0 < t1) {
+            return [None, None];
+        }
+        [(t0 > 0.0).then_some(t0), (t1 < 1.0).then_some(t1)]
+    }
+}
+
+/// Append the polyline `pts` (f64, local px) to `pb`, closed if `close`.
+/// Each edge is cut where it enters and leaves `win`, in f64, and those
+/// points are added before narrowing: an edge crossing the page between two
+/// vertices 1e9 px away would otherwise move with their f32 rounding, up to
+/// 64 px (VR-47). Off the window, the narrowed edge does not matter.
+pub fn push_far_poly(pb: &mut PathBuilder, pts: &[(f64, f64)], close: bool, win: &FarWin) {
+    let Some(&first) = pts.first() else {
+        return;
+    };
+    let f = |p: (f64, f64)| (p.0 as f32, p.1 as f32);
+    let (x, y) = f(first);
+    pb.move_to(x, y);
+    let n = pts.len();
+    let edges = if close { n } else { n - 1 };
+    for k in 0..edges {
+        let (p, q) = (pts[k], pts[(k + 1) % n]);
+        for t in win.crossings(p, q).into_iter().flatten() {
+            let (x, y) = f((p.0 + t * (q.0 - p.0), p.1 + t * (q.1 - p.1)));
+            pb.line_to(x, y);
+        }
+        if k + 1 < n {
+            let (x, y) = f(q);
+            pb.line_to(x, y);
+        }
+    }
+    if close {
+        pb.close();
+    }
+}
+
+/// Append the arc of radius `r` about `(cx, cy)` from `a0` to `a1` (radians,
+/// y-up as in [`sector_path`]) to `pts`, not including its start point. Each
+/// ~4 degree chord that passes near `win` is split until it lies within the
+/// window's tolerance of the arc: for a radius of 1e9 px a 4 degree chord
+/// misses the arc by 6e5 px. Chords away from the window stay as they are.
+fn far_arc(pts: &mut Vec<(f64, f64)>, cx: f64, cy: f64, r: f64, a0: f64, a1: f64, win: &FarWin) {
+    let pt = |a: f64| (cx + r * a.cos(), cy - r * a.sin());
+    fn piece(
+        pts: &mut Vec<(f64, f64)>,
+        pt: &dyn Fn(f64) -> (f64, f64),
+        win: &FarWin,
+        r: f64,
+        a0: f64,
+        a1: f64,
+        depth: u32,
+    ) {
+        let (p, q) = (pt(a0), pt(a1));
+        // The arc lies within its chord's box grown by the sagitta.
+        let sag = r * (1.0 - (0.5 * (a1 - a0)).cos());
+        let near = win.touches(
+            p.0.min(q.0) - sag,
+            p.1.min(q.1) - sag,
+            p.0.max(q.0) + sag,
+            p.1.max(q.1) + sag,
+        );
+        if !near || sag <= win.tol || depth >= 64 || pts.len() >= 1 << 20 {
+            pts.push(q);
+            return;
+        }
+        let m = 0.5 * (a0 + a1);
+        piece(pts, pt, win, r, a0, m, depth + 1);
+        piece(pts, pt, win, r, m, a1, depth + 1);
+    }
+    let segs = (((a1 - a0).abs() / (std::f64::consts::PI / 45.0))
+        .ceil()
+        .max(2.0) as usize)
+        .min(4096);
+    for k in 0..segs {
+        let b0 = a0 + (a1 - a0) * (k as f64) / (segs as f64);
+        let b1 = a0 + (a1 - a0) * ((k + 1) as f64) / (segs as f64);
+        piece(pts, &pt, win, r, b0, b1, 0);
+    }
+}
+
+/// [`sector_path`] for a sector reaching past [`crate::units::PRECISE_PX`]
+/// (VR-47): its arcs follow the circle within the window's tolerance where
+/// they pass `win`, and its edges are cut at the window in f64.
+fn far_sector_path(
+    cx: f64,
+    cy: f64,
+    r_in: f64,
+    r_out: f64,
+    theta0: f64,
+    theta1: f64,
+    win: &FarWin,
+) -> Option<Path> {
+    let pt = |r: f64, a: f64| (cx + r * a.cos(), cy - r * a.sin());
+    let mut pts = vec![pt(r_out, theta0)];
+    far_arc(&mut pts, cx, cy, r_out, theta0, theta1, win);
+    if r_in > 0.0 {
+        pts.push(pt(r_in, theta1));
+        far_arc(&mut pts, cx, cy, r_in, theta1, theta0, win);
+    } else {
+        pts.push((cx, cy));
+    }
+    let mut pb = PathBuilder::new();
+    push_far_poly(&mut pb, &pts, true, win);
+    pb.finish()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -346,7 +566,7 @@ mod tests {
         let b = PathBuilder::from_rect(tiny_skia::Rect::from_xywh(10.3, 20.7, 30.1, 5.5).unwrap());
         assert_eq!(format!("{a:?}"), format!("{b:?}"));
         let mut pa = PathBuilder::new();
-        push_circle_precise(&mut pa, 53.75, 285.9, 3.78);
+        push_circle_precise(&mut pa, 53.75, 285.9, 3.78, &FarWin::around_origin());
         let mut pb = PathBuilder::new();
         pb.push_circle(53.75, 285.9, 3.78);
         assert_eq!(format!("{:?}", pa.finish()), format!("{:?}", pb.finish()));
@@ -363,12 +583,117 @@ mod tests {
     #[test]
     fn a_far_circle_keeps_its_near_edge_exact() {
         let mut pb = PathBuilder::new();
-        push_circle_precise(&mut pb, 1e9 + 100.0, 50.0, 1e9);
+        push_circle_precise(&mut pb, 1e9 + 100.0, 50.0, 1e9, &FarWin::around_origin());
         let p = pb.finish().unwrap();
         assert_eq!(p.bounds().left(), 100.0f32);
         // within 1/64 px of the true circle near its west point
         let mut pb = PathBuilder::new();
-        push_circle_precise(&mut pb, 1e9 + 100.25, 50.0, 1e9);
+        push_circle_precise(&mut pb, 1e9 + 100.25, 50.0, 1e9, &FarWin::around_origin());
         assert_eq!(pb.finish().unwrap().bounds().left(), 100.25f32);
+    }
+
+    // x where the outline of `p` crosses height `y`, nearest `near`.
+    fn crossing(p: &Path, y: f64, near: f64) -> f64 {
+        let ring = &flatten_rings(p)[0];
+        let mut best = f64::INFINITY;
+        for k in 0..ring.len() {
+            let (a, b) = (ring[k], ring[(k + 1) % ring.len()]);
+            let (ay, by) = (a.1 as f64, b.1 as f64);
+            if (ay - y) * (by - y) <= 0.0 && ay != by {
+                let x = a.0 as f64 + (y - ay) / (by - ay) * (b.0 as f64 - a.0 as f64);
+                if (x - near).abs() < (best - near).abs() {
+                    best = x;
+                }
+            }
+        }
+        best
+    }
+
+    #[test]
+    fn a_far_sector_follows_its_arc_across_the_page() {
+        // The left half of a disc of radius 1e9 whose west point is at
+        // 100.25 px. 4 degree chords missed the arc by 6e5 px (VR-47).
+        let (cx, cy, r) = (1e9 + 100.25, 50.0, 1e9);
+        let half = std::f64::consts::FRAC_PI_2;
+        for (r0, (t0, t1)) in [(0.0, (half, 3.0 * half)), (r - 10.0, (3.0 * half, half))] {
+            let p = sector_path(cx, cy, r0, r, t0, t1).unwrap();
+            for y in [0.0, 50.0, 100.0] {
+                let want = cx - (r * r - (y - cy) * (y - cy)).sqrt();
+                assert!((crossing(&p, y, want) - want).abs() < 0.05, "y = {y}");
+            }
+        }
+        // and within PRECISE_PX it is built as before (~4 degree chords)
+        let near = sector_path(100.0, 100.0, 0.0, 50.0, 0.0, half).unwrap();
+        // (23 chords out, 24 points back, the start)
+        assert_eq!(near.len(), 1 + 23 + 24 + 1);
+    }
+
+    #[test]
+    fn a_far_circle_follows_its_arc_between_the_compass_points() {
+        // Crossing the page 22.5 degrees round from its east point, where
+        // cubic quarter arcs missed it by 27 px at a radius of 1e5 (VR-47).
+        let a = std::f64::consts::PI / 8.0;
+        for r in [1e5, 1e7, 1e9] {
+            let (cx, cy) = (72.0 - r * a.cos(), 72.0 + r * a.sin());
+            let mut pb = PathBuilder::new();
+            push_circle_precise(&mut pb, cx, cy, r, &FarWin::around_origin());
+            let p = pb.finish().unwrap();
+            for y in [50.0, 72.0, 100.0] {
+                let want = cx + (r * r - (y - cy) * (y - cy)).sqrt();
+                assert!(
+                    (crossing(&p, y, want) - want).abs() < 0.05,
+                    "r = {r}, y = {y}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn a_far_edge_between_two_far_vertices_crosses_the_page_exactly() {
+        // The line x + y = 144.3 between vertices 1e9 px either way: each
+        // vertex alone rounds by up to 64 px in f32 (VR-47).
+        let r = 1e9;
+        let pts = [
+            (72.15 - r, 72.15 + r),
+            (72.15 + r, 72.15 - r),
+            (72.15 + r, 72.15 + r),
+        ];
+        let mut pb = PathBuilder::new();
+        push_far_poly(&mut pb, &pts, true, &FarWin::around_origin());
+        let p = pb.finish().unwrap();
+        for y in [0.0, 72.0, 144.0] {
+            assert!(
+                (crossing(&p, y, 144.3 - y) - (144.3 - y)).abs() < 0.02,
+                "y = {y}"
+            );
+        }
+        // and a sector's radial edge from a centre 1e9 px away
+        let a: f64 = 0.3;
+        let (cx, cy) = (72.0 - r * a.cos(), 72.0 + r * a.sin());
+        let p = sector_path(cx, cy, 0.0, 2.0 * r, a, a + 0.5).unwrap();
+        for y in [60.0, 72.0, 84.0] {
+            let want = cx + (cy - y) / a.tan();
+            assert!(
+                (crossing(&p, y, want) - want).abs() < 0.02,
+                "sector y = {y}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_far_circle_is_fine_only_over_the_page() {
+        // r = 1e5 px, its edge through a 144 px page: chords fine only near
+        // the page, ~4 degree ones elsewhere.
+        let (r, a) = (1e5, std::f64::consts::PI / 8.0);
+        let (cx, cy) = (72.0 - r * a.cos(), 72.0 + r * a.sin());
+        let win = FarWin::for_page(Transform::identity(), 144, 144);
+        let mut pb = PathBuilder::new();
+        push_circle_precise(&mut pb, cx, cy, r, &win);
+        let p = pb.finish().unwrap();
+        assert!(p.len() < 200, "{} points", p.len());
+        for y in [0.0, 72.0, 144.0] {
+            let want = cx + (r * r - (y - cy) * (y - cy)).sqrt();
+            assert!((crossing(&p, y, want) - want).abs() < 0.05, "y = {y}");
+        }
     }
 }

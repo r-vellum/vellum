@@ -159,3 +159,151 @@ test_that("a far clipped viewport keeps a rect clip on every backend (VR-45)", {
   expect_identical(scene_display_list(far), scene_display_list(near))
   expect_identical(scene_raster(far), scene_raster(near))
 })
+
+test_that("far markers and sectors keep their edge on the page (VR-47)", {
+  # Red on white, row 72 of a 144 px page: ink from an edge at 50.3 px.
+  row_ink <- function(s) {
+    a <- scene_raster(s)
+    sum(255 - a[2, , 72]) / 255
+  }
+  u <- function(v) vl_unit(v, "pt")
+  stroked <- vl_gpar(fill = "red", col = "red", lwd = 0.01)
+  marker <- function(off, shape, gp = fill) {
+    base |>
+      draw(points_grob(u(off + 50.3), 0.5, size = u(off), shape = shape, gp = gp))
+  }
+  # the same glyph built near the origin, as before
+  near <- function(shape, gp = fill) row_ink(marker(1e4, shape, gp))
+  for (off in c(1e5, 1e7, 1e9)) {
+    info <- format(off)
+    # the unit-shape fast path, and the per-element build
+    expect_lt(abs(row_ink(marker(off, "square")) - near("square")), 0.05, label = paste("square", info))
+    expect_lt(abs(row_ink(marker(off, "diamond")) - near("diamond")), 0.05, label = paste("diamond", info))
+    expect_lt(
+      abs(row_ink(marker(off, "square", stroked)) - near("square", stroked)),
+      0.05,
+      label = paste("stroked square", info)
+    )
+    # a half disc of radius `off` whose west point is at 50.3 px: drawn
+    # with ~4 degree chords, it missed the page by up to 6e5 px
+    sector <- base |>
+      draw(sector_grob(
+        u(off + 50.3),
+        0.5,
+        r1 = u(off),
+        theta0 = pi / 2,
+        theta1 = 3 * pi / 2,
+        gp = fill
+      ))
+    expect_lt(abs(row_ink(sector) - (144 - 50.3)), 0.1, label = paste("sector", info))
+  }
+  # A disc crossing the page centre 22.5 degrees round from its west point,
+  # where cubic quarter arcs missed the circle by 2.7e-4 of the radius: the
+  # sector and the circle agree with each other and with the true crossing.
+  a <- pi / 8
+  for (off in c(1e5, 1e9)) {
+    at <- list(u(off * cos(a) + 72), u(off * sin(a) + 72))
+    circle <- draw(base, circle_grob(at[[1]], at[[2]], r = u(off), gp = fill))
+    disc <- draw(base, sector_grob(at[[1]], at[[2]], r1 = u(off), gp = fill))
+    # row 72 spans y in [71, 72] px from the top: the edge crosses it at
+    # x = 72 - 0.5 * tan(a) on average, ink to its right
+    want <- 72 + 0.5 * tan(a)
+    expect_lt(abs(row_ink(circle) - want), 0.3, label = paste("circle", off))
+    expect_lt(abs(row_ink(disc) - want), 0.3, label = paste("disc", off))
+  }
+})
+
+test_that("a far edge between two far vertices crosses the page exactly (VR-47)", {
+  row_ink <- function(s) {
+    a <- scene_raster(s)
+    sum(255 - a[2, , 72]) / 255
+  }
+  u <- function(v) vl_unit(v, "pt")
+  # a diamond whose upper-left edge crosses the page centre, both of its
+  # vertices r / 2 away; a sector whose first radial edge does, its centre
+  # r away. Each vertex alone rounds by up to 64 px at 1e9.
+  dia <- function(r) {
+    base |>
+      draw(points_grob(u(72 + r / 2), u(72 - r / 2), size = u(r), shape = "diamond", gp = fill))
+  }
+  a <- 0.3
+  sec <- function(r) {
+    base |>
+      draw(sector_grob(
+        u(72 - r * cos(a)),
+        u(72 - r * sin(a)),
+        r1 = u(2 * r),
+        theta0 = a,
+        theta1 = a + 0.5,
+        gp = fill
+      ))
+  }
+  for (r in c(1e5, 1e7, 1e9)) {
+    expect_lt(abs(row_ink(dia(r)) - row_ink(dia(1e3))), 0.05, label = paste("diamond", r))
+    expect_lt(abs(row_ink(sec(r)) - row_ink(sec(1e3))), 0.05, label = paste("sector", r))
+  }
+})
+
+test_that("a far circle is split finely only over the page (VR-47)", {
+  # r = 1e5 px crossing the page: a few hundred bytes of SVG, not a path
+  # of thousands of 1/32 px chords
+  a <- pi / 8
+  s <- base |>
+    draw(circle_grob(
+      vl_unit(72 - 1e5 * cos(a), "pt"),
+      vl_unit(72 - 1e5 * sin(a), "pt"),
+      r = vl_unit(1e5, "pt"),
+      gp = fill
+    ))
+  expect_lt(nchar(scene_svg(s)), 10000)
+})
+
+test_that("a far raster image draws the part over the page on every backend (VR-46)", {
+  u <- function(v) vl_unit(v, "pt")
+  two <- matrix(c("red", "blue"), 1, 2)
+  img <- function(w, interpolate = FALSE) {
+    base |>
+      draw(raster_grob(two, width = u(w), height = 0.5, interpolate = interpolate))
+  }
+  # red left of the page centre, blue right of it (row 72)
+  seam_ok <- function(a, info) {
+    al <- if (dim(a)[3] == 4) a[72, , 4] else 1
+    red <- a[72, , 1] * al > 0.5 & a[72, , 3] * al < 0.5
+    blue <- a[72, , 3] * al > 0.5 & a[72, , 1] * al < 0.5
+    expect_true(all(red[3:70]), label = info)
+    expect_true(all(blue[75:142]), label = info)
+  }
+  for (w in c(1e7, 1e10)) {
+    s <- img(w)
+    a <- scene_raster(s)
+    seam_ok(aperm(a, c(3, 2, 1)) / 255, paste("png", w))
+    # the SVG image stays near the page
+    svg <- scene_svg(s)
+    xy <- as.numeric(regmatches(
+      svg,
+      gregexpr('(?<=<image href="data:image/png;base64,)[^"]*" x="[-0-9.e]+', svg, perl = TRUE)
+    )[[1]] |> sub(pattern = '.*x="', replacement = ""))
+    expect_true(all(abs(xy) < 1e4), label = paste("svg x", w))
+    if (nzchar(Sys.which("rsvg-convert")) && requireNamespace("png", quietly = TRUE)) {
+      f <- withr::local_tempfile(fileext = ".svg")
+      o <- withr::local_tempfile(fileext = ".png")
+      render(s, f)
+      system2("rsvg-convert", c("-o", o, f))
+      seam_ok(png::readPNG(o), paste("svg", w))
+    }
+    if (requireNamespace("pdftools", quietly = TRUE)) {
+      f <- withr::local_tempfile(fileext = ".pdf")
+      render(s, f)
+      b <- pdftools::pdf_render_page(f, dpi = 72, numeric = TRUE)
+      seam_ok(b, paste("pdf", w))
+    }
+    # PowerPoint places a picture of the visible part, in EMU range
+    f <- withr::local_tempfile(fileext = ".pptx")
+    render(s, f)
+    d <- withr::local_tempdir()
+    utils::unzip(f, exdir = d)
+    x <- paste(readLines(file.path(d, "ppt/slides/slide1.xml"), warn = FALSE), collapse = "")
+    off <- as.numeric(regmatches(x, gregexpr('(?<=<a:off x=")-?[0-9]+', x, perl = TRUE))[[1]])
+    expect_true(all(abs(off) < 1e8), label = paste("pptx", w))
+  }
+})

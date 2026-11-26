@@ -278,7 +278,7 @@ pub(super) fn draw_circle<B: RenderBackend>(
         paint_sketch(b, &s, gp, t, clip, vp, o.fill_weight);
     } else {
         let mut pb = PathBuilder::new();
-        crate::render::push_circle_precise(&mut pb, cx, cy, rr);
+        crate::render::push_circle_precise(&mut pb, cx, cy, rr, &b.far_window(t));
         if let Some(path) = pb.finish() {
             fill_then_stroke(b, &path, gp, t, clip, vp, FillRule::Winding);
         }
@@ -538,7 +538,7 @@ pub(super) fn draw_circles<B: RenderBackend>(
             let cy = vp.y_pos(y[i], yu[i]);
             let rr = vp.r_len(r[i], ru[i]);
             let mut pb = PathBuilder::new();
-            crate::render::push_circle_precise(&mut pb, cx, cy, rr);
+            crate::render::push_circle_precise(&mut pb, cx, cy, rr, &b.far_window(t));
             if let Some(path) = pb.finish() {
                 fill_paint_then_stroke(
                     b,
@@ -709,6 +709,24 @@ pub(super) fn draw_markers<B: RenderBackend>(
         }
         let sh = shape[i];
         b.begin_marker(sh, cx, cy, rr, t, clip);
+        if far_box(cx, cy, 2.0 * rr, 2.0 * rr) {
+            // Far from the origin, built in place in f64 (VR-47).
+            let Some(path) = far_marker_path(sh, cx, cy, rr, &b.far_window(t)) else {
+                continue;
+            };
+            if sh == 4 || sh == 5 {
+                if let Some(col) = gp.col.filter(|_| style.width > 0.0) {
+                    b.stroke_lines(&path, t, col, &style, clip);
+                }
+            } else if fast {
+                if let Some(rp) = &rf {
+                    fill_or_hatch(b, &path, t, rp, FillRule::Winding, clip);
+                }
+            } else {
+                fill_then_stroke(b, &path, gp, t, clip, vp, FillRule::Winding);
+            }
+            continue;
+        }
         if fast && sh != 4 && sh != 5 {
             if let Some(rp) = &rf {
                 let slot = (sh as usize).min(7);
@@ -961,6 +979,8 @@ pub(super) fn draw_sectors<B: RenderBackend>(
     }
     let style = stroke_style(gp, vp);
     let pen = gp.col.filter(|_| style.width > 0.0).map(|c| (c, style.clone()));
+    // A far sector is built exactly over the page (VR-47).
+    let win = b.far_window(t);
     // Arrowheads (directed self-loops) accumulate across the batch and
     // are drawn once at the end, tangent to each outer arc's end(s).
     let mut ends: Vec<(f32, f32, f64, f64)> = Vec::new();
@@ -973,7 +993,7 @@ pub(super) fn draw_sectors<B: RenderBackend>(
         }
         let rr0 = vp.r_len(r0[i], r0u[i]);
         let rr1 = vp.r_len(r1[i], r1u[i]);
-        if let Some(path) = sector_path(cx, cy, rr0, rr1, theta0[i], theta1[i]) {
+        if let Some(path) = sector_path_in(cx, cy, rr0, rr1, theta0[i], theta1[i], &win) {
             if let Some(g) = b.geom_sink() {
                 g.path(i, &path, FillRule::Winding);
             }

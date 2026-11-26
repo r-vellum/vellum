@@ -538,6 +538,10 @@ impl SvgBackend {
 }
 
 impl RenderBackend for SvgBackend {
+    fn far_window(&self, transform: Transform) -> FarWin {
+        let (w, h) = (self.w, self.h);
+        FarWin::for_page(transform, w, h)
+    }
     fn fill_path(
         &mut self,
         path: &Path,
@@ -982,6 +986,37 @@ impl RenderBackend for SvgBackend {
         transform: Transform,
         clip: &Clip,
     ) {
+        // A far image is cut to the part over the page first (VR-46).
+        let fitted;
+        let (rgba, iw, ih, x, y, w, h, interpolate) = match super::fit::vector_image(
+            rgba,
+            iw,
+            ih,
+            x,
+            y,
+            w,
+            h,
+            interpolate,
+            transform,
+            self.w,
+            self.h,
+        ) {
+            super::fit::VecImage::Keep => (rgba, iw, ih, x, y, w, h, interpolate),
+            super::fit::VecImage::Draw(f) => {
+                fitted = f;
+                (
+                    &fitted.rgba[..],
+                    fitted.iw,
+                    fitted.ih,
+                    fitted.x,
+                    fitted.y,
+                    fitted.w,
+                    fitted.h,
+                    fitted.interpolate,
+                )
+            }
+            super::fit::VecImage::Skip => return,
+        };
         let png = match straight_png(rgba, iw, ih) {
             Some(b) => b,
             None => return,
