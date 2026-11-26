@@ -1,5 +1,18 @@
 # vellum (development version)
 
+## New features
+
+* A DrawingML backend (F-24, part 1): a scene can be written as editable
+  PowerPoint shapes. Paths become `custGeom` freeforms baked to slide
+  coordinates (axis-aligned rectangles and circles stay preset rectangles and
+  ellipses), strokes keep their width, cap, join and dash, colours their
+  alpha, and rasters become pictures. Text is a native, editable text run in a
+  box sized to vellum's own measurement, aligned from `hjust`/`vjust` so a
+  substituted font grows away from the anchor, and rotated like the label;
+  `md()` and `tex()` labels, halos and text on a path are glyph outlines, as
+  in SVG. Panels become named shape groups. The user-facing entry points
+  (officer's `ph_with()` and `.pptx` files) follow in the next changes.
+
 # vellum 0.17.0
 
 ## New features

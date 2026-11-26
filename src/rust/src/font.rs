@@ -190,6 +190,20 @@ impl FontCache {
         Some(GlyphSprite { pixmap: pm, dx: sminx as i32, dy: sminy as i32 })
     }
 
+    /// The family name a font file declares (typographic family when present,
+    /// else the legacy family), for backends that name fonts rather than embed
+    /// glyphs. `None` when the file cannot be read or carries no name.
+    pub fn family_name(&mut self, font_path: &str, face_index: u32) -> Option<String> {
+        use skrifa::string::StringId;
+        let bytes = self.bytes(font_path)?;
+        let font = FontRef::from_index(bytes.as_slice(), face_index).ok()?;
+        [StringId::TYPOGRAPHIC_FAMILY_NAME, StringId::FAMILY_NAME]
+            .into_iter()
+            .filter_map(|id| font.localized_strings(id).english_or_first())
+            .map(|s| s.to_string())
+            .find(|s| !s.trim().is_empty())
+    }
+
     fn sprite_stats(&self) -> (i64, i64, i64) {
         (self.sprite_hits, self.sprite_misses, self.sprites.len() as i64)
     }
@@ -204,6 +218,11 @@ thread_local! {
 /// Glyph outline via the persistent cache. See [`FontCache::glyph_outline`].
 pub fn glyph_outline_cached(font_path: &str, face_index: u32, glyph_id: u32, size_px: f32) -> Option<Rc<tiny_skia::Path>> {
     GLYPH_CACHE.with(|c| c.borrow_mut().glyph_outline(font_path, face_index, glyph_id, size_px))
+}
+
+/// Family name via the persistent cache. See [`FontCache::family_name`].
+pub fn font_family_name(font_path: &str, face_index: u32) -> Option<String> {
+    GLYPH_CACHE.with(|c| c.borrow_mut().family_name(font_path, face_index))
 }
 
 /// Glyph sprite via the persistent cache. See [`FontCache::glyph_sprite`].

@@ -1682,6 +1682,37 @@ impl Scene {
         warnings
     }
 
+    /// Render the scene as a DrawingML fragment: one `<p:grpSp>` placed `left`,
+    /// `top` EMU from the slide corner, for officer's `ph_with()`. Rasters are
+    /// written to `media_dir` as PNG files and referenced by path (officer copies
+    /// them into the package on save); an empty `media_dir` leaves placeholder
+    /// names instead (tests). `list(xml, files, warnings)`.
+    fn render_dml(&self, left: f64, top: f64, outline_text: bool, media_dir: &str) -> List {
+        let mut b = DmlBackend::new(
+            self.w_px,
+            self.h_px,
+            self.dpi,
+            self.bg,
+            left.round() as i64,
+            top.round() as i64,
+            outline_text,
+        );
+        b.set_name(&self.a11y_title);
+        let warnings = self.render_to(&mut b);
+        let (xml, media, _) = b.finish();
+        let files: Vec<String> = if media_dir.is_empty() {
+            (1..=media.len()).map(|i| format!("vellum-media-{i}")).collect()
+        } else {
+            write_media_files(&media, media_dir).unwrap_or_else(|e| {
+                throw_r_error(format!(
+                    "failed to write a raster for PowerPoint output: {e}"
+                ))
+            })
+        };
+        let xml = resolve_media(&xml, |i| files[i].clone());
+        list!(xml = xml, files = files, warnings = warnings)
+    }
+
     /// Render the scene and return the SVG document as a string (rather than
     /// writing it to a file). Same output as `render_svg`; the interactivity
     /// layer needs the markup in-memory to embed it in an htmlwidget, and tests

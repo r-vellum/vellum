@@ -495,6 +495,14 @@ rs_math_layout <- function(src, path, face, size, display) .Call(wrap__rs_math_l
 #'Returns any degradation warnings.
 #'}
 #'
+#'\subsection{Method `render_dml`}{
+#'Render the scene as a DrawingML fragment: one `<p:grpSp>` placed `left`,
+#'`top` EMU from the slide corner, for officer's `ph_with()`. Rasters are
+#'written to `media_dir` as PNG files and referenced by path (officer copies
+#'them into the package on save); an empty `media_dir` leaves placeholder
+#'names instead (tests). `list(xml, files, warnings)`.
+#'}
+#'
 #'\subsection{Method `render_svg_string`}{
 #'Render the scene and return the SVG document as a string (rather than
 #'writing it to a file). Same output as `render_svg`; the interactivity
@@ -713,6 +721,8 @@ Scene$render_png_raw <- function(layer, panels, run) .Call(wrap__Scene__render_p
 Scene$render_pdf_raw <- function() .Call(wrap__Scene__render_pdf_raw, self)
 
 Scene$render_svg <- function(path, outline_text) .Call(wrap__Scene__render_svg, self, path, outline_text)
+
+Scene$render_dml <- function(left, top, outline_text, media_dir) .Call(wrap__Scene__render_dml, self, left, top, outline_text, media_dir)
 
 Scene$render_svg_string <- function(outline_text, layer, panels, run) .Call(wrap__Scene__render_svg_string, self, outline_text, layer, panels, run)
 
