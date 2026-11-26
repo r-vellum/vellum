@@ -4,6 +4,29 @@
 
 ### Bug fixes
 
+- A raster image reaching far past the page now draws its visible part
+  in PDF, SVG and PowerPoint, and in the right place in PNG. An image
+  1e7 pt wide drew nothing in poppler, was drawn in one colour or not at
+  all by librsvg, and became a picture kilometres wide in PowerPoint; at
+  1e10 pt PNG placed it wrongly too. Such an image is now cut to the
+  part over the page first: cropped to whole source pixels when they are
+  small, or resampled over the page at twice its resolution when each
+  pixel is huge. An image within 1e6 px is written exactly as before
+  (VR-46).
+
+- Markers, sectors and circles far from the origin keep their edges on
+  the page. A square, triangle, diamond, star, plus or cross marker
+  reaching past 65536 px was built in single precision, so a radius-1e9
+  square’s edge landed up to 64 px off. A sector that size was drawn
+  with 4-degree chords that missed the arc by up to 6e5 px, and a circle
+  that size with four cubic curves that miss it by 2.7e-4 of its radius
+  between the compass points (27 px at a radius of 1e5 px). Such shapes
+  are now built in double precision: an edge crossing the page is cut at
+  the page in double precision, even when both its ends are far away
+  (hexagons too), and arcs follow the circle within 1/32 px over the
+  page and stay coarse off it. Shapes within 65536 px are built exactly
+  as before, including the approximations they already had (VR-47).
+
 - A clip that cannot be represented now clips everything away, on every
   backend: a viewport clip whose box is not finite (a missing size) or
   overflows once rotated, and a clip path with a missing vertex, with
