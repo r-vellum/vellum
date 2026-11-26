@@ -24,12 +24,14 @@ use crate::font::{glyph_outline_cached, glyph_sprite_cached, PHASE_X, PHASE_Y};
 use crate::units::rotation_about;
 
 mod displaylist;
+mod dml;
 mod paths;
 mod pdf;
 mod raster;
 mod svg;
 
 pub use displaylist::{DisplayList, DisplayListBackend};
+pub use dml::{resolve_media, write_media_files, DmlBackend};
 pub use paths::*;
 pub(crate) use pdf::is_decorative;
 pub use pdf::{pdf_tag, PdfBackend};

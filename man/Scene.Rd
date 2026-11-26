@@ -240,6 +240,14 @@ instead of selectable \verb{<text>} (pixel-faithful, matches raster/PDF).
 Returns any degradation warnings.
 }
 
+\subsection{Method \code{render_dml}}{
+Render the scene as a DrawingML fragment: one \verb{<p:grpSp>} placed \code{left},
+\code{top} EMU from the slide corner, for officer's \code{ph_with()}. Rasters are
+written to \code{media_dir} as PNG files and referenced by path (officer copies
+them into the package on save); an empty \code{media_dir} leaves placeholder
+names instead (tests). \code{list(xml, files, warnings)}.
+}
+
 \subsection{Method \code{render_svg_string}}{
 Render the scene and return the SVG document as a string (rather than
 writing it to a file). Same output as \code{render_svg}; the interactivity

@@ -61,6 +61,7 @@ Collate:
     'debug.R'
     'device.R'
     'display-list.R'
+    'dml.R'
     'edit.R'
     'encode.R'
     'extendr-wrappers.R'

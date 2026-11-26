@@ -20,6 +20,7 @@ use crate::render::{
     Clip, ClipShape, GroupEffect, MaskKind, MaskLayer, PdfBackend, RasterBackend, RenderBackend,
     ResolvedPaint, Shadow, StrokeStyle, SvgBackend, TextRun,
 };
+use crate::render::{resolve_media, write_media_files, DmlBackend};
 
 use crate::cache::TwoGenCache;
 use crate::color::{opt_color, Gpar, GparAcc, Lty, Paint, PartialGpar, Rgba};
