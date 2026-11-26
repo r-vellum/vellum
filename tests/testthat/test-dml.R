@@ -143,8 +143,11 @@ test_that("md() labels become one editable run per span (VR-40)", {
   # at its real height: the 0.7x run's box bottom sits higher than the base
   # run's, so a superscript rises about 80% of its 0.35 em offset
   base <- as.numeric(attr_of("baseline")[c(2, 10)])
-  expect_true(base[1] > 25000 && base[1] < 32000)
-  expect_true(base[2] < -15000 && base[2] > -22000)
+  sp <- .md_compose(md("R^2^ x~i~"), "sans", "plain", 20, "black")$spans
+  rise <- sp$dy[sp$dy != 0]
+  expect_equal(base, round(rise / 20 * 1e5))
+  expect_true(base[1] > 0 && base[1] < 35000)
+  expect_true(base[2] < 0 && base[2] > -35000)
   expect_true(all(is.na(attr_of("baseline")[-c(2, 10)])))
   # the colour span, and the label's alpha on every run
   cols <- xml2::xml_attr(
