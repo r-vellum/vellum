@@ -38,6 +38,7 @@ Suggests:
     officer,
     magick,
     pdftools,
+    pkgload,
     rsvg
 VignetteBuilder: knitr
 Config/testthat/edition: 3
