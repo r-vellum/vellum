@@ -525,6 +525,19 @@ fn rs_pdf_pages_raw(scenes: List) -> List {
     list!(bytes = bytes, warnings = warnings)
 }
 
+/// Several scenes as the slides of one PowerPoint file.
+///
+/// @param scenes A list of compiled scenes.
+/// @param outline_text Write text as glyph outlines.
+/// @param title The presentation title (empty: the first scene's).
+/// @return A list of `bytes` and `warnings`.
+/// @keywords internal
+#[extendr]
+fn rs_pptx_pages(scenes: List, outline_text: bool, title: &str) -> List {
+    let (warnings, bytes) = scene::pptx_pages(scenes, outline_text, title);
+    list!(bytes = Raw::from_bytes(&bytes), warnings = warnings)
+}
+
 extendr_module! {
     mod vellum;
     fn rs_backend_info;
@@ -550,6 +563,7 @@ extendr_module! {
     fn rs_svg_path;
     fn rs_pdf_pages;
     fn rs_pdf_pages_raw;
+    fn rs_pptx_pages;
     use scene;
     use aggregate;
     use math;

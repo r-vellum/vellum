@@ -1688,25 +1688,8 @@ impl Scene {
     /// them into the package on save); an empty `media_dir` leaves placeholder
     /// names instead (tests). `list(xml, files, warnings)`.
     fn render_dml(&self, left: f64, top: f64, outline_text: bool, media_dir: &str) -> List {
-        let mut b = DmlBackend::new(
-            self.w_px,
-            self.h_px,
-            self.dpi,
-            self.bg,
-            left.round() as i64,
-            top.round() as i64,
-            outline_text,
-        );
-        b.set_a11y(&self.a11y_title, &self.a11y_desc);
-        // A blended group composites onto what lies beneath it, so the backend
-        // keeps a raster of the page when the scene has one.
-        if self.nodes.iter().any(|(_, n)| {
-            matches!(n, Node::GroupStart { blend, .. } if *blend != BlendKind::Normal)
-        }) {
-            b.enable_mirror(self.bg);
-        }
-        let warnings = self.render_to(&mut b);
-        let (xml, media, _) = b.finish();
+        let (xml, media, warnings) =
+            self.dml_parts(left.round() as i64, top.round() as i64, outline_text);
         let files: Vec<String> = if media_dir.is_empty() {
             (1..=media.len()).map(|i| format!("vellum-media-{i}")).collect()
         } else {

@@ -20,7 +20,7 @@ use crate::render::{
     Clip, ClipShape, GroupEffect, MaskKind, MaskLayer, PdfBackend, RasterBackend, RenderBackend,
     ResolvedPaint, Shadow, StrokeStyle, SvgBackend, TextRun,
 };
-use crate::render::{resolve_media, write_media_files, DmlBackend};
+use crate::render::{pptx_package, resolve_media, write_media_files, DmlBackend, SlidePart, EMU_PER_INCH};
 
 use crate::cache::TwoGenCache;
 use crate::color::{opt_color, Gpar, GparAcc, Lty, Paint, PartialGpar, Rgba};
@@ -193,9 +193,64 @@ pub(crate) fn pdf_pages(scenes: List, path: Option<&str>) -> (Vec<String>, Vec<u
     }
 }
 
+/// Several scenes as the slides of one `.pptx`, returned as bytes with the
+/// degradation warnings (de-duplicated across slides). A presentation has one
+/// slide size, so it takes the largest page; a smaller page is centred.
+pub(crate) fn pptx_pages(scenes: List, outline_text: bool, title: &str) -> (Vec<String>, Vec<u8>) {
+    if scenes.is_empty() {
+        throw_r_error("a presentation needs at least one slide");
+    }
+    let eps: Vec<ExternalPtr<Scene>> = scenes
+        .values()
+        .map(|r| {
+            <ExternalPtr<Scene>>::try_from(r)
+                .unwrap_or_else(|_| throw_r_error("slides must be compiled vellum scenes"))
+        })
+        .collect();
+    let emu = |px: u32, dpi: f64| (px as f64 * EMU_PER_INCH / dpi).round() as i64;
+    let sizes: Vec<(i64, i64)> = eps.iter().map(|s| (emu(s.w_px, s.dpi), emu(s.h_px, s.dpi))).collect();
+    // PowerPoint's slide size range: 1 to 56 inches each way.
+    let (min, max) = (914_400i64, 51_206_400i64);
+    let cx = sizes.iter().map(|s| s.0).max().unwrap_or(min).max(min);
+    let cy = sizes.iter().map(|s| s.1).max().unwrap_or(min).max(min);
+    if cx > max || cy > max {
+        throw_r_error("a PowerPoint slide is at most 56 inches on a side");
+    }
+    let mut warnings: Vec<String> = Vec::new();
+    let mut slides = Vec::with_capacity(eps.len());
+    for (s, (w, h)) in eps.iter().zip(sizes) {
+        let (xml, media, warns) = s.dml_parts((cx - w) / 2, (cy - h) / 2, outline_text);
+        for w in warns {
+            if !warnings.contains(&w) {
+                warnings.push(w);
+            }
+        }
+        slides.push(SlidePart { xml, media });
+    }
+    let title = if title.is_empty() { eps[0].a11y_title.as_str() } else { title };
+    (warnings, pptx_package(&slides, cx, cy, title))
+}
+
 // Non-exported helpers on `Scene`. extendr exports every method of an
 // `#[extendr] impl` block, so anything with a non-FFI signature lives here.
 impl Scene {
+    /// The scene as a DrawingML fragment placed `(left, top)` EMU from the
+    /// slide corner: `(xml with media tokens, PNGs, warnings)`.
+    pub(crate) fn dml_parts(&self, left: i64, top: i64, outline_text: bool) -> (String, Vec<Vec<u8>>, Vec<String>) {
+        let mut b = DmlBackend::new(self.w_px, self.h_px, self.dpi, self.bg, left, top, outline_text);
+        b.set_a11y(&self.a11y_title, &self.a11y_desc);
+        // A blended group composites onto what lies beneath it, so the backend
+        // keeps a raster of the page when the scene has one.
+        if self.nodes.iter().any(|(_, n)| {
+            matches!(n, Node::GroupStart { blend, .. } if *blend != BlendKind::Normal)
+        }) {
+            b.enable_mirror(self.bg);
+        }
+        let warnings = self.render_to(&mut b);
+        let (xml, media, _) = b.finish();
+        (xml, media, warnings)
+    }
+
     /// Serialize the scene as a PDF document, returning `(bytes, warnings)`.
     /// Shared by `render_pdf` (writes a file) and `render_pdf_raw` (returns the
     /// bytes to R), so the two can never drift.

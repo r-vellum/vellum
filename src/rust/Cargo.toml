@@ -24,6 +24,7 @@ rayon = '1.10'
 gif = '0.14'
 color_quant = '1.1'
 i_overlay = { version = "7.0.3", default-features = false }
+flate2 = "1.1"
 
 [profile.release]
 lto = true

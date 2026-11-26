@@ -15,10 +15,10 @@ scene_svg(
 \arguments{
 \item{scene}{A \code{\link[=vl_scene]{vl_scene()}}.}
 
-\item{text}{For SVG output, how text is written: \code{"native"} (default) emits
-selectable \verb{<text>} referencing system fonts, \code{"outline"} emits glyph
-outlines (pixel-faithful, identical to the raster/PDF backends, but not
-selectable). Ignored for PNG/PDF.}
+\item{text}{For SVG and PowerPoint output, how text is written: \code{"native"}
+(default) emits selectable, editable text referencing system fonts,
+\code{"outline"} emits glyph outlines (pixel-faithful, identical to the
+raster/PDF backends, but not selectable). Ignored for PNG/PDF.}
 
 \item{layer}{Which part of the scene to draw: \code{"all"} (the default), only the
 \code{"keyed"} marks, everything \code{"unkeyed"}, the unkeyed elements painted

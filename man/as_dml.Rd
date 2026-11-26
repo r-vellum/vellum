@@ -34,6 +34,9 @@ doc <- officer::ph_with(doc, scene, location = officer::ph_location_type("body")
 doc <- officer::ph_with(doc, as_dml(plot), location = officer::ph_location_fullsize())
 print(doc, target = "deck.pptx")
 }\if{html}{\out{</div>}}
+
+To write a deck without officer, give \code{\link[=render]{render()}} a \code{.pptx} path (one slide)
+or use \code{\link[=pptx_pages]{pptx_pages()}} (several).
 }
 \section{Size}{
 
@@ -94,4 +97,7 @@ doc <- officer::ph_with(doc, as_dml(sc),
 f <- tempfile(fileext = ".pptx")
 print(doc, target = f)
 \dontshow{\}) # examplesIf}
+}
+\seealso{
+\code{\link[=render]{render()}} and \code{\link[=pptx_pages]{pptx_pages()}} to write a \code{.pptx} without officer.
 }

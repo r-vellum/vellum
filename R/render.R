@@ -3,11 +3,13 @@ NULL
 
 #' @rdname vl_scene
 #' @param path Output file path; the format is taken from the extension (`.png`,
-#'   `.svg`, or `.pdf`).
-#' @param text For SVG output, how text is written: `"native"` (default) emits
-#'   selectable `<text>` referencing system fonts, `"outline"` emits glyph
-#'   outlines (pixel-faithful, identical to the raster/PDF backends, but not
-#'   selectable). Ignored for PNG/PDF.
+#'   `.svg`, `.pdf`, or `.pptx`). A `.pptx` is a one-slide PowerPoint file of
+#'   editable shapes at the scene's size (see [as_dml()] for what that means,
+#'   and [pptx_pages()] for several slides); it needs no other package.
+#' @param text For SVG and PowerPoint output, how text is written: `"native"`
+#'   (default) emits selectable, editable text referencing system fonts,
+#'   `"outline"` emits glyph outlines (pixel-faithful, identical to the
+#'   raster/PDF backends, but not selectable). Ignored for PNG/PDF.
 #' @param debug If `TRUE`, overlay a layout-debug skeleton on the output: each
 #'   viewport region (outlined and labelled by name), its layout track boundaries,
 #'   and its clip region. Built from the resolved scene with [why_size()]; useful
@@ -49,8 +51,9 @@ render <- function(
     png = s$render_png(path),
     svg = s$render_svg(path, identical(text, "outline")),
     pdf = s$render_pdf(path),
+    pptx = .write_pptx(list(s), path, text, scene@title),
     cli::cli_abort(
-      "Unsupported output format {.val {ext}}; use .png, .svg, or .pdf."
+      "Unsupported output format {.val {ext}}; use .png, .svg, .pdf, or .pptx."
     )
   )
   .emit_degrade_warnings(warns)
