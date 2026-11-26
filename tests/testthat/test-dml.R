@@ -277,6 +277,65 @@ test_that("coordinates stay inside DrawingML's range", {
   expect_true(all(num(".//a:ext", "cx") >= 0))
 })
 
+test_that("a layer of points becomes a few multi-path shapes (VR-39)", {
+  skip_if_not_installed("xml2")
+  set.seed(1)
+  n <- 400L
+  x <- runif(n)
+  y <- runif(n)
+  pts <- function(shape, gp = vl_gpar(fill = "steelblue", col = NA)) {
+    vl_scene(4, 3, dpi = 96, bg = NA) |>
+      draw(points_grob(x, y, size = vl_unit(1.5, "mm"), shape = shape, gp = gp))
+  }
+  count <- function(sc) {
+    doc <- xml2::read_xml(.dml_fragment(sc)$xml)
+    ns <- xml2::xml_ns(doc)
+    sps <- xml2::xml_find_all(doc, ".//p:sp", ns)
+    # every point is still drawn: one path in a merged shape, or a shape
+    marks <- vapply(
+      sps,
+      function(sp) {
+        k <- length(xml2::xml_find_all(sp, ".//a:path", ns))
+        if (k == 0L) 1L else k
+      },
+      integer(1)
+    )
+    c(shapes = length(sps), marks = sum(marks))
+  }
+  # circles (a Circles batch), squares and outlined triangles (markers)
+  circ <- count(pts("circle"))
+  expect_identical(circ[["marks"]], n)
+  expect_lt(circ[["shapes"]], n / 4)
+  sq <- count(pts("square"))
+  expect_identical(sq[["marks"]], n)
+  expect_lt(sq[["shapes"]], n / 4)
+  tri <- count(pts("triangle", vl_gpar(fill = "gold", col = "black")))
+  expect_identical(tri[["marks"]], n)
+  expect_lt(tri[["shapes"]], n / 4)
+  # a merged circle is two half arcs, not curves
+  doc <- xml2::read_xml(.dml_fragment(pts("circle"))$xml)
+  ns <- xml2::xml_ns(doc)
+  expect_length(xml2::xml_find_all(doc, ".//a:cubicBezTo", ns), 0)
+  expect_gt(length(xml2::xml_find_all(doc, ".//a:arcTo", ns)), n)
+})
+
+test_that("merged points keep the stacking order of overlapping points", {
+  skip_if_not_installed("xml2")
+  # Two disjoint red points, then a blue one over the first: the reds merge
+  # into one shape drawn first, and blue stays above the red it covers.
+  sc <- vl_scene(3, 1, dpi = 96, bg = NA) |>
+    draw(points_grob(c(0.2, 0.8), 0.5, gp = vl_gpar(fill = "red", col = NA))) |>
+    draw(points_grob(0.21, 0.5, gp = vl_gpar(fill = "blue", col = NA)))
+  doc <- xml2::read_xml(.dml_fragment(sc)$xml)
+  ns <- xml2::xml_ns(doc)
+  cols <- xml2::xml_attr(
+    xml2::xml_find_all(doc, ".//p:sp/p:spPr/a:solidFill/a:srgbClr", ns),
+    "val"
+  )
+  expect_identical(cols, c("FF0000", "0000FF"))
+  expect_length(xml2::xml_find_all(doc, ".//p:sp[1]//a:path", ns), 2)
+})
+
 test_that("a blank line keeps a label native", {
   skip_if_not_installed("xml2")
   sc <- vl_scene(2, 2, dpi = 96) |> draw(text_grob("a\n\nb"))
@@ -489,6 +548,13 @@ test_that("the package's parts validate against the PresentationML schema", {
     draw(rect_grob(gp = vl_gpar(fill = stripes, col = "black", lty = "dashed"))) |>
     draw(circle_grob(r = 0.7, gp = vl_gpar(fill = "orange", alpha = 0.5))) |>
     draw(text_grob("a\001b\nc", rot = 30, gp = vl_gpar(fontsize = 20))) |>
+    draw(points_grob(
+      c(0.1, 0.3, 0.32, 0.6),
+      0.2,
+      shape = "triangle",
+      gp = vl_gpar(fill = "gold", col = "black")
+    )) |>
+    draw(points_grob(c(0.1, 0.5, 0.52), 0.8, gp = vl_gpar(col = NA))) |>
     pop() |>
     push(vl_viewport(blend = "multiply")) |>
     draw(rect_grob(width = 0.3, gp = vl_gpar(fill = "steelblue"))) |>

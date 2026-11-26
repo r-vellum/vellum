@@ -3,7 +3,8 @@
 //! The output is one `<p:grpSp>` holding a `p:sp` per path (`a:custGeom`), a
 //! text box per label, a `p:pic` per raster and a nested `p:grpSp` per panel,
 //! which officer's `ph_with()` or the standalone `.pptx` writer places on a
-//! slide.
+//! slide. Point marks are the exception: a layer of them is merged into a few
+//! multi-path shapes (see `DmlBackend::flush_points`).
 //!
 //! DrawingML's `a:xfrm` carries only an offset, an extent, a rotation and flips:
 //! there is no general affine transform. So, as the SVG backend does for solid
@@ -401,6 +402,11 @@ fn bounds_of(paths: &[DevPath]) -> Option<[f64; 4]> {
     })
 }
 
+/// The most point marks merged into one shape: enough that a large layer
+/// becomes a few dozen shapes, few enough that each stays quick to select,
+/// edit and draw in applications that redraw a shape whole.
+const MAX_MARKS: usize = 1000;
+
 /// The largest device-px coordinate written: far inside DrawingML's
 /// coordinate range (about 2.7e13 EMU) at any resolution, and far enough off
 /// the page that clamping a long line's end leaves its visible part straight.
@@ -529,6 +535,26 @@ pub struct DmlBackend {
     /// A full-page raster of everything drawn so far, kept only when the scene
     /// has a blend mode: a blended group's pixels depend on what lies beneath.
     mirror: Option<RasterBackend>,
+    /// Point marks held back to be merged into a few shapes (VR-39).
+    points: Vec<PendingMark>,
+    /// The next shapes paint a point marker: set by `begin_marker`, cleared
+    /// when the walk moves to another element or node (`set_element_key`).
+    marker_armed: bool,
+    /// Inside a `draw_circles` batch.
+    in_circles: bool,
+}
+
+/// A point mark's shape, held back so a layer of points can be written as a
+/// few multi-path shapes instead of one `p:sp` per point (VR-39).
+struct PendingMark {
+    name: String,
+    paths: Vec<DevPath>,
+    fill: String,
+    ln: String,
+    filled: bool,
+    /// What the mark can paint, in device px: its geometry grown by the
+    /// reach of its outline.
+    reach: [f64; 4],
 }
 
 impl DmlBackend {
@@ -566,12 +592,15 @@ impl DmlBackend {
             regions: HashMap::new(),
             capture: None,
             mirror: None,
+            points: Vec::new(),
+            marker_armed: false,
+            in_circles: false,
         };
         if bg.a > 0 {
             if let Some(p) = rect_path(0.0, 0.0, w as f64, h as f64) {
                 let dp = DevPath::from_path(&p, Transform::identity());
                 let fill = solid_fill(bg, 1.0);
-                b.emit_geom("Background", &[dp], &fill, "", true);
+                b.emit_geom("Background", &[dp], &fill, "", true, 0.0);
             }
         }
         b
@@ -621,6 +650,7 @@ impl DmlBackend {
 
     /// Append a finished element covering `b` to the current frame.
     fn push(&mut self, xml: &str, b: Bounds) {
+        self.flush_points();
         let f = self.out();
         f.body.push_str(xml);
         f.bbox = Some(union(f.bbox, b));
@@ -630,6 +660,7 @@ impl DmlBackend {
     /// Append a closed frame's output (`xml`, covering `b`) to the current
     /// frame, carrying its shapes' bounds and overlap flag up.
     fn splice(&mut self, xml: &str, b: Bounds, items: Vec<Bounds>, self_overlap: bool) {
+        self.flush_points();
         let f = self.out();
         f.body.push_str(xml);
         f.bbox = Some(union(f.bbox, b));
@@ -639,8 +670,20 @@ impl DmlBackend {
 
     /// The `a:custGeom` for `paths` (one `a:path` each) in the box at
     /// `(x0, y0)` of size `w` x `h` (EMU). `open` marks a stroke-only shape whose
-    /// paths must not be filled.
-    fn cust_geom(&self, paths: &[DevPath], x0: i64, y0: i64, w: i64, h: i64, open: bool) -> String {
+    /// paths must not be filled. `arcs` writes an ellipse as two `a:arcTo`
+    /// halves rather than its curves: a few dozen bytes, for the many circles
+    /// of a merged point layer.
+    #[allow(clippy::too_many_arguments)]
+    fn cust_geom(
+        &self,
+        paths: &[DevPath],
+        x0: i64,
+        y0: i64,
+        w: i64,
+        h: i64,
+        open: bool,
+        arcs: bool,
+    ) -> String {
         use std::fmt::Write;
         let mut s = String::from(
             "<a:custGeom><a:avLst/><a:gdLst/><a:ahLst/><a:cxnLst/>\
@@ -652,6 +695,23 @@ impl DmlBackend {
                 s.push_str(" fill=\"none\"");
             }
             s.push('>');
+            if arcs && is_ellipse(p) {
+                if let Some(b) = p.bounds() {
+                    let (ex0, ex1) = (self.ex(b[0]) as f64, self.ex(b[2]) as f64);
+                    let (ey0, ey1) = (self.ey(b[1]) as f64, self.ey(b[3]) as f64);
+                    let (wr, hr) = (((ex1 - ex0) / 2.0).round(), ((ey1 - ey0) / 2.0).round());
+                    let _ = write!(
+                        s,
+                        "<a:moveTo><a:pt x=\"{}\" y=\"{}\"/></a:moveTo>\
+                         <a:arcTo wR=\"{wr}\" hR=\"{hr}\" stAng=\"0\" swAng=\"10800000\"/>\
+                         <a:arcTo wR=\"{wr}\" hR=\"{hr}\" stAng=\"10800000\" swAng=\"10800000\"/>\
+                         <a:close/></a:path>",
+                        ex1 as i64 - x0,
+                        ((ey0 + ey1) / 2.0).round() as i64 - y0,
+                    );
+                    continue;
+                }
+            }
             let pt = |s: &mut String, (x, y): Pt| {
                 let _ = write!(
                     s,
@@ -703,8 +763,10 @@ impl DmlBackend {
     }
 
     /// Write one `p:sp` from device-px `paths` with the given fill and line XML.
-    /// `filled` false marks open, stroke-only geometry. Returns false when there
-    /// was nothing to draw.
+    /// `filled` false marks open, stroke-only geometry; `pad` is how far the
+    /// outline reaches past the geometry (device px). Returns false when there
+    /// was nothing to draw. A point mark is held back to be merged with the
+    /// rest of its layer (see [`DmlBackend::flush_points`]).
     pub(super) fn emit_geom(
         &mut self,
         name: &str,
@@ -712,31 +774,132 @@ impl DmlBackend {
         fill: &str,
         ln: &str,
         filled: bool,
+        pad: f64,
     ) -> bool {
-        let mut bb: Option<[f64; 4]> = None;
-        for p in paths {
-            if let Some(b) = p.bounds() {
-                bb = Some(match bb {
-                    None => b,
-                    Some(a) => [
-                        a[0].min(b[0]),
-                        a[1].min(b[1]),
-                        a[2].max(b[2]),
-                        a[3].max(b[3]),
-                    ],
-                });
-            }
-        }
-        let Some(bb) = bb else { return false };
+        let Some(bb) = bounds_of(paths) else {
+            return false;
+        };
         if self.off_page(bb) {
             return false;
         }
+        if self.marker_armed || self.in_circles {
+            let pad = if pad.is_finite() { pad.max(0.0) } else { 0.0 };
+            self.points.push(PendingMark {
+                name: name.to_string(),
+                paths: paths.to_vec(),
+                fill: fill.to_string(),
+                ln: ln.to_string(),
+                filled,
+                reach: [bb[0] - pad, bb[1] - pad, bb[2] + pad, bb[3] + pad],
+            });
+            return true;
+        }
+        self.flush_points();
+        self.write_geom(name, paths, fill, ln, filled, bb, None);
+        true
+    }
+
+    /// Write the held-back point marks. A mark goes one level above every
+    /// earlier mark it could overlap, so overlapping marks keep their order
+    /// while marks on one level are disjoint; each level then writes one shape
+    /// per style, with one `a:path` per mark. Disjoint paths paint the same
+    /// whether an application fills a shape's paths separately or together,
+    /// so the merged shapes draw exactly what one shape per mark drew.
+    fn flush_points(&mut self) {
+        let marks = std::mem::take(&mut self.points);
+        if marks.is_empty() {
+            return;
+        }
+        let level = point_levels(&marks.iter().map(|m| m.reach).collect::<Vec<_>>());
+        // Shapes in drawing order: by level, then by each style's first mark.
+        let mut shapes: Vec<(usize, Vec<usize>)> = Vec::new();
+        let mut index: HashMap<(usize, &str, &str, bool, usize), usize> = HashMap::new();
+        for (i, m) in marks.iter().enumerate() {
+            // A gradient or picture fill is laid out over the shape's box, so
+            // only solid paint can be shared by several marks.
+            let solid = |x: &str| {
+                !(x.contains("<a:gradFill")
+                    || x.contains("<a:blipFill")
+                    || x.contains("<a:pattFill"))
+            };
+            let alone = if solid(&m.fill) && solid(&m.ln) {
+                0
+            } else {
+                i + 1
+            };
+            let k = (level[i], m.fill.as_str(), m.ln.as_str(), m.filled, alone);
+            match index.get(&k) {
+                // A full shape starts another (see `MAX_MARKS`).
+                Some(&s) if shapes[s].1.len() < MAX_MARKS => shapes[s].1.push(i),
+                _ => {
+                    index.insert(k, shapes.len());
+                    shapes.push((level[i], vec![i]));
+                }
+            }
+        }
+        shapes.sort_by_key(|(lv, items)| (*lv, items[0]));
+        for (_, items) in shapes {
+            let first = &marks[items[0]];
+            let paths: Vec<DevPath> = items
+                .iter()
+                .flat_map(|&i| marks[i].paths.iter().cloned())
+                .collect();
+            let Some(bb) = bounds_of(&paths) else {
+                continue;
+            };
+            if items.len() == 1 {
+                self.write_geom(
+                    &first.name,
+                    &paths,
+                    &first.fill,
+                    &first.ln,
+                    first.filled,
+                    bb,
+                    None,
+                );
+                continue;
+            }
+            // Each mark's own box, so a group opacity folded over the shape
+            // still sees which marks overlap other shapes.
+            let boxes: Vec<Bounds> = items
+                .iter()
+                .filter_map(|&i| bounds_of(&marks[i].paths))
+                .map(|b| {
+                    let (x0, y0, w, h) = self.emu_box(b);
+                    [x0, y0, x0 + w, y0 + h]
+                })
+                .collect();
+            self.write_geom(
+                "Points",
+                &paths,
+                &first.fill,
+                &first.ln,
+                first.filled,
+                bb,
+                Some(boxes),
+            );
+        }
+    }
+
+    /// Write one `p:sp` (see [`DmlBackend::emit_geom`]) covering device-px
+    /// bounds `bb`. `items` are the boxes of the marks a merged shape holds.
+    #[allow(clippy::too_many_arguments)]
+    fn write_geom(
+        &mut self,
+        name: &str,
+        paths: &[DevPath],
+        fill: &str,
+        ln: &str,
+        filled: bool,
+        bb: [f64; 4],
+        items: Option<Vec<Bounds>>,
+    ) {
         let (x0, y0, w, h) = self.emu_box(bb);
         let geom = match (paths, rect_of(paths)) {
             // An axis-aligned rectangle stays a real rectangle when edited.
             ([_], Some(_)) if filled => prst("rect"),
             ([p], _) if filled && is_ellipse(p) => prst("ellipse"),
-            _ => self.cust_geom(paths, x0, y0, w, h, !filled),
+            _ => self.cust_geom(paths, x0, y0, w, h, !filled, items.is_some()),
         };
         // A filled shape with an outline paints the inner half of the line
         // over its fill; overlapping glyph paths paint twice too.
@@ -760,8 +923,11 @@ impl DmlBackend {
              <p:spPr><a:xfrm><a:off x=\"{x0}\" y=\"{y0}\"/><a:ext cx=\"{w}\" cy=\"{h}\"/></a:xfrm>\
              {geom}{fill}{ln}</p:spPr></p:sp>"
         );
-        self.push(&xml, [x0, y0, x0 + w, y0 + h]);
-        true
+        let b = [x0, y0, x0 + w, y0 + h];
+        match items {
+            None => self.push(&xml, b),
+            Some(items) => self.splice(&xml, b, items, false),
+        }
     }
 
     /// The fill XML for a paint (empty for no fill). Gradient and pattern
@@ -1328,7 +1494,7 @@ impl DmlBackend {
                 } else {
                     all.clone()
                 };
-                self.emit_geom("Halo", &paths, "", &ln, true);
+                self.emit_geom("Halo", &paths, "", &ln, true, 0.0);
             }
         }
         for (c, paths) in by_col {
@@ -1336,7 +1502,7 @@ impl DmlBackend {
                 continue;
             }
             let fill = solid_fill(c, 1.0);
-            self.emit_geom("Glyphs", &paths, &fill, "", true);
+            self.emit_geom("Glyphs", &paths, &fill, "", true, 0.0);
         }
         self.close_frame(true);
     }
@@ -1344,6 +1510,7 @@ impl DmlBackend {
     /// Pop the innermost frame into its parent: a named `p:grpSp`, or, when it
     /// holds a single element and `unwrap` is set, that element itself.
     fn close_frame(&mut self, unwrap: bool) {
+        self.flush_points();
         let f = self.frames.pop().expect("frame");
         let Some(b) = f.bbox else { return };
         let single = f.body.matches("<p:cNvPr ").count() == 1;
@@ -1519,6 +1686,7 @@ impl DmlBackend {
     /// The finished fragment (one root `p:grpSp`), with media still tokenised,
     /// the encoded PNGs it references, and the degradation warnings.
     pub fn finish(mut self) -> (String, Vec<Vec<u8>>, Vec<String>) {
+        self.flush_points();
         while self.frames.len() > 1 {
             self.close_frame(false);
         }
@@ -2012,7 +2180,7 @@ impl DmlBackend {
         if fill.is_empty() {
             return;
         }
-        self.emit_geom("Freeform", &[dp], &fill, "", true);
+        self.emit_geom("Freeform", &[dp], &fill, "", true, 0.0);
     }
 
     fn vec_stroke(
@@ -2069,7 +2237,8 @@ impl DmlBackend {
         }
         let ln = self.ln_xml(color, stroke, scale, transform, dp.bounds());
         let closed = dp_all_closed(&dp);
-        self.emit_geom("Line", &[dp], "", &ln, closed);
+        let pad = stroke_reach(stroke, scale);
+        self.emit_geom("Line", &[dp], "", &ln, closed, pad);
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -2117,7 +2286,8 @@ impl DmlBackend {
         let bb = dp.bounds();
         let fill = self.fill_xml(paint, transform, bb);
         let ln = self.ln_xml(color, stroke, scale.unwrap_or(1.0), transform, bb);
-        self.emit_geom("Freeform", &[dp], &fill, &ln, true);
+        let pad = stroke_reach(stroke, scale.unwrap_or(1.0));
+        self.emit_geom("Freeform", &[dp], &fill, &ln, true, pad);
     }
 
     fn vec_text(&mut self, run: &TextRun, transform: Transform, clip: &Clip) {
@@ -2478,6 +2648,7 @@ impl RenderBackend for DmlBackend {
     }
 
     fn draw_text(&mut self, run: &TextRun, transform: Transform, clip: &Clip) {
+        self.flush_points();
         route!(self, draw_text(run, transform, clip));
         self.vec_text(run, transform, clip);
     }
@@ -2495,6 +2666,7 @@ impl RenderBackend for DmlBackend {
         transform: Transform,
         clip: &Clip,
     ) {
+        self.flush_points();
         route!(
             self,
             draw_image(rgba, iw, ih, x, y, w, h, interpolate, transform, clip)
@@ -2509,6 +2681,7 @@ impl RenderBackend for DmlBackend {
         blend: BlendKind,
         effect: GroupEffect,
     ) {
+        self.flush_points();
         if let Some(m) = self.mirror.as_mut() {
             m.begin_group(copy_mask(&mask), alpha, blend, effect);
         }
@@ -2569,6 +2742,7 @@ impl RenderBackend for DmlBackend {
     }
 
     fn end_group(&mut self) {
+        self.flush_points();
         if let Some(m) = self.mirror.as_mut() {
             m.end_group();
         }
@@ -2615,7 +2789,44 @@ impl RenderBackend for DmlBackend {
     }
 
     fn begin_panel(&mut self, name: &str, _pannable: bool) {
+        self.flush_points();
         self.frames.push(Frame::new(name));
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn draw_circles(
+        &mut self,
+        cx: &[f64],
+        cy: &[f64],
+        r: &[f64],
+        fill: Option<&ResolvedPaint>,
+        stroke: Option<(Rgba, StrokeStyle)>,
+        transform: Transform,
+        clip: &Clip,
+        _keys: &[String],
+    ) {
+        // Every circle is a point mark: held back and merged (VR-39).
+        self.in_circles = true;
+        circles_by_path(self, cx, cy, r, fill, stroke.as_ref(), transform, clip);
+        self.in_circles = false;
+    }
+
+    fn begin_marker(
+        &mut self,
+        _shape: u32,
+        _cx: f64,
+        _cy: f64,
+        _r: f64,
+        _transform: Transform,
+        _clip: &Clip,
+    ) {
+        self.marker_armed = true;
+    }
+
+    fn set_element_key(&mut self, _key: Option<&str>) {
+        // A new element or node: what follows is a point mark only if it
+        // announces itself with `begin_marker`.
+        self.marker_armed = false;
     }
 
     fn end_panel(&mut self) {
@@ -2658,6 +2869,81 @@ fn group_reason(mask: bool, blend: BlendKind, effect: GroupEffect) -> &'static s
     } else {
         "group opacity over overlapping shapes"
     }
+}
+
+/// How far a stroke drawn under a uniform `scale` reaches past its geometry,
+/// in device px: half the line width, or the miter limit's worth at a miter
+/// join.
+fn stroke_reach(st: &StrokeStyle, scale: f64) -> f64 {
+    let half = st.width as f64 * scale / 2.0;
+    match st.join {
+        crate::color::LineJoin::Mitre => half * (st.miter as f64).max(1.0),
+        _ => half,
+    }
+}
+
+/// The level of each box (see [`DmlBackend::flush_points`]): one above the
+/// highest earlier box it overlaps (touching edges do not count), found
+/// through a uniform grid of cells about one typical box in size.
+fn point_levels(boxes: &[[f64; 4]]) -> Vec<usize> {
+    let n = boxes.len();
+    let mut level = vec![0usize; n];
+    if n < 2 {
+        return level;
+    }
+    let mut sizes: Vec<f64> = boxes
+        .iter()
+        .map(|b| (b[2] - b[0]).max(b[3] - b[1]))
+        .filter(|v| v.is_finite())
+        .collect();
+    sizes.sort_by(|a, b| a.total_cmp(b));
+    let cell = sizes.get(sizes.len() / 2).copied().unwrap_or(1.0).max(1.0);
+    let overlap =
+        |a: &[f64; 4], b: &[f64; 4]| a[0] < b[2] && b[0] < a[2] && a[1] < b[3] && b[1] < a[3];
+    let mut grid: HashMap<(i64, i64), Vec<usize>> = HashMap::new();
+    // Boxes spanning too many cells are checked against every later box.
+    let mut wide: Vec<usize> = Vec::new();
+    const MAX_CELLS: i64 = 256;
+    for i in 0..n {
+        let b = &boxes[i];
+        let c = |v: f64| (v / cell).floor().clamp(-1e15, 1e15) as i64;
+        let (cx0, cy0, cx1, cy1) = (c(b[0]), c(b[1]), c(b[2]), c(b[3]));
+        let many = (cx1 - cx0 + 1).saturating_mul(cy1 - cy0 + 1) > MAX_CELLS;
+        let mut lv = 0usize;
+        for &j in &wide {
+            if overlap(b, &boxes[j]) {
+                lv = lv.max(level[j] + 1);
+            }
+        }
+        if many {
+            for j in 0..i {
+                if overlap(b, &boxes[j]) {
+                    lv = lv.max(level[j] + 1);
+                }
+            }
+            level[i] = lv;
+            wide.push(i);
+            continue;
+        }
+        for gx in cx0..=cx1 {
+            for gy in cy0..=cy1 {
+                if let Some(v) = grid.get(&(gx, gy)) {
+                    for &j in v {
+                        if overlap(b, &boxes[j]) {
+                            lv = lv.max(level[j] + 1);
+                        }
+                    }
+                }
+            }
+        }
+        level[i] = lv;
+        for gx in cx0..=cx1 {
+            for gy in cy0..=cy1 {
+                grid.entry((gx, gy)).or_default().push(i);
+            }
+        }
+    }
+    level
 }
 
 /// Whether any two EMU boxes overlap (touching edges do not count).
@@ -3436,5 +3722,194 @@ mod tests {
         assert_eq!(media.len(), 1);
         assert_eq!(warns.len(), 1);
         assert!(xml.contains("<p:pic>") && !xml.contains("<p:sp>"), "{xml}");
+    }
+
+    fn blank(w: u32, h: u32) -> DmlBackend {
+        DmlBackend::new(
+            w,
+            h,
+            96.0,
+            Rgba {
+                r: 0,
+                g: 0,
+                b: 0,
+                a: 0,
+            },
+            0,
+            0,
+            false,
+        )
+    }
+
+    #[test]
+    fn point_levels_keep_overlapping_marks_in_order() {
+        // Disjoint boxes (touching edges included) share level 0.
+        let disjoint = [
+            [0.0, 0.0, 1.0, 1.0],
+            [1.0, 0.0, 2.0, 1.0],
+            [5.0, 5.0, 6.0, 6.0],
+        ];
+        assert_eq!(point_levels(&disjoint), vec![0, 0, 0]);
+        // A chain of overlaps climbs a level per step; a box overlapping
+        // only the first goes just above it.
+        let chain = [
+            [0.0, 0.0, 2.0, 2.0],
+            [1.0, 1.0, 3.0, 3.0],
+            [2.5, 2.5, 4.0, 4.0],
+            [-1.0, -1.0, 0.5, 0.5],
+        ];
+        assert_eq!(point_levels(&chain), vec![0, 1, 2, 1]);
+        // A wide box (many grid cells) still sees every box it covers.
+        let mut wide = vec![[0.0, 0.0, 1.0, 1.0]; 1];
+        wide.push([3.0, 0.0, 4.0, 1.0]);
+        wide.push([-100.0, -100.0, 100.0, 100.0]);
+        wide.push([50.0, 50.0, 51.0, 51.0]);
+        assert_eq!(point_levels(&wide), vec![0, 0, 1, 2]);
+    }
+
+    #[test]
+    fn a_circle_batch_merges_disjoint_points_into_one_shape() {
+        let mut b = blank(200, 100);
+        let red = ResolvedPaint::Solid(RED);
+        // Three disjoint discs, then one overlapping the first.
+        b.draw_circles(
+            &[20.0, 60.0, 100.0, 25.0],
+            &[50.0, 50.0, 50.0, 50.0],
+            &[5.0, 5.0, 5.0, 5.0],
+            Some(&red),
+            None,
+            Transform::identity(),
+            &clip0(),
+            &[],
+        );
+        let (xml, _, _) = b.finish();
+        assert_eq!(xml.matches("<p:sp>").count(), 2, "{xml}");
+        // The merged shape comes first: three paths, each two half arcs.
+        let merged = xml.find("name=\"Points").expect("merged shape");
+        let single = xml.find("prst=\"ellipse\"").expect("single disc");
+        assert!(merged < single, "{xml}");
+        assert_eq!(xml.matches("<a:path ").count(), 3);
+        assert_eq!(xml.matches("<a:arcTo ").count(), 6);
+        // The shape is the three discs' box: 15..105 px by 45..55 px.
+        assert!(
+            xml.contains("<a:off x=\"142875\" y=\"428625\"/><a:ext cx=\"857250\" cy=\"95250\"/>"),
+            "{xml}"
+        );
+    }
+
+    #[test]
+    fn outlines_keep_marks_apart_by_their_reach() {
+        // Discs 12 px apart edge to edge: disjoint as geometry, but a 30 px
+        // outline makes them overlap, so they are not merged.
+        let mut b = blank(200, 100);
+        let red = ResolvedPaint::Solid(RED);
+        b.draw_circles(
+            &[20.0, 42.0],
+            &[50.0, 50.0],
+            &[5.0, 5.0],
+            Some(&red),
+            Some((RED, pen(30.0))),
+            Transform::identity(),
+            &clip0(),
+            &[],
+        );
+        let (xml, _, _) = b.finish();
+        assert_eq!(xml.matches("<p:sp>").count(), 2, "{xml}");
+        assert!(!xml.contains("Points"), "{xml}");
+        let mut b = blank(200, 100);
+        b.draw_circles(
+            &[20.0, 60.0],
+            &[50.0, 50.0],
+            &[5.0, 5.0],
+            Some(&red),
+            Some((RED, pen(2.0))),
+            Transform::identity(),
+            &clip0(),
+            &[],
+        );
+        let (xml, _, _) = b.finish();
+        assert_eq!(xml.matches("<p:sp>").count(), 1, "{xml}");
+        assert!(xml.contains("Points") && xml.contains("<a:ln w="), "{xml}");
+    }
+
+    #[test]
+    fn only_marker_shapes_are_merged() {
+        let mut b = blank(200, 100);
+        let red = ResolvedPaint::Solid(RED);
+        let sq = |x: f64| rect_path(x, 40.0, 10.0, 10.0).unwrap();
+        // Two markers merge...
+        for x in [10.0, 40.0] {
+            b.set_element_key(None);
+            b.begin_marker(
+                1,
+                x as f64 + 5.0,
+                45.0,
+                5.0,
+                Transform::identity(),
+                &clip0(),
+            );
+            b.fill_path(
+                &sq(x),
+                Transform::identity(),
+                &red,
+                FillRule::Winding,
+                &clip0(),
+            );
+        }
+        // ...but the next node's rects (no `begin_marker`) stay apart.
+        for x in [100.0, 130.0] {
+            b.set_element_key(None);
+            b.fill_path(
+                &sq(x),
+                Transform::identity(),
+                &red,
+                FillRule::Winding,
+                &clip0(),
+            );
+        }
+        let (xml, _, _) = b.finish();
+        assert_eq!(xml.matches("<p:sp>").count(), 3, "{xml}");
+        assert_eq!(xml.matches("name=\"Points").count(), 1, "{xml}");
+        assert_eq!(xml.matches("prst=\"rect\"").count(), 2, "{xml}");
+    }
+
+    #[test]
+    fn gradient_marks_are_not_merged() {
+        let mut b = blank(200, 100);
+        let grad = ResolvedPaint::Linear {
+            x1: 0.0,
+            y1: 0.0,
+            x2: 100.0,
+            y2: 0.0,
+            stops: vec![
+                Stop {
+                    offset: 0.0,
+                    color: RED,
+                },
+                Stop {
+                    offset: 1.0,
+                    color: Rgba {
+                        r: 0,
+                        g: 0,
+                        b: 255,
+                        a: 255,
+                    },
+                },
+            ],
+            extend: Extend::Pad,
+        };
+        b.draw_circles(
+            &[20.0, 60.0],
+            &[50.0, 50.0],
+            &[5.0, 5.0],
+            Some(&grad),
+            None,
+            Transform::identity(),
+            &clip0(),
+            &[],
+        );
+        let (xml, _, _) = b.finish();
+        assert_eq!(xml.matches("<p:sp>").count(), 2, "{xml}");
+        assert!(!xml.contains("Points"), "{xml}");
     }
 }

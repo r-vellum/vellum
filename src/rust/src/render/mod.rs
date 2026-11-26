@@ -792,7 +792,7 @@ pub(crate) fn drawable_disc(cx: f64, cy: f64, r: f64) -> bool {
 /// One unit circle (origin, radius 1) reused with a per-element affine transform.
 /// The stroke width and dash are pre-divided by the radius so they land at their
 /// device sizes after the uniform scale.
-fn circles_by_path<B: RenderBackend>(
+pub(super) fn circles_by_path<B: RenderBackend>(
     b: &mut B,
     cx: &[f64],
     cy: &[f64],
