@@ -113,3 +113,49 @@ test_that("a huge circle or rect with an edge on the page keeps that edge (VR-45
     expect_lt(abs(row_ink(rect) - 70.55), 0.1)
   }
 })
+
+test_that("a far clipped viewport keeps a rect clip on every backend (VR-45)", {
+  # The same 72 x 72 pt clipped box, placed near or 1e6 pt off the page: the
+  # far one is rebased, but still clips as a rect, so PowerPoint and the
+  # display list write exactly what they write for the near one.
+  u <- function(v) vl_unit(v, "pt")
+  far_vp <- vl_viewport(
+    x = u((72 - 1e6) / 2),
+    y = u((72 - 1e6) / 2),
+    width = u(1e6 + 72),
+    height = u(1e6 + 72),
+    clip = TRUE
+  )
+  near_vp <- vl_viewport(
+    x = u(36),
+    y = u(36),
+    width = u(72),
+    height = u(72),
+    clip = TRUE
+  )
+  mk <- function(vp, o) {
+    base |>
+      push(vp) |>
+      draw(circle_grob(
+        u(o + 36),
+        u(o + 36),
+        u(20),
+        gp = vl_gpar(fill = "blue", col = "red", lwd = 2)
+      )) |>
+      draw(text_grob("Hi", u(o + 30), u(o + 30), gp = vl_gpar(col = "red"))) |>
+      draw(points_grob(u(o + c(20, 50)), u(o + c(20, 50)), key = c("a", "b")))
+  }
+  slide <- function(s) {
+    f <- withr::local_tempfile(fileext = ".pptx")
+    expect_no_warning(render(s, f))
+    paste(
+      readLines(unz(f, "ppt/slides/slide1.xml"), warn = FALSE),
+      collapse = ""
+    )
+  }
+  far <- mk(far_vp, 1e6)
+  near <- mk(near_vp, 0)
+  expect_identical(slide(far), slide(near))
+  expect_identical(scene_display_list(far), scene_display_list(near))
+  expect_identical(scene_raster(far), scene_raster(near))
+})

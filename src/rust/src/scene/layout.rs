@@ -390,9 +390,29 @@ impl Scene {
                     })
                     .unwrap_or_else(ClipShape::nothing),
             )
+        } else if node.clip && origin != (0.0, 0.0) && exact.kx == 0.0 && exact.ky == 0.0 {
+            // A rebased, axis-aligned viewport keeps a rect clip, so backends
+            // that special-case rects (PowerPoint regions, the display list)
+            // treat it as they treat a near one. Its device box is computed in
+            // f64 and cut to the page (nothing beyond it is visible), so its
+            // edges are exact in f32 and a box within the page is exactly the
+            // one a near viewport gets (VR-45).
+            let (pw, ph) = (self.w_px as f64, self.h_px as f64);
+            let (xa, xb) = (exact.tx, exact.tx + exact.sx * cw);
+            let (ya, yb) = (exact.ty, exact.ty + exact.sy * ch);
+            let x0 = xa.min(xb).clamp(0.0, pw);
+            let x1 = xa.max(xb).clamp(0.0, pw);
+            let y0 = ya.min(yb).clamp(0.0, ph);
+            let y1 = ya.max(yb).clamp(0.0, ph);
+            Some(ClipShape::Rect {
+                w: x1 - x0,
+                h: y1 - y0,
+                transform: Transform::from_translate(x0 as f32, y0 as f32),
+            })
         } else if node.clip && origin != (0.0, 0.0) {
-            // A rebased viewport's box starts at `-origin` in its frame; its
-            // corners are placed in f64 first, so an edge on the page is exact.
+            // A rotated rebased viewport's box starts at `-origin` in its
+            // frame; its corners are placed in f64 first, so an edge on the
+            // page is exact.
             let (l, t) = (-origin.0, -origin.1);
             let mut pb = tiny_skia::PathBuilder::new();
             pb.move_to(l as f32, t as f32);
