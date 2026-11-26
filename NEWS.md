@@ -21,6 +21,26 @@
   and PowerPoint output no longer lose the content under a clip region
   reaching that far (VR-43).
 
+* SVG and PDF output now draw the visible part of geometry reaching far past
+  the page, as PNG does. A circle of radius 1e10 px, a line from -1e12 to
+  1e12 px or a huge clip path used to be written as given, and librsvg,
+  poppler and browsers then drew nothing, or nothing under the clip. Such
+  geometry and such clips are now cut to the page the same way PNG cuts them
+  (dashed strokes keep their phase); anything within 1e6 px is written
+  exactly as before, and SVG now skips geometry beyond 1e15 px as PNG and
+  PDF do. PowerPoint cuts far geometry the same way instead of
+  clamping each point, which bent the visible part of a long, slanted line
+  (VR-44).
+
+* Geometry far from the origin no longer loses precision before it is drawn.
+  A viewport placed more than 65536 px from the page origin has its local
+  frame shifted so its transform carries no large offset, and viewport
+  placement is composed in double precision, so a mark drawn 1e7 px into a
+  viewport placed 1e7 px off the page lands where it should instead of
+  snapping to whole pixels (64 px at 1e9). Rects and circles reaching that
+  far are built in double precision too, so a huge one keeps the edge it has
+  on the page. Ordinary scenes are unchanged (VR-45).
+
 # vellum 0.18.0
 
 ## New features

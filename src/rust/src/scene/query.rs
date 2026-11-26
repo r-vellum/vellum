@@ -233,6 +233,8 @@ fn clip_bbox(c: &ClipShape) -> Option<(f64, f64, f64, f64)> {
                 xscale: (0.0, 1.0),
                 yscale: (0.0, 1.0),
                 dpi: 96.0,
+                origin: (0.0, 0.0),
+                exact: crate::units::Affine::from_transform(*transform),
             };
             Some(dev_bbox(&vpx, 0.0, 0.0, *w, *h))
         }
@@ -247,6 +249,8 @@ fn clip_bbox(c: &ClipShape) -> Option<(f64, f64, f64, f64)> {
                 xscale: (0.0, 1.0),
                 yscale: (0.0, 1.0),
                 dpi: 96.0,
+                origin: (0.0, 0.0),
+                exact: crate::units::Affine::from_transform(*transform),
             };
             Some(dev_bbox(
                 &vpx,
@@ -331,15 +335,14 @@ impl Scene {
             let vp = &rv.vp;
             w_px.push(vp.w);
             h_px.push(vp.h);
-            let t = vp.transform;
-            transform.push(Robj::from(vec![
-                t.sx as f64,
-                t.ky as f64,
-                t.kx as f64,
-                t.sy as f64,
-                t.tx as f64,
-                t.ty as f64,
-            ]));
+            // A rebased viewport (VR-45) reports its unshifted transform, the
+            // one that maps the local frame callers compute in.
+            let t = if vp.origin == (0.0, 0.0) {
+                crate::units::Affine::from_transform(vp.transform)
+            } else {
+                vp.exact
+            };
+            transform.push(Robj::from(vec![t.sx, t.ky, t.kx, t.sy, t.tx, t.ty]));
             match &self.viewports[i].layout {
                 Some(layout) => {
                     let (xe, xo, ye, yo) = solve_layout(layout, vp.w, vp.h, self.dpi);
@@ -544,7 +547,8 @@ impl Scene {
             fill_rgba.push(pack_rgba(fc));
             lwd_px.push(gp.lwd_px(self.dpi) as f64);
             vp_ix.push(*vp_id as i32);
-            let vb = dev_bbox(vp, 0.0, 0.0, vp.w, vp.h);
+            let (ox, oy) = vp.origin;
+            let vb = dev_bbox(vp, -ox, -oy, vp.w - ox, vp.h - oy);
             vx0.push(vb.0);
             vy0.push(vb.1);
             vx1.push(vb.2);

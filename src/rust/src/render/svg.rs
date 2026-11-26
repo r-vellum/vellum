@@ -1,5 +1,6 @@
 //! The SVG backend and its serialization helpers.
 
+use super::fit::{self, VecFill, VecStroke};
 use super::*;
 
 pub struct SvgBackend {
@@ -448,75 +449,8 @@ impl SvgBackend {
         )
     }
 
-    /// A ` clip-path="url(#…)"` attribute for this clip (empty string = none).
-    /// Nested `<clipPath>` elements (each referencing the previous) intersect.
-    fn clip_attr(&mut self, clip: &Clip) -> String {
-        if clip.shapes.is_empty() {
-            return String::new();
-        }
-        if let Some(a) = self.clip_attrs.get(&clip.id) {
-            return a.clone();
-        }
-        let mut parent_ref = String::new();
-        let mut last = String::new();
-        for shape in clip.shapes {
-            let id = format!("{}c{}", self.id_prefix, self.next_clip);
-            self.next_clip += 1;
-            // Clip geometry is baked to device coords (userSpaceOnUse) so the
-            // wrapping `<g>` carries no transform.
-            let rule = matches!(shape, ClipShape::Path { evenodd: true, .. });
-            let rule_attr = if rule { " clip-rule=\"evenodd\"" } else { "" };
-            self.defs.push_str(&format!(
-                "<clipPath id=\"{id}\" clipPathUnits=\"userSpaceOnUse\"{parent_ref}><path d=\"{d}\"{rule_attr}/></clipPath>",
-                d = clip_shape_d(shape),
-            ));
-            parent_ref = format!(" clip-path=\"url(#{id})\"");
-            last = id;
-        }
-        let attr = format!(" clip-path=\"url(#{last})\"");
-        self.clip_attrs.insert(clip.id, attr.clone());
-        attr
-    }
-}
-
-impl RenderBackend for SvgBackend {
-    fn fill_path(
-        &mut self,
-        path: &Path,
-        transform: Transform,
-        paint: &ResolvedPaint,
-        rule: FillRule,
-        clip: &Clip,
-    ) {
-        let fill = self.svg_fill(paint);
-        let rule_attr = match rule {
-            FillRule::EvenOdd => " fill-rule=\"evenodd\"",
-            FillRule::Winding => "",
-        };
-        // A solid fill looks the same however the geometry reaches device space,
-        // so its transform is baked into the coordinates (no per-element
-        // `transform`), and a circle is written as a `<circle>`. A gradient or
-        // pattern is laid out in local px, so it keeps local geometry and the
-        // element's own `transform`.
-        let element = if matches!(paint, ResolvedPaint::Solid(_)) {
-            match circle_of(path).and_then(|c| bake_circle(c, transform)) {
-                Some((cx, cy, r)) => format!("<circle {} {fill}/>", circle_attrs(cx, cy, r)),
-                None => format!(
-                    "<path d=\"{}\" {fill}{rule_attr}/>",
-                    path_to_d(path, Some(transform), Some(COORD_DECIMALS)),
-                ),
-            }
-        } else {
-            format!(
-                "<path d=\"{}\" {fill}{rule_attr}{}/>",
-                path_to_d(path, None, Some(coord_decimals(transform))),
-                transform_attr(transform),
-            )
-        };
-        self.emit(&element, clip);
-    }
-
-    fn stroke_path(
+    /// A stroke whose geometry is in range (see `stroke_path`).
+    fn stroke_unfitted(
         &mut self,
         path: &Path,
         transform: Transform,
@@ -524,9 +458,6 @@ impl RenderBackend for SvgBackend {
         stroke: &StrokeStyle,
         clip: &Clip,
     ) {
-        if stroke.width <= 0.0 {
-            return;
-        }
         // A solid stroke under a similarity transform (uniform scale, rotation,
         // translation) is baked into device coordinates, with the width and dash
         // scaled by the same factor: the outline it strokes is the same. Anything
@@ -575,6 +506,118 @@ impl RenderBackend for SvgBackend {
         self.emit(&element, clip);
     }
 
+    /// A ` clip-path="url(#…)"` attribute for this clip (empty string = none).
+    /// Nested `<clipPath>` elements (each referencing the previous) intersect.
+    fn clip_attr(&mut self, clip: &Clip) -> String {
+        if clip.shapes.is_empty() {
+            return String::new();
+        }
+        if let Some(a) = self.clip_attrs.get(&clip.id) {
+            return a.clone();
+        }
+        let mut parent_ref = String::new();
+        let mut last = String::new();
+        for shape in clip.shapes {
+            let id = format!("{}c{}", self.id_prefix, self.next_clip);
+            self.next_clip += 1;
+            // Clip geometry is baked to device coords (userSpaceOnUse) so the
+            // wrapping `<g>` carries no transform.
+            let rule = matches!(shape, ClipShape::Path { evenodd: true, .. });
+            let rule_attr = if rule { " clip-rule=\"evenodd\"" } else { "" };
+            self.defs.push_str(&format!(
+                "<clipPath id=\"{id}\" clipPathUnits=\"userSpaceOnUse\"{parent_ref}><path d=\"{d}\"{rule_attr}/></clipPath>",
+                d = clip_shape_d(shape, self.w, self.h),
+            ));
+            parent_ref = format!(" clip-path=\"url(#{id})\"");
+            last = id;
+        }
+        let attr = format!(" clip-path=\"url(#{last})\"");
+        self.clip_attrs.insert(clip.id, attr.clone());
+        attr
+    }
+}
+
+impl RenderBackend for SvgBackend {
+    fn fill_path(
+        &mut self,
+        path: &Path,
+        transform: Transform,
+        paint: &ResolvedPaint,
+        rule: FillRule,
+        clip: &Clip,
+    ) {
+        // Far geometry is cut to the page first, as on PNG (VR-44).
+        let fitted;
+        let solid = matches!(paint, ResolvedPaint::Solid(_));
+        let (path, transform) = match fit::vector_fill(path, transform, self.w, self.h, solid) {
+            VecFill::Keep => (path, transform),
+            VecFill::Draw(p, t) => {
+                fitted = p;
+                (&fitted, t)
+            }
+            VecFill::Skip => return,
+        };
+        let fill = self.svg_fill(paint);
+        let rule_attr = match rule {
+            FillRule::EvenOdd => " fill-rule=\"evenodd\"",
+            FillRule::Winding => "",
+        };
+        // A solid fill looks the same however the geometry reaches device space,
+        // so its transform is baked into the coordinates (no per-element
+        // `transform`), and a circle is written as a `<circle>`. A gradient or
+        // pattern is laid out in local px, so it keeps local geometry and the
+        // element's own `transform`.
+        let element = if matches!(paint, ResolvedPaint::Solid(_)) {
+            match circle_of(path).and_then(|c| bake_circle(c, transform)) {
+                Some((cx, cy, r)) => format!("<circle {} {fill}/>", circle_attrs(cx, cy, r)),
+                None => format!(
+                    "<path d=\"{}\" {fill}{rule_attr}/>",
+                    path_to_d(path, Some(transform), Some(COORD_DECIMALS)),
+                ),
+            }
+        } else {
+            format!(
+                "<path d=\"{}\" {fill}{rule_attr}{}/>",
+                path_to_d(path, None, Some(coord_decimals(transform))),
+                transform_attr(transform),
+            )
+        };
+        self.emit(&element, clip);
+    }
+
+    fn stroke_path(
+        &mut self,
+        path: &Path,
+        transform: Transform,
+        color: Rgba,
+        stroke: &StrokeStyle,
+        clip: &Clip,
+    ) {
+        if stroke.width <= 0.0 {
+            return;
+        }
+        // Far geometry is cut to the page first, as on PNG (VR-44).
+        match fit::vector_stroke_style(path, transform, stroke, self.w, self.h) {
+            VecStroke::Keep => self.stroke_unfitted(path, transform, color, stroke, clip),
+            VecStroke::Runs(runs) => {
+                for (run, phase) in runs {
+                    let style = StrokeStyle {
+                        phase,
+                        ..stroke.clone()
+                    };
+                    self.stroke_unfitted(&run, transform, color, &style, clip);
+                }
+            }
+            VecStroke::Outline => {
+                if let Some(outline) = fit::stroke_outline_path(path, transform, stroke) {
+                    let paint = stroke.paint.clone().unwrap_or(ResolvedPaint::Solid(color));
+                    self.fill_path(&outline, transform, &paint, FillRule::Winding, clip);
+                }
+            }
+            VecStroke::Skip => {}
+        }
+    }
+
     /// One element carrying both paints when the pair can be: a solid fill and
     /// an undashed solid stroke under a similarity transform (so both bake into
     /// the same device coordinates). SVG paints fill then stroke on one element
@@ -596,7 +639,11 @@ impl RenderBackend for SvgBackend {
             && stroke.paint.is_none()
             && stroke.dash.is_empty()
             && stroke.width > 0.0
-            && bake.is_some();
+            && bake.is_some()
+            && matches!(
+                fit::vector_stroke_style(path, transform, stroke, self.w, self.h),
+                VecStroke::Keep
+            );
         if !merge {
             self.fill_path(path, transform, paint, rule, clip);
             self.stroke_path(path, transform, color, stroke, clip);
@@ -1346,18 +1393,38 @@ fn path_to_d(path: &Path, map: Option<Transform>, dec: Option<u32>) -> String {
     d
 }
 
-/// A clip shape as a closed SVG path `d` in device coords (transform baked in).
-pub(super) fn clip_shape_d(shape: &ClipShape) -> String {
+/// A clip shape as a closed SVG path `d` in device coords (transform baked in),
+/// for a `w` x `h` px page. A region reaching far beyond the page is cut to it
+/// first, as on PNG (VR-44): viewers drop a clip path at 1e12 px, which hid
+/// everything under it. One with nothing left on the page admits nothing.
+pub(super) fn clip_shape_d(shape: &ClipShape, w: u32, h: u32) -> String {
     match shape {
-        ClipShape::Rect { w, h, transform } => {
-            let [(x0, y0), (x1, y1), (x2, y2), (x3, y3)] = rect_corners(*w, *h, *transform);
+        ClipShape::Rect {
+            w: rw,
+            h: rh,
+            transform,
+        } => {
+            let c = rect_corners(*rw, *rh, *transform);
+            if !fit::rect_corners_near(&c) {
+                if let Some(Some(dev)) = rect_path(0.0, 0.0, *rw, *rh)
+                    .and_then(|p| fit::vector_clip(&p, *transform, w, h))
+                {
+                    return path_to_d(&dev, None, None);
+                }
+                return String::new();
+            }
+            let [(x0, y0), (x1, y1), (x2, y2), (x3, y3)] = c;
             format!("M{x0} {y0} L{x1} {y1} L{x2} {y2} L{x3} {y3} Z")
         }
         ClipShape::Path {
             path, transform, ..
-        } => match path.clone().transform(*transform) {
-            Some(p) => path_to_d(&p, None, None),
-            None => String::new(),
+        } => match fit::vector_clip(path, *transform, w, h) {
+            Some(Some(dev)) => path_to_d(&dev, None, None),
+            Some(None) => String::new(),
+            None => match path.clone().transform(*transform) {
+                Some(p) => path_to_d(&p, None, None),
+                None => String::new(),
+            },
         },
     }
 }

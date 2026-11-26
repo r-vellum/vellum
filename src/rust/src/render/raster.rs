@@ -31,7 +31,7 @@ fn skia_join(j: LineJoin) -> tiny_skia::LineJoin {
     }
 }
 
-fn skia_stroke(s: &StrokeStyle) -> Stroke {
+pub(super) fn skia_stroke(s: &StrokeStyle) -> Stroke {
     Stroke {
         width: s.width,
         miter_limit: s.miter,
@@ -87,7 +87,7 @@ fn fill_fit(
 
 /// How far (device px) a pen reaches from its centreline under `t`, with room
 /// for a mitre or square cap and a pixel of anti-aliasing.
-fn pen_reach(sk: &Stroke, t: &Transform) -> f64 {
+pub(super) fn pen_reach(sk: &Stroke, t: &Transform) -> f64 {
     // The largest singular value of the linear part: the most `t` stretches
     // any direction, so a skewed pen is covered too.
     let (a, b, c, d) = (t.sx as f64, t.ky as f64, t.kx as f64, t.sy as f64);

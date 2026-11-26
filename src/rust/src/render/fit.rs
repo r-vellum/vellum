@@ -683,6 +683,165 @@ pub(crate) fn fitted_fill<'a>(
     }
 }
 
+// --- vector backends (VR-44) -------------------------------------------------
+//
+// SVG and PDF never panic on far geometry, but their viewers fail on it the
+// way tiny-skia did: librsvg, poppler and browsers draw nothing for a circle of
+// radius 1e10 px or a line from -1e12 to 1e12, where PNG (fitted above) draws
+// the visible part. So the vector backends fit far geometry the same way, with
+// the same threshold, and still write every ordinary path exactly as before.
+
+/// What a vector backend draws for a filled path.
+pub(super) enum VecFill {
+    /// The path as given, under its own transform: in range (or not finite,
+    /// which each backend already handles as before).
+    Keep,
+    /// This path under this transform instead.
+    Draw(Path, Transform),
+    /// Nothing: beyond the PDF coordinate cap, or cut away entirely.
+    Skip,
+}
+
+/// Is `path` under `t` finite, and is every coordinate of it and its pen
+/// (`reach`) within [`SAFE`]? Such geometry is written untouched.
+fn vector_untouched(path: &Path, t: &Transform, reach: f64) -> bool {
+    if !t.is_finite() {
+        return true;
+    }
+    let b = device_bounds(path, t);
+    !b.iter().all(|v| v.is_finite()) || within(b, reach)
+}
+
+/// Fit a filled path for a vector backend drawing a `w` x `h` px page.
+/// `device_ok`: the paint looks the same in device space (a solid colour), so
+/// the cut path is drawn in device px under the identity. A gradient or pattern
+/// is laid out in local px, so the cut is mapped back to local space and keeps
+/// the transform, as long as that mapping stays in range.
+pub(super) fn vector_fill(path: &Path, t: Transform, w: u32, h: u32, device_ok: bool) -> VecFill {
+    if vector_untouched(path, &t, 0.0) {
+        return VecFill::Keep;
+    }
+    if beyond_cap(path, t) {
+        return VecFill::Skip;
+    }
+    let dev = match fit_fill(path, t, w, h) {
+        Fit::Keep(_) => return VecFill::Keep,
+        Fit::Clipped(dev) => dev,
+        Fit::Outline | Fit::Skip => return VecFill::Skip,
+    };
+    if device_ok {
+        return VecFill::Draw(dev, Transform::identity());
+    }
+    match invert(&t).and_then(|inv| dev.transform(inv)) {
+        Some(local) if within(device_bounds(&local, &t), 0.0) => VecFill::Draw(local, t),
+        _ => VecFill::Skip,
+    }
+}
+
+/// What a vector backend draws for a stroked path.
+pub(super) enum VecStroke {
+    /// The path as given (see [`VecFill::Keep`]).
+    Keep,
+    /// These pieces instead, in local space under the original transform, each
+    /// with the dash phase it starts at (the original phase for a solid stroke).
+    Runs(Vec<(Path, f32)>),
+    /// The pen alone reaches past the safe range: stroke the path to its
+    /// outline and fill that (see [`Fit::Outline`]).
+    Outline,
+    /// Nothing.
+    Skip,
+}
+
+/// Fit a stroked path whose pen reaches `reach` device px, for a vector
+/// backend drawing a `w` x `h` px page. `dash` is a valid dash pattern and
+/// phase, kept on the page as on PNG ([`fit_dashed`]); `phase` is the stroke's
+/// phase, carried on an undashed run.
+pub(super) fn vector_stroke(
+    path: &Path,
+    t: Transform,
+    reach: f64,
+    w: u32,
+    h: u32,
+    dash: Option<(&[f32], f32)>,
+    phase: f32,
+) -> VecStroke {
+    if !reach.is_finite() || vector_untouched(path, &t, reach) {
+        return VecStroke::Keep;
+    }
+    if beyond_cap(path, t) {
+        return VecStroke::Skip;
+    }
+    if let Some((intervals, ph)) = dash {
+        return match fit_dashed(path, t, reach, w, h, intervals, ph) {
+            DashFit::Keep(_) => VecStroke::Keep,
+            DashFit::Runs(runs) => VecStroke::Runs(runs),
+            DashFit::Outline => VecStroke::Outline,
+            DashFit::Skip => VecStroke::Skip,
+        };
+    }
+    match fit_stroke(path, t, reach, w, h) {
+        Fit::Keep(_) => VecStroke::Keep,
+        Fit::Clipped(local) => VecStroke::Runs(vec![(local, phase)]),
+        Fit::Outline => VecStroke::Outline,
+        Fit::Skip => VecStroke::Skip,
+    }
+}
+
+/// [`vector_stroke`] for a backend stroke, with the pen reach and dash taken
+/// from the style as the raster backend takes them.
+pub(super) fn vector_stroke_style(
+    path: &Path,
+    t: Transform,
+    stroke: &super::StrokeStyle,
+    w: u32,
+    h: u32,
+) -> VecStroke {
+    let sk = super::raster::skia_stroke(stroke);
+    let reach = super::raster::pen_reach(&sk, &t);
+    let dash = sk
+        .dash
+        .is_some()
+        .then_some((stroke.dash.as_slice(), stroke.phase));
+    vector_stroke(path, t, reach, w, h, dash, stroke.phase)
+}
+
+/// The outline of `path` stroked with `stroke` under `t` (dashed first, at
+/// tiny-skia's resolution scale), local px: what [`VecStroke::Outline`] fills.
+pub(super) fn stroke_outline_path(
+    path: &Path,
+    t: Transform,
+    stroke: &super::StrokeStyle,
+) -> Option<Path> {
+    let sk = super::raster::skia_stroke(stroke);
+    let res = tiny_skia::PathStroker::compute_resolution_scale(&t);
+    let dashed = match &sk.dash {
+        Some(d) => Some(path.dash(d, res)?),
+        None => None,
+    };
+    let solid = tiny_skia::Stroke { dash: None, ..sk };
+    dashed.as_ref().unwrap_or(path).stroke(&solid, res)
+}
+
+/// Fit a clip region's path (local, under `t`) for a vector backend: `None`
+/// keeps it as is, `Some(dev)` is the region cut to the page in device px
+/// (`Some(None)`: nothing of it can be drawn, so it admits nothing).
+pub(super) fn vector_clip(path: &Path, t: Transform, w: u32, h: u32) -> Option<Option<Path>> {
+    if vector_untouched(path, &t, 0.0) {
+        return None;
+    }
+    match fit_fill(path, t, w, h) {
+        Fit::Keep(_) => None,
+        Fit::Clipped(dev) => Some(Some(dev)),
+        Fit::Outline | Fit::Skip => Some(None),
+    }
+}
+
+/// Is a clip rect's device geometry within the safe range (written as is)?
+pub(super) fn rect_corners_near(c: &[(f64, f64); 4]) -> bool {
+    c.iter()
+        .all(|p| !(p.0.is_finite() && p.1.is_finite()) || p.0.abs().max(p.1.abs()) <= SAFE)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -935,5 +1094,119 @@ mod tests {
         let inf = Transform::from_row(f32::MAX, 0.0, 0.0, f32::MAX, f32::MAX, 0.0);
         let mut pm = Pixmap::new(10, 10).unwrap();
         fill(&mut pm, &p, inf);
+    }
+
+    // --- vector backends (VR-44) ---
+
+    fn max_coord(p: &Path, t: Transform) -> f64 {
+        let b = device_bounds(p, &t);
+        b.iter().fold(0.0f64, |m, v| m.max(v.abs()))
+    }
+
+    #[test]
+    fn vector_fits_leave_ordinary_geometry_alone() {
+        let p = PathBuilder::from_circle(50.0, 50.0, 20.0).unwrap();
+        let t = Transform::from_translate(3.0, 4.0);
+        assert!(matches!(vector_fill(&p, t, 100, 100, true), VecFill::Keep));
+        assert!(matches!(vector_fill(&p, t, 100, 100, false), VecFill::Keep));
+        assert!(matches!(
+            vector_stroke(&p, t, 5.0, 100, 100, Some((&[4.0, 2.0], 1.0)), 1.0),
+            VecStroke::Keep
+        ));
+        assert!(vector_clip(&p, t, 100, 100).is_none());
+        // so is geometry each backend already handles on its own
+        let nan = Transform::from_row(f32::NAN, 0.0, 0.0, 1.0, 0.0, 0.0);
+        assert!(matches!(
+            vector_fill(&p, nan, 100, 100, true),
+            VecFill::Keep
+        ));
+    }
+
+    #[test]
+    fn a_far_solid_fill_is_cut_to_the_page_in_device_px() {
+        let p = PathBuilder::from_circle(50.0, 50.0, 1e10).unwrap();
+        match vector_fill(&p, Transform::identity(), 100, 100, true) {
+            VecFill::Draw(d, t) => {
+                assert_eq!(t, Transform::identity());
+                assert!(max_coord(&d, t) <= 205.0);
+            }
+            _ => panic!("expected a fitted path"),
+        }
+    }
+
+    #[test]
+    fn a_far_gradient_fill_keeps_its_transform() {
+        // Local px under a scale: the cut maps back to local space, so a
+        // gradient laid out there still lines up.
+        let p = PathBuilder::from_rect(Rect::from_xywh(-1e9, 0.0, 2e9, 10.0).unwrap());
+        let t = Transform::from_scale(2.0, 2.0);
+        match vector_fill(&p, t, 100, 100, false) {
+            VecFill::Draw(d, t2) => {
+                assert_eq!(t2, t);
+                assert!(max_coord(&d, t) <= 205.0);
+                // the visible part is still covered: the page's width at y = 10
+                let b = d.bounds();
+                assert!(b.left() <= 0.0 && b.right() >= 50.0);
+            }
+            _ => panic!("expected a fitted path"),
+        }
+    }
+
+    #[test]
+    fn far_geometry_beyond_the_pdf_cap_is_skipped_on_vector_backends_too() {
+        let p = PathBuilder::from_circle(0.0, 0.0, 1e16).unwrap();
+        assert!(matches!(
+            vector_fill(&p, Transform::identity(), 10, 10, true),
+            VecFill::Skip
+        ));
+        assert!(matches!(
+            vector_stroke(&p, Transform::identity(), 1.0, 10, 10, None, 0.0),
+            VecStroke::Skip
+        ));
+    }
+
+    #[test]
+    fn a_far_stroke_becomes_local_runs_with_their_phase() {
+        let mut pb = PathBuilder::new();
+        pb.move_to(-1e9, 50.0);
+        pb.line_to(1e9, 50.0);
+        let p = pb.finish().unwrap();
+        let t = Transform::identity();
+        match vector_stroke(&p, t, 3.0, 100, 100, None, 0.5) {
+            VecStroke::Runs(runs) => {
+                assert_eq!(runs.len(), 1);
+                assert_eq!(runs[0].1, 0.5);
+                assert!(max_coord(&runs[0].0, t) < 300.0);
+            }
+            _ => panic!("expected runs"),
+        }
+        // dashed: the pattern offset at the cut, as on PNG
+        match vector_stroke(&p, t, 3.0, 100, 100, Some((&[6.0, 4.0], 0.0)), 0.0) {
+            VecStroke::Runs(runs) => {
+                assert_eq!(runs.len(), 1);
+                let start = runs[0].0.bounds().left() as f64;
+                let want = (start + 1e9).rem_euclid(10.0) as f32;
+                assert!((runs[0].1 - want).abs() < 1e-3, "{} vs {want}", runs[0].1);
+            }
+            _ => panic!("expected runs"),
+        }
+    }
+
+    #[test]
+    fn a_far_clip_is_cut_to_the_page_and_one_off_it_admits_nothing() {
+        let big = PathBuilder::from_rect(Rect::from_xywh(-1e12, -1e12, 2e12, 2e12).unwrap());
+        match vector_clip(&big, Transform::identity(), 100, 100) {
+            Some(Some(d)) => assert!(max_coord(&d, Transform::identity()) <= 205.0),
+            _ => panic!("expected a fitted clip"),
+        }
+        let off = PathBuilder::from_rect(Rect::from_xywh(1e12, 1e12, 10.0, 10.0).unwrap());
+        match vector_clip(&off, Transform::identity(), 100, 100) {
+            Some(Some(d)) => {
+                let b = d.bounds();
+                assert!(b.width() == 0.0 || b.height() == 0.0);
+            }
+            Some(None) => {}
+            None => panic!("a far clip must be fitted"),
+        }
     }
 }

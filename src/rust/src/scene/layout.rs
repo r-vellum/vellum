@@ -223,6 +223,8 @@ impl Scene {
             xscale: root.xscale,
             yscale: root.yscale,
             dpi: self.dpi,
+            origin: (0.0, 0.0),
+            exact: Affine::IDENTITY,
         };
         let root_clip = if root.clip {
             vec![ClipShape::Rect {
@@ -258,7 +260,10 @@ impl Scene {
     }
 
     fn resolve_one(&self, node: &ViewportNode, parent: &ResolvedVp) -> ResolvedVp {
-        // Child rectangle in PARENT-local pixels.
+        // Child rectangle in PARENT-local pixels. `shifted`: the origin is in
+        // the parent's (possibly rebased) resolver frame rather than its
+        // unshifted local frame.
+        let shifted = matches!(node.placement, Placement::Absolute { .. });
         let (x0, top, cw, ch) = match node.placement {
             Placement::Absolute {
                 cx,
@@ -313,11 +318,41 @@ impl Scene {
             }
         };
 
-        let transform = parent
-            .vp
-            .transform
-            .pre_concat(Transform::from_translate(x0 as f32, top as f32))
-            .pre_concat(rotation_about(node.angle, cw / 2.0, ch / 2.0));
+        // The placement in f64, from the parent's unshifted frame (VR-45).
+        let (po, pexact) = (parent.vp.origin, parent.vp.exact);
+        let (x0u, topu) = if shifted {
+            (x0 + po.0, top + po.1)
+        } else {
+            (x0, top)
+        };
+        let exact = pexact
+            .pre_concat(Affine::translate(x0u, topu))
+            .pre_concat(Affine::rotation_about(node.angle, cw / 2.0, ch / 2.0));
+        let far = exact.is_finite() && exact.tx.abs().max(exact.ty.abs()) > PRECISE_PX;
+        let rebase = if far {
+            exact.preimage_of_origin()
+        } else {
+            None
+        };
+        let (transform, origin) = match rebase {
+            // Far from the device origin: shift the local frame so the
+            // transform's offset (computed in f64) is about zero.
+            Some(o) => (
+                exact.pre_concat(Affine::translate(o.0, o.1)).to_transform(),
+                o,
+            ),
+            // Under a rebased parent: narrow the f64 placement.
+            None if po != (0.0, 0.0) => (exact.to_transform(), (0.0, 0.0)),
+            // Every ordinary viewport: placed in f32, exactly as before.
+            None => (
+                parent
+                    .vp
+                    .transform
+                    .pre_concat(Transform::from_translate(x0 as f32, top as f32))
+                    .pre_concat(rotation_about(node.angle, cw / 2.0, ch / 2.0)),
+                (0.0, 0.0),
+            ),
+        };
 
         // Invariant: viewport transforms are isometries (translation + rotation),
         // so stroke widths are preserved. Catch any accidental scaling early.
@@ -338,6 +373,8 @@ impl Scene {
             xscale: node.xscale,
             yscale: node.yscale,
             dpi: self.dpi,
+            origin,
+            exact,
         };
 
         let mut clip_chain = parent.clip_chain.clone();
@@ -349,6 +386,25 @@ impl Scene {
                     .map(|path| ClipShape::Path {
                         path,
                         evenodd: cp.evenodd,
+                        transform,
+                    })
+                    .unwrap_or_else(ClipShape::nothing),
+            )
+        } else if node.clip && origin != (0.0, 0.0) {
+            // A rebased viewport's box starts at `-origin` in its frame; its
+            // corners are placed in f64 first, so an edge on the page is exact.
+            let (l, t) = (-origin.0, -origin.1);
+            let mut pb = tiny_skia::PathBuilder::new();
+            pb.move_to(l as f32, t as f32);
+            pb.line_to((l + cw) as f32, t as f32);
+            pb.line_to((l + cw) as f32, (t + ch) as f32);
+            pb.line_to(l as f32, (t + ch) as f32);
+            pb.close();
+            Some(
+                pb.finish()
+                    .map(|path| ClipShape::Path {
+                        path,
+                        evenodd: false,
                         transform,
                     })
                     .unwrap_or_else(ClipShape::nothing),

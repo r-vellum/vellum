@@ -146,7 +146,49 @@ pub fn hatch_path(path: &Path, angle: f64, spacing: f64) -> Option<Path> {
 }
 
 pub fn rect_path(x: f64, y: f64, w: f64, h: f64) -> Option<Path> {
+    let near = |v: f64| v.abs() <= crate::units::PRECISE_PX;
+    if !(near(x) && near(y) && near(w) && near(h)) && [x, y, w, h].iter().all(|v| v.is_finite()) {
+        // Far from the origin, the far edge is placed in f64 before narrowing:
+        // a rect from -2e7 px, 2e7 px wide, ends on the page, not a pixel off
+        // it (VR-45).
+        return tiny_skia::Rect::from_ltrb(x as f32, y as f32, (x + w) as f32, (y + h) as f32)
+            .map(PathBuilder::from_rect);
+    }
     tiny_skia::Rect::from_xywh(x as f32, y as f32, w as f32, h as f32).map(PathBuilder::from_rect)
+}
+
+/// Append a circle to `pb`. Within [`crate::units::PRECISE_PX`] it is exactly
+/// tiny-skia's `push_circle`. Further out its points are placed in f64 before
+/// narrowing, so a huge circle whose edge crosses the page keeps that edge
+/// where it is (VR-45): four cubic quarter arcs, from the east point and
+/// turning the same way.
+pub fn push_circle_precise(pb: &mut PathBuilder, cx: f64, cy: f64, r: f64) {
+    let lim = crate::units::PRECISE_PX;
+    if (cx.abs() + r <= lim && cy.abs() + r <= lim)
+        || !(cx.is_finite() && cy.is_finite() && r.is_finite())
+    {
+        pb.push_circle(cx as f32, cy as f32, r as f32);
+        return;
+    }
+    if r <= 0.0 {
+        return;
+    }
+    const K: f64 = 0.552_284_749_830_793_4;
+    let k = K * r;
+    let f = |x: f64, y: f64| (x as f32, y as f32);
+    let p = [f(cx + r, cy), f(cx, cy + r), f(cx - r, cy), f(cx, cy - r)];
+    let c = [
+        (f(cx + r, cy + k), f(cx + k, cy + r)),
+        (f(cx - k, cy + r), f(cx - r, cy + k)),
+        (f(cx - r, cy - k), f(cx - k, cy - r)),
+        (f(cx + k, cy - r), f(cx + r, cy - k)),
+    ];
+    pb.move_to(p[0].0, p[0].1);
+    for i in 0..4 {
+        let ((a, b), e) = (c[i], p[(i + 1) % 4]);
+        pb.cubic_to(a.0, a.1, b.0, b.1, e.0, e.1);
+    }
+    pb.close();
 }
 
 /// A rounded rectangle (top-left `(x, y)`, size `w`×`h`, corner radius `r` in the
@@ -292,4 +334,41 @@ pub fn sector_path(cx: f64, cy: f64, r0: f64, r1: f64, theta0: f64, theta1: f64)
     }
     pb.close();
     pb.finish()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn near_rects_and_circles_are_built_as_before() {
+        let a = rect_path(10.3, 20.7, 30.1, 5.5).unwrap();
+        let b = PathBuilder::from_rect(tiny_skia::Rect::from_xywh(10.3, 20.7, 30.1, 5.5).unwrap());
+        assert_eq!(format!("{a:?}"), format!("{b:?}"));
+        let mut pa = PathBuilder::new();
+        push_circle_precise(&mut pa, 53.75, 285.9, 3.78);
+        let mut pb = PathBuilder::new();
+        pb.push_circle(53.75, 285.9, 3.78);
+        assert_eq!(format!("{:?}", pa.finish()), format!("{:?}", pb.finish()));
+    }
+
+    #[test]
+    fn a_far_rect_keeps_its_near_edge_exact() {
+        // from -2e7 px, 2e7 + 50.3 wide: the right edge is at 50.3 px, which
+        // an f32 sum would round to 50 (VR-45)
+        let p = rect_path(-2e7, 0.0, 2e7 + 50.3, 10.0).unwrap();
+        assert_eq!(p.bounds().right(), 50.3f32);
+    }
+
+    #[test]
+    fn a_far_circle_keeps_its_near_edge_exact() {
+        let mut pb = PathBuilder::new();
+        push_circle_precise(&mut pb, 1e9 + 100.0, 50.0, 1e9);
+        let p = pb.finish().unwrap();
+        assert_eq!(p.bounds().left(), 100.0f32);
+        // within 1/64 px of the true circle near its west point
+        let mut pb = PathBuilder::new();
+        push_circle_precise(&mut pb, 1e9 + 100.25, 50.0, 1e9);
+        assert_eq!(pb.finish().unwrap().bounds().left(), 100.25f32);
+    }
 }

@@ -29,7 +29,7 @@ use crate::geom::{
     Recording,
 };
 use crate::spatial::{Item as SpatialItem, Region, SpatialIndex};
-use crate::units::{rotation_about, Unit, UnitKind, Vp};
+use crate::units::{rotation_about, Affine, Unit, UnitKind, Vp, PRECISE_PX};
 
 mod dlist;
 mod draw;
@@ -359,7 +359,7 @@ impl Scene {
         // ordinary R error, after the Rust frames between have been dropped
         // normally (no longjmp over them).
         let drawn = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            let mut b = PdfBackend::new(&mut surface, scale);
+            let mut b = PdfBackend::new(&mut surface, scale, self.w_px, self.h_px);
             // With the whole-content span open, per-node tagging stands down (no
             // nested spans); the decorative marks draw as the figure's content.
             b.set_outer_tagged(tag_id.is_some());

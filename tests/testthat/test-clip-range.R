@@ -134,8 +134,128 @@ test_that("PNG draws shapes reaching far past the page without a panic (VR-43)",
   expect_identical(png[6], 72L * 144L)
   expect_identical(png[7:8], c(0L, 0L))
   expect_gt(png[9], 0L)
-  # (Not compared with SVG or PDF: librsvg and poppler, the rasterisers at
-  # hand, themselves draw nothing at such coordinates.)
+  # (SVG and PDF are compared with PNG in the VR-44 test below.)
+})
+
+# The far shapes of VR-43 and VR-44, as the child draws them.
+far_shapes <- c(
+  "base <- vl_scene(2, 2, dpi = 72)",
+  "count(base |> draw(circle_grob(r = vl_unit(1e10, 'pt'), gp = fill)))",
+  "count(base |> draw(circle_grob(x = vl_unit(1e9 + 100, 'pt'), r = vl_unit(1e9, 'pt'), gp = fill)))",
+  "count(base |> draw(segments_grob(vl_unit(-1e12, 'pt'), 0.5, vl_unit(1e12, 'pt'), 0.3,",
+  "  gp = vl_gpar(col = 'red', lwd = 8))))",
+  "count(base |> draw(segments_grob(vl_unit(-1e9, 'pt'), 0.5, vl_unit(1e9, 'pt'), 0.5,",
+  "  gp = vl_gpar(col = 'red', lwd = 8, lty = 'dashed'))))",
+  "count(base |> draw(polygon_grob(vl_unit(c(-1e12, 72, 100, -1e12), 'pt'),",
+  "  vl_unit(c(-1e12, -1e12, 1e12, 1e12), 'pt'), gp = fill)))",
+  "count(base |> draw(rect_grob(width = vl_unit(1e9, 'pt'), height = 0.5,",
+  "  gp = vl_gpar(fill = linear_gradient(c('red', 'darkred')), col = NA))))",
+  "count(base |> push(vl_viewport(clip = polygon_grob(vl_unit(c(-1e12, 1e12, 72), 'pt'),",
+  "  vl_unit(c(-1e12, -1e12, 1e12), 'pt')))) |> draw(rect_grob(width = 0.5, height = 0.5, gp = fill)))",
+  "count(base |> draw(path_grob(vl_unit(c(-1e10, 1e10, 1e10, -1e10, 30, 110, 110, 30), 'pt'),",
+  "  vl_unit(c(-1e10, -1e10, 1e10, 1e10, 30, 30, 110, 110), 'pt'), id = rep(1:2, each = 4),",
+  "  rule = 'evenodd', gp = fill)))"
+)
+
+test_that("SVG and PDF draw the visible part of far geometry, as PNG does (VR-44)", {
+  res <- run_vellum_child(c(red_counter, far_shapes))
+  expect_identical(res$status, 0L)
+  counts <- red_counts(res)
+  expect_length(counts, 8L)
+  png <- vapply(counts, function(k) k$px[["png"]], integer(1))
+  expect_true(all(png > 0L))
+  expect_true(all(vapply(counts, function(k) k$pptx, logical(1))))
+  # Rasterisers differ on anti-aliased edges: allow a pixel row or so.
+  near <- function(a, b) abs(a - b) <= max(160L, 0.02 * b)
+  svg <- vapply(counts, function(k) k$px[["svg"]], integer(1))
+  skip_if(anyNA(svg), "no SVG rasteriser (rsvg)")
+  for (k in seq_along(png)) {
+    expect_true(near(svg[k], png[k]), info = paste("case", k, svg[k], png[k]))
+  }
+  pdf <- vapply(counts, function(k) k$px[["pdf"]], integer(1))
+  skip_if(anyNA(pdf), "no PDF rasteriser (pdftools)")
+  for (k in seq_along(png)) {
+    expect_true(near(pdf[k], png[k]), info = paste("case", k, pdf[k], png[k]))
+  }
+})
+
+test_that("SVG writes far geometry and far clips cut to the page (VR-44)", {
+  # Without a rasteriser: every coordinate the SVG holds is near the page.
+  base <- vl_scene(2, 2, dpi = 72)
+  fill <- vl_gpar(fill = "red", col = NA)
+  scenes <- list(
+    base |> draw(circle_grob(r = vl_unit(1e10, "pt"), gp = fill)),
+    base |>
+      draw(segments_grob(
+        vl_unit(-1e12, "pt"),
+        0.5,
+        vl_unit(1e12, "pt"),
+        0.3,
+        gp = vl_gpar(col = "red", lwd = 8, lty = "dashed")
+      )),
+    base |>
+      push(vl_viewport(
+        clip = polygon_grob(
+          vl_unit(c(-1e12, 1e12, 72), "pt"),
+          vl_unit(c(-1e12, -1e12, 1e12), "pt")
+        )
+      )) |>
+      draw(rect_grob(width = 0.5, height = 0.5, gp = fill))
+  )
+  for (s in scenes) {
+    svg <- scene_svg(s)
+    d <- regmatches(svg, gregexpr(' d="[^"]*"', svg))[[1]]
+    nums <- as.numeric(unlist(regmatches(
+      d,
+      gregexpr("-?[0-9.]+(e[-+]?[0-9]+)?", d)
+    )))
+    expect_gt(length(nums), 0L)
+    expect_lt(max(abs(nums)), 1e3)
+  }
+  # an ordinary scene is written as before: no cut
+  svg <- scene_svg(base |> draw(circle_grob(r = 0.25, gp = fill)))
+  expect_match(svg, "<circle ", fixed = TRUE)
+})
+
+test_that("PowerPoint cuts a far line to the page instead of bending it (VR-44)", {
+  # A line from x = -1e12 at the bottom to x = 1e10 at the top crosses the
+  # page about 1.4 px below the top. Clamping each end to 1e8 px moved it to
+  # mid-height.
+  s <- vl_scene(2, 2, dpi = 72) |>
+    draw(segments_grob(
+      vl_unit(-1e12, "pt"),
+      0,
+      vl_unit(1e10, "pt"),
+      1,
+      gp = vl_gpar(col = "red", lwd = 1)
+    ))
+  f <- withr::local_tempfile(fileext = ".pptx")
+  render(s, f)
+  xml <- paste(
+    readLines(unz(f, "ppt/slides/slide1.xml"), warn = FALSE),
+    collapse = ""
+  )
+  sp <- regmatches(xml, gregexpr("<p:sp>.*?</p:sp>", xml, perl = TRUE))[[1]]
+  sp <- sp[grepl("FF0000", sp, fixed = TRUE)]
+  expect_length(sp, 1L)
+  off <- as.numeric(regmatches(
+    sp,
+    regexec('<a:off x="(-?[0-9]+)" y="(-?[0-9]+)"', sp)
+  )[[1]][2:3])
+  pts <- regmatches(sp, gregexpr('<a:pt x="-?[0-9]+" y="-?[0-9]+"', sp))[[1]]
+  xy <- matrix(
+    as.numeric(unlist(regmatches(pts, gregexpr("-?[0-9]+", pts)))),
+    ncol = 2,
+    byrow = TRUE
+  )
+  emu <- 12700 # per px at 72 dpi
+  x <- (off[1] + xy[, 1]) / emu
+  y <- (off[2] + xy[, 2]) / emu
+  # the piece crossing x = 72 (the cut runs off the page along its edges)
+  k <- which(head(x, -1) <= 72 & tail(x, -1) >= 72 & head(x, -1) != tail(x, -1))
+  expect_length(k, 1L)
+  y_mid <- y[k] + (72 - x[k]) / (x[k + 1] - x[k]) * (y[k + 1] - y[k])
+  expect_lt(abs(y_mid - 144 * (1e10 - 72) / (1e12 + 1e10)), 0.5)
 })
 
 test_that("a dashed stroke cut to the page keeps its dash phase (VR-43)", {

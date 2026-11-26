@@ -256,15 +256,23 @@ impl Scene {
                     // the cache a full render would then reuse.
                     if b.caches_subrasters() && layer.is_all() {
                         let rv = &resolved[*vp_id];
-                        match subraster_key(
-                            *nid,
-                            &rv.vp.transform,
-                            &rv.clip_chain,
-                            rv.gp_acc.fingerprint(),
-                            self.w_px,
-                            self.h_px,
-                            self.dpi,
-                        ) {
+                        // A rebased viewport (VR-45) is not keyed by its
+                        // transform alone (its frame's shift is not in it), so
+                        // it draws inline, like a path-clipped one.
+                        let key = if rv.vp.origin == (0.0, 0.0) {
+                            subraster_key(
+                                *nid,
+                                &rv.vp.transform,
+                                &rv.clip_chain,
+                                rv.gp_acc.fingerprint(),
+                                self.w_px,
+                                self.h_px,
+                                self.dpi,
+                            )
+                        } else {
+                            None
+                        };
+                        match key {
                             None => sub_stack.push(None), // path-clipped: inline, no capture
                             Some(key) => {
                                 if let Some(pm) = subraster_get(&key) {

@@ -801,6 +801,29 @@ fn circles_by_path<B: RenderBackend>(
         if !drawable_disc(cx[i], cy[i], rr) {
             continue;
         }
+        // Far from the origin, a unit circle placed by an f32 transform loses
+        // the circle's edge (VR-45): build it in place instead, in f64.
+        let lim = crate::units::PRECISE_PX;
+        if cx[i].abs() + rr > lim || cy[i].abs() + rr > lim {
+            let mut pb = PathBuilder::new();
+            push_circle_precise(&mut pb, cx[i], cy[i], rr);
+            let Some(path) = pb.finish() else { continue };
+            let pen = stroke.filter(|(_, s)| s.width > 0.0);
+            match (fill, pen) {
+                (Some(f), Some((c, st))) if !matches!(f, ResolvedPaint::Hatch { .. }) => {
+                    b.fill_and_stroke_path(&path, transform, f, FillRule::Winding, *c, st, clip);
+                }
+                (f, pen) => {
+                    if let Some(f) = f {
+                        b.fill_path(&path, transform, f, FillRule::Winding, clip);
+                    }
+                    if let Some((c, st)) = pen {
+                        b.stroke_path(&path, transform, *c, st, clip);
+                    }
+                }
+            }
+            continue;
+        }
         let tr = transform.pre_concat(Transform::from_row(
             rr as f32,
             0.0,
@@ -860,7 +883,7 @@ fn circles_keyed<B: RenderBackend>(
     for i in 0..n {
         b.set_element_key(keys.get(i).map(String::as_str).filter(|k| !k.is_empty()));
         let mut pb = PathBuilder::new();
-        pb.push_circle(cx[i] as f32, cy[i] as f32, r[i] as f32);
+        push_circle_precise(&mut pb, cx[i], cy[i], r[i]);
         let Some(path) = pb.finish() else { continue };
         match (fill, pen) {
             (Some(rp), Some((col, style))) if !matches!(rp, ResolvedPaint::Hatch { .. }) => {
