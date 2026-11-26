@@ -192,6 +192,48 @@ test_that("masks and blend modes become pictures of their region", {
     lengths(regmatches(fa$xml, gregexpr('<a:alpha val="50000"/>', fa$xml))),
     2L
   )
+  # overlaps inside a nested group or inside one shape still count
+  nested <- vl_scene(2, 1, dpi = 96) |>
+    push(vl_viewport(alpha = 0.5)) |>
+    push(vl_viewport(name = "inner")) |>
+    dots() |>
+    pop() |>
+    pop()
+  expect_match(.dml_fragment(nested)$warnings, "group opacity", all = FALSE)
+  outlined <- vl_scene(2, 1, dpi = 96) |>
+    push(vl_viewport(alpha = 0.5)) |>
+    draw(circle_grob(r = 0.3, gp = vl_gpar(fill = "red", col = "black", lwd = 4))) |>
+    pop()
+  expect_match(.dml_fragment(outlined)$warnings, "group opacity", all = FALSE)
+  halo <- vl_scene(4, 2, dpi = 96) |>
+    push(vl_viewport(alpha = 0.5)) |>
+    draw(text_grob("HALO", gp = vl_gpar(fontsize = 60, halo_col = "red", halo_width = 6))) |>
+    pop()
+  expect_match(.dml_fragment(halo)$warnings, "group opacity", all = FALSE)
+  # a nested opacity over disjoint shapes folds both opacities in
+  twice <- vl_scene(2, 1, dpi = 96, bg = NA) |>
+    push(vl_viewport(alpha = 0.5)) |>
+    push(vl_viewport(alpha = 0.5)) |>
+    draw(circle_grob(x = 0.2, r = 0.2, gp = vl_gpar(fill = "red", col = NA))) |>
+    draw(circle_grob(x = 0.8, r = 0.2, gp = vl_gpar(fill = "blue", col = NA))) |>
+    pop() |>
+    pop()
+  ft <- .dml_fragment(twice)
+  expect_length(ft$warnings, 0)
+  expect_identical(
+    lengths(regmatches(ft$xml, gregexpr('<a:alpha val="25000"/>', ft$xml))),
+    2L
+  )
+  # a nested blend names the real reason
+  blended <- vl_scene(2, 1, dpi = 96) |>
+    push(vl_viewport(alpha = 0.5)) |>
+    push(vl_viewport(blend = "multiply")) |>
+    draw(circle_grob(x = 0.2, r = 0.2, gp = vl_gpar(fill = "red", col = NA))) |>
+    pop() |>
+    pop()
+  fb <- .dml_fragment(blended)$warnings
+  expect_match(fb, "blend modes", all = FALSE)
+  expect_no_match(fb, "overlapping")
 })
 
 test_that("control characters cannot break the XML", {

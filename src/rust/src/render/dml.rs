@@ -448,9 +448,13 @@ struct Frame {
     body: String,
     bbox: Option<Bounds>,
     name: String,
-    /// The bounds of each element written into this frame, so a group whose
-    /// opacity could be folded into its children can check they do not overlap.
+    /// The bounds of each shape written into this frame, nested groups'
+    /// shapes included, so a group whose opacity could be folded into its
+    /// children can check they do not overlap.
     items: Vec<Bounds>,
+    /// Some shape in the frame overlaps itself (a fill under its own outline,
+    /// glyphs that touch): folding an opacity into it would double it there.
+    self_overlap: bool,
 }
 
 impl Frame {
@@ -460,6 +464,7 @@ impl Frame {
             bbox: None,
             name: name.to_string(),
             items: Vec::new(),
+            self_overlap: false,
         }
     }
 }
@@ -471,6 +476,9 @@ enum GroupKind {
     Plain,
     /// The group that opened the active capture (see [`Capture`]).
     Capture,
+    /// A group with only an opacity, nested in a shadow capture: its shapes
+    /// get their own frame and the opacity is folded into them when it closes.
+    Fold(f32),
 }
 
 /// A group DrawingML cannot express, being drawn through the raster backend.
@@ -619,6 +627,16 @@ impl DmlBackend {
         f.items.push(b);
     }
 
+    /// Append a closed frame's output (`xml`, covering `b`) to the current
+    /// frame, carrying its shapes' bounds and overlap flag up.
+    fn splice(&mut self, xml: &str, b: Bounds, items: Vec<Bounds>, self_overlap: bool) {
+        let f = self.out();
+        f.body.push_str(xml);
+        f.bbox = Some(union(f.bbox, b));
+        f.items.extend(items);
+        f.self_overlap |= self_overlap;
+    }
+
     /// The `a:custGeom` for `paths` (one `a:path` each) in the box at
     /// `(x0, y0)` of size `w` x `h` (EMU). `open` marks a stroke-only shape whose
     /// paths must not be filled.
@@ -720,6 +738,16 @@ impl DmlBackend {
             ([p], _) if filled && is_ellipse(p) => prst("ellipse"),
             _ => self.cust_geom(paths, x0, y0, w, h, !filled),
         };
+        // A filled shape with an outline paints the inner half of the line
+        // over its fill; overlapping glyph paths paint twice too.
+        let overlaps_itself = (!fill.is_empty() && !ln.is_empty())
+            || (paths.len() > 1 && {
+                let boxes: Vec<[f64; 4]> = paths.iter().filter_map(|p| p.bounds()).collect();
+                any_overlap(&boxes)
+            });
+        if overlaps_itself {
+            self.out().self_overlap = true;
+        }
         let id = self.id();
         let fill = if fill.is_empty() { "<a:noFill/>" } else { fill };
         let ln = if ln.is_empty() {
@@ -1320,7 +1348,7 @@ impl DmlBackend {
         let Some(b) = f.bbox else { return };
         let single = f.body.matches("<p:cNvPr ").count() == 1;
         if unwrap && single {
-            self.push(&f.body, b);
+            self.splice(&f.body, b, f.items, f.self_overlap);
             return;
         }
         let id = self.id();
@@ -1335,7 +1363,7 @@ impl DmlBackend {
             h = (b[3] - b[1]).max(1),
             body = f.body,
         );
-        self.push(&xml, b);
+        self.splice(&xml, b, f.items, f.self_overlap);
     }
 
     /// A raster the clip cuts in a way a picture crop cannot express (a path
@@ -2382,28 +2410,30 @@ impl RenderBackend for DmlBackend {
         }
         let plain =
             mask.is_none() && alpha >= 1.0 && blend == BlendKind::Normal && effect.is_none();
+        let opacity_only =
+            mask.is_none() && blend == BlendKind::Normal && effect.is_none() && alpha < 1.0;
         if let Some(c) = self.capture.as_mut() {
             c.depth += 1;
-            if !plain {
+            let shadow = !c.exclusive;
+            if shadow && !plain && !opacity_only && !c.failed {
+                // Folding stops here; say why the region became a picture.
                 c.failed = true;
+                c.reason = group_reason(mask.is_some(), blend, effect);
             }
             c.rb.begin_group(mask, alpha, blend, effect);
-            self.groups.push(GroupKind::Plain);
+            if shadow && opacity_only {
+                self.frames.push(Frame::new("Group"));
+                self.groups.push(GroupKind::Fold(alpha));
+            } else {
+                self.groups.push(GroupKind::Plain);
+            }
             return;
         }
         if plain {
             self.groups.push(GroupKind::Plain);
             return;
         }
-        let reason = if mask.is_some() {
-            "masks"
-        } else if blend != BlendKind::Normal {
-            "blend modes"
-        } else if !effect.is_none() {
-            "blur and shadow effects"
-        } else {
-            "group opacity over overlapping shapes"
-        };
+        let reason = group_reason(mask.is_some(), blend, effect);
         let exclusive = mask.is_some() || blend != BlendKind::Normal || !effect.is_none();
         let is_blend = blend != BlendKind::Normal && self.mirror.is_some();
         let mut rb = RasterBackend::new(
@@ -2444,21 +2474,24 @@ impl RenderBackend for DmlBackend {
         };
         c.rb.end_group();
         c.depth -= 1;
+        if let Some(GroupKind::Fold(alpha)) = kind {
+            // A nested opacity: fold it into its own shapes, or give up on
+            // folding the whole capture if they overlap.
+            let frame = self.frames.pop().expect("fold frame");
+            if !self.fold_into_parent(frame, alpha) {
+                let c = self.capture.as_mut().expect("capture");
+                c.failed = true;
+                c.reason = "group opacity over overlapping shapes";
+            }
+            return;
+        }
         if c.depth > 0 || !matches!(kind, Some(GroupKind::Capture)) {
             return;
         }
         let c = self.capture.take().expect("capture");
         if !c.exclusive {
             let frame = self.frames.pop().expect("group frame");
-            if !c.failed && !any_overlap_bounds(&frame.items) {
-                // Opacity over shapes that do not overlap is each shape's own.
-                if let Some(b) = frame.bbox {
-                    let body = fold_alpha(&frame.body, c.alpha);
-                    let f = self.out();
-                    f.body.push_str(&body);
-                    f.bbox = Some(union(f.bbox, b));
-                    f.items.extend(frame.items);
-                }
+            if !c.failed && self.fold_into_parent(frame, c.alpha) {
                 return;
             }
         }
@@ -2490,6 +2523,36 @@ impl RenderBackend for DmlBackend {
 
     fn take_warnings(&mut self) -> Vec<String> {
         self.warnings.clone()
+    }
+}
+
+impl DmlBackend {
+    /// Fold `alpha` into a closed frame's shapes and splice them into the
+    /// current frame, when that is exactly what the group would composite to:
+    /// no two shapes overlap and none overlaps itself. Returns false (and
+    /// writes nothing) otherwise.
+    fn fold_into_parent(&mut self, frame: Frame, alpha: f32) -> bool {
+        if frame.self_overlap || any_overlap_bounds(&frame.items) {
+            return false;
+        }
+        if let Some(b) = frame.bbox {
+            let body = fold_alpha(&frame.body, alpha);
+            self.splice(&body, b, frame.items, false);
+        }
+        true
+    }
+}
+
+/// Why a group has to be drawn as a picture, for the warning.
+fn group_reason(mask: bool, blend: BlendKind, effect: GroupEffect) -> &'static str {
+    if mask {
+        "masks"
+    } else if blend != BlendKind::Normal {
+        "blend modes"
+    } else if !effect.is_none() {
+        "blur and shadow effects"
+    } else {
+        "group opacity over overlapping shapes"
     }
 }
 
