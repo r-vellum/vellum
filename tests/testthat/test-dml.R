@@ -262,3 +262,39 @@ test_that("ph_with() puts a scene on a slide as editable shapes", {
   bg2 <- xml2::xml_find_first(slide2, "//p:grpSp/p:sp/p:spPr/a:xfrm/a:ext", ns)
   expect_identical(xml2::xml_attr(bg2, "cx"), "1828800")
 })
+
+test_that("clipped geometry is cut to the clip region in advance", {
+  skip_if_not_installed("xml2")
+  # a 1 x 1 in clip viewport centred on a 2 x 2 in page: x, y in [0.5, 1.5] in
+  sc <- vl_scene(2, 2, dpi = 96, bg = NA) |>
+    push(vl_viewport(width = 0.5, height = 0.5, clip = TRUE)) |>
+    draw(lines_grob(x = c(-1, 2), y = c(0.5, 0.5))) |>
+    draw(rect_grob(x = 0.9, width = 0.6, gp = vl_gpar(fill = "red", col = NA))) |>
+    draw(circle_grob(x = 5, r = 0.1, gp = vl_gpar(fill = "blue")))
+  fr <- .dml_fragment(sc)
+  expect_length(fr$warnings, 0)
+  doc <- xml2::read_xml(fr$xml)
+  ns <- xml2::xml_ns(doc)
+  xf <- xml2::xml_find_all(doc, ".//p:sp/p:spPr/a:xfrm", ns)
+  # the off-page circle is gone: the line and the cut rect remain
+  expect_length(xf, 2)
+  num <- function(path, attr) {
+    as.numeric(xml2::xml_attr(xml2::xml_find_all(xf, path, ns), attr)) / 914400
+  }
+  x0 <- num("a:off", "x")
+  x1 <- x0 + num("a:ext", "cx")
+  expect_true(all(x0 >= 0.5 - 1e-3 & x1 <= 1.5 + 1e-3))
+  # the cut rectangle is still a rectangle
+  expect_length(xml2::xml_find_all(doc, ".//a:prstGeom[@prst='rect']", ns), 1)
+})
+
+test_that("native text crossing a clip edge is drawn whole, with a warning", {
+  sc <- vl_scene(2, 2, dpi = 96) |>
+    push(vl_viewport(width = 0.5, height = 0.5, clip = TRUE)) |>
+    draw(text_grob("a long label that overflows", x = 0.9, just = "left"))
+  fr <- .dml_fragment(sc)
+  expect_match(fr$warnings, "clip edge", all = FALSE)
+  expect_match(fr$xml, "a long label that overflows", fixed = TRUE)
+  # as outlines it is cut exactly instead
+  expect_length(.dml_fragment(sc, text = "outline")$warnings, 0)
+})
