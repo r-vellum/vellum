@@ -783,7 +783,12 @@ impl DmlBackend {
             return false;
         }
         if self.marker_armed || self.in_circles {
-            let pad = if pad.is_finite() { pad.max(0.0) } else { 0.0 };
+            // An outline of unknown reach overlaps everything: never merged.
+            let pad = if pad.is_finite() {
+                pad.max(0.0)
+            } else {
+                f64::INFINITY
+            };
             self.points.push(PendingMark {
                 name: name.to_string(),
                 paths: paths.to_vec(),
