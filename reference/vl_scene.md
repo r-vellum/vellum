@@ -102,14 +102,19 @@ render(
 - path:
 
   Output file path; the format is taken from the extension (`.png`,
-  `.svg`, or `.pdf`).
+  `.svg`, `.pdf`, or `.pptx`). A `.pptx` is a one-slide PowerPoint file
+  of editable shapes at the scene's size (see
+  [`as_dml()`](https://r-vellum.github.io/vellum/reference/as_dml.md)
+  for what that means, and
+  [`pptx_pages()`](https://r-vellum.github.io/vellum/reference/pptx_pages.md)
+  for several slides); it needs no other package.
 
 - text:
 
-  For SVG output, how text is written: `"native"` (default) emits
-  selectable `<text>` referencing system fonts, `"outline"` emits glyph
-  outlines (pixel-faithful, identical to the raster/PDF backends, but
-  not selectable). Ignored for PNG/PDF.
+  For SVG and PowerPoint output, how text is written: `"native"`
+  (default) emits selectable, editable text referencing system fonts,
+  `"outline"` emits glyph outlines (pixel-faithful, identical to the
+  raster/PDF backends, but not selectable). Ignored for PNG/PDF.
 
 - debug:
 

@@ -171,14 +171,16 @@ output is unchanged. See <code><a href="describe.html">describe()</a></code> to 
 
 <dt id="arg-path">path<a class="anchor" aria-label="anchor" href="#arg-path"></a></dt>
 <dd><p>Output file path; the format is taken from the extension (<code>.png</code>,
-<code>.svg</code>, or <code>.pdf</code>).</p></dd>
+<code>.svg</code>, <code>.pdf</code>, or <code>.pptx</code>). A <code>.pptx</code> is a one-slide PowerPoint file of
+editable shapes at the scene's size (see <code><a href="as_dml.html">as_dml()</a></code> for what that means,
+and <code><a href="pptx_pages.html">pptx_pages()</a></code> for several slides); it needs no other package.</p></dd>
 
 
 <dt id="arg-text">text<a class="anchor" aria-label="anchor" href="#arg-text"></a></dt>
-<dd><p>For SVG output, how text is written: <code>"native"</code> (default) emits
-selectable <code>&lt;text&gt;</code> referencing system fonts, <code>"outline"</code> emits glyph
-outlines (pixel-faithful, identical to the raster/PDF backends, but not
-selectable). Ignored for PNG/PDF.</p></dd>
+<dd><p>For SVG and PowerPoint output, how text is written: <code>"native"</code>
+(default) emits selectable, editable text referencing system fonts,
+<code>"outline"</code> emits glyph outlines (pixel-faithful, identical to the
+raster/PDF backends, but not selectable). Ignored for PNG/PDF.</p></dd>
 
 
 <dt id="arg-debug">debug<a class="anchor" aria-label="anchor" href="#arg-debug"></a></dt>

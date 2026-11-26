@@ -43,6 +43,7 @@
 <url><loc>https://r-vellum.github.io/vellum/reference/node_names.html</loc></url>
 <url><loc>https://r-vellum.github.io/vellum/reference/pdf_pages.html</loc></url>
 <url><loc>https://r-vellum.github.io/vellum/reference/plotmath.html</loc></url>
+<url><loc>https://r-vellum.github.io/vellum/reference/pptx_pages.html</loc></url>
 <url><loc>https://r-vellum.github.io/vellum/reference/profile_render.html</loc></url>
 <url><loc>https://r-vellum.github.io/vellum/reference/render_all.html</loc></url>
 <url><loc>https://r-vellum.github.io/vellum/reference/render_animation.html</loc></url>
@@ -62,6 +63,7 @@
 <url><loc>https://r-vellum.github.io/vellum/reference/rs_path_op.html</loc></url>
 <url><loc>https://r-vellum.github.io/vellum/reference/rs_pdf_pages.html</loc></url>
 <url><loc>https://r-vellum.github.io/vellum/reference/rs_pdf_pages_raw.html</loc></url>
+<url><loc>https://r-vellum.github.io/vellum/reference/rs_pptx_pages.html</loc></url>
 <url><loc>https://r-vellum.github.io/vellum/reference/rs_read_png.html</loc></url>
 <url><loc>https://r-vellum.github.io/vellum/reference/rs_set_cvd_mode.html</loc></url>
 <url><loc>https://r-vellum.github.io/vellum/reference/rs_set_glyph_bitmap_mode.html</loc></url>

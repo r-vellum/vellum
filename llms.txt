@@ -586,6 +586,8 @@ document, and a batch rendered across cores.
   : Render many scenes in parallel
 - [`as_dml()`](https://r-vellum.github.io/vellum/reference/as_dml.md) :
   Editable PowerPoint output via officer
+- [`pptx_pages()`](https://r-vellum.github.io/vellum/reference/pptx_pages.md)
+  : Write several scenes as the slides of one PowerPoint file
 
 ## Accessibility & fonts
 

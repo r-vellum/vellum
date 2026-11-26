@@ -49,6 +49,12 @@ can compile (a vellumplot plot, say) so it can go there too:
     doc <- officer::ph_with(doc, as_dml(plot), location = officer::ph_location_fullsize())
     print(doc, target = "deck.pptx")
 
+To write a deck without officer, give
+[`render()`](https://r-vellum.github.io/vellum/reference/vl_scene.md) a
+`.pptx` path (one slide) or use
+[`pptx_pages()`](https://r-vellum.github.io/vellum/reference/pptx_pages.md)
+(several).
+
 ## Size
 
 By default the scene is laid out again at the size of the location
@@ -97,6 +103,13 @@ places an off-centre radial gradient differently.
 
 For charts whose *data* stays editable in PowerPoint, see the mschart
 package; this writes the drawing, not the data.
+
+## See also
+
+[`render()`](https://r-vellum.github.io/vellum/reference/vl_scene.md)
+and
+[`pptx_pages()`](https://r-vellum.github.io/vellum/reference/pptx_pages.md)
+to write a `.pptx` without officer.
 
 ## Examples
 

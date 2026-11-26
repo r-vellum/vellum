@@ -47,6 +47,13 @@
   through the raster backend as a picture of the region they cover (a
   blend over the page beneath it), with a warning.
 
+- `render(scene, "deck.pptx")` writes a PowerPoint file directly, and
+  `pptx_pages(scenes, path)` a deck with one slide per scene (F-24, part
+  5), without officer. The slide is the scene’s size (a deck takes its
+  largest page and centres smaller ones), the shapes are the same
+  editable ones the officer route places, and the file is byte-for-byte
+  reproducible: no timestamps, user name or software version.
+
 ## vellum 0.17.0
 
 ### New features

@@ -119,6 +119,8 @@ can compile (a vellumplot plot, say) so it can go there too:</p>
 <span><span class="va">doc</span> <span class="op">&lt;-</span> <span class="fu">officer</span><span class="fu">::</span><span class="fu"><a href="https://davidgohel.github.io/officer/reference/ph_with.html" class="external-link">ph_with</a></span><span class="op">(</span><span class="va">doc</span>, <span class="va">scene</span>, location <span class="op">=</span> <span class="fu">officer</span><span class="fu">::</span><span class="fu"><a href="https://davidgohel.github.io/officer/reference/ph_location_type.html" class="external-link">ph_location_type</a></span><span class="op">(</span><span class="st">"body"</span><span class="op">)</span><span class="op">)</span></span>
 <span><span class="va">doc</span> <span class="op">&lt;-</span> <span class="fu">officer</span><span class="fu">::</span><span class="fu"><a href="https://davidgohel.github.io/officer/reference/ph_with.html" class="external-link">ph_with</a></span><span class="op">(</span><span class="va">doc</span>, <span class="fu"><a href="../reference/as_dml.html">as_dml</a></span><span class="op">(</span><span class="va">plot</span><span class="op">)</span>, location <span class="op">=</span> <span class="fu">officer</span><span class="fu">::</span><span class="fu"><a href="https://davidgohel.github.io/officer/reference/ph_location_fullsize.html" class="external-link">ph_location_fullsize</a></span><span class="op">(</span><span class="op">)</span><span class="op">)</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/base/print.html" class="external-link">print</a></span><span class="op">(</span><span class="va">doc</span>, target <span class="op">=</span> <span class="st">"deck.pptx"</span><span class="op">)</span></span></code></pre><p></p></div>
+<p>To write a deck without officer, give <code><a href="vl_scene.html">render()</a></code> a <code>.pptx</code> path (one slide)
+or use <code><a href="pptx_pages.html">pptx_pages()</a></code> (several).</p>
     </div>
     <div class="section level2">
     <h2 id="size">Size<a class="anchor" aria-label="anchor" href="#size"></a></h2>
@@ -163,6 +165,10 @@ translucent stops and the transparency of tiled pattern pictures, and places
 an off-centre radial gradient differently.</p>
 <p>For charts whose <em>data</em> stays editable in PowerPoint, see the mschart
 package; this writes the drawing, not the data.</p>
+    </div>
+    <div class="section level2">
+    <h2 id="see-also">See also<a class="anchor" aria-label="anchor" href="#see-also"></a></h2>
+    <div class="dont-index"><p><code><a href="vl_scene.html">render()</a></code> and <code><a href="pptx_pages.html">pptx_pages()</a></code> to write a <code>.pptx</code> without officer.</p></div>
     </div>
 
     <div class="section level2">

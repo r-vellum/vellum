@@ -28,10 +28,10 @@ scene_svg(
 
 - text:
 
-  For SVG output, how text is written: `"native"` (default) emits
-  selectable `<text>` referencing system fonts, `"outline"` emits glyph
-  outlines (pixel-faithful, identical to the raster/PDF backends, but
-  not selectable). Ignored for PNG/PDF.
+  For SVG and PowerPoint output, how text is written: `"native"`
+  (default) emits selectable, editable text referencing system fonts,
+  `"outline"` emits glyph outlines (pixel-faithful, identical to the
+  raster/PDF backends, but not selectable). Ignored for PNG/PDF.
 
 - layer:
 
