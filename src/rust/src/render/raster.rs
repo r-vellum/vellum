@@ -410,6 +410,11 @@ impl RasterBackend {
         self.bitmap_text = on;
     }
 
+    /// The page as drawn so far (outside any open group).
+    pub fn page(&self) -> &Pixmap {
+        &self.targets[0]
+    }
+
     pub fn into_pixmap(mut self) -> Pixmap {
         // Balanced groups leave only the page; if not, the base is still first.
         self.targets.swap_remove(0)

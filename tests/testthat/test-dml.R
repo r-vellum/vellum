@@ -126,13 +126,114 @@ test_that("rasters become pictures, written to the media directory", {
   expect_gt(dim(png::readPNG(fr$files))[1], 2)
 })
 
-test_that("unsupported effects are reported", {
-  sc <- vl_scene(2, 1, dpi = 96) |>
+test_that("gradients become gradFill, patterns a tiled picture fill", {
+  skip_if_not_installed("xml2")
+  sc <- vl_scene(3, 1, dpi = 96, bg = NA) |>
     draw(rect_grob(
-      gp = vl_gpar(fill = linear_gradient(c("red", "blue")))
+      x = 0.2,
+      width = 0.3,
+      gp = vl_gpar(col = NA, fill = linear_gradient(c("red", "blue")))
+    )) |>
+    draw(rect_grob(
+      x = 0.5,
+      width = 0.2,
+      gp = vl_gpar(col = NA, fill = radial_gradient(c("white", "navy"), fx = 0.4))
+    )) |>
+    draw(rect_grob(
+      x = 0.8,
+      width = 0.3,
+      gp = vl_gpar(
+        col = NA,
+        fill = vl_pattern(circle_grob(gp = vl_gpar(fill = "red")), 0.1, 0.1)
+      )
     ))
   fr <- .dml_fragment(sc)
-  expect_match(fr$warnings, "gradient", all = FALSE)
+  expect_match(fr$warnings, "focal point", all = FALSE)
+  doc <- xml2::read_xml(fr$xml)
+  ns <- xml2::xml_ns(doc)
+  expect_length(xml2::xml_find_all(doc, ".//a:gradFill/a:lin", ns), 1)
+  expect_length(xml2::xml_find_all(doc, ".//a:gradFill/a:path[@path='circle']", ns), 1)
+  tile <- xml2::xml_find_first(doc, ".//a:blipFill/a:tile", ns)
+  expect_identical(xml2::xml_attr(tile, "sx"), "100000")
+  expect_length(fr$files, 1)
+})
+
+test_that("masks and blend modes become pictures of their region", {
+  skip_if_not_installed("xml2")
+  dots <- function(sc) {
+    sc |>
+      draw(circle_grob(x = 0.4, r = 0.3, gp = vl_gpar(fill = "cyan", col = NA))) |>
+      draw(circle_grob(x = 0.6, r = 0.3, gp = vl_gpar(fill = "magenta", col = NA)))
+  }
+  sc <- vl_scene(2, 1, dpi = 96) |>
+    push(vl_viewport(blend = "multiply")) |>
+    dots() |>
+    pop()
+  fr <- .dml_fragment(sc)
+  expect_match(fr$warnings, "blend modes are drawn as a picture", all = FALSE)
+  doc <- xml2::read_xml(fr$xml)
+  ns <- xml2::xml_ns(doc)
+  expect_length(xml2::xml_find_all(doc, ".//p:pic", ns), 1)
+  expect_length(xml2::xml_find_all(doc, ".//a:prstGeom[@prst='ellipse']", ns), 0)
+  # opacity over overlapping shapes: a picture; over disjoint ones: folded in
+  over <- vl_scene(2, 1, dpi = 96) |>
+    push(vl_viewport(alpha = 0.5)) |>
+    dots() |>
+    pop()
+  expect_match(.dml_fragment(over)$warnings, "group opacity", all = FALSE)
+  apart <- vl_scene(2, 1, dpi = 96, bg = NA) |>
+    push(vl_viewport(alpha = 0.5)) |>
+    draw(circle_grob(x = 0.2, r = 0.2, gp = vl_gpar(fill = "red", col = NA))) |>
+    draw(circle_grob(x = 0.8, r = 0.2, gp = vl_gpar(fill = "blue", col = NA))) |>
+    pop()
+  fa <- .dml_fragment(apart)
+  expect_length(fa$warnings, 0)
+  expect_identical(
+    lengths(regmatches(fa$xml, gregexpr('<a:alpha val="50000"/>', fa$xml))),
+    2L
+  )
+  # overlaps inside a nested group or inside one shape still count
+  nested <- vl_scene(2, 1, dpi = 96) |>
+    push(vl_viewport(alpha = 0.5)) |>
+    push(vl_viewport(name = "inner")) |>
+    dots() |>
+    pop() |>
+    pop()
+  expect_match(.dml_fragment(nested)$warnings, "group opacity", all = FALSE)
+  outlined <- vl_scene(2, 1, dpi = 96) |>
+    push(vl_viewport(alpha = 0.5)) |>
+    draw(circle_grob(r = 0.3, gp = vl_gpar(fill = "red", col = "black", lwd = 4))) |>
+    pop()
+  expect_match(.dml_fragment(outlined)$warnings, "group opacity", all = FALSE)
+  halo <- vl_scene(4, 2, dpi = 96) |>
+    push(vl_viewport(alpha = 0.5)) |>
+    draw(text_grob("HALO", gp = vl_gpar(fontsize = 60, halo_col = "red", halo_width = 6))) |>
+    pop()
+  expect_match(.dml_fragment(halo)$warnings, "group opacity", all = FALSE)
+  # a nested opacity over disjoint shapes folds both opacities in
+  twice <- vl_scene(2, 1, dpi = 96, bg = NA) |>
+    push(vl_viewport(alpha = 0.5)) |>
+    push(vl_viewport(alpha = 0.5)) |>
+    draw(circle_grob(x = 0.2, r = 0.2, gp = vl_gpar(fill = "red", col = NA))) |>
+    draw(circle_grob(x = 0.8, r = 0.2, gp = vl_gpar(fill = "blue", col = NA))) |>
+    pop() |>
+    pop()
+  ft <- .dml_fragment(twice)
+  expect_length(ft$warnings, 0)
+  expect_identical(
+    lengths(regmatches(ft$xml, gregexpr('<a:alpha val="25000"/>', ft$xml))),
+    2L
+  )
+  # a nested blend names the real reason
+  blended <- vl_scene(2, 1, dpi = 96) |>
+    push(vl_viewport(alpha = 0.5)) |>
+    push(vl_viewport(blend = "multiply")) |>
+    draw(circle_grob(x = 0.2, r = 0.2, gp = vl_gpar(fill = "red", col = NA))) |>
+    pop() |>
+    pop()
+  fb <- .dml_fragment(blended)$warnings
+  expect_match(fb, "blend modes", all = FALSE)
+  expect_no_match(fb, "overlapping")
 })
 
 test_that("control characters cannot break the XML", {
