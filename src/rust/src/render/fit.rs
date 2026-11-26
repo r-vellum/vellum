@@ -45,6 +45,10 @@ pub(super) enum Fit<'a> {
     /// identity, with the paint's shader moved to device space); for a stroke it
     /// is in the original local space (draw it under the original transform).
     Clipped(Path),
+    /// Stroke the path to its outline and fill that through [`fit_fill`]: the
+    /// pen itself reaches past the safe range (a stroke millions of px wide),
+    /// so no cut of the centreline would bring its outline into range.
+    Outline,
     /// Nothing can be drawn: the geometry is not finite, or not invertible.
     Skip,
 }
@@ -89,13 +93,16 @@ fn within(b: [f64; 4], reach: f64) -> bool {
     b.iter().all(|v| v.is_finite()) && b.iter().all(|v| v.abs() + reach <= SAFE)
 }
 
-/// Does `path` under `t`, grown by `reach` px, reach past the PDF backend's
-/// coordinate cap (or is it not finite)? Such a mark is skipped on PDF
-/// (`pdf::drawable`), so the raster backend skips it too.
-pub(super) fn beyond_cap(path: &Path, t: Transform, reach: f64) -> bool {
+/// Does `path` under `t` reach past the PDF backend's coordinate cap (or is it
+/// not finite)? Such a mark is skipped on PDF (`pdf::drawable`), so the raster
+/// backend skips it too. As on PDF, the path's own box is checked, not its pen.
+/// PDF also checks the box in points under the page scale, so at under 72 dpi
+/// it skips a mark up to 72/dpi times nearer the cap than PNG does; both are
+/// beyond any page.
+pub(super) fn beyond_cap(path: &Path, t: Transform) -> bool {
     let cap = super::pdf::MAX_COORD as f64;
     let b = device_bounds(path, &t);
-    !(t.is_finite() && b.iter().all(|v| v.is_finite() && v.abs() + reach <= cap))
+    !(t.is_finite() && b.iter().all(|v| v.is_finite() && v.abs() <= cap))
 }
 
 /// Fit a filled path. [`Fit::Clipped`] holds device-px geometry.
@@ -111,7 +118,7 @@ pub(super) fn fit_fill<'a>(path: &'a Path, t: Transform, w: u32, h: u32) -> Fit<
         return Fit::Skip;
     }
     let m = w.max(h) as f64 + 4.0;
-    match clip_to_box(path, &t, [-m, -m, w as f64 + m, h as f64 + m]) {
+    match clip_to_box(path, &t, [-m, -m, w as f64 + m, h as f64 + m], true) {
         Some(p) => Fit::Clipped(p),
         None => Fit::Skip,
     }
@@ -130,13 +137,16 @@ pub(super) fn fit_stroke<'a>(path: &'a Path, t: Transform, reach: f64, w: u32, h
     if within(b, reach) {
         return Fit::Keep(path);
     }
-    // A pen wider than the safe range itself cannot be drawn safely however the
-    // centreline is cut.
-    if !b.iter().all(|v| v.is_finite()) || reach > SAFE / 8.0 {
+    if !b.iter().all(|v| v.is_finite()) {
         return Fit::Skip;
     }
+    // A pen wider than the safe range itself: however the centreline is cut,
+    // its outline is not in range, so the outline is cut instead.
+    if reach > SAFE / 8.0 {
+        return Fit::Outline;
+    }
     let m = w.max(h) as f64 + reach + 4.0;
-    let Some(dev) = clip_to_box(path, &t, [-m, -m, w as f64 + m, h as f64 + m]) else {
+    let Some(dev) = clip_to_box(path, &t, [-m, -m, w as f64 + m, h as f64 + m], false) else {
         return Fit::Skip;
     };
     let Some(local) = invert(&t).and_then(|inv| dev.transform(inv)) else {
@@ -150,6 +160,306 @@ pub(super) fn fit_stroke<'a>(path: &'a Path, t: Transform, reach: f64, w: u32, h
     } else {
         Fit::Skip
     }
+}
+
+/// What to draw for a dashed stroke after fitting it into the safe range.
+pub(super) enum DashFit<'a> {
+    /// Draw the path as given, dashed as given.
+    Keep(&'a Path),
+    /// Draw each visible run (local geometry, under the original transform),
+    /// dashed from its own offset into the pattern.
+    Runs(Vec<(Path, f32)>),
+    /// Stroke to an outline and fill it (see [`Fit::Outline`]).
+    Outline,
+    /// Nothing can be drawn.
+    Skip,
+}
+
+/// Fit a dashed stroke. Clamping the centreline, as [`fit_stroke`] does, would
+/// change its length, and tiny-skia dashes from a contour's start, so the
+/// pattern on the page would shift (VR-43 review). Instead the pieces of each
+/// contour inside the clip box are kept as separate runs, each starting its
+/// dash pattern where the whole contour would be at that point: the dash
+/// `phase` plus the arc length cut off before it, measured in local units (in
+/// which tiny-skia dashes) and in `f64`, reduced modulo the pattern. A closed
+/// contour whose start lies inside the box keeps its first and last runs as
+/// one, so the join there is not lost.
+pub(super) fn fit_dashed<'a>(
+    path: &'a Path,
+    t: Transform,
+    reach: f64,
+    w: u32,
+    h: u32,
+    intervals: &[f32],
+    phase: f32,
+) -> DashFit<'a> {
+    let period: f64 = intervals.iter().map(|&v| v as f64).sum();
+    match fit_stroke(path, t, reach, w, h) {
+        Fit::Keep(p) => return DashFit::Keep(p),
+        Fit::Outline => return DashFit::Outline,
+        Fit::Skip => return DashFit::Skip,
+        Fit::Clipped(_) => {}
+    }
+    if !(period > 0.0 && period.is_finite()) {
+        return DashFit::Skip;
+    }
+    let m = w.max(h) as f64 + reach + 4.0;
+    let mut d = Dasher {
+        t,
+        r: [-m, -m, w as f64 + m, h as f64 + m],
+        period,
+        phase: phase as f64,
+        s: 0.0,
+        run: None,
+        runs: Vec::new(),
+        contour_first: 0,
+    };
+    let lp = |p: tiny_skia::Point| (p.x as f64, p.y as f64);
+    let mut start: Pt = (0.0, 0.0);
+    let mut cur: Pt = (0.0, 0.0);
+    for seg in path.segments() {
+        match seg {
+            PathSegment::MoveTo(p) => {
+                d.end_contour(false);
+                cur = lp(p);
+                start = cur;
+            }
+            PathSegment::LineTo(p) => {
+                let q = lp(p);
+                d.line(cur, q, None);
+                cur = q;
+            }
+            PathSegment::QuadTo(p1, p) => {
+                let q = lp(p);
+                d.curve(&[cur, lp(p1), q], 0);
+                cur = q;
+            }
+            PathSegment::CubicTo(p1, p2, p) => {
+                let q = lp(p);
+                d.curve(&[cur, lp(p1), lp(p2), q], 0);
+                cur = q;
+            }
+            PathSegment::Close => {
+                d.line(cur, start, None);
+                cur = start;
+                d.end_contour(true);
+            }
+        }
+    }
+    d.end_contour(false);
+    let runs = d
+        .runs
+        .into_iter()
+        .filter_map(|r| {
+            let mut pb = PathBuilder::new();
+            let f = |p: Pt| (p.0 as f32, p.1 as f32);
+            let s0 = f(r.start);
+            pb.move_to(s0.0, s0.1);
+            for g in &r.segs {
+                match g {
+                    Seg::Line(p) => {
+                        let p = f(*p);
+                        pb.line_to(p.0, p.1);
+                    }
+                    Seg::Quad(c, p) => {
+                        let (c, p) = (f(*c), f(*p));
+                        pb.quad_to(c.0, c.1, p.0, p.1);
+                    }
+                    Seg::Cubic(c1, c2, p) => {
+                        let (c1, c2, p) = (f(*c1), f(*c2), f(*p));
+                        pb.cubic_to(c1.0, c1.1, c2.0, c2.1, p.0, p.1);
+                    }
+                }
+            }
+            let p = pb.finish()?;
+            // As in `fit_stroke`: never hand tiny-skia a run that the transform's
+            // precision put back out of range.
+            within(device_bounds(&p, &t), reach).then_some((p, r.offset as f32))
+        })
+        .collect();
+    DashFit::Runs(runs)
+}
+
+/// A segment of a dash run, in local coordinates (the start is implicit).
+enum Seg {
+    Line(Pt),
+    Quad(Pt, Pt),
+    Cubic(Pt, Pt, Pt),
+}
+
+struct Run {
+    start: Pt,
+    segs: Vec<Seg>,
+    /// Offset into the dash pattern at `start`, in `[0, period)`.
+    offset: f64,
+    /// Starts at its contour's start (arc length 0).
+    at_start: bool,
+}
+
+struct Dasher {
+    t: Transform,
+    /// The clip box, in device px.
+    r: [f64; 4],
+    period: f64,
+    phase: f64,
+    /// Arc length so far along the current contour (local units).
+    s: f64,
+    run: Option<Run>,
+    runs: Vec<Run>,
+    /// Index in `runs` of the current contour's first run.
+    contour_first: usize,
+}
+
+impl Dasher {
+    fn offset(&self, s: f64) -> f64 {
+        (self.phase + s).rem_euclid(self.period)
+    }
+
+    fn end_run(&mut self) {
+        if let Some(r) = self.run.take() {
+            self.runs.push(r);
+        }
+    }
+
+    fn end_contour(&mut self, closed: bool) {
+        let open = self.run.take();
+        // A closed contour that starts and ends inside the box: its last run
+        // continues into its first.
+        if let Some(mut last) = open {
+            let first = self.contour_first;
+            if closed && first < self.runs.len() && self.runs[first].at_start {
+                let head = self.runs.remove(first);
+                last.segs.extend(head.segs);
+            }
+            self.runs.push(last);
+        }
+        self.s = 0.0;
+        self.contour_first = self.runs.len();
+    }
+
+    fn begin_run(&mut self, p: Pt, s: f64) {
+        self.end_run();
+        self.run = Some(Run {
+            start: p,
+            segs: Vec::new(),
+            offset: self.offset(s),
+            at_start: s == 0.0,
+        });
+    }
+
+    /// The local line `a`-`b` (`len`: its arc length when it stands in for a
+    /// curve).
+    fn line(&mut self, a: Pt, b: Pt, len: Option<f64>) {
+        let len = len.unwrap_or_else(|| (b.0 - a.0).hypot(b.1 - a.1));
+        let (da, db) = (map_f64(&self.t, a), map_f64(&self.t, b));
+        // Liang-Barsky: the parameter interval of the device segment inside
+        // the (convex) box.
+        let (mut t0, mut t1) = (0.0f64, 1.0f64);
+        let (dx, dy) = (db.0 - da.0, db.1 - da.1);
+        for (p, q) in [
+            (-dx, da.0 - self.r[0]),
+            (dx, self.r[2] - da.0),
+            (-dy, da.1 - self.r[1]),
+            (dy, self.r[3] - da.1),
+        ] {
+            if p == 0.0 {
+                if q < 0.0 {
+                    t0 = 1.0;
+                    t1 = 0.0;
+                }
+            } else {
+                let u = q / p;
+                if p < 0.0 {
+                    t0 = t0.max(u);
+                } else {
+                    t1 = t1.min(u);
+                }
+            }
+        }
+        let lerp = |u: f64| (a.0 + u * (b.0 - a.0), a.1 + u * (b.1 - a.1));
+        if t0 > t1 {
+            self.end_run();
+        } else {
+            if t0 > 0.0 || self.run.is_none() {
+                self.begin_run(lerp(t0), self.s + t0 * len);
+            }
+            let end = if t1 < 1.0 { lerp(t1) } else { b };
+            if let Some(r) = self.run.as_mut() {
+                r.segs.push(Seg::Line(end));
+            }
+            if t1 < 1.0 {
+                self.end_run();
+            }
+        }
+        self.s += len;
+    }
+
+    fn curve(&mut self, pts: &[Pt], depth: u32) {
+        let dev: Vec<Pt> = pts.iter().map(|&p| map_f64(&self.t, p)).collect();
+        let (mut x0, mut y0, mut x1, mut y1) = (
+            f64::INFINITY,
+            f64::INFINITY,
+            f64::NEG_INFINITY,
+            f64::NEG_INFINITY,
+        );
+        for p in &dev {
+            x0 = x0.min(p.0);
+            y0 = y0.min(p.1);
+            x1 = x1.max(p.0);
+            y1 = y1.max(p.1);
+        }
+        let r = self.r;
+        let end = pts[pts.len() - 1];
+        let len = curve_len(pts, 0);
+        if x0 >= r[0] && y0 >= r[1] && x1 <= r[2] && y1 <= r[3] {
+            if self.run.is_none() {
+                self.begin_run(pts[0], self.s);
+            }
+            if let Some(run) = self.run.as_mut() {
+                run.segs.push(if pts.len() == 3 {
+                    Seg::Quad(pts[1], end)
+                } else {
+                    Seg::Cubic(pts[1], pts[2], end)
+                });
+            }
+            self.s += len;
+            return;
+        }
+        let outside = x1 < r[0] || x0 > r[2] || y1 < r[1] || y0 > r[3];
+        if outside {
+            self.end_run();
+            self.s += len;
+            return;
+        }
+        let small = (x1 - x0).max(y1 - y0) <= CHORD_PX;
+        if small || depth >= MAX_DEPTH {
+            self.line(pts[0], end, Some(len));
+            return;
+        }
+        let (a, b) = split(pts);
+        self.curve(&a, depth + 1);
+        self.curve(&b, depth + 1);
+    }
+}
+
+fn map_f64(t: &Transform, p: Pt) -> Pt {
+    (
+        t.sx as f64 * p.0 + t.kx as f64 * p.1 + t.tx as f64,
+        t.ky as f64 * p.0 + t.sy as f64 * p.1 + t.ty as f64,
+    )
+}
+
+/// Arc length of a quad or cubic (local units): the mean of its chord and
+/// control-polygon lengths, refined by splitting until they agree.
+fn curve_len(p: &[Pt], depth: u32) -> f64 {
+    let d = |a: Pt, b: Pt| (b.0 - a.0).hypot(b.1 - a.1);
+    let chord = d(p[0], p[p.len() - 1]);
+    let poly: f64 = p.windows(2).map(|w| d(w[0], w[1])).sum();
+    if poly - chord <= 1e-9 * poly || depth >= 24 {
+        return 0.5 * (chord + poly);
+    }
+    let (a, b) = split(p);
+    curve_len(&a, depth + 1) + curve_len(&b, depth + 1)
 }
 
 /// The inverse of `t`, computed in `f64`.
@@ -183,7 +493,11 @@ pub(super) fn dims(pm: &Pixmap) -> (u32, u32) {
 /// one wholly to one side of it is replaced by its chord (the region between
 /// them lies on that side too); one that straddles the edge is split until it
 /// is one or the other, or small enough that its chord is as good.
-fn clip_to_box(path: &Path, t: &Transform, r: [f64; 4]) -> Option<Path> {
+///
+/// With `close_open` (a fill), an open contour is closed here, in `f64`, as a
+/// fill closes it implicitly: left to tiny-skia, the closing edge would join the
+/// clamped ends instead of following the true one.
+fn clip_to_box(path: &Path, t: &Transform, r: [f64; 4], close_open: bool) -> Option<Path> {
     let mut c = Clamper {
         r,
         pb: PathBuilder::new(),
@@ -191,9 +505,19 @@ fn clip_to_box(path: &Path, t: &Transform, r: [f64; 4]) -> Option<Path> {
     };
     let mut start: Pt = (0.0, 0.0);
     let mut cur: Pt = (0.0, 0.0);
+    let mut open = false;
+    let close = |c: &mut Clamper, cur: Pt, start: Pt| {
+        c.line(cur, start);
+        c.pb.close();
+        c.last = None;
+    };
     for seg in path.segments() {
         match seg {
             PathSegment::MoveTo(p) => {
+                if close_open && open {
+                    close(&mut c, cur, start);
+                }
+                open = false;
                 cur = map(t, p.x, p.y);
                 start = cur;
                 c.move_to(cur);
@@ -202,24 +526,29 @@ fn clip_to_box(path: &Path, t: &Transform, r: [f64; 4]) -> Option<Path> {
                 let q = map(t, p.x, p.y);
                 c.line(cur, q);
                 cur = q;
+                open = true;
             }
             PathSegment::QuadTo(p1, p) => {
                 let q = map(t, p.x, p.y);
                 c.curve(&[cur, map(t, p1.x, p1.y), q], 0);
                 cur = q;
+                open = true;
             }
             PathSegment::CubicTo(p1, p2, p) => {
                 let q = map(t, p.x, p.y);
                 c.curve(&[cur, map(t, p1.x, p1.y), map(t, p2.x, p2.y), q], 0);
                 cur = q;
+                open = true;
             }
             PathSegment::Close => {
-                c.line(cur, start);
-                c.pb.close();
-                c.last = None;
+                close(&mut c, cur, start);
                 cur = start;
+                open = false;
             }
         }
+    }
+    if close_open && open {
+        close(&mut c, cur, start);
     }
     c.pb.finish()
 }
@@ -341,7 +670,7 @@ fn split(p: &[Pt]) -> (Vec<Pt>, Vec<Pt>) {
 
 /// `path` as given, or fitted, borrowed or owned, for callers that just need a
 /// path to hand on (no transform change): used for clip masks in device px.
-pub(super) fn fitted_fill<'a>(
+pub(crate) fn fitted_fill<'a>(
     path: &'a Path,
     t: Transform,
     w: u32,
@@ -350,7 +679,7 @@ pub(super) fn fitted_fill<'a>(
     match fit_fill(path, t, w, h) {
         Fit::Keep(p) => Some((Cow::Borrowed(p), t)),
         Fit::Clipped(p) => Some((Cow::Owned(p), Transform::identity())),
-        Fit::Skip => None,
+        Fit::Outline | Fit::Skip => None,
     }
 }
 
@@ -373,7 +702,7 @@ mod tests {
             Fit::Clipped(p) => {
                 pm.fill_path(&p, &red(), FillRule::Winding, Transform::identity(), None)
             }
-            Fit::Skip => {}
+            Fit::Outline | Fit::Skip => {}
         }
     }
 
@@ -481,14 +810,120 @@ mod tests {
     fn the_pdf_coordinate_cap_marks_what_is_not_drawn() {
         let p = PathBuilder::from_circle(0.0, 0.0, 1.0).unwrap();
         let at = |s: f32| Transform::from_row(s, 0.0, 0.0, s, 50.0, 50.0);
-        assert!(!fit_cap(&p, at(1e12), 0.0));
-        assert!(fit_cap(&p, at(1e16), 0.0));
-        assert!(fit_cap(&p, at(1e12), 1e16));
-        assert!(fit_cap(&p, at(f32::NAN), 0.0));
+        assert!(!beyond_cap(&p, at(1e12)));
+        assert!(beyond_cap(&p, at(1e16)));
+        assert!(beyond_cap(&p, at(f32::NAN)));
     }
 
-    fn fit_cap(p: &Path, t: Transform, reach: f64) -> bool {
-        beyond_cap(p, t, reach)
+    /// Stroke `path` dashed `[4, 4]` from `phase`, as the raster backend does.
+    fn dashed(path: &Path, t: Transform, width: f32, phase: f32) -> Pixmap {
+        let mut pm = Pixmap::new(100, 100).unwrap();
+        let sk = Stroke {
+            width,
+            line_cap: tiny_skia::LineCap::Butt,
+            dash: tiny_skia::StrokeDash::new(vec![4.0, 4.0], phase),
+            ..Stroke::default()
+        };
+        let reach = width as f64 * 0.5 + 2.0;
+        match fit_dashed(path, t, reach, 100, 100, &[4.0, 4.0], phase) {
+            DashFit::Keep(p) => pm.stroke_path(p, &red(), &sk, t, None),
+            DashFit::Runs(runs) => {
+                for (run, off) in runs {
+                    let mut sk = sk.clone();
+                    sk.dash = tiny_skia::StrokeDash::new(vec![4.0, 4.0], off);
+                    pm.stroke_path(&run, &red(), &sk, t, None);
+                }
+            }
+            DashFit::Outline | DashFit::Skip => panic!("expected runs"),
+        }
+        pm
+    }
+
+    fn hline(l: f32) -> Path {
+        let mut pb = PathBuilder::new();
+        pb.move_to(-l, 50.0);
+        pb.line_to(100.0 + l, 50.0);
+        pb.finish().unwrap()
+    }
+
+    #[test]
+    fn a_fitted_dashed_stroke_keeps_its_phase() {
+        let t = Transform::identity();
+        // In range (drawn as given) vs far past it, with the same phase on the
+        // page ((x + l) mod 8): the far one is cut, yet dashes alike.
+        for (near, far) in [
+            (1e5f32, 3e6f32),
+            (1e5 + 4.0, 3e6 + 4.0),
+            (1e5 + 2.0, 1.5e6 + 2.0),
+        ] {
+            let a = dashed(&hline(near), t, 2.0, 0.0);
+            let b = dashed(&hline(far), t, 2.0, 0.0);
+            assert_eq!(a.data(), b.data(), "{near} vs {far}");
+        }
+        // A phase given with the stroke carries through too.
+        let a = dashed(&hline(1e5), t, 2.0, 3.0);
+        let b = dashed(&hline(2e6), t, 2.0, 3.0);
+        assert_eq!(a.data(), b.data());
+        // ... and a phase shift does show.
+        let c = dashed(&hline(2e6 + 4.0), t, 2.0, 3.0);
+        assert_ne!(a.data(), c.data());
+        // Under a scale the pattern is measured in local units.
+        let s = Transform::from_row(2.0, 0.0, 0.0, 2.0, -50.0, -50.0);
+        let a = dashed(&hline(1e5), s, 1.0, 0.0);
+        let b = dashed(&hline(3e6), s, 1.0, 0.0);
+        assert_eq!(a.data(), b.data());
+    }
+
+    #[test]
+    fn a_closed_dashed_contour_through_the_page_is_one_run_there() {
+        // A huge square whose start (and end) corner is on the page.
+        let l = 1e9f32;
+        let mut pb = PathBuilder::new();
+        pb.move_to(50.0, 50.0);
+        pb.line_to(50.0 + l, 50.0);
+        pb.line_to(50.0 + l, 50.0 + l);
+        pb.line_to(50.0, 50.0 + l);
+        pb.close();
+        let p = pb.finish().unwrap();
+        let DashFit::Runs(runs) =
+            fit_dashed(&p, Transform::identity(), 3.0, 100, 100, &[4.0, 4.0], 0.0)
+        else {
+            panic!("expected runs");
+        };
+        // Leaving and re-entering the box: the last run continues into the first.
+        assert_eq!(runs.len(), 1);
+    }
+
+    #[test]
+    fn a_pen_wider_than_the_safe_range_is_outlined_not_dropped() {
+        let p = hline(10.0);
+        assert!(matches!(
+            fit_stroke(&p, Transform::identity(), 1.1e6, 100, 100),
+            Fit::Outline
+        ));
+    }
+
+    #[test]
+    fn an_open_fill_contour_is_closed_along_its_true_edge() {
+        // Open: implicitly closed from (100 + l, 60) back to (-l, 40).
+        let open = |l: f32| {
+            let mut pb = PathBuilder::new();
+            pb.move_to(-l, 40.0);
+            pb.line_to(0.0, -l);
+            pb.line_to(100.0 + l, 60.0);
+            pb.finish().unwrap()
+        };
+        let mut a = Pixmap::new(100, 100).unwrap();
+        fill(&mut a, &open(1e5), Transform::identity());
+        let mut b = Pixmap::new(100, 100).unwrap();
+        fill(&mut b, &open(1e12), Transform::identity());
+        let differ = a
+            .data()
+            .iter()
+            .zip(b.data())
+            .filter(|(x, y)| x != y)
+            .count();
+        assert!(differ < 100 * 4, "{differ} bytes differ");
     }
 
     #[test]

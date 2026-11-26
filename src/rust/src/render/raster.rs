@@ -68,7 +68,7 @@ fn fill_fit(
     t: Transform,
     mask: Option<&Mask>,
 ) {
-    if fit::beyond_cap(path, t, 0.0) {
+    if fit::beyond_cap(path, t) {
         return;
     }
     let (w, h) = fit::dims(pm);
@@ -81,16 +81,19 @@ fn fill_fit(
             paint.shader.transform(t);
             pm.fill_path(&dev, &paint, rule, Transform::identity(), mask);
         }
-        Fit::Skip => {}
+        Fit::Outline | Fit::Skip => {}
     }
 }
 
 /// How far (device px) a pen reaches from its centreline under `t`, with room
 /// for a mitre or square cap and a pixel of anti-aliasing.
 fn pen_reach(sk: &Stroke, t: &Transform) -> f64 {
-    let scale = (t.sx as f64)
-        .hypot(t.ky as f64)
-        .max((t.kx as f64).hypot(t.sy as f64));
+    // The largest singular value of the linear part: the most `t` stretches
+    // any direction, so a skewed pen is covered too.
+    let (a, b, c, d) = (t.sx as f64, t.ky as f64, t.kx as f64, t.sy as f64);
+    let sq = a * a + b * b + c * c + d * d;
+    let det = a * d - b * c;
+    let scale = (0.5 * (sq + (sq * sq - 4.0 * det * det).max(0.0).sqrt())).sqrt();
     let mut k: f64 = 1.0;
     if matches!(
         sk.line_join,
@@ -104,6 +107,8 @@ fn pen_reach(sk: &Stroke, t: &Transform) -> f64 {
     sk.width as f64 * 0.5 * scale * k + 2.0
 }
 
+/// Stroke `path`. `dash` is the stroke's dash pattern and phase as given (so
+/// a fitted dashed stroke can keep its phase); `None` for a solid stroke.
 fn stroke_fit(
     pm: &mut Pixmap,
     path: &Path,
@@ -111,16 +116,61 @@ fn stroke_fit(
     sk: &Stroke,
     t: Transform,
     mask: Option<&Mask>,
+    dash: Option<(&[f32], f32)>,
 ) {
-    let reach = pen_reach(sk, &t);
-    if fit::beyond_cap(path, t, reach) {
+    if fit::beyond_cap(path, t) {
         return;
     }
+    let reach = pen_reach(sk, &t);
     let (w, h) = fit::dims(pm);
+    if let Some((intervals, phase)) = dash.filter(|_| sk.dash.is_some()) {
+        match fit::fit_dashed(path, t, reach, w, h, intervals, phase) {
+            fit::DashFit::Keep(p) => pm.stroke_path(p, paint, sk, t, mask),
+            fit::DashFit::Runs(runs) => {
+                for (run, offset) in runs {
+                    let mut sk = sk.clone();
+                    sk.dash = StrokeDash::new(intervals.to_vec(), offset);
+                    pm.stroke_path(&run, paint, &sk, t, mask);
+                }
+            }
+            fit::DashFit::Outline => stroke_outline(pm, path, paint, sk, t, mask),
+            fit::DashFit::Skip => {}
+        }
+        return;
+    }
     match fit::fit_stroke(path, t, reach, w, h) {
         Fit::Keep(p) => pm.stroke_path(p, paint, sk, t, mask),
         Fit::Clipped(local) => pm.stroke_path(&local, paint, sk, t, mask),
+        Fit::Outline => stroke_outline(pm, path, paint, sk, t, mask),
         Fit::Skip => {}
+    }
+}
+
+/// A stroke whose pen alone reaches past the safe range: stroked to its
+/// outline as tiny-skia would (dashed first, at the same resolution scale),
+/// and the outline filled through [`fill_fit`].
+fn stroke_outline(
+    pm: &mut Pixmap,
+    path: &Path,
+    paint: &Paint,
+    sk: &Stroke,
+    t: Transform,
+    mask: Option<&Mask>,
+) {
+    let res = tiny_skia::PathStroker::compute_resolution_scale(&t);
+    let dashed = match &sk.dash {
+        Some(d) => match path.dash(d, res) {
+            Some(p) => Some(p),
+            None => return,
+        },
+        None => None,
+    };
+    let solid = Stroke {
+        dash: None,
+        ..sk.clone()
+    };
+    if let Some(outline) = dashed.as_ref().unwrap_or(path).stroke(&solid, res) {
+        fill_fit(pm, &outline, paint, FillRule::Winding, t, mask);
     }
 }
 
@@ -146,7 +196,7 @@ fn draw_pixmap_fit(
     let Some(rect) = rect_path(0.0, 0.0, src.width() as f64, src.height() as f64) else {
         return;
     };
-    if fit::beyond_cap(&rect, t, 0.0) {
+    if fit::beyond_cap(&rect, t) {
         return;
     }
     match fit::fit_fill(&rect, t, w, h) {
@@ -167,7 +217,7 @@ fn draw_pixmap_fit(
             paint.shader.transform(t);
             pm.fill_path(&dev, &paint, FillRule::Winding, Transform::identity(), mask);
         }
-        Fit::Skip => {}
+        Fit::Outline | Fit::Skip => {}
     }
 }
 
@@ -367,7 +417,7 @@ fn stroke_polyline(
             pb.line_to(x, y);
         }
         if let Some(p) = pb.finish() {
-            stroke_fit(target, &p, paint, sk, transform, mask);
+            stroke_fit(target, &p, paint, sk, transform, mask, None);
         }
     };
     if nseg <= STROKE_RUN {
@@ -473,7 +523,15 @@ fn stroke_polyline(
             Some(lm)
         });
         let t = transform.post_translate(-(j.x0 as f32), -(j.y0 as f32));
-        stroke_fit(&mut scratch, &local, paint, sk, t, local_mask.as_ref());
+        stroke_fit(
+            &mut scratch,
+            &local,
+            paint,
+            sk,
+            t,
+            local_mask.as_ref(),
+            None,
+        );
         let data = target.data_mut();
         let row_len = j.w as usize * 4;
         for row in 0..j.h as usize {
@@ -717,17 +775,34 @@ impl RenderBackend for RasterBackend {
         }
         let mask = self.mask_for(clip);
         let sk = skia_stroke(stroke);
+        let dash = (!stroke.dash.is_empty()).then_some((stroke.dash.as_slice(), stroke.phase));
         // A gradient/pattern stroke is the same shader a fill would use, applied
         // to the stroked region instead of the enclosed one.
         match &stroke.paint {
             Some(paint) => {
                 with_paint(paint, |p| {
-                    stroke_fit(self.target(), path, p, &sk, transform, mask.as_deref())
+                    stroke_fit(
+                        self.target(),
+                        path,
+                        p,
+                        &sk,
+                        transform,
+                        mask.as_deref(),
+                        dash,
+                    )
                 });
             }
             None => {
                 let p = solid_paint(color);
-                stroke_fit(self.target(), path, &p, &sk, transform, mask.as_deref());
+                stroke_fit(
+                    self.target(),
+                    path,
+                    &p,
+                    &sk,
+                    transform,
+                    mask.as_deref(),
+                    dash,
+                );
             }
         }
     }
@@ -900,6 +975,7 @@ impl RenderBackend for RasterBackend {
                     &stroke,
                     base.pre_concat(place),
                     mask.as_deref(),
+                    None,
                 );
             }
             // A tex() label's bars take the halo with its glyphs.
@@ -912,6 +988,7 @@ impl RenderBackend for RasterBackend {
                         &stroke,
                         base,
                         mask.as_deref(),
+                        None,
                     );
                 }
             }

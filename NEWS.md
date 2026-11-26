@@ -4,19 +4,22 @@
 
 * A clip that cannot be represented now clips everything away, on every
   backend: a viewport clip whose box is not finite (a missing size) or
-  overflows once rotated, and a clip path with a missing vertex or bounds that
-  overflow. PDF used to skip such a clip and draw its content unclipped where
-  PNG, SVG and PowerPoint drew nothing, and a clip path with a missing vertex
-  was dropped on every backend, leaving its content unclipped (VR-42).
+  overflows once rotated, and a clip path with a missing vertex, with bounds
+  that overflow, or with no sub-path of at least two points (an empty clip
+  polygon). PDF used to skip such a clip and draw its content unclipped where
+  PNG, SVG and PowerPoint drew nothing, and a clip path that could not be
+  built was dropped on every backend, leaving its content unclipped (VR-42).
 
 * PNG output no longer errors (a tiny-skia panic) on a shape that crosses the
   page with coordinates or a size far beyond it: from about 2e9 px, a circle,
   rect, point, stroke, glyph, picture or clip region made the rasteriser
   index past its buffers. Such geometry is now cut to the page in double
-  precision before rasterising; anything within 1e6 px is drawn exactly as
-  before, and geometry beyond 1e15 px is skipped, as the PDF backend skips it
-  (VR-43). PowerPoint output no longer drops the content under a clip path
-  reaching that far.
+  precision before rasterising, and a dashed stroke keeps the dash phase the
+  whole line would give; anything within 1e6 px is drawn exactly as before,
+  and geometry beyond 1e15 px is skipped, as the PDF backend skips it. A
+  stroke whose pen alone is that wide is drawn from its outline. Hit testing
+  and PowerPoint output no longer lose the content under a clip region
+  reaching that far (VR-43).
 
 # vellum 0.18.0
 

@@ -72,7 +72,7 @@ fn build_clip_mask(w: u32, h: u32, chain: &[ClipShape]) -> Option<Mask> {
                 h: rh,
                 transform,
             } => match rect_path(0.0, 0.0, *rw, *rh) {
-                Some(r) => m.intersect_path(&r, FillRule::Winding, aa, *transform),
+                Some(r) => intersect_fit(&mut m, &r, FillRule::Winding, *transform),
                 None => m.clear(),
             },
             ClipShape::Path {
@@ -85,11 +85,22 @@ fn build_clip_mask(w: u32, h: u32, chain: &[ClipShape]) -> Option<Mask> {
                 } else {
                     FillRule::Winding
                 };
-                m.intersect_path(path, rule, aa, *transform);
+                intersect_fit(&mut m, path, rule, *transform);
             }
         }
     }
     Some(m)
+}
+
+/// Intersect the (aliased) hit-test clip mask with a clip region, cut to the
+/// page first when it reaches far past it, as the raster backend's own clip
+/// masks are (VR-43): tiny-skia's mask fill cannot take such geometry, so a
+/// far clip region used to hide every element from `hit_test()`.
+fn intersect_fit(m: &mut Mask, path: &tiny_skia::Path, rule: FillRule, t: Transform) {
+    match crate::render::fit::fitted_fill(path, t, m.width(), m.height()) {
+        Some((p, t)) => m.intersect_path(&p, rule, false, t),
+        None => m.clear(),
+    }
 }
 
 /// Map a local-pixel axis-aligned bbox through a viewport's affine transform to a

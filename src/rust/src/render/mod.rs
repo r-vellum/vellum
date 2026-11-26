@@ -25,7 +25,7 @@ use crate::units::rotation_about;
 
 mod displaylist;
 mod dml;
-mod fit;
+pub(crate) mod fit;
 mod paths;
 mod pdf;
 mod pptx;

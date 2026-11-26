@@ -1793,7 +1793,7 @@ impl Region {
             let dp = match super::fit::fit_fill(path, t, w, h) {
                 super::fit::Fit::Keep(p) => DevPath::from_path(p, t),
                 super::fit::Fit::Clipped(dev) => DevPath::from_path(&dev, Transform::identity()),
-                super::fit::Fit::Skip => return Vec::new(),
+                super::fit::Fit::Outline | super::fit::Fit::Skip => return Vec::new(),
             };
             dp.flatten()
                 .into_iter()

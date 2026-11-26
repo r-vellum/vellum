@@ -64,15 +64,25 @@ test_that("a clip that cannot be represented clips everything away, on every bac
   counts <- red_counts(res)
   expect_length(counts, 4L)
   for (k in 1:3) {
-    expect_true(all(counts[[k]]$px %in% c(0L, NA)), info = k)
-    expect_false(counts[[k]]$pptx, info = k)
+    expect_identical(counts[[k]]$px[["png"]], 0L, info = paste("case", k))
+    expect_false(counts[[k]]$pptx, info = paste("case", k))
   }
-  # the control draws its 72 x 72 px square (librsvg, whose fixed-point
-  # coordinates cannot hold 1e20, renders nothing under such a clip, so SVG is
-  # not checked)
-  px <- counts[[4]]$px[c("png", "pdf")]
-  expect_true(all(abs(px - 72L * 72L) < 300L | is.na(px)))
+  # the control draws its 72 x 72 px square
+  expect_lt(abs(counts[[4]]$px[["png"]] - 72L * 72L), 300L)
   expect_true(counts[[4]]$pptx)
+  # The vector backends, where the child has a rasteriser (skipped otherwise,
+  # rather than passing on a missing count). librsvg, whose
+  # fixed-point coordinates cannot hold 1e20, renders nothing under the
+  # control's clip, so it is not checked there.
+  skip_if(anyNA(vapply(counts, function(k) k$px[["svg"]], 0L)), "no SVG rasteriser (rsvg)")
+  for (k in 1:3) {
+    expect_identical(counts[[k]]$px[["svg"]], 0L, info = paste("case", k))
+  }
+  skip_if(anyNA(vapply(counts, function(k) k$px[["pdf"]], 0L)), "no PDF rasteriser (pdftools)")
+  for (k in 1:3) {
+    expect_identical(counts[[k]]$px[["pdf"]], 0L, info = paste("case", k))
+  }
+  expect_lt(abs(counts[[4]]$px[["pdf"]] - 72L * 72L), 300L)
 })
 
 test_that("the PDF backend draws nothing under an empty or non-finite clip (VR-42)", {
@@ -126,4 +136,40 @@ test_that("PNG draws shapes reaching far past the page without a panic (VR-43)",
   expect_gt(png[9], 0L)
   # (Not compared with SVG or PDF: librsvg and poppler, the rasterisers at
   # hand, themselves draw nothing at such coordinates.)
+})
+
+test_that("a dashed stroke cut to the page keeps its dash phase (VR-43)", {
+  # A dashed line past the 1e6 px range is cut to the page before tiny-skia
+  # sees it; the pattern on the page must still be the one the whole line
+  # would give (the length cut off before it counts toward the phase).
+  res <- run_vellum_child(c(
+    "row <- function(L) {",
+    "  s <- vl_scene(2, 2, dpi = 72) |> draw(segments_grob(vl_unit(-L, 'pt'), 0.5,",
+    "    vl_unit(L, 'pt'), 0.5, gp = vl_gpar(col = 'red', lwd = 4, lty = 'dashed', lineend = 'butt')))",
+    "  a <- scene_raster(s)",
+    "  paste(as.integer(a[1, , 72] > 128 & a[2, , 72] < 128), collapse = '')",
+    "}",
+    # in range (drawn as given) vs cut, at the same phase on the page
+    "cat(row(4.5e5), row(1.5e6), row(3e6), '\\n')",
+    # a shift by a quarter of the pattern shows
+    "cat(row(3e6) != row(3e6 + 6), '\\n')"
+  ))
+  expect_identical(res$status, 0L)
+  out <- trimws(tail(res$output, 2))
+  rows <- strsplit(out[1], " ")[[1]]
+  expect_length(unique(rows), 1L)
+  expect_identical(out[2], "TRUE")
+})
+
+test_that("hit testing sees through a clip reaching far past the page (VR-43)", {
+  for (a in c(1e10, 1e20)) {
+    s <- vl_scene(2, 2, dpi = 72) |>
+      push(vl_viewport(clip = polygon_grob(
+        vl_unit(c(-a, 72, 72, -a), "pt"),
+        vl_unit(c(-a, -a, a, a), "pt")
+      ))) |>
+      draw(rect_grob(gp = vl_gpar(fill = "red"), name = "r"))
+    expect_identical(hit_test(s, 0.25, 0.5), "r", info = a)
+    expect_null(hit_test(s, 0.75, 0.5))
+  }
 })
