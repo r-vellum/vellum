@@ -15,8 +15,18 @@
   [`md()`](https://r-vellum.github.io/vellum/reference/md.md) and
   [`tex()`](https://r-vellum.github.io/vellum/reference/tex.md) labels,
   halos and text on a path are glyph outlines, as in SVG. Panels become
-  named shape groups. The user-facing entry points (officer’s
-  `ph_with()` and `.pptx` files) follow in the next changes.
+  named shape groups.
+
+- Scenes go onto PowerPoint slides through officer (F-24, part 2):
+  `officer::ph_with(doc, scene, location)` works for a
+  [`vl_scene()`](https://r-vellum.github.io/vellum/reference/vl_scene.md),
+  and `as_dml(x)` wraps anything
+  [`as_vellum_scene()`](https://r-vellum.github.io/vellum/reference/as_vellum_scene.md)
+  compiles (a vellumplot plot) for the same call. The scene is laid out
+  again at the location’s size (`resize = FALSE` keeps its own),
+  `text = "outline"` trades editable text for glyph outlines, and the
+  scene’s title and description become the group’s name and alt text.
+  officer stays in Suggests: the methods are registered when it loads.
 
 ## vellum 0.17.0
 
