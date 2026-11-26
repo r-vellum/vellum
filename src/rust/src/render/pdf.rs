@@ -497,6 +497,10 @@ enum PaintRole {
 }
 
 impl RenderBackend for PdfBackend<'_, '_> {
+    fn far_window(&self, transform: Transform) -> FarWin {
+        let (w, h) = self.page;
+        FarWin::for_page(transform, w, h)
+    }
     fn wants_node_meta(&self) -> bool {
         true
     }

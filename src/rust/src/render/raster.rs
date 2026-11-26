@@ -748,6 +748,10 @@ fn paint_for(paint: &ResolvedPaint) -> Option<Paint<'static>> {
 }
 
 impl RenderBackend for RasterBackend {
+    fn far_window(&self, transform: Transform) -> FarWin {
+        let (w, h) = fit::dims(self.targets.last().expect("at least the page target"));
+        FarWin::for_page(transform, w, h)
+    }
     fn fill_path(
         &mut self,
         path: &Path,

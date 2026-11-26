@@ -538,6 +538,10 @@ impl SvgBackend {
 }
 
 impl RenderBackend for SvgBackend {
+    fn far_window(&self, transform: Transform) -> FarWin {
+        let (w, h) = (self.w, self.h);
+        FarWin::for_page(transform, w, h)
+    }
     fn fill_path(
         &mut self,
         path: &Path,

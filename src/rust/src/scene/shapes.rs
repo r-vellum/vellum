@@ -78,23 +78,27 @@ pub(super) fn unit_marker(shape: u32) -> tiny_skia::Path {
 }
 
 /// A marker glyph centred at `(cx, cy)` with radius `r`, every point placed in
-/// f64 before narrowing (VR-47). For a marker reaching past
-/// [`crate::units::PRECISE_PX`]: the unit shape placed by an `f32` transform,
-/// or the per-element `f32` build, rounds a radius-1e9 square's edge to 64 px.
+/// f64 before narrowing and every edge cut at `win` in f64 (VR-47). For a
+/// marker reaching past [`crate::units::PRECISE_PX`]: the unit shape placed by
+/// an `f32` transform, or the per-element `f32` build, rounds a radius-1e9
+/// square's edge to 64 px.
 /// Same shapes as [`unit_marker`] and the per-element build (plus and cross
 /// as two open strokes; circle via [`push_circle_precise`]).
-pub(super) fn far_marker_path(shape: u32, cx: f64, cy: f64, r: f64) -> Option<tiny_skia::Path> {
+pub(super) fn far_marker_path(
+    shape: u32,
+    cx: f64,
+    cy: f64,
+    r: f64,
+    win: &crate::render::FarWin,
+) -> Option<tiny_skia::Path> {
     let mut pb = PathBuilder::new();
+    let at = |pts: &[(f64, f64)]| -> Vec<(f64, f64)> {
+        pts.iter()
+            .map(|&(dx, dy)| (cx + dx * r, cy + dy * r))
+            .collect()
+    };
     let poly = |pb: &mut PathBuilder, pts: &[(f64, f64)]| {
-        for (k, &(dx, dy)) in pts.iter().enumerate() {
-            let (x, y) = ((cx + dx * r) as f32, (cy + dy * r) as f32);
-            if k == 0 {
-                pb.move_to(x, y);
-            } else {
-                pb.line_to(x, y);
-            }
-        }
-        pb.close();
+        crate::render::push_far_poly(pb, &at(pts), true, win);
     };
     match shape {
         1 => poly(
@@ -125,12 +129,11 @@ pub(super) fn far_marker_path(shape: u32, cx: f64, cy: f64, r: f64) -> Option<ti
             } else {
                 [[(-d, -d), (d, d)], [(-d, d), (d, -d)]]
             };
-            for [(ax, ay), (bx, by)] in arms {
-                pb.move_to((cx + ax * r) as f32, (cy + ay * r) as f32);
-                pb.line_to((cx + bx * r) as f32, (cy + by * r) as f32);
+            for arm in arms {
+                crate::render::push_far_poly(&mut pb, &at(&arm), false, win);
             }
         }
-        _ => push_circle_precise(&mut pb, cx, cy, r),
+        _ => push_circle_precise(&mut pb, cx, cy, r, win),
     }
     pb.finish()
 }

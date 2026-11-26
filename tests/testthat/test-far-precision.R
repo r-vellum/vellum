@@ -213,6 +213,51 @@ test_that("far markers and sectors keep their edge on the page (VR-47)", {
   }
 })
 
+test_that("a far edge between two far vertices crosses the page exactly (VR-47)", {
+  row_ink <- function(s) {
+    a <- scene_raster(s)
+    sum(255 - a[2, , 72]) / 255
+  }
+  u <- function(v) vl_unit(v, "pt")
+  # a diamond whose upper-left edge crosses the page centre, both of its
+  # vertices r / 2 away; a sector whose first radial edge does, its centre
+  # r away. Each vertex alone rounds by up to 64 px at 1e9.
+  dia <- function(r) {
+    base |>
+      draw(points_grob(u(72 + r / 2), u(72 - r / 2), size = u(r), shape = "diamond", gp = fill))
+  }
+  a <- 0.3
+  sec <- function(r) {
+    base |>
+      draw(sector_grob(
+        u(72 - r * cos(a)),
+        u(72 - r * sin(a)),
+        r1 = u(2 * r),
+        theta0 = a,
+        theta1 = a + 0.5,
+        gp = fill
+      ))
+  }
+  for (r in c(1e5, 1e7, 1e9)) {
+    expect_lt(abs(row_ink(dia(r)) - row_ink(dia(1e3))), 0.05, label = paste("diamond", r))
+    expect_lt(abs(row_ink(sec(r)) - row_ink(sec(1e3))), 0.05, label = paste("sector", r))
+  }
+})
+
+test_that("a far circle is split finely only over the page (VR-47)", {
+  # r = 1e5 px crossing the page: a few hundred bytes of SVG, not a path
+  # of thousands of 1/32 px chords
+  a <- pi / 8
+  s <- base |>
+    draw(circle_grob(
+      vl_unit(72 - 1e5 * cos(a), "pt"),
+      vl_unit(72 - 1e5 * sin(a), "pt"),
+      r = vl_unit(1e5, "pt"),
+      gp = fill
+    ))
+  expect_lt(nchar(scene_svg(s)), 10000)
+})
+
 test_that("a far raster image draws the part over the page on every backend (VR-46)", {
   u <- function(v) vl_unit(v, "pt")
   two <- matrix(c("red", "blue"), 1, 2)

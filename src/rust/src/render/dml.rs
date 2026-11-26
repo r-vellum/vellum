@@ -2431,6 +2431,10 @@ fn copy_mask(m: &Option<MaskLayer>) -> Option<MaskLayer> {
 }
 
 impl RenderBackend for DmlBackend {
+    fn far_window(&self, transform: Transform) -> FarWin {
+        let (w, h) = (self.w, self.h);
+        FarWin::for_page(transform, w, h)
+    }
     fn fill_path(
         &mut self,
         path: &Path,
