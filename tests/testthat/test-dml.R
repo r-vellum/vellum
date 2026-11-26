@@ -457,3 +457,52 @@ test_that("pptx_pages() writes a deck officer can read", {
   expect_type(pptx_pages(slides), "raw")
   expect_error(pptx_pages(list()), "non-empty")
 })
+
+test_that("pptx_pages() checks the title whether or not it writes a file", {
+  slides <- list(vl_scene(2, 1, dpi = 96))
+  f <- withr::local_tempfile(fileext = ".pptx")
+  expect_error(pptx_pages(slides, title = 1), "title")
+  expect_error(pptx_pages(slides, f, title = c("a", "b")), "title")
+  expect_false(file.exists(f))
+})
+
+test_that("a control character in the title leaves the package readable", {
+  skip_if_not_installed("xml2")
+  f <- withr::local_tempfile(fileext = ".pptx")
+  pptx_pages(list(vl_scene(2, 1, dpi = 96)), f, title = "a\001b")
+  d <- withr::local_tempdir()
+  utils::unzip(f, files = "docProps/core.xml", exdir = d)
+  core <- xml2::read_xml(file.path(d, "docProps", "core.xml"))
+  expect_identical(xml2::xml_text(xml2::xml_find_first(core, ".//dc:title")), "ab")
+})
+
+# Schema validation needs xmllint and the ECMA-376 transitional schemas, which
+# are too large to ship: point VELLUM_PML_XSD at a local pml.xsd to run it.
+test_that("the package's parts validate against the PresentationML schema", {
+  skip_on_cran()
+  xsd <- Sys.getenv("VELLUM_PML_XSD")
+  skip_if(!nzchar(xsd) || !file.exists(xsd), "VELLUM_PML_XSD not set")
+  skip_if(!nzchar(Sys.which("xmllint")), "xmllint not available")
+  stripes <- linear_gradient(c("red", "blue"), x1 = 0, y1 = 0, x2 = 1, y2 = 1)
+  sc <- vl_scene(4, 3, dpi = 96, bg = "white") |>
+    push(vl_viewport(name = "panel", clip = TRUE, width = 0.8, height = 0.8)) |>
+    draw(rect_grob(gp = vl_gpar(fill = stripes, col = "black", lty = "dashed"))) |>
+    draw(circle_grob(r = 0.7, gp = vl_gpar(fill = "orange", alpha = 0.5))) |>
+    draw(text_grob("a\001b\nc", rot = 30, gp = vl_gpar(fontsize = 20))) |>
+    pop() |>
+    push(vl_viewport(blend = "multiply")) |>
+    draw(rect_grob(width = 0.3, gp = vl_gpar(fill = "steelblue"))) |>
+    pop()
+  f <- withr::local_tempfile(fileext = ".pptx")
+  suppressWarnings(pptx_pages(list(sc, sc), f))
+  d <- withr::local_tempdir()
+  utils::unzip(f, exdir = d)
+  parts <- list.files(file.path(d, "ppt"), "\\.xml$", recursive = TRUE, full.names = TRUE)
+  out <- suppressWarnings(system2(
+    "xmllint",
+    c("--noout", "--schema", shQuote(xsd), shQuote(parts)),
+    stdout = TRUE,
+    stderr = TRUE
+  ))
+  expect_identical(out[!grepl(" validates$", out)], character())
+})

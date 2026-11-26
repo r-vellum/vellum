@@ -6,8 +6,7 @@
 //! `png` and `krilla`) with fixed timestamps and no user or date metadata, so
 //! the same scenes always give the same bytes.
 
-use super::dml::{resolve_media, DML_NS};
-use super::xml_escape;
+use super::dml::{dml_escape, resolve_media, DML_NS};
 use std::collections::HashMap;
 use std::io::Write;
 
@@ -100,7 +99,7 @@ pub fn pptx_package(slides: &[SlidePart], cx: i64, cy: i64, title: &str) -> Vec<
     let title_el = if title.is_empty() {
         String::new()
     } else {
-        format!("<dc:title>{}</dc:title>", xml_escape(title))
+        format!("<dc:title>{}</dc:title>", dml_escape(title))
     };
     z.add(
         "docProps/core.xml",

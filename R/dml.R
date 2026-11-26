@@ -218,25 +218,32 @@ pptx_pages <- function(
   title = NULL
 ) {
   text <- match.arg(text)
+  .check_string(title, "title")
   if (!is.list(scenes) || !length(scenes)) {
     cli::cli_abort("{.arg scenes} must be a non-empty list of scenes.")
   }
   backends <- lapply(scenes, function(s) .scene_to_backend(as_vellum_scene(s)))
+  r <- .pptx_bytes(backends, text, title)
+  .emit_degrade_warnings(r$warnings)
   if (is.null(path)) {
-    r <- rs_pptx_pages(backends, identical(text, "outline"), title %||% "")
-    .emit_degrade_warnings(r$warnings)
     return(r$bytes)
   }
-  .emit_degrade_warnings(.write_pptx(backends, path, text, title))
+  writeBin(r$bytes, path)
   invisible(path)
+}
+
+# Compiled scenes as .pptx bytes: list(warnings, bytes). An empty or missing
+# title falls back to the first scene's.
+.pptx_bytes <- function(backends, text, title = NULL) {
+  if (!is.character(title) || length(title) != 1L || is.na(title)) {
+    title <- ""
+  }
+  rs_pptx_pages(backends, identical(text, "outline"), title)
 }
 
 # Write compiled scenes as a .pptx; returns the degradation warnings.
 .write_pptx <- function(backends, path, text, title = NULL) {
-  if (!is.character(title) || length(title) != 1L || is.na(title)) {
-    title <- ""
-  }
-  r <- rs_pptx_pages(backends, identical(text, "outline"), title)
+  r <- .pptx_bytes(backends, text, title)
   writeBin(r$bytes, path)
   r$warnings
 }

@@ -234,14 +234,6 @@ pub(crate) fn pptx_pages(scenes: List, outline_text: bool, title: &str) -> (Vec<
 // Non-exported helpers on `Scene`. extendr exports every method of an
 // `#[extendr] impl` block, so anything with a non-FFI signature lives here.
 impl Scene {
-    /// Serialize the scene as a PDF document, returning `(bytes, warnings)`.
-    /// Shared by `render_pdf` (writes a file) and `render_pdf_raw` (returns the
-    /// bytes to R), so the two can never drift.
-    /// Drop the document-level accessibility strings.
-    ///
-    /// Used when a scene becomes one *frame* of an animation: the title and
-    /// description belong to the document, and repeating them per frame would
-    /// have a screen reader announce the figure once for every frame.
     /// The scene as a DrawingML fragment placed `(left, top)` EMU from the
     /// slide corner: `(xml with media tokens, PNGs, warnings)`.
     pub(crate) fn dml_parts(&self, left: i64, top: i64, outline_text: bool) -> (String, Vec<Vec<u8>>, Vec<String>) {
@@ -259,6 +251,14 @@ impl Scene {
         (xml, media, warnings)
     }
 
+    /// Serialize the scene as a PDF document, returning `(bytes, warnings)`.
+    /// Shared by `render_pdf` (writes a file) and `render_pdf_raw` (returns the
+    /// bytes to R), so the two can never drift.
+    /// Drop the document-level accessibility strings.
+    ///
+    /// Used when a scene becomes one *frame* of an animation: the title and
+    /// description belong to the document, and repeating them per frame would
+    /// have a screen reader announce the figure once for every frame.
     pub(crate) fn clear_a11y(&mut self) {
         self.a11y_title.clear();
         self.a11y_desc.clear();
