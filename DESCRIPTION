@@ -35,6 +35,7 @@ Suggests:
     base64enc,
     rmarkdown,
     xml2,
+    officer,
     magick,
     pdftools,
     rsvg

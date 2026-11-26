@@ -447,6 +447,8 @@ pub struct DmlBackend {
     media: Vec<Vec<u8>>,
     media_index: HashMap<u64, usize>,
     warnings: Vec<String>,
+    /// Alt text for the root group (the scene's description, else its title).
+    descr: String,
 }
 
 impl DmlBackend {
@@ -484,6 +486,7 @@ impl DmlBackend {
             media: Vec::new(),
             media_index: HashMap::new(),
             warnings: Vec::new(),
+            descr: String::new(),
         };
         if bg.a > 0 {
             if let Some(p) = rect_path(0.0, 0.0, w as f64, h as f64) {
@@ -1005,20 +1008,28 @@ impl DmlBackend {
         );
         let (x, y) = (self.left, self.top);
         let xml = format!(
-            "<p:grpSp {DML_NS}><p:nvGrpSpPr><p:cNvPr id=\"1\" name=\"{name}\"/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr>\
+            "<p:grpSp {DML_NS}><p:nvGrpSpPr><p:cNvPr id=\"1\" name=\"{name}\"{descr}/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr>\
              <p:grpSpPr><a:xfrm><a:off x=\"{x}\" y=\"{y}\"/><a:ext cx=\"{w}\" cy=\"{h}\"/>\
              <a:chOff x=\"{x}\" y=\"{y}\"/><a:chExt cx=\"{w}\" cy=\"{h}\"/></a:xfrm></p:grpSpPr>{body}</p:grpSp>",
             name = dml_escape(&root.name),
+            descr = if self.descr.is_empty() {
+                String::new()
+            } else {
+                format!(" descr=\"{}\"", dml_escape(&self.descr))
+            },
             body = root.body,
         );
         (xml, self.media, self.warnings)
     }
 
-    /// Name the root group (the scene title, when it has one).
-    pub fn set_name(&mut self, name: &str) {
-        if !name.is_empty() {
-            self.frames[0].name = name.to_string();
+    /// Name the root group after the scene's title and give it the scene's
+    /// description (else its title) as alt text. officer renames the root to
+    /// the placeholder label, but keeps the alt text.
+    pub fn set_a11y(&mut self, title: &str, desc: &str) {
+        if !title.is_empty() {
+            self.frames[0].name = title.to_string();
         }
+        self.descr = if desc.is_empty() { title } else { desc }.to_string();
     }
 }
 
