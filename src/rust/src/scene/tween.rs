@@ -481,7 +481,7 @@ fn lerp_node(a: &Node, b: &Node, fr: &Fracs) -> Node {
             // a changed label switches at the positional midpoint and the last
             // keyframe's text is what the final frame shows.
             let Node::Text {
-                xu, yu, hjust, vjust, w, h, gid, gx, gy, gsize, gpath, gface, gcol, rules, gtext, halo, label, family, face, size,
+                xu, yu, hjust, vjust, w, h, gid, gx, gy, gsize, gpath, gface, gcol, rules, gtext, spans, halo, label, family, face, size,
                 tpath, key, ..
             } = snap(a, b, t)
             else {
@@ -507,6 +507,7 @@ fn lerp_node(a: &Node, b: &Node, fr: &Fracs) -> Node {
                 gcol: gcol.clone(),
                 rules: rules.clone(),
                 gtext: gtext.clone(),
+                spans: spans.clone(),
                 label: label.clone(),
                 family: family.clone(),
                 face: face.clone(),
@@ -1735,6 +1736,7 @@ fn patch_text(nodes: &mut [(usize, Node)], variant: &TextVariant) {
             gcol,
             rules,
             gtext,
+            spans,
             label,
             family,
             face,
@@ -1756,6 +1758,7 @@ fn patch_text(nodes: &mut [(usize, Node)], variant: &TextVariant) {
             gcol: vgcol,
             rules: vrules,
             gtext: vgtext,
+            spans: vspans,
             label: vlabel,
             family: vfamily,
             face: vface,
@@ -1776,6 +1779,7 @@ fn patch_text(nodes: &mut [(usize, Node)], variant: &TextVariant) {
         *gcol = vgcol.clone();
         *rules = vrules.clone();
         *gtext = vgtext.clone();
+        *spans = vspans.clone();
         *label = vlabel.clone();
         *family = vfamily.clone();
         *face = vface.clone();
@@ -2701,6 +2705,7 @@ mod tests {
             gcol: Vec::new(),
             rules: Vec::new(),
             gtext: String::new(),
+            spans: Vec::new(),
             halo: None,
             label: label.to_string(),
             family: "sans".to_string(),

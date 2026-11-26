@@ -94,10 +94,10 @@ test_that("text is a native, editable run sized to vellum's measurement", {
   )
 })
 
-test_that("rich, tex and outline text become glyph outlines", {
+test_that("math, tex and outline text become glyph outlines", {
   skip_if_not_installed("xml2")
   sc <- vl_scene(3, 1, dpi = 96) |>
-    draw(text_grob(md("a **b**"), x = 0.3)) |>
+    draw(text_grob(md("mass $m_e$ in **kg**"), x = 0.3)) |>
     draw(text_grob(tex("\\frac{1}{2}"), x = 0.7))
   doc <- xml2::read_xml(.dml_fragment(sc)$xml)
   ns <- xml2::xml_ns(doc)
@@ -106,6 +106,60 @@ test_that("rich, tex and outline text become glyph outlines", {
   plain <- vl_scene(3, 1, dpi = 96) |> draw(text_grob("abc"))
   out <- xml2::read_xml(.dml_fragment(plain, text = "outline")$xml)
   expect_length(xml2::xml_find_all(out, ".//a:t", ns), 0)
+  rich <- vl_scene(3, 1, dpi = 96) |> draw(text_grob(md("a **b**")))
+  out <- xml2::read_xml(.dml_fragment(rich, text = "outline")$xml)
+  expect_length(xml2::xml_find_all(out, ".//a:t", ns), 0)
+})
+
+test_that("md() labels become one editable run per span (VR-40)", {
+  skip_if_not_installed("xml2")
+  sc <- vl_scene(4, 2, dpi = 96) |>
+    draw(text_grob(
+      md("R^2^ = **0.91** *it* [red]{#c00} x~i~\nnext **line**"),
+      gp = vl_gpar(fontsize = 20, col = "grey20", alpha = 0.5)
+    ))
+  doc <- xml2::read_xml(.dml_fragment(sc)$xml)
+  ns <- xml2::xml_ns(doc)
+  expect_length(xml2::xml_find_all(doc, ".//a:custGeom", ns), 0)
+  sp <- xml2::xml_find_all(doc, "p:sp[p:nvSpPr/p:cNvSpPr/@txBox='1']", ns)
+  expect_length(sp, 1)
+  paras <- xml2::xml_find_all(sp, ".//a:p", ns)
+  expect_length(paras, 2)
+  runs <- xml2::xml_find_all(paras[[1]], "a:r", ns)
+  expect_identical(
+    xml2::xml_text(runs),
+    c("R", "2", " = ", "0.91", " ", "it", " ", "red", " x", "i")
+  )
+  attr_of <- function(a) {
+    xml2::xml_attr(xml2::xml_find_first(runs, "a:rPr", ns), a)
+  }
+  # bold and italic runs
+  expect_identical(attr_of("b")[4], "1")
+  expect_identical(attr_of("i")[6], "1")
+  expect_true(all(is.na(attr_of("b")[-4])))
+  # a raised or lowered run keeps the size around it and shifts its baseline
+  # (applications shrink it themselves)
+  expect_identical(unique(attr_of("sz")), "2000")
+  expect_identical(attr_of("baseline")[c(2, 10)], c("35000", "-15000"))
+  expect_true(all(is.na(attr_of("baseline")[-c(2, 10)])))
+  # the colour span, and the label's alpha on every run
+  cols <- xml2::xml_attr(
+    xml2::xml_find_first(runs, "a:rPr/a:solidFill/a:srgbClr", ns),
+    "val"
+  )
+  expect_identical(cols[8], "CC0000")
+  expect_identical(unique(cols[-8]), "333333")
+  alpha <- xml2::xml_find_all(runs, "a:rPr/a:solidFill/a:srgbClr/a:alpha", ns)
+  expect_length(alpha, length(runs))
+  # the second line, at vellum's line pitch (1.2 x 20 pt)
+  expect_identical(
+    xml2::xml_text(xml2::xml_find_all(paras[[2]], "a:r", ns)),
+    c("next ", "line")
+  )
+  expect_identical(
+    xml2::xml_attr(xml2::xml_find_first(paras[[1]], ".//a:spcPts", ns), "val"),
+    "2400"
+  )
 })
 
 test_that("rasters become pictures, written to the media directory", {
@@ -555,6 +609,7 @@ test_that("the package's parts validate against the PresentationML schema", {
       gp = vl_gpar(fill = "gold", col = "black")
     )) |>
     draw(points_grob(c(0.1, 0.5, 0.52), 0.8, gp = vl_gpar(col = NA))) |>
+    draw(text_grob(md("R^2^ **b** *c* [d]{red}\nx~i~"), y = 0.2)) |>
     pop() |>
     push(vl_viewport(blend = "multiply")) |>
     draw(rect_grob(width = 0.3, gp = vl_gpar(fill = "steelblue"))) |>

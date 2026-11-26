@@ -1163,6 +1163,7 @@ impl Scene {
             gcol: Vec::new(),
             rules: Vec::new(),
             gtext: String::new(),
+            spans: Vec::new(),
             halo,
             label: label.to_string(),
             family: family.to_string(),
@@ -1236,6 +1237,7 @@ impl Scene {
             gcol: Vec::new(),
             rules: Vec::new(),
             gtext: String::new(),
+            spans: Vec::new(),
             halo,
             label: label.to_string(),
             family: family.to_string(),
@@ -1343,6 +1345,7 @@ impl Scene {
                 gcol: Vec::new(),
                 rules: Vec::new(),
                 gtext: String::new(),
+                spans: Vec::new(),
                 halo,
                 label: label[i].clone(),
                 family: family.to_string(),
@@ -1367,6 +1370,12 @@ impl Scene {
     /// bottom) and an RGBA colour per rule. Empty vectors mean no rules.
     /// `gtext` optionally gives each label's per-glyph text for PDF
     /// extraction (empty: the label itself).
+    ///
+    /// `nspans`/`span_text`/`span_face`/`span_num` optionally give each label's
+    /// styled runs (an `md()` label's spans), for backends that write native
+    /// rich text (PowerPoint): a run count per label, then per run its text, its
+    /// face string and three numbers -- size and baseline shift (points) and glyph
+    /// count (`-1` marks a line break). Empty vectors mean no runs.
     #[allow(clippy::too_many_arguments)]
     fn texts_rich(
         &mut self,
@@ -1402,6 +1411,10 @@ impl Scene {
         rules: &[f64],
         rcol: &[i32],
         gtext: Vec<String>,
+        nspans: &[i32],
+        span_text: Vec<String>,
+        span_face: Vec<String>,
+        span_num: &[f64],
     ) {
         let gp = PartialGpar::from_robj(&rnull(), &col, &rnull(), &alpha, &rnull());
         let halo = halo_of(&halo_col, halo_width);
@@ -1436,7 +1449,26 @@ impl Scene {
         // for any label. 4 numbers (x, y, w, h) and 4 colour ints per rule.
         let rmax = (rules.len() / 4).min(rcol.len() / 4);
         let mut roff = 0usize;
+        let smax = span_text.len().min(span_face.len()).min(span_num.len() / 3);
+        let mut soff = 0usize;
         for i in 0..nlab {
+            let scnt = nspans.get(i).copied().unwrap_or(0).max(0) as usize;
+            let slo = soff.min(smax);
+            let shi = (soff + scnt).min(smax);
+            soff = shi;
+            let spans: Vec<crate::render::TextSpan> = (slo..shi)
+                .map(|k| {
+                    let ng = span_num[3 * k + 2];
+                    crate::render::TextSpan {
+                        text: span_text[k].clone(),
+                        face: span_face[k].clone(),
+                        size: span_num[3 * k],
+                        dy: span_num[3 * k + 1],
+                        glyphs: if ng > 0.0 { ng as usize } else { 0 },
+                        brk: ng < 0.0,
+                    }
+                })
+                .collect();
             let rcnt = nrules.get(i).copied().unwrap_or(0).max(0) as usize;
             let rlo = roff.min(rmax);
             let rhi = (roff + rcnt).min(rmax);
@@ -1487,6 +1519,7 @@ impl Scene {
                     .collect(),
                 rules: label_rules,
                 gtext: gtext.get(i).cloned().unwrap_or_default(),
+                spans,
                 halo,
                 label: label[i].clone(),
                 family: family.to_string(),

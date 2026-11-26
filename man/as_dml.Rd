@@ -53,8 +53,10 @@ when the machine opening the deck has it and substitutes another when it does
 not; the box is anchored so a wider substitute grows away from the label's
 anchor (right-aligned tick labels stay right-aligned) rather than drifting.
 Fonts are not embedded. \code{text = "outline"} writes glyph outlines instead:
-identical everywhere, but no longer editable as text. \code{md()} and \code{tex()}
-labels, halos and text set on a path are always outlines, as in SVG.
+identical everywhere, but no longer editable as text. An \code{md()} label is
+one text run per styled span (bold, italic, colour; a superscript or
+subscript as a raised or lowered run). \code{tex()} labels, \code{md()} labels with
+inline math, halos and text set on a path are always outlines, as in SVG.
 }
 
 \section{What cannot be expressed}{

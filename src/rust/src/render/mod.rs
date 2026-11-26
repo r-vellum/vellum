@@ -272,6 +272,9 @@ pub struct TextRun<'a> {
     /// One character per glyph for PDF text extraction when `label` is not
     /// that (a `tex()` label's `label` is its TeX source). Empty: `label`.
     pub gtext: &'a str,
+    /// The label's styled runs (an `md()` label's spans), for a backend that
+    /// writes native rich text. Empty for every other label.
+    pub spans: &'a [TextSpan],
     /// Optional halo: `(colour, width in local px)`. Backends stroke the glyph
     /// outlines in this colour **under** the fill (SVG native text uses
     /// `paint-order`). `None` leaves every text path exactly as it was.
@@ -281,6 +284,22 @@ pub struct TextRun<'a> {
     pub face: &'a str,
     pub size: f64,
     pub dpi: f64,
+}
+
+/// One styled run of a rich label, as the label's markup gave it: its text,
+/// face string (`"bold"`, `"italic@300"`), size and baseline shift (points,
+/// +up), and how many of the label's glyphs it shaped to. `brk` marks a line
+/// break between runs (its other fields are empty). Only a backend that writes
+/// native rich text reads them (PowerPoint, VR-40); the glyphs stay the
+/// drawing.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct TextSpan {
+    pub text: String,
+    pub face: String,
+    pub size: f64,
+    pub dy: f64,
+    pub glyphs: usize,
+    pub brk: bool,
 }
 
 /// A filled rectangle that belongs to a text label, in label-local px in the

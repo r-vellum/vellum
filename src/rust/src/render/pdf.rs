@@ -1436,6 +1436,7 @@ mod tests {
             gcolor: &[],
             rules: if l.rule { &rule } else { &[] },
             gtext: "",
+            spans: &[],
             halo: l.halo,
             label: "ab",
             family: "",

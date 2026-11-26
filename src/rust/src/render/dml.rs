@@ -14,8 +14,9 @@
 //!
 //! Text is native (an editable `a:t` run in a box sized to vellum's measured
 //! extents, aligned from `hjust`/`vjust` so a substituted font grows away from
-//! the anchor). Labels a text run cannot express -- rich `md()` labels, `tex()`
-//! labels, halos, text set on a path -- become glyph outlines, as in SVG.
+//! the anchor). An `md()` label writes one run per styled span. Labels text
+//! runs cannot express -- `tex()` labels and math in `md()`, halos, text set on
+//! a path -- become glyph outlines, as in SVG.
 
 use super::*;
 use crate::font::font_family_name;
@@ -377,7 +378,12 @@ fn face_flags(face: &str) -> (bool, bool) {
 /// with (so a viewer that has it lays the text out exactly), else the requested
 /// family, with R's generic aliases mapped to fonts Office ships.
 fn typeface(run: &TextRun) -> String {
-    if let (Some(p), Some(f)) = (run.gpath.first(), run.gface.first()) {
+    typeface_at(run, 0)
+}
+
+/// [`typeface`] from the font of glyph `g` (the first glyph of a run).
+fn typeface_at(run: &TextRun, g: usize) -> String {
+    if let (Some(p), Some(f)) = (run.gpath.get(g), run.gface.get(g)) {
         if let Some(name) = font_family_name(p, *f) {
             return name;
         }
@@ -2301,18 +2307,40 @@ impl DmlBackend {
         if run.label.is_empty() && run.rules.is_empty() {
             return;
         }
-        let lines = line_runs(run);
-        let label_lines: Vec<&str> = run.label.split('\n').collect();
-        // Indices of the label lines that hold text, in order.
-        let nonblank: Vec<usize> = (0..label_lines.len())
-            .filter(|&i| !label_lines[i].is_empty())
-            .collect();
+        // An `md()` label whose runs are all text (no math) is written as one
+        // text run per styled span (VR-40); `paras` holds each line's spans.
+        let paras = rich_paras(run);
+        let (lines, nonblank, label_lines): (Vec<(usize, usize)>, Vec<usize>, Vec<&str>) =
+            match &paras {
+                Some(ps) => {
+                    let mut lines = Vec::new();
+                    let mut nonblank = Vec::new();
+                    let mut g = 0usize;
+                    for (i, p) in ps.iter().enumerate() {
+                        let n: usize = p.iter().map(|sp| sp.glyphs).sum();
+                        if p.iter().any(|sp| !sp.text.is_empty()) {
+                            nonblank.push(i);
+                            lines.push((g, g + n));
+                        }
+                        g += n;
+                    }
+                    (lines, nonblank, Vec::new())
+                }
+                None => {
+                    let label_lines: Vec<&str> = run.label.split('\n').collect();
+                    // Indices of the label lines that hold text, in order.
+                    let nonblank = (0..label_lines.len())
+                        .filter(|&i| !label_lines[i].is_empty())
+                        .collect();
+                    (line_runs(run), nonblank, label_lines)
+                }
+            };
         let scale = uniform_scale(transform);
         let reflected = (transform.sx as f64 * transform.sy as f64
             - transform.kx as f64 * transform.ky as f64)
             < 0.0;
         let outline = self.outline_text
-            || !run.gcolor.is_empty()
+            || (!run.gcolor.is_empty() && paras.is_none())
             || !run.rules.is_empty()
             || run.halo.is_some()
             || run.w <= 0.0
@@ -2412,7 +2440,15 @@ impl DmlBackend {
             let (a, b) = (lines[0].0, lines[1].0);
             // The first two glyph lines may have blank lines between them.
             let steps = (nonblank[1] - nonblank[0]).max(1) as f64;
-            let pitch_px = (run.gy[a] - run.gy[b]).abs() * s / steps;
+            // A rich line's first glyph may be raised (a superscript): measure
+            // from its run's baseline.
+            let shift = |line: usize| {
+                paras
+                    .as_ref()
+                    .and_then(|ps| ps[nonblank[line]].iter().find(|sp| sp.glyphs > 0))
+                    .map_or(0.0, |sp| sp.dy * run.dpi / 72.0)
+            };
+            let pitch_px = ((run.gy[a] - shift(0)) - (run.gy[b] - shift(1))).abs() * s / steps;
             let pitch_pt = pitch_px * 72.0 / (EMU_PER_INCH / self.k);
             format!(
                 "<a:lnSpc><a:spcPts val=\"{}\"/></a:lnSpc>",
@@ -2421,9 +2457,35 @@ impl DmlBackend {
         } else {
             String::new()
         };
-        let paras: Vec<&str> = label_lines;
         let mut body = String::new();
-        for line in paras {
+        if let Some(ps) = &paras {
+            let mut g = 0usize;
+            let mut col = run.color;
+            for p in ps {
+                body.push_str(&format!("<a:p><a:pPr algn=\"{algn}\">{ln_spc}</a:pPr>"));
+                let mut any = false;
+                for sp in p {
+                    if let Some(c) = run.gcolor.get(g).filter(|_| sp.glyphs > 0) {
+                        col = *c;
+                    }
+                    g += sp.glyphs;
+                    if sp.text.is_empty() {
+                        continue;
+                    }
+                    any = true;
+                    let rpr = span_rpr(run, sp, g - sp.glyphs, s, col);
+                    body.push_str(&format!(
+                        "<a:r>{rpr}<a:t>{}</a:t></a:r>",
+                        dml_escape(&sp.text)
+                    ));
+                }
+                if !any {
+                    body.push_str(&format!("<a:endParaRPr sz=\"{sz}\" dirty=\"0\"/>"));
+                }
+                body.push_str("</a:p>");
+            }
+        }
+        for line in label_lines {
             body.push_str(&format!("<a:p><a:pPr algn=\"{algn}\">{ln_spc}</a:pPr>"));
             if line.is_empty() {
                 body.push_str(&format!("<a:endParaRPr sz=\"{sz}\" dirty=\"0\"/>"));
@@ -3077,6 +3139,69 @@ fn fold_alpha(xml: &str, a: f32) -> String {
     }
     o.push_str(r);
     o
+}
+
+/// A rich label's styled runs split into lines, when the label can be written
+/// as native text runs: it has runs (an `md()` label; a `tex()` label and an
+/// `md()` label with math have none, and math has rules and glyph text too),
+/// and they account for exactly the label's glyphs.
+fn rich_paras<'r>(run: &'r TextRun) -> Option<Vec<Vec<&'r TextSpan>>> {
+    if run.gcolor.is_empty()
+        || run.spans.is_empty()
+        || !run.rules.is_empty()
+        || !run.gtext.is_empty()
+    {
+        return None;
+    }
+    let n: usize = run.spans.iter().map(|sp| sp.glyphs).sum();
+    if n != run.gid.len() || n != run.gcolor.len() {
+        return None;
+    }
+    let mut paras = vec![Vec::new()];
+    for sp in run.spans {
+        if sp.brk {
+            paras.push(Vec::new());
+        } else if let Some(p) = paras.last_mut() {
+            p.push(sp);
+        }
+    }
+    Some(paras)
+}
+
+/// The `a:rPr` of one styled run whose glyphs start at `g0`, drawn under a
+/// uniform `scale`, in colour `col`. A raised or lowered run (`^sup^`,
+/// `~sub~`) is written as a DrawingML baseline shift at the size of the text
+/// around it, because PowerPoint and LibreOffice shrink a shifted run
+/// themselves: writing the shrunk size too would shrink it twice.
+fn span_rpr(run: &TextRun, sp: &TextSpan, g0: usize, scale: f64, col: Rgba) -> String {
+    // markdown sets a shifted run at 0.7 of the size around it.
+    let (size, baseline) = if sp.dy != 0.0 && sp.size > 0.0 {
+        let around = sp.size / 0.7;
+        (around, (sp.dy / around * 100_000.0).round() as i64)
+    } else {
+        (sp.size, 0)
+    };
+    let sz = ((size * scale * 100.0).round() as i64).clamp(100, 400_000);
+    let (bold, italic) = face_flags(&sp.face);
+    let face = dml_escape(&typeface_at(run, g0));
+    let mut rpr = format!("<a:rPr sz=\"{sz}\"");
+    if bold {
+        rpr.push_str(" b=\"1\"");
+    }
+    if italic {
+        rpr.push_str(" i=\"1\"");
+    }
+    if baseline != 0 {
+        rpr.push_str(&format!(
+            " baseline=\"{}\"",
+            baseline.clamp(-100_000, 100_000)
+        ));
+    }
+    rpr.push_str(&format!(
+        " dirty=\"0\">{}<a:latin typeface=\"{face}\"/><a:ea typeface=\"{face}\"/><a:cs typeface=\"{face}\"/></a:rPr>",
+        solid_fill(col, 1.0)
+    ));
+    rpr
 }
 
 /// The alignment a multi-line label's lines were set with, read back from the
@@ -4026,5 +4151,78 @@ mod tests {
         let (xml, _, _) = b.finish();
         assert_eq!(xml.matches("<p:sp>").count(), 2, "{xml}");
         assert!(!xml.contains("Points"), "{xml}");
+    }
+
+    fn span(text: &str, face: &str, size: f64, dy: f64, glyphs: usize) -> TextSpan {
+        TextSpan {
+            text: text.to_string(),
+            face: face.to_string(),
+            size,
+            dy,
+            glyphs,
+            brk: false,
+        }
+    }
+
+    #[test]
+    fn rich_runs_need_spans_covering_every_glyph() {
+        let spans = vec![
+            span("R", "plain", 10.0, 0.0, 1),
+            span("2", "plain", 7.0, 3.5, 1),
+            TextSpan {
+                brk: true,
+                ..TextSpan::default()
+            },
+            span("ab", "bold", 10.0, 0.0, 2),
+        ];
+        let gid = [1, 2, 3, 4];
+        let g = [0.0; 4];
+        let names: Vec<String> = vec![String::new(); 4];
+        let cols = [RED; 4];
+        let mut run = TextRun {
+            ax: 0.0,
+            ay: 0.0,
+            w: 10.0,
+            h: 10.0,
+            hjust: 0.5,
+            vjust: 0.5,
+            rot: 0.0,
+            color: RED,
+            gid: &gid,
+            gx: &g,
+            gy: &g,
+            gsize: &g,
+            gpath: &names,
+            gface: &[0, 0, 0, 0],
+            gcolor: &cols,
+            rules: &[],
+            gtext: "",
+            spans: &spans,
+            halo: None,
+            label: "R2\nab",
+            family: "sans",
+            face: "plain",
+            size: 10.0,
+            dpi: 96.0,
+        };
+        let paras = rich_paras(&run).expect("native runs");
+        assert_eq!(paras.len(), 2);
+        assert_eq!(paras[0].len(), 2);
+        assert_eq!(paras[1][0].text, "ab");
+        // A superscript: the size around it, its baseline raised 35%.
+        let rpr = span_rpr(&run, paras[0][1], 1, 1.0, RED);
+        assert!(
+            rpr.starts_with("<a:rPr sz=\"1000\" baseline=\"35000\""),
+            "{rpr}"
+        );
+        let rpr = span_rpr(&run, paras[1][0], 2, 1.0, RED);
+        assert!(rpr.starts_with("<a:rPr sz=\"1000\" b=\"1\" dirty"), "{rpr}");
+        // Spans that miss a glyph, or a label with math, stay outlines.
+        let short = &spans[..3];
+        run.spans = short;
+        assert!(rich_paras(&run).is_none());
+        run.spans = &spans;
+        run.gtext = "R2ab";
+        assert!(rich_paras(&run).is_none());
     }
 }
