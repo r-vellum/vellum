@@ -59,8 +59,13 @@
 #' labels, halos and text set on a path are always outlines, as in SVG.
 #'
 #' @section What cannot be expressed:
-#' DrawingML has no clipping, blend modes, masks or group opacity. For now
-#' these are not applied, and a warning says so. Rasters become pictures.
+#' DrawingML has no clipping, blend modes, masks or group opacity. Clipped
+#' geometry is cut in advance: fills to the visible area, strokes along their
+#' centreline (a round or square cap at a cut end reaches half a line width past
+#' the edge), pictures cropped. Native text cannot be cut: a label crossing a
+#' clip edge is drawn whole, with a warning (outlined text is cut exactly).
+#' Blend modes, masks and group opacity are not yet applied, and a warning says
+#' so. Rasters become pictures.
 #'
 #' For charts whose *data* stays editable in PowerPoint, see the mschart
 #' package; this writes the drawing, not the data.

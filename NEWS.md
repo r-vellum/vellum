@@ -21,6 +21,14 @@
   name and alt text. officer stays in Suggests: the methods are registered
   when it loads.
 
+* PowerPoint output honours clipping (F-24, part 3): DrawingML cannot clip, so
+  geometry is cut to the clip region in advance with `i_overlay`, so facet
+  panels and zoomed scales come out right. Fills are cut to their visible area
+  (a cut rectangle stays a rectangle), strokes along their centreline, upright
+  pictures are cropped (`a:srcRect`), and a raster under a clip a crop cannot
+  express is drawn as a picture of its visible part. Native text crossing a clip
+  edge is drawn whole, with a warning; outlined text is cut exactly.
+
 # vellum 0.17.0
 
 ## New features

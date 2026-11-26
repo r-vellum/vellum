@@ -96,6 +96,21 @@ impl DevPath {
         DevPath { segs }
     }
 
+    /// An open polyline per entry.
+    pub fn from_polylines(lines: &[Vec<Pt>]) -> DevPath {
+        let mut segs = Vec::new();
+        for l in lines {
+            if l.len() < 2 {
+                continue;
+            }
+            segs.push(Seg::Move(l[0]));
+            for p in &l[1..] {
+                segs.push(Seg::Line(*p));
+            }
+        }
+        DevPath { segs }
+    }
+
     pub fn is_empty(&self) -> bool {
         !self
             .segs
@@ -374,6 +389,18 @@ fn typeface(run: &TextRun) -> String {
     }
 }
 
+/// Device-px bounds of several paths.
+fn bounds_of(paths: &[DevPath]) -> Option<[f64; 4]> {
+    paths.iter().filter_map(|p| p.bounds()).reduce(|a, b| {
+        [
+            a[0].min(b[0]),
+            a[1].min(b[1]),
+            a[2].max(b[2]),
+            a[3].max(b[3]),
+        ]
+    })
+}
+
 /// The largest device-px coordinate written: far inside DrawingML's
 /// coordinate range (about 2.7e13 EMU) at any resolution, and far enough off
 /// the page that clamping a long line's end leaves its visible part straight.
@@ -449,6 +476,9 @@ pub struct DmlBackend {
     warnings: Vec<String>,
     /// Alt text for the root group (the scene's description, else its title).
     descr: String,
+    /// Each viewport's clip region, resolved once (keyed like the SVG
+    /// backend's `<clipPath>` cache, by the clip's viewport id).
+    regions: HashMap<usize, Rc<Region>>,
 }
 
 impl DmlBackend {
@@ -487,6 +517,7 @@ impl DmlBackend {
             media_index: HashMap::new(),
             warnings: Vec::new(),
             descr: String::new(),
+            regions: HashMap::new(),
         };
         if bg.a > 0 {
             if let Some(p) = rect_path(0.0, 0.0, w as f64, h as f64) {
@@ -768,16 +799,108 @@ impl DmlBackend {
         s
     }
 
-    /// Warn when a clip region would cut this geometry (clipping is not applied).
-    fn note_clip(&mut self, bounds: Option<[f64; 4]>, clip: &Clip) {
+    /// The resolved region of a clip chain (`None`: no clip).
+    fn region(&mut self, clip: &Clip) -> Option<Rc<Region>> {
         if clip.shapes.is_empty() {
-            return;
+            return None;
         }
-        let Some(b) = bounds else { return };
-        if let Some(c) = clip_bounds(clip) {
-            let eps = 0.5;
-            if b[0] < c[0] - eps || b[1] < c[1] - eps || b[2] > c[2] + eps || b[3] > c[3] + eps {
-                self.warn("clip regions are not applied");
+        if let Some(r) = self.regions.get(&clip.id) {
+            return Some(Rc::clone(r));
+        }
+        let r = Rc::new(Region::new(clip));
+        self.regions.insert(clip.id, Rc::clone(&r));
+        Some(r)
+    }
+
+    /// Where geometry with device-px bounds `b` lies relative to the clip.
+    fn coverage(&mut self, b: Option<[f64; 4]>, clip: &Clip) -> Coverage {
+        let Some(r) = self.region(clip) else {
+            return Coverage::Inside;
+        };
+        let Some(b) = b else { return Coverage::Outside };
+        r.coverage(b)
+    }
+
+    /// Cut a fill to the clip: DrawingML cannot clip, so the visible part of
+    /// the geometry is computed here (curves inside the clip are kept; a cut
+    /// shape's curves are flattened).
+    fn clip_area(&mut self, dp: DevPath, rule: FillRule, clip: &Clip) -> Clipped {
+        let Some(r) = self.region(clip) else {
+            return Clipped::Keep(dp);
+        };
+        match dp.bounds().map(|b| r.coverage(b)) {
+            None | Some(Coverage::Outside) => Clipped::Drop,
+            Some(Coverage::Inside) => Clipped::Keep(dp),
+            Some(Coverage::Partial) => {
+                use i_overlay::core::fill_rule::FillRule as IFill;
+                use i_overlay::core::overlay_rule::OverlayRule;
+                use i_overlay::float::single::SingleFloatOverlay;
+                let subj: Vec<Vec<[f64; 2]>> = dp
+                    .flatten()
+                    .into_iter()
+                    .filter(|(c, _)| c.len() >= 3)
+                    .map(|(c, _)| c.into_iter().map(|(x, y)| [x, y]).collect())
+                    .collect();
+                let fr = match rule {
+                    FillRule::EvenOdd => IFill::EvenOdd,
+                    FillRule::Winding => IFill::NonZero,
+                };
+                let shapes = subj.overlay(&r.contours, OverlayRule::Intersect, fr);
+                let rings: Vec<Vec<Pt>> = shapes
+                    .into_iter()
+                    .flatten()
+                    .filter(|c| c.len() >= 3)
+                    .map(|c| c.into_iter().map(|p| (p[0], p[1])).collect())
+                    .collect();
+                if rings.is_empty() {
+                    Clipped::Drop
+                } else {
+                    Clipped::Cut(DevPath::from_rings(&rings))
+                }
+            }
+        }
+    }
+
+    /// Cut a stroke's centreline to the clip. The pen keeps its width, so a
+    /// round or square cap at a cut end reaches half a line width past the clip
+    /// edge (a butt cap ends on it).
+    fn clip_line(&mut self, dp: DevPath, clip: &Clip) -> Clipped {
+        let Some(r) = self.region(clip) else {
+            return Clipped::Keep(dp);
+        };
+        match dp.bounds().map(|b| r.coverage(b)) {
+            None | Some(Coverage::Outside) => Clipped::Drop,
+            Some(Coverage::Inside) => Clipped::Keep(dp),
+            Some(Coverage::Partial) => {
+                use i_overlay::core::fill_rule::FillRule as IFill;
+                use i_overlay::float::clip::FloatClip;
+                use i_overlay::string::clip::ClipRule;
+                let mut lines: Vec<Vec<[f64; 2]>> = Vec::new();
+                for (mut pts, closed) in dp.flatten() {
+                    if closed {
+                        if let Some(&p) = pts.first() {
+                            pts.push(p);
+                        }
+                    }
+                    lines.push(pts.into_iter().map(|(x, y)| [x, y]).collect());
+                }
+                let rule = ClipRule {
+                    invert: false,
+                    boundary_included: true,
+                };
+                let mut out: Vec<Vec<Pt>> = Vec::new();
+                for l in &lines {
+                    for piece in l.clip_by(&r.contours, IFill::NonZero, rule) {
+                        if piece.len() >= 2 {
+                            out.push(piece.into_iter().map(|p| (p[0], p[1])).collect());
+                        }
+                    }
+                }
+                if out.is_empty() {
+                    Clipped::Drop
+                } else {
+                    Clipped::Cut(DevPath::from_polylines(&out))
+                }
             }
         }
     }
@@ -823,7 +946,7 @@ impl DmlBackend {
     /// Text that has to be drawn as glyph outlines: one shape per colour (each
     /// glyph its own `a:path`, so overlapping glyphs never punch holes), the
     /// halo as an outlined shape underneath, `tex()` rules as rectangles.
-    fn text_outlines(&mut self, run: &TextRun, transform: Transform) {
+    fn text_outlines(&mut self, run: &TextRun, transform: Transform, clip: &Clip) {
         let base = if run.rot != 0.0 {
             transform.pre_concat(crate::units::rotation_about(run.rot, run.ax, run.ay))
         } else {
@@ -870,6 +993,27 @@ impl DmlBackend {
                 add(&mut by_col, r.col, dp);
             }
         }
+        // Cut every glyph to the clip, as a fill.
+        let cut = |paths: Vec<DevPath>, me: &mut Self| -> Vec<DevPath> {
+            paths
+                .into_iter()
+                .filter_map(|p| match me.clip_area(p, FillRule::Winding, clip) {
+                    Clipped::Drop => None,
+                    Clipped::Keep(p) | Clipped::Cut(p) => Some(p),
+                })
+                .collect()
+        };
+        let halo_paths = if run.halo.is_some() {
+            all.clone()
+        } else {
+            Vec::new()
+        };
+        let all = cut(all, self);
+        let by_col: Vec<(Rgba, Vec<DevPath>)> = by_col
+            .into_iter()
+            .map(|(c, v)| (c, cut(v, self)))
+            .filter(|(_, v)| !v.is_empty())
+            .collect();
         if all.is_empty() {
             return;
         }
@@ -892,7 +1036,14 @@ impl DmlBackend {
                     phase: 0.0,
                 };
                 let ln = self.ln_xml(hcol, &st, scale);
-                self.emit_geom("Halo", &all, "", &ln, true);
+                // The halo is an outline of whole glyphs; where the clip cuts
+                // the glyphs, outline the cut shapes instead.
+                let paths = if self.coverage(bounds_of(&halo_paths), clip) == Coverage::Inside {
+                    halo_paths
+                } else {
+                    all.clone()
+                };
+                self.emit_geom("Halo", &paths, "", &ln, true);
             }
         }
         for (c, paths) in by_col {
@@ -928,6 +1079,91 @@ impl DmlBackend {
             body = f.body,
         );
         self.push(&xml, b);
+    }
+
+    /// A raster the clip cuts in a way a picture crop cannot express (a path
+    /// clip, or a rotated picture): draw it through the raster backend with
+    /// the clip applied and place the visible part as a picture.
+    #[allow(clippy::too_many_arguments)]
+    fn raster_region(
+        &mut self,
+        rgba: &[u8],
+        iw: u32,
+        ih: u32,
+        x: f64,
+        y: f64,
+        w: f64,
+        h: f64,
+        interpolate: bool,
+        t: Transform,
+        clip: &Clip,
+        ib: [f64; 4],
+    ) {
+        self.warn(
+            "a raster under a clip it cannot crop to is drawn as a picture of its visible part",
+        );
+        let mut rb = RasterBackend::new(
+            self.w,
+            self.h,
+            Rgba {
+                r: 0,
+                g: 0,
+                b: 0,
+                a: 0,
+            },
+        );
+        rb.draw_image(rgba, iw, ih, x, y, w, h, interpolate, t, clip);
+        let pm = rb.into_pixmap();
+        self.emit_pixmap_region(&pm, ib);
+    }
+
+    /// Place the part of a page-sized pixmap inside device-px bounds `b` as a
+    /// picture, trimmed to what it actually covers. Returns false when the
+    /// region is empty.
+    pub(super) fn emit_pixmap_region(&mut self, pm: &Pixmap, b: [f64; 4]) -> bool {
+        let (pw, ph) = (pm.width() as i64, pm.height() as i64);
+        let x0 = (b[0].floor() as i64).clamp(0, pw);
+        let y0 = (b[1].floor() as i64).clamp(0, ph);
+        let x1 = (b[2].ceil() as i64).clamp(0, pw);
+        let y1 = (b[3].ceil() as i64).clamp(0, ph);
+        // Trim to non-transparent pixels.
+        let px = pm.pixels();
+        let (mut tx0, mut ty0, mut tx1, mut ty1) = (x1, y1, x0, y0);
+        for yy in y0..y1 {
+            for xx in x0..x1 {
+                if px[(yy * pw + xx) as usize].alpha() > 0 {
+                    tx0 = tx0.min(xx);
+                    ty0 = ty0.min(yy);
+                    tx1 = tx1.max(xx + 1);
+                    ty1 = ty1.max(yy + 1);
+                }
+            }
+        }
+        if tx1 <= tx0 || ty1 <= ty0 {
+            return false;
+        }
+        let (cw, ch) = ((tx1 - tx0) as u32, (ty1 - ty0) as u32);
+        let mut rgba = Vec::with_capacity((cw * ch * 4) as usize);
+        for yy in ty0..ty1 {
+            for xx in tx0..tx1 {
+                let c = px[(yy * pw + xx) as usize].demultiply();
+                rgba.extend_from_slice(&[c.red(), c.green(), c.blue(), c.alpha()]);
+            }
+        }
+        let Some(png) = straight_png(&rgba, cw, ch) else {
+            return false;
+        };
+        self.emit_picture(
+            png,
+            (tx0 + tx1) as f64 / 2.0,
+            (ty0 + ty1) as f64 / 2.0,
+            cw as f64,
+            ch as f64,
+            0.0,
+            false,
+            None,
+        );
+        true
     }
 
     /// Register a PNG and return its media token.
@@ -1206,6 +1442,125 @@ pub(super) fn clip_bounds(clip: &Clip) -> Option<[f64; 4]> {
     out
 }
 
+/// Where geometry lies relative to a clip region.
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub(super) enum Coverage {
+    Inside,
+    Outside,
+    Partial,
+}
+
+/// A fill or stroke after clipping.
+pub(super) enum Clipped {
+    /// Entirely inside: unchanged, curves and all.
+    Keep(DevPath),
+    /// Cut at the clip edge.
+    Cut(DevPath),
+    /// Entirely outside.
+    Drop,
+}
+
+/// A clip chain resolved to device px: the intersection of its shapes, as
+/// contours `i_overlay` can clip against, plus its bounds. `rect` marks a chain
+/// of axis-aligned rectangles (a panel), whose region is exactly its bounds.
+pub(super) struct Region {
+    pub bbox: [f64; 4],
+    pub rect: bool,
+    pub contours: Vec<Vec<[f64; 2]>>,
+}
+
+impl Region {
+    fn new(clip: &Clip) -> Region {
+        use i_overlay::core::fill_rule::FillRule as IFill;
+        use i_overlay::core::overlay_rule::OverlayRule;
+        use i_overlay::float::simplify::SimplifyShape;
+        use i_overlay::float::single::SingleFloatOverlay;
+        let axis = |t: &Transform| t.kx == 0.0 && t.ky == 0.0;
+        let rect = clip
+            .shapes
+            .iter()
+            .all(|s| matches!(s, ClipShape::Rect { transform, .. } if axis(transform)));
+        let bbox = clip_bounds(clip).unwrap_or([0.0; 4]);
+        if rect {
+            let [x0, y0, x1, y1] = bbox;
+            let contours = if x1 > x0 && y1 > y0 {
+                vec![vec![[x0, y0], [x1, y0], [x1, y1], [x0, y1]]]
+            } else {
+                Vec::new()
+            };
+            return Region {
+                bbox,
+                rect: true,
+                contours,
+            };
+        }
+        let mut acc: Option<Vec<Vec<[f64; 2]>>> = None;
+        for shape in clip.shapes {
+            let (rings, fr) = match shape {
+                ClipShape::Rect { w, h, transform } => (
+                    vec![rect_corners(*w, *h, *transform)
+                        .iter()
+                        .map(|p| [p.0, p.1])
+                        .collect::<Vec<_>>()],
+                    IFill::NonZero,
+                ),
+                ClipShape::Path {
+                    path,
+                    evenodd,
+                    transform,
+                } => (
+                    DevPath::from_path(path, *transform)
+                        .flatten()
+                        .into_iter()
+                        .filter(|(c, _)| c.len() >= 3)
+                        .map(|(c, _)| c.into_iter().map(|(x, y)| [x, y]).collect())
+                        .collect(),
+                    if *evenodd {
+                        IFill::EvenOdd
+                    } else {
+                        IFill::NonZero
+                    },
+                ),
+            };
+            let clean: Vec<Vec<[f64; 2]>> =
+                rings.simplify_shape(fr).into_iter().flatten().collect();
+            acc = Some(match acc {
+                None => clean,
+                Some(a) => a
+                    .overlay(&clean, OverlayRule::Intersect, IFill::NonZero)
+                    .into_iter()
+                    .flatten()
+                    .collect(),
+            });
+        }
+        Region {
+            bbox,
+            rect: false,
+            contours: acc.unwrap_or_default(),
+        }
+    }
+
+    /// Where a box lies relative to the region. Only a rectangular region can
+    /// say "inside" from bounds alone; anything else that meets it is cut.
+    fn coverage(&self, b: [f64; 4]) -> Coverage {
+        let [x0, y0, x1, y1] = self.bbox;
+        let eps = 1e-6;
+        if self.contours.is_empty()
+            || b[2] < x0 - eps
+            || b[0] > x1 + eps
+            || b[3] < y0 - eps
+            || b[1] > y1 + eps
+        {
+            return Coverage::Outside;
+        }
+        if self.rect && b[0] >= x0 - eps && b[1] >= y0 - eps && b[2] <= x1 + eps && b[3] <= y1 + eps
+        {
+            return Coverage::Inside;
+        }
+        Coverage::Partial
+    }
+}
+
 /// FNV-1a over bytes: a stable key for de-duplicating media.
 pub(super) fn fnv64(bytes: &[u8]) -> u64 {
     let mut h: u64 = 0xcbf2_9ce4_8422_2325;
@@ -1246,9 +1601,12 @@ impl RenderBackend for DmlBackend {
         if matches!(paint, ResolvedPaint::Hatch { .. }) {
             return;
         }
-        let dp = DevPath::from_path(path, transform);
-        self.note_clip(dp.bounds(), clip);
-        let dp = normalize_fill(dp, rule);
+        let dp = match self.clip_area(DevPath::from_path(path, transform), rule, clip) {
+            Clipped::Drop => return,
+            // A cut is already free of overlaps (the overlay resolved them).
+            Clipped::Cut(dp) => dp,
+            Clipped::Keep(dp) => normalize_fill(dp, rule),
+        };
         if dp.is_empty() {
             return;
         }
@@ -1274,8 +1632,10 @@ impl RenderBackend for DmlBackend {
             self.stroke_outline(path, transform, color, stroke, clip);
             return;
         };
-        let dp = DevPath::from_path(path, transform);
-        self.note_clip(dp.bounds(), clip);
+        let dp = match self.clip_line(DevPath::from_path(path, transform), clip) {
+            Clipped::Drop => return,
+            Clipped::Cut(dp) | Clipped::Keep(dp) => dp,
+        };
         if dp.is_empty() {
             return;
         }
@@ -1303,7 +1663,13 @@ impl RenderBackend for DmlBackend {
         let dp = DevPath::from_path(path, transform);
         let boxes = dp.subpath_bounds();
         let plain = boxes.len() <= 1 || !any_overlap(&boxes);
-        if scale.is_none()
+        // A shape the clip cuts is drawn as its cut fill and its cut outline.
+        let cov = self.coverage(dp.bounds(), clip);
+        if cov == Coverage::Outside {
+            return;
+        }
+        if cov == Coverage::Partial
+            || scale.is_none()
             || !plain
             || matches!(paint, ResolvedPaint::Hatch { .. })
             || stroke.width <= 0.0
@@ -1312,7 +1678,6 @@ impl RenderBackend for DmlBackend {
             self.stroke_path(path, transform, color, stroke, clip);
             return;
         }
-        self.note_clip(dp.bounds(), clip);
         if dp.is_empty() {
             return;
         }
@@ -1368,10 +1733,17 @@ impl RenderBackend for DmlBackend {
                 pts.iter().map(|p| p.0).fold(f64::NEG_INFINITY, f64::max),
                 pts.iter().map(|p| p.1).fold(f64::NEG_INFINITY, f64::max),
             ];
-            self.note_clip(Some(b), clip);
+            match self.coverage(Some(b), clip) {
+                Coverage::Outside => return,
+                // Outlines are cut exactly, below; a text run cannot be.
+                Coverage::Partial if !outline => {
+                    self.warn("text crossing a clip edge is drawn whole")
+                }
+                _ => {}
+            }
         }
         if outline {
-            self.text_outlines(run, transform);
+            self.text_outlines(run, transform, clip);
             return;
         }
         let s = scale.unwrap_or(1.0);
@@ -1519,12 +1891,66 @@ impl RenderBackend for DmlBackend {
         }
         let (cx, cy) = map_pt(t, tiny_skia::Point::from_xy(x as f32, y as f32));
         let (dw, dh) = ((w * ax).abs(), (h * ay).abs());
-        {
-            let hw = dw.max(dh);
-            self.note_clip(Some([cx - hw, cy - hw, cx + hw, cy + hw]), clip);
-        }
         let rot = ky.atan2(sx).to_degrees().rem_euclid(360.0);
         let flip = sx * sy - kx * ky < 0.0;
+        // The cell's corners on the page.
+        let corners: Vec<Pt> = [(-0.5, -0.5), (0.5, -0.5), (0.5, 0.5), (-0.5, 0.5)]
+            .iter()
+            .map(|(u, v)| {
+                map_pt(
+                    t,
+                    tiny_skia::Point::from_xy((x + u * w) as f32, (y + v * h) as f32),
+                )
+            })
+            .collect();
+        let ib = [
+            corners.iter().map(|p| p.0).fold(f64::INFINITY, f64::min),
+            corners.iter().map(|p| p.1).fold(f64::INFINITY, f64::min),
+            corners
+                .iter()
+                .map(|p| p.0)
+                .fold(f64::NEG_INFINITY, f64::max),
+            corners
+                .iter()
+                .map(|p| p.1)
+                .fold(f64::NEG_INFINITY, f64::max),
+        ];
+        let mut crop: Option<[f64; 4]> = None;
+        let (mut cx, mut cy, mut dw, mut dh) = (cx, cy, dw, dh);
+        match self.coverage(Some(ib), clip) {
+            Coverage::Outside => return,
+            Coverage::Inside => {}
+            Coverage::Partial => {
+                let r = self.region(clip).expect("a partial coverage has a region");
+                let upright = rot.abs() < 1e-9 && !flip;
+                if !(r.rect && upright) {
+                    self.raster_region(rgba, iw, ih, x, y, w, h, interpolate, t, clip, ib);
+                    return;
+                }
+                // An upright picture in a rectangular clip: crop the image
+                // (`a:srcRect`) and shrink the frame to the visible part.
+                let v = [
+                    ib[0].max(r.bbox[0]),
+                    ib[1].max(r.bbox[1]),
+                    ib[2].min(r.bbox[2]),
+                    ib[3].min(r.bbox[3]),
+                ];
+                if v[2] <= v[0] || v[3] <= v[1] {
+                    return;
+                }
+                let (iw_, ih_) = (ib[2] - ib[0], ib[3] - ib[1]);
+                crop = Some([
+                    (v[0] - ib[0]) / iw_,
+                    (v[1] - ib[1]) / ih_,
+                    (ib[2] - v[2]) / iw_,
+                    (ib[3] - v[3]) / ih_,
+                ]);
+                cx = (v[0] + v[2]) / 2.0;
+                cy = (v[1] + v[3]) / 2.0;
+                dw = v[2] - v[0];
+                dh = v[3] - v[1];
+            }
+        }
         let png = if interpolate {
             straight_png(rgba, iw, ih)
         } else {
@@ -1540,7 +1966,7 @@ impl RenderBackend for DmlBackend {
             }
         };
         let Some(png) = png else { return };
-        self.emit_picture(png, cx, cy, dw, dh, rot, flip, None);
+        self.emit_picture(png, cx, cy, dw, dh, rot, flip, crop);
     }
 
     fn begin_panel(&mut self, name: &str, _pannable: bool) {
@@ -1950,6 +2376,186 @@ mod tests {
         assert_eq!(
             b.dash_xml(&st),
             "<a:custDash><a:ds d=\"100000\" sp=\"300000\"/></a:custDash>"
+        );
+    }
+
+    fn panel() -> [ClipShape; 1] {
+        [ClipShape::Rect {
+            w: 50.0,
+            h: 50.0,
+            transform: Transform::from_translate(10.0, 10.0),
+        }]
+    }
+
+    #[test]
+    fn fills_are_cut_to_a_rect_clip_and_dropped_outside_it() {
+        let shapes = panel();
+        let clip = Clip {
+            id: 1,
+            shapes: &shapes,
+        };
+        let mut b = DmlBackend::new(
+            100,
+            100,
+            96.0,
+            Rgba {
+                r: 0,
+                g: 0,
+                b: 0,
+                a: 0,
+            },
+            0,
+            0,
+            false,
+        );
+        let paint = ResolvedPaint::Solid(RED);
+        // straddles the right edge (x = 60): cut to 40..60
+        let p = rect_path(40.0, 20.0, 40.0, 10.0).unwrap();
+        b.fill_path(&p, Transform::identity(), &paint, FillRule::Winding, &clip);
+        // wholly outside: dropped
+        let q = rect_path(70.0, 70.0, 5.0, 5.0).unwrap();
+        b.fill_path(&q, Transform::identity(), &paint, FillRule::Winding, &clip);
+        let (xml, _, warns) = b.finish();
+        assert!(warns.is_empty(), "{warns:?}");
+        assert_eq!(xml.matches("<p:sp>").count(), 1, "{xml}");
+        // 40 px wide in, 20 px left: x 40..60 = 381000..571500 EMU
+        assert!(
+            xml.contains("<a:off x=\"381000\" y=\"190500\"/><a:ext cx=\"190500\" cy=\"95250\"/>"),
+            "{xml}"
+        );
+        assert!(
+            xml.contains("prst=\"rect\""),
+            "a cut rectangle stays a rectangle: {xml}"
+        );
+    }
+
+    #[test]
+    fn strokes_are_cut_at_the_clip_edge() {
+        let shapes = panel();
+        let clip = Clip {
+            id: 1,
+            shapes: &shapes,
+        };
+        let mut b = DmlBackend::new(
+            100,
+            100,
+            96.0,
+            Rgba {
+                r: 0,
+                g: 0,
+                b: 0,
+                a: 0,
+            },
+            0,
+            0,
+            false,
+        );
+        let mut pb = PathBuilder::new();
+        pb.move_to(0.0, 30.0);
+        pb.line_to(100.0, 30.0);
+        b.stroke_path(
+            &pb.finish().unwrap(),
+            Transform::identity(),
+            RED,
+            &pen(1.0),
+            &clip,
+        );
+        let (xml, _, _) = b.finish();
+        assert!(
+            xml.contains("<a:off x=\"95250\" y=\"285750\"/><a:ext cx=\"476250\""),
+            "{xml}"
+        );
+    }
+
+    #[test]
+    fn a_path_clip_cuts_fills_to_its_shape() {
+        let mut pb = PathBuilder::new();
+        pb.push_circle(50.0, 50.0, 20.0);
+        let shapes = [ClipShape::Path {
+            path: pb.finish().unwrap(),
+            evenodd: false,
+            transform: Transform::identity(),
+        }];
+        let clip = Clip {
+            id: 2,
+            shapes: &shapes,
+        };
+        let mut b = DmlBackend::new(
+            100,
+            100,
+            96.0,
+            Rgba {
+                r: 0,
+                g: 0,
+                b: 0,
+                a: 0,
+            },
+            0,
+            0,
+            false,
+        );
+        let p = rect_path(0.0, 0.0, 100.0, 50.0).unwrap();
+        b.fill_path(
+            &p,
+            Transform::identity(),
+            &ResolvedPaint::Solid(RED),
+            FillRule::Winding,
+            &clip,
+        );
+        let (xml, _, _) = b.finish();
+        // the top half disc: 40 px wide, 20 px tall
+        assert!(xml.contains("<a:custGeom>"), "{xml}");
+        assert!(
+            xml.contains("<a:ext cx=\"381000\" cy=\"190500\"/>"),
+            "{xml}"
+        );
+    }
+
+    #[test]
+    fn an_upright_raster_is_cropped_to_a_rect_clip() {
+        let shapes = panel();
+        let clip = Clip {
+            id: 1,
+            shapes: &shapes,
+        };
+        let mut b = DmlBackend::new(
+            100,
+            100,
+            96.0,
+            Rgba {
+                r: 0,
+                g: 0,
+                b: 0,
+                a: 0,
+            },
+            0,
+            0,
+            false,
+        );
+        let px = [255u8; 16];
+        // a 40 x 40 cell centred at (60, 60): its top-left quarter is visible
+        b.draw_image(
+            &px,
+            2,
+            2,
+            60.0,
+            60.0,
+            40.0,
+            40.0,
+            true,
+            Transform::identity(),
+            &clip,
+        );
+        let (xml, media, warns) = b.finish();
+        assert_eq!(media.len(), 1);
+        assert!(warns.is_empty());
+        assert!(
+            xml.contains("<a:srcRect l=\"0\" t=\"0\" r=\"50000\" b=\"50000\"/>"),
+            "{xml}"
+        );
+        assert!(
+            xml.contains("<a:off x=\"381000\" y=\"381000\"/><a:ext cx=\"190500\" cy=\"190500\"/>"),
+            "{xml}"
         );
     }
 }
