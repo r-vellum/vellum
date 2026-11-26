@@ -2289,6 +2289,37 @@ impl DmlBackend {
         if iw == 0 || ih == 0 {
             return;
         }
+        // A far image is cut to the part over the page first (VR-46).
+        let fitted;
+        let (rgba, iw, ih, x, y, w, h, interpolate) = match super::fit::vector_image(
+            rgba,
+            iw,
+            ih,
+            x,
+            y,
+            w,
+            h,
+            interpolate,
+            transform,
+            self.w,
+            self.h,
+        ) {
+            super::fit::VecImage::Keep => (rgba, iw, ih, x, y, w, h, interpolate),
+            super::fit::VecImage::Draw(f) => {
+                fitted = f;
+                (
+                    &fitted.rgba[..],
+                    fitted.iw,
+                    fitted.ih,
+                    fitted.x,
+                    fitted.y,
+                    fitted.w,
+                    fitted.h,
+                    fitted.interpolate,
+                )
+            }
+            super::fit::VecImage::Skip => return,
+        };
         let t = transform;
         let (sx, ky, kx, sy) = (t.sx as f64, t.ky as f64, t.kx as f64, t.sy as f64);
         let (ax, ay) = (sx.hypot(ky), kx.hypot(sy));

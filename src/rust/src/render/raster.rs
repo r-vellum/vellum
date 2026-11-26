@@ -1337,6 +1337,29 @@ impl RenderBackend for RasterBackend {
         transform: Transform,
         clip: &Clip,
     ) {
+        // A far image is cut to the part over the page first, as on the
+        // vector backends (VR-46): its f32 shader matrix cannot place a
+        // source px 1e9 px wide to the pixel.
+        let (pw, ph) = fit::dims(self.targets.last().expect("at least the page target"));
+        let fitted;
+        let (rgba, iw, ih, x, y, w, h, interpolate) =
+            match fit::vector_image(rgba, iw, ih, x, y, w, h, interpolate, transform, pw, ph) {
+                fit::VecImage::Keep => (rgba, iw, ih, x, y, w, h, interpolate),
+                fit::VecImage::Draw(f) => {
+                    fitted = f;
+                    (
+                        &fitted.rgba[..],
+                        fitted.iw,
+                        fitted.ih,
+                        fitted.x,
+                        fitted.y,
+                        fitted.w,
+                        fitted.h,
+                        fitted.interpolate,
+                    )
+                }
+                fit::VecImage::Skip => return,
+            };
         let pm = match pixmap_from_straight(rgba, iw, ih) {
             Some(p) => p,
             None => return,

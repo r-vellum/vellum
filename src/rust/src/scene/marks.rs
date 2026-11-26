@@ -709,6 +709,24 @@ pub(super) fn draw_markers<B: RenderBackend>(
         }
         let sh = shape[i];
         b.begin_marker(sh, cx, cy, rr, t, clip);
+        if far_box(cx, cy, 2.0 * rr, 2.0 * rr) {
+            // Far from the origin, built in place in f64 (VR-47).
+            let Some(path) = far_marker_path(sh, cx, cy, rr) else {
+                continue;
+            };
+            if sh == 4 || sh == 5 {
+                if let Some(col) = gp.col.filter(|_| style.width > 0.0) {
+                    b.stroke_lines(&path, t, col, &style, clip);
+                }
+            } else if fast {
+                if let Some(rp) = &rf {
+                    fill_or_hatch(b, &path, t, rp, FillRule::Winding, clip);
+                }
+            } else {
+                fill_then_stroke(b, &path, gp, t, clip, vp, FillRule::Winding);
+            }
+            continue;
+        }
         if fast && sh != 4 && sh != 5 {
             if let Some(rp) = &rf {
                 let slot = (sh as usize).min(7);

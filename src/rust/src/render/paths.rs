@@ -160,8 +160,10 @@ pub fn rect_path(x: f64, y: f64, w: f64, h: f64) -> Option<Path> {
 /// Append a circle to `pb`. Within [`crate::units::PRECISE_PX`] it is exactly
 /// tiny-skia's `push_circle`. Further out its points are placed in f64 before
 /// narrowing, so a huge circle whose edge crosses the page keeps that edge
-/// where it is (VR-45): four cubic quarter arcs, from the east point and
-/// turning the same way.
+/// where it is (VR-45). Its outline is chords that follow the circle within
+/// [`FAR_ARC_TOL`] near the page ([`far_arc`]), from the east point and turning
+/// the same way: four cubic quarter arcs miss a circle by 2.7e-4 of its radius
+/// between their ends, 27 px for a radius of 1e5 px (VR-47).
 pub fn push_circle_precise(pb: &mut PathBuilder, cx: f64, cy: f64, r: f64) {
     let lim = crate::units::PRECISE_PX;
     if (cx.abs() + r <= lim && cy.abs() + r <= lim)
@@ -173,20 +175,15 @@ pub fn push_circle_precise(pb: &mut PathBuilder, cx: f64, cy: f64, r: f64) {
     if r <= 0.0 {
         return;
     }
-    const K: f64 = 0.552_284_749_830_793_4;
-    let k = K * r;
-    let f = |x: f64, y: f64| (x as f32, y as f32);
-    let p = [f(cx + r, cy), f(cx, cy + r), f(cx - r, cy), f(cx, cy - r)];
-    let c = [
-        (f(cx + r, cy + k), f(cx + k, cy + r)),
-        (f(cx - k, cy + r), f(cx - r, cy + k)),
-        (f(cx - r, cy - k), f(cx - k, cy - r)),
-        (f(cx + k, cy - r), f(cx + r, cy - k)),
-    ];
-    pb.move_to(p[0].0, p[0].1);
-    for i in 0..4 {
-        let ((a, b), e) = (c[i], p[(i + 1) % 4]);
-        pb.cubic_to(a.0, a.1, b.0, b.1, e.0, e.1);
+    let mut pts = vec![(cx + r, cy)];
+    far_arc(&mut pts, cx, cy, r, 0.0, -std::f64::consts::TAU);
+    pts.pop(); // back at the start
+    for (k, &(x, y)) in pts.iter().enumerate() {
+        if k == 0 {
+            pb.move_to(x as f32, y as f32);
+        } else {
+            pb.line_to(x as f32, y as f32);
+        }
     }
     pb.close();
 }
@@ -305,6 +302,10 @@ pub fn sector_path(cx: f64, cy: f64, r0: f64, r1: f64, theta0: f64, theta1: f64)
         return None;
     }
     let theta1 = theta0 + dtheta;
+    let lim = crate::units::PRECISE_PX;
+    if cx.abs() + r_out > lim || cy.abs() + r_out > lim {
+        return far_sector_path(cx, cy, r_in, r_out, theta0, theta1);
+    }
     // ~4 degrees per segment, at least 2 segments across the span. Cap the count so
     // an extreme span (should already be rejected R-side as non-finite/huge, but be
     // defensive) can't blow up the allocation / loop.
@@ -331,6 +332,88 @@ pub fn sector_path(cx: f64, cy: f64, r0: f64, r1: f64, theta0: f64, theta1: f64)
         let a = theta1 - dtheta * (k as f64) / (segs as f64);
         let (px, py) = pt(r_in, a);
         pb.line_to(px, py);
+    }
+    pb.close();
+    pb.finish()
+}
+
+/// Local px around the origin where a far shape's outline is kept exact: four
+/// times [`crate::units::PRECISE_PX`] either way. A viewport placed within
+/// `PRECISE_PX` of the page, or rebased onto it, puts every page in this box.
+const FAR_WINDOW: f64 = 4.0 * crate::units::PRECISE_PX;
+
+/// The largest gap (local px) between a far arc and the chords drawn for it,
+/// where it passes [`FAR_WINDOW`].
+const FAR_ARC_TOL: f64 = 1.0 / 32.0;
+
+/// Append the arc of radius `r` about `(cx, cy)` from `a0` to `a1` (radians,
+/// y-up as in [`sector_path`]) to `pts`, not including its start point. Each
+/// ~4 degree chord that passes near [`FAR_WINDOW`] is split until it lies
+/// within [`FAR_ARC_TOL`] of the arc: for a radius of 1e9 px a 4 degree chord
+/// misses the arc by 6e5 px. Chords away from the window stay as they are.
+fn far_arc(pts: &mut Vec<(f64, f64)>, cx: f64, cy: f64, r: f64, a0: f64, a1: f64) {
+    let pt = |a: f64| (cx + r * a.cos(), cy - r * a.sin());
+    fn piece(
+        pts: &mut Vec<(f64, f64)>,
+        pt: &dyn Fn(f64) -> (f64, f64),
+        r: f64,
+        a0: f64,
+        a1: f64,
+        depth: u32,
+    ) {
+        let (p, q) = (pt(a0), pt(a1));
+        // The arc lies within its chord's box grown by the sagitta.
+        let sag = r * (1.0 - (0.5 * (a1 - a0)).cos());
+        let near = p.0.min(q.0) - sag <= FAR_WINDOW
+            && p.0.max(q.0) + sag >= -FAR_WINDOW
+            && p.1.min(q.1) - sag <= FAR_WINDOW
+            && p.1.max(q.1) + sag >= -FAR_WINDOW;
+        if !near || sag <= FAR_ARC_TOL || depth >= 64 || pts.len() >= 1 << 20 {
+            pts.push(q);
+            return;
+        }
+        let m = 0.5 * (a0 + a1);
+        piece(pts, pt, r, a0, m, depth + 1);
+        piece(pts, pt, r, m, a1, depth + 1);
+    }
+    let segs = (((a1 - a0).abs() / (std::f64::consts::PI / 45.0))
+        .ceil()
+        .max(2.0) as usize)
+        .min(4096);
+    for k in 0..segs {
+        let b0 = a0 + (a1 - a0) * (k as f64) / (segs as f64);
+        let b1 = a0 + (a1 - a0) * ((k + 1) as f64) / (segs as f64);
+        piece(pts, &pt, r, b0, b1, 0);
+    }
+}
+
+/// [`sector_path`] for a sector reaching past [`crate::units::PRECISE_PX`]
+/// (VR-47): its arcs follow the circle within [`FAR_ARC_TOL`] wherever they
+/// pass near the page, and every point is placed in f64 before narrowing.
+fn far_sector_path(
+    cx: f64,
+    cy: f64,
+    r_in: f64,
+    r_out: f64,
+    theta0: f64,
+    theta1: f64,
+) -> Option<Path> {
+    let pt = |r: f64, a: f64| (cx + r * a.cos(), cy - r * a.sin());
+    let mut pts = vec![pt(r_out, theta0)];
+    far_arc(&mut pts, cx, cy, r_out, theta0, theta1);
+    if r_in > 0.0 {
+        pts.push(pt(r_in, theta1));
+        far_arc(&mut pts, cx, cy, r_in, theta1, theta0);
+    } else {
+        pts.push((cx, cy));
+    }
+    let mut pb = PathBuilder::new();
+    for (k, &(x, y)) in pts.iter().enumerate() {
+        if k == 0 {
+            pb.move_to(x as f32, y as f32);
+        } else {
+            pb.line_to(x as f32, y as f32);
+        }
     }
     pb.close();
     pb.finish()
@@ -370,5 +453,61 @@ mod tests {
         let mut pb = PathBuilder::new();
         push_circle_precise(&mut pb, 1e9 + 100.25, 50.0, 1e9);
         assert_eq!(pb.finish().unwrap().bounds().left(), 100.25f32);
+    }
+
+    // x where the outline of `p` crosses height `y`, nearest `near`.
+    fn crossing(p: &Path, y: f64, near: f64) -> f64 {
+        let ring = &flatten_rings(p)[0];
+        let mut best = f64::INFINITY;
+        for k in 0..ring.len() {
+            let (a, b) = (ring[k], ring[(k + 1) % ring.len()]);
+            let (ay, by) = (a.1 as f64, b.1 as f64);
+            if (ay - y) * (by - y) <= 0.0 && ay != by {
+                let x = a.0 as f64 + (y - ay) / (by - ay) * (b.0 as f64 - a.0 as f64);
+                if (x - near).abs() < (best - near).abs() {
+                    best = x;
+                }
+            }
+        }
+        best
+    }
+
+    #[test]
+    fn a_far_sector_follows_its_arc_across_the_page() {
+        // The left half of a disc of radius 1e9 whose west point is at
+        // 100.25 px. 4 degree chords missed the arc by 6e5 px (VR-47).
+        let (cx, cy, r) = (1e9 + 100.25, 50.0, 1e9);
+        let half = std::f64::consts::FRAC_PI_2;
+        for (r0, (t0, t1)) in [(0.0, (half, 3.0 * half)), (r - 10.0, (3.0 * half, half))] {
+            let p = sector_path(cx, cy, r0, r, t0, t1).unwrap();
+            for y in [0.0, 50.0, 100.0] {
+                let want = cx - (r * r - (y - cy) * (y - cy)).sqrt();
+                assert!((crossing(&p, y, want) - want).abs() < 0.05, "y = {y}");
+            }
+        }
+        // and within PRECISE_PX it is built as before (~4 degree chords)
+        let near = sector_path(100.0, 100.0, 0.0, 50.0, 0.0, half).unwrap();
+        // (23 chords out, 24 points back, the start)
+        assert_eq!(near.len(), 1 + 23 + 24 + 1);
+    }
+
+    #[test]
+    fn a_far_circle_follows_its_arc_between_the_compass_points() {
+        // Crossing the page 22.5 degrees round from its east point, where
+        // cubic quarter arcs missed it by 27 px at a radius of 1e5 (VR-47).
+        let a = std::f64::consts::PI / 8.0;
+        for r in [1e5, 1e7, 1e9] {
+            let (cx, cy) = (72.0 - r * a.cos(), 72.0 + r * a.sin());
+            let mut pb = PathBuilder::new();
+            push_circle_precise(&mut pb, cx, cy, r);
+            let p = pb.finish().unwrap();
+            for y in [50.0, 72.0, 100.0] {
+                let want = cx + (r * r - (y - cy) * (y - cy)).sqrt();
+                assert!(
+                    (crossing(&p, y, want) - want).abs() < 0.05,
+                    "r = {r}, y = {y}"
+                );
+            }
+        }
     }
 }

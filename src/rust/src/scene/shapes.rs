@@ -77,6 +77,64 @@ pub(super) fn unit_marker(shape: u32) -> tiny_skia::Path {
     pb.finish().expect("unit marker path")
 }
 
+/// A marker glyph centred at `(cx, cy)` with radius `r`, every point placed in
+/// f64 before narrowing (VR-47). For a marker reaching past
+/// [`crate::units::PRECISE_PX`]: the unit shape placed by an `f32` transform,
+/// or the per-element `f32` build, rounds a radius-1e9 square's edge to 64 px.
+/// Same shapes as [`unit_marker`] and the per-element build (plus and cross
+/// as two open strokes; circle via [`push_circle_precise`]).
+pub(super) fn far_marker_path(shape: u32, cx: f64, cy: f64, r: f64) -> Option<tiny_skia::Path> {
+    let mut pb = PathBuilder::new();
+    let poly = |pb: &mut PathBuilder, pts: &[(f64, f64)]| {
+        for (k, &(dx, dy)) in pts.iter().enumerate() {
+            let (x, y) = ((cx + dx * r) as f32, (cy + dy * r) as f32);
+            if k == 0 {
+                pb.move_to(x, y);
+            } else {
+                pb.line_to(x, y);
+            }
+        }
+        pb.close();
+    };
+    match shape {
+        1 => poly(
+            &mut pb,
+            &[(-1.0, -1.0), (1.0, -1.0), (1.0, 1.0), (-1.0, 1.0)],
+        ),
+        2 => poly(&mut pb, &[(0.0, -1.0), (0.866, 0.5), (-0.866, 0.5)]),
+        3 => poly(&mut pb, &[(0.0, -1.0), (1.0, 0.0), (0.0, 1.0), (-1.0, 0.0)]),
+        6 => poly(&mut pb, &[(0.0, 1.0), (0.866, -0.5), (-0.866, -0.5)]),
+        7 => {
+            let pts: Vec<(f64, f64)> = (0..10)
+                .map(|k| {
+                    let ang = -std::f64::consts::FRAC_PI_2 + k as f64 * std::f64::consts::PI / 5.0;
+                    let rad = if k % 2 == 0 { 1.0 } else { 0.382 };
+                    (rad * ang.cos(), rad * ang.sin())
+                })
+                .collect();
+            poly(&mut pb, &pts);
+        }
+        4 | 5 => {
+            let d = if shape == 4 {
+                1.0
+            } else {
+                std::f64::consts::FRAC_1_SQRT_2
+            };
+            let arms = if shape == 4 {
+                [[(0.0, -d), (0.0, d)], [(-d, 0.0), (d, 0.0)]]
+            } else {
+                [[(-d, -d), (d, d)], [(-d, d), (d, -d)]]
+            };
+            for [(ax, ay), (bx, by)] in arms {
+                pb.move_to((cx + ax * r) as f32, (cy + ay * r) as f32);
+                pb.line_to((cx + bx * r) as f32, (cy + by * r) as f32);
+            }
+        }
+        _ => push_circle_precise(&mut pb, cx, cy, r),
+    }
+    pb.finish()
+}
+
 /// Append a 5-pointed star to `pb`, centred at `(cx, cy)` with outer radius `r`.
 /// Ten alternating outer/inner vertices, first at the top `(cx, cy − r)` in the
 /// y-down frame; the inner radius is the regular-pentagram ratio (≈ 0.382).

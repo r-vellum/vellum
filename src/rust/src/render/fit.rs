@@ -842,6 +842,213 @@ pub(super) fn rect_corners_near(c: &[(f64, f64); 4]) -> bool {
         .all(|p| !(p.0.is_finite() && p.1.is_finite()) || p.0.abs().max(p.1.abs()) <= SAFE)
 }
 
+// --- far images (VR-46) ------------------------------------------------------
+//
+// An image cell is placed by its own matrix, which SVG, PDF and DrawingML write
+// as given. poppler draws nothing for a cell millions of px wide, so a far
+// image is cut to the part over the page first, as a path is, and placed at
+// sane coordinates.
+
+/// A replacement image for [`vector_image`]: straight RGBA, `iw` x `ih`, in
+/// the local cell centred at `(x, y)`, `w` x `h` px.
+pub(super) struct FitImage {
+    pub rgba: Vec<u8>,
+    pub iw: u32,
+    pub ih: u32,
+    pub x: f64,
+    pub y: f64,
+    pub w: f64,
+    pub h: f64,
+    pub interpolate: bool,
+}
+
+/// What a vector backend draws for an image.
+pub(super) enum VecImage {
+    /// The image as given: in range (or not finite or empty, which each
+    /// backend already handles).
+    Keep,
+    /// This image instead, under the original transform.
+    Draw(FitImage),
+    /// Nothing: beyond the PDF coordinate cap, or wholly off the page.
+    Skip,
+}
+
+/// Source px whose device size (along one axis) is at most this are kept as
+/// they are: a far image is cropped to whole source px around the page.
+/// Larger ones are resampled at twice the device resolution over the page
+/// instead, as a crop to whole px would still reach far past it.
+const CROP_PX: f64 = 64.0;
+
+/// Output budget (px) for a resampled far image.
+const RESAMPLE_BUDGET: f64 = 4_000_000.0;
+
+/// Fit an `iw` x `ih` image in the local cell centred at `(x, y)`, `w` x `h`
+/// px, under `t`, for a vector backend drawing a `pw` x `ph` px page. A cell
+/// within [`SAFE`] is kept. A farther one is cut to the part within a margin
+/// of the page (the box [`fit_fill`] cuts paths to): cropped to whole source
+/// px when they are small on the page, else resampled over that part, nearest
+/// or bilinear as `interpolate` asks. Beyond the PDF cap, nothing is drawn
+/// (as PNG and PDF already skip it).
+#[allow(clippy::too_many_arguments)]
+pub(super) fn vector_image(
+    rgba: &[u8],
+    iw: u32,
+    ih: u32,
+    x: f64,
+    y: f64,
+    w: f64,
+    h: f64,
+    interpolate: bool,
+    t: Transform,
+    pw: u32,
+    ph: u32,
+) -> VecImage {
+    let n = (iw as usize).saturating_mul(ih as usize);
+    if iw == 0 || ih == 0 || rgba.len() < n.saturating_mul(4) || !t.is_finite() {
+        return VecImage::Keep;
+    }
+    let (x0, y0) = (x - w / 2.0, y - h / 2.0);
+    let corners = [(x0, y0), (x0 + w, y0), (x0 + w, y0 + h), (x0, y0 + h)].map(|p| map_f64(&t, p));
+    let mut b = [
+        f64::INFINITY,
+        f64::INFINITY,
+        f64::NEG_INFINITY,
+        f64::NEG_INFINITY,
+    ];
+    for (cx, cy) in corners {
+        b[0] = b[0].min(cx);
+        b[1] = b[1].min(cy);
+        b[2] = b[2].max(cx);
+        b[3] = b[3].max(cy);
+    }
+    if !b.iter().all(|v| v.is_finite()) || within(b, 0.0) {
+        return VecImage::Keep;
+    }
+    let cap = super::pdf::MAX_COORD as f64;
+    if b.iter().any(|v| v.abs() > cap) {
+        return VecImage::Skip;
+    }
+    // Source px (u, v) -> device: columns per source px, then the origin.
+    let (du, dv) = (w / iw as f64, h / ih as f64);
+    let (a, c) = (t.sx as f64 * du, t.ky as f64 * du);
+    let (bb, d) = (t.kx as f64 * dv, t.sy as f64 * dv);
+    let (e, f) = corners[0];
+    let det = a * d - bb * c;
+    if det == 0.0 || !det.is_finite() {
+        return VecImage::Skip;
+    }
+    let inv = |px: f64, py: f64| {
+        let (qx, qy) = (px - e, py - f);
+        ((d * qx - bb * qy) / det, (a * qy - c * qx) / det)
+    };
+    // The page box, grown as fit_fill grows it, in source px.
+    let m = pw.max(ph) as f64 + 4.0;
+    let (mut u0, mut v0, mut u1, mut v1) = (
+        f64::INFINITY,
+        f64::INFINITY,
+        f64::NEG_INFINITY,
+        f64::NEG_INFINITY,
+    );
+    for (px, py) in [
+        (-m, -m),
+        (pw as f64 + m, -m),
+        (pw as f64 + m, ph as f64 + m),
+        (-m, ph as f64 + m),
+    ] {
+        let (u, v) = inv(px, py);
+        u0 = u0.min(u);
+        u1 = u1.max(u);
+        v0 = v0.min(v);
+        v1 = v1.max(v);
+    }
+    let (u0, u1) = (u0.max(0.0), u1.min(iw as f64));
+    let (v0, v1) = (v0.max(0.0), v1.min(ih as f64));
+    if !(u1 > u0 && v1 > v0) {
+        return VecImage::Skip;
+    }
+    // Per axis: source px small on the page are kept whole (the window
+    // snapped out to whole px, one more each side for the bilinear filter,
+    // sampled once per px, so each is copied as is); larger ones are
+    // resampled at about two output px per device px.
+    let axis = |lo: f64, hi: f64, n: u32, s: f64| {
+        if s <= CROP_PX {
+            let a = (lo.floor() - 1.0).max(0.0);
+            let b = (hi.ceil() + 1.0).min(n as f64);
+            (a, b, b - a)
+        } else {
+            (lo, hi, ((hi - lo) * 2.0 * s).ceil().max(1.0))
+        }
+    };
+    let (u0, u1, mut nu) = axis(u0, u1, iw, a.hypot(c));
+    let (v0, v1, mut nv) = axis(v0, v1, ih, bb.hypot(d));
+    if nu * nv > RESAMPLE_BUDGET {
+        let k = (RESAMPLE_BUDGET / (nu * nv)).sqrt();
+        nu = (nu * k).floor().max(1.0);
+        nv = (nv * k).floor().max(1.0);
+    }
+    let (nu, nv) = (nu as usize, nv as usize);
+    let src = |i: usize, j: usize| {
+        let k = 4 * (j * iw as usize + i);
+        [rgba[k], rgba[k + 1], rgba[k + 2], rgba[k + 3]]
+    };
+    let (stu, stv) = ((u1 - u0) / nu as f64, (v1 - v0) / nv as f64);
+    let (iwz, ihz) = (iw as usize, ih as usize);
+    let mut out = Vec::with_capacity(nu * nv * 4);
+    for j in 0..nv {
+        let v = v0 + (j as f64 + 0.5) * stv;
+        for i in 0..nu {
+            let u = u0 + (i as f64 + 0.5) * stu;
+            if !interpolate {
+                let (si, sj) = ((u as usize).min(iwz - 1), (v as usize).min(ihz - 1));
+                out.extend_from_slice(&src(si, sj));
+                continue;
+            }
+            // Bilinear between texel centres, edges padded; mixed
+            // premultiplied, so a transparent texel lends no colour.
+            let (fu, fv) = ((u - 0.5).max(0.0), (v - 0.5).max(0.0));
+            let (ia, ja) = ((fu as usize).min(iwz - 1), (fv as usize).min(ihz - 1));
+            let (ib, jb) = ((ia + 1).min(iwz - 1), (ja + 1).min(ihz - 1));
+            let (tu, tv) = (fu - ia as f64, fv - ja as f64);
+            let mut acc = [0.0f64; 4];
+            for (si, sj, wgt) in [
+                (ia, ja, (1.0 - tu) * (1.0 - tv)),
+                (ib, ja, tu * (1.0 - tv)),
+                (ia, jb, (1.0 - tu) * tv),
+                (ib, jb, tu * tv),
+            ] {
+                let p = src(si, sj);
+                let al = p[3] as f64 * wgt;
+                acc[0] += p[0] as f64 * al;
+                acc[1] += p[1] as f64 * al;
+                acc[2] += p[2] as f64 * al;
+                acc[3] += al;
+            }
+            let px = if acc[3] > 0.0 {
+                [
+                    (acc[0] / acc[3]).round() as u8,
+                    (acc[1] / acc[3]).round() as u8,
+                    (acc[2] / acc[3]).round() as u8,
+                    acc[3].round() as u8,
+                ]
+            } else {
+                [0, 0, 0, 0]
+            };
+            out.extend_from_slice(&px);
+        }
+    }
+    let (nw, nh) = ((u1 - u0) * du, (v1 - v0) * dv);
+    VecImage::Draw(FitImage {
+        rgba: out,
+        iw: nu as u32,
+        ih: nv as u32,
+        x: x0 + u0 * du + nw / 2.0,
+        y: y0 + v0 * dv + nh / 2.0,
+        w: nw,
+        h: nh,
+        interpolate,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1208,5 +1415,82 @@ mod tests {
             Some(None) => {}
             None => panic!("a far clip must be fitted"),
         }
+    }
+
+    // A 2 x 1 image, red then blue, `w` px wide, centred on a 100 px page.
+    fn red_blue(w: f64, interpolate: bool, t: Transform) -> VecImage {
+        let px = [255, 0, 0, 255, 0, 0, 255, 255];
+        vector_image(&px, 2, 1, 50.0, 50.0, w, 20.0, interpolate, t, 100, 100)
+    }
+
+    #[test]
+    fn an_image_in_range_is_kept() {
+        assert!(matches!(
+            red_blue(1e5, false, Transform::identity()),
+            VecImage::Keep
+        ));
+    }
+
+    #[test]
+    fn a_far_image_is_cut_to_the_page_with_its_seam_in_place() {
+        for w in [1e7, 1e10, 1e14] {
+            for interpolate in [false, true] {
+                let VecImage::Draw(f) = red_blue(w, interpolate, Transform::identity()) else {
+                    panic!("expected a fitted image at {w}");
+                };
+                // the cell now lies around the page
+                let (x0, x1) = (f.x - f.w / 2.0, f.x + f.w / 2.0);
+                assert!(x0 >= -300.0 && x1 <= 400.0, "{x0} {x1}");
+                // the source px each side of the centre seam
+                let col = |x: f64| {
+                    let i = ((x - x0) / f.w * f.iw as f64) as usize;
+                    f.rgba[4 * i]
+                };
+                if interpolate {
+                    // texel centres millions of px apart: an even mix here
+                    assert!((col(50.0) as i32 - 128).abs() <= 1, "{w}");
+                } else {
+                    assert_eq!(col(49.5), 255, "{w}");
+                    assert_eq!(col(50.5), 0, "{w}");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn a_far_image_with_small_px_is_cropped_to_whole_px() {
+        // 1e6 px wide, 10 device px per source px: a crop, copied as is.
+        let n = 1_000_000usize;
+        let px: Vec<u8> = (0..n).flat_map(|i| [(i % 251) as u8, 0, 0, 255]).collect();
+        let VecImage::Draw(f) = vector_image(
+            &px,
+            n as u32,
+            1,
+            50.0,
+            50.0,
+            1e7,
+            20.0,
+            false,
+            Transform::identity(),
+            100,
+            100,
+        ) else {
+            panic!("expected a fitted image");
+        };
+        assert!(f.iw < 100);
+        assert_eq!(f.w, f.iw as f64 * 10.0);
+        let first = ((f.x - f.w / 2.0 + 5e6 - 50.0) / 10.0).round() as usize;
+        for i in 0..f.iw as usize {
+            assert_eq!(f.rgba[4 * i], ((first + i) % 251) as u8);
+        }
+    }
+
+    #[test]
+    fn a_far_image_off_the_page_or_past_the_cap_is_skipped() {
+        let px = [255u8, 0, 0, 255];
+        let t = Transform::identity();
+        let off = vector_image(&px, 1, 1, 1e9, 50.0, 1e7, 20.0, false, t, 100, 100);
+        assert!(matches!(off, VecImage::Skip));
+        assert!(matches!(red_blue(1e16, false, t), VecImage::Skip));
     }
 }
