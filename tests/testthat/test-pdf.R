@@ -75,3 +75,65 @@ test_that("PDF text is embedded and selectable", {
   )
   expect_match(txt, "VellumPDF")
 })
+
+# VR-38: a missing marker size or radius reached krilla as a NaN scale; krilla
+# panicked, and the panic unwound through a destructor that asserts, which
+# aborted the whole R process. Missing elements are now skipped, as the PNG
+# backend always did, so the page equals one drawn without them. The renders
+# run in a child process (`run_vellum_child()`), so a regression fails this
+# test instead of killing the test run.
+test_that("PDF skips markers and circles with a missing size (VR-38)", {
+  res <- run_vellum_child(c(
+    "scene <- function(size, r) {",
+    "  x <- vl_unit(seq(0.2, 0.8, length.out = length(size)), 'npc')",
+    "  gp <- vl_gpar(fill = 'red', col = 'black')",
+    "  vl_scene(2, 2, dpi = 72) |>",
+    "    draw(points_grob(x, vl_unit(0.6, 'npc'), size = vl_unit(size, 'mm'), gp = gp)) |>",
+    "    draw(points_grob(x, vl_unit(0.4, 'npc'), size = vl_unit(size, 'mm'),",
+    "      shape = 'square', gp = gp)) |>",
+    "    draw(circle_grob(vl_unit(seq(0.2, 0.8, length.out = length(r)), 'npc'),",
+    "      vl_unit(0.2, 'npc'), r = r, gp = vl_gpar(fill = 'blue', col = 'black')))",
+    "}",
+    "bytes <- function(s) {",
+    "  f <- tempfile(fileext = '.pdf')",
+    "  render(s, f)",
+    "  readBin(f, 'raw', file.size(f))",
+    "}",
+    "ok <- bytes(scene(c(2, 3), c(0.05, 0.1)))",
+    "for (bad in c(NA, NaN, Inf)) {",
+    "  cat(identical(bytes(scene(c(2, bad, 3), c(0.05, bad, 0.1))), ok), '\\n')",
+    "}"
+  ))
+  expect_identical(res$status, 0L)
+  expect_identical(trimws(tail(res$output, 3)), rep("TRUE", 3))
+})
+
+test_that("a krilla failure is an R error, not a crash (VR-38)", {
+  # At 36 dpi the page scale enlarges a box near the float limit past it
+  # inside krilla; the walk now skips it, so the page renders.
+  res <- run_vellum_child(c(
+    "s <- vl_scene(3, 3, dpi = 36) |>",
+    "  draw(rect_grob(x = vl_unit(3.3e38, 'pt'), width = vl_unit(3.3e38, 'pt'),",
+    "    gp = vl_gpar(fill = 'red')))",
+    "f <- tempfile(fileext = '.pdf')",
+    "render(s, f)",
+    "cat(rawToChar(readBin(f, 'raw', 5)), '\\n')"
+  ))
+  expect_identical(res$status, 0L)
+  expect_identical(trimws(tail(res$output, 1)), "%PDF-")
+})
+
+test_that("geometry and hit testing leave out the discs that are not drawn (VR-38)", {
+  s <- vl_scene(2, 2) |>
+    draw(points_grob(
+      c(0.3, 0.6),
+      c(0.5, 0.5),
+      size = vl_unit(c(2, NA), "mm"),
+      key = c("a", "b")
+    )) |>
+    draw(circle_grob(c(0.3, 0.6), 0.2, r = c(0.1, NA), key = c("c", "d")))
+  expect_setequal(element_geometry(s)$key, c("a", "c"))
+  # nothing is drawn where the missing point would be
+  expect_null(hit_test(s, 0.6, 0.5))
+  expect_false(is.null(hit_test(s, 0.3, 0.5)))
+})

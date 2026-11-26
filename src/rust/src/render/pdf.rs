@@ -69,11 +69,18 @@ pub struct PdfBackend<'a, 'b> {
     /// decorative, so the marks are the visual content of a single figure rather
     /// than figures in their own right.
     outer_tagged: bool,
+    /// The page's root transform (device px -> PDF pt, `72 / dpi`), which krilla
+    /// applies on top of every primitive transform; `drawable()` checks boxes
+    /// under it too, since at a low dpi it enlarges them.
+    root: Transform,
 }
 
 impl<'a, 'b> PdfBackend<'a, 'b> {
-    pub fn new(surface: &'a mut Surface<'b>) -> Self {
+    /// `root_scale` is the uniform px -> pt scale the caller pushed as the
+    /// page's root transform.
+    pub fn new(surface: &'a mut Surface<'b>, root_scale: f32) -> Self {
         PdfBackend {
+            root: Transform::from_scale(root_scale, root_scale),
             surface,
             fonts: HashMap::new(),
             group_pushes: Vec::new(),
@@ -103,6 +110,29 @@ impl<'a, 'b> PdfBackend<'a, 'b> {
             // Expanded to stroked spans by the walk before it reaches a backend.
             ResolvedPaint::Hatch { .. } => return None,
             ResolvedPaint::Solid(c) => (rgb::Color::new(c.r, c.g, c.b).into(), norm(c.a)),
+            // krilla unwraps a transform built from the gradient's geometry (a
+            // repeating ramp's rotation is inverted), so a missing coordinate
+            // would panic; leave the shape unpainted instead (VR-38).
+            ResolvedPaint::Linear { x1, y1, x2, y2, .. } if !all_finite(&[*x1, *y1, *x2, *y2]) => {
+                self.warn_nonfinite(role);
+                return None;
+            }
+            ResolvedPaint::Radial {
+                cx,
+                cy,
+                r,
+                fx,
+                fy,
+                fr,
+                ..
+            } if !all_finite(&[*cx, *cy, *r, *fx, *fy, *fr]) => {
+                self.warn_nonfinite(role);
+                return None;
+            }
+            ResolvedPaint::Pattern { x, y, .. } if !all_finite(&[*x, *y]) => {
+                self.warn_nonfinite(role);
+                return None;
+            }
             ResolvedPaint::Linear {
                 x1,
                 y1,
@@ -169,13 +199,7 @@ impl<'a, 'b> PdfBackend<'a, 'b> {
                     // buffer at least the required size, not exactly it).
                     (Some(cell), Some(n)) if tile.len() >= n => {
                         let img = KImage::from_rgba8(tile[..n].to_vec(), *tw, *th);
-                        let stream = {
-                            let mut sb = self.surface.stream_builder();
-                            let mut surf = sb.surface();
-                            surf.draw_image(img, cell);
-                            surf.finish();
-                            sb.finish()
-                        };
+                        let stream = image_stream(self.surface, img, cell);
                         let pat = KPattern {
                             stream,
                             transform: KTransform::from_translate(
@@ -213,6 +237,17 @@ impl<'a, 'b> PdfBackend<'a, 'b> {
         if !self.warnings.contains(&msg) {
             self.warnings.push(msg);
         }
+    }
+
+    /// A paint whose geometry has a non-finite coordinate, skipped (VR-38).
+    fn warn_nonfinite(&mut self, role: PaintRole) {
+        let (what, left) = match role {
+            PaintRole::Fill => ("fill", "unfilled"),
+            PaintRole::Stroke => ("stroke", "unstroked"),
+        };
+        self.warn(format!(
+            "a gradient or pattern {what} with a missing (non-finite) coordinate could not be rendered to PDF; the shape was left {left}"
+        ));
     }
 
     /// The structure-tree entries collected during the walk, in draw order.
@@ -405,6 +440,9 @@ impl RenderBackend for PdfBackend<'_, '_> {
         rule: FillRule,
         clip: &Clip,
     ) {
+        if !drawable(path, transform, self.root) {
+            return;
+        }
         let kp = match to_kpath(path) {
             Some(p) => p,
             None => return,
@@ -438,7 +476,10 @@ impl RenderBackend for PdfBackend<'_, '_> {
         stroke: &StrokeStyle,
         clip: &Clip,
     ) {
-        if stroke.width <= 0.0 {
+        // Written so a NaN width (an R `NA`) is skipped too: `NaN <= 0.0` is false.
+        if !(stroke.width > 0.0 && stroke.width.is_finite())
+            || !drawable(path, transform, self.root)
+        {
             return;
         }
         let kp = match to_kpath(path) {
@@ -462,10 +503,19 @@ impl RenderBackend for PdfBackend<'_, '_> {
             paint: kpaint,
             width: stroke.width,
             opacity: kopacity,
-            miter_limit: stroke.miter,
+            miter_limit: if stroke.miter.is_finite() {
+                stroke.miter
+            } else {
+                KStroke::default().miter_limit
+            },
             line_cap: krilla_cap(stroke.cap),
             line_join: krilla_join(stroke.join),
-            dash: if stroke.dash.is_empty() {
+            // A dash with a missing or negative entry draws solid, as tiny-skia
+            // (the raster backend) rejects such a dash.
+            dash: if stroke.dash.is_empty()
+                || !stroke.dash.iter().all(|d| d.is_finite() && *d >= 0.0)
+                || !stroke.phase.is_finite()
+            {
                 None
             } else {
                 Some(KStrokeDash {
@@ -495,7 +545,7 @@ impl RenderBackend for PdfBackend<'_, '_> {
             return;
         }
         let size_px = (run.size * run.dpi / 72.0) as f32;
-        if size_px <= 0.0 {
+        if !(size_px > 0.0 && size_px.is_finite()) {
             return;
         }
         // Text origin (local px). Glyph i sits at origin + gx[i]. The baseline y
@@ -529,12 +579,21 @@ impl RenderBackend for PdfBackend<'_, '_> {
             }
         };
 
+        // krilla unwraps the glyph bounding box, which a non-finite transform
+        // or origin makes impossible to compute (VR-38).
+        if !base.is_finite() || !start_x.is_finite() {
+            return;
+        }
+        // The label's anchor must also land on a representable point of the page.
+        if !placeable_point(self.root.pre_concat(base), start_x, run.ay as f32) {
+            return;
+        }
         let pushes = self.push_state(base, clip);
         let rich = !run.gcolor.is_empty();
         // A halo means drawing the whole label twice: once stroke-only underneath,
         // then normally on top. PDF has a fill-and-stroke text mode, but it paints
         // the stroke *over* the fill, which is an outline, not a halo.
-        let passes: &[bool] = if run.halo.is_some() {
+        let passes: &[bool] = if run.halo.is_some_and(|(_, hw)| hw.is_finite()) {
             &[true, false]
         } else {
             &[false]
@@ -597,6 +656,13 @@ impl RenderBackend for PdfBackend<'_, '_> {
                 let start_y = (run.ay - (gy0 - run.vjust * run.h)) as f32;
                 // The run's own glyph size (px); fall back to the label size.
                 let run_px = if gsize0 > 0.0 { gsize0 as f32 } else { size_px };
+                let placeable = start_y.is_finite()
+                    && run_px.is_finite()
+                    && (i..j).all(|k| (run.gx[k] as f32 / run_px).is_finite());
+                if !placeable {
+                    i = j;
+                    continue;
+                }
                 if let Some(font) = self.font_for(gpath, gface) {
                     let glyphs: Vec<KrillaGlyph> = (i..j)
                         .map(|k| {
@@ -669,13 +735,7 @@ impl RenderBackend for PdfBackend<'_, '_> {
             let (w, h) = (ml.pixmap.width(), ml.pixmap.height());
             if let Some(size) = KSize::from_wh(w as f32, h as f32) {
                 let img = KImage::from_rgba8(mask_gray_rgba(&ml.pixmap, ml.kind), w, h);
-                let stream = {
-                    let mut sb = self.surface.stream_builder();
-                    let mut surf = sb.surface();
-                    surf.draw_image(img, size);
-                    surf.finish();
-                    sb.finish()
-                };
+                let stream = image_stream(self.surface, img, size);
                 self.surface
                     .push_mask(KMask::new(stream, KMaskType::Luminosity));
                 pushes += 1;
@@ -757,6 +817,13 @@ impl RenderBackend for PdfBackend<'_, '_> {
             (x - w / 2.0) as f32,
             (y - h / 2.0) as f32,
         ));
+        let on_page = self.root.pre_concat(place);
+        if !place.is_finite()
+            || !placeable_point(on_page, 0.0, 0.0)
+            || !placeable_point(on_page, w as f32, h as f32)
+        {
+            return;
+        }
         let n = self.push_state(place, clip);
         self.surface.draw_image(img, size);
         self.pop_state(n);
@@ -765,6 +832,65 @@ impl RenderBackend for PdfBackend<'_, '_> {
     fn take_warnings(&mut self) -> Vec<String> {
         std::mem::take(&mut self.warnings)
     }
+}
+
+/// The largest device coordinate (px or pt) a drawn box may reach. Far beyond
+/// any page, but small enough that a union of such boxes (krilla grows one
+/// bounding box per content stream) cannot overflow `f32`.
+const MAX_COORD: f32 = 1e15;
+
+/// Can krilla draw `path` under `transform`? krilla maps every drawn object's
+/// bounding box through the current transform (the primitive's, under the
+/// page's `root` px -> pt scale) and unwraps the result, so a non-finite
+/// transform (a marker scaled by an `NA` size) or a box that overflows panics
+/// inside krilla. Unchecked, that panic unwound through krilla's `Surface`,
+/// whose `Drop` asserts that every push was popped, and the second panic
+/// aborted R (VR-38). Such an object draws nothing on the other backends
+/// either, so skip it. The box is checked under the primitive transform alone
+/// and under the root too, as krilla's sub-streams (groups, masks) start
+/// without the root.
+pub(crate) fn drawable(path: &Path, transform: Transform, root: Transform) -> bool {
+    let within = |t: Transform| {
+        path.bounds().transform(t).is_some_and(|b| {
+            b.left().abs() <= MAX_COORD
+                && b.right().abs() <= MAX_COORD
+                && b.top().abs() <= MAX_COORD
+                && b.bottom().abs() <= MAX_COORD
+        })
+    };
+    transform.is_finite() && within(transform) && within(root.pre_concat(transform))
+}
+
+/// Does `(x, y)` map through `t` to a point within [`MAX_COORD`]? Used for the
+/// text and image anchors, whose boxes krilla computes itself.
+fn placeable_point(t: Transform, x: f32, y: f32) -> bool {
+    let mut p = [tiny_skia::Point::from_xy(x, y)];
+    t.map_points(&mut p);
+    t.is_finite() && p[0].x.abs() <= MAX_COORD && p[0].y.abs() <= MAX_COORD
+}
+
+/// Draw `img` at `size` into a fresh stream (a tile or a mask). The nested
+/// surface has no pushes of its own, so its asserting `Drop` would pass, but a
+/// krilla panic mid-draw could still leave its builder half-written; leak it
+/// and keep unwinding to the page-level `catch_unwind` in `add_pdf_page`
+/// rather than run its destructor (VR-38).
+fn image_stream(surface: &mut Surface, img: KImage, size: KSize) -> krilla::stream::Stream {
+    let mut sb = surface.stream_builder();
+    let mut surf = sb.surface();
+    let drawn = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        surf.draw_image(img, size);
+    }));
+    if let Err(payload) = drawn {
+        std::mem::forget(surf);
+        std::mem::forget(sb);
+        std::panic::resume_unwind(payload);
+    }
+    surf.finish();
+    sb.finish()
+}
+
+fn all_finite(v: &[f64]) -> bool {
+    v.iter().all(|x| x.is_finite())
 }
 
 fn to_kpath(p: &Path) -> Option<KPath> {
@@ -834,4 +960,491 @@ fn krilla_stops(stops: &[Stop]) -> Vec<KStop> {
             opacity: norm(s.color.a),
         })
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::color::Stop;
+
+    const NAN: f64 = f64::NAN;
+    const INF: f64 = f64::INFINITY;
+    const BLACK: Rgba = Rgba {
+        r: 0,
+        g: 0,
+        b: 0,
+        a: 255,
+    };
+
+    /// Draw onto one 100 x 100 px page the way `add_pdf_page` does (root
+    /// px -> pt scale, then the walk) and serialise it. Like the real page
+    /// there is no `catch_unwind` here: if a guard regresses, krilla's panic
+    /// unwinds through the `Surface`, its asserting `Drop` panics again and the
+    /// test binary aborts (which is how these tests fail; with the guards
+    /// disabled they reproduce the original crash).
+    fn pdf(draw: impl FnOnce(&mut PdfBackend)) -> (Vec<u8>, Vec<String>) {
+        let mut doc = krilla::Document::new();
+        let mut page =
+            doc.start_page_with(krilla::page::PageSettings::from_wh(75.0, 75.0).unwrap());
+        let mut surface = page.surface();
+        surface.push_transform(&KTransform::from_scale(0.75, 0.75));
+        let warnings = {
+            let mut b = PdfBackend::new(&mut surface, 0.75);
+            draw(&mut b);
+            b.take_warnings()
+        };
+        surface.pop();
+        surface.finish();
+        page.finish();
+        (doc.finish().expect("a valid PDF"), warnings)
+    }
+
+    fn no_clip() -> Clip<'static> {
+        Clip { id: 0, shapes: &[] }
+    }
+
+    fn unit_circle() -> Path {
+        let mut pb = tiny_skia::PathBuilder::new();
+        pb.push_circle(0.0, 0.0, 1.0);
+        pb.finish().unwrap()
+    }
+
+    fn square() -> Path {
+        tiny_skia::PathBuilder::from_rect(
+            tiny_skia::Rect::from_xywh(10.0, 10.0, 20.0, 20.0).unwrap(),
+        )
+    }
+
+    /// A marker placed by `scale(r) then translate(cx, cy)`, as the walk
+    /// places a point marker of radius `r`.
+    fn marker(r: f64, cx: f64, cy: f64) -> Transform {
+        Transform::from_row(r as f32, 0.0, 0.0, r as f32, cx as f32, cy as f32)
+    }
+
+    fn style(width: f32) -> StrokeStyle {
+        StrokeStyle {
+            width,
+            dash: Vec::new(),
+            cap: LineCap::Butt,
+            join: LineJoin::Mitre,
+            miter: 4.0,
+            crisp: false,
+            paint: None,
+            phase: 0.0,
+        }
+    }
+
+    // The bare bytes of a page that draws nothing but this rect.
+    fn baseline() -> Vec<u8> {
+        pdf(|b| {
+            b.fill_path(
+                &square(),
+                Transform::identity(),
+                &ResolvedPaint::Solid(BLACK),
+                FillRule::Winding,
+                &no_clip(),
+            )
+        })
+        .0
+    }
+
+    #[test]
+    fn a_marker_with_a_missing_size_is_skipped_not_a_panic() {
+        // VR-38: `size = NA` reached krilla as a NaN scale; krilla unwrapped the
+        // transformed bounding box and the unwind then aborted R.
+        let base = baseline();
+        for r in [NAN, INF, -INF] {
+            let (bytes, _) = pdf(|b| {
+                b.fill_path(
+                    &square(),
+                    Transform::identity(),
+                    &ResolvedPaint::Solid(BLACK),
+                    FillRule::Winding,
+                    &no_clip(),
+                );
+                b.fill_path(
+                    &unit_circle(),
+                    marker(r, 50.0, 50.0),
+                    &ResolvedPaint::Solid(BLACK),
+                    FillRule::Winding,
+                    &no_clip(),
+                );
+                b.stroke_path(
+                    &unit_circle(),
+                    marker(r, 50.0, 50.0),
+                    BLACK,
+                    &style(1.0),
+                    &no_clip(),
+                );
+            });
+            assert!(bytes == base, "radius {r} should draw nothing");
+        }
+    }
+
+    #[test]
+    fn a_missing_position_is_skipped() {
+        let base = baseline();
+        for (cx, cy) in [(NAN, 50.0), (50.0, INF), (-INF, NAN)] {
+            let (bytes, _) = pdf(|b| {
+                b.fill_path(
+                    &square(),
+                    Transform::identity(),
+                    &ResolvedPaint::Solid(BLACK),
+                    FillRule::Winding,
+                    &no_clip(),
+                );
+                b.fill_path(
+                    &unit_circle(),
+                    marker(3.0, cx, cy),
+                    &ResolvedPaint::Solid(BLACK),
+                    FillRule::Winding,
+                    &no_clip(),
+                );
+            });
+            assert!(bytes == base);
+        }
+    }
+
+    #[test]
+    fn a_negative_scale_still_draws() {
+        // A reflection is a legitimate transform, not a missing value.
+        let base = baseline();
+        let (bytes, _) = pdf(|b| {
+            b.fill_path(
+                &unit_circle(),
+                marker(-3.0, 50.0, 50.0),
+                &ResolvedPaint::Solid(BLACK),
+                FillRule::Winding,
+                &no_clip(),
+            )
+        });
+        assert!(bytes != base);
+    }
+
+    #[test]
+    fn non_finite_or_negative_stroke_settings_do_not_panic() {
+        let base = baseline();
+        for w in [f32::NAN, f32::INFINITY, -1.0, 0.0] {
+            let (bytes, _) = pdf(|b| {
+                b.fill_path(
+                    &square(),
+                    Transform::identity(),
+                    &ResolvedPaint::Solid(BLACK),
+                    FillRule::Winding,
+                    &no_clip(),
+                );
+                b.stroke_path(
+                    &square(),
+                    Transform::identity(),
+                    BLACK,
+                    &style(w),
+                    &no_clip(),
+                );
+            });
+            assert!(bytes == base, "width {w} should draw nothing");
+        }
+        // A broken dash or miter limit falls back to a solid line / the default
+        // limit rather than writing NaN into the content stream.
+        let (bytes, _) = pdf(|b| {
+            let mut s = style(2.0);
+            s.dash = vec![f32::NAN, -1.0];
+            s.phase = f32::NAN;
+            s.miter = f32::INFINITY;
+            b.stroke_path(&square(), Transform::identity(), BLACK, &s, &no_clip());
+        });
+        let solid = pdf(|b| {
+            let mut s = style(2.0);
+            s.miter = KStroke::default().miter_limit;
+            b.stroke_path(&square(), Transform::identity(), BLACK, &s, &no_clip())
+        })
+        .0;
+        assert!(bytes == solid);
+    }
+
+    #[test]
+    fn a_gradient_with_a_missing_coordinate_is_dropped_with_a_warning() {
+        let stops = vec![
+            Stop {
+                offset: 0.0,
+                color: BLACK,
+            },
+            Stop {
+                offset: 1.0,
+                color: Rgba {
+                    r: 255,
+                    g: 255,
+                    b: 255,
+                    a: 255,
+                },
+            },
+        ];
+        let paints = [
+            // Repeat: krilla inverts a transform built from the ramp's angle.
+            ResolvedPaint::Linear {
+                x1: NAN,
+                y1: 0.0,
+                x2: 10.0,
+                y2: 0.0,
+                stops: stops.clone(),
+                extend: Extend::Repeat,
+            },
+            ResolvedPaint::Linear {
+                x1: 0.0,
+                y1: 0.0,
+                x2: INF,
+                y2: 0.0,
+                stops: stops.clone(),
+                extend: Extend::Pad,
+            },
+            ResolvedPaint::Radial {
+                cx: 20.0,
+                cy: 20.0,
+                r: NAN,
+                fx: 20.0,
+                fy: 20.0,
+                fr: 0.0,
+                stops: stops.clone(),
+                extend: Extend::Pad,
+            },
+        ];
+        for paint in &paints {
+            let (_, warnings) = pdf(|b| {
+                b.fill_path(
+                    &square(),
+                    Transform::identity(),
+                    paint,
+                    FillRule::Winding,
+                    &no_clip(),
+                );
+                let mut s = style(2.0);
+                s.paint = Some(paint.clone());
+                b.stroke_path(&square(), Transform::identity(), BLACK, &s, &no_clip());
+            });
+            assert_eq!(warnings.len(), 2, "{warnings:?}");
+            assert!(warnings[0].contains("non-finite"));
+        }
+    }
+
+    #[test]
+    fn an_image_with_a_missing_placement_is_skipped() {
+        let px = vec![0u8; 4 * 4];
+        let base = pdf(|_| {}).0;
+        for (x, w, t) in [
+            (NAN, 10.0, Transform::identity()),
+            (5.0, NAN, Transform::identity()),
+            (5.0, -10.0, Transform::identity()),
+            (5.0, 10.0, marker(NAN, 0.0, 0.0)),
+        ] {
+            let (bytes, _) =
+                pdf(|b| b.draw_image(&px, 2, 2, x, 5.0, w, 10.0, false, t, &no_clip()));
+            assert!(bytes == base);
+        }
+    }
+
+    const STIX: &str = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../inst/fonts/STIXTwoMath-Regular.otf"
+    );
+
+    /// A two-glyph label in the bundled STIX font (or `font`), with a tex()
+    /// style rule when `rule` is set, so both the glyph runs and the rules are
+    /// exercised.
+    struct Label {
+        size: f64,
+        ax: f64,
+        rot: f64,
+        gx: [f64; 2],
+        halo: Option<(Rgba, f64)>,
+        font: &'static str,
+        rule: bool,
+    }
+
+    impl Default for Label {
+        fn default() -> Self {
+            Label {
+                size: 10.0,
+                ax: 10.0,
+                rot: 0.0,
+                gx: [0.0, 8.0],
+                halo: None,
+                font: STIX,
+                rule: false,
+            }
+        }
+    }
+
+    fn label_pdf(l: &Label) -> Vec<u8> {
+        let rule = [TextRule {
+            x: 0.0,
+            y: 0.0,
+            w: 10.0,
+            h: 1.0,
+            col: BLACK,
+        }];
+        let gpath = [l.font.to_string(), l.font.to_string()];
+        let run = TextRun {
+            ax: l.ax,
+            ay: 20.0,
+            w: 16.0,
+            h: 10.0,
+            hjust: 0.0,
+            vjust: 0.0,
+            rot: l.rot,
+            color: BLACK,
+            gid: &[36, 37],
+            gx: &l.gx,
+            gy: &[0.0, 0.0],
+            gsize: &[0.0, 0.0],
+            gpath: &gpath,
+            gface: &[0, 0],
+            gcolor: &[],
+            rules: if l.rule { &rule } else { &[] },
+            gtext: "",
+            halo: l.halo,
+            label: "ab",
+            family: "",
+            face: "",
+            size: l.size,
+            dpi: 72.0,
+        };
+        pdf(|b| b.draw_text(&run, Transform::identity(), &no_clip())).0
+    }
+
+    #[test]
+    fn a_label_with_a_missing_size_or_anchor_is_skipped() {
+        let blank = pdf(|_| {}).0;
+        // Positive controls: a valid label (glyphs, and glyphs plus a rule)
+        // draws something, so the comparisons below can fail.
+        assert!(label_pdf(&Label::default()) != blank);
+        assert!(
+            label_pdf(&Label {
+                rule: true,
+                ..Label::default()
+            }) != label_pdf(&Label::default())
+        );
+        for (size, ax, rot) in [
+            (NAN, 10.0, 0.0),
+            (INF, 10.0, 0.0),
+            (-3.0, 10.0, 0.0),
+            (10.0, NAN, 0.0),
+            (10.0, 1e30, 0.0),
+            (10.0, 10.0, NAN),
+        ] {
+            let got = label_pdf(&Label {
+                size,
+                ax,
+                rot,
+                rule: true,
+                ..Label::default()
+            });
+            assert!(got == blank, "size {size}, ax {ax}, rot {rot}");
+        }
+    }
+
+    #[test]
+    fn a_glyph_run_with_a_missing_offset_is_skipped() {
+        // Reaches the per-run guard: the label itself is placeable, one run is
+        // not. It then draws exactly what an unloadable font draws: nothing,
+        // inside the label's pushed state.
+        let no_font = label_pdf(&Label {
+            font: "/nonexistent/font.otf",
+            ..Label::default()
+        });
+        assert!(label_pdf(&Label::default()) != no_font);
+        for gx in [[0.0, NAN], [INF, 8.0]] {
+            assert!(
+                label_pdf(&Label {
+                    gx,
+                    ..Label::default()
+                }) == no_font
+            );
+        }
+    }
+
+    #[test]
+    fn a_halo_with_a_missing_width_is_dropped() {
+        let plain = label_pdf(&Label::default());
+        let red = Rgba {
+            r: 255,
+            g: 0,
+            b: 0,
+            a: 255,
+        };
+        // Positive control: a real halo adds a stroke pass.
+        assert!(
+            label_pdf(&Label {
+                halo: Some((red, 2.0)),
+                ..Label::default()
+            }) != plain
+        );
+        for hw in [NAN, INF] {
+            let got = label_pdf(&Label {
+                halo: Some((red, hw)),
+                ..Label::default()
+            });
+            assert!(got == plain, "halo width {hw}");
+        }
+    }
+
+    #[test]
+    fn a_box_that_overflows_under_the_page_scale_is_skipped() {
+        // At 36 dpi the root scale is 2: a finite box near f32::MAX in px
+        // overflows in pt inside krilla.
+        let blank = {
+            let mut doc = krilla::Document::new();
+            let mut page =
+                doc.start_page_with(krilla::page::PageSettings::from_wh(75.0, 75.0).unwrap());
+            let mut surface = page.surface();
+            surface.push_transform(&KTransform::from_scale(2.0, 2.0));
+            {
+                let _ = PdfBackend::new(&mut surface, 2.0);
+            }
+            surface.pop();
+            surface.finish();
+            page.finish();
+            doc.finish().unwrap()
+        };
+        let mut doc = krilla::Document::new();
+        let mut page =
+            doc.start_page_with(krilla::page::PageSettings::from_wh(75.0, 75.0).unwrap());
+        let mut surface = page.surface();
+        surface.push_transform(&KTransform::from_scale(2.0, 2.0));
+        {
+            let mut b = PdfBackend::new(&mut surface, 2.0);
+            let huge = tiny_skia::PathBuilder::from_rect(
+                tiny_skia::Rect::from_xywh(2.0e38, 0.0, 1.0e38, 10.0).unwrap(),
+            );
+            b.fill_path(
+                &huge,
+                Transform::identity(),
+                &ResolvedPaint::Solid(BLACK),
+                FillRule::Winding,
+                &no_clip(),
+            );
+        }
+        surface.pop();
+        surface.finish();
+        page.finish();
+        assert!(doc.finish().unwrap() == blank);
+    }
+
+    #[test]
+    fn circles_with_a_missing_radius_or_centre_draw_nothing() {
+        // The batched circle path (vellumplot's plain points) shares the guard
+        // with the markers, so every backend drops the same elements.
+        let base = pdf(|_| {}).0;
+        let (bytes, _) = pdf(|b| {
+            b.draw_circles(
+                &[10.0, NAN, 30.0, 40.0],
+                &[10.0, 20.0, INF, 40.0],
+                &[NAN, 2.0, 2.0, -1.0],
+                Some(&ResolvedPaint::Solid(BLACK)),
+                Some((BLACK, style(1.0))),
+                Transform::identity(),
+                &no_clip(),
+                &[],
+            )
+        });
+        assert!(bytes == base);
+    }
 }

@@ -128,8 +128,23 @@ vl_strheight <- function(
       call = call
     )
   }
+  if (any(size > .MAX_FONT_SIZE)) {
+    cli::cli_abort(
+      c(
+        "Text size must be at most {(.MAX_FONT_SIZE)} points.",
+        x = "Got {format(max(size))} ({.arg fontsize} * {.arg cex})."
+      ),
+      call = call
+    )
+  }
   invisible(size)
 }
+
+# The largest type size (points) text is shaped at. FreeType sizes a face in
+# 16-bit pixels per em, and textshaping crashes the R process (rather than
+# erroring) on a size past that, about 65,000 px (VR-38 review). 10,000 pt, a
+# letter over three metres tall, is far beyond any real use.
+.MAX_FONT_SIZE <- 10000
 
 # TRUE for a single md() label or a non-empty list of them.
 # A list of labels may mix rich labels with plain strings (one per datum, as

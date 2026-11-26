@@ -46,6 +46,22 @@
   officer route places, and the file is byte-for-byte reproducible: no
   timestamps, user name or software version.
 
+## Bug fixes
+
+* Rendering to PDF no longer aborts the R process when a point marker or
+  circle has a missing (`NA`) or infinite size, e.g. a vellumplot `size`
+  mapping over data with `NA`s (VR-38). Such elements are now skipped by every
+  backend, as the PNG backend already did (SVG used to write `NaN` paths). The
+  PDF writer also skips any other geometry it cannot take (a non-finite
+  transform, stroke width, text size or gradient coordinate) instead of
+  panicking, and an unexpected failure inside it is now an R error rather
+  than a crash. `element_geometry()` and `hit_test()` leave the skipped
+  elements out too, so they match what is drawn.
+
+* A text size above 10,000 points is now an error. textshaping crashed the R
+  process on a size past FreeType's limit (about 65,000 px), e.g.
+  `vl_gpar(fontsize = 1e30)` (VR-38).
+
 # vellum 0.17.0
 
 ## New features

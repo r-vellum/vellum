@@ -717,6 +717,27 @@ pub trait RenderBackend {
     }
 }
 
+/// The message of a caught panic (`&str` or `String` payload).
+pub(crate) fn panic_message(payload: &(dyn std::any::Any + Send)) -> String {
+    if let Some(s) = payload.downcast_ref::<&str>() {
+        (*s).to_string()
+    } else if let Some(s) = payload.downcast_ref::<String>() {
+        s.clone()
+    } else {
+        "an internal error in the PDF writer".to_string()
+    }
+}
+
+/// Can a disc (a circle or a point marker) centred at `(cx, cy)` with radius
+/// `r` be drawn? A missing size or position reaches the walk as `NaN` (an R
+/// `NA`), and `r <= 0.0` is false for `NaN`, so the radius test must be
+/// written this way round. Every backend then drops the same elements: the
+/// raster backend skipped them silently, SVG wrote `NaN` paths, and krilla
+/// panicked on them (VR-38).
+pub(crate) fn drawable_disc(cx: f64, cy: f64, r: f64) -> bool {
+    r > 0.0 && r.is_finite() && cx.is_finite() && cy.is_finite()
+}
+
 /// One unit circle (origin, radius 1) reused with a per-element affine transform.
 /// The stroke width and dash are pre-divided by the radius so they land at their
 /// device sizes after the uniform scale.
@@ -734,7 +755,7 @@ fn circles_by_path<B: RenderBackend>(
     let unit = unit_circle_path();
     for i in 0..n {
         let rr = r[i];
-        if rr <= 0.0 {
+        if !drawable_disc(cx[i], cy[i], rr) {
             continue;
         }
         let tr = transform.pre_concat(Transform::from_row(
