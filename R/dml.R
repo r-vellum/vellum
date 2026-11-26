@@ -43,6 +43,9 @@
 #' print(doc, target = "deck.pptx")
 #' ```
 #'
+#' To write a deck without officer, give [render()] a `.pptx` path (one slide)
+#' or use [pptx_pages()] (several).
+#'
 #' @section Size:
 #' By default the scene is laid out again at the size of the location
 #' (`resize = TRUE`), exactly as [render()] would at that size, so text keeps
@@ -87,6 +90,7 @@
 #'   glyph outlines.
 #' @param resize Re-solve the layout at the location's size (default `TRUE`).
 #' @return `as_dml()`: a `vellum_dml` object, for [officer::ph_with()].
+#' @seealso [render()] and [pptx_pages()] to write a `.pptx` without officer.
 #' @examplesIf requireNamespace("officer", quietly = TRUE)
 #' sc <- vl_scene(6, 4, dpi = 96, bg = "white") |>
 #'   draw(rect_grob(width = 0.5, height = 0.5, gp = vl_gpar(fill = "tomato"))) |>
@@ -177,4 +181,62 @@ NULL
   d <- file.path(tempdir(), "vellum-dml-media")
   dir.create(d, showWarnings = FALSE, recursive = TRUE)
   d
+}
+
+#' Write several scenes as the slides of one PowerPoint file
+#'
+#' [render()] with a `.pptx` path writes one slide; this writes a deck, one
+#' slide per scene, without officer. The shapes are the same editable ones
+#' [as_dml()] puts on an officer slide.
+#'
+#' A presentation has a single slide size, so the deck takes the largest
+#' scene's width and height (at least 1 inch, at most 56) and centres any
+#' smaller scene on its slide. The file is byte-for-byte reproducible: it
+#' carries no timestamps, user name or software version.
+#'
+#' @inheritParams pdf_pages
+#' @param text `"native"` (default) for editable text, `"outline"` for glyph
+#'   outlines.
+#' @param title The presentation's title property. `NULL` (default) uses the
+#'   first scene's `title`.
+#' @return `path` invisibly, or a raw vector when `path` is `NULL`.
+#' @seealso [render()] for a single slide, [as_dml()] for officer decks.
+#' @examples
+#' slides <- lapply(c("tomato", "steelblue"), function(col) {
+#'   vl_scene(6, 4, dpi = 96, bg = "white") |>
+#'     draw(rect_grob(width = 0.5, height = 0.5, gp = vl_gpar(fill = col))) |>
+#'     draw(text_grob(col, gp = vl_gpar(fontsize = 24)))
+#' })
+#' f <- tempfile(fileext = ".pptx")
+#' pptx_pages(slides, f)
+#' file.size(f) > 0
+#' @export
+pptx_pages <- function(
+  scenes,
+  path = NULL,
+  text = c("native", "outline"),
+  title = NULL
+) {
+  text <- match.arg(text)
+  if (!is.list(scenes) || !length(scenes)) {
+    cli::cli_abort("{.arg scenes} must be a non-empty list of scenes.")
+  }
+  backends <- lapply(scenes, function(s) .scene_to_backend(as_vellum_scene(s)))
+  if (is.null(path)) {
+    r <- rs_pptx_pages(backends, identical(text, "outline"), title %||% "")
+    .emit_degrade_warnings(r$warnings)
+    return(r$bytes)
+  }
+  .emit_degrade_warnings(.write_pptx(backends, path, text, title))
+  invisible(path)
+}
+
+# Write compiled scenes as a .pptx; returns the degradation warnings.
+.write_pptx <- function(backends, path, text, title = NULL) {
+  if (!is.character(title) || length(title) != 1L || is.na(title)) {
+    title <- ""
+  }
+  r <- rs_pptx_pages(backends, identical(text, "outline"), title)
+  writeBin(r$bytes, path)
+  r$warnings
 }

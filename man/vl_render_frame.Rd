@@ -37,10 +37,10 @@ classes; default \code{frac}.}
 the same keys (one entry of \code{text_variants} in \code{\link[=vl_render_animation]{vl_render_animation()}}),
 or \code{NULL}.}
 
-\item{text}{For SVG output, how text is written: \code{"native"} (default) emits
-selectable \verb{<text>} referencing system fonts, \code{"outline"} emits glyph
-outlines (pixel-faithful, identical to the raster/PDF backends, but not
-selectable). Ignored for PNG/PDF.}
+\item{text}{For SVG and PowerPoint output, how text is written: \code{"native"}
+(default) emits selectable, editable text referencing system fonts,
+\code{"outline"} emits glyph outlines (pixel-faithful, identical to the
+raster/PDF backends, but not selectable). Ignored for PNG/PDF.}
 
 \item{scale}{Resolution multiplier (default \code{1}). \code{scale = 2} renders at twice
 the device pixels while keeping the \strong{same physical size} — the retina /

@@ -27,11 +27,13 @@ mod displaylist;
 mod dml;
 mod paths;
 mod pdf;
+mod pptx;
 mod raster;
 mod svg;
 
 pub use displaylist::{DisplayList, DisplayListBackend};
-pub use dml::{resolve_media, write_media_files, DmlBackend};
+pub use dml::{resolve_media, write_media_files, DmlBackend, EMU_PER_INCH};
+pub use pptx::{pptx_package, SlidePart};
 pub use paths::*;
 pub(crate) use pdf::is_decorative;
 pub use pdf::{pdf_tag, PdfBackend};

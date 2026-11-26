@@ -613,6 +613,7 @@ dependencies = [
  "base64",
  "color_quant",
  "extendr-api",
+ "flate2",
  "gif",
  "i_overlay",
  "krilla",

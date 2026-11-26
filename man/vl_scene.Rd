@@ -67,12 +67,14 @@ output is unchanged. See \code{\link[=describe]{describe()}} to set them on an e
 \item{n}{Number of viewport levels to ascend.}
 
 \item{path}{Output file path; the format is taken from the extension (\code{.png},
-\code{.svg}, or \code{.pdf}).}
+\code{.svg}, \code{.pdf}, or \code{.pptx}). A \code{.pptx} is a one-slide PowerPoint file of
+editable shapes at the scene's size (see \code{\link[=as_dml]{as_dml()}} for what that means,
+and \code{\link[=pptx_pages]{pptx_pages()}} for several slides); it needs no other package.}
 
-\item{text}{For SVG output, how text is written: \code{"native"} (default) emits
-selectable \verb{<text>} referencing system fonts, \code{"outline"} emits glyph
-outlines (pixel-faithful, identical to the raster/PDF backends, but not
-selectable). Ignored for PNG/PDF.}
+\item{text}{For SVG and PowerPoint output, how text is written: \code{"native"}
+(default) emits selectable, editable text referencing system fonts,
+\code{"outline"} emits glyph outlines (pixel-faithful, identical to the
+raster/PDF backends, but not selectable). Ignored for PNG/PDF.}
 
 \item{debug}{If \code{TRUE}, overlay a layout-debug skeleton on the output: each
 viewport region (outlined and labelled by name), its layout track boundaries,

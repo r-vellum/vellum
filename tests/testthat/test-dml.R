@@ -399,3 +399,61 @@ test_that("native text crossing a clip edge is drawn whole, with a warning", {
   # as outlines it is cut exactly instead
   expect_length(.dml_fragment(sc, text = "outline")$warnings, 0)
 })
+
+test_that("render() writes a standalone, deterministic .pptx", {
+  skip_if_not_installed("xml2")
+  sc <- S7::set_props(dml_scene(), title = "Deck") |>
+    draw(text_grob("hello", y = 0.9)) |>
+    draw(raster_grob(matrix(c("red", "blue"), 1), x = 0.9, width = 0.1, height = 0.2))
+  f1 <- withr::local_tempfile(fileext = ".pptx")
+  f2 <- withr::local_tempfile(fileext = ".pptx")
+  render(sc, f1)
+  render(sc, f2)
+  expect_identical(unname(tools::md5sum(f1)), unname(tools::md5sum(f2)))
+  parts <- utils::unzip(f1, list = TRUE)$Name
+  expect_identical(parts[1], "[Content_Types].xml")
+  expect_true(all(
+    c(
+      "ppt/presentation.xml",
+      "ppt/slides/slide1.xml",
+      "ppt/slideMasters/slideMaster1.xml",
+      "ppt/theme/theme1.xml",
+      "ppt/media/image1.png"
+    ) %in%
+      parts
+  ))
+  dir <- withr::local_tempdir()
+  utils::unzip(f1, exdir = dir)
+  pres <- xml2::read_xml(file.path(dir, "ppt/presentation.xml"))
+  sz <- xml2::xml_find_first(pres, "//p:sldSz", xml2::xml_ns(pres))
+  expect_identical(xml2::xml_attr(sz, "cx"), "1828800")
+  expect_identical(xml2::xml_attr(sz, "cy"), "914400")
+  core <- readLines(file.path(dir, "docProps/core.xml"), warn = FALSE)
+  expect_false(any(grepl("dcterms:(created|modified)|lastModifiedBy|creator", core)))
+  expect_true(any(grepl("<dc:title>Deck</dc:title>", core, fixed = TRUE)))
+  slide <- xml2::read_xml(file.path(dir, "ppt/slides/slide1.xml"))
+  ids <- xml2::xml_attr(xml2::xml_find_all(slide, "//p:cNvPr", xml2::xml_ns(slide)), "id")
+  expect_false(anyDuplicated(ids) > 0)
+  embed <- xml2::xml_attr(xml2::xml_find_first(slide, "//a:blip", xml2::xml_ns(slide)), "embed")
+  rels <- xml2::read_xml(file.path(dir, "ppt/slides/_rels/slide1.xml.rels"))
+  rel <- xml2::xml_find_first(rels, sprintf("//*[@Id='%s']", embed))
+  expect_identical(xml2::xml_attr(rel, "Target"), "../media/image1.png")
+})
+
+test_that("pptx_pages() writes a deck officer can read", {
+  skip_if_not_installed("officer")
+  slides <- list(
+    vl_scene(4, 3, dpi = 96) |> draw(text_grob("one")),
+    vl_scene(6, 2, dpi = 96) |> draw(text_grob("two"))
+  )
+  f <- withr::local_tempfile(fileext = ".pptx")
+  expect_identical(pptx_pages(slides, f), f)
+  deck <- officer::read_pptx(f)
+  expect_identical(length(deck), 2L)
+  s <- officer::pptx_summary(deck)
+  expect_true(all(c("one", "two") %in% s$text))
+  # the deck takes the largest page; the bytes come back when path = NULL
+  expect_identical(officer::slide_size(deck), list(width = 6, height = 3))
+  expect_type(pptx_pages(slides), "raw")
+  expect_error(pptx_pages(list()), "non-empty")
+})

@@ -182,6 +182,15 @@ rs_pdf_pages <- function(scenes, path) .Call(wrap__rs_pdf_pages, scenes, path)
 #' @keywords internal
 rs_pdf_pages_raw <- function(scenes) .Call(wrap__rs_pdf_pages_raw, scenes)
 
+#' Several scenes as the slides of one PowerPoint file.
+#'
+#' @param scenes A list of compiled scenes.
+#' @param outline_text Write text as glyph outlines.
+#' @param title The presentation title (empty: the first scene's).
+#' @return A list of `bytes` and `warnings`.
+#' @keywords internal
+rs_pptx_pages <- function(scenes, outline_text, title) .Call(wrap__rs_pptx_pages, scenes, outline_text, title)
+
 #' Render a keyframe animation to `path`.
 #'
 #' * `keyframes` — a list of compiled `Scene` external pointers (the `K` states).

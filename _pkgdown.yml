@@ -215,6 +215,7 @@ reference:
   - pdf_pages
   - render_all
   - as_dml
+  - pptx_pages
 
 - title: Accessibility & fonts
   desc: >
