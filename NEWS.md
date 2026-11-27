@@ -129,6 +129,14 @@
 
 ## Documentation
 
+* `?scene_display_list`, `?scene_svg` and the scene-contract article no
+  longer say hatched fills are flagged. A `vl_hatch()` fill is expanded into
+  geometry before the list is made, so a hatched rect, path, polygon or circle
+  is listed as the shape in the hatch's background and a path of its rules,
+  both exact; a new *Hatched fills* section gives the rule, and such records
+  are flagged only for the usual reasons (a group, a non-rectangular clip in
+  version 1) (VL-19).
+
 * New articles: "Editable PowerPoint output" (`vignette("powerpoint")`, D-9)
   and "Keyframe animation in the engine" (`vignette("animation")`, D-11),
   added to the Output section of the navbar, and a new Animation section in

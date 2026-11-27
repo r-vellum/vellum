@@ -18,8 +18,10 @@
 //! table the paints refer to), clips by a path or a rotated rect (clip paths
 //! in device px), and groups whose only effect is an opacity below 1 (a group
 //! table each record refers to; a client composites the group's records as
-//! one layer). Masks, blend modes, effects, hatches, patterns, repeating
-//! gradients and gradient strokes stay flagged.
+//! one layer). Masks, blend modes, effects, patterns, repeating gradients and
+//! gradient strokes stay flagged. A hatch never reaches the list as a paint:
+//! the shared walk expands it into a `bg` fill and stroked rules first, which
+//! are listed exactly like any fill and stroke.
 
 use std::collections::HashMap;
 
@@ -39,7 +41,7 @@ pub const KIND_RECT: u8 = 1;
 pub const KIND_PATH: u8 = 2;
 
 /// Record flags (`record$flags`, a bitfield). Zero = drawn exactly.
-pub const FLAG_PAINT: u8 = 1; // gradient / pattern / hatch: paint not reproduced
+pub const FLAG_PAINT: u8 = 1; // gradient / pattern: paint not reproduced
 pub const FLAG_CLIP: u8 = 2; // clipped by a path or rotated rect: clip not listed
 pub const FLAG_GROUP: u8 = 4; // inside a group with opacity / blend / mask / effect
 pub const FLAG_TEXT: u8 = 8; // a text label: geometry is its (rotated) box

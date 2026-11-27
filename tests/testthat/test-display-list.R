@@ -552,3 +552,34 @@ test_that("compact coordinates keep a 200-point cloud within half a step", {
   expect_identical(dl1$path$xy, scene_display_list(s1)$path$xy)
   expect_identical(dl1$rect$x$type, "f32")
 })
+
+test_that("a hatched fill is listed as exact geometry, not flagged (VL-19)", {
+  h <- vl_hatch(angle = 45, spacing = 4, col = "navy", bg = "lightyellow")
+  gp <- vl_gpar(fill = h, col = NA)
+  base <- function() vl_scene(3, 2, dpi = 72, bg = "white")
+  shapes <- list(
+    rect = rect_grob(width = 0.5, height = 0.5, key = "k", gp = gp),
+    polygon = polygon_grob(c(0.2, 0.8, 0.5), c(0.2, 0.2, 0.8), key = "k", gp = gp),
+    circle = circle_grob(r = 0.3, key = "k", gp = gp)
+  )
+  for (nm in names(shapes)) {
+    for (v in 1:2) {
+      dl <- scene_display_list(base() |> draw(shapes[[nm]]), version = v)
+      d <- .dl_decode(dl)
+      # the shape in the hatch's background, then the rules in its colour
+      expect_identical(d$flags, c(0, 0), info = paste(nm, v))
+      expect_identical(d$fill, c("#ffffe0ff", NA), info = paste(nm, v))
+      expect_identical(d$stroke, c(NA, "#000080ff"), info = paste(nm, v))
+      expect_identical(d$kind[2], "path", info = paste(nm, v))
+    }
+  }
+  # rotated and clipped to a rotated viewport: exact in version 2
+  sc <- base() |>
+    push(vl_viewport(width = 0.5, height = 0.5, angle = 30, clip = TRUE)) |>
+    draw(rect_grob(width = 1.5, height = 0.5, key = "k", gp = gp)) |>
+    pop()
+  expect_identical(.dl_decode(scene_display_list(sc, version = 2))$flags, c(0, 0))
+  expect_identical(scene_display_list(sc, version = 2)$runs, 0L)
+  # a non-rectangular clip flags it in version 1, as it would any record
+  expect_identical(.dl_decode(scene_display_list(sc))$flags, c(2, 2))
+})
