@@ -707,8 +707,9 @@ pub trait RenderBackend {
 
     /// Announce that the fill about to be painted is a hatch, expanded into a
     /// background fill and stroked rules by the shared walk. Painting backends
-    /// ignore it; the display list flags an open marker whose paint it cannot
-    /// carry in one point record (VL-19).
+    /// ignore it; the display list withdraws an open marker's point record,
+    /// which cannot carry the rules, so the marker is listed as the geometry
+    /// that follows (VL-19, VR-53).
     fn begin_hatch(&mut self) {}
 
     /// Stroke a polyline / batch of disjoint segments (one `Path` whose subpaths

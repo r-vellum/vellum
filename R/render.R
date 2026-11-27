@@ -102,9 +102,9 @@ render <- function(
 #' `"keyed_flagged"` draws only the marks of the `"keyed"` layer that
 #' [scene_display_list()] (`version = 2`, same `panels`) flags as not drawable
 #' from the list: marks under a mask, a blend mode or an effect, patterned or
-#' repeating-gradient fills, gradient strokes, text and hatched point markers
-#' other than circles. Any other hatched fill is listed as exact geometry, so
-#' it is not drawn here unless something else flags it (see
+#' repeating-gradient fills, gradient strokes and text. A hatched fill, on
+#' a point marker too, is listed as exact geometry, so it is not drawn here
+#' unless something else flags it (see
 #' [scene_display_list()]). Whole
 #' nodes are drawn (every record of a node with one flagged record), and an
 #' opacity group holding a flagged mark goes in whole. The flagged marks fall

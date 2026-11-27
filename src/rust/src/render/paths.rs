@@ -226,6 +226,15 @@ pub fn roundrect_path(x: f64, y: f64, w: f64, h: f64, r: f64, win: &FarWin) -> O
 /// in f64: the same outline, starting at the top edge's left end and turning
 /// the same way.
 fn precise_roundrect_path(x: f64, y: f64, w: f64, h: f64, r: f64, win: &FarWin) -> Option<Path> {
+    let pts = precise_roundrect_pts(x, y, w, h, r, win);
+    let mut pb = PathBuilder::new();
+    push_far_poly(&mut pb, &pts, true, win);
+    pb.finish()
+}
+
+/// The f64 outline [`precise_roundrect_path`] draws, before it is cut at the
+/// window.
+fn precise_roundrect_pts(x: f64, y: f64, w: f64, h: f64, r: f64, win: &FarWin) -> Vec<(f64, f64)> {
     use std::f64::consts::{FRAC_PI_2, PI};
     let (x1, y1) = (x + w, y + h);
     let mut pts = vec![(x + r, y), (x1 - r, y)];
@@ -238,24 +247,81 @@ fn precise_roundrect_path(x: f64, y: f64, w: f64, h: f64, r: f64, win: &FarWin) 
     pts.push((x, y + r));
     far_arc(&mut pts, x + r, y + r, r, PI, FRAC_PI_2, win);
     pts.pop(); // back at the start
-    let mut pb = PathBuilder::new();
-    push_far_poly(&mut pb, &pts, true, win);
-    pb.finish()
+    pts
+}
+
+/// The outline [`roundrect_path`] draws, as an f64 ring for picking (VR-55):
+/// the chord corners of a large or far one, or its cubic corners sampled
+/// within [`IN_RANGE_ARC_TOL`] device px. `None` where nothing is drawn.
+pub fn roundrect_ring_in(
+    x: f64,
+    y: f64,
+    w: f64,
+    h: f64,
+    r: f64,
+    win: &FarWin,
+) -> Option<Vec<(f64, f64)>> {
+    if w <= 0.0 || h <= 0.0 || ![x, y, w, h].iter().all(|v| v.is_finite()) {
+        return None;
+    }
+    let (x1, y1) = (x + w, y + h);
+    let r = r.max(0.0).min(w / 2.0).min(h / 2.0);
+    if r <= 0.0 || !r.is_finite() {
+        return Some(vec![(x, y), (x1, y), (x1, y1), (x, y1)]);
+    }
+    let lim = crate::units::PRECISE_PX;
+    let far = [x, y, x1, y1].iter().any(|v| v.abs() > lim);
+    if far || !win.keeps(CUBIC_ARC_ERR * r) {
+        let win = if far { *win } else { win.in_range() };
+        return Some(precise_roundrect_pts(x, y, w, h, r, &win));
+    }
+    // Chords of `k` steps per cubic corner stray about r (pi / 4k)^2 / 2.
+    let tol = win.in_range().tol;
+    let k =
+        ((std::f64::consts::FRAC_PI_4 * (r / (2.0 * tol)).sqrt()).ceil() as usize).clamp(2, 256);
+    let kr = r * 0.552_284_749_830_793_6;
+    // Each corner as in `roundrect_path`: start, two control points, end.
+    let corners = [
+        [(x1 - r, y), (x1 - r + kr, y), (x1, y + r - kr), (x1, y + r)],
+        [
+            (x1, y1 - r),
+            (x1, y1 - r + kr),
+            (x1 - r + kr, y1),
+            (x1 - r, y1),
+        ],
+        [(x + r, y1), (x + r - kr, y1), (x, y1 - r + kr), (x, y1 - r)],
+        [(x, y + r), (x, y + r - kr), (x + r - kr, y), (x + r, y)],
+    ];
+    let mut pts = vec![(x + r, y)];
+    for [p0, p1, p2, p3] in corners {
+        pts.push(p0);
+        for j in 1..=k {
+            let t = j as f64 / k as f64;
+            let u = 1.0 - t;
+            let (a, b, c, d) = (u * u * u, 3.0 * u * u * t, 3.0 * u * t * t, t * t * t);
+            pts.push((
+                a * p0.0 + b * p1.0 + c * p2.0 + d * p3.0,
+                a * p0.1 + b * p1.1 + c * p2.1 + d * p3.1,
+            ));
+        }
+    }
+    pts.pop(); // back at the start
+    Some(pts)
 }
 
 /// A regular hexagon centred at `(cx, cy)` with circumradius `r` (centre→vertex).
 /// `flat` selects orientation: flat-top (a horizontal top/bottom edge) when true,
 /// pointy-top (a vertex up/down) when false. `r <= 0` → `None`. A thin wrapper over
 /// [`hexagon_path_xy`] with the regular relation between the two half-extents.
-pub fn hexagon_path(cx: f64, cy: f64, r: f64, flat: bool) -> Option<Path> {
+pub fn hexagon_path(cx: f64, cy: f64, r: f64, flat: bool, win: &FarWin) -> Option<Path> {
     if r <= 0.0 {
         return None;
     }
     let s = r * (3.0_f64).sqrt() * 0.5; // the short half-extent of a regular hex
     if flat {
-        hexagon_path_xy(cx, cy, r, s, true)
+        hexagon_path_xy(cx, cy, r, s, true, win)
     } else {
-        hexagon_path_xy(cx, cy, s, r, false)
+        hexagon_path_xy(cx, cy, s, r, false, win)
     }
 }
 
@@ -266,7 +332,16 @@ pub fn hexagon_path(cx: f64, cy: f64, r: f64, flat: bool) -> Option<Path> {
 /// pointy-top — vertices top/bottom at `(0, ±hy)`, vertical edges at `±hx`. A
 /// regular hexagon is the special case `hy == hx*sqrt(3)/2` (flat) resp.
 /// `hx == hy*sqrt(3)/2` (pointy). Non-positive or non-finite extents → `None`.
-pub fn hexagon_path_xy(cx: f64, cy: f64, hx: f64, hy: f64, flat: bool) -> Option<Path> {
+/// A hexagon reaching past [`crate::units::PRECISE_PX`] has its edges cut at
+/// `win`, the backend's [`FarWin`] (VR-47, VR-52).
+pub fn hexagon_path_xy(
+    cx: f64,
+    cy: f64,
+    hx: f64,
+    hy: f64,
+    flat: bool,
+    win: &FarWin,
+) -> Option<Path> {
     if hx <= 0.0 || hy <= 0.0 || !cx.is_finite() || !cy.is_finite() {
         return None;
     }
@@ -294,7 +369,7 @@ pub fn hexagon_path_xy(cx: f64, cy: f64, hx: f64, hy: f64, flat: bool) -> Option
     if cx.abs() + hx > lim || cy.abs() + hy > lim {
         // Far: edges cut at the window in f64 (VR-47).
         let pts: Vec<(f64, f64)> = corners.iter().map(|(dx, dy)| (cx + dx, cy + dy)).collect();
-        push_far_poly(&mut pb, &pts, true, &FarWin::around_origin());
+        push_far_poly(&mut pb, &pts, true, win);
         return pb.finish();
     }
     for (k, (dx, dy)) in corners.iter().enumerate() {
@@ -400,6 +475,10 @@ pub fn sector_path_in(
 /// every page in this box.
 const FAR_WINDOW: f64 = 4.0 * crate::units::PRECISE_PX;
 
+/// How many times the display list's arc tolerance may grow away from the
+/// page ([`FarWin::for_list`], VR-56).
+const TOL_GROWTH_CAP: f64 = 4.0;
+
 /// The largest gap (device px) between a far arc and the chords drawn for it,
 /// where it passes the window.
 const FAR_ARC_TOL: f64 = 1.0 / 32.0;
@@ -439,6 +518,10 @@ pub struct FarWin {
     pub b: [f64; 4],
     /// Arc tolerance, local px.
     pub tol: f64,
+    /// Where `tol` holds, when it coarsens away from the page (VR-56): a box
+    /// in local px and a length. A chord `d` local px outside the box is
+    /// kept within `tol * (1 + d / len)`. `None`: `tol` everywhere.
+    pub near: Option<([f64; 4], f64)>,
 }
 
 impl FarWin {
@@ -447,6 +530,42 @@ impl FarWin {
         FarWin {
             b: [-FAR_WINDOW, -FAR_WINDOW, FAR_WINDOW, FAR_WINDOW],
             tol: FAR_ARC_TOL,
+            near: None,
+        }
+    }
+
+    /// The display list's window (VR-56): [`FarWin::around_origin`], so a mark
+    /// the widget pans into view stays within reach out to 4 x `PRECISE_PX`,
+    /// with the arc tolerance held near the `w` x `h` px page drawn under `t`
+    /// (the page grown by a page each way) and growing with the distance
+    /// from it, in page lengths, up to [`TOL_GROWTH_CAP`] times. Refining a
+    /// huge arc's whole ring at the page's tolerance tripled the list. The
+    /// widget can pan anywhere at any zoom, so off-page arcs are coarser
+    /// there (at most 1/2 px for an in-range arc, 1/8 px for a far one) than
+    /// on the page, never unboundedly so.
+    pub fn for_list(t: Transform, w: u32, h: u32) -> Self {
+        let mut win = Self::around_origin();
+        let det = (t.sx as f64 * t.sy as f64 - t.kx as f64 * t.ky as f64).abs();
+        let len = w.max(h).max(1) as f64 / det.sqrt();
+        if len.is_finite() && len > 0.0 {
+            win.near = Some((Self::for_page(t, w, h).b, len));
+        }
+        win
+    }
+
+    /// The arc tolerance (local px) for a chord whose box is `[x0, y0, x1,
+    /// y1]`: `tol`, coarsened with the distance from the page (`near`).
+    fn tol_at(&self, x0: f64, y0: f64, x1: f64, y1: f64) -> f64 {
+        let Some((b, len)) = self.near else {
+            return self.tol;
+        };
+        let dx = (b[0] - x1).max(x0 - b[2]).max(0.0);
+        let dy = (b[1] - y1).max(y0 - b[3]).max(0.0);
+        let d = dx.max(dy);
+        if d > 0.0 {
+            self.tol * (1.0 + d / len).min(TOL_GROWTH_CAP)
+        } else {
+            self.tol
         }
     }
 
@@ -482,7 +601,11 @@ impl FarWin {
         }
         let tol = FAR_ARC_TOL / det.abs().sqrt();
         if out.iter().all(|v| v.is_finite()) && tol.is_finite() && tol > 0.0 {
-            FarWin { b: out, tol }
+            FarWin {
+                b: out,
+                tol,
+                near: None,
+            }
         } else {
             Self::around_origin()
         }
@@ -530,6 +653,7 @@ impl FarWin {
         FarWin {
             b: self.b,
             tol: self.tol * (IN_RANGE_ARC_TOL / FAR_ARC_TOL),
+            near: self.near,
         }
     }
 
@@ -618,13 +742,15 @@ fn far_arc(pts: &mut Vec<(f64, f64)>, cx: f64, cy: f64, r: f64, a0: f64, a1: f64
         let (p, q) = (pt(a0), pt(a1));
         // The arc lies within its chord's box grown by the sagitta.
         let sag = r * (1.0 - (0.5 * (a1 - a0)).cos());
-        let near = win.touches(
+        let bx = [
             p.0.min(q.0) - sag,
             p.1.min(q.1) - sag,
             p.0.max(q.0) + sag,
             p.1.max(q.1) + sag,
-        );
-        if !near || sag <= win.tol || depth >= 64 || pts.len() >= 1 << 20 {
+        ];
+        let near = win.touches(bx[0], bx[1], bx[2], bx[3]);
+        let tol = win.tol_at(bx[0], bx[1], bx[2], bx[3]);
+        if !near || sag <= tol || depth >= 64 || pts.len() >= 1 << 20 {
             pts.push(q);
             return;
         }
@@ -739,6 +865,31 @@ mod tests {
         let near = sector_path(100.0, 100.0, 0.0, 50.0, 0.0, half).unwrap();
         // (23 chords out, 24 points back, the start)
         assert_eq!(near.len(), 1 + 23 + 24 + 1);
+    }
+
+    #[test]
+    fn a_far_hexagon_is_cut_at_the_window_it_is_given() {
+        // A hexagon of half-extent 1e6 whose west vertex is on the page: its
+        // edges are cut, in f64, where they leave the page window rather than
+        // the origin box 4 x PRECISE_PX out (VR-52).
+        let near = |p: &Path| {
+            p.points()
+                .iter()
+                .filter(|q| q.x.abs() < 1e3 && q.y.abs() < 1e3)
+                .count()
+        };
+        let win = FarWin::for_page(Transform::identity(), 144, 144);
+        let p = hexagon_path_xy(1e6 + 50.0, 72.0, 1e6, 0.9e6, true, &win).unwrap();
+        // the vertex and the two cuts at the window's edge
+        assert_eq!(near(&p), 3);
+        let on_edge = |v: f32, e: f64| (v as f64 - e).abs() < 0.01;
+        let cuts = p
+            .points()
+            .iter()
+            .filter(|q| on_edge(q.y, win.b[1]) || on_edge(q.y, win.b[3]));
+        assert_eq!(cuts.count(), 2);
+        let q = hexagon_path_xy(1e6 + 50.0, 72.0, 1e6, 0.9e6, true, &FarWin::around_origin());
+        assert_eq!(near(&q.unwrap()), 1);
     }
 
     #[test]

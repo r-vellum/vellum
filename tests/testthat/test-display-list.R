@@ -573,9 +573,9 @@ test_that("a hatched fill is listed as exact geometry, not flagged (VL-19)", {
       expect_identical(d$kind[2], "path", info = paste(nm, v))
     }
   }
-  # a hatched marker other than a circle is one point record, which cannot
-  # carry the rules: flagged as a paint it does not reproduce
-  for (shape in c("square", "triangle", "diamond")) {
+  # a hatched marker of any shape is listed as its geometry, not as a point
+  # record, which cannot carry the rules (VR-53): exact, like a circle
+  for (shape in c("square", "triangle", "diamond", "star")) {
     sc <- base() |>
       draw(points_grob(
         x = 0.5,
@@ -585,9 +585,21 @@ test_that("a hatched fill is listed as exact geometry, not flagged (VL-19)", {
         key = "k",
         gp = vl_gpar(fill = h, col = "black")
       ))
-    d <- .dl_decode(scene_display_list(sc, version = 2))
-    expect_identical(d$kind, "point", info = shape)
-    expect_identical(d$flags, 1, info = shape)
+    for (v in 1:2) {
+      dl <- scene_display_list(sc, version = v)
+      d <- .dl_decode(dl)
+      kind <- if (shape == "square") "rect" else "path"
+      expect_identical(d$kind, c(kind, "path", kind), info = paste(shape, v))
+      expect_identical(d$flags, c(0, 0, 0), info = paste(shape, v))
+      expect_identical(d$fill, c("#ffffe0ff", NA, NA), info = paste(shape, v))
+      expect_identical(
+        d$stroke,
+        c(NA, "#000080ff", "#000000ff"),
+        info = paste(shape, v)
+      )
+      # no point record is left behind in the point table
+      expect_length(.dl_col(dl$point$cx), 0)
+    }
   }
   # a solid marker stays exact
   sc <- base() |>
@@ -602,4 +614,43 @@ test_that("a hatched fill is listed as exact geometry, not flagged (VL-19)", {
   expect_identical(scene_display_list(sc, version = 2)$runs, 0L)
   # a non-rectangular clip flags it in version 1, as it would any record
   expect_identical(.dl_decode(scene_display_list(sc))$flags, c(2, 2))
+})
+
+test_that("a huge in-range arc is refined finely only near the page (VR-56)", {
+  u <- function(v) vl_unit(v, "pt")
+  r <- 30000
+  # A ring of 36 sectors whose outer arc crosses a 576 px page: the list
+  # keeps that arc within 1/8 px near the page, and coarser with the
+  # distance from it, instead of refining the whole ring at 1/8 px.
+  th <- seq(0, 2 * pi, length.out = 37)
+  s <- vl_scene(8, 8, dpi = 72) |>
+    draw(sector_grob(
+      u(288 - r),
+      0.5,
+      r0 = u(r * 0.6),
+      r1 = u(r),
+      theta0 = th[-37],
+      theta1 = th[-1],
+      key = paste0("k", 1:36),
+      gp = vl_gpar(fill = "steelblue", col = NA)
+    ))
+  d <- .dl_decode(scene_display_list(s, version = 2))
+  runs <- unlist(d$runs[d$kind == "path"], recursive = FALSE)
+  expect_lt(sum(vapply(runs, nrow, 1L)), 2000) # 1380; was 2664
+  cx <- 288 - r
+  cy <- 288
+  near <- 0
+  for (xy in runs) {
+    # outer-arc chords: both ends on the arc, within a page of the page
+    on <- abs(sqrt((xy[, 1] - cx)^2 + (xy[, 2] - cy)^2) - r) < 0.05
+    inb <- xy[, 1] > -576 & xy[, 1] < 1152 & xy[, 2] > -576 & xy[, 2] < 1152
+    k <- which(on[-1] & on[-nrow(xy)] & inb[-1] & inb[-nrow(xy)])
+    for (i in k) {
+      m <- (xy[i, ] + xy[i + 1, ]) / 2
+      sag <- r - sqrt((m[1] - cx)^2 + (m[2] - cy)^2)
+      expect_lt(sag, 1 / 8 + 0.01)
+      near <- near + 1
+    }
+  }
+  expect_gt(near, 3)
 })

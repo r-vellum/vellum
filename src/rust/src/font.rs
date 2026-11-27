@@ -230,19 +230,28 @@ impl FontCache {
             .find(|s| !s.trim().is_empty())
     }
 
-    /// The face's line box height at `size` (points, shaped at 72 dpi): hhea
-    /// ascender plus descent scaled to the size, each rounded to 1/64 as
-    /// FreeType's 26.6 metrics are, which is how textshaping measures a line's
-    /// height. `None` when unreadable.
-    pub fn line_height(&mut self, font_path: &str, face_index: u32, size: f64) -> Option<f64> {
+    /// The face's line box at `size` (points, shaped at 72 dpi), as its
+    /// height above and below the baseline: the hhea ascender and descent
+    /// scaled to the size, each rounded to 1/64 as FreeType's 26.6 metrics
+    /// are, which is how textshaping measures a line's height. `None` when
+    /// unreadable.
+    pub fn line_extent(
+        &mut self,
+        font_path: &str,
+        face_index: u32,
+        size: f64,
+    ) -> Option<(f64, f64)> {
         use skrifa::raw::TableProvider;
         let bytes = self.bytes(font_path)?;
         let font = FontRef::from_index(bytes.as_slice(), face_index).ok()?;
         let upem = font.head().ok()?.units_per_em() as f64;
         let hhea = font.hhea().ok()?;
         let px64 = |u: i16| (u as f64 * size * 64.0 / upem).round();
-        let h = (px64(hhea.ascender().to_i16()) - px64(hhea.descender().to_i16())) / 64.0;
-        (upem > 0.0 && h > 0.0).then_some(h)
+        let (a, d) = (
+            px64(hhea.ascender().to_i16()) / 64.0,
+            -px64(hhea.descender().to_i16()) / 64.0,
+        );
+        (upem > 0.0 && a + d > 0.0).then_some((a, d))
     }
 
     fn sprite_stats(&self) -> (i64, i64, i64) {
@@ -278,9 +287,9 @@ pub fn font_family_name(font_path: &str, face_index: u32) -> Option<String> {
     GLYPH_CACHE.with(|c| c.borrow_mut().family_name(font_path, face_index))
 }
 
-/// Line box height via the persistent cache. See [`FontCache::line_height`].
-pub fn font_line_height(font_path: &str, face_index: u32, size: f64) -> Option<f64> {
-    GLYPH_CACHE.with(|c| c.borrow_mut().line_height(font_path, face_index, size))
+/// Line box extent via the persistent cache. See [`FontCache::line_extent`].
+pub fn font_line_extent(font_path: &str, face_index: u32, size: f64) -> Option<(f64, f64)> {
+    GLYPH_CACHE.with(|c| c.borrow_mut().line_extent(font_path, face_index, size))
 }
 
 /// Glyph sprite via the persistent cache. See [`FontCache::glyph_sprite`].
