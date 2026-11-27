@@ -542,6 +542,11 @@ impl RenderBackend for SvgBackend {
         let (w, h) = (self.w, self.h);
         FarWin::for_page(transform, w, h)
     }
+    /// A `push_circle` path becomes a `<circle>` (`circle_of`), unless its
+    /// stroke is dashed.
+    fn exact_circles(&self, dashed: bool) -> bool {
+        !dashed
+    }
     fn fill_path(
         &mut self,
         path: &Path,

@@ -83,7 +83,9 @@ pub(super) fn draw_round_rect<B: RenderBackend>(
         let o = resolve_sketch(sk, gp, vp.dpi);
         let s = crate::sketch::closed_curve(&ring, &o, gp.fill.is_some());
         paint_sketch(b, &s, gp, t, clip, vp, o.fill_weight);
-    } else if let Some(path) = roundrect_path(cx - pw / 2.0, cy - ph / 2.0, pw, ph, pr) {
+    } else if let Some(path) =
+        roundrect_path(cx - pw / 2.0, cy - ph / 2.0, pw, ph, pr, &b.far_window(t))
+    {
         fill_then_stroke(b, &path, gp, t, clip, vp, FillRule::Winding);
     }
 }
@@ -149,17 +151,32 @@ pub(super) fn draw_lines<B: RenderBackend>(
             // Resolve to local px, rigidly translate the whole polyline by
             // any perpendicular offset (along its chord normal), then trim
             // the ends by any absolute caps (heads land on the capped ends).
-            let mut pts: Vec<(f32, f32)> = (0..n)
-                .map(|i| (vp.x_pos(x[i], xu[i]) as f32, vp.y_pos(y[i], yu[i]) as f32))
+            let mut p64: Vec<(f64, f64)> = (0..n)
+                .map(|i| (vp.x_pos(x[i], xu[i]), vp.y_pos(y[i], yu[i])))
                 .collect();
-            if let Some((v, u)) = off {
-                let o = vp.x_len(*v, *u); // signed
-                offset_polyline(&mut pts, o);
-            }
+            let o = off.map(|(v, u)| vp.x_len(v, u)); // signed
             let sc = scap.map_or(0.0, |(v, u)| vp.x_len(v.max(0.0), u));
             let ec = ecap.map_or(0.0, |(v, u)| vp.x_len(v.max(0.0), u));
-            if sc > 0.0 || ec > 0.0 {
-                trim_poly_ends(&mut pts, sc, ec);
+            // A polyline reaching past PRECISE_PX is offset, trimmed and
+            // built in f64, its edges cut at the window (VR-50).
+            let far = any_far(&p64);
+            let mut pts: Vec<(f32, f32)>;
+            if far {
+                if let Some(o) = o {
+                    offset_polyline64(&mut p64, o);
+                }
+                if sc > 0.0 || ec > 0.0 {
+                    trim_poly_ends64(&mut p64, sc, ec);
+                }
+                pts = p64.iter().map(|p| (p.0 as f32, p.1 as f32)).collect();
+            } else {
+                pts = p64.iter().map(|p| (p.0 as f32, p.1 as f32)).collect();
+                if let Some(o) = o {
+                    offset_polyline(&mut pts, o);
+                }
+                if sc > 0.0 || ec > 0.0 {
+                    trim_poly_ends(&mut pts, sc, ec);
+                }
             }
             // The centre-line as drawn: offset, then trimmed.
             if let Some(g) = b.geom_sink() {
@@ -171,7 +188,12 @@ pub(super) fn draw_lines<B: RenderBackend>(
                 return;
             };
             let style = stroke_style(gp, vp);
-            if let Some(path) = build_poly_px(&pts, false) {
+            let path = if far {
+                build_far_poly(&p64, false, &b.far_window(t))
+            } else {
+                build_poly_px(&pts, false)
+            };
+            if let Some(path) = path {
                 if style.width > 0.0 {
                     b.stroke_lines(&path, t, col, &style, clip);
                 }
@@ -239,7 +261,7 @@ pub(super) fn draw_polygon<B: RenderBackend>(
         if ring.len() >= 2 {
             draw_sketch_rings(b, &[ring], gp, sk, t, clip, vp);
         }
-    } else if let Some(path) = build_poly(x, y, xu, yu, vp, true) {
+    } else if let Some(path) = build_poly(x, y, xu, yu, vp, true, &b.far_window(t)) {
         fill_then_stroke(b, &path, gp, t, clip, vp, FillRule::Winding);
     }
 }
@@ -698,6 +720,10 @@ pub(super) fn draw_markers<B: RenderBackend>(
     // Indexed by shape code (0..=7); plus/cross (4/5) never reach here.
     let mut unit_cache: [Option<tiny_skia::Path>; 8] =
         [None, None, None, None, None, None, None, None];
+    // A large circle marker is built at its own radius unless the backend
+    // writes the unit circle as an exact one (VR-48, as `circles_by_path`).
+    let win = b.far_window(t);
+    let exact = b.exact_circles(false);
     for i in 0..n {
         b.set_element_key(key_at(keys, i));
         let cx = vp.x_pos(x[i], xu[i]);
@@ -711,7 +737,7 @@ pub(super) fn draw_markers<B: RenderBackend>(
         b.begin_marker(sh, cx, cy, rr, t, clip);
         if far_box(cx, cy, 2.0 * rr, 2.0 * rr) {
             // Far from the origin, built in place in f64 (VR-47).
-            let Some(path) = far_marker_path(sh, cx, cy, rr, &b.far_window(t)) else {
+            let Some(path) = far_marker_path(sh, cx, cy, rr, &win) else {
                 continue;
             };
             if sh == 4 || sh == 5 {
@@ -729,6 +755,14 @@ pub(super) fn draw_markers<B: RenderBackend>(
         }
         if fast && sh != 4 && sh != 5 {
             if let Some(rp) = &rf {
+                if !matches!(sh, 1 | 2 | 3 | 6 | 7) && !(exact || win.unit_circle_fits(rr)) {
+                    let mut pb = PathBuilder::new();
+                    crate::render::push_circle_precise(&mut pb, cx, cy, rr, &win);
+                    if let Some(path) = pb.finish() {
+                        fill_or_hatch(b, &path, t, rp, FillRule::Winding, clip);
+                    }
+                    continue;
+                }
                 let slot = (sh as usize).min(7);
                 let unit = unit_cache[slot].get_or_insert_with(|| unit_marker(sh));
                 let tr = t.pre_concat(Transform::from_row(
@@ -1288,7 +1322,35 @@ pub(super) fn draw_segments<B: RenderBackend>(
         // Each seg carries its originating element index so a keyed
         // batch can tag every segment with its own `data-key`.
         let mut segs: Vec<(f32, f32, f32, f32, usize)> = Vec::with_capacity(n);
+        // Per entry of `segs`, the f64 ends of a segment reaching past
+        // PRECISE_PX: offset, capped and cut at the window in f64 (VR-50).
+        let mut far64: Vec<Option<[f64; 4]>> = Vec::new();
         for i in 0..n {
+            let e64 = [
+                vp.x_pos(x0[i], x0u[i]),
+                vp.y_pos(y0[i], y0u[i]),
+                vp.x_pos(x1[i], x1u[i]),
+                vp.y_pos(y1[i], y1u[i]),
+            ];
+            if e64.iter().all(|v| v.is_finite()) && any_far(&[(e64[0], e64[1]), (e64[2], e64[3])]) {
+                let o = if has_off {
+                    off_len_px(off, offu, i, vp)
+                } else {
+                    0.0
+                };
+                let caps = has_caps.then(|| {
+                    (
+                        cap_len_px(scap, scapu, i, vp),
+                        cap_len_px(ecap, ecapu, i, vp),
+                    )
+                });
+                if let Some(q) = far_segment(e64, o, caps) {
+                    segs.push((q[0] as f32, q[1] as f32, q[2] as f32, q[3] as f32, i));
+                    far64.resize(segs.len() - 1, None);
+                    far64.push(Some(q));
+                }
+                continue;
+            }
             let (mut sx, mut sy) = (
                 vp.x_pos(x0[i], x0u[i]) as f32,
                 vp.y_pos(y0[i], y0u[i]) as f32,
@@ -1320,6 +1382,16 @@ pub(super) fn draw_segments<B: RenderBackend>(
                 segs.push((sx, sy, ex, ey, i));
             }
         }
+        far64.resize(segs.len(), None);
+        let win = b.far_window(t);
+        let push_seg = |pb: &mut PathBuilder, k: usize| match far64[k] {
+            Some(q) => push_far_poly(pb, &[(q[0], q[1]), (q[2], q[3])], false, &win),
+            None => {
+                let (sx, sy, ex, ey, _) = segs[k];
+                pb.move_to(sx, sy);
+                pb.line_to(ex, ey);
+            }
+        };
         // Each segment as drawn -- offset, then capped -- is the
         // element's geometry, recorded whether or not it is
         // painted.
@@ -1342,7 +1414,7 @@ pub(super) fn draw_segments<B: RenderBackend>(
         // on the R side: one grob instead of N.
         let per_el = !cols.is_empty() || !lwds.is_empty();
         if per_el {
-            for &(sx, sy, ex, ey, gi) in &segs {
+            for (k, &(_, _, _, _, gi)) in segs.iter().enumerate() {
                 let c = cols.get(gi).copied().unwrap_or(col);
                 let mut st = style.clone();
                 if let Some(w) = lwds.get(gi) {
@@ -1361,8 +1433,7 @@ pub(super) fn draw_segments<B: RenderBackend>(
                 }
                 b.set_element_key(key_at(keys, gi));
                 let mut pb = PathBuilder::new();
-                pb.move_to(sx, sy);
-                pb.line_to(ex, ey);
+                push_seg(&mut pb, k);
                 if let Some(path) = pb.finish() {
                     b.stroke_lines(&path, t, c, &st, clip);
                 }
@@ -1374,9 +1445,8 @@ pub(super) fn draw_segments<B: RenderBackend>(
                 // (Also taken by raster/PDF for keyed batches — they
                 // ignore keys, so they stay pixel-identical.)
                 let mut pb = PathBuilder::new();
-                for &(sx, sy, ex, ey, _) in &segs {
-                    pb.move_to(sx, sy);
-                    pb.line_to(ex, ey);
+                for k in 0..segs.len() {
+                    push_seg(&mut pb, k);
                 }
                 if let Some(path) = pb.finish() {
                     b.stroke_lines(&path, t, col, &style, clip);
@@ -1384,11 +1454,10 @@ pub(super) fn draw_segments<B: RenderBackend>(
             } else {
                 // Keyed: stroke each segment on its own so it can carry
                 // its `data-key` (the interactivity opt-in).
-                for &(sx, sy, ex, ey, gi) in &segs {
+                for (k, &(_, _, _, _, gi)) in segs.iter().enumerate() {
                     b.set_element_key(key_at(keys, gi));
                     let mut pb = PathBuilder::new();
-                    pb.move_to(sx, sy);
-                    pb.line_to(ex, ey);
+                    push_seg(&mut pb, k);
                     if let Some(path) = pb.finish() {
                         b.stroke_lines(&path, t, col, &style, clip);
                     }
@@ -1565,9 +1634,10 @@ pub(super) fn draw_path<B: RenderBackend>(
         unreachable!("draw_path called on another node kind")
     };
     b.set_element_key(key.as_deref());
+    let win = b.far_window(t);
     if let Some(g) = b.geom_sink() {
         // Every ring, filled together under the path's own rule.
-        if let Some(p) = build_subpaths(x, y, xu, yu, nper, vp) {
+        if let Some(p) = build_subpaths(x, y, xu, yu, nper, vp, &win) {
             g.path(
                 0,
                 &p,
@@ -1599,7 +1669,7 @@ pub(super) fn draw_path<B: RenderBackend>(
         if !rings.is_empty() {
             draw_sketch_rings(b, &rings, gp, sk, t, clip, vp);
         }
-    } else if let Some(path) = build_subpaths(x, y, xu, yu, nper, vp) {
+    } else if let Some(path) = build_subpaths(x, y, xu, yu, nper, vp, &win) {
         let rule = if *evenodd {
             FillRule::EvenOdd
         } else {

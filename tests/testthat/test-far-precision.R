@@ -307,3 +307,134 @@ test_that("a far raster image draws the part over the page on every backend (VR-
     expect_true(all(abs(off) < 1e8), label = paste("pptx", w))
   }
 })
+
+test_that("large in-range circles, sectors and round rects follow their arcs (VR-48)", {
+  row_ink <- function(s) {
+    a <- scene_raster(s)
+    sum(255 - a[2, , 72]) / 255
+  }
+  u <- function(v) vl_unit(v, "pt")
+  # Row 72 spans y in [71, 72] px from the top, so y = 72.5 pt up from the
+  # bottom; ink runs from the left edge of the page to the arc.
+  crossing <- function(cx, cy, r, sign = 1) cx + sign * sqrt(r^2 - (72.5 - cy)^2)
+  # A circle through the page centre 22.5 degrees from its east point: the
+  # scaled unit circle missed it by 3.1e-3 r (3 px at r = 1e3, the whole
+  # row at 3e4) and snapped to exact past PRECISE_PX. Now no jump.
+  p <- pi / 8
+  for (r in c(1e3, 1e4, 3e4, 6e4, 7e4, 1e5)) {
+    cx <- 72 - r * cos(p)
+    cy <- 72 - r * sin(p)
+    one <- draw(base, circle_grob(u(cx), u(cy), r = u(r), gp = fill))
+    expect_lt(abs(row_ink(one) - crossing(cx, cy, r)), 0.1, label = paste("circle", r))
+    # the point marker fast path (a solid fill, no stroke)
+    pt <- draw(base, points_grob(u(cx), u(cy), size = u(r), shape = "circle", gp = fill))
+    expect_lt(abs(row_ink(pt) - crossing(cx, cy, r)), 0.1, label = paste("marker", r))
+  }
+  # A quarter disc crossing the page in the middle of its first ~4 degree
+  # chord, which missed the arc by 6 px at r = 1e4.
+  phi <- (pi / 2 / 23) / 2
+  for (r in c(1e3, 1e4, 3e4, 6e4, 7e4)) {
+    cx <- 72 - r * cos(phi)
+    cy <- 72 - r * sin(phi)
+    s <- draw(base, sector_grob(u(cx), u(cy), r1 = u(r), theta0 = 0, theta1 = pi / 2, gp = fill))
+    expect_lt(abs(row_ink(s) - crossing(cx, cy, r)), 0.1, label = paste("sector", r))
+  }
+  # A round rect whose top-left corner crosses the page 22.5 degrees from
+  # its west end, where cubic corners stray 2.7e-4 r.
+  for (r in c(1e4, 6e4)) {
+    cx <- 72 + r * cos(p)
+    cy <- 72 - r * sin(p)
+    s <- draw(base, roundrect_grob(
+      u(cx),
+      u(cy),
+      width = u(2 * r),
+      height = u(2 * r),
+      r = u(r),
+      gp = fill
+    ))
+    want <- 144 - crossing(cx, cy, r, -1)
+    expect_lt(abs(row_ink(s) - want), 0.1, label = paste("roundrect", r))
+  }
+  # SVG still writes a large circle as a <circle>, and a large sector is
+  # split finely only over the page
+  r <- 1e4
+  one <- draw(base, circle_grob(u(72 - r * cos(p)), u(72 - r * sin(p)), r = u(r), gp = fill))
+  expect_match(scene_svg(one), "<circle ")
+  s <- draw(base, sector_grob(u(72 - r), u(72), r1 = u(r), gp = fill))
+  expect_lt(nchar(scene_svg(s)), 20000)
+})
+
+test_that("ordinary circles, sectors and round rects keep their bytes (VR-48)", {
+  # Below the thresholds (a scaled unit circle to ~78 px, ~4 degree sector
+  # chords to ~410 px, cubic corners to ~920 px) nothing changes: the path
+  # is the one main built.
+  s <- vl_scene(6, 6, dpi = 72) |>
+    draw(sector_grob(0.5, 0.5, r1 = vl_unit(200, "pt"), theta0 = 0, theta1 = 2, gp = fill))
+  d <- regmatches(scene_svg(s), regexpr('<path d="[^"]*"', scene_svg(s)))
+  expect_identical(lengths(regmatches(d, gregexpr("L", d))), 59L)
+  s <- vl_scene(6, 6, dpi = 72) |>
+    draw(roundrect_grob(0.5, 0.5, 0.9, 0.9, r = vl_unit(100, "pt"), gp = fill))
+  expect_match(scene_svg(s), "C")
+})
+
+test_that("far polygons, lines, paths and segments cross the page exactly (VR-50)", {
+  row_ink <- function(s) {
+    a <- scene_raster(s)
+    sum(255 - a[2, , 72]) / 255
+  }
+  u <- function(v) vl_unit(v, "pt")
+  pen <- vl_gpar(col = "red", lwd = 10)
+  # The edge x + y = 144.3 through the page centre, between vertices r away
+  # either way: each vertex alone rounds by up to 64 px in f32 at 1e9.
+  tri <- function(r) list(x = 72.15 + c(-r, r, -r), y = 72.15 + c(r, -r, -r))
+  shapes <- list(
+    polygon = function(r) {
+      v <- tri(r)
+      draw(base, polygon_grob(u(v$x), u(v$y), gp = fill))
+    },
+    path = function(r) {
+      v <- tri(r)
+      draw(base, path_grob(u(v$x), u(v$y), gp = fill))
+    },
+    lines = function(r) {
+      v <- tri(r)
+      draw(base, lines_grob(u(v$x[1:2]), u(v$y[1:2]), gp = pen))
+    },
+    segments = function(r) {
+      v <- tri(r)
+      draw(base, segments_grob(u(v$x[1]), u(v$y[1]), u(v$x[2]), u(v$y[2]), gp = pen))
+    }
+  )
+  for (kind in names(shapes)) {
+    ref <- row_ink(shapes[[kind]](1e3))
+    for (r in c(1e5, 1e7, 1e9)) {
+      expect_lt(abs(row_ink(shapes[[kind]](r)) - ref), 0.05, label = paste(kind, r))
+    }
+  }
+  # the polygon's ink ends at the edge
+  expect_lt(abs(row_ink(shapes$polygon(1e9)) - (144.3 - 72.5)), 0.1)
+})
+
+test_that("a far image never reaches the display list (VR-49)", {
+  # Images carry no key, so the display list (the widget's exact marks)
+  # never lists one; the widget draws them in its base SVG, which fits a far
+  # image to the page (VR-46).
+  u <- function(v) vl_unit(v, "pt")
+  pt <- points_grob(0.3, 0.3, size = u(5), shape = "circle", gp = fill, key = "a")
+  img <- raster_grob(matrix(c("red", "blue"), 1, 2), width = u(1e10), height = 0.5)
+  with_img <- base |> draw(img) |> draw(pt)
+  without <- base |> draw(pt)
+  for (v in 1:2) {
+    expect_identical(
+      scene_display_list(with_img, version = v),
+      scene_display_list(without, version = v)
+    )
+  }
+  svg <- scene_svg(with_img, layer = "unkeyed")
+  x <- as.numeric(sub('.*x="', "", regmatches(
+    svg,
+    gregexpr('(?<=<image href="data:image/png;base64,)[^"]*" x="[-0-9.e]+', svg, perl = TRUE)
+  )[[1]]))
+  expect_length(x, 1)
+  expect_lt(abs(x), 1e4)
+})

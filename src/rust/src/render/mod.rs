@@ -791,6 +791,16 @@ pub trait RenderBackend {
         let _ = transform;
         FarWin::around_origin()
     }
+
+    /// Whether this backend writes a path built by tiny-skia's `push_circle`
+    /// (eight quads, under any transform) as an exact circle: SVG writes a
+    /// `<circle>`, DrawingML a preset ellipse. Elsewhere those quads are drawn
+    /// as they are, 3.1e-3 r off the circle, so a large circle is built at its
+    /// own radius instead (VR-48). `dashed`: the circle's stroke is dashed.
+    fn exact_circles(&self, dashed: bool) -> bool {
+        let _ = dashed;
+        false
+    }
 }
 
 /// The message of a caught panic (`&str` or `String` payload).
@@ -829,17 +839,23 @@ pub(super) fn circles_by_path<B: RenderBackend>(
 ) {
     let n = cx.len().min(cy.len()).min(r.len());
     let unit = unit_circle_path();
+    let win = b.far_window(transform);
+    let dashed = stroke.is_some_and(|(_, st)| st.width > 0.0 && !st.dash.is_empty());
+    let exact = b.exact_circles(dashed);
     for i in 0..n {
         let rr = r[i];
         if !drawable_disc(cx[i], cy[i], rr) {
             continue;
         }
         // Far from the origin, a unit circle placed by an f32 transform loses
-        // the circle's edge (VR-45): build it in place instead, in f64.
+        // the circle's edge (VR-45): build it in place instead, in f64. So is
+        // a large one, which the unit circle's quads would miss by 3.1e-3 r
+        // (VR-48), unless the backend writes them as an exact circle.
         let lim = crate::units::PRECISE_PX;
-        if cx[i].abs() + rr > lim || cy[i].abs() + rr > lim {
+        if cx[i].abs() + rr > lim || cy[i].abs() + rr > lim || !(exact || win.unit_circle_fits(rr))
+        {
             let mut pb = PathBuilder::new();
-            push_circle_precise(&mut pb, cx[i], cy[i], rr, &b.far_window(transform));
+            push_circle_precise(&mut pb, cx[i], cy[i], rr, &win);
             let Some(path) = pb.finish() else { continue };
             let pen = stroke.filter(|(_, s)| s.width > 0.0);
             match (fill, pen) {

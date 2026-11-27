@@ -382,13 +382,21 @@ impl Scene {
             // A clip path that cannot be built (a missing vertex, or bounds that
             // overflow) clips everything away rather than nothing (VR-42).
             Some(
-                build_subpaths(&cp.x, &cp.y, &cp.xu, &cp.yu, &cp.nper, &vp)
-                    .map(|path| ClipShape::Path {
-                        path,
-                        evenodd: cp.evenodd,
-                        transform,
-                    })
-                    .unwrap_or_else(ClipShape::nothing),
+                build_subpaths(
+                    &cp.x,
+                    &cp.y,
+                    &cp.xu,
+                    &cp.yu,
+                    &cp.nper,
+                    &vp,
+                    &FarWin::for_page(transform, self.w_px, self.h_px),
+                )
+                .map(|path| ClipShape::Path {
+                    path,
+                    evenodd: cp.evenodd,
+                    transform,
+                })
+                .unwrap_or_else(ClipShape::nothing),
             )
         } else if node.clip && origin != (0.0, 0.0) && exact.kx == 0.0 && exact.ky == 0.0 {
             // A rebased, axis-aligned viewport keeps a rect clip, so backends

@@ -968,6 +968,16 @@ impl RenderBackend for DisplayListBackend {
         }
     }
 
+    /// Images are not listed: an image carries no key, so it is never one of
+    /// the keyed marks this list records, and the widget draws it in its base
+    /// SVG, which fits a far image to the page (VR-46). So there is nothing
+    /// here to fit with `fit::vector_image` (VR-49).
+    ///
+    /// The list keeps the origin box for far shapes ([`FarWin::around_origin`],
+    /// the trait default) rather than a page window: the widget pans and zooms
+    /// these records itself, so a mark well off the page can be brought into
+    /// view, and the box keeps it exact out to 4 x `PRECISE_PX`. A page window
+    /// would refine arcs and cut edges only within a page of the page.
     fn draw_image(
         &mut self,
         _: &[u8],
