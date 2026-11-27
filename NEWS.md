@@ -86,9 +86,9 @@
 ## Documentation
 
 * New articles: "Editable PowerPoint output" (`vignette("powerpoint")`, D-9)
-  and "Keyframe animation in the engine" (`vignette("animation")`, D-11), with
-  an Output section in the navbar and an Animation section in the reference
-  (D-8 to D-16). The output-formats matrix gains a PowerPoint column and no
+  and "Keyframe animation in the engine" (`vignette("animation")`, D-11),
+  added to the Output section of the navbar, and a new Animation section in
+  the reference (D-8 to D-16). The output-formats matrix gains a PowerPoint column and no
   longer says PDF degrades tiling patterns (it draws them as PNG and SVG do).
   The typography article covers font weights, scene-contract the split render
   layers, the display list and `vellum_content_fit`, retained-mode

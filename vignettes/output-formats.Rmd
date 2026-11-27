@@ -33,7 +33,8 @@ render(scene, "figure.pptx") # editable shapes, slides
 | Tiling patterns | ✓ | ✓ | ✓ | as a tiled picture fill |
 | Hatching (`vl_hatch()`) | ✓ | ✓ (as `<path>`) | ✓ | ✓ (as shapes) |
 | Clipping | ✓ | ✓ | ✓ | geometry cut in advance |
-| Masks, blend modes, blur, shadow | ✓ | ✓ | ✓ | as a picture of the region, with a warning |
+| Masks, blend modes | ✓ | ✓ | ✓ | as a picture of the region, with a warning |
+| Blur, shadow | ✓ | ✓ (native filters) | drawn unfiltered, with a warning | as a picture of the region, with a warning |
 | Selectable / editable text | ✗ | ✓ (`text = "native"`) | selectable | editable (`text = "native"`) |
 | Screen-reader structure | ✗ | ✓ (`role`, `data-*`) | ✓ (tagged) | title and alt text only |
 | Faithful without the author's fonts | ✓ | only with `text = "outline"` | ✓ (embedded) | only with `text = "outline"` |
@@ -57,8 +58,9 @@ DrawingML has no clipping, so geometry that a clip would hide is cut away before
 it is written. The same applies to text and fonts as in SVG: `text = "native"`
 (the default) is editable and uses whatever fonts the viewer has, and
 `text = "outline"` gives glyph outlines that look the same everywhere. A `tex()`
-formula, inline math in an `md()` label and haloed text are outlines in either
-mode. `vignette("powerpoint")` covers placing scenes on slides.
+or `plotmath()` formula, inline math in an `md()` label, haloed text and text on
+a path are outlines in either mode (the table in `vignette("powerpoint")` lists
+every case). That article also covers placing scenes on slides.
 
 Geometry far off the page is cut to the page the same way on every backend, so
 a mark with an extreme coordinate draws its visible part identically in all

@@ -152,7 +152,8 @@ error for a guest that declares nothing.
 #| fig.height: 2.2
 square <- vl_scene(1, 1) |>
   draw(rect_grob(gp = vl_gpar(fill = "#eef2f6", col = "grey40"))) |>
-  draw(circle_grob(r = 0.35, gp = vl_gpar(fill = "tomato", col = NA)))
+  draw(rect_grob(width = 0.6, height = 0.6, gp = vl_gpar(fill = "tomato", col = NA))) |>
+  draw(segments_grob(0, 0, 1, 1, gp = vl_gpar(col = "grey40")))
 attr(square, "vellum_content_fit") <- c(0, 0, 1, 1) # no frame, one square track
 
 page <- vl_scene(6, 2.2, dpi = 96, bg = "white") |>
@@ -165,7 +166,9 @@ display(
 )
 ```
 
-The dashed boxes are the two regions. Fitting needs the region's physical size,
+The dashed boxes are the two regions. On the left, `"fill"` stretches the
+square and its diagonal to the wide region; on the right, `"auto"` keeps them
+square. Fitting needs the region's physical size,
 so it applies when the region is placed at the host's top level, in `npc` numbers
 or absolute units; inside a pushed viewport the guest fills its region.
 

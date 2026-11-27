@@ -160,9 +160,10 @@ engine rather than in R: glyph advances are in points and the baseline is in
 viewport's pixel extent is known.
 
 On-path text is an ordinary text node with a baseline attached, so everything
-else still applies — halos, features, colour, clipping, and all three backends.
-The run is fanned out into one glyph per position at draw time, so SVG output is
-still real `<text>` and PDF still carries copyable text:
+else still applies — halos, features, colour, clipping, and every output
+format. The run is fanned out into one glyph per position at draw time, so SVG
+output is still real `<text>` and PDF still carries copyable text. PowerPoint
+cannot set text along a curve, so there it is drawn as glyph outlines:
 
 ```{r}
 #| fig.height: 1.8

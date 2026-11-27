@@ -428,13 +428,14 @@ unlist(dl[c("version", "n", "runs")])
 dl$keys
 ```
 
-`version = 2` adds gradient fills, clips by a path, and opacity groups to what
-the list draws exactly. `precision` quantises the coordinates to 16 or 24 bits
+`version = 2` adds linear and radial gradient fills with `pad` extension, clips
+by a path, and opacity groups to what the list draws exactly. `precision` quantises the coordinates to 16 or 24 bits
 (or to a largest rounding error in device px), and `keys` lets a host that
 already holds the keys avoid shipping them twice.
 
 Some marks cannot be drawn from the list: a mark under a mask, a blend mode or
-an effect, a pattern fill, a gradient stroke, or text. The list still carries
+an effect, a hatch or pattern fill, a repeating or reflecting gradient, a
+gradient stroke, or text. The list still carries
 them, for hit-testing, but flags them, and groups them into numbered **runs**:
 stretches of flagged marks in paint order that no exactly drawn mark
 interrupts. `scene_png(layer = "keyed_flagged", run = k)` draws run `k` alone,
@@ -472,8 +473,10 @@ A scene carries an optional accessible **name** and **description**, set with
   and `<desc>` children (the reliable screen-reader pattern; WCAG 1.1.1);
 - the **PDF** is a **tagged PDF**: the chart is a `Figure` in the structure tree
   whose `Alt` is the description.
-- the **PowerPoint** group holding the scene is named after the title and
-  carries the description as its alt text.
+- the **PowerPoint** group holding the scene carries the description (or the
+  title, when there is no description) as its alt text, and is named after the
+  title when written by `render()` or `pptx_pages()` (through officer it takes
+  the placeholder's name).
 
 This is additive: with no title/desc the output is unchanged. The grammar layer
 (`vellumplot`) sets these automatically from the plot's title and an auto-generated (or

@@ -114,9 +114,11 @@ own the tagging and the `describe()` text becomes the root figure's alt.
 
 A slide gets less structure than a PDF. In PowerPoint output, written with
 `render(scene, "deck.pptx")`, `pptx_pages()` or officer, the scene becomes one
-group of shapes whose name is the `describe()` title and whose alt text is the
-`describe()` description. This is the text PowerPoint's own Alt Text pane shows
-and a screen reader announces for the graphic. The per-mark `role` and `name`
+group of shapes. Its alt text is the `describe()` description, or the title when
+there is no description. This is the text PowerPoint's own Alt Text pane shows
+and a screen reader announces for the graphic. `render()` and `pptx_pages()`
+name the group after the title; through `officer::ph_with()` it takes the
+placeholder's name instead. The per-mark `role` and `name`
 are not written to the slide. Text labels stay real text in the slide, so a
 screen reader can still read them, except for the labels drawn as outlines
 (see `vignette("powerpoint")`).

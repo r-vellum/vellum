@@ -236,15 +236,18 @@ drawing, not the data behind it.
 ## Alt text
 
 A scene's `title` and `desc`, set in `vl_scene()` or with `describe()`, become
-the name and the alt text of the group that holds the slide's shapes:
+the name and the alt text of the group that holds the slide's shapes. With no
+`desc`, the title is the alt text too:
 
 ```{r}
 #| label: alt
 regmatches(x, regexpr('<p:cNvPr [^>]*descr="[^"]*"/>', x))
 ```
 
-That is the text in PowerPoint's Alt Text pane. Per-mark `role` and `name`, which
-build a tagged PDF's structure tree, are not written to the slide; see
+That is the text in PowerPoint's Alt Text pane. Through `officer::ph_with()`
+the group takes the placeholder's name instead of the title, and keeps the alt
+text. Per-mark `role` and `name`, which build a tagged PDF's structure tree,
+are not written to the slide; see
 `vignette("accessible-output")`.
 
 ## Where to go next
