@@ -188,23 +188,3 @@ test_that("an absurd font size is an error, not a crash (VR-38 review)", {
     "at most 10000 points"
   )
 })
-
-test_that("a face systemfonts cannot open is shaped in the default font (VL-22)", {
-  # textshaping uses a face systemfonts failed to load and crashes R (macOS
-  # Skia once system_fonts() has run): vellum checks the face first.
-  local_mocked_bindings(
-    font_info = function(...) stop("Failed to open font file"),
-    .package = "systemfonts"
-  )
-  rm(list = ls(vellum:::.face_warned), envir = vellum:::.face_warned)
-  expect_warning(
-    w <- vl_strwidth("Hamburg", family = "serif", fontsize = 20),
-    "could not be loaded"
-  )
-  expect_equal(w, vl_strwidth("Hamburg", family = "", fontsize = 20))
-  # once per face
-  expect_no_warning(vl_strwidth("Hamburg", family = "serif", fontsize = 21))
-  sc <- vl_scene(2, 1, dpi = 72) |>
-    draw(text_grob("Hamburg", gp = vl_gpar(fontfamily = "serif")))
-  expect_no_error(scene_raster(sc))
-})

@@ -1008,8 +1008,9 @@ impl RenderBackend for DisplayListBackend {
     /// itself, so a mark well off the page can be brought into view, and the
     /// box keeps it exact out to 4 x `PRECISE_PX`. A page window would refine
     /// arcs and cut edges only within a page of the page. With the page known,
-    /// the arc tolerance grows with the distance from it ([`FarWin::for_list`],
-    /// VR-56), so a huge arc is not refined at the page's tolerance all round.
+    /// the arc tolerance grows with the distance from it, at most four times
+    /// ([`FarWin::for_list`], VR-56), so a huge arc is not refined at the
+    /// page's tolerance all round.
     fn far_window(&self, transform: Transform) -> FarWin {
         match self.page {
             Some((w, h)) => FarWin::for_list(transform, w, h),

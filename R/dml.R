@@ -58,10 +58,13 @@
 #' not; the box is anchored so a wider substitute grows away from the label's
 #' anchor (right-aligned tick labels stay right-aligned) rather than drifting.
 #' Vertically, the text sits on the box's bottom edge whatever its
-#' justification: applications agree on how far a line reaches below its
-#' baseline but not above it (LibreOffice sets every font 1.0 em above), so
-#' this keeps the baseline where vellum draws it. Fonts are not embedded. `text = "outline"` writes glyph outlines instead:
-#' identical everywhere, but no longer editable as text. An `md()` label is
+#' justification. LibreOffice assumes a fixed line, 1.0 em above the baseline
+#' and 0.2 em below, whatever the font: on the bottom edge a label sits where
+#' vellum draws it when the font's descent is about 0.2 em, and lower by the
+#' excess for a deeper one (Avenir Next, Hoefler Text). Keynote follows the
+#' font's own metrics. PowerPoint itself has not been checked. Fonts are not
+#' embedded. `text = "outline"` writes glyph outlines instead: identical
+#' everywhere, but no longer editable as text. An `md()` label is
 #' one text run per styled span (bold, italic, colour; a superscript or
 #' subscript as a raised or lowered run). `tex()` labels, `md()` labels with
 #' inline math, halos and text set on a path are always outlines, as in SVG.

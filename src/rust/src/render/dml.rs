@@ -2471,12 +2471,14 @@ impl DmlBackend {
             },
         };
         // The box is vellum's line boxes from the font's ascent and descent,
-        // and the text sits on its bottom whatever the label's vjust (VR-54):
-        // applications agree on a line's descent but not its ascent.
-        // LibreOffice sets a line 1.0 em above the baseline and 0.2 em below
-        // in any font, and Keynote takes Helvetica's ascent from elsewhere,
-        // so a box anchored at its top or middle put the text up to 0.2 em
-        // (Helvetica) lower than vellum draws it.
+        // and the text sits on its bottom whatever the label's vjust (VR-54).
+        // LibreOffice assumes a fixed line, 1.0 em above the baseline and
+        // 0.2 em below, whatever the font: anchored at the top or middle a
+        // label drew up to 0.23 em low there (Helvetica), while on the bottom
+        // it is exact for a font whose descent is about 0.2 em and low by the
+        // excess for a deeper one (Avenir Next, Hoefler Text). Keynote follows
+        // the font, except Helvetica's ascent. PowerPoint itself is not
+        // verified.
         let anchor = "b";
         let pt = run.size * s;
         let sz = ((pt * 100.0).round() as i64).clamp(100, 400_000);

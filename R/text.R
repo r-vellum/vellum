@@ -96,12 +96,11 @@ vl_strheight <- function(
   face <- .rs_face(fontface)
   # Measurement must use the same features as drawing, or a `grobwidth`-sized
   # track reserves the wrong space for the glyphs that actually get drawn.
-  weight <- .snap_weight(family, face$italic, face$weight)
   pt <- textshaping::shape_text(
     label,
-    family = .loadable_family(family, face$italic, weight),
+    family = family,
     italic = face$italic,
-    weight = weight,
+    weight = .snap_weight(family, face$italic, face$weight),
     size = fontsize * cex,
     res = 72,
     features = .as_font_feature(features)
@@ -256,7 +255,7 @@ vl_strheight <- function(
   if (length(miss)) {
     sh <- textshaping::shape_text(
       uniq[miss],
-      family = .loadable_family(family, italic, weight),
+      family = family,
       italic = italic,
       weight = weight,
       size = size,
@@ -1794,48 +1793,6 @@ md <- function(text) {
   snapped <- .nearest_weight(family, italic, weight)
   .weight_cache[[key]] <- list(weight = snapped, probe = probe)
   snapped
-}
-
-# The family to shape `family` with: itself when systemfonts can load the face
-# it matches, else the default font (VL-22). textshaping does not check that
-# systemfonts opened the face before using it, so a face systemfonts fails to
-# load crashes R: on macOS the variable font Skia does once
-# `systemfonts::system_fonts()` has run, which `.snap_weight()` itself does. A
-# failed face warns once per session; `font_info()` reports the failure as an R
-# error rather than crashing. Checked on every call (about 0.2 ms, made only
-# when shaping misses the cache), since the same face can load at first and
-# fail later.
-.face_warned <- new.env(parent = emptyenv())
-.loadable_family <- function(family, italic, weight) {
-  if (!is.character(family) || length(family) != 1L || !nzchar(family)) {
-    return(family)
-  }
-  m <- tryCatch(
-    systemfonts::match_fonts(family, italic = italic, weight = weight),
-    error = function(e) NULL
-  )
-  if (is.null(m) || !nzchar(m$path[1])) {
-    return(family)
-  }
-  ok <- tryCatch(
-    {
-      systemfonts::font_info(path = m$path[1], index = m$index[1])
-      TRUE
-    },
-    error = function(e) FALSE
-  )
-  if (ok) {
-    return(family)
-  }
-  key <- paste(m$path[1], m$index[1], sep = "\r")
-  if (is.null(.face_warned[[key]])) {
-    .face_warned[[key]] <- TRUE
-    cli::cli_warn(c(
-      "Font family {.val {family}} could not be loaded; using the default font.",
-      i = "systemfonts failed to open {.file {m$path[1]}} (face {m$index[1]})."
-    ))
-  }
-  ""
 }
 
 # What systemfonts matches for `family` at the requested weight, at regular

@@ -21,19 +21,19 @@
 ## Bug fixes
 
 * PowerPoint text boxes sit on their bottom edge whatever the label's
-  `vjust`, with the box still vellum's line boxes. LibreOffice sets a line
-  1.0 em above its baseline and 0.2 em below in every font, so a label
-  anchored at the box's top or middle drew up to 0.23 em lower than vellum
-  draws it (2.4 pt for a centred 18 pt Helvetica label, 4 pt for a
-  top-justified one), and Keynote, which takes Helvetica's ascent from
-  elsewhere, about as much. Applications agree on a line's descent, not its
-  ascent: both now draw within two pixels (at 36 pt, 150 dpi) of vellum
-  for most fonts, LibreOffice still lower for a font with a deep descent
-  (Avenir, 0.17 em). A multi-line label whose lines line up
-  at both edges (`md("a\n\nb")`) is aligned as a one-line label is, centred
-  for a centred label, rather than left, and an `md()` label whose box is cut
-  to its text lines counts a `^superscript^` or `~subscript~` run where it
-  sits (VR-54).
+  `vjust`, with the box still vellum's line boxes. LibreOffice assumes a fixed
+  line, 1.0 em above the baseline and 0.2 em below, whatever the font, so a
+  label anchored at the box's top or middle drew up to 0.23 em lower than
+  vellum draws it (2.4 pt for a centred 18 pt Helvetica label, 4 pt for a
+  top-justified one); Keynote, which takes Helvetica's ascent from elsewhere,
+  was off about as much. On the bottom edge both draw within two pixels (at
+  36 pt, 150 dpi) of vellum for most fonts; in LibreOffice a font whose descent
+  is deeper than 0.2 em (Avenir Next, Hoefler Text) still sits lower by the
+  excess. PowerPoint itself has not been checked. The paragraph alignment of a
+  multi-line label whose lines line up at both edges now follows its `hjust`:
+  `"a\nb"` and `md("a\n\nb")` are centred for a centred label, where they
+  were left-aligned. An `md()` label whose box is cut to its text lines counts
+  a `^superscript^` or `~subscript~` run where it sits (VR-54).
 
 * `scene_display_list()` lists a hatched point marker of any shape (square,
   triangle, diamond, star) as its shape, the hatch's background and its rules,
@@ -44,17 +44,18 @@
   cut each corner with five points, about 0.012 r inside the arc, so a point
   6 px inside a drawn corner of radius 1000 px got no hit (VR-55).
 
-* `vl_strwidth()` and text drawing no longer crash R when systemfonts cannot
-  open a font's face (macOS's variable font Skia once
-  `systemfonts::system_fonts()` has run, which a numeric `fontweight` does):
-  the label is shaped in the default font with a warning (VL-22).
+* Known issue: on macOS the variable font Skia can crash R inside
+  textshaping once `systemfonts::system_fonts()` has run (which a numeric
+  `fontweight` does): systemfonts fails to open the face and textshaping uses
+  it anyway. This is an upstream problem; avoid Skia, or the numeric weight,
+  until it is fixed (VL-22).
 
 * `scene_display_list()` is smaller for huge in-range arcs off the page: an
   arc it refines is kept within 1/8 px near the page, as before, and within a
   tolerance that grows with the distance from the page beyond it, in page
-  lengths, as a view zoomed out to show that far does. A ring of 36
+  lengths, up to four times (1/2 px). A ring of 36
   sectors of radius 30000 px crossing an 8 inch page went from 33 KB to
-  10 KB (VR-56).
+  20 KB (VR-56).
 
 * Hexagons far from the origin (`hexagon_grob()`, past about 65,000 px) are
   cut at the page window of the backend rather than a box around the origin,

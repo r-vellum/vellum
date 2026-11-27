@@ -636,7 +636,7 @@ test_that("a huge in-range arc is refined finely only near the page (VR-56)", {
     ))
   d <- .dl_decode(scene_display_list(s, version = 2))
   runs <- unlist(d$runs[d$kind == "path"], recursive = FALSE)
-  expect_lt(sum(vapply(runs, nrow, 1L)), 1000) # was 2664
+  expect_lt(sum(vapply(runs, nrow, 1L)), 2000) # 1380; was 2664
   cx <- 288 - r
   cy <- 288
   near <- 0

@@ -475,6 +475,10 @@ pub fn sector_path_in(
 /// every page in this box.
 const FAR_WINDOW: f64 = 4.0 * crate::units::PRECISE_PX;
 
+/// How many times the display list's arc tolerance may grow away from the
+/// page ([`FarWin::for_list`], VR-56).
+const TOL_GROWTH_CAP: f64 = 4.0;
+
 /// The largest gap (device px) between a far arc and the chords drawn for it,
 /// where it passes the window.
 const FAR_ARC_TOL: f64 = 1.0 / 32.0;
@@ -531,13 +535,14 @@ impl FarWin {
     }
 
     /// The display list's window (VR-56): [`FarWin::around_origin`], so a mark
-    /// the widget pans into view stays exact out to 4 x `PRECISE_PX`, but
-    /// with the arc tolerance held only near the `w` x `h` px page drawn
-    /// under `t` (the page grown by a page each way) and growing with the
-    /// distance from it, in page lengths. A view that reaches a page length
-    /// `k` past that box is zoomed out about `k` times (or panned there), so
-    /// the error looks no larger than at the page; refining a huge arc's
-    /// whole ring at the page's tolerance tripled the list.
+    /// the widget pans into view stays within reach out to 4 x `PRECISE_PX`,
+    /// with the arc tolerance held near the `w` x `h` px page drawn under `t`
+    /// (the page grown by a page each way) and growing with the distance
+    /// from it, in page lengths, up to [`TOL_GROWTH_CAP`] times. Refining a
+    /// huge arc's whole ring at the page's tolerance tripled the list. The
+    /// widget can pan anywhere at any zoom, so off-page arcs are coarser
+    /// there (at most 1/2 px for an in-range arc, 1/8 px for a far one) than
+    /// on the page, never unboundedly so.
     pub fn for_list(t: Transform, w: u32, h: u32) -> Self {
         let mut win = Self::around_origin();
         let det = (t.sx as f64 * t.sy as f64 - t.kx as f64 * t.ky as f64).abs();
@@ -558,7 +563,7 @@ impl FarWin {
         let dy = (b[1] - y1).max(y0 - b[3]).max(0.0);
         let d = dx.max(dy);
         if d > 0.0 {
-            self.tol * (1.0 + d / len)
+            self.tol * (1.0 + d / len).min(TOL_GROWTH_CAP)
         } else {
             self.tol
         }
