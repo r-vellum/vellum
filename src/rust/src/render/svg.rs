@@ -472,10 +472,16 @@ impl SvgBackend {
                 // An undashed circle becomes a `<circle>`: it starts at the same
                 // east point and runs the same way, but a dash would expose the
                 // tiny length difference from the quadratic approximation.
+                // A large circle (past `unit_circle_fits`) keeps its dashes as
+                // a `<circle>` too: the unit circle's quads are 3.1e-3 r off
+                // there, and PNG and PDF draw it near-exactly (VR-48).
                 let circle = if stroke.dash.is_empty() {
                     circle_of(path).and_then(|c| bake_circle(c, transform))
                 } else {
-                    None
+                    let win = self.far_window(transform);
+                    circle_of(path)
+                        .filter(|c| !win.unit_circle_fits(c.2))
+                        .and_then(|c| bake_circle(c, transform))
                 };
                 match circle {
                     Some((cx, cy, r)) => {
@@ -541,6 +547,11 @@ impl RenderBackend for SvgBackend {
     fn far_window(&self, transform: Transform) -> FarWin {
         let (w, h) = (self.w, self.h);
         FarWin::for_page(transform, w, h)
+    }
+    /// A `push_circle` path becomes a `<circle>` (`circle_of`); a dashed one
+    /// too when it is large (below).
+    fn exact_circles(&self) -> bool {
+        true
     }
     fn fill_path(
         &mut self,

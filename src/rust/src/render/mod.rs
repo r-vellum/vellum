@@ -791,6 +791,15 @@ pub trait RenderBackend {
         let _ = transform;
         FarWin::around_origin()
     }
+
+    /// Whether this backend writes a path built by tiny-skia's `push_circle`
+    /// (eight quads, under any transform) as an exact circle: SVG writes a
+    /// `<circle>`, DrawingML a preset ellipse. Elsewhere those quads are drawn
+    /// as they are, 3.1e-3 r off the circle, so a large circle is drawn as the
+    /// fine unit circle instead (VR-48).
+    fn exact_circles(&self) -> bool {
+        false
+    }
 }
 
 /// The message of a caught panic (`&str` or `String` payload).
@@ -828,7 +837,9 @@ pub(super) fn circles_by_path<B: RenderBackend>(
     clip: &Clip,
 ) {
     let n = cx.len().min(cy.len()).min(r.len());
-    let unit = unit_circle_path();
+    let mut units = UnitCircles::default();
+    let win = b.far_window(transform);
+    let exact = b.exact_circles();
     for i in 0..n {
         let rr = r[i];
         if !drawable_disc(cx[i], cy[i], rr) {
@@ -839,7 +850,7 @@ pub(super) fn circles_by_path<B: RenderBackend>(
         let lim = crate::units::PRECISE_PX;
         if cx[i].abs() + rr > lim || cy[i].abs() + rr > lim {
             let mut pb = PathBuilder::new();
-            push_circle_precise(&mut pb, cx[i], cy[i], rr, &b.far_window(transform));
+            push_circle_precise(&mut pb, cx[i], cy[i], rr, &win);
             let Some(path) = pb.finish() else { continue };
             let pen = stroke.filter(|(_, s)| s.width > 0.0);
             match (fill, pen) {
@@ -857,24 +868,29 @@ pub(super) fn circles_by_path<B: RenderBackend>(
             }
             continue;
         }
+        // A large circle, which the unit circle's quads would miss by
+        // 3.1e-3 r, is the fine unit circle instead (VR-48), unless the
+        // backend writes the unit circle as an exact one. Still one shape
+        // placed by a transform, so repeats stay cheap in PDF.
+        let (shape, k) = units.get(if exact { 1.0 } else { win.circle_radius(rr) }, rr);
         let tr = transform.pre_concat(Transform::from_row(
-            rr as f32,
+            k,
             0.0,
             0.0,
-            rr as f32,
+            k,
             cx[i] as f32,
             cy[i] as f32,
         ));
         let scaled = stroke.map(|(c, st)| {
             let scaled = StrokeStyle {
-                width: st.width / rr as f32,
-                dash: st.dash.iter().map(|d| d / rr as f32).collect(),
+                width: st.width / k,
+                dash: st.dash.iter().map(|d| d / k).collect(),
                 cap: st.cap,
                 join: st.join,
                 miter: st.miter,
                 crisp: st.crisp,
                 paint: st.paint.clone(),
-                phase: st.phase / rr as f32,
+                phase: st.phase / k,
             };
             (*c, scaled)
         });
@@ -882,14 +898,14 @@ pub(super) fn circles_by_path<B: RenderBackend>(
             (Some(f), Some((c, st)))
                 if st.width > 0.0 && !matches!(f, ResolvedPaint::Hatch { .. }) =>
             {
-                b.fill_and_stroke_path(&unit, tr, f, FillRule::Winding, c, &st, clip);
+                b.fill_and_stroke_path(shape, tr, f, FillRule::Winding, c, &st, clip);
             }
             (f, st) => {
                 if let Some(f) = f {
-                    b.fill_path(&unit, tr, f, FillRule::Winding, clip);
+                    b.fill_path(shape, tr, f, FillRule::Winding, clip);
                 }
                 if let Some((c, st)) = st {
-                    b.stroke_path(&unit, tr, c, &st, clip);
+                    b.stroke_path(shape, tr, c, &st, clip);
                 }
             }
         }
@@ -934,10 +950,32 @@ fn circles_keyed<B: RenderBackend>(
     }
 }
 
-fn unit_circle_path() -> Path {
-    let mut pb = PathBuilder::new();
-    pb.push_circle(0.0, 0.0, 1.0);
-    pb.finish().expect("unit circle path")
+/// The circles a circle batch is drawn from, each placed and scaled by a
+/// transform: tiny-skia's `push_circle` at the radius
+/// [`FarWin::circle_radius`] picks (1, 32, 128 or `PRECISE_PX` px: 8, 16, 32
+/// or 64 quads), built once each (VR-48).
+#[derive(Default)]
+pub(crate) struct UnitCircles {
+    paths: [Option<Path>; 4],
+}
+
+impl UnitCircles {
+    /// The circle of build radius `base` and the scale that makes it a
+    /// circle of radius `r`.
+    pub(crate) fn get(&mut self, base: f32, r: f64) -> (&Path, f32) {
+        let slot = match base {
+            b if b <= 1.0 => 0,
+            b if b <= 32.0 => 1,
+            b if b <= 128.0 => 2,
+            _ => 3,
+        };
+        let path = self.paths[slot].get_or_insert_with(|| {
+            let mut pb = PathBuilder::new();
+            pb.push_circle(0.0, 0.0, base);
+            pb.finish().expect("unit circle path")
+        });
+        (path, (r / base as f64) as f32)
+    }
 }
 
 /// Build a `Pixmap` from straight (non-premultiplied) RGBA bytes, top-left origin.

@@ -20,6 +20,34 @@
 
 ## Bug fixes
 
+* Large circles, sectors and round-rect corners now follow their arcs to
+  within a small fraction of a pixel. In PNG and PDF a circle was tiny-skia's
+  unit circle scaled up, 3e-3 of its radius off: 3 px at a radius of 1,000
+  px, the whole row at 30,000, then exact again past 65,536 px. Sectors used
+  ~4 degree chords (6 px off at a radius of 10,000) and round-rect corners
+  cubic arcs (2.7e-4 of the radius). The build now depends on the radius in
+  device pixels. A circle past ~78 px is drawn from a finer circle (16 to 64
+  curves instead of 8, still one shape placed by a transform), within 1/8 px.
+  Sectors past ~410 px and corners past ~920 px are split until they are
+  within 1/8 px of the arc, and far ones within 1/32 px over the page.
+  Smaller shapes, which is most plots, are drawn exactly as before. SVG and
+  PowerPoint already wrote circles as exact circles and still do; a large
+  dashed circle in SVG is now a dashed `<circle>` as well. Files with large
+  shapes grow a little: 200 circles of radius 100 px went from 6.0 to 7.3 KB
+  of PDF, and a 36-sector ring of radius 600 px from 8.4 to 11.6 KB of SVG
+  (VR-48).
+
+* A polygon, line, path or segment with vertices far off the page on both
+  sides of it now crosses the page where it should. Each vertex was rounded
+  on its own, so an edge between two vertices 1e9 px away could move by up
+  to 64 px. Such edges are now cut where they enter and leave the page
+  before rounding, as far markers and sectors already were (VR-50).
+
+* Far raster images were never wrong in the widget's display list: images
+  are not in the display list (they carry no key), and the widget draws
+  them in its base SVG, which fits them to the page since VR-46. A test now
+  checks this (VR-49).
+
 * A raster image reaching far past the page now draws its visible part in
   PDF, SVG and PowerPoint, and in the right place in PNG. An image 1e7 pt
   wide drew nothing in poppler, was drawn in one colour or not at all by

@@ -157,7 +157,10 @@ pub(super) fn star_path(pb: &mut PathBuilder, cx: f32, cy: f32, r: f32) {
 }
 
 /// Build a multi-subpath device path: `nper[k]` consecutive points form one
-/// closed sub-path (so even-odd/winding rules give holes).
+/// closed sub-path (so even-odd/winding rules give holes). A path with a point
+/// past [`crate::units::PRECISE_PX`] has its edges cut at `win` in f64 before
+/// narrowing ([`push_far_poly`]), so an edge between two far vertices crosses
+/// the page where it should (VR-50).
 pub(super) fn build_subpaths(
     x: &[f64],
     y: &[f64],
@@ -165,19 +168,70 @@ pub(super) fn build_subpaths(
     yu: &[Unit],
     nper: &[usize],
     vp: &Vp,
+    win: &FarWin,
 ) -> Option<tiny_skia::Path> {
-    let mut pb = PathBuilder::new();
+    let mut rings: Vec<Vec<(f64, f64)>> = Vec::new();
     let mut i = 0usize;
     for &cnt in nper {
         let end = i + cnt;
         if cnt >= 2 && end <= x.len() && end <= y.len() && end <= xu.len() && end <= yu.len() {
-            pb.move_to(vp.x_pos(x[i], xu[i]) as f32, vp.y_pos(y[i], yu[i]) as f32);
-            for k in (i + 1)..end {
-                pb.line_to(vp.x_pos(x[k], xu[k]) as f32, vp.y_pos(y[k], yu[k]) as f32);
-            }
-            pb.close();
+            rings.push(
+                (i..end)
+                    .map(|k| (vp.x_pos(x[k], xu[k]), vp.y_pos(y[k], yu[k])))
+                    .collect(),
+            );
         }
         i = end;
+    }
+    let far = rings.iter().any(|r| any_far(r));
+    let mut pb = PathBuilder::new();
+    for ring in &rings {
+        if far {
+            push_far_poly(&mut pb, ring, true, win);
+            continue;
+        }
+        for (k, &(px, py)) in ring.iter().enumerate() {
+            if k == 0 {
+                pb.move_to(px as f32, py as f32);
+            } else {
+                pb.line_to(px as f32, py as f32);
+            }
+        }
+        pb.close();
+    }
+    pb.finish()
+}
+
+/// Does a finite point of `pts` lie past [`crate::units::PRECISE_PX`]? Its
+/// edges are then cut at the window in f64 before narrowing (VR-50).
+pub(super) fn any_far(pts: &[(f64, f64)]) -> bool {
+    let lim = crate::units::PRECISE_PX;
+    pts.iter()
+        .any(|p| (p.0.is_finite() && p.0.abs() > lim) || (p.1.is_finite() && p.1.abs() > lim))
+}
+
+/// [`build_poly_px`] for points (local px, f64) of which some lie past
+/// [`crate::units::PRECISE_PX`]: each run of finite points goes through
+/// [`push_far_poly`], so an edge between two vertices 1e9 px away crosses the
+/// page where it should rather than up to 64 px off (VR-50). A long run is
+/// simplified as [`build_poly_px`] simplifies one, in f64.
+pub(super) fn build_far_poly(
+    pts: &[(f64, f64)],
+    close: bool,
+    win: &FarWin,
+) -> Option<tiny_skia::Path> {
+    let mut pb = PathBuilder::new();
+    let tol = simplify_tol() as f64;
+    let finite = |p: &(f64, f64)| p.0.is_finite() && p.1.is_finite();
+    for run in pts.split(|p| !finite(p)).filter(|r| !r.is_empty()) {
+        let simplified;
+        let run = if tol > 0.0 && run.len() >= SIMPLIFY_MIN_PTS {
+            simplified = douglas_peucker64(run, tol);
+            &simplified[..]
+        } else {
+            run
+        };
+        push_far_poly(&mut pb, run, close && run.len() >= 2, win);
     }
     pb.finish()
 }
@@ -255,14 +309,19 @@ pub(super) fn build_poly(
     yu: &[Unit],
     vp: &Vp,
     close: bool,
+    win: &FarWin,
 ) -> Option<tiny_skia::Path> {
     let n = x.len().min(y.len()).min(xu.len()).min(yu.len());
     if n < 2 {
         return None;
     }
-    let pts: Vec<(f32, f32)> = (0..n)
-        .map(|i| (vp.x_pos(x[i], xu[i]) as f32, vp.y_pos(y[i], yu[i]) as f32))
+    let pts: Vec<(f64, f64)> = (0..n)
+        .map(|i| (vp.x_pos(x[i], xu[i]), vp.y_pos(y[i], yu[i])))
         .collect();
+    if any_far(&pts) {
+        return build_far_poly(&pts, close, win);
+    }
+    let pts: Vec<(f32, f32)> = pts.iter().map(|p| (p.0 as f32, p.1 as f32)).collect();
     build_poly_px(&pts, close)
 }
 
@@ -328,6 +387,52 @@ fn douglas_peucker(pts: &[(f32, f32)], tol: f32) -> Vec<(f32, f32)> {
             let d2 = if len2 <= f32::EPSILON {
                 let (ex, ey) = (px - ax, py - ay);
                 ex * ex + ey * ey
+            } else {
+                let cross = dx * (py - ay) - dy * (px - ax);
+                cross * cross / len2
+            };
+            if d2 > worst {
+                worst = d2;
+                worst_i = i;
+            }
+        }
+        if worst > tol2 {
+            keep[worst_i] = true;
+            stack.push((lo, worst_i));
+            stack.push((worst_i, hi));
+        }
+    }
+    pts.iter()
+        .zip(keep)
+        .filter(|(_, k)| *k)
+        .map(|(p, _)| *p)
+        .collect()
+}
+
+/// [`douglas_peucker`] in f64, for a run of a far polyline (VR-50): the
+/// distances are taken before narrowing, which would move far vertices by
+/// up to 64 px.
+fn douglas_peucker64(pts: &[(f64, f64)], tol: f64) -> Vec<(f64, f64)> {
+    let n = pts.len();
+    if n < 3 {
+        return pts.to_vec();
+    }
+    let mut keep = vec![false; n];
+    keep[0] = true;
+    keep[n - 1] = true;
+    let tol2 = tol * tol;
+    let mut stack = vec![(0usize, n - 1)];
+    while let Some((lo, hi)) = stack.pop() {
+        if hi <= lo + 1 {
+            continue;
+        }
+        let (ax, ay) = pts[lo];
+        let (dx, dy) = (pts[hi].0 - ax, pts[hi].1 - ay);
+        let len2 = dx * dx + dy * dy;
+        let (mut worst, mut worst_i) = (0.0f64, lo);
+        for (i, &(px, py)) in pts.iter().enumerate().take(hi).skip(lo + 1) {
+            let d2 = if len2 <= f64::EPSILON {
+                (px - ax).powi(2) + (py - ay).powi(2)
             } else {
                 let cross = dx * (py - ay) - dy * (px - ax);
                 cross * cross / len2
@@ -453,6 +558,28 @@ pub(super) fn cap_segment(
     ))
 }
 
+/// A segment `[sx, sy, ex, ey]` reaching past [`crate::units::PRECISE_PX`],
+/// shifted sideways by `o` ([`offset_segment`]) and capped by `caps`, `(sc,
+/// ec)` ([`cap_segment`]), in f64 (VR-50). `None` when the caps leave nothing.
+pub(super) fn far_segment(e: [f64; 4], o: f64, caps: Option<(f64, f64)>) -> Option<[f64; 4]> {
+    let (dx, dy) = (e[2] - e[0], e[3] - e[1]);
+    let len = (dx * dx + dy * dy).sqrt();
+    let (ux, uy) = if len < 1e-9 {
+        (0.0, 0.0)
+    } else {
+        (dx / len, dy / len)
+    };
+    let (ox, oy) = (o * -uy, o * ux);
+    let (sx, sy, ex, ey) = (e[0] + ox, e[1] + oy, e[2] + ox, e[3] + oy);
+    let Some((sc, ec)) = caps else {
+        return Some([sx, sy, ex, ey]);
+    };
+    if len < 1e-9 || sc + ec >= len {
+        return None;
+    }
+    Some([sx + sc * ux, sy + sc * uy, ex - ec * ux, ey - ec * uy])
+}
+
 /// Move point `from` toward `toward` by `cap` device pixels, clamped so it never
 /// overshoots `toward`. `None` when the two points coincide (no direction).
 fn move_toward(from: (f32, f32), toward: (f32, f32), cap: f64) -> Option<(f32, f32)> {
@@ -489,6 +616,35 @@ pub(super) fn trim_poly_ends(pts: &mut [(f32, f32)], sc: f64, ec: f64) {
                 if let Some(np) = move_toward(pts[z], pts[w], ec) {
                     pts[z] = np;
                 }
+            }
+        }
+    }
+}
+
+/// [`trim_poly_ends`] for f64 points (a polyline reaching past
+/// [`crate::units::PRECISE_PX`], VR-50).
+pub(super) fn trim_poly_ends64(pts: &mut [(f64, f64)], sc: f64, ec: f64) {
+    let finite = |q: (f64, f64)| q.0.is_finite() && q.1.is_finite();
+    let toward = |from: (f64, f64), to: (f64, f64), cap: f64| {
+        let (dx, dy) = (to.0 - from.0, to.1 - from.1);
+        let len = (dx * dx + dy * dy).sqrt();
+        if len < 1e-9 {
+            return from;
+        }
+        let d = cap.min(len);
+        (from.0 + d * dx / len, from.1 + d * dy / len)
+    };
+    if sc > 0.0 {
+        if let Some(a) = pts.iter().position(|&q| finite(q)) {
+            if let Some(b) = (a + 1..pts.len()).find(|&j| finite(pts[j])) {
+                pts[a] = toward(pts[a], pts[b], sc);
+            }
+        }
+    }
+    if ec > 0.0 {
+        if let Some(z) = pts.iter().rposition(|&q| finite(q)) {
+            if let Some(w) = (0..z).rev().find(|&j| finite(pts[j])) {
+                pts[z] = toward(pts[z], pts[w], ec);
             }
         }
     }
@@ -543,6 +699,26 @@ pub(super) fn offset_polyline(pts: &mut [(f32, f32)], o: f64) {
     }
 }
 
+/// [`offset_polyline`] for f64 points (a polyline reaching past
+/// [`crate::units::PRECISE_PX`], VR-50).
+pub(super) fn offset_polyline64(pts: &mut [(f64, f64)], o: f64) {
+    let finite = |q: (f64, f64)| q.0.is_finite() && q.1.is_finite();
+    let Some(a) = pts.iter().position(|&q| finite(q)) else {
+        return;
+    };
+    let z = pts.iter().rposition(|&q| finite(q)).unwrap_or(a);
+    let (dx, dy) = (pts[z].0 - pts[a].0, pts[z].1 - pts[a].1);
+    let len = (dx * dx + dy * dy).sqrt();
+    if len < 1e-9 {
+        return;
+    }
+    let (ox, oy) = (o * -dy / len, o * dx / len);
+    for p in pts.iter_mut().filter(|p| finite(**p)) {
+        p.0 += ox;
+        p.1 += oy;
+    }
+}
+
 /// The four device-px control points of a self-loop's cubic-Bézier teardrop
 /// (igraph's `loop()` shape): it leaves and re-enters the vertex `(cx, cy)`,
 /// bulging out to extent `s` along `angle` (radians), with the two feet placed on
@@ -581,4 +757,73 @@ pub(super) fn loop_control_points(
         );
     }
     out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // x where a segment of `p` crosses height `y`.
+    fn crossings(p: &tiny_skia::Path, y: f64) -> Vec<f64> {
+        let mut out = Vec::new();
+        let mut last = (0.0f64, 0.0f64);
+        for seg in p.segments() {
+            use tiny_skia::PathSegment::*;
+            match seg {
+                MoveTo(q) => last = (q.x as f64, q.y as f64),
+                LineTo(q) => {
+                    let q = (q.x as f64, q.y as f64);
+                    if (last.1 - y) * (q.1 - y) <= 0.0 && last.1 != q.1 {
+                        out.push(last.0 + (y - last.1) / (q.1 - last.1) * (q.0 - last.0));
+                    }
+                    last = q;
+                }
+                _ => {}
+            }
+        }
+        out
+    }
+
+    #[test]
+    fn a_far_polyline_crosses_the_page_exactly() {
+        // x + y = 144.3 between vertices 1e9 px either way, an NA break
+        // after it: the edge crosses the page where it should (VR-50), and
+        // the break still splits the line.
+        let r = 1e9;
+        let pts = [
+            (72.15 - r, 72.15 + r),
+            (72.15 + r, 72.15 - r),
+            (f64::NAN, f64::NAN),
+            (10.0, 10.0),
+            (20.0, 10.0),
+        ];
+        let win = FarWin::for_page(Transform::identity(), 144, 144);
+        let p = build_far_poly(&pts, false, &win).unwrap();
+        for y in [0.0, 72.0, 144.0] {
+            let x = crossings(&p, y);
+            assert!(
+                x.iter().any(|x| (x - (144.3 - y)).abs() < 0.02),
+                "y = {y}: {x:?}"
+            );
+        }
+        let moves = p
+            .segments()
+            .filter(|s| matches!(s, tiny_skia::PathSegment::MoveTo(_)))
+            .count();
+        assert_eq!(moves, 2);
+        assert!(any_far(&pts));
+        assert!(!any_far(&pts[2..]));
+    }
+
+    #[test]
+    fn a_far_segment_is_offset_and_capped_in_f64() {
+        let r = 1e9;
+        let e = [-r, 50.25, r, 50.25];
+        // a 2 px offset along the normal (-u_y, u_x), as offset_segment
+        let q = far_segment(e, 2.0, None).unwrap();
+        assert_eq!((q[1], q[3]), (52.25, 52.25));
+        let q = far_segment(e, 0.0, Some((r - 10.0, 0.0))).unwrap();
+        assert_eq!(q[0], -10.0);
+        assert!(far_segment(e, 0.0, Some((r, r))).is_none());
+    }
 }
