@@ -180,7 +180,11 @@ pub(super) fn draw_lines<B: RenderBackend>(
             }
             // The centre-line as drawn: offset, then trimmed.
             if let Some(g) = b.geom_sink() {
-                g.stroke(0, &pts, lwd);
+                if far {
+                    g.stroke64(0, &p64, lwd);
+                } else {
+                    g.stroke(0, &pts, lwd);
+                }
             }
             // Geometry above is recorded even when nothing is
             // painted; painting needs a colour.
@@ -720,10 +724,11 @@ pub(super) fn draw_markers<B: RenderBackend>(
     // Indexed by shape code (0..=7); plus/cross (4/5) never reach here.
     let mut unit_cache: [Option<tiny_skia::Path>; 8] =
         [None, None, None, None, None, None, None, None];
-    // A large circle marker is built at its own radius unless the backend
+    // A large circle marker is the fine unit circle unless the backend
     // writes the unit circle as an exact one (VR-48, as `circles_by_path`).
     let win = b.far_window(t);
-    let exact = b.exact_circles(false);
+    let exact = b.exact_circles();
+    let mut units = crate::render::UnitCircles::default();
     for i in 0..n {
         b.set_element_key(key_at(keys, i));
         let cx = vp.x_pos(x[i], xu[i]);
@@ -756,11 +761,10 @@ pub(super) fn draw_markers<B: RenderBackend>(
         if fast && sh != 4 && sh != 5 {
             if let Some(rp) = &rf {
                 if !matches!(sh, 1 | 2 | 3 | 6 | 7) && !(exact || win.unit_circle_fits(rr)) {
-                    let mut pb = PathBuilder::new();
-                    crate::render::push_circle_precise(&mut pb, cx, cy, rr, &win);
-                    if let Some(path) = pb.finish() {
-                        fill_or_hatch(b, &path, t, rp, FillRule::Winding, clip);
-                    }
+                    let (fine, k) = units.get(win.circle_radius(rr), rr);
+                    let tr =
+                        t.pre_concat(Transform::from_row(k, 0.0, 0.0, k, cx as f32, cy as f32));
+                    fill_or_hatch(b, fine, tr, rp, FillRule::Winding, clip);
                     continue;
                 }
                 let slot = (sh as usize).min(7);
@@ -1397,12 +1401,13 @@ pub(super) fn draw_segments<B: RenderBackend>(
         // painted.
         if let Some(g) = b.geom_sink() {
             let lwd = gp.lwd_px(vp.dpi) as f64;
-            for &(sx, sy, ex, ey, gi) in &segs {
-                g.stroke(
-                    gi,
-                    &[(sx, sy), (ex, ey)],
-                    lwds.get(gi).map_or(lwd, |w| w * vp.dpi / 96.0),
-                );
+            for (k, &(sx, sy, ex, ey, gi)) in segs.iter().enumerate() {
+                let w = lwds.get(gi).map_or(lwd, |w| w * vp.dpi / 96.0);
+                match far64[k] {
+                    // a far segment as drawn, in f64 (VR-50)
+                    Some(q) => g.stroke64(gi, &[(q[0], q[1]), (q[2], q[3])], w),
+                    None => g.stroke(gi, &[(sx, sy), (ex, ey)], w),
+                }
             }
         }
         let Some(col) = gp.col else {

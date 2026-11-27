@@ -202,7 +202,8 @@ pub fn roundrect_path(x: f64, y: f64, w: f64, h: f64, r: f64, win: &FarWin) -> O
     let lim = crate::units::PRECISE_PX;
     let far = [x, y, x + w, y + h].iter().any(|v| v.abs() > lim);
     if (far || !win.keeps(CUBIC_ARC_ERR * r)) && [x, y, w, h, r].iter().all(|v| v.is_finite()) {
-        return precise_roundrect_path(x, y, w, h, r, win);
+        let win = if far { *win } else { win.in_range() };
+        return precise_roundrect_path(x, y, w, h, r, &win);
     }
     let kr = (r * 0.552_284_749_830_793_6) as f32; // control-point offset for a 90° arc
     let r = r as f32;
@@ -360,12 +361,15 @@ pub fn sector_path_in(
         .min(MAX_SECTOR_SEGS);
     // Those chords miss the arc by their sagitta: 6.1e-4 r, 6 px at r = 1e4.
     // Past ARC_KEEP_TOL device px (r past ~410 px) the outline is built as a
-    // far one is, within the window's tolerance over the window (VR-48).
+    // far one is, within IN_RANGE_ARC_TOL over the window (VR-48).
     let r_max = r_out.max(r_in);
     let sag = r_max * (1.0 - (0.5 * dtheta / segs as f64).cos());
     let lim = crate::units::PRECISE_PX;
-    if cx.abs() + r_max > lim || cy.abs() + r_max > lim || !win.keeps(sag) {
+    if cx.abs() + r_max > lim || cy.abs() + r_max > lim {
         return far_sector_path(cx, cy, r_in, r_out, theta0, theta1, win);
+    }
+    if !win.keeps(sag) {
+        return far_sector_path(cx, cy, r_in, r_out, theta0, theta1, &win.in_range());
     }
     // `(cx, cy)` is already in the y-down device frame (via `y_pos`), while `a` is a
     // y-up angle (0 at 3 o'clock, CCW, per the R contract). Negate the sin term to map
@@ -400,10 +404,17 @@ const FAR_WINDOW: f64 = 4.0 * crate::units::PRECISE_PX;
 /// where it passes the window.
 const FAR_ARC_TOL: f64 = 1.0 / 32.0;
 
+/// The arc tolerance (device px) of an in-range arc that [`ARC_KEEP_TOL`]
+/// sends to the far build. Coarser than [`FAR_ARC_TOL`], which is for arcs
+/// that swing past the page at huge radii: half the point count, and still
+/// well under the error of the builds kept below the threshold (VR-48).
+const IN_RANGE_ARC_TOL: f64 = 1.0 / 8.0;
+
 /// The largest outline error (device px) of an in-range arc build that is
 /// kept as it is (VR-48): ~4 degree sector chords, tiny-skia's unit circle
-/// scaled up, cubic round-rect corners. A larger arc is built as a far one is
-/// instead ([`far_arc`], within [`FAR_ARC_TOL`] over the window). At 1/4 px
+/// scaled up, cubic round-rect corners. A larger sector or corner is built as
+/// a far one is instead ([`far_arc`], within [`IN_RANGE_ARC_TOL`] over the
+/// window), a larger circle as the fine unit circle. At 1/4 px
 /// those builds stay as they were up to a sector radius of ~410 px, a scaled
 /// unit circle of ~78 px and a round-rect corner of ~920 px, so ordinary plot
 /// sizes keep their bytes (at 1/8 px, the outer rings of the default
@@ -485,11 +496,41 @@ impl FarWin {
 
     /// May a circle of radius `r` local px be drawn as tiny-skia's unit circle
     /// scaled up (VR-48)? Past ~78 device px it strays more than
-    /// [`ARC_KEEP_TOL`]; it is then built at its own radius
-    /// ([`push_circle_precise`]), within 0.06 px up to
-    /// [`crate::units::PRECISE_PX`] and within [`FAR_ARC_TOL`] past it.
+    /// [`ARC_KEEP_TOL`]; it is then drawn from a finer circle
+    /// ([`FarWin::circle_radius`]), and past [`crate::units::PRECISE_PX`]
+    /// built in place ([`push_circle_precise`]).
     pub fn unit_circle_fits(&self, r: f64) -> bool {
         self.keeps(UNIT_CIRCLE_ERR * r)
+    }
+
+    /// The radius (px) at which to build the circle that is scaled to draw a
+    /// circle of radius `r` local px (VR-48). tiny-skia's `push_circle` uses
+    /// more quads for a larger radius: 8 at 1 px (3.1e-3 r off), 16 at 32 px
+    /// (1.9e-4 r), 32 at 128 px (1.2e-5 r) and 64 at `PRECISE_PX` (8e-7 r).
+    /// The unit circle while [`FarWin::unit_circle_fits`], else the fewest
+    /// quads within [`IN_RANGE_ARC_TOL`] device px: few quads keep a PDF of
+    /// many large circles small.
+    pub fn circle_radius(&self, r: f64) -> f32 {
+        if self.unit_circle_fits(r) {
+            return 1.0;
+        }
+        let tol = self.tol * (IN_RANGE_ARC_TOL / FAR_ARC_TOL);
+        if 1.9e-4 * r <= tol {
+            32.0
+        } else if 1.2e-5 * r <= tol {
+            128.0
+        } else {
+            crate::units::PRECISE_PX as f32
+        }
+    }
+
+    /// This window with the coarser [`IN_RANGE_ARC_TOL`], for an in-range
+    /// arc rebuilt past [`ARC_KEEP_TOL`].
+    pub fn in_range(&self) -> Self {
+        FarWin {
+            b: self.b,
+            tol: self.tol * (IN_RANGE_ARC_TOL / FAR_ARC_TOL),
+        }
     }
 
     /// Does the box `[x0, y0, x1, y1]` touch the window?
@@ -778,10 +819,12 @@ mod tests {
         for r in [1e3, 1e4, 6e4] {
             let (cx, cy) = (72.0 - r * phi.cos(), 72.0 + r * phi.sin());
             let p = sector_path_in(cx, cy, 0.0, r, 0.0, half, &win).unwrap();
+            // within 1/8 px rebuilt in range, 1/32 px far (6e4 + 72 > PRECISE_PX)
+            let tol = if r < 6e4 { 0.14 } else { 0.05 };
             for y in [50.0, 72.0, 100.0] {
                 let want = cx + (r * r - (y - cy) * (y - cy)).sqrt();
                 assert!(
-                    (crossing(&p, y, want) - want).abs() < 0.05,
+                    (crossing(&p, y, want) - want).abs() < tol,
                     "r = {r}, y = {y}"
                 );
             }
@@ -795,10 +838,11 @@ mod tests {
         // Up to ~410 px a sector keeps its ~4 degree chords (VR-48)
         let half = std::f64::consts::FRAC_PI_2;
         let win = FarWin::for_page(Transform::identity(), 1200, 1200);
-        let p = sector_path_in(600.0, 600.0, 0.0, 400.0, 0.0, half, &win).unwrap();
+        let p = sector_path_in(600.0, 600.0, 200.0, 400.0, 0.0, half, &win).unwrap();
         assert_eq!(p.len(), 1 + 23 + 24 + 1);
-        let p = sector_path_in(600.0, 600.0, 0.0, 440.0, 0.0, half, &win).unwrap();
-        assert!(p.len() > 1 + 23 + 24 + 1);
+        // past it, split to 1/8 px: 2 degree chords (the 220 px inner arc too)
+        let p = sector_path_in(600.0, 600.0, 220.0, 440.0, 0.0, half, &win).unwrap();
+        assert_eq!(p.len(), 1 + 46 + 1 + 46 + 1);
         // and a round rect with corners up to ~920 px its cubic corners
         let cubics = |p: &Path| {
             p.segments()
@@ -827,14 +871,35 @@ mod tests {
         for r in [1e4, 6e4, 1e7] {
             let (cx, cy) = (72.0 + r * a.cos(), 72.0 + r * a.sin());
             let p = roundrect_path(cx - r, cy - r, 2.0 * r, 2.0 * r, r, &win).unwrap();
+            // within 1/8 px rebuilt in range (1e4), 1/32 px far
+            let tol = if r < 6e4 { 0.14 } else { 0.05 };
             for y in [60.0, 72.0, 84.0] {
                 let want = cx - (r * r - (y - cy) * (y - cy)).sqrt();
                 assert!(
-                    (crossing(&p, y, want) - want).abs() < 0.05,
+                    (crossing(&p, y, want) - want).abs() < tol,
                     "r = {r}, y = {y}"
                 );
             }
             assert!(p.len() < 400, "r = {r}: {} points", p.len());
         }
+    }
+
+    #[test]
+    fn a_large_circle_is_drawn_from_the_fewest_quads_that_fit() {
+        // the build radius picks tiny-skia's quad count (VR-48)
+        let win = FarWin::for_page(Transform::identity(), 144, 144);
+        assert_eq!(win.circle_radius(50.0), 1.0);
+        assert_eq!(win.circle_radius(100.0), 32.0);
+        assert_eq!(win.circle_radius(1000.0), 128.0);
+        assert_eq!(win.circle_radius(2e4), crate::units::PRECISE_PX as f32);
+        let quads = |r: f32| {
+            let mut pb = PathBuilder::new();
+            pb.push_circle(0.0, 0.0, r);
+            pb.finish().unwrap().len() - 2
+        };
+        assert_eq!(
+            [1.0, 32.0, 128.0, crate::units::PRECISE_PX as f32].map(quads),
+            [8, 16, 32, 64]
+        );
     }
 }

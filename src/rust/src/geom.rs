@@ -144,6 +144,13 @@ impl GeomSink {
         self.push(elem, Part::Stroke { pts, width });
     }
 
+    /// [`GeomSink::stroke`] for f64 local px: a far line or segment, whose
+    /// vertices narrowed to f32 would move its edges (VR-50).
+    pub fn stroke64(&mut self, elem: usize, pts: &[(f64, f64)], width: f64) {
+        let pts = pts.iter().map(|&(x, y)| self.dev(x, y)).collect();
+        self.push(elem, Part::Stroke { pts, width });
+    }
+
     /// An open path (curves flattened) stroked `width` px wide.
     pub fn stroke_path(&mut self, elem: usize, path: &Path, width: f64) {
         for run in flatten_rings(path) {

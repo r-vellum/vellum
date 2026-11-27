@@ -213,15 +213,24 @@ pub(super) fn any_far(pts: &[(f64, f64)]) -> bool {
 /// [`build_poly_px`] for points (local px, f64) of which some lie past
 /// [`crate::units::PRECISE_PX`]: each run of finite points goes through
 /// [`push_far_poly`], so an edge between two vertices 1e9 px away crosses the
-/// page where it should rather than up to 64 px off (VR-50). Not simplified.
+/// page where it should rather than up to 64 px off (VR-50). A long run is
+/// simplified as [`build_poly_px`] simplifies one, in f64.
 pub(super) fn build_far_poly(
     pts: &[(f64, f64)],
     close: bool,
     win: &FarWin,
 ) -> Option<tiny_skia::Path> {
     let mut pb = PathBuilder::new();
+    let tol = simplify_tol() as f64;
     let finite = |p: &(f64, f64)| p.0.is_finite() && p.1.is_finite();
     for run in pts.split(|p| !finite(p)).filter(|r| !r.is_empty()) {
+        let simplified;
+        let run = if tol > 0.0 && run.len() >= SIMPLIFY_MIN_PTS {
+            simplified = douglas_peucker64(run, tol);
+            &simplified[..]
+        } else {
+            run
+        };
         push_far_poly(&mut pb, run, close && run.len() >= 2, win);
     }
     pb.finish()
@@ -378,6 +387,52 @@ fn douglas_peucker(pts: &[(f32, f32)], tol: f32) -> Vec<(f32, f32)> {
             let d2 = if len2 <= f32::EPSILON {
                 let (ex, ey) = (px - ax, py - ay);
                 ex * ex + ey * ey
+            } else {
+                let cross = dx * (py - ay) - dy * (px - ax);
+                cross * cross / len2
+            };
+            if d2 > worst {
+                worst = d2;
+                worst_i = i;
+            }
+        }
+        if worst > tol2 {
+            keep[worst_i] = true;
+            stack.push((lo, worst_i));
+            stack.push((worst_i, hi));
+        }
+    }
+    pts.iter()
+        .zip(keep)
+        .filter(|(_, k)| *k)
+        .map(|(p, _)| *p)
+        .collect()
+}
+
+/// [`douglas_peucker`] in f64, for a run of a far polyline (VR-50): the
+/// distances are taken before narrowing, which would move far vertices by
+/// up to 64 px.
+fn douglas_peucker64(pts: &[(f64, f64)], tol: f64) -> Vec<(f64, f64)> {
+    let n = pts.len();
+    if n < 3 {
+        return pts.to_vec();
+    }
+    let mut keep = vec![false; n];
+    keep[0] = true;
+    keep[n - 1] = true;
+    let tol2 = tol * tol;
+    let mut stack = vec![(0usize, n - 1)];
+    while let Some((lo, hi)) = stack.pop() {
+        if hi <= lo + 1 {
+            continue;
+        }
+        let (ax, ay) = pts[lo];
+        let (dx, dy) = (pts[hi].0 - ax, pts[hi].1 - ay);
+        let len2 = dx * dx + dy * dy;
+        let (mut worst, mut worst_i) = (0.0f64, lo);
+        for (i, &(px, py)) in pts.iter().enumerate().take(hi).skip(lo + 1) {
+            let d2 = if len2 <= f64::EPSILON {
+                (px - ax).powi(2) + (py - ay).powi(2)
             } else {
                 let cross = dx * (py - ay) - dy * (px - ax);
                 cross * cross / len2

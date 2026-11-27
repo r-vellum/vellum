@@ -438,3 +438,33 @@ test_that("a far image never reaches the display list (VR-49)", {
   expect_length(x, 1)
   expect_lt(abs(x), 1e4)
 })
+
+test_that("a far line or segment is hit where it is drawn (VR-50)", {
+  # Both ends 5e8 px away, chosen so their f32 rounding moves the crossing
+  # of row 72 by ~25 px: the recorded geometry must follow the drawing.
+  u <- function(v) vl_unit(v, "pt")
+  pen <- vl_gpar(col = "red", lwd = 1)
+  ds <- c(-5e8 - 1.7, 5e8 + 3 * 1.7)
+  px <- 72.3 + ds
+  py <- 72 + 2 * ds
+  for (kind in c("lines", "segments")) {
+    s <- switch(
+      kind,
+      lines = draw(base, lines_grob(u(px), u(144 - py), gp = pen, key = "k")),
+      segments = draw(base, segments_grob(
+        u(px[1]),
+        u(144 - py[1]),
+        u(px[2]),
+        u(144 - py[2]),
+        gp = pen,
+        key = "k"
+      ))
+    )
+    a <- scene_raster(s)
+    ink <- which(a[1, , 72] > 100 & a[2, , 72] < 200)
+    xs <- seq(0, 144, by = 0.25)
+    hits <- xs[vapply(xs, function(x) length(hit_test(s, x, 71.5, units = "px")) > 0, TRUE)]
+    expect_gt(length(hits), 0)
+    expect_lt(abs(mean(hits) - mean(ink - 0.5)), 1.5, label = kind)
+  }
+})

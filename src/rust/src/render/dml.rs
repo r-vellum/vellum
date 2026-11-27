@@ -2680,7 +2680,7 @@ impl RenderBackend for DmlBackend {
         FarWin::for_page(transform, w, h)
     }
     /// A `push_circle` path becomes a preset ellipse (`is_ellipse`).
-    fn exact_circles(&self, _dashed: bool) -> bool {
+    fn exact_circles(&self) -> bool {
         true
     }
     fn fill_path(
