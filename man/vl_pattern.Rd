@@ -18,11 +18,18 @@ vl_pattern(
 \item{grob}{A grob, or a list of grobs, drawn into the tile (their \verb{0..1} npc
 coordinates map to the tile, painted in order).}
 
-\item{width, height}{Size of one tile cell (default \code{0.1} npc).}
+\item{width, height}{Size of one tile cell (default \code{0.1} npc). Numbers are
+in \code{units}; a \code{\link[=vl_unit]{vl_unit()}} keeps its own unit, so
+\code{width = vl_unit(5, "mm")} makes 5 mm cells whatever \code{units} is. The two
+must share a unit, or both be absolute lengths (\code{"mm"}, \code{"cm"}, \code{"in"},
+\code{"pt"}).}
 
-\item{x, y}{Cell centre (default centred).}
+\item{x, y}{Cell centre (default centred). Numbers are in \code{units}; a
+\code{\link[=vl_unit]{vl_unit()}} is converted to \code{units}, which works for the same unit or
+between absolute lengths.}
 
-\item{units}{Coordinate system for the geometry; see \code{\link[=linear_gradient]{linear_gradient()}}.}
+\item{units}{Coordinate system for the geometry given as plain numbers;
+see \code{\link[=linear_gradient]{linear_gradient()}}.}
 
 \item{extend}{Tiling mode: \code{"repeat"} (default) or \code{"reflect"} (every other
 cell mirrored). Both draw the same on every backend. \code{"pad"} is not
@@ -49,4 +56,6 @@ with a degrade warning.
 \examples{
 dots <- circle_grob(r = 0.25, gp = vl_gpar(fill = "white", col = NA))
 vl_pattern(dots, width = 0.08, height = 0.08)
+# cells of a fixed physical size
+vl_pattern(dots, width = vl_unit(5, "mm"), height = vl_unit(5, "mm"))
 }

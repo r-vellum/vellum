@@ -414,6 +414,74 @@ test_that("a leading superscript or subscript keeps the md() line pitch", {
   expect_identical(pitch(md("**A**\n\n*b*")), "1440")
 })
 
+test_that("a label with one text line among blank ones keeps the line pitch (VR-51)", {
+  skip_if_not_installed("xml2")
+  box <- function(lab, family = "") {
+    sc <- vl_scene(4, 2, dpi = 96) |>
+      draw(text_grob(lab, gp = vl_gpar(fontfamily = family)))
+    doc <- xml2::read_xml(.dml_fragment(sc)$xml)
+    ns <- xml2::xml_ns(doc)
+    sp <- xml2::xml_find_first(doc, ".//p:sp[.//p:txBody]", ns)
+    ps <- xml2::xml_find_all(sp, ".//p:txBody/a:p", ns)
+    list(
+      spc = vapply(
+        ps,
+        function(p) {
+          v <- xml2::xml_find_first(p, "a:pPr/a:lnSpc/a:spcPts", ns)
+          xml2::xml_attr(v, "val")
+        },
+        ""
+      ),
+      text = xml2::xml_text(ps),
+      cy = as.numeric(xml2::xml_attr(xml2::xml_find_first(sp, ".//a:ext", ns), "cy"))
+    )
+  }
+  # every paragraph gets 1.2 x the default 12 pt, as "a\nb" does
+  expect_identical(box("\nabc")$spc, c("1440", "1440"))
+  expect_identical(box("\n\nabc")$spc, rep("1440", 3))
+  expect_identical(box("a\n\nb")$spc, rep("1440", 3))
+  # a single line needs none
+  expect_identical(box("abc")$spc, NA_character_)
+  # vellum sets "abc\n" as one line (as strsplit() splits it), so is it here
+  expect_identical(box("abc\n"), box("abc"))
+  # an md() label's box leaves out blank lines before and after its text, so
+  # they are not written either, and the box is the text line's: as tall as
+  # its font's line box, which is not its nominal size in every font (1.0 em
+  # in Helvetica, 1.16 em in DejaVu Sans), to within EMU rounding
+  for (family in c("", "serif", "mono")) {
+    one <- box(md("**abc**"), family)
+    labs <- list(
+      md("\n**abc**"),
+      md("\n\n**abc**"),
+      md("**abc**\n\n"),
+      # unequal blank lines on both ends
+      md("\n**abc**\n\n\n"),
+      md("\n\n**abc**\n\n\n\n")
+    )
+    for (lab in labs) {
+      b <- box(lab, family)
+      expect_identical(b[c("spc", "text")], one[c("spc", "text")])
+      expect_lt(abs(b$cy - one$cy), 127) # 0.01 pt
+    }
+  }
+  # a blank line between text lines stays
+  expect_identical(box(md("**a**\n\n*b*"))$spc, rep("1440", 3))
+})
+
+test_that("a CRLF line break is one break in PowerPoint", {
+  skip_if_not_installed("xml2")
+  paras <- function(lab) {
+    sc <- vl_scene(4, 2, dpi = 96) |> draw(text_grob(lab))
+    doc <- xml2::read_xml(.dml_fragment(sc)$xml)
+    ns <- xml2::xml_ns(doc)
+    xml2::xml_text(xml2::xml_find_all(doc, ".//p:txBody/a:p", ns))
+  }
+  expect_identical(paras("a\r\nb"), c("a", "b"))
+  expect_identical(paras("a\r\n\r\nb"), c("a", "", "b"))
+  expect_identical(paras(md("**a**\r\n*b*")), c("a", "b"))
+  expect_identical(paras(md("\r\n**a**")), "a")
+})
+
 test_that("a blank line keeps a label native", {
   skip_if_not_installed("xml2")
   sc <- vl_scene(2, 2, dpi = 96) |> draw(text_grob("a\n\nb"))

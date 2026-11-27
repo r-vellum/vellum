@@ -1812,9 +1812,37 @@ md <- function(text) {
 .nearest_weight <- function(family, italic, weight) {
   sf <- systemfonts::system_fonts()
   faces <- sf[tolower(sf$family) == tolower(family), , drop = FALSE]
+  .pick_weight(faces, italic, weight)
+}
+
+# The weight to ask for from `faces` (rows of `systemfonts::system_fonts()`
+# for one family: `italic`, `weight` and `width` columns): the nearest weight
+# among faces of the requested style, a tie going to the heavier face.
+#
+# Faces of normal width come first (VL-20): the OS matcher picks the nearest
+# weight whatever its width, so Helvetica Neue at 900 drew in "Condensed
+# Black", narrower than every other weight. Asking for the nearest weight a
+# normal-width face has (700 there) gets that face instead. A family with no
+# normal-width face uses all of them. The matcher still chooses between faces
+# of equal weight itself.
+#
+# Width tags are unreliable (Sukhumvit Set's Thin is tagged semicondensed but
+# is not narrow; every face of Skia is tagged condensed), so a face counts as
+# narrow or wide only when its style name says so too.
+# A style name that says the face is narrower or wider than normal (also
+# matching "SemiCondensed", "Ultra Expanded" and the like).
+.WIDTH_STYLE <- "condensed|narrow|compressed|extended|expanded"
+
+.pick_weight <- function(faces, italic, weight) {
   same_style <- faces[faces$italic == italic, , drop = FALSE]
   if (nrow(same_style)) {
     faces <- same_style
+  }
+  wd <- as.character(faces$width)
+  named <- grepl(.WIDTH_STYLE, as.character(faces$style), ignore.case = TRUE)
+  normal <- is.na(wd) | wd == "normal" | !named
+  if (any(normal) && !all(normal)) {
+    faces <- faces[normal, , drop = FALSE]
   }
   have <- 100L * as.integer(faces$weight)
   have <- have[!is.na(have)]

@@ -88,8 +88,25 @@
 #'   (1-based, 0 = top level). A client draws a group's records into their own
 #'   layer and composites it at `alpha`.
 #'
-#' Masks, blend modes, blur and shadow effects, hatches, patterns, repeating or
+#' Masks, blend modes, blur and shadow effects, patterns, repeating or
 #' reflecting gradients and gradient strokes stay flagged.
+#'
+#' @section Hatched fills:
+#' A [vl_hatch()] fill is not flagged for its paint in either version:
+#' vellum turns it into geometry before the list is made, so a hatched rect,
+#' path, polygon or circle (a circle [points_grob()] marker included) is
+#' listed as two exact records, the shape filled with the hatch's
+#' `bg` (transparent when `bg = NA`) and a path of the rules stroked in the
+#' hatch's colour, then the shape's own stroke if it has one. The rules are
+#' already cut to the shape, and a clip, rotation or sketch applies to them as
+#' to any path. Such records are flagged only for the reasons any record is:
+#' a group with an opacity (version 1), a blend mode, mask or effect, or a
+#' clip that is not an axis-aligned rectangle (version 1).
+#'
+#' The exception is a hatched [points_grob()] marker of any other shape
+#' (square, triangle, diamond, star, ...): it is one point record, which has
+#' room for one fill and one stroke but not the rules, so it is flagged `1`
+#' and drawn from `"keyed_flagged"`.
 #'
 #' * Flagged runs (VW-30): `record$run` is the run of flagged marks a record
 #'   belongs to (1-based, 0 = none) and `runs` their count. A run is a stretch
@@ -113,7 +130,8 @@
 #' @section What stage 1 does not reproduce:
 #' Such marks are still listed, so they can be hit-tested, but `flags` marks
 #' them and a client should fall back to its approximate path for them:
-#' `1` a gradient, pattern or hatch paint (the paint's colour is `NA`); `2` a
+#' `1` a gradient or pattern paint (the paint's colour is `NA`; a hatch is
+#' listed as geometry instead, see *Hatched fills*); `2` a
 #' clip that is not an axis-aligned rectangle (the clip is not listed); `4` a
 #' mark inside a group with opacity, blend mode, mask or effect; `8` a text
 #' label (the geometry is its box); `16` pick-only: a keyed mark that paints

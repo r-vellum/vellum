@@ -139,8 +139,27 @@ the record is drawn in, 0 = none). \code{groups} has \code{alpha} and \code{pare
 layer and composites it at \code{alpha}.
 }
 
-Masks, blend modes, blur and shadow effects, hatches, patterns, repeating or
+Masks, blend modes, blur and shadow effects, patterns, repeating or
 reflecting gradients and gradient strokes stay flagged.
+}
+
+\section{Hatched fills}{
+
+A \code{\link[=vl_hatch]{vl_hatch()}} fill is not flagged for its paint in either version:
+vellum turns it into geometry before the list is made, so a hatched rect,
+path, polygon or circle (a circle \code{\link[=points_grob]{points_grob()}} marker included) is
+listed as two exact records, the shape filled with the hatch's
+\code{bg} (transparent when \code{bg = NA}) and a path of the rules stroked in the
+hatch's colour, then the shape's own stroke if it has one. The rules are
+already cut to the shape, and a clip, rotation or sketch applies to them as
+to any path. Such records are flagged only for the reasons any record is:
+a group with an opacity (version 1), a blend mode, mask or effect, or a
+clip that is not an axis-aligned rectangle (version 1).
+
+The exception is a hatched \code{\link[=points_grob]{points_grob()}} marker of any other shape
+(square, triangle, diamond, star, ...): it is one point record, which has
+room for one fill and one stroke but not the rules, so it is flagged \code{1}
+and drawn from \code{"keyed_flagged"}.
 \itemize{
 \item Flagged runs (VW-30): \code{record$run} is the run of flagged marks a record
 belongs to (1-based, 0 = none) and \code{runs} their count. A run is a stretch
@@ -167,7 +186,8 @@ from its raster; current lists have none.
 
 Such marks are still listed, so they can be hit-tested, but \code{flags} marks
 them and a client should fall back to its approximate path for them:
-\code{1} a gradient, pattern or hatch paint (the paint's colour is \code{NA}); \code{2} a
+\code{1} a gradient or pattern paint (the paint's colour is \code{NA}; a hatch is
+listed as geometry instead, see \emph{Hatched fills}); \code{2} a
 clip that is not an axis-aligned rectangle (the clip is not listed); \code{4} a
 mark inside a group with opacity, blend mode, mask or effect; \code{8} a text
 label (the geometry is its box); \code{16} pick-only: a keyed mark that paints

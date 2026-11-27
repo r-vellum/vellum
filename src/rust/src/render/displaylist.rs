@@ -18,8 +18,11 @@
 //! table the paints refer to), clips by a path or a rotated rect (clip paths
 //! in device px), and groups whose only effect is an opacity below 1 (a group
 //! table each record refers to; a client composites the group's records as
-//! one layer). Masks, blend modes, effects, hatches, patterns, repeating
-//! gradients and gradient strokes stay flagged.
+//! one layer). Masks, blend modes, effects, patterns, repeating gradients and
+//! gradient strokes stay flagged. A hatch never reaches the list as a paint:
+//! the shared walk expands it into a `bg` fill and stroked rules first, which
+//! are listed exactly like any fill and stroke -- except inside a marker's
+//! point record, which cannot hold the rules and is flagged instead.
 
 use std::collections::HashMap;
 
@@ -39,7 +42,7 @@ pub const KIND_RECT: u8 = 1;
 pub const KIND_PATH: u8 = 2;
 
 /// Record flags (`record$flags`, a bitfield). Zero = drawn exactly.
-pub const FLAG_PAINT: u8 = 1; // gradient / pattern / hatch: paint not reproduced
+pub const FLAG_PAINT: u8 = 1; // gradient / pattern: paint not reproduced
 pub const FLAG_CLIP: u8 = 2; // clipped by a path or rotated rect: clip not listed
 pub const FLAG_GROUP: u8 = 4; // inside a group with opacity / blend / mask / effect
 pub const FLAG_TEXT: u8 = 8; // a text label: geometry is its (rotated) box
@@ -1071,6 +1074,14 @@ impl RenderBackend for DisplayListBackend {
         self.dl.pt_shape.push(shape.min(255) as u8);
         self.push_rec(KIND_POINT, PaintKey::default(), 0, clip);
         self.marker = Some(self.dl.recs.len() - 1);
+    }
+
+    fn begin_hatch(&mut self) {
+        // A point record has one fill and one stroke, so a hatched marker's
+        // rules cannot ride on it: flag it rather than list it as exact.
+        if let Some(m) = self.marker {
+            self.dl.recs[m].flags |= FLAG_PAINT;
+        }
     }
 
     fn begin_draw_node(&mut self, node: usize) {

@@ -180,3 +180,62 @@ test_that("a hatch in col is rejected", {
     "vl_hatch"
   )
 })
+
+test_that("vl_pattern() takes vl_unit() cell sizes (VL-18)", {
+  g <- circle_grob(r = 0.3, gp = vl_gpar(fill = "red", col = NA))
+  # an absolute size keeps its unit; the centre stays in `units`
+  p <- vl_pattern(g, width = vl_unit(5, "mm"), height = vl_unit(5, "mm"))
+  expect_identical(c(p$width, p$height), c(5, 5))
+  expect_identical(p$units, "npc")
+  expect_identical(p$size_units, "mm")
+  expect_match(cli::cli_fmt(print(p)), "5 x 5 \"mm\"", all = FALSE)
+  # converted when `units` is absolute, so nothing extra is recorded
+  p <- vl_pattern(g, vl_unit(1, "in"), vl_unit(36, "pt"), units = "mm")
+  expect_equal(c(p$width, p$height), c(25.4, 12.7))
+  expect_null(p$size_units)
+  # two absolute units meet in millimetres
+  p <- vl_pattern(g, vl_unit(1, "cm"), vl_unit(1, "in"))
+  expect_equal(c(p$width, p$height), c(10, 25.4))
+  expect_identical(p$size_units, "mm")
+  # the same unit as `units` changes nothing
+  expect_identical(
+    vl_pattern(g, vl_unit(0.2, "npc"), vl_unit(0.2, "npc")),
+    vl_pattern(g, 0.2, 0.2)
+  )
+  # a position converts to `units`
+  p <- vl_pattern(g, 5, 5, x = vl_unit(1, "in"), units = "pt")
+  expect_identical(p$x, 72)
+})
+
+test_that("a vl_unit() pattern cell renders at its physical size (VL-18)", {
+  tile <- list(
+    rect_grob(gp = vl_gpar(fill = "red", col = NA)),
+    circle_grob(r = 0.3, gp = vl_gpar(fill = "white", col = NA))
+  )
+  scene <- function(fill) {
+    vl_scene(width = 1, height = 1, dpi = 100, bg = "white") |>
+      draw(rect_grob(gp = vl_gpar(col = NA, fill = fill)))
+  }
+  # on a 1 in page, 0.2 in cells are 0.2 npc cells
+  a <- scene(vl_pattern(tile, vl_unit(0.2, "in"), vl_unit(0.2, "in")))
+  b <- scene(vl_pattern(tile, 0.2, 0.2))
+  expect_identical(.scene_to_backend(a)$rgba(), .scene_to_backend(b)$rgba())
+})
+
+test_that("vl_pattern() explains a vl_unit() it can't use (VL-18)", {
+  g <- circle_grob()
+  expect_error(
+    vl_pattern(g, vl_unit(0.1, "npc"), vl_unit(5, "mm")),
+    "must share a unit"
+  )
+  expect_error(
+    vl_pattern(g, 0.1, vl_unit(5, "mm"), units = "native"),
+    "must share a unit"
+  )
+  expect_error(vl_pattern(g, x = vl_unit(5, "mm")), "Can't convert")
+  expect_error(vl_pattern(g, vl_unit(1:2, "mm"), 0.1), "single")
+  expect_error(
+    vl_pattern(g, vl_unit(1, "npc") + vl_unit(2, "mm"), 0.1),
+    "compound"
+  )
+})

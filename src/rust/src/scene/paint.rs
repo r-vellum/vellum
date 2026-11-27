@@ -121,6 +121,7 @@ pub(super) fn fill_or_hatch<B: RenderBackend>(
             return;
         }
     };
+    b.begin_hatch();
     // An opaque background behind the rules, when asked for: a hatch over white
     // and a hatch over the map beneath it are different designs.
     if let Some(c) = bg {
@@ -197,7 +198,7 @@ pub(super) fn resolve_paint(paint: &Paint, vp: &Vp) -> ResolvedPaint {
         },
         Paint::Pattern(p) => {
             let (mut x, mut y) = (vp.x_pos(p.x, p.unit), vp.y_pos(p.y, p.unit));
-            let (mut w, mut h) = (vp.x_len(p.w, p.unit), vp.y_len(p.h, p.unit));
+            let (mut w, mut h) = (vp.x_len(p.w, p.size_unit), vp.y_len(p.h, p.size_unit));
             // A reflected pattern was turned into a 2x2 mirrored tile at parse
             // time: the tile now spans two cells each way from the same top-left.
             if p.mirrored {
