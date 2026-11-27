@@ -534,7 +534,8 @@ impl Scene {
         keys: Option<Vec<Option<String>>>,
         precision: Precision,
     ) -> List {
-        let mut b = DisplayListBackend::with_options(panels, version);
+        let mut b =
+            DisplayListBackend::with_options(panels, version).with_page(self.w_px, self.h_px);
         let _ = self.render_to(&mut b);
         encode(
             b.finish(),

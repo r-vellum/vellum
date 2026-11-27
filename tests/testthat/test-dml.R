@@ -76,7 +76,7 @@ test_that("text is a native, editable run sized to vellum's measurement", {
   expect_identical(xml2::xml_attr(rpr, "i"), "1")
   body <- xml2::xml_find_first(sp, ".//a:bodyPr", ns)
   expect_identical(xml2::xml_attr(body, "wrap"), "none")
-  expect_identical(xml2::xml_attr(body, "anchor"), "ctr")
+  expect_identical(xml2::xml_attr(body, "anchor"), "b")
   expect_identical(
     xml2::xml_attr(xml2::xml_find_first(sp, ".//a:pPr", ns), "algn"),
     "l"
@@ -466,6 +466,55 @@ test_that("a label with one text line among blank ones keeps the line pitch (VR-
   }
   # a blank line between text lines stays
   expect_identical(box(md("**a**\n\n*b*"))$spc, rep("1440", 3))
+})
+
+test_that("text boxes sit on their bottom edge, whatever the vjust (VR-54)", {
+  skip_if_not_installed("xml2")
+  sp_of <- function(lab, just = "centre", size = 20) {
+    sc <- vl_scene(4, 2, dpi = 96) |>
+      draw(text_grob(lab, just = just, gp = vl_gpar(fontsize = size)))
+    doc <- xml2::read_xml(.dml_fragment(sc)$xml)
+    ns <- xml2::xml_ns(doc)
+    sp <- xml2::xml_find_first(doc, ".//p:sp[.//p:txBody]", ns)
+    num <- function(path, a) {
+      as.numeric(xml2::xml_attr(xml2::xml_find_first(sp, path, ns), a))
+    }
+    list(
+      anchor = xml2::xml_attr(xml2::xml_find_first(sp, ".//a:bodyPr", ns), "anchor"),
+      algn = xml2::xml_attr(xml2::xml_find_all(sp, ".//a:pPr", ns), "algn"),
+      y = num(".//a:off", "y"),
+      cy = num(".//a:ext", "cy")
+    )
+  }
+  # the box is where vellum sets the label, and the text sits on its bottom:
+  # LibreOffice sets a line 1.0 em above the baseline and 0.2 em below in
+  # any font, Keynote takes Helvetica's ascent from elsewhere, and both
+  # agree with vellum on the descent
+  for (lab in list("abc", "a\nbc", md("**a** *b*"))) {
+    for (vj in c(0, 0.5, 1)) {
+      b <- sp_of(lab, just = c(0.5, vj))
+      expect_identical(b$anchor, "b")
+      # a vjust moves the box by its height and nothing else
+      b0 <- sp_of(lab, just = c(0.5, 0))
+      expect_lt(abs(b$y - vj * b$cy - b0$y), 2)
+    }
+  }
+  # lines flush at both edges align as one line does
+  expect_identical(sp_of(md("a\n\nb"))$algn, rep("ctr", 3))
+  expect_identical(sp_of("a\nb")$algn, rep("ctr", 2))
+  expect_identical(sp_of("a\nb", just = "left")$algn, rep("l", 2))
+  expect_identical(sp_of("a\nb", just = "right")$algn, rep("r", 2))
+  # lines of different widths keep the alignment they were set with
+  expect_identical(sp_of("abc\nd")$algn, rep("l", 2))
+  # an md() box cut to its text line counts a raised or lowered run where it
+  # sits: as tall as the same line on its own, its outer end kept
+  for (lab in c("^up^ abc", "~dn~ abc", "abc^up^")) {
+    one <- sp_of(md(lab))
+    after <- sp_of(md(paste0(lab, "\n\n")))
+    before <- sp_of(md(paste0("\n\n", lab)))
+    expect_lt(abs(after$cy - one$cy), 127, label = lab)
+    expect_lt(abs(before$cy - one$cy), 127, label = lab)
+  }
 })
 
 test_that("a CRLF line break is one break in PowerPoint", {

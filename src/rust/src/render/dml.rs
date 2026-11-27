@@ -2379,36 +2379,34 @@ impl DmlBackend {
         let x0 = run.ax - run.hjust * run.w;
         let mut y0 = run.ay - (1.0 - run.vjust) * run.h;
         let mut h = run.h;
-        if let Some(ps) = paras.as_ref().filter(|_| cut.0 != cut.1) {
+        if paras.is_some() && cut.0 != cut.1 {
             // An `md()` box always reaches the label's middle, so text lines
             // off the middle (more blank lines cut before them than after, or
             // the reverse) sit at one end of a taller box: shrink the box to
-            // them, keeping that end.
-            let pitch = run
-                .spans
+            // them. Each glyph's line box is its face's at its size, from its
+            // baseline (`gy`, up from the box's bottom), so a raised or
+            // lowered run (`^sup^`, `~sub~`) counts where it sits, as vellum
+            // measured it. That is 1.0 em for Helvetica but 1.16 em for DejaVu
+            // Sans. Glyph sizes are local px, like the box.
+            let ext = lines
                 .iter()
-                .find(|sp| sp.brk && sp.size > 0.0)
-                .map_or(run.size * LINE_HEIGHT, |sp| sp.size);
-            // A text line is as tall as its tallest face's line box at its
-            // size (what vellum measured it as), not its nominal size: that is
-            // 1.0 em for Helvetica but 1.16 em for DejaVu Sans. Glyph sizes
-            // are local px, like the box.
-            let first = lines.first().map_or(0..0, |&(lo, hi)| lo..hi);
-            let line_px = first
+                .flat_map(|&(lo, hi)| lo..hi)
                 .filter_map(|g| {
                     let pt = run.gsize.get(g)? * 72.0 / run.dpi;
-                    let h =
-                        crate::font::font_line_height(run.gpath.get(g)?, *run.gface.get(g)?, pt)?;
-                    Some(h * run.dpi / 72.0)
+                    let (a, d) =
+                        crate::font::font_line_extent(run.gpath.get(g)?, *run.gface.get(g)?, pt)?;
+                    let y = *run.gy.get(g)?;
+                    Some((y - d * run.dpi / 72.0, y + a * run.dpi / 72.0))
                 })
-                .fold(None, |m: Option<f64>, v| Some(m.map_or(v, |m| m.max(v))))
-                .unwrap_or(run.size * run.dpi / 72.0);
-            let tall = (ps.len() - 1) as f64 * pitch * run.dpi / 72.0 + line_px;
-            if tall < h {
-                if cut.0 > cut.1 {
-                    y0 += h - tall;
+                .fold(None, |m: Option<(f64, f64)>, (b, t)| {
+                    Some(m.map_or((b, t), |(mb, mt)| (mb.min(b), mt.max(t))))
+                });
+            if let Some((bot, top)) = ext {
+                let tall = top - bot;
+                if tall > 0.0 && tall < h {
+                    y0 += h - top;
+                    h = tall;
                 }
-                h = tall;
             }
         }
         let rot_t = crate::units::rotation_about(run.rot, run.ax, run.ay);
@@ -2462,21 +2460,24 @@ impl DmlBackend {
         let ox = self.ex(ccx) - ew / 2;
         let oy = self.ey(ccy) - eh / 2;
         // One line aligns away from its anchor; several keep the alignment
-        // their glyphs were set with.
-        let algn = if lines.len() > 1 {
-            infer_align(run, &lines)
-        } else {
-            match run.hjust {
+        // their glyphs were set with, and lines that line up every way (all
+        // as wide, `md("a\n\nb")`) align as one line does (VR-54).
+        let algn = match infer_align(run, &lines) {
+            Some(a) if lines.len() > 1 => a,
+            _ => match run.hjust {
                 h if h <= 0.25 => "l",
                 h if h >= 0.75 => "r",
                 _ => "ctr",
-            }
+            },
         };
-        let anchor = match run.vjust {
-            v if v <= 0.25 => "b",
-            v if v >= 0.75 => "t",
-            _ => "ctr",
-        };
+        // The box is vellum's line boxes from the font's ascent and descent,
+        // and the text sits on its bottom whatever the label's vjust (VR-54):
+        // applications agree on a line's descent but not its ascent.
+        // LibreOffice sets a line 1.0 em above the baseline and 0.2 em below
+        // in any font, and Keynote takes Helvetica's ascent from elsewhere,
+        // so a box anchored at its top or middle put the text up to 0.2 em
+        // (Helvetica) lower than vellum draws it.
+        let anchor = "b";
         let pt = run.size * s;
         let sz = ((pt * 100.0).round() as i64).clamp(100, 400_000);
         let (bold, italic) = face_flags(run.face);
@@ -3319,8 +3320,9 @@ fn span_rpr(run: &TextRun, sp: &TextSpan, g0: usize, scale: f64, col: Rgba) -> S
 /// The alignment a multi-line label's lines were set with, read back from the
 /// glyph positions: lines sharing a left edge are left-aligned, else the edge
 /// (right, or centre) that varies least. A line's right edge is its last
-/// glyph's pen position plus its outline's extent.
-fn infer_align(run: &TextRun, lines: &[(usize, usize)]) -> &'static str {
+/// glyph's pen position plus its outline's extent. `None` when that cannot
+/// tell: fewer than two lines, or lines flush both left and right.
+fn infer_align(run: &TextRun, lines: &[(usize, usize)]) -> Option<&'static str> {
     let mut edges: Vec<(f64, f64)> = Vec::new();
     for &(lo, hi) in lines {
         if lo >= hi {
@@ -3339,7 +3341,7 @@ fn infer_align(run: &TextRun, lines: &[(usize, usize)]) -> &'static str {
         edges.push((left, run.gx[last] + ext.max(0.0)));
     }
     if edges.len() < 2 {
-        return "l";
+        return None;
     }
     let spread = |f: &dyn Fn(&(f64, f64)) -> f64| {
         let v: Vec<f64> = edges.iter().map(f).collect();
@@ -3349,12 +3351,15 @@ fn infer_align(run: &TextRun, lines: &[(usize, usize)]) -> &'static str {
     let l = spread(&|e| e.0);
     let r = spread(&|e| e.1);
     let c = spread(&|e| (e.0 + e.1) / 2.0);
-    if l <= 0.5 || (l <= r && l <= c) {
-        "l"
+    if l <= 0.5 && r <= 0.5 {
+        // flush both ways: any alignment sets them so
+        None
+    } else if l <= 0.5 || (l <= r && l <= c) {
+        Some("l")
     } else if r <= c {
-        "r"
+        Some("r")
     } else {
-        "ctr"
+        Some("ctr")
     }
 }
 

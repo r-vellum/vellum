@@ -20,6 +20,47 @@
 
 ## Bug fixes
 
+* PowerPoint text boxes sit on their bottom edge whatever the label's
+  `vjust`, with the box still vellum's line boxes. LibreOffice sets a line
+  1.0 em above its baseline and 0.2 em below in every font, so a label
+  anchored at the box's top or middle drew up to 0.23 em lower than vellum
+  draws it (2.4 pt for a centred 18 pt Helvetica label, 4 pt for a
+  top-justified one), and Keynote, which takes Helvetica's ascent from
+  elsewhere, about as much. Applications agree on a line's descent, not its
+  ascent: both now draw within two pixels (at 36 pt, 150 dpi) of vellum
+  for most fonts, LibreOffice still lower for a font with a deep descent
+  (Avenir, 0.17 em). A multi-line label whose lines line up
+  at both edges (`md("a\n\nb")`) is aligned as a one-line label is, centred
+  for a centred label, rather than left, and an `md()` label whose box is cut
+  to its text lines counts a `^superscript^` or `~subscript~` run where it
+  sits (VR-54).
+
+* `scene_display_list()` lists a hatched point marker of any shape (square,
+  triangle, diamond, star) as its shape, the hatch's background and its rules,
+  exact and unflagged like a hatched circle. It was a point record flagged as a
+  paint it could not reproduce, drawn from the flagged raster (VR-53).
+
+* The picking outline of a `roundrect_grob()` follows its drawn corners. It
+  cut each corner with five points, about 0.012 r inside the arc, so a point
+  6 px inside a drawn corner of radius 1000 px got no hit (VR-55).
+
+* `vl_strwidth()` and text drawing no longer crash R when systemfonts cannot
+  open a font's face (macOS's variable font Skia once
+  `systemfonts::system_fonts()` has run, which a numeric `fontweight` does):
+  the label is shaped in the default font with a warning (VL-22).
+
+* `scene_display_list()` is smaller for huge in-range arcs off the page: an
+  arc it refines is kept within 1/8 px near the page, as before, and within a
+  tolerance that grows with the distance from the page beyond it, in page
+  lengths, as a view zoomed out to show that far does. A ring of 36
+  sectors of radius 30000 px crossing an 8 inch page went from 33 KB to
+  10 KB (VR-56).
+
+* Hexagons far from the origin (`hexagon_grob()`, past about 65,000 px) are
+  cut at the page window of the backend rather than a box around the origin,
+  so SVG and PDF output is a little smaller; the visible part is unchanged
+  (VR-52).
+
 * A numeric `fontweight` snaps to the nearest weight among a family's
   normal-width faces when it has any, so `fontweight = 900` with Helvetica
   Neue on macOS draws in Bold rather than "Condensed Black", which measured

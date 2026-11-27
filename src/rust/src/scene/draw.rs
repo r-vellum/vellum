@@ -127,7 +127,8 @@ impl Scene {
     /// through the display-list backend (version 2, restricted to the layer's
     /// panels, as the client's list is) and take each flagged node's run.
     pub(super) fn with_flagged_runs(&self, layer: &LayerFilter) -> LayerFilter {
-        let mut d = crate::render::DisplayListBackend::with_options(layer.panels.clone(), 2);
+        let mut d = crate::render::DisplayListBackend::with_options(layer.panels.clone(), 2)
+            .with_page(self.w_px, self.h_px);
         let _ = self.render_to(&mut d);
         let dl = d.finish();
         LayerFilter {

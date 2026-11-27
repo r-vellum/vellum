@@ -21,8 +21,9 @@
 //! one layer). Masks, blend modes, effects, patterns, repeating gradients and
 //! gradient strokes stay flagged. A hatch never reaches the list as a paint:
 //! the shared walk expands it into a `bg` fill and stroked rules first, which
-//! are listed exactly like any fill and stroke -- except inside a marker's
-//! point record, which cannot hold the rules and is flagged instead.
+//! are listed exactly like any fill and stroke. A hatched point marker is
+//! listed that way too, as its geometry rather than a point record, which
+//! cannot hold the rules (VR-53).
 
 use std::collections::HashMap;
 
@@ -32,7 +33,7 @@ use crate::color::{Extend, LineCap, LineJoin, Rgba, Stop};
 use crate::units::rotation_about;
 
 use super::{
-    drawable_disc, BlendKind, Clip, ClipShape, GroupEffect, MaskLayer, RenderBackend,
+    drawable_disc, BlendKind, Clip, ClipShape, FarWin, GroupEffect, MaskLayer, RenderBackend,
     ResolvedPaint, StrokeStyle, TextRun,
 };
 
@@ -196,6 +197,8 @@ pub struct DisplayListBackend {
     cur_node: u32,
     /// Per open group, the blend root its content is drawn in (0 = none).
     root_stack: Vec<u32>,
+    /// The page, `w` x `h` device px, when known (VR-56).
+    page: Option<(u32, u32)>,
 }
 
 impl Default for DisplayListBackend {
@@ -214,6 +217,13 @@ impl DisplayListBackend {
     }
 
     /// As `with_panels()`, recording format `version` (1 or 2).
+    /// Arcs refined past the page are kept to a tolerance that grows with
+    /// their distance from this `w` x `h` px page (see `far_window`).
+    pub fn with_page(mut self, w: u32, h: u32) -> Self {
+        self.page = Some((w, h));
+        self
+    }
+
     pub fn with_options(panels: Option<Vec<String>>, version: u32) -> Self {
         let mut b = Self::with_panels(panels);
         b.v2 = version >= 2;
@@ -247,6 +257,7 @@ impl DisplayListBackend {
             only_panels: None,
             cur_node: 0,
             root_stack: Vec::new(),
+            page: None,
         }
     }
 
@@ -976,11 +987,7 @@ impl RenderBackend for DisplayListBackend {
     /// SVG, which fits a far image to the page (VR-46). So there is nothing
     /// here to fit with `fit::vector_image` (VR-49).
     ///
-    /// The list keeps the origin box for far shapes ([`FarWin::around_origin`],
-    /// the trait default) rather than a page window: the widget pans and zooms
-    /// these records itself, so a mark well off the page can be brought into
-    /// view, and the box keeps it exact out to 4 x `PRECISE_PX`. A page window
-    /// would refine arcs and cut edges only within a page of the page.
+    /// The list keeps the origin box for far shapes (see `far_window`).
     fn draw_image(
         &mut self,
         _: &[u8],
@@ -994,6 +1001,20 @@ impl RenderBackend for DisplayListBackend {
         _: Transform,
         _: &Clip,
     ) {
+    }
+
+    /// The list keeps the origin box for far shapes ([`FarWin::around_origin`])
+    /// rather than a page window: the widget pans and zooms these records
+    /// itself, so a mark well off the page can be brought into view, and the
+    /// box keeps it exact out to 4 x `PRECISE_PX`. A page window would refine
+    /// arcs and cut edges only within a page of the page. With the page known,
+    /// the arc tolerance grows with the distance from it ([`FarWin::for_list`],
+    /// VR-56), so a huge arc is not refined at the page's tolerance all round.
+    fn far_window(&self, transform: Transform) -> FarWin {
+        match self.page {
+            Some((w, h)) => FarWin::for_list(transform, w, h),
+            None => FarWin::around_origin(),
+        }
     }
 
     /// A keyed batch stays one batch: one point record per keyed element.
@@ -1078,9 +1099,21 @@ impl RenderBackend for DisplayListBackend {
 
     fn begin_hatch(&mut self) {
         // A point record has one fill and one stroke, so a hatched marker's
-        // rules cannot ride on it: flag it rather than list it as exact.
-        if let Some(m) = self.marker {
+        // rules cannot ride on it. Withdraw the record before anything is
+        // absorbed into it: the background, rules and outline that follow are
+        // then listed as geometry, exact, like any other hatched shape (VR-53).
+        let Some(m) = self.marker.take() else { return };
+        if m + 1 == self.dl.recs.len() && self.dl.recs[m].kind == KIND_POINT {
+            self.dl.recs.pop();
+            self.dl.pt_cx.pop();
+            self.dl.pt_cy.pop();
+            self.dl.pt_r.pop();
+            self.dl.pt_shape.pop();
+        } else {
+            // Not reached (the hatch is the marker's first paint): keep the
+            // record, flagged rather than listed as exact.
             self.dl.recs[m].flags |= FLAG_PAINT;
+            self.marker = Some(m);
         }
     }
 

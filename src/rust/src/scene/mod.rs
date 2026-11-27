@@ -17,9 +17,9 @@ use tiny_skia::{FillRule, Mask, PathBuilder, Pixmap, Transform};
 
 use crate::render::{
     hexagon_path, hexagon_path_xy, push_circle_precise, push_far_poly, rect_path, roundrect_path,
-    sector_path, sector_path_in, xml_escape, BlendKind, Clip, ClipShape, FarWin, GroupEffect,
-    MaskKind, MaskLayer, PdfBackend, RasterBackend, RenderBackend, ResolvedPaint, Shadow,
-    StrokeStyle, SvgBackend, TextRun,
+    roundrect_ring_in, sector_path, sector_path_in, xml_escape, BlendKind, Clip, ClipShape, FarWin,
+    GroupEffect, MaskKind, MaskLayer, PdfBackend, RasterBackend, RenderBackend, ResolvedPaint,
+    Shadow, StrokeStyle, SvgBackend, TextRun,
 };
 use crate::render::{
     pptx_package, resolve_media, write_media_files, DmlBackend, SlidePart, EMU_PER_INCH,

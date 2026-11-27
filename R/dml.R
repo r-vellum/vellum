@@ -57,7 +57,10 @@
 #' when the machine opening the deck has it and substitutes another when it does
 #' not; the box is anchored so a wider substitute grows away from the label's
 #' anchor (right-aligned tick labels stay right-aligned) rather than drifting.
-#' Fonts are not embedded. `text = "outline"` writes glyph outlines instead:
+#' Vertically, the text sits on the box's bottom edge whatever its
+#' justification: applications agree on how far a line reaches below its
+#' baseline but not above it (LibreOffice sets every font 1.0 em above), so
+#' this keeps the baseline where vellum draws it. Fonts are not embedded. `text = "outline"` writes glyph outlines instead:
 #' identical everywhere, but no longer editable as text. An `md()` label is
 #' one text run per styled span (bold, italic, colour; a superscript or
 #' subscript as a raised or lowered run). `tex()` labels, `md()` labels with

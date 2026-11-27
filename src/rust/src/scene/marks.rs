@@ -73,19 +73,22 @@ pub(super) fn draw_round_rect<B: RenderBackend>(
     let pw = vp.x_extent(*w, *wu);
     let ph = vp.y_extent(*h, *hu);
     let pr = vp.r_len(*r, *ru); // isotropic radius (npc -> min side)
+    let win = b.far_window(t);
     if let Some(g) = b.geom_sink() {
-        // The crisp outline, also for a sketched one: the wobble
-        // is decoration, not where the mark is.
-        g.ring(0, &roundrect_ring(cx - pw / 2.0, cy - ph / 2.0, pw, ph, pr));
+        // The crisp outline with its corners built as they are drawn
+        // (VR-55), also for a sketched one: the wobble is decoration,
+        // not where the mark is.
+        let (x0, y0) = (cx - pw / 2.0, cy - ph / 2.0);
+        let ring = roundrect_ring_in(x0, y0, pw, ph, pr, &win)
+            .unwrap_or_else(|| roundrect_ring(x0, y0, pw, ph, pr));
+        g.ring(0, &ring);
     }
     if let Some(sk) = sketch {
         let ring = roundrect_ring(cx - pw / 2.0, cy - ph / 2.0, pw, ph, pr);
         let o = resolve_sketch(sk, gp, vp.dpi);
         let s = crate::sketch::closed_curve(&ring, &o, gp.fill.is_some());
         paint_sketch(b, &s, gp, t, clip, vp, o.fill_weight);
-    } else if let Some(path) =
-        roundrect_path(cx - pw / 2.0, cy - ph / 2.0, pw, ph, pr, &b.far_window(t))
-    {
+    } else if let Some(path) = roundrect_path(cx - pw / 2.0, cy - ph / 2.0, pw, ph, pr, &win) {
         fill_then_stroke(b, &path, gp, t, clip, vp, FillRule::Winding);
     }
 }
@@ -891,6 +894,7 @@ pub(super) fn draw_hexagons<B: RenderBackend>(
     .unwrap_or(0);
     let style = stroke_style(gp, vp);
     let pen = gp.col.filter(|_| style.width > 0.0).map(|c| (c, style));
+    let win = b.far_window(t);
     for i in 0..n {
         b.set_element_key(key_at(keys, i));
         let cx = vp.x_pos(x[i], xu[i]);
@@ -906,9 +910,10 @@ pub(super) fn draw_hexagons<B: RenderBackend>(
                 vp.x_extent(w[i], wu[i]) * 0.5,
                 vp.y_extent(h[i], hu[i]) * 0.5,
                 *flat,
+                &win,
             )
         } else {
-            hexagon_path(cx, cy, vp.r_len(size[i], su[i]), *flat)
+            hexagon_path(cx, cy, vp.r_len(size[i], su[i]), *flat, &win)
         };
         if let (Some(g), Some(p)) = (b.geom_sink(), path.as_ref()) {
             g.path(i, p, FillRule::Winding);
