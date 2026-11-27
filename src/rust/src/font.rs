@@ -95,7 +95,12 @@ impl FontCache {
         glyph_id: u32,
         size_px: f32,
     ) -> Option<Rc<tiny_skia::Path>> {
-        let key = (font_path.to_string(), face_index, glyph_id, size_px.to_bits());
+        let key = (
+            font_path.to_string(),
+            face_index,
+            glyph_id,
+            size_px.to_bits(),
+        );
         if let Some(o) = self.outlines.get(&key) {
             return o;
         }
@@ -104,12 +109,20 @@ impl FontCache {
         // is the common, intended case; a transient read failure staying `None`
         // until `clear_glyph_cache` is an accepted trade-off (fonts don't appear
         // mid-session in practice).
-        let out = self.extract(font_path, face_index, glyph_id, size_px).map(Rc::new);
+        let out = self
+            .extract(font_path, face_index, glyph_id, size_px)
+            .map(Rc::new);
         self.outlines.insert(key, out.clone());
         out
     }
 
-    fn extract(&mut self, font_path: &str, face_index: u32, glyph_id: u32, size_px: f32) -> Option<tiny_skia::Path> {
+    fn extract(
+        &mut self,
+        font_path: &str,
+        face_index: u32,
+        glyph_id: u32,
+        size_px: f32,
+    ) -> Option<tiny_skia::Path> {
         let bytes = self.bytes(font_path)?;
         let font = FontRef::from_index(bytes.as_slice(), face_index).ok()?;
         let outlines = font.outline_glyphs();
@@ -136,8 +149,13 @@ impl FontCache {
         phase_y: u8,
     ) -> Option<Rc<GlyphSprite>> {
         let key = (
-            font_path.to_string(), face_index, glyph_id, size_px.to_bits(),
-            u32::from_be_bytes(color), phase_x, phase_y,
+            font_path.to_string(),
+            face_index,
+            glyph_id,
+            size_px.to_bits(),
+            u32::from_be_bytes(color),
+            phase_x,
+            phase_y,
         );
         if let Some(s) = self.sprites.get(&key) {
             self.sprite_hits += 1;
@@ -145,7 +163,9 @@ impl FontCache {
         }
         self.sprite_misses += 1;
         let sprite = self
-            .build_sprite(font_path, face_index, glyph_id, size_px, color, phase_x, phase_y)
+            .build_sprite(
+                font_path, face_index, glyph_id, size_px, color, phase_x, phase_y,
+            )
             .map(Rc::new);
         self.sprites.insert(key, sprite.clone());
         sprite
@@ -182,12 +202,18 @@ impl FontCache {
         }
         let mut pm = Pixmap::new(w as u32, h as u32)?;
         let mut paint = Paint::default();
-        paint.set_color(tiny_skia::Color::from_rgba8(color[0], color[1], color[2], color[3]));
+        paint.set_color(tiny_skia::Color::from_rgba8(
+            color[0], color[1], color[2], color[3],
+        ));
         paint.anti_alias = true;
         // glyph-local (lx, ly) -> sprite pixel (lx + fx - sminx, -ly + fy - sminy).
         let t = Transform::from_row(1.0, 0.0, 0.0, -1.0, fx - sminx, fy - sminy);
         pm.fill_path(outline.as_ref(), &paint, FillRule::Winding, t, None);
-        Some(GlyphSprite { pixmap: pm, dx: sminx as i32, dy: sminy as i32 })
+        Some(GlyphSprite {
+            pixmap: pm,
+            dx: sminx as i32,
+            dy: sminy as i32,
+        })
     }
 
     /// The family name a font file declares (typographic family when present,
@@ -205,7 +231,11 @@ impl FontCache {
     }
 
     fn sprite_stats(&self) -> (i64, i64, i64) {
-        (self.sprite_hits, self.sprite_misses, self.sprites.len() as i64)
+        (
+            self.sprite_hits,
+            self.sprite_misses,
+            self.sprites.len() as i64,
+        )
     }
 }
 
@@ -216,8 +246,16 @@ thread_local! {
 }
 
 /// Glyph outline via the persistent cache. See [`FontCache::glyph_outline`].
-pub fn glyph_outline_cached(font_path: &str, face_index: u32, glyph_id: u32, size_px: f32) -> Option<Rc<tiny_skia::Path>> {
-    GLYPH_CACHE.with(|c| c.borrow_mut().glyph_outline(font_path, face_index, glyph_id, size_px))
+pub fn glyph_outline_cached(
+    font_path: &str,
+    face_index: u32,
+    glyph_id: u32,
+    size_px: f32,
+) -> Option<Rc<tiny_skia::Path>> {
+    GLYPH_CACHE.with(|c| {
+        c.borrow_mut()
+            .glyph_outline(font_path, face_index, glyph_id, size_px)
+    })
 }
 
 /// Family name via the persistent cache. See [`FontCache::family_name`].
@@ -228,10 +266,19 @@ pub fn font_family_name(font_path: &str, face_index: u32) -> Option<String> {
 /// Glyph sprite via the persistent cache. See [`FontCache::glyph_sprite`].
 #[allow(clippy::too_many_arguments)]
 pub fn glyph_sprite_cached(
-    font_path: &str, face_index: u32, glyph_id: u32, size_px: f32,
-    color: [u8; 4], phase_x: u8, phase_y: u8,
+    font_path: &str,
+    face_index: u32,
+    glyph_id: u32,
+    size_px: f32,
+    color: [u8; 4],
+    phase_x: u8,
+    phase_y: u8,
 ) -> Option<Rc<GlyphSprite>> {
-    GLYPH_CACHE.with(|c| c.borrow_mut().glyph_sprite(font_path, face_index, glyph_id, size_px, color, phase_x, phase_y))
+    GLYPH_CACHE.with(|c| {
+        c.borrow_mut().glyph_sprite(
+            font_path, face_index, glyph_id, size_px, color, phase_x, phase_y,
+        )
+    })
 }
 
 /// `(hits, misses, resident)` for the glyph sprite cache (tests/diagnostics).

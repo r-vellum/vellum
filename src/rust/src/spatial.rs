@@ -104,7 +104,12 @@ impl SpatialIndex {
         // Keep the cell count bounded by ~4 per item (a very elongated extent
         // would otherwise give one long row of empty cells).
         let cap = 4 * boxed + 16;
-        let dims = |c: f64| (((w / c).ceil() as usize).max(1), ((h / c).ceil() as usize).max(1));
+        let dims = |c: f64| {
+            (
+                ((w / c).ceil() as usize).max(1),
+                ((h / c).ceil() as usize).max(1),
+            )
+        };
         let (mut nx, mut ny) = dims(cell);
         while nx.saturating_mul(ny) > cap {
             cell *= 1.5;
@@ -125,7 +130,8 @@ impl SpatialIndex {
         // Two passes: count per cell, then fill (CSR).
         let ncell = nx * ny;
         let mut count = vec![0u32; ncell + 1];
-        let mut spans: Vec<Option<(usize, usize, usize, usize)>> = Vec::with_capacity(idx.items.len());
+        let mut spans: Vec<Option<(usize, usize, usize, usize)>> =
+            Vec::with_capacity(idx.items.len());
         for (i, it) in idx.items.iter().enumerate() {
             let span = it.bbox.map(|b| idx.cell_span(b));
             match span {
@@ -347,7 +353,12 @@ impl SpatialIndex {
             return Vec::new();
         }
         let q = poly.iter().fold(
-            (f64::INFINITY, f64::INFINITY, f64::NEG_INFINITY, f64::NEG_INFINITY),
+            (
+                f64::INFINITY,
+                f64::INFINITY,
+                f64::NEG_INFINITY,
+                f64::NEG_INFINITY,
+            ),
             |a, &(x, y)| (a.0.min(x), a.1.min(y), a.2.max(x), a.3.max(y)),
         );
         let (xs, ys): (Vec<f64>, Vec<f64>) = poly.iter().copied().unzip();
@@ -362,7 +373,10 @@ impl SpatialIndex {
                         && b.1 >= q.1
                         && b.2 <= q.2
                         && b.3 <= q.3
-                        && self.parts(i).iter().all(|p| part_in_poly(p, &poly, &inside))
+                        && self
+                            .parts(i)
+                            .iter()
+                            .all(|p| part_in_poly(p, &poly, &inside))
                 }
                 Region::Intersect => self
                     .parts(i)
@@ -525,7 +539,10 @@ fn part_in_poly(p: &Part, poly: &[(f64, f64)], inside: &impl Fn(f64, f64) -> boo
         }
         Part::Fill { rings, .. } => {
             rings.iter().flatten().any(|&v| finite(v))
-                && rings.iter().flatten().all(|&v| !finite(v) || inside(v.0, v.1))
+                && rings
+                    .iter()
+                    .flatten()
+                    .all(|&v| !finite(v) || inside(v.0, v.1))
                 && !rings
                     .iter()
                     .any(|r| ring_edges(r).any(|(a, b)| crosses_poly(a, b, poly)))
@@ -540,22 +557,33 @@ mod tests {
 
     /// A recording of one node whose elements are discs at the given centres.
     fn discs(pts: &[(f64, f64)], r: f64) -> SpatialIndex {
-        let elems: Vec<Vec<Part>> = pts.iter().map(|&(cx, cy)| vec![Part::Disc { cx, cy, r }]).collect();
+        let elems: Vec<Vec<Part>> = pts
+            .iter()
+            .map(|&(cx, cy)| vec![Part::Disc { cx, cy, r }])
+            .collect();
         let items = (0..elems.len())
-            .map(|i| Item { node: 0, elem: i, bbox: item_bbox(&elems[i]) })
+            .map(|i| Item {
+                node: 0,
+                elem: i,
+                bbox: item_bbox(&elems[i]),
+            })
             .collect();
         SpatialIndex::build(Arc::new(vec![elems]), items)
     }
 
     fn lcg(seed: &mut u64) -> f64 {
-        *seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+        *seed = seed
+            .wrapping_mul(6364136223846793005)
+            .wrapping_add(1442695040888963407);
         (*seed >> 11) as f64 / (1u64 << 53) as f64
     }
 
     #[test]
     fn nearest_matches_a_full_scan() {
         let mut s = 7u64;
-        let pts: Vec<(f64, f64)> = (0..2000).map(|_| (lcg(&mut s) * 800.0, lcg(&mut s) * 600.0)).collect();
+        let pts: Vec<(f64, f64)> = (0..2000)
+            .map(|_| (lcg(&mut s) * 800.0, lcg(&mut s) * 600.0))
+            .collect();
         let idx = discs(&pts, 2.0);
         for _ in 0..200 {
             let (px, py) = (lcg(&mut s) * 900.0 - 50.0, lcg(&mut s) * 700.0 - 50.0);
@@ -578,7 +606,11 @@ mod tests {
     fn ties_break_by_paint_order() {
         // three overlapping discs: a probe inside all of them is at distance 0
         let idx = discs(&[(10.0, 10.0), (11.0, 10.0), (10.5, 10.0)], 5.0);
-        let got: Vec<usize> = idx.nearest(10.5, 10.0, 2, f64::INFINITY).iter().map(|x| x.0).collect();
+        let got: Vec<usize> = idx
+            .nearest(10.5, 10.0, 2, f64::INFINITY)
+            .iter()
+            .map(|x| x.0)
+            .collect();
         assert_eq!(got, vec![0, 1]);
     }
 
@@ -587,7 +619,10 @@ mod tests {
         let idx = discs(&[(10.0, 10.0), (20.0, 10.0), (30.0, 10.0)], 3.0);
         // a box covering x 15..25 contains disc 1, touches discs 0 and 2
         assert_eq!(idx.brush(15.0, 0.0, 25.0, 20.0, Region::Contain), vec![1]);
-        assert_eq!(idx.brush(12.0, 0.0, 28.0, 20.0, Region::Intersect), vec![0, 1, 2]);
+        assert_eq!(
+            idx.brush(12.0, 0.0, 28.0, 20.0, Region::Intersect),
+            vec![0, 1, 2]
+        );
         assert_eq!(idx.brush(12.0, 0.0, 28.0, 20.0, Region::Contain), vec![1]);
         assert_eq!(idx.brush(14.0, 0.0, 26.0, 20.0, Region::Centre), vec![1]);
         // a triangle around disc 1 only
@@ -595,31 +630,62 @@ mod tests {
         assert_eq!(idx.lasso(&tri, Region::Centre), vec![0, 1, 2]);
         let small = [(15.0, 0.0), (25.0, 0.0), (25.0, 20.0), (15.0, 20.0)];
         assert_eq!(idx.lasso(&small, Region::Contain), vec![1]);
-        assert_eq!(idx.lasso(&small[..2], Region::Intersect), Vec::<usize>::new());
+        assert_eq!(
+            idx.lasso(&small[..2], Region::Intersect),
+            Vec::<usize>::new()
+        );
     }
 
     #[test]
     fn region_tests_follow_the_true_geometry() {
         // a diagonal segment whose box covers the probe rectangle but whose
         // line does not reach it, and a polygon with a hole
-        let seg = vec![Part::Stroke { pts: vec![(0.0, 0.0), (100.0, 100.0)], width: 1.0 }];
+        let seg = vec![Part::Stroke {
+            pts: vec![(0.0, 0.0), (100.0, 100.0)],
+            width: 1.0,
+        }];
         let outer = vec![(200.0, 0.0), (300.0, 0.0), (300.0, 100.0), (200.0, 100.0)];
         let hole = vec![(240.0, 40.0), (240.0, 60.0), (260.0, 60.0), (260.0, 40.0)];
-        let donut = vec![Part::Fill { rings: vec![outer, hole], evenodd: true }];
+        let donut = vec![Part::Fill {
+            rings: vec![outer, hole],
+            evenodd: true,
+        }];
         let elems = vec![seg, donut];
-        let items = (0..2).map(|i| Item { node: 0, elem: i, bbox: item_bbox(&elems[i]) }).collect();
+        let items = (0..2)
+            .map(|i| Item {
+                node: 0,
+                elem: i,
+                bbox: item_bbox(&elems[i]),
+            })
+            .collect();
         let idx = SpatialIndex::build(Arc::new(vec![elems]), items);
-        assert!(idx.brush(70.0, 5.0, 95.0, 20.0, Region::Intersect).is_empty());
-        assert_eq!(idx.brush(40.0, 40.0, 60.0, 60.0, Region::Intersect), vec![0]);
+        assert!(idx
+            .brush(70.0, 5.0, 95.0, 20.0, Region::Intersect)
+            .is_empty());
+        assert_eq!(
+            idx.brush(40.0, 40.0, 60.0, 60.0, Region::Intersect),
+            vec![0]
+        );
         // a box in the hole does not meet the donut; one inside the ring does
-        assert!(idx.brush(245.0, 45.0, 255.0, 55.0, Region::Intersect).is_empty());
-        assert_eq!(idx.brush(205.0, 5.0, 215.0, 15.0, Region::Intersect), vec![1]);
+        assert!(idx
+            .brush(245.0, 45.0, 255.0, 55.0, Region::Intersect)
+            .is_empty());
+        assert_eq!(
+            idx.brush(205.0, 5.0, 215.0, 15.0, Region::Intersect),
+            vec![1]
+        );
         // a lasso inside the donut's solid part, with no vertex of it inside
         let inner = [(210.0, 10.0), (230.0, 10.0), (220.0, 30.0)];
         assert_eq!(idx.lasso(&inner, Region::Intersect), vec![1]);
         // a concave lasso whose vertices all surround the segment's ends but
         // whose notch cuts the line: not contained
-        let notch = [(-10.0, -10.0), (110.0, -10.0), (110.0, 110.0), (50.0, 40.0), (-10.0, 110.0)];
+        let notch = [
+            (-10.0, -10.0),
+            (110.0, -10.0),
+            (110.0, 110.0),
+            (50.0, 40.0),
+            (-10.0, 110.0),
+        ];
         assert!(idx.lasso(&notch, Region::Contain).is_empty());
         assert_eq!(idx.lasso(&notch, Region::Intersect), vec![0]);
     }

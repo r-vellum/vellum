@@ -142,7 +142,14 @@ impl LchSeg {
         while dh <= -std::f32::consts::PI {
             dh += tau;
         }
-        LchSeg { l0, c0, h0, l1, c1, dh }
+        LchSeg {
+            l0,
+            c0,
+            h0,
+            l1,
+            c1,
+            dh,
+        }
     }
 
     /// Interpolated Oklab `(L, a, b)` at `t` in `0..=1`: L and C move linearly,
@@ -242,12 +249,20 @@ mod tests {
     use super::*;
 
     fn stop(off: f32, r: u8, g: u8, b: u8) -> Stop {
-        Stop { offset: off, color: Rgba { r, g, b, a: 255 } }
+        Stop {
+            offset: off,
+            color: Rgba { r, g, b, a: 255 },
+        }
     }
 
     #[test]
     fn white_maps_to_oklab_l1() {
-        let (lab, _) = rgba_to_oklab(Rgba { r: 255, g: 255, b: 255, a: 255 });
+        let (lab, _) = rgba_to_oklab(Rgba {
+            r: 255,
+            g: 255,
+            b: 255,
+            a: 255,
+        });
         assert!((lab[0] - 1.0).abs() < 1e-3, "L={}", lab[0]);
         assert!(lab[1].abs() < 1e-3 && lab[2].abs() < 1e-3);
     }
@@ -255,7 +270,12 @@ mod tests {
     #[test]
     fn srgb_red_reference() {
         // Ottosson's reference: sRGB #ff0000 -> Oklab ~ (0.6280, 0.2249, 0.1258).
-        let (lab, _) = rgba_to_oklab(Rgba { r: 255, g: 0, b: 0, a: 255 });
+        let (lab, _) = rgba_to_oklab(Rgba {
+            r: 255,
+            g: 0,
+            b: 0,
+            a: 255,
+        });
         assert!((lab[0] - 0.6280).abs() < 2e-3, "L={}", lab[0]);
         assert!((lab[1] - 0.2249).abs() < 2e-3, "a={}", lab[1]);
         assert!((lab[2] - 0.1258).abs() < 2e-3, "b={}", lab[2]);
@@ -263,11 +283,27 @@ mod tests {
 
     #[test]
     fn round_trip_is_stable() {
-        for c in [(0, 0, 0), (255, 255, 255), (12, 200, 77), (255, 0, 0), (30, 60, 90)] {
-            let orig = Rgba { r: c.0, g: c.1, b: c.2, a: 200 };
+        for c in [
+            (0, 0, 0),
+            (255, 255, 255),
+            (12, 200, 77),
+            (255, 0, 0),
+            (30, 60, 90),
+        ] {
+            let orig = Rgba {
+                r: c.0,
+                g: c.1,
+                b: c.2,
+                a: 200,
+            };
             let (lab, a) = rgba_to_oklab(orig);
             let back = oklab_to_rgba(lab, a);
-            assert!((back.r as i16 - orig.r as i16).abs() <= 1, "r {} vs {}", back.r, orig.r);
+            assert!(
+                (back.r as i16 - orig.r as i16).abs() <= 1,
+                "r {} vs {}",
+                back.r,
+                orig.r
+            );
             assert!((back.g as i16 - orig.g as i16).abs() <= 1);
             assert!((back.b as i16 - orig.b as i16).abs() <= 1);
             assert_eq!(back.a, orig.a);
@@ -276,7 +312,11 @@ mod tests {
 
     #[test]
     fn srgb_interp_is_identity() {
-        let author = vec![stop(0.0, 0, 0, 0), stop(0.5, 255, 0, 0), stop(1.0, 255, 255, 255)];
+        let author = vec![
+            stop(0.0, 0, 0, 0),
+            stop(0.5, 255, 0, 0),
+            stop(1.0, 255, 255, 255),
+        ];
         assert_eq!(interpolate_stops(&author, Interp::Srgb), author);
     }
 
@@ -300,12 +340,17 @@ mod tests {
     fn oklab_preserves_interior_author_stops_exactly() {
         // Every author stop — not just the endpoints — must appear byte-exact in
         // the expansion (no Oklab->sRGB8 round-trip drift at author offsets).
-        let author = vec![stop(0.0, 0, 0, 0), stop(0.5, 12, 200, 77), stop(1.0, 255, 255, 255)];
+        let author = vec![
+            stop(0.0, 0, 0, 0),
+            stop(0.5, 12, 200, 77),
+            stop(1.0, 255, 255, 255),
+        ];
         for interp in [Interp::Oklab, Interp::Oklch] {
             let out = interpolate_stops(&author, interp);
             for a in &author {
                 assert!(
-                    out.iter().any(|s| s.color == a.color && (s.offset - a.offset).abs() < 1e-6),
+                    out.iter()
+                        .any(|s| s.color == a.color && (s.offset - a.offset).abs() < 1e-6),
                     "author stop {:?} missing from {interp:?} expansion",
                     a.color
                 );
@@ -320,11 +365,25 @@ mod tests {
         let author = vec![stop(0.0, 0, 0, 0), stop(1.0, 255, 255, 255)];
         let out = interpolate_stops(&author, Interp::Oklab);
         // the stop nearest offset 0.5
-        let mid = out.iter().min_by(|a, b| {
-            (a.offset - 0.5).abs().partial_cmp(&(b.offset - 0.5).abs()).unwrap()
-        }).unwrap();
-        assert!(mid.color.r < 115, "oklab midpoint {} should be darker than the sRGB 127", mid.color.r);
-        assert!(mid.color.r > 85, "oklab midpoint {} unexpectedly dark", mid.color.r);
+        let mid = out
+            .iter()
+            .min_by(|a, b| {
+                (a.offset - 0.5)
+                    .abs()
+                    .partial_cmp(&(b.offset - 0.5).abs())
+                    .unwrap()
+            })
+            .unwrap();
+        assert!(
+            mid.color.r < 115,
+            "oklab midpoint {} should be darker than the sRGB 127",
+            mid.color.r
+        );
+        assert!(
+            mid.color.r > 85,
+            "oklab midpoint {} unexpectedly dark",
+            mid.color.r
+        );
     }
 
     #[test]
@@ -344,7 +403,12 @@ mod tests {
     /// The stop nearest a given offset.
     fn nearest(out: &[Stop], off: f32) -> Stop {
         *out.iter()
-            .min_by(|a, b| (a.offset - off).abs().partial_cmp(&(b.offset - off).abs()).unwrap())
+            .min_by(|a, b| {
+                (a.offset - off)
+                    .abs()
+                    .partial_cmp(&(b.offset - off).abs())
+                    .unwrap()
+            })
             .unwrap()
     }
 
@@ -370,7 +434,12 @@ mod tests {
         // hue the whole way (chroma rises from 0), never veering to another hue.
         let author = vec![stop(0.0, 255, 255, 255), stop(1.0, 0, 0, 255)];
         let out = interpolate_stops(&author, Interp::Oklch);
-        let (blue_lab, _) = rgba_to_oklab(Rgba { r: 0, g: 0, b: 255, a: 255 });
+        let (blue_lab, _) = rgba_to_oklab(Rgba {
+            r: 0,
+            g: 0,
+            b: 255,
+            a: 255,
+        });
         let blue_h = blue_lab[2].atan2(blue_lab[1]);
         for s in &out {
             let (lab, _) = rgba_to_oklab(s.color);
@@ -386,7 +455,11 @@ mod tests {
                 }
                 // 0.15 rad (~9°) comfortably separates "hue held" from a real flash
                 // (which would be radians of swing) while tolerating sRGB8 rounding.
-                assert!(dh < 0.15, "hue drift {dh} rad at offset {} (expected ~blue)", s.offset);
+                assert!(
+                    dh < 0.15,
+                    "hue drift {dh} rad at offset {} (expected ~blue)",
+                    s.offset
+                );
             }
         }
     }

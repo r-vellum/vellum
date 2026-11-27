@@ -177,8 +177,18 @@ fn line_pass(pb: &mut PathBuilder, rng: &mut Rng, a: Pt, b: Pt, o: &SketchOpts, 
     let pv = o.preserve_vertices;
 
     // Start point.
-    let sx = x1 + if pv { 0.0 } else { rng.offset_sym(mag, r, gain) };
-    let sy = y1 + if pv { 0.0 } else { rng.offset_sym(mag, r, gain) };
+    let sx = x1
+        + if pv {
+            0.0
+        } else {
+            rng.offset_sym(mag, r, gain)
+        };
+    let sy = y1
+        + if pv {
+            0.0
+        } else {
+            rng.offset_sym(mag, r, gain)
+        };
     pb.move_to(sx as f32, sy as f32);
 
     // Cubic through two jittered interior points to a jittered end.
@@ -186,8 +196,18 @@ fn line_pass(pb: &mut PathBuilder, rng: &mut Rng, a: Pt, b: Pt, o: &SketchOpts, 
     let c1y = mid_y + y1 + (y2 - y1) * diverge + rng.offset_sym(mag, r, gain);
     let c2x = mid_x + x1 + 2.0 * (x2 - x1) * diverge + rng.offset_sym(mag, r, gain);
     let c2y = mid_y + y1 + 2.0 * (y2 - y1) * diverge + rng.offset_sym(mag, r, gain);
-    let ex = x2 + if pv { 0.0 } else { rng.offset_sym(mag, r, gain) };
-    let ey = y2 + if pv { 0.0 } else { rng.offset_sym(mag, r, gain) };
+    let ex = x2
+        + if pv {
+            0.0
+        } else {
+            rng.offset_sym(mag, r, gain)
+        };
+    let ey = y2
+        + if pv {
+            0.0
+        } else {
+            rng.offset_sym(mag, r, gain)
+        };
     pb.cubic_to(
         c1x as f32, c1y as f32, c2x as f32, c2y as f32, ex as f32, ey as f32,
     );
@@ -292,7 +312,12 @@ fn curve_path_closed(pts: &[Pt], tightness: f64) -> Option<Path> {
             p2.1 + (s * p1.1 - s * p3.1) / 6.0,
         );
         pb.cubic_to(
-            b1.0 as f32, b1.1 as f32, b2.0 as f32, b2.1 as f32, p2.0 as f32, p2.1 as f32,
+            b1.0 as f32,
+            b1.1 as f32,
+            b2.0 as f32,
+            b2.1 as f32,
+            p2.0 as f32,
+            p2.1 as f32,
         );
     }
     pb.close();
@@ -369,7 +394,11 @@ pub fn ellipse(cx: f64, cy: f64, w: f64, h: f64, o: &SketchOpts, want_fill: bool
 /// stay round. `pts` is the crisp outline in local px.
 pub fn closed_curve(pts: &[Pt], o: &SketchOpts, want_fill: bool) -> Sketched {
     if pts.len() < 3 {
-        return Sketched { stroke: Vec::new(), fill_sketch: Vec::new(), fill_solid: None };
+        return Sketched {
+            stroke: Vec::new(),
+            fill_sketch: Vec::new(),
+            fill_solid: None,
+        };
     }
     let mut rng = Rng::new(o.seed);
     let pass = |rng: &mut Rng| -> Vec<Pt> {
@@ -396,7 +425,11 @@ pub fn closed_curve(pts: &[Pt], o: &SketchOpts, want_fill: bool) -> Sketched {
     } else {
         (Vec::new(), None)
     };
-    Sketched { stroke, fill_sketch, fill_solid }
+    Sketched {
+        stroke,
+        fill_sketch,
+        fill_solid,
+    }
 }
 
 /// Build the crisp closed region (one multi-subpath path) for solid fill.
@@ -640,7 +673,10 @@ mod tests {
         };
         let s = rings(&[sq], &o, true);
         assert!(!s.stroke.is_empty());
-        assert!(!s.fill_sketch.is_empty(), "hachure should produce fill lines");
+        assert!(
+            !s.fill_sketch.is_empty(),
+            "hachure should produce fill lines"
+        );
     }
 
     #[test]
@@ -661,7 +697,10 @@ mod tests {
         let s = ellipse(50.0, 50.0, 80.0, 60.0, &o, true);
         assert_eq!(s.stroke.len(), 2, "two hand-drawn passes by default");
         assert!(!s.fill_sketch.is_empty(), "default hachure fill");
-        let o1 = SketchOpts { disable_multi_stroke: true, ..SketchOpts::default() };
+        let o1 = SketchOpts {
+            disable_multi_stroke: true,
+            ..SketchOpts::default()
+        };
         let s1 = ellipse(50.0, 50.0, 80.0, 60.0, &o1, false);
         assert_eq!(s1.stroke.len(), 1, "single pass when multi-stroke disabled");
     }

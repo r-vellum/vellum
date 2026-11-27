@@ -66,13 +66,22 @@ fn to_rings(x: &[f64], y: &[f64], nper: &[i32]) -> Vec<Vec<[f64; 2]>> {
 /// Returns `(x, y, nper)`: rings flattened the same way they arrived, so the
 /// result can go straight back into a path grob.
 pub fn path_op(
-    ax: &[f64], ay: &[f64], anper: &[i32],
-    bx: &[f64], by: &[f64], bnper: &[i32],
-    op: Op, even_odd: bool,
+    ax: &[f64],
+    ay: &[f64],
+    anper: &[i32],
+    bx: &[f64],
+    by: &[f64],
+    bnper: &[i32],
+    op: Op,
+    even_odd: bool,
 ) -> (Vec<f64>, Vec<f64>, Vec<i32>) {
     let subj = to_rings(ax, ay, anper);
     let clip = to_rings(bx, by, bnper);
-    let fill = if even_odd { FillRule::EvenOdd } else { FillRule::NonZero };
+    let fill = if even_odd {
+        FillRule::EvenOdd
+    } else {
+        FillRule::NonZero
+    };
     let shapes = subj.overlay(&clip, op.rule(), fill);
     flatten_shapes(shapes)
 }
@@ -84,9 +93,7 @@ pub fn path_op(
 /// which is why the result must be drawn with the non-zero rule regardless of
 /// what the inputs used. Contours with fewer than 3 points cannot bound an area
 /// and are dropped.
-pub(crate) fn flatten_shapes(
-    shapes: Vec<Vec<Vec<[f64; 2]>>>,
-) -> (Vec<f64>, Vec<f64>, Vec<i32>) {
+pub(crate) fn flatten_shapes(shapes: Vec<Vec<Vec<[f64; 2]>>>) -> (Vec<f64>, Vec<f64>, Vec<i32>) {
     let (mut x, mut y, mut nper) = (Vec::new(), Vec::new(), Vec::new());
     for shape in shapes {
         for contour in shape {
@@ -135,7 +142,11 @@ mod tests {
         let (ax, ay, an) = a();
         let (bx, by, bn) = b();
         let (x, y, n) = path_op(&ax, &ay, &an, &bx, &by, &bn, Op::Union, false);
-        assert!((area(&x, &y, &n) - 1.5).abs() < 1e-6, "got {}", area(&x, &y, &n));
+        assert!(
+            (area(&x, &y, &n) - 1.5).abs() < 1e-6,
+            "got {}",
+            area(&x, &y, &n)
+        );
     }
 
     #[test]
@@ -143,7 +154,11 @@ mod tests {
         let (ax, ay, an) = a();
         let (bx, by, bn) = b();
         let (x, y, n) = path_op(&ax, &ay, &an, &bx, &by, &bn, Op::Intersect, false);
-        assert!((area(&x, &y, &n) - 0.5).abs() < 1e-6, "got {}", area(&x, &y, &n));
+        assert!(
+            (area(&x, &y, &n) - 0.5).abs() < 1e-6,
+            "got {}",
+            area(&x, &y, &n)
+        );
     }
 
     #[test]
@@ -151,7 +166,11 @@ mod tests {
         let (ax, ay, an) = a();
         let (bx, by, bn) = b();
         let (x, y, n) = path_op(&ax, &ay, &an, &bx, &by, &bn, Op::Difference, false);
-        assert!((area(&x, &y, &n) - 0.5).abs() < 1e-6, "got {}", area(&x, &y, &n));
+        assert!(
+            (area(&x, &y, &n) - 0.5).abs() < 1e-6,
+            "got {}",
+            area(&x, &y, &n)
+        );
     }
 
     #[test]
@@ -159,7 +178,11 @@ mod tests {
         let (ax, ay, an) = a();
         let (bx, by, bn) = b();
         let (x, y, n) = path_op(&ax, &ay, &an, &bx, &by, &bn, Op::Xor, false);
-        assert!((area(&x, &y, &n) - 1.0).abs() < 1e-6, "got {}", area(&x, &y, &n));
+        assert!(
+            (area(&x, &y, &n) - 1.0).abs() < 1e-6,
+            "got {}",
+            area(&x, &y, &n)
+        );
     }
 
     #[test]
@@ -176,8 +199,14 @@ mod tests {
         let outer = (vec![0.0, 4.0, 4.0, 0.0], vec![0.0, 0.0, 4.0, 4.0], vec![4]);
         let inner = (vec![1.0, 3.0, 3.0, 1.0], vec![1.0, 1.0, 3.0, 3.0], vec![4]);
         let (x, y, n) = path_op(
-            &outer.0, &outer.1, &outer.2, &inner.0, &inner.1, &inner.2,
-            Op::Difference, false,
+            &outer.0,
+            &outer.1,
+            &outer.2,
+            &inner.0,
+            &inner.1,
+            &inner.2,
+            Op::Difference,
+            false,
         );
         assert_eq!(n.len(), 2, "outer ring + hole");
         assert!((area(&x, &y, &n) - (16.0 - 4.0)).abs() < 1e-6);

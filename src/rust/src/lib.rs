@@ -3,9 +3,9 @@ use extendr_api::prelude::*;
 mod aggregate;
 mod booleans;
 mod cache;
+mod color;
 mod contour;
 mod cvd;
-mod color;
 mod font;
 mod geom;
 mod math;
@@ -61,7 +61,10 @@ fn rs_glyph_sprite_stats() -> Vec<i32> {
 /// @keywords internal
 #[extendr]
 fn rs_subraster_stats() -> Vec<i32> {
-    scene::subraster_stats().into_iter().map(|v| v as i32).collect()
+    scene::subraster_stats()
+        .into_iter()
+        .map(|v| v as i32)
+        .collect()
 }
 
 /// Set colour-vision-deficiency simulation for subsequent renders.
@@ -159,8 +162,14 @@ fn rs_set_simplify_tol(tol: f64) {
 /// @keywords internal
 #[extendr]
 fn rs_stroke_to_path(
-    x: &[f64], y: &[f64], nper: &[i32], closed: bool,
-    width: f64, cap: i32, join: i32, miter: f64,
+    x: &[f64],
+    y: &[f64],
+    nper: &[i32],
+    closed: bool,
+    width: f64,
+    cap: i32,
+    join: i32,
+    miter: f64,
 ) -> Vec<f64> {
     use tiny_skia::{LineCap, LineJoin, PathBuilder, Stroke};
     let mut pb = PathBuilder::new();
@@ -211,7 +220,11 @@ fn rs_stroke_to_path(
         use tiny_skia::PathSegment::*;
         match seg {
             MoveTo(p) => {
-                if cur.len() >= 2 { subs.push(std::mem::take(&mut cur)); } else { cur.clear(); }
+                if cur.len() >= 2 {
+                    subs.push(std::mem::take(&mut cur));
+                } else {
+                    cur.clear();
+                }
                 cur.push((p.x as f64, p.y as f64));
             }
             LineTo(p) => cur.push((p.x as f64, p.y as f64)),
@@ -221,14 +234,19 @@ fn rs_stroke_to_path(
                 if let Some(&first) = cur.first() {
                     cur.push(first);
                 }
-                if cur.len() >= 2 { subs.push(std::mem::take(&mut cur)); } else { cur.clear(); }
+                if cur.len() >= 2 {
+                    subs.push(std::mem::take(&mut cur));
+                } else {
+                    cur.clear();
+                }
             }
         }
     }
     if cur.len() >= 2 {
         subs.push(cur);
     }
-    let mut out = Vec::with_capacity(1 + subs.len() + subs.iter().map(|s| s.len() * 2).sum::<usize>());
+    let mut out =
+        Vec::with_capacity(1 + subs.len() + subs.iter().map(|s| s.len() * 2).sum::<usize>());
     out.push(subs.len() as f64);
     for sp in &subs {
         out.push(sp.len() as f64);
@@ -264,13 +282,24 @@ fn rs_stroke_to_path(
 /// @keywords internal
 #[extendr]
 fn rs_stroke_to_path_var(
-    x: &[f64], y: &[f64], nper: &[i32], closed: bool,
-    hw: &[f64], cap: i32, join: i32, miter: f64, arc: i32,
+    x: &[f64],
+    y: &[f64],
+    nper: &[i32],
+    closed: bool,
+    hw: &[f64],
+    cap: i32,
+    join: i32,
+    miter: f64,
+    arc: i32,
 ) -> Vec<f64> {
     let nib = crate::ribbon::Nib {
         cap: crate::ribbon::Cap::from_code(cap),
         join: crate::ribbon::Join::from_code(join),
-        miter: if miter.is_finite() && miter > 0.0 { miter } else { 10.0 },
+        miter: if miter.is_finite() && miter > 0.0 {
+            miter
+        } else {
+            10.0
+        },
         arc: if arc > 0 { arc as usize } else { 0 },
     };
     let (ox, oy, onper) = crate::ribbon::variable_stroke(x, y, nper, hw, closed, &nib);
@@ -301,17 +330,26 @@ fn flatten_quad(out: &mut Vec<(f64, f64)>, c: tiny_skia::Point, p: tiny_skia::Po
 }
 
 /// Flatten a cubic segment into line segments at roughly pixel accuracy.
-fn flatten_cubic(out: &mut Vec<(f64, f64)>, c1: tiny_skia::Point, c2: tiny_skia::Point, p: tiny_skia::Point) {
+fn flatten_cubic(
+    out: &mut Vec<(f64, f64)>,
+    c1: tiny_skia::Point,
+    c2: tiny_skia::Point,
+    p: tiny_skia::Point,
+) {
     let a = *out.last().unwrap_or(&(c1.x as f64, c1.y as f64));
     let steps = curve_steps(a, (p.x as f64, p.y as f64));
     for i in 1..=steps {
         let t = i as f64 / steps as f64;
         let mt = 1.0 - t;
         out.push((
-            mt * mt * mt * a.0 + 3.0 * mt * mt * t * c1.x as f64
-                + 3.0 * mt * t * t * c2.x as f64 + t * t * t * p.x as f64,
-            mt * mt * mt * a.1 + 3.0 * mt * mt * t * c1.y as f64
-                + 3.0 * mt * t * t * c2.y as f64 + t * t * t * p.y as f64,
+            mt * mt * mt * a.0
+                + 3.0 * mt * mt * t * c1.x as f64
+                + 3.0 * mt * t * t * c2.x as f64
+                + t * t * t * p.x as f64,
+            mt * mt * mt * a.1
+                + 3.0 * mt * mt * t * c1.y as f64
+                + 3.0 * mt * t * t * c2.y as f64
+                + t * t * t * p.y as f64,
         ));
     }
 }
@@ -428,7 +466,10 @@ fn rs_largest_empty_rect(boxes: &[f64], region: &[f64], nx: i32, ny: i32) -> Vec
 /// @keywords internal
 #[extendr]
 fn rs_box_overlaps(boxes: &[f64], pad: f64) -> Vec<i32> {
-    place::box_overlaps(boxes, pad).into_iter().map(|i| i + 1).collect()
+    place::box_overlaps(boxes, pad)
+        .into_iter()
+        .map(|i| i + 1)
+        .collect()
 }
 
 /// Convex or concave hull of a point set, as 1-based point indices in order.
@@ -456,12 +497,24 @@ fn rs_hull(x: &[f64], y: &[f64], concavity: f64) -> Vec<i32> {
 /// @keywords internal
 #[extendr]
 fn rs_path_op(
-    ax: &[f64], ay: &[f64], anper: &[i32],
-    bx: &[f64], by: &[f64], bnper: &[i32],
-    op: i32, even_odd: bool,
+    ax: &[f64],
+    ay: &[f64],
+    anper: &[i32],
+    bx: &[f64],
+    by: &[f64],
+    bnper: &[i32],
+    op: i32,
+    even_odd: bool,
 ) -> List {
     let (x, y, nper) = booleans::path_op(
-        ax, ay, anper, bx, by, bnper, booleans::Op::from_code(op), even_odd,
+        ax,
+        ay,
+        anper,
+        bx,
+        by,
+        bnper,
+        booleans::Op::from_code(op),
+        even_odd,
     );
     list!(x = x, y = y, nper = nper)
 }

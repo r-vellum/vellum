@@ -57,7 +57,16 @@ impl GridBounds {
         if !(dx.is_finite() && dy.is_finite()) || dx == 0.0 || dy == 0.0 {
             return None;
         }
-        Some(GridBounds { nx, ny, x0, x1, y0, y1, sx: nx as f64 / dx, sy: ny as f64 / dy })
+        Some(GridBounds {
+            nx,
+            ny,
+            x0,
+            x1,
+            y0,
+            y1,
+            sx: nx as f64 / dx,
+            sy: ny as f64 / dy,
+        })
     }
 
     /// Cell `(col, row)` a point falls in, or `None` if it is non-finite or
@@ -103,7 +112,17 @@ impl GridBounds {
 // into the last column / top row rather than spilling out. See `datashade()`.
 // (Plain `//` not `///`: keep this out of the generated R wrappers / Rd.)
 #[extendr]
-fn rs_aggregate_2d(x: &[f64], y: &[f64], w: Robj, nx: i32, ny: i32, x0: f64, x1: f64, y0: f64, y1: f64) -> Vec<f64> {
+fn rs_aggregate_2d(
+    x: &[f64],
+    y: &[f64],
+    w: Robj,
+    nx: i32,
+    ny: i32,
+    x0: f64,
+    x1: f64,
+    y0: f64,
+    y1: f64,
+) -> Vec<f64> {
     let nx = nx.max(1) as usize;
     let ny = ny.max(1) as usize;
     let n = x.len().min(y.len());
@@ -135,7 +154,19 @@ fn rs_aggregate_2d(x: &[f64], y: &[f64], w: Robj, nx: i32, ny: i32, x0: f64, x1:
 // matrix with a single `matrix()` call. Binning/edge/skip rules match
 // `rs_aggregate_2d` exactly. See `datashade(category=)`.
 #[extendr]
-fn rs_aggregate_2d_cat(x: &[f64], y: &[f64], cat: &[i32], ncat: i32, w: Robj, nx: i32, ny: i32, x0: f64, x1: f64, y0: f64, y1: f64) -> Vec<f64> {
+fn rs_aggregate_2d_cat(
+    x: &[f64],
+    y: &[f64],
+    cat: &[i32],
+    ncat: i32,
+    w: Robj,
+    nx: i32,
+    ny: i32,
+    x0: f64,
+    x1: f64,
+    y0: f64,
+    y1: f64,
+) -> Vec<f64> {
     let nx = nx.max(1) as usize;
     let ny = ny.max(1) as usize;
     let ncat = ncat.max(0) as usize;
@@ -203,19 +234,39 @@ fn rfpart(x: f64) -> f64 {
 // coordinates (cell `k`'s centre is at coordinate `k`; world->grid is therefore
 // `(world - origin) * scale - 0.5`). Coverage sums to ~`wt` per major-axis step,
 // so a line deposits ~`wt` per cell it spans and overlapping lines add.
-fn wu_segment(grid: &mut [f64], nx: usize, ny: usize, gx0: f64, gy0: f64, gx1: f64, gy1: f64, wt: f64) {
+fn wu_segment(
+    grid: &mut [f64],
+    nx: usize,
+    ny: usize,
+    gx0: f64,
+    gy0: f64,
+    gx1: f64,
+    gy1: f64,
+    wt: f64,
+) {
     if wt == 0.0 || !(gx0.is_finite() && gy0.is_finite() && gx1.is_finite() && gy1.is_finite()) {
         return;
     }
     // Degenerate (zero-length) segment: deposit at its nearest cell.
     if gx0 == gx1 && gy0 == gy1 {
-        splat(grid, nx, ny, (gx0 + 0.5).floor() as i64, (gy0 + 0.5).floor() as i64, wt);
+        splat(
+            grid,
+            nx,
+            ny,
+            (gx0 + 0.5).floor() as i64,
+            (gy0 + 0.5).floor() as i64,
+            wt,
+        );
         return;
     }
 
     let steep = (gy1 - gy0).abs() > (gx1 - gx0).abs();
     // Work along the major axis; un-swap when plotting steep segments.
-    let (mut x0, mut y0, mut x1, mut y1) = if steep { (gy0, gx0, gy1, gx1) } else { (gx0, gy0, gx1, gy1) };
+    let (mut x0, mut y0, mut x1, mut y1) = if steep {
+        (gy0, gx0, gy1, gx1)
+    } else {
+        (gx0, gy0, gx1, gy1)
+    };
     if x0 > x1 {
         std::mem::swap(&mut x0, &mut x1);
         std::mem::swap(&mut y0, &mut y1);
@@ -280,7 +331,14 @@ fn wu_segment(grid: &mut [f64], nx: usize, ny: usize, gx0: f64, gy0: f64, gx1: f
 // axis limit drives `wu_segment`'s major-axis loop for ~1e9 dropped cells.
 #[inline]
 fn clip_to_rect(
-    x0: f64, y0: f64, x1: f64, y1: f64, xmin: f64, xmax: f64, ymin: f64, ymax: f64,
+    x0: f64,
+    y0: f64,
+    x1: f64,
+    y1: f64,
+    xmin: f64,
+    xmax: f64,
+    ymin: f64,
+    ymax: f64,
 ) -> Option<(f64, f64, f64, f64)> {
     let dx = x1 - x0;
     let dy = y1 - y0;
@@ -318,8 +376,18 @@ fn clip_to_rect(
 #[allow(clippy::too_many_arguments)]
 #[inline]
 fn accumulate_segment(
-    grid: &mut [f64], nx: usize, ny: usize, sx: f64, sy: f64, x0d: f64, y1d: f64,
-     wx0: f64, wy0: f64, wx1: f64, wy1: f64, wt: f64,
+    grid: &mut [f64],
+    nx: usize,
+    ny: usize,
+    sx: f64,
+    sy: f64,
+    x0d: f64,
+    y1d: f64,
+    wx0: f64,
+    wy0: f64,
+    wx1: f64,
+    wy1: f64,
+    wt: f64,
 ) {
     let gx0 = (wx0 - x0d) * sx - 0.5;
     let gy0 = (y1d - wy0) * sy - 0.5; // top-left origin: row grows downward from y1
@@ -345,7 +413,17 @@ fn accumulate_segment(
 // Row-major, top-left origin, identical to `rs_aggregate_2d`. See `datashade_segments()`.
 #[extendr]
 fn rs_aggregate_segments(
-    x0: &[f64], y0: &[f64], x1: &[f64], y1: &[f64], w: Robj, nx: i32, ny: i32, x0d: f64, x1d: f64, y0d: f64, y1d: f64,
+    x0: &[f64],
+    y0: &[f64],
+    x1: &[f64],
+    y1: &[f64],
+    w: Robj,
+    nx: i32,
+    ny: i32,
+    x0d: f64,
+    x1d: f64,
+    y0d: f64,
+    y1d: f64,
 ) -> Vec<f64> {
     let nx = nx.max(1) as usize;
     let ny = ny.max(1) as usize;
@@ -361,7 +439,9 @@ fn rs_aggregate_segments(
 
     for i in 0..n {
         let wt = weights.map_or(1.0, |s| s[i]);
-        accumulate_segment(&mut grid, nx, ny, gb.sx, gb.sy, gb.x0, gb.y1, x0[i], y0[i], x1[i], y1[i], wt);
+        accumulate_segment(
+            &mut grid, nx, ny, gb.sx, gb.sy, gb.x0, gb.y1, x0[i], y0[i], x1[i], y1[i], wt,
+        );
     }
     grid
 }
@@ -375,7 +455,16 @@ fn rs_aggregate_segments(
 // the line. Layout matches `rs_aggregate_2d`. See `datashade_lines()`.
 #[extendr]
 fn rs_aggregate_lines(
-    x: &[f64], y: &[f64], brk: Robj, w: Robj, nx: i32, ny: i32, x0d: f64, x1d: f64, y0d: f64, y1d: f64,
+    x: &[f64],
+    y: &[f64],
+    brk: Robj,
+    w: Robj,
+    nx: i32,
+    ny: i32,
+    x0d: f64,
+    x1d: f64,
+    y0d: f64,
+    y1d: f64,
 ) -> Vec<f64> {
     let nx = nx.max(1) as usize;
     let ny = ny.max(1) as usize;
@@ -404,7 +493,9 @@ fn rs_aggregate_lines(
             continue; // NA gap
         }
         let wt = weights.map_or(1.0, |s| s[i]);
-        accumulate_segment(&mut grid, nx, ny, gb.sx, gb.sy, gb.x0, gb.y1, ax, ay, bx, by, wt);
+        accumulate_segment(
+            &mut grid, nx, ny, gb.sx, gb.sy, gb.x0, gb.y1, ax, ay, bx, by, wt,
+        );
     }
     grid
 }
@@ -424,9 +515,15 @@ fn rs_attractor(kind: &str, n: i32, a: f64, b: f64, c: f64, d: f64, x0: f64, y0:
     for i in 0..n {
         let (nx, ny) = match kind {
             "dejong" => ((a * y).sin() - (b * x).cos(), (c * x).sin() - (d * y).cos()),
-            "svensson" => (d * (a * x).sin() - (b * y).sin(), c * (a * x).cos() + (b * y).cos()),
+            "svensson" => (
+                d * (a * x).sin() - (b * y).sin(),
+                c * (a * x).cos() + (b * y).cos(),
+            ),
             "bedhead" => ((x * y / b).sin() * y + (a * x - y).cos(), x + (y).sin() / b),
-            "fractal_dream" => ((b * y).sin() + c * (b * x).sin(), (a * x).sin() + d * (a * y).sin()),
+            "fractal_dream" => (
+                (b * y).sin() + c * (b * x).sin(),
+                (a * x).sin() + d * (a * y).sin(),
+            ),
             "hopalong" => (y - x.signum() * (b * x - c).abs().sqrt(), a - x),
             "gumowski_mira" => {
                 // g(t) = a*t + 2(1-a) t^2 / (1+t^2); x' = b*y + g(x); y' = -x + g(x')
@@ -435,7 +532,10 @@ fn rs_attractor(kind: &str, n: i32, a: f64, b: f64, c: f64, d: f64, x0: f64, y0:
                 (px, -x + g(px))
             }
             // clifford (default)
-            _ => ((a * y).sin() + c * (a * x).cos(), (b * x).sin() + d * (b * y).cos()),
+            _ => (
+                (a * y).sin() + c * (a * x).cos(),
+                (b * x).sin() + d * (b * y).cos(),
+            ),
         };
         x = nx;
         y = ny;

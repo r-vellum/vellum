@@ -26,8 +26,18 @@ pub struct Rgba {
 }
 
 impl Rgba {
-    pub const WHITE: Rgba = Rgba { r: 255, g: 255, b: 255, a: 255 };
-    pub const BLACK: Rgba = Rgba { r: 0, g: 0, b: 0, a: 255 };
+    pub const WHITE: Rgba = Rgba {
+        r: 255,
+        g: 255,
+        b: 255,
+        a: 255,
+    };
+    pub const BLACK: Rgba = Rgba {
+        r: 0,
+        g: 0,
+        b: 0,
+        a: 255,
+    };
 
     /// Apply a multiplicative alpha (gpar `alpha`, in 0..=1) to this colour. A
     /// non-finite multiplier is ignored (alpha unchanged) rather than silently
@@ -104,39 +114,107 @@ pub struct PatternFill {
 #[derive(Clone, Debug)]
 pub enum Paint {
     Solid(Rgba),
-    Linear { x1: f64, y1: f64, x2: f64, y2: f64, unit: Unit, stops: Vec<Stop>, extend: Extend },
+    Linear {
+        x1: f64,
+        y1: f64,
+        x2: f64,
+        y2: f64,
+        unit: Unit,
+        stops: Vec<Stop>,
+        extend: Extend,
+    },
     /// A radial gradient between two circles: the focal/start circle
     /// `(fx, fy, fr)` at stop offset 0 and the outer/end circle `(cx, cy, r)` at
     /// offset 1. `fr == 0` with `(fx, fy) == (cx, cy)` is the ordinary concentric
     /// gradient; a non-zero focal offset places the highlight off-centre.
-    Radial { cx: f64, cy: f64, r: f64, fx: f64, fy: f64, fr: f64, unit: Unit, stops: Vec<Stop>, extend: Extend },
+    Radial {
+        cx: f64,
+        cy: f64,
+        r: f64,
+        fx: f64,
+        fy: f64,
+        fr: f64,
+        unit: Unit,
+        stops: Vec<Stop>,
+        extend: Extend,
+    },
     Pattern(PatternFill),
     /// Parallel ruled lines filling a shape. Unlike `Pattern` this is geometry,
     /// not a rasterised tile, so it stays crisp at any zoom and prints correctly
     /// -- and it is the accessible alternative to a colour encoding.
-    Hatch { angle: f64, spacing: f64, width: f64, col: Rgba, bg: Option<Rgba> },
+    Hatch {
+        angle: f64,
+        spacing: f64,
+        width: f64,
+        col: Rgba,
+        bg: Option<Rgba>,
+    },
 }
 
 impl Paint {
     /// Fold a multiplicative gpar alpha into the paint (every stop / the solid).
     pub fn with_alpha(self, alpha: f64) -> Paint {
         let fade = |stops: Vec<Stop>| {
-            stops.into_iter().map(|s| Stop { offset: s.offset, color: s.color.with_alpha(alpha) }).collect()
+            stops
+                .into_iter()
+                .map(|s| Stop {
+                    offset: s.offset,
+                    color: s.color.with_alpha(alpha),
+                })
+                .collect()
         };
         match self {
             Paint::Solid(c) => Paint::Solid(c.with_alpha(alpha)),
-            Paint::Linear { x1, y1, x2, y2, unit, stops, extend } => {
-                Paint::Linear { x1, y1, x2, y2, unit, stops: fade(stops), extend }
-            }
-            Paint::Radial { cx, cy, r, fx, fy, fr, unit, stops, extend } => {
-                Paint::Radial { cx, cy, r, fx, fy, fr, unit, stops: fade(stops), extend }
-            }
+            Paint::Linear {
+                x1,
+                y1,
+                x2,
+                y2,
+                unit,
+                stops,
+                extend,
+            } => Paint::Linear {
+                x1,
+                y1,
+                x2,
+                y2,
+                unit,
+                stops: fade(stops),
+                extend,
+            },
+            Paint::Radial {
+                cx,
+                cy,
+                r,
+                fx,
+                fy,
+                fr,
+                unit,
+                stops,
+                extend,
+            } => Paint::Radial {
+                cx,
+                cy,
+                r,
+                fx,
+                fy,
+                fr,
+                unit,
+                stops: fade(stops),
+                extend,
+            },
             Paint::Pattern(mut p) => {
                 // Fold alpha into the opacity scalar; the tile `Rc` stays shared.
                 p.opacity *= alpha.clamp(0.0, 1.0);
                 Paint::Pattern(p)
             }
-            Paint::Hatch { angle, spacing, width, col, bg } => Paint::Hatch {
+            Paint::Hatch {
+                angle,
+                spacing,
+                width,
+                col,
+                bg,
+            } => Paint::Hatch {
                 angle,
                 spacing,
                 width,
@@ -188,8 +266,20 @@ fn parse_pattern(obj: &Robj) -> Option<Paint> {
     if tile_i.len() != (tw as usize) * (th as usize) * 4 {
         return None;
     }
-    let unit = Unit::parse(obj.dollar("units").ok().and_then(|u| u.as_str().map(String::from)).as_deref().unwrap_or("npc"));
-    let extend = Extend::parse(obj.dollar("extend").ok().and_then(|e| e.as_str().map(String::from)).as_deref().unwrap_or("repeat"));
+    let unit = Unit::parse(
+        obj.dollar("units")
+            .ok()
+            .and_then(|u| u.as_str().map(String::from))
+            .as_deref()
+            .unwrap_or("npc"),
+    );
+    let extend = Extend::parse(
+        obj.dollar("extend")
+            .ok()
+            .and_then(|e| e.as_str().map(String::from))
+            .as_deref()
+            .unwrap_or("repeat"),
+    );
     let mut tile: Vec<u8> = tile_i.iter().map(|v| (*v).clamp(0, 255) as u8).collect();
     let (mut tw, mut th) = (tw, th);
     let mirrored = matches!(extend, Extend::Reflect);
@@ -234,14 +324,30 @@ fn parse_gradient(obj: &Robj, kind: &str) -> Option<Paint> {
     // (no defensive `.to_vec()` copy of read-only data).
     let coords_obj = obj.dollar("coords").ok()?;
     let coords = coords_obj.as_real_slice()?;
-    let unit = Unit::parse(obj.dollar("units").ok().and_then(|u| u.as_str().map(String::from)).as_deref().unwrap_or("npc"));
-    let extend = Extend::parse(obj.dollar("extend").ok().and_then(|e| e.as_str().map(String::from)).as_deref().unwrap_or("pad"));
+    let unit = Unit::parse(
+        obj.dollar("units")
+            .ok()
+            .and_then(|u| u.as_str().map(String::from))
+            .as_deref()
+            .unwrap_or("npc"),
+    );
+    let extend = Extend::parse(
+        obj.dollar("extend")
+            .ok()
+            .and_then(|e| e.as_str().map(String::from))
+            .as_deref()
+            .unwrap_or("pad"),
+    );
     let cols_obj = obj.dollar("col").ok()?;
     let cols = cols_obj.as_integer_slice()?;
     let offs_obj = obj.dollar("offset").ok()?;
     let offs = offs_obj.as_real_slice()?;
     let interp = crate::oklab::Interp::parse(
-        obj.dollar("interpolation").ok().and_then(|s| s.as_str().map(String::from)).as_deref().unwrap_or("srgb"),
+        obj.dollar("interpolation")
+            .ok()
+            .and_then(|s| s.as_str().map(String::from))
+            .as_deref()
+            .unwrap_or("srgb"),
     );
     let n = offs.len().min(cols.len() / 4);
     if n == 0 {
@@ -251,7 +357,11 @@ fn parse_gradient(obj: &Robj, kind: &str) -> Option<Paint> {
         .map(|i| Stop {
             // Guard a non-finite offset (an R `NA`/`Inf` would otherwise clamp to
             // NaN and corrupt sorting/shading); finite offsets clamp to [0, 1].
-            offset: if offs[i].is_finite() { offs[i].clamp(0.0, 1.0) as f32 } else { 0.0 },
+            offset: if offs[i].is_finite() {
+                offs[i].clamp(0.0, 1.0) as f32
+            } else {
+                0.0
+            },
             color: Rgba {
                 r: cols[4 * i].clamp(0, 255) as u8,
                 g: cols[4 * i + 1].clamp(0, 255) as u8,
@@ -275,11 +385,27 @@ fn parse_gradient(obj: &Robj, kind: &str) -> Option<Paint> {
             } else {
                 (coords[0], coords[1], 0.0)
             };
-            Some(Paint::Radial { cx: coords[0], cy: coords[1], r: coords[2], fx, fy, fr, unit, stops, extend })
+            Some(Paint::Radial {
+                cx: coords[0],
+                cy: coords[1],
+                r: coords[2],
+                fx,
+                fy,
+                fr,
+                unit,
+                stops,
+                extend,
+            })
         }
-        "linear" if coords.len() >= 4 => {
-            Some(Paint::Linear { x1: coords[0], y1: coords[1], x2: coords[2], y2: coords[3], unit, stops, extend })
-        }
+        "linear" if coords.len() >= 4 => Some(Paint::Linear {
+            x1: coords[0],
+            y1: coords[1],
+            x2: coords[2],
+            y2: coords[3],
+            unit,
+            stops,
+            extend,
+        }),
         _ => None,
     }
 }
@@ -386,19 +512,30 @@ impl PartialGpar {
     /// (each `NULL` = inherit), or `NULL` to inherit all of them.
     pub fn from_robj(fill: &Robj, col: &Robj, lwd: &Robj, alpha: &Robj, stroke: &Robj) -> Self {
         let field = |name: &str| stroke.dollar(name).unwrap_or_else(|_| ().into());
-        let (lty, lineend, linejoin, linemitre, antialias, crisp, col_paint, dash_phase) = if stroke.is_list() {
-            (
-                inh_lty(&field("lty")), inh_linecap(&field("lineend")),
-                inh_linejoin(&field("linejoin")), inh_f64(&field("linemitre")),
-                inh_bool(&field("antialias")), inh_bool(&field("crisp")),
-                inh_paint(&field("paint")), inh_f64(&field("phase")),
-            )
-        } else {
-            (
-                Inh::Inherit, Inh::Inherit, Inh::Inherit, Inh::Inherit,
-                Inh::Inherit, Inh::Inherit, Inh::Inherit, Inh::Inherit,
-            )
-        };
+        let (lty, lineend, linejoin, linemitre, antialias, crisp, col_paint, dash_phase) =
+            if stroke.is_list() {
+                (
+                    inh_lty(&field("lty")),
+                    inh_linecap(&field("lineend")),
+                    inh_linejoin(&field("linejoin")),
+                    inh_f64(&field("linemitre")),
+                    inh_bool(&field("antialias")),
+                    inh_bool(&field("crisp")),
+                    inh_paint(&field("paint")),
+                    inh_f64(&field("phase")),
+                )
+            } else {
+                (
+                    Inh::Inherit,
+                    Inh::Inherit,
+                    Inh::Inherit,
+                    Inh::Inherit,
+                    Inh::Inherit,
+                    Inh::Inherit,
+                    Inh::Inherit,
+                    Inh::Inherit,
+                )
+            };
         PartialGpar {
             fill: inh_paint(fill),
             col: inh_color(col),
@@ -657,7 +794,15 @@ fn hash_paint(p: &Paint, h: &mut impl std::hash::Hasher) {
             0u8.hash(h);
             hash_rgba(*c, h);
         }
-        Paint::Linear { x1, y1, x2, y2, unit, stops, extend } => {
+        Paint::Linear {
+            x1,
+            y1,
+            x2,
+            y2,
+            unit,
+            stops,
+            extend,
+        } => {
             1u8.hash(h);
             for v in [*x1, *y1, *x2, *y2] {
                 v.to_bits().hash(h);
@@ -666,7 +811,17 @@ fn hash_paint(p: &Paint, h: &mut impl std::hash::Hasher) {
             hash_stops(stops, h);
             std::mem::discriminant(extend).hash(h);
         }
-        Paint::Radial { cx, cy, r, fx, fy, fr, unit, stops, extend } => {
+        Paint::Radial {
+            cx,
+            cy,
+            r,
+            fx,
+            fy,
+            fr,
+            unit,
+            stops,
+            extend,
+        } => {
             2u8.hash(h);
             for v in [*cx, *cy, *r, *fx, *fy, *fr] {
                 v.to_bits().hash(h);
@@ -688,14 +843,23 @@ fn hash_paint(p: &Paint, h: &mut impl std::hash::Hasher) {
             pf.mirrored.hash(h);
             pf.opacity.to_bits().hash(h);
         }
-        Paint::Hatch { angle, spacing, width, col, bg } => {
+        Paint::Hatch {
+            angle,
+            spacing,
+            width,
+            col,
+            bg,
+        } => {
             4u8.hash(h);
             angle.to_bits().hash(h);
             spacing.to_bits().hash(h);
             width.to_bits().hash(h);
             hash_rgba(*col, h);
             match bg {
-                Some(c) => { 1u8.hash(h); hash_rgba(*c, h); }
+                Some(c) => {
+                    1u8.hash(h);
+                    hash_rgba(*c, h);
+                }
                 None => 0u8.hash(h),
             }
         }
@@ -748,7 +912,12 @@ mod tests {
 
     #[test]
     fn with_alpha_ignores_non_finite() {
-        let c = Rgba { r: 10, g: 20, b: 30, a: 200 };
+        let c = Rgba {
+            r: 10,
+            g: 20,
+            b: 30,
+            a: 200,
+        };
         // NaN / infinities must not silently zero the alpha (a NaN `as u8` -> 0).
         assert_eq!(c.with_alpha(f64::NAN).a, 200);
         assert_eq!(c.with_alpha(f64::INFINITY).a, 200);

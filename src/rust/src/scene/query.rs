@@ -688,11 +688,18 @@ impl Scene {
                 if elem_key(node, ei).is_none() {
                     continue;
                 }
-                let parts = rec.get(ni).and_then(|e| e.get(ei)).map_or(&[][..], |p| &p[..]);
+                let parts = rec
+                    .get(ni)
+                    .and_then(|e| e.get(ei))
+                    .map_or(&[][..], |p| &p[..]);
                 if parts.is_empty() {
                     continue;
                 }
-                items.push(SpatialItem { node: ni, elem: ei, bbox: parts_bbox(parts) });
+                items.push(SpatialItem {
+                    node: ni,
+                    elem: ei,
+                    bbox: parts_bbox(parts),
+                });
             }
         }
         let s = Arc::new(SpatialIndex::build(rec, items));
@@ -701,7 +708,11 @@ impl Scene {
     }
 
     /// `key` and `kind` columns for a list of spatial-index items.
-    fn spatial_rows(&self, idx: &SpatialIndex, hits: impl Iterator<Item = usize>) -> (Vec<String>, Vec<String>) {
+    fn spatial_rows(
+        &self,
+        idx: &SpatialIndex,
+        hits: impl Iterator<Item = usize>,
+    ) -> (Vec<String>, Vec<String>) {
         let (mut key, mut kind) = (Vec::new(), Vec::new());
         for i in hits {
             let it = &idx.items()[i];
@@ -726,7 +737,13 @@ impl Scene {
     /// Body of the `brush_table` / `lasso_table` R methods: the keyed elements
     /// meeting a rectangle (`xs`/`ys` its two corners) or a polygon, in paint
     /// order.
-    pub(super) fn build_region_table(&self, xs: &[f64], ys: &[f64], rect: bool, mode: Region) -> List {
+    pub(super) fn build_region_table(
+        &self,
+        xs: &[f64],
+        ys: &[f64],
+        rect: bool,
+        mode: Region,
+    ) -> List {
         let idx = self.spatial();
         let hits = if rect {
             if xs.len() < 2 || ys.len() < 2 {

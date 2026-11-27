@@ -34,10 +34,10 @@ mod svg;
 
 pub use displaylist::{DisplayList, DisplayListBackend};
 pub use dml::{resolve_media, write_media_files, DmlBackend, EMU_PER_INCH};
-pub use pptx::{pptx_package, SlidePart};
 pub use paths::*;
 pub(crate) use pdf::is_decorative;
 pub use pdf::{pdf_tag, PdfBackend};
+pub use pptx::{pptx_package, SlidePart};
 pub use raster::RasterBackend;
 pub use svg::SvgBackend;
 pub(crate) use svg::{doc_id_prefix, resolve_ids, xml_escape, ID_TOKEN};
@@ -322,8 +322,13 @@ pub struct TextRule {
 pub fn text_rule_path(run: &TextRun, r: &TextRule) -> Option<Path> {
     let x0 = run.ax - run.hjust * run.w + r.x;
     let y0 = run.ay - (r.y + r.h - run.vjust * run.h);
-    tiny_skia::Rect::from_xywh(x0 as f32, y0 as f32, r.w.max(0.0) as f32, r.h.max(0.0) as f32)
-        .map(tiny_skia::PathBuilder::from_rect)
+    tiny_skia::Rect::from_xywh(
+        x0 as f32,
+        y0 as f32,
+        r.w.max(0.0) as f32,
+        r.h.max(0.0) as f32,
+    )
+    .map(tiny_skia::PathBuilder::from_rect)
 }
 
 /// A drop shadow cast by a group: the group's own coverage, tinted, blurred and

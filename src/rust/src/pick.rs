@@ -148,7 +148,11 @@ mod tests {
         // report zero.
         let d = poly_dist(0.0, 10.0, &[0.0, 10.0], &[0.0, 10.0], false);
         assert!((d - (50.0f64).sqrt()).abs() < 1e-9, "got {d}");
-        assert_eq!(rect_dist(0.0, 10.0, 0.0, 0.0, 10.0, 10.0), 0.0, "bbox says inside");
+        assert_eq!(
+            rect_dist(0.0, 10.0, 0.0, 0.0, 10.0, 10.0),
+            0.0,
+            "bbox says inside"
+        );
     }
 
     #[test]
