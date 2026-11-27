@@ -20,6 +20,15 @@
 
 ## Bug fixes
 
+* PowerPoint output keeps vellum's line spacing in a label with blank lines
+  but only one line of text, such as `"\nabc"`: every paragraph of a label
+  with more than one now gets an exact line spacing, where it used to fall
+  back to the font's default. A trailing newline (`"abc\n"`) no longer adds
+  an empty paragraph that lifted the text by half a line, since vellum sets
+  that label as one line; and an `md()` label leaves out blank lines before
+  or after its text, as vellum's own layout does, instead of shifting the
+  text off its place (VR-51).
+
 * Large circles, sectors and round-rect corners now follow their arcs to
   within a small fraction of a pixel. In PNG and PDF a circle was tiny-skia's
   unit circle scaled up, 3e-3 of its radius off: 3 px at a radius of 1,000

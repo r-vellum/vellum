@@ -39,6 +39,10 @@ pub(crate) const DML_NS: &str =
 /// polygons (fill normalisation, clipping).
 const FLATTEN_TOL: f64 = 0.05;
 
+/// Baseline-to-baseline line pitch as a multiple of the font size; R's
+/// `.LINEHEIGHT`, which stacks a plain label's lines.
+const LINE_HEIGHT: f64 = 1.2;
+
 pub(super) type Pt = (f64, f64);
 
 /// One segment of a path baked into device px.
@@ -2310,6 +2314,16 @@ impl DmlBackend {
         // An `md()` label whose runs are all text (no math) is written as one
         // text run per styled span (VR-40); `paras` holds each line's spans.
         let paras = rich_paras(run);
+        // vellum sets an `md()` label's box around its text lines only, so
+        // blank lines before or after them are left out (VR-51); `cut` counts
+        // them.
+        let (paras, cut) = match paras {
+            Some(ps) => {
+                let (ps, cut) = trim_blank_paras(ps);
+                (Some(ps), cut)
+            }
+            None => (None, (0, 0)),
+        };
         let (lines, nonblank, label_lines): (Vec<(usize, usize)>, Vec<usize>, Vec<&str>) =
             match &paras {
                 Some(ps) => {
@@ -2327,7 +2341,13 @@ impl DmlBackend {
                     (lines, nonblank, Vec::new())
                 }
                 None => {
-                    let label_lines: Vec<&str> = run.label.split('\n').collect();
+                    let mut label_lines: Vec<&str> = run.label.split('\n').collect();
+                    // vellum splits a label as `strsplit()` does, which drops
+                    // one trailing empty line: "abc\n" is set as one line, so
+                    // it is one paragraph here too.
+                    if label_lines.len() > 1 && label_lines.last() == Some(&"") {
+                        label_lines.pop();
+                    }
                     // Indices of the label lines that hold text, in order.
                     let nonblank = (0..label_lines.len())
                         .filter(|&i| !label_lines[i].is_empty())
@@ -2352,15 +2372,34 @@ impl DmlBackend {
             || (lines.len() > 1 && lines.len() != nonblank.len());
         // The label's box in local px, before rotation.
         let x0 = run.ax - run.hjust * run.w;
-        let y0 = run.ay - (1.0 - run.vjust) * run.h;
+        let mut y0 = run.ay - (1.0 - run.vjust) * run.h;
+        let mut h = run.h;
+        if let Some(ps) = paras.as_ref().filter(|_| (cut.0 > 0) != (cut.1 > 0)) {
+            // An `md()` box always reaches the label's middle, so text lines
+            // all below it (after cut blank lines) or all above it (before
+            // them) sit at one end of a taller box: shrink the box to them,
+            // keeping that end.
+            let pitch = run
+                .spans
+                .iter()
+                .find(|sp| sp.brk && sp.size > 0.0)
+                .map_or(run.size * LINE_HEIGHT, |sp| sp.size);
+            let tall = ((ps.len() - 1) as f64 * pitch + run.size) * run.dpi / 72.0;
+            if tall < h {
+                if cut.0 > 0 {
+                    y0 += h - tall;
+                }
+                h = tall;
+            }
+        }
         let rot_t = crate::units::rotation_about(run.rot, run.ax, run.ay);
         let full = transform.pre_concat(rot_t);
         {
             let corners = [
                 (x0, y0),
                 (x0 + run.w, y0),
-                (x0 + run.w, y0 + run.h),
-                (x0, y0 + run.h),
+                (x0 + run.w, y0 + h),
+                (x0, y0 + h),
             ];
             let pts: Vec<Pt> = corners
                 .iter()
@@ -2389,9 +2428,9 @@ impl DmlBackend {
         // Centre of the box on the page, and the box size.
         let (ccx, ccy) = map_pt(
             full,
-            tiny_skia::Point::from_xy((x0 + run.w / 2.0) as f32, (y0 + run.h / 2.0) as f32),
+            tiny_skia::Point::from_xy((x0 + run.w / 2.0) as f32, (y0 + h / 2.0) as f32),
         );
-        let (bw, bh) = (run.w * s, run.h * s);
+        let (bw, bh) = (run.w * s, h * s);
         // Page rotation: the label's own (counter-clockwise) plus the
         // transform's, as DrawingML's clockwise 60000ths of a degree.
         let t_ang = (transform.ky as f64)
@@ -2435,7 +2474,14 @@ impl DmlBackend {
             solid_fill(run.color, 1.0)
         ));
         // Line pitch from the glyph baselines, so a multi-line label keeps
-        // vellum's spacing rather than the font's default.
+        // vellum's spacing rather than the font's default. A label of several
+        // paragraphs with fewer than two glyph lines (a leading or trailing
+        // blank line, VR-51) cannot measure it from its glyphs, so it takes
+        // vellum's line pitch directly.
+        let n_paras = match &paras {
+            Some(ps) => ps.len(),
+            None => label_lines.len(),
+        };
         let ln_spc = if lines.len() > 1 {
             let (a, b) = (lines[0].0, lines[1].0);
             // The first two glyph lines may have blank lines between them.
@@ -2455,10 +2501,18 @@ impl DmlBackend {
                     pitch_px * 72.0 / (EMU_PER_INCH / self.k)
                 }
             };
-            format!(
-                "<a:lnSpc><a:spcPts val=\"{}\"/></a:lnSpc>",
-                (pitch_pt * 100.0).round() as i64
-            )
+            spc_pts(pitch_pt)
+        } else if n_paras > 1 {
+            // A rich label's line break carries its pitch; a plain label's is
+            // its size times vellum's line height.
+            let pitch_pt = run
+                .spans
+                .iter()
+                .find(|sp| sp.brk && sp.size > 0.0)
+                .filter(|_| paras.is_some())
+                .map_or(run.size * LINE_HEIGHT, |sp| sp.size)
+                * s;
+            spc_pts(pitch_pt)
         } else {
             String::new()
         };
@@ -3148,6 +3202,31 @@ fn fold_alpha(xml: &str, a: f32) -> String {
     }
     o.push_str(r);
     o
+}
+
+/// `paras` without the blank paragraphs before its first and after its last
+/// non-blank one, and how many went from each end. All blank: kept whole.
+fn trim_blank_paras(paras: Vec<Vec<&TextSpan>>) -> (Vec<Vec<&TextSpan>>, (usize, usize)) {
+    let blank = |p: &Vec<&TextSpan>| p.iter().all(|sp| sp.text.is_empty());
+    let Some(first) = paras.iter().position(|p| !blank(p)) else {
+        return (paras, (0, 0));
+    };
+    let last = paras.iter().rposition(|p| !blank(p)).unwrap_or(first);
+    let cut = (first, paras.len() - 1 - last);
+    let kept = paras
+        .into_iter()
+        .skip(first)
+        .take(last + 1 - first)
+        .collect();
+    (kept, cut)
+}
+
+/// A paragraph's exact line spacing, `pt` points.
+fn spc_pts(pt: f64) -> String {
+    format!(
+        "<a:lnSpc><a:spcPts val=\"{}\"/></a:lnSpc>",
+        (pt * 100.0).round() as i64
+    )
 }
 
 /// A rich label's styled runs split into lines, when the label can be written
