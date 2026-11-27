@@ -31,8 +31,8 @@
   is deeper than 0.2 em (Avenir Next, Hoefler Text) still sits lower by the
   excess. PowerPoint itself has not been checked. The paragraph alignment of a
   multi-line label whose lines line up at both edges now follows its `hjust`:
-  `"a\nb"` and `md("a\n\nb")` are centred for a centred label, where they
-  were left-aligned. An `md()` label whose box is cut to its text lines counts
+  `"ab\nab"`, and in Helvetica `"a\nb"`, are centred for a centred label,
+  where they were left-aligned. An `md()` label whose box is cut to its text lines counts
   a `^superscript^` or `~subscript~` run where it sits (VR-54).
 
 * `scene_display_list()` lists a hatched point marker of any shape (square,

@@ -499,11 +499,12 @@ test_that("text boxes sit on their bottom edge, whatever the vjust (VR-54)", {
       expect_lt(abs(b$y - vj * b$cy - b0$y), 2)
     }
   }
-  # lines flush at both edges align as one line does
-  expect_identical(sp_of(md("a\n\nb"))$algn, rep("ctr", 3))
-  expect_identical(sp_of("a\nb")$algn, rep("ctr", 2))
-  expect_identical(sp_of("a\nb", just = "left")$algn, rep("l", 2))
-  expect_identical(sp_of("a\nb", just = "right")$algn, rep("r", 2))
+  # lines flush at both edges align as one line does (identical lines, so
+  # this holds in any font; "a" and "b" are as wide in Helvetica only)
+  expect_identical(sp_of(md("a\n\na"))$algn, rep("ctr", 3))
+  expect_identical(sp_of("ab\nab")$algn, rep("ctr", 2))
+  expect_identical(sp_of("ab\nab", just = "left")$algn, rep("l", 2))
+  expect_identical(sp_of("ab\nab", just = "right")$algn, rep("r", 2))
   # lines of different widths keep the alignment they were set with
   expect_identical(sp_of("abc\nd")$algn, rep("l", 2))
   # an md() box cut to its text line counts a raised or lowered run where it
