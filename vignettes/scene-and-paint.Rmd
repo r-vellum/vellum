@@ -109,9 +109,9 @@ unit, and that errors rather than being guessed.
 ## The paint model
 
 Any `fill` in `vl_gpar()` can be more than a flat colour — and so can `col`. The
-same three paint types work identically on the raster, SVG, and PDF backends
-(with the documented exception that the PDF backend does not yet rasterise
-patterns).
+same three paint types work identically on the raster, SVG, and PDF backends.
+PowerPoint keeps gradients as native gradient fills and writes a pattern as a
+tiled picture fill (see `vignette("output-formats")`).
 
 ### Gradients
 

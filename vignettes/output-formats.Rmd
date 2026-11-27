@@ -20,23 +20,25 @@ the capability matrix, and — more usefully — where each format *degrades*.
 
 ```{r}
 #| eval: false
-render(scene, "figure.png") # raster
-render(scene, "figure.svg") # vector, web
-render(scene, "figure.pdf") # vector, print
+render(scene, "figure.png")  # raster
+render(scene, "figure.svg")  # vector, web
+render(scene, "figure.pdf")  # vector, print
+render(scene, "figure.pptx") # editable shapes, slides
 ```
 
-| | PNG | SVG | PDF |
-|---|---|---|---|
-| Resolution-independent | ✗ | ✓ | ✓ |
-| Gradients, patterns | ✓ | ✓ | ✓ |
-| Hatching (`vl_hatch()`) | ✓ | ✓ (as `<path>`) | ✓ |
-| Selectable / searchable text | ✗ | ✓ (`text = "native"`) | ✓ |
-| Screen-reader structure | ✗ | ✓ (`role`, `data-*`) | ✓ (tagged) |
-| Masks | ✓ | ✓ | ✓ |
-| Tiling patterns | ✓ | ✓ | degrades |
-| Faithful without the author's fonts | ✓ | only with `text = "outline"` | ✓ (embedded) |
+| | PNG | SVG | PDF | PPTX |
+|---|---|---|---|---|
+| Resolution-independent | ✗ | ✓ | ✓ | ✓ |
+| Gradients | ✓ | ✓ | ✓ | ✓ (native gradient fills) |
+| Tiling patterns | ✓ | ✓ | ✓ | as a tiled picture fill |
+| Hatching (`vl_hatch()`) | ✓ | ✓ (as `<path>`) | ✓ | ✓ (as shapes) |
+| Clipping | ✓ | ✓ | ✓ | geometry cut in advance |
+| Masks, blend modes, blur, shadow | ✓ | ✓ | ✓ | as a picture of the region, with a warning |
+| Selectable / editable text | ✗ | ✓ (`text = "native"`) | selectable | editable (`text = "native"`) |
+| Screen-reader structure | ✗ | ✓ (`role`, `data-*`) | ✓ (tagged) | title and alt text only |
+| Faithful without the author's fonts | ✓ | only with `text = "outline"` | ✓ (embedded) | only with `text = "outline"` |
 
-Two rows deserve expansion.
+A few rows deserve expansion.
 
 **SVG text is a choice, not a default you can ignore.** `text = "native"` emits
 real `<text>` — selectable, searchable, readable by a screen reader — but it
@@ -48,6 +50,19 @@ embedding a subset font would give both, and is blocked on tooling
 
 **PDF embeds its fonts**, which is why it is the format to hand someone when
 fidelity matters more than editability.
+
+**PowerPoint is the format for editability.** Paths become freeform shapes,
+text becomes text boxes you can retype, and panels become named groups.
+DrawingML has no clipping, so geometry that a clip would hide is cut away before
+it is written. The same applies to text and fonts as in SVG: `text = "native"`
+(the default) is editable and uses whatever fonts the viewer has, and
+`text = "outline"` gives glyph outlines that look the same everywhere. A `tex()`
+formula, inline math in an `md()` label and haloed text are outlines in either
+mode. `vignette("powerpoint")` covers placing scenes on slides.
+
+Geometry far off the page is cut to the page the same way on every backend, so
+a mark with an extreme coordinate draws its visible part identically in all
+four formats.
 
 Anything a backend cannot honour is reported as a warning at render time rather
 than silently dropped, so you do not have to consult this table to find out.
@@ -88,8 +103,10 @@ wins by a wide margin *and* stays crisp at any size. A 2000-point cloud is 24 MB
 uncompressed; vellum warns above 5 MB rather than letting you find out later.
 
 `prefers-reduced-motion` is worth noting as more than a checkbox: a reader who
-has asked their system not to animate gets the first frame, held, instead of
-nothing.
+has asked their system not to animate gets one frame, held, instead of nothing.
+That is the last frame when the schedule ends on the final keyframe (the
+complete picture of a reveal or a time series), and the first one otherwise.
+`vignette("animation")` covers building the keyframes and the schedule.
 
 ## Documents and batches
 
@@ -120,12 +137,6 @@ byte-identical either way, and that is asserted in the test suite.
 
 Named because "can it?" is a reasonable question with a definite answer.
 
-**PowerPoint / OOXML DrawingML.** The gap with the clearest audience: `rvg` and
-`officer` are widely used because people need *editable* shapes in a deck, not a
-picture of a plot. A resolved scene maps onto DrawingML about as directly as
-onto SVG. It is not here because it needs a new backend and a zip container
-writer — a phase of its own rather than a tail item, and worth doing properly.
-
 **EPS / PostScript.** Still demanded by some journals, and a hard blocker for
 those who need it. Also a new backend: krilla writes PDF and nothing else, so
 this is a PostScript writer from scratch for a shrinking audience.
@@ -138,6 +149,9 @@ Straightforward to add if a need appears.
 
 - `vignette("accessible-output")`: tagged PDF, and why SVG cannot yet be both
   faithful and selectable.
+- `vignette("powerpoint")`: scenes and plots as editable PowerPoint shapes.
+- `vignette("animation")`: keyframes, schedules, and how marks are matched
+  between frames.
 - `vignette("scene-and-paint")`: the paint features whose degradation this table
   summarises.
 - `vignette("scenes-as-values")`: rendering is not the only thing to do with a

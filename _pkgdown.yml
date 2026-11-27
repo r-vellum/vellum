@@ -30,9 +30,9 @@ home:
   description: >
     vellum is the parchment of the vellum ecosystem: a grid-like scene graph,
     unit/layout engine, and renderer. It measures text and solves layout without
-    a device, so one solved scene draws to PNG, SVG, or PDF with the same
-    geometry — and can report that geometry back, element by element, for a host
-    to build on. It is the foundation a grammar of graphics builds on, not a
+    a device, so one solved scene draws to PNG, SVG, PDF, or editable PowerPoint
+    with the same geometry — and can report that geometry back, element by
+    element, for a host to build on. It is the foundation a grammar of graphics builds on, not a
     plotting package itself.
   sidebar:
     structure: [ecosystem, links, license, community, citation, authors, dev]
@@ -97,6 +97,8 @@ articles:
   navbar: Output
   contents:
   - output-formats
+  - powerpoint
+  - animation
 
 - title: Interop
   navbar: Interop
@@ -113,7 +115,7 @@ reference:
   desc: >
     Build a scene functionally with `vl_scene()` and a pipeline of
     `push()` / `draw()` / `pop()`, then render it. `render()` picks the
-    backend (PNG / SVG / PDF) from the file extension.
+    backend (PNG / SVG / PDF / PowerPoint) from the file extension.
   contents:
   - vl_scene
   - describe
@@ -122,6 +124,13 @@ reference:
   - scene_svg
   - scene_png
   - as_vellum_scene
+
+- title: Animation
+  desc: >
+    Keyframe animation: tween between finished scenes on a schedule and encode
+    the frames as GIF, APNG, animated SVG or PNG files, or draw one frame as a
+    still. See `vignette("animation")`.
+  contents:
   - vl_render_animation
   - vl_render_frame
   - vl_tween_pairing
@@ -179,8 +188,10 @@ reference:
 
 - title: Text
   desc: >
-    Device-independent shaping and measurement, Markdown-style rich labels, and
-    layout: text wrapped to a box or set along a curve.
+    Device-independent shaping and measurement, font weights, Markdown-style
+    rich labels, math typeset from TeX or plotmath notation (`tex()`, inline
+    `$...$` in `md()`, `plotmath()`), and layout: text wrapped to a box or set
+    along a curve.
   contents:
   - vl_strwidth
   - md
@@ -209,8 +220,9 @@ reference:
 
 - title: Output reach
   desc: >
-    Destinations for a finished scene beyond a single file: a multi-page
-    document, and a batch rendered across cores.
+    Destinations for a finished scene beyond a single file: a multi-page PDF
+    document, a batch rendered across cores, and editable PowerPoint slides,
+    written directly or through officer (see `vignette("powerpoint")`).
   contents:
   - pdf_pages
   - render_all
