@@ -2389,7 +2389,21 @@ impl DmlBackend {
                 .iter()
                 .find(|sp| sp.brk && sp.size > 0.0)
                 .map_or(run.size * LINE_HEIGHT, |sp| sp.size);
-            let tall = ((ps.len() - 1) as f64 * pitch + run.size) * run.dpi / 72.0;
+            // A text line is as tall as its tallest face's line box at its
+            // size (what vellum measured it as), not its nominal size: that is
+            // 1.0 em for Helvetica but 1.16 em for DejaVu Sans. Glyph sizes
+            // are local px, like the box.
+            let first = lines.first().map_or(0..0, |&(lo, hi)| lo..hi);
+            let line_px = first
+                .filter_map(|g| {
+                    let pt = run.gsize.get(g)? * 72.0 / run.dpi;
+                    let h =
+                        crate::font::font_line_height(run.gpath.get(g)?, *run.gface.get(g)?, pt)?;
+                    Some(h * run.dpi / 72.0)
+                })
+                .fold(None, |m: Option<f64>, v| Some(m.map_or(v, |m| m.max(v))))
+                .unwrap_or(run.size * run.dpi / 72.0);
+            let tall = (ps.len() - 1) as f64 * pitch * run.dpi / 72.0 + line_px;
             if tall < h {
                 if cut.0 > cut.1 {
                     y0 += h - tall;
