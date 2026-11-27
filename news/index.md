@@ -2,6 +2,17 @@
 
 ## vellum (development version)
 
+### New features
+
+- PowerPoint output writes a layer of points as a few shapes instead of
+  one shape per point. Points of one style that do not overlap share a
+  shape, one path each (a circle as two arcs); a point overlapping an
+  earlier one goes into a later shape, so the stacking order is kept and
+  the slide looks as before. A 10,000-point scatter went from 10,018
+  shapes and 182 KB to 320 shapes and 136 KB. Each shape stays an
+  editable freeform; bars, tiles and lines are still one shape each
+  (VR-39).
+
 ### Bug fixes
 
 - A raster image reaching far past the page now draws its visible part
