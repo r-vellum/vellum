@@ -20,6 +20,13 @@
 
 ## Bug fixes
 
+* `vl_pattern()` takes `vl_unit()` cell sizes:
+  `vl_pattern(grob, width = vl_unit(5, "mm"), height = vl_unit(5, "mm"))`
+  makes 5 mm cells, still centred by `x` and `y` in `units`. It failed with a
+  raw vctrs error. A `vl_unit()` `x` or `y` is converted to `units` where it
+  can be, and a combination that can't work (a width in `"npc"` with a
+  height in `"mm"`) says so (VL-18).
+
 * PowerPoint output keeps vellum's line spacing in a label with blank lines
   but only one line of text, such as `"\nabc"`: every paragraph of a label
   with more than one now gets an exact line spacing, where it used to fall

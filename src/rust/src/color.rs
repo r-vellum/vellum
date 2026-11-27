@@ -95,6 +95,9 @@ pub struct PatternFill {
     pub w: f64,
     pub h: f64,
     pub unit: Unit,
+    /// The unit of `w` and `h`: `unit`, unless the cell size was given in a
+    /// unit of its own (a `vl_unit()` width, VL-18).
+    pub size_unit: Unit,
     /// Always `Repeat` after parsing: SVG and PDF tiling patterns can only
     /// repeat, so `reflect` is baked into a mirrored tile (see `mirrored`) and
     /// `pad` (rejected in R) falls back to repeat, identically on every backend.
@@ -273,6 +276,11 @@ fn parse_pattern(obj: &Robj) -> Option<Paint> {
             .as_deref()
             .unwrap_or("npc"),
     );
+    let size_unit = obj
+        .dollar("size_units")
+        .ok()
+        .and_then(|u| u.as_str().map(Unit::parse))
+        .unwrap_or(unit);
     let extend = Extend::parse(
         obj.dollar("extend")
             .ok()
@@ -295,6 +303,7 @@ fn parse_pattern(obj: &Robj) -> Option<Paint> {
         w: coords[2],
         h: coords[3],
         unit,
+        size_unit,
         extend: Extend::Repeat,
         mirrored,
         opacity: 1.0,
@@ -839,6 +848,7 @@ fn hash_paint(p: &Paint, h: &mut impl std::hash::Hasher) {
                 v.to_bits().hash(h);
             }
             hash_unit(&pf.unit, h);
+            hash_unit(&pf.size_unit, h);
             std::mem::discriminant(&pf.extend).hash(h);
             pf.mirrored.hash(h);
             pf.opacity.to_bits().hash(h);

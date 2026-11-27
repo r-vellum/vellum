@@ -213,9 +213,16 @@ print.vellum_gradient <- function(x, ...) {
 #'
 #' @param grob A grob, or a list of grobs, drawn into the tile (their `0..1` npc
 #'   coordinates map to the tile, painted in order).
-#' @param width,height Size of one tile cell (default `0.1` npc).
-#' @param x,y Cell centre (default centred).
-#' @param units Coordinate system for the geometry; see [linear_gradient()].
+#' @param width,height Size of one tile cell (default `0.1` npc). Numbers are
+#'   in `units`; a [vl_unit()] keeps its own unit, so
+#'   `width = vl_unit(5, "mm")` makes 5 mm cells whatever `units` is. The two
+#'   must share a unit, or both be absolute lengths (`"mm"`, `"cm"`, `"in"`,
+#'   `"pt"`).
+#' @param x,y Cell centre (default centred). Numbers are in `units`; a
+#'   [vl_unit()] is converted to `units`, which works for the same unit or
+#'   between absolute lengths.
+#' @param units Coordinate system for the geometry given as plain numbers;
+#'   see [linear_gradient()].
 #' @param extend Tiling mode: `"repeat"` (default) or `"reflect"` (every other
 #'   cell mirrored). Both draw the same on every backend. `"pad"` is not
 #'   supported for patterns: SVG and PDF tiling patterns cannot clamp a tile's
@@ -225,6 +232,8 @@ print.vellum_gradient <- function(x, ...) {
 #' @examples
 #' dots <- circle_grob(r = 0.25, gp = vl_gpar(fill = "white", col = NA))
 #' vl_pattern(dots, width = 0.08, height = 0.08)
+#' # cells of a fixed physical size
+#' vl_pattern(dots, width = vl_unit(5, "mm"), height = vl_unit(5, "mm"))
 #' @export
 vl_pattern <- function(
   grob,
@@ -243,27 +252,117 @@ vl_pattern <- function(
       i = 'Use {.val repeat} or {.val reflect}; SVG and PDF can only tile a pattern.'
     ))
   }
-  if (!all(is.finite(c(width, height, x, y)))) {
+  x <- .pattern_pos(x, units, "x")
+  y <- .pattern_pos(y, units, "y")
+  size <- .pattern_size(width, height, units)
+  if (!all(is.finite(c(size$width, size$height, x, y)))) {
     cli::cli_abort("Pattern geometry must be finite.")
   }
-  structure(
-    list(
-      grob = grob,
-      width = width,
-      height = height,
-      x = x,
-      y = y,
-      units = units,
-      extend = extend
-    ),
-    class = "vellum_pattern"
+  out <- list(
+    grob = grob,
+    width = size$width,
+    height = size$height,
+    x = x,
+    y = y,
+    units = units,
+    extend = extend
   )
+  # Only a cell size whose unit differs from `units` records its own, so every
+  # other pattern keeps its fields (and its serialized form) as before.
+  if (size$units != units) {
+    out$size_units <- size$units
+  }
+  structure(out, class = "vellum_pattern")
+}
+
+# The unit name of a core unit code.
+.unit_name <- function(code) names(.unit_codes)[match(code, .unit_codes)]
+
+# Check that a pattern argument given as a vl_unit() is one plain unit, and
+# return its value and unit name.
+.pattern_unit1 <- function(u, arg) {
+  if (vctrs::vec_size(u) != 1L) {
+    cli::cli_abort("{.arg {arg}} must be a single {.fn vl_unit}.")
+  }
+  if (vctrs::field(u, "offset") != 0) {
+    cli::cli_abort(
+      "{.arg {arg}} can't be a compound unit such as {.val 1npc+2mm} in a pattern."
+    )
+  }
+  unit <- .unit_name(vctrs::field(u, "unit"))
+  if (identical(unit, "null")) {
+    cli::cli_abort("{.arg {arg}} can't use {.val null} units in a pattern.")
+  }
+  list(value = vctrs::field(u, "value"), unit = unit)
+}
+
+.abs_units <- c("mm", "in", "pt")
+
+# A value of `unit` converted to the absolute unit `to`.
+.abs_convert <- function(value, unit, to) {
+  .abs_to_mm(value, .unit_codes[[unit]]) / .abs_to_mm(1, .unit_codes[[to]])
+}
+
+# A pattern's cell centre coordinate as a number in `units` (VL-18).
+.pattern_pos <- function(v, units, arg) {
+  if (!is_unit(v)) {
+    return(v)
+  }
+  u <- .pattern_unit1(v, arg)
+  if (u$unit == units) {
+    return(u$value)
+  }
+  if (u$unit %in% .abs_units && units %in% .abs_units) {
+    return(.abs_convert(u$value, u$unit, units))
+  }
+  cli::cli_abort(c(
+    "Can't convert {.arg {arg}} from {.val {u$unit}} to {.val {units}} in a pattern.",
+    i = "Give {.arg {arg}} in {.code units = {.val {units}}}, or set {.arg units} to match it."
+  ))
+}
+
+# A pattern's cell size: width and height as numbers in one unit, and that
+# unit's name (VL-18). Plain numbers are in `units`; a vl_unit() keeps its own
+# unit, converted only to put both sizes in one unit.
+.pattern_size <- function(width, height, units) {
+  parts <- list(width = width, height = height)
+  vals <- list()
+  unit <- list()
+  for (arg in names(parts)) {
+    v <- parts[[arg]]
+    if (is_unit(v)) {
+      u <- .pattern_unit1(v, arg)
+      vals[[arg]] <- u$value
+      unit[[arg]] <- u$unit
+    } else {
+      vals[[arg]] <- v
+      unit[[arg]] <- units
+    }
+  }
+  if (unit$width == unit$height) {
+    return(list(width = vals$width, height = vals$height, units = unit$width))
+  }
+  if (all(c(unit$width, unit$height) %in% .abs_units)) {
+    # Both absolute: in `units` when that is absolute too, else millimetres.
+    to <- if (units %in% .abs_units) units else "mm"
+    return(list(
+      width = .abs_convert(vals$width, unit$width, to),
+      height = .abs_convert(vals$height, unit$height, to),
+      units = to
+    ))
+  }
+  cli::cli_abort(c(
+    "A pattern's {.arg width} and {.arg height} must share a unit.",
+    x = "{.arg width} is in {.val {unit$width}} and {.arg height} in {.val {unit$height}}.",
+    i = "Give both as {.fn vl_unit} in one unit, or both as numbers in {.arg units}."
+  ))
 }
 
 #' @export
 print.vellum_pattern <- function(x, ...) {
+  su <- x$size_units %||% x$units
   cli::cli_text(
-    "<vellum_pattern> cell {x$width} x {x$height} {.val {x$units}}, extend = {.val {x$extend}}"
+    "<vellum_pattern> cell {x$width} x {x$height} {.val {su}}, extend = {.val {x$extend}}"
   )
   invisible(x)
 }
@@ -284,14 +383,15 @@ print.vellum_pattern <- function(x, ...) {
   # against the actual viewport (which may be non-square) -- so the only stretch
   # is the genuine viewport aspect, not the page aspect.
   ref <- min(page)
-  tw <- max(1L, as.integer(round(.paint_len_px(p$width, p$units, ref, dpi))))
-  th <- max(1L, as.integer(round(.paint_len_px(p$height, p$units, ref, dpi))))
+  su <- p$size_units %||% p$units
+  tw <- max(1L, as.integer(round(.paint_len_px(p$width, su, ref, dpi))))
+  th <- max(1L, as.integer(round(.paint_len_px(p$height, su, ref, dpi))))
   tile <- Scene$new(tw / dpi, th / dpi, dpi, c(0L, 0L, 0L, 0L))
   nodes <- if (inherits(p$grob, "S7_object")) list(p$grob) else as.list(p$grob)
   for (nd in nodes) {
     compile(nd, tile)
   }
-  list(
+  out <- list(
     kind = "pattern",
     tile = tile$rgba(),
     tw = tile$dim()[1],
@@ -300,6 +400,10 @@ print.vellum_pattern <- function(x, ...) {
     units = p$units,
     extend = p$extend
   )
+  if (!is.null(p$size_units)) {
+    out$size_units <- p$size_units
+  }
+  out
 }
 
 #' Masks
