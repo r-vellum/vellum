@@ -98,18 +98,21 @@ halves together are exactly `"unkeyed"`.
 `"keyed_flagged"` draws only the marks of the `"keyed"` layer that
 [`scene_display_list()`](https://r-vellum.github.io/vellum/reference/scene_display_list.md)
 (`version = 2`, same `panels`) flags as not drawable from the list:
-marks under a mask, a blend mode or an effect, hatched, patterned or
-repeating-gradient fills, gradient strokes and text. Whole nodes are
-drawn (every record of a node with one flagged record), and an opacity
-group holding a flagged mark goes in whole. The flagged marks fall into
-*runs*: maximal stretches in paint order not interrupted by a mark the
-list draws exactly, numbered from 1 in the list's `record$run` (its
-`runs` field counts them). `run = k` draws only run `k`; `NULL` draws
-every run. A host that draws the exact marks itself can composite run
-`k` at its place in paint order and keep the overlap order right. The
-page is transparent. A mark under a blend mode (display-list flag `32`)
-is drawn too, but blends against transparency here rather than against
-the marks beneath it.
+marks under a mask, a blend mode or an effect, patterned or
+repeating-gradient fills, gradient strokes, text and hatched point
+markers other than circles. Any other hatched fill is listed as exact
+geometry, so it is not drawn here unless something else flags it (see
+[`scene_display_list()`](https://r-vellum.github.io/vellum/reference/scene_display_list.md)).
+Whole nodes are drawn (every record of a node with one flagged record),
+and an opacity group holding a flagged mark goes in whole. The flagged
+marks fall into *runs*: maximal stretches in paint order not interrupted
+by a mark the list draws exactly, numbered from 1 in the list's
+`record$run` (its `runs` field counts them). `run = k` draws only run
+`k`; `NULL` draws every run. A host that draws the exact marks itself
+can composite run `k` at its place in paint order and keep the overlap
+order right. The page is transparent. A mark under a blend mode
+(display-list flag `32`) is drawn too, but blends against transparency
+here rather than against the marks beneath it.
 
 ## See also
 

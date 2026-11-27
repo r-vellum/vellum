@@ -531,13 +531,19 @@ largest rounding error in device px), and `keys` lets a host that
 already holds the keys avoid shipping them twice.
 
 Some marks cannot be drawn from the list: a mark under a mask, a blend
-mode or an effect, a hatch or pattern fill, a repeating or reflecting
-gradient, a gradient stroke, or text. The list still carries them, for
-hit-testing, but flags them, and groups them into numbered **runs**:
-stretches of flagged marks in paint order that no exactly drawn mark
-interrupts. `scene_png(layer = "keyed_flagged", run = k)` draws run `k`
-alone, so the host composites it at its place in paint order
-(`run_blend` gives the blend mode to composite with):
+mode or an effect, a pattern fill, a repeating or reflecting gradient, a
+gradient stroke, or text. A
+[`vl_hatch()`](https://r-vellum.github.io/vellum/reference/vl_hatch.md)
+fill is mostly not among them: vellum expands it into the shape, filled
+with the hatch’s background, and a path of its rules, and lists both
+exactly. Only a hatched point marker other than a circle is flagged,
+since its single point record cannot carry the rules. The list still
+carries the others, for hit-testing, but flags them, and groups them
+into numbered **runs**: stretches of flagged marks in paint order that
+no exactly drawn mark interrupts.
+`scene_png(layer = "keyed_flagged", run = k)` draws run `k` alone, so
+the host composites it at its place in paint order (`run_blend` gives
+the blend mode to composite with):
 
 ``` r
 

@@ -228,8 +228,27 @@ the paths' boxes. <code>clip_paths</code> is a path table like <code>path</code>
 the record is drawn in, 0 = none). <code>groups</code> has <code>alpha</code> and <code>parent</code>
 (1-based, 0 = top level). A client draws a group's records into their own
 layer and composites it at <code>alpha</code>.</p></li>
-</ul><p>Masks, blend modes, blur and shadow effects, hatches, patterns, repeating or
-reflecting gradients and gradient strokes stay flagged.</p><ul><li><p>Flagged runs (VW-30): <code>record$run</code> is the run of flagged marks a record
+</ul><p>Masks, blend modes, blur and shadow effects, patterns, repeating or
+reflecting gradients and gradient strokes stay flagged.</p>
+    </div>
+    <div class="section level2">
+    <h2 id="hatched-fills">Hatched fills<a class="anchor" aria-label="anchor" href="#hatched-fills"></a></h2>
+
+
+<p>A <code><a href="vl_hatch.html">vl_hatch()</a></code> fill is not flagged for its paint in either version:
+vellum turns it into geometry before the list is made, so a hatched rect,
+path, polygon or circle (a circle <code><a href="grob.html">points_grob()</a></code> marker included) is
+listed as two exact records, the shape filled with the hatch's
+<code>bg</code> (transparent when <code>bg = NA</code>) and a path of the rules stroked in the
+hatch's colour, then the shape's own stroke if it has one. The rules are
+already cut to the shape, and a clip, rotation or sketch applies to them as
+to any path. Such records are flagged only for the reasons any record is:
+a group with an opacity (version 1), a blend mode, mask or effect, or a
+clip that is not an axis-aligned rectangle (version 1).</p>
+<p>The exception is a hatched <code><a href="grob.html">points_grob()</a></code> marker of any other shape
+(square, triangle, diamond, star, ...): it is one point record, which has
+room for one fill and one stroke but not the rules, so it is flagged <code>1</code>
+and drawn from <code>"keyed_flagged"</code>.</p><ul><li><p>Flagged runs (VW-30): <code>record$run</code> is the run of flagged marks a record
 belongs to (1-based, 0 = none) and <code>runs</code> their count. A run is a stretch
 of flagged marks in paint order that no exactly drawn mark interrupts;
 every record of a node with a flagged record, and of an opacity group
@@ -254,7 +273,8 @@ from its raster; current lists have none.</p></li>
 
 <p>Such marks are still listed, so they can be hit-tested, but <code>flags</code> marks
 them and a client should fall back to its approximate path for them:
-<code>1</code> a gradient, pattern or hatch paint (the paint's colour is <code>NA</code>); <code>2</code> a
+<code>1</code> a gradient or pattern paint (the paint's colour is <code>NA</code>; a hatch is
+listed as geometry instead, see <em>Hatched fills</em>); <code>2</code> a
 clip that is not an axis-aligned rectangle (the clip is not listed); <code>4</code> a
 mark inside a group with opacity, blend mode, mask or effect; <code>8</code> a text
 label (the geometry is its box); <code>16</code> pick-only: a keyed mark that paints

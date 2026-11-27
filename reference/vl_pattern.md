@@ -29,15 +29,22 @@ vl_pattern(
 
 - width, height:
 
-  Size of one tile cell (default `0.1` npc).
+  Size of one tile cell (default `0.1` npc). Numbers are in `units`; a
+  [`vl_unit()`](https://r-vellum.github.io/vellum/reference/vl_unit.md)
+  keeps its own unit, so `width = vl_unit(5, "mm")` makes 5 mm cells
+  whatever `units` is. The two must share a unit, or both be absolute
+  lengths (`"mm"`, `"cm"`, `"in"`, `"pt"`).
 
 - x, y:
 
-  Cell centre (default centred).
+  Cell centre (default centred). Numbers are in `units`; a
+  [`vl_unit()`](https://r-vellum.github.io/vellum/reference/vl_unit.md)
+  is converted to `units`, which works for the same unit or between
+  absolute lengths.
 
 - units:
 
-  Coordinate system for the geometry; see
+  Coordinate system for the geometry given as plain numbers; see
   [`linear_gradient()`](https://r-vellum.github.io/vellum/reference/gradients.md).
 
 - extend:
@@ -66,4 +73,7 @@ leaving the shape unfilled with a degrade warning.
 dots <- circle_grob(r = 0.25, gp = vl_gpar(fill = "white", col = NA))
 vl_pattern(dots, width = 0.08, height = 0.08)
 #> <vellum_pattern> cell 0.08 x 0.08 "npc", extend = "repeat"
+# cells of a fixed physical size
+vl_pattern(dots, width = vl_unit(5, "mm"), height = vl_unit(5, "mm"))
+#> <vellum_pattern> cell 5 x 5 "mm", extend = "repeat"
 ```

@@ -26,6 +26,39 @@
 
 ### Bug fixes
 
+- A numeric `fontweight` snaps to the nearest weight among a family’s
+  normal-width faces when it has any, so `fontweight = 900` with
+  Helvetica Neue on macOS draws in Bold rather than “Condensed Black”,
+  which measured narrower than every lighter weight. A face counts as
+  condensed or expanded only when its style name says so too, since
+  width tags are unreliable (Sukhumvit Set’s Thin is tagged
+  semicondensed). A family with only condensed (or only expanded) faces
+  still uses them (VL-20).
+
+- [`vl_pattern()`](https://r-vellum.github.io/vellum/reference/vl_pattern.md)
+  takes
+  [`vl_unit()`](https://r-vellum.github.io/vellum/reference/vl_unit.md)
+  cell sizes:
+  `vl_pattern(grob, width = vl_unit(5, "mm"), height = vl_unit(5, "mm"))`
+  makes 5 mm cells, still centred by `x` and `y` in `units`. It failed
+  with a raw vctrs error. A
+  [`vl_unit()`](https://r-vellum.github.io/vellum/reference/vl_unit.md)
+  `x` or `y` is converted to `units` where it can be, and a combination
+  that can’t work (a width in `"npc"` with a height in `"mm"`) says so
+  (VL-18).
+
+- PowerPoint output keeps vellum’s line spacing in a label with blank
+  lines but only one line of text, such as `"\nabc"`: every paragraph of
+  a label with more than one now gets an exact line spacing, where it
+  used to fall back to the font’s default. A trailing newline
+  (`"abc\n"`) no longer adds an empty paragraph that lifted the text by
+  half a line, since vellum sets that label as one line; and an
+  [`md()`](https://r-vellum.github.io/vellum/reference/md.md) label
+  leaves out blank lines before or after its text, as vellum’s own
+  layout does, instead of shifting the text off its place. A CRLF line
+  break (`"a\r\nb"`) is one break, where the `\r` was written into the
+  text and doubled the gap (VR-51).
+
 - Large circles, sectors and round-rect corners now follow their arcs to
   within a small fraction of a pixel. In PNG and PDF a circle was
   tiny-skia’s unit circle scaled up, 3e-3 of its radius off: 3 px at a
@@ -123,6 +156,20 @@
   one. Ordinary scenes are unchanged (VR-45).
 
 ### Documentation
+
+- [`?scene_display_list`](https://r-vellum.github.io/vellum/reference/scene_display_list.md),
+  [`?scene_svg`](https://r-vellum.github.io/vellum/reference/scene_svg.md)
+  and the scene-contract article no longer say hatched fills are
+  flagged. A
+  [`vl_hatch()`](https://r-vellum.github.io/vellum/reference/vl_hatch.md)
+  fill is expanded into geometry before the list is made, so a hatched
+  rect, path, polygon or circle is listed as the shape in the hatch’s
+  background and a path of its rules, both exact; a new *Hatched fills*
+  section gives the rule, and such records are flagged only for the
+  usual reasons (a group, a non-rectangular clip in version 1). A
+  hatched point marker other than a circle is one point record that
+  cannot carry the rules: it is now flagged `1` (a paint it does not
+  reproduce), where it was listed unflagged with its hatch lost (VL-19).
 
 - New articles: “Editable PowerPoint output”
   ([`vignette("powerpoint")`](https://r-vellum.github.io/vellum/articles/powerpoint.md),
