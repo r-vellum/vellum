@@ -20,6 +20,12 @@
 
 ## Bug fixes
 
+* A numeric `fontweight` snaps to the nearest weight among a family's
+  normal-width faces when it has any, so `fontweight = 900` with Helvetica
+  Neue on macOS draws in Bold rather than "Condensed Black", which measured
+  narrower than every lighter weight. A family with only condensed (or only
+  expanded) faces still uses them (VL-20).
+
 * `vl_pattern()` takes `vl_unit()` cell sizes:
   `vl_pattern(grob, width = vl_unit(5, "mm"), height = vl_unit(5, "mm"))`
   makes 5 mm cells, still centred by `x` and `y` in `units`. It failed with a

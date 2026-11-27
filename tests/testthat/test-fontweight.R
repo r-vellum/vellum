@@ -178,3 +178,57 @@ test_that("adding a heavier face of a family re-snaps a cached weight", {
     vl_strwidth("Hamburg", family = "Aller", fontface = "bold")
   )
 })
+
+test_that("a weight snaps to a normal-width face first (VL-20)", {
+  wl <- c(
+    "thin", "ultralight", "light", "normal", "medium", "semibold", "bold",
+    "ultrabold", "heavy"
+  )
+  wd <- c(
+    "ultracondensed", "extracondensed", "condensed", "semicondensed",
+    "normal", "semiexpanded", "expanded", "extraexpanded", "ultraexpanded"
+  )
+  faces <- function(weight, width, italic = FALSE) {
+    data.frame(
+      weight = factor(weight, levels = wl, ordered = TRUE),
+      width = factor(width, levels = wd, ordered = TRUE),
+      italic = rep(italic, length(weight))
+    )
+  }
+  # Helvetica Neue's upright faces on macOS: the only 900 is condensed
+  hn <- faces(
+    c("thin", "ultralight", "light", "normal", "medium", "bold", "bold", "heavy"),
+    c(rep("normal", 6), "semicondensed", "semicondensed")
+  )
+  expect_identical(.pick_weight(hn, FALSE, 900L), 700L)
+  expect_identical(.pick_weight(hn, FALSE, 800L), 700L)
+  expect_identical(.pick_weight(hn, FALSE, 300L), 300L)
+  # no normal-width face: every width counts
+  cond <- faces(c("normal", "heavy"), "condensed")
+  expect_identical(.pick_weight(cond, FALSE, 900L), 900L)
+  # no width information: every face counts
+  nowd <- faces(c("normal", "heavy"), NA)
+  expect_identical(.pick_weight(nowd, FALSE, 800L), 900L)
+  # the style filter still comes first, and a tie still goes heavier
+  mixed <- rbind(
+    faces(c("normal", "bold"), "normal"),
+    faces("heavy", "normal", italic = TRUE)
+  )
+  expect_identical(.pick_weight(mixed, TRUE, 400L), 900L)
+  expect_identical(.pick_weight(mixed, FALSE, 550L), 700L)
+  expect_identical(.pick_weight(faces(character(), character()), FALSE, 500L), 500L)
+})
+
+test_that("Helvetica Neue at weight 900 is not the condensed face (VL-20)", {
+  sf <- systemfonts::system_fonts()
+  hn <- sf[sf$family == "Helvetica Neue" & !sf$italic, ]
+  skip_if(
+    !any(hn$weight == "heavy" & hn$width != "normal") ||
+      !any(hn$weight == "bold" & hn$width == "normal"),
+    "Helvetica Neue with a condensed black face not installed"
+  )
+  expect_identical(
+    vl_strwidth("Hamburg", family = "Helvetica Neue", fontweight = 900),
+    vl_strwidth("Hamburg", family = "Helvetica Neue", fontweight = 700)
+  )
+})
