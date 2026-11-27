@@ -346,6 +346,124 @@ host-side axis-aware zoom. It is SVG-only and inert for static rendering (the
 extra group has no transform until a host sets one); non-pannable panels and other
 backends are unchanged.
 
+## Split rendering for hosts
+
+A host that draws many marks does not want them all as SVG elements. vellumwidget
+splits a scene into layers instead: the furniture (background, gridlines, axes,
+legends) as SVG, and the keyed marks as a PNG, or drawn by the browser itself
+from a display list. Every layer is drawn on the same page, with the same
+transforms and clips, so the layers overlay pixel for pixel.
+
+### `layer =` in `scene_svg()` and `scene_png()`
+
+| `layer` | draws |
+|---|---|
+| `"all"` (default) | the whole scene |
+| `"keyed"` | only the marks with a `key`, on a transparent page |
+| `"unkeyed"` | everything else |
+| `"unkeyed_below"` | the unkeyed elements painted before the marks |
+| `"unkeyed_above"` | the unkeyed elements painted after the marks, on a transparent page |
+| `"keyed_flagged"` | only the keyed marks the display list cannot draw exactly (see below), on a transparent page |
+
+`"keyed"` over `"unkeyed"` reproduces the full render, except that an unkeyed
+element painted *after* a mark ends up under it. Stacking `"unkeyed_below"`,
+`"keyed"` and `"unkeyed_above"` keeps that order too. In this scene the dashed
+reference line is drawn after the points, so it belongs to the top layer:
+
+```{r}
+#| label: split
+#| fig.width: 6
+#| fig.height: 1.5
+split <- vl_scene(3, 1.8, dpi = 96, bg = "white") |>
+  push(vl_viewport(name = "panel", xscale = c(0, 10), yscale = c(0, 10))) |>
+  draw(rect_grob(gp = vl_gpar(fill = "grey93", col = NA))) |>
+  draw(points_grob(vl_unit(c(2, 5, 8), "native"), vl_unit(c(3, 6, 4), "native"),
+                   size = vl_unit(6, "mm"), key = c("a", "b", "c"),
+                   gp = vl_gpar(fill = "#2c6fa6", col = NA))) |>
+  draw(segments_grob(0, vl_unit(5, "native"), 1, vl_unit(5, "native"),
+                     gp = vl_gpar(col = "#c0392b", lwd = 2, lty = "dashed"))) |>
+  pop()
+
+layers <- c("unkeyed_below", "keyed", "unkeyed_above", "all")
+files <- vapply(layers, function(l) {
+  f <- tempfile(fileext = ".png")
+  writeBin(scene_png(split, layer = l), f)
+  f
+}, character(1))
+
+sheet <- vl_scene(6, 1.5, dpi = 96, bg = "white")
+for (i in seq_along(files)) {
+  sheet <- sheet |>
+    draw(rect_grob(x = (i - 0.5) / 4, y = 0.6, width = vl_unit(1.2, "in"),
+                   height = vl_unit(0.72, "in"),
+                   gp = vl_gpar(fill = "#ffe9e9", col = "grey70"))) |>
+    draw(raster_grob(files[i], x = (i - 0.5) / 4, y = 0.6,
+                     width = vl_unit(1.2, "in"), height = vl_unit(0.72, "in"))) |>
+    draw(text_grob(layers[i], x = (i - 0.5) / 4, y = 0.08,
+                   gp = vl_gpar(fontsize = 9)))
+}
+display(sheet)
+```
+
+The pink behind the second and third layers is the transparent page showing
+through. `panels =` narrows the mark layer to keyed marks in the named panels,
+so a legend's keyed swatches can stay with the furniture; the layers stay exact
+complements.
+
+### The display list
+
+`scene_display_list()` resolves every keyed mark to device-pixel geometry, a
+paint and its key, packed as compact columns that a browser draws and hit-tests
+without parsing SVG. It is **internal but versioned**: it is a private vellum to
+vellumwidget payload, documented in `?scene_display_list` but not a format to
+build on. Its fields may change in any release, in step with vellumwidget, and
+`version =` says which layout the reader gets. A reader that knows only
+version 1 must never be handed version 2.
+
+```{r}
+#| label: display-list
+dl <- scene_display_list(split, version = 2, precision = "u16")
+dl$format
+unlist(dl[c("version", "n", "runs")])
+dl$keys
+```
+
+`version = 2` adds linear and radial gradient fills with `pad` extension, clips
+by a path, and opacity groups to what the list draws exactly. `precision` quantises the coordinates to 16 or 24 bits
+(or to a largest rounding error in device px), and `keys` lets a host that
+already holds the keys avoid shipping them twice.
+
+Some marks cannot be drawn from the list: a mark under a mask, a blend mode or
+an effect, a hatch or pattern fill, a repeating or reflecting gradient, a
+gradient stroke, or text. The list still carries
+them, for hit-testing, but flags them, and groups them into numbered **runs**:
+stretches of flagged marks in paint order that no exactly drawn mark
+interrupts. `scene_png(layer = "keyed_flagged", run = k)` draws run `k` alone,
+so the host composites it at its place in paint order (`run_blend` gives the
+blend mode to composite with):
+
+```{r}
+#| label: flagged
+dots <- circle_grob(r = 0.3, gp = vl_gpar(fill = "#2c6fa6", col = NA))
+flagged <- split |>
+  draw(rect_grob(x = 0.8, y = 0.75, width = 0.25, height = 0.3, key = "p",
+                 gp = vl_gpar(fill = vl_pattern(dots, width = 0.05, height = 0.08))))
+fl <- scene_display_list(flagged, version = 2)
+fl$runs
+length(scene_png(flagged, layer = "keyed_flagged", run = 1)) > 0
+```
+
+### `vellum_content_fit`
+
+A guest scene whose content has a fixed aspect ratio (a map, or a plot with a
+fixed coordinate ratio) can declare it with the attribute
+`vellum_content_fit`: `c(fixed_w, fixed_h, null_w, null_h)`, the fixed width
+and height of its frame in mm and the weights of its aspect-locked `null`
+tracks. vellumplot sets it on an aspect-locked plot. `scene_inset(fit = "auto")`
+reads it and shrinks the inset's region around the content, so its background
+and border hug the plot (see `vignette("scenes-as-values")`). The attribute,
+like the display list, is part of the contract between the packages.
+
 ## Accessibility
 
 A scene carries an optional accessible **name** and **description**, set with
@@ -355,6 +473,10 @@ A scene carries an optional accessible **name** and **description**, set with
   and `<desc>` children (the reliable screen-reader pattern; WCAG 1.1.1);
 - the **PDF** is a **tagged PDF**: the chart is a `Figure` in the structure tree
   whose `Alt` is the description.
+- the **PowerPoint** group holding the scene carries the description (or the
+  title, when there is no description) as its alt text, and is named after the
+  title when written by `render()` or `pptx_pages()` (through officer it takes
+  the placeholder's name).
 
 This is additive: with no title/desc the output is unchanged. The grammar layer
 (`vellumplot`) sets these automatically from the plot's title and an auto-generated (or
@@ -397,5 +519,7 @@ in the same commit, and expect to co-release vellumplot and vellumwidget:
 - the `key`/`meta` length rule (1 or the element count),
 - the default reading of bare numbers (`default_units = "npc"`),
 - the SVG attribute names, or when they are emitted,
+- the `layer` values of `scene_svg()` / `scene_png()`, the display-list format
+  (bump its `version`), or the `vellum_content_fit` attribute,
 - the reserved `meta` key vocabulary.
 ```

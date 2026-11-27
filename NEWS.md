@@ -83,6 +83,20 @@
   and the display list treat it as a near one. Ordinary scenes are unchanged
   (VR-45).
 
+## Documentation
+
+* New articles: "Editable PowerPoint output" (`vignette("powerpoint")`, D-9)
+  and "Keyframe animation in the engine" (`vignette("animation")`, D-11),
+  added to the Output section of the navbar, and a new Animation section in
+  the reference (D-8 to D-16). The output-formats matrix gains a PowerPoint column and no
+  longer says PDF degrades tiling patterns (it draws them as PNG and SVG do).
+  The typography article covers font weights, scene-contract the split render
+  layers, the display list and `vellum_content_fit`, retained-mode
+  `vl_brush()` and `vl_lasso()`, scenes-as-values `scene_inset(fit = )`, and
+  coming-from-grid `default_units`. README, DESCRIPTION and the pkgdown
+  descriptions list PowerPoint and math. Stale `vignettes/figure/` images
+  are removed.
+
 ## Internal
 
 * The Rust sources are formatted with `cargo fmt`, and R-CMD-check now fails

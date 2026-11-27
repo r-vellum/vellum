@@ -110,6 +110,19 @@ tag from `describe()` alone are mutually exclusive, because PDF does not allow
 one tagged content span inside another. When any mark is annotated, the marks
 own the tagging and the `describe()` text becomes the root figure's alt.
 
+### PowerPoint
+
+A slide gets less structure than a PDF. In PowerPoint output, written with
+`render(scene, "deck.pptx")`, `pptx_pages()` or officer, the scene becomes one
+group of shapes. Its alt text is the `describe()` description, or the title when
+there is no description. This is the text PowerPoint's own Alt Text pane shows
+and a screen reader announces for the graphic. `render()` and `pptx_pages()`
+name the group after the title; through `officer::ph_with()` it takes the
+placeholder's name instead. The per-mark `role` and `name`
+are not written to the slide. Text labels stay real text in the slide, so a
+screen reader can still read them, except for the labels drawn as outlines
+(see `vignette("powerpoint")`).
+
 ## Fonts you can trust
 
 `DESIGN.md` opens by claiming identical pixels on every OS and in CI. Layout,
@@ -195,5 +208,6 @@ than a tail item.
   `font_pin()` below: one asks whether the fonts moved, the other whether a
   character has any glyph at all on this machine.
 - `vignette("render-quality")`: colour-vision simulation.
+- `vignette("powerpoint")`: editable slides, and what becomes a picture.
 - `vignette("scene-contract")`: what the `id`/`role`/`name` channel promises to
   layers above vellum.

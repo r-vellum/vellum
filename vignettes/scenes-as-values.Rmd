@@ -137,6 +137,41 @@ coordinates become relative to the region, so a guest built on a square page and
 dropped into a wide region will stretch; match the aspect, or build the guest at
 the aspect you want.
 
+A guest whose content has a fixed aspect ratio, such as a map or a plot with a
+fixed coordinate ratio, can declare it, and `fit` decides what to do with the
+declaration. The guest carries the attribute `vellum_content_fit`:
+`c(fixed_w, fixed_h, null_w, null_h)`, the fixed width and height of its frame
+in mm and the weights of its aspect-locked tracks. vellumplot sets it on an
+aspect-locked plot; here it is set by hand on a square guest. With
+`fit = "auto"` (the default) the region shrinks around the content, keeping its
+centre, so the guest's background and border hug it. `fit = "fill"` stretches
+the guest to the region as before, and `fit = "contain"` is `"auto"` but an
+error for a guest that declares nothing.
+
+```{r}
+#| fig.height: 2.2
+square <- vl_scene(1, 1) |>
+  draw(rect_grob(gp = vl_gpar(fill = "#eef2f6", col = "grey40"))) |>
+  draw(rect_grob(width = 0.6, height = 0.6, gp = vl_gpar(fill = "tomato", col = NA))) |>
+  draw(segments_grob(0, 0, 1, 1, gp = vl_gpar(col = "grey40")))
+attr(square, "vellum_content_fit") <- c(0, 0, 1, 1) # no frame, one square track
+
+page <- vl_scene(6, 2.2, dpi = 96, bg = "white") |>
+  draw(rect_grob(x = c(0.27, 0.73), width = 0.42, height = 0.8,
+                 gp = vl_gpar(fill = NA, col = "grey75", lty = "dashed")))
+display(
+  page |>
+    scene_inset(square, x = 0.27, width = 0.42, height = 0.8, fit = "fill") |>
+    scene_inset(square, x = 0.73, width = 0.42, height = 0.8, fit = "auto")
+)
+```
+
+The dashed boxes are the two regions. On the left, `"fill"` stretches the
+square and its diagonal to the wide region; on the right, `"auto"` keeps them
+square. Fitting needs the region's physical size,
+so it applies when the region is placed at the host's top level, in `npc` numbers
+or absolute units; inside a pushed viewport the guest fills its region.
+
 What vellum deliberately does *not* decide is the **policy**: whether panel edges
 should align across composed plots, whether axes should be shared. Those are
 properties of how a grammar decomposes a figure, so they belong in a layer above.
