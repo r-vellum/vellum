@@ -92,6 +92,12 @@
   clips as a rect, so PowerPoint and the display list treat it as a near
   one. Ordinary scenes are unchanged (VR-45).
 
+### Internal
+
+- The Rust sources are formatted with `cargo fmt`, and R-CMD-check now
+  fails when they are not (`cargo fmt --check`), so a change no longer
+  carries formatting churn in files it did not touch (VR-41).
+
 ## vellum 0.18.0
 
 ### New features
