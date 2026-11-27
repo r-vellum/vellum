@@ -978,7 +978,10 @@ pub(super) fn draw_sectors<B: RenderBackend>(
         return;
     }
     let style = stroke_style(gp, vp);
-    let pen = gp.col.filter(|_| style.width > 0.0).map(|c| (c, style.clone()));
+    let pen = gp
+        .col
+        .filter(|_| style.width > 0.0)
+        .map(|c| (c, style.clone()));
     // A far sector is built exactly over the page (VR-47).
     let win = b.far_window(t);
     // Arrowheads (directed self-loops) accumulate across the batch and

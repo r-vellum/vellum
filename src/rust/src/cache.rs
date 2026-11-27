@@ -22,7 +22,11 @@ pub struct TwoGenCache<K, V> {
 
 impl<K: Eq + Hash + Clone, V: Clone> TwoGenCache<K, V> {
     pub fn new(cap: usize) -> Self {
-        TwoGenCache { hot: HashMap::new(), cold: HashMap::new(), cap: cap.max(1) }
+        TwoGenCache {
+            hot: HashMap::new(),
+            cold: HashMap::new(),
+            cap: cap.max(1),
+        }
     }
 
     /// Look up `k`, promoting a cold hit into the hot generation. Returns a clone

@@ -49,8 +49,10 @@ pub fn marching_squares(z: &[f64], nx: usize, ny: usize, level: f64) -> Segments
                 continue; // missing data: leave a gap, do not interpolate across it
             }
             let above = |v: f64| v > level;
-            let idx = (above(bl) as u8) | ((above(br) as u8) << 1)
-                | ((above(tr) as u8) << 2) | ((above(tl) as u8) << 3);
+            let idx = (above(bl) as u8)
+                | ((above(br) as u8) << 1)
+                | ((above(tr) as u8) << 2)
+                | ((above(tl) as u8) << 3);
             if idx == 0 || idx == 15 {
                 continue;
             }
@@ -111,8 +113,12 @@ pub fn chain(coords: &[f64]) -> (Vec<f64>, Vec<f64>, Vec<i32>, Vec<bool>) {
     let mut ends: HashMap<(i64, i64), Vec<usize>> = HashMap::new();
     let nseg = coords.len() / 4;
     for s in 0..nseg {
-        ends.entry(key(coords[s * 4], coords[s * 4 + 1])).or_default().push(s);
-        ends.entry(key(coords[s * 4 + 2], coords[s * 4 + 3])).or_default().push(s);
+        ends.entry(key(coords[s * 4], coords[s * 4 + 1]))
+            .or_default()
+            .push(s);
+        ends.entry(key(coords[s * 4 + 2], coords[s * 4 + 3]))
+            .or_default()
+            .push(s);
     }
     let mut used = vec![false; nseg];
     let (mut ox, mut oy, mut nper, mut closed) = (Vec::new(), Vec::new(), Vec::new(), Vec::new());
@@ -243,7 +249,8 @@ mod tests {
         let c = (n - 1) as f64 / 2.0;
         let radius = |lvl: f64| {
             let s = marching_squares(&z, n, n, lvl);
-            s.coords.chunks_exact(2)
+            s.coords
+                .chunks_exact(2)
                 .map(|p| ((p[0] - c).powi(2) + (p[1] - c).powi(2)).sqrt())
                 .fold(0.0f64, f64::max)
         };
@@ -256,7 +263,9 @@ mod tests {
         // gap there, and every emitted coordinate must still be finite -- an
         // infinite sentinel would silently produce NaN coordinates.
         let n = 11;
-        let mut z: Vec<f64> = (0..n * n).map(|i| (i % n) as f64 / (n - 1) as f64).collect();
+        let mut z: Vec<f64> = (0..n * n)
+            .map(|i| (i % n) as f64 / (n - 1) as f64)
+            .collect();
         let full = marching_squares(&z, n, n, 0.5).coords.len();
         for r in 3..6 {
             z[r * n + 5] = f64::NAN;
@@ -324,7 +333,9 @@ mod tests {
         // A ramp: the contour runs off both edges of the grid, so it is a line
         // rather than a ring.
         let n = 11;
-        let z: Vec<f64> = (0..n * n).map(|i| (i % n) as f64 / (n - 1) as f64).collect();
+        let z: Vec<f64> = (0..n * n)
+            .map(|i| (i % n) as f64 / (n - 1) as f64)
+            .collect();
         let (_, _, nper, closed) = chain(&marching_squares(&z, n, n, 0.5).coords);
         assert_eq!(nper.len(), 1);
         assert_eq!(closed, vec![false]);

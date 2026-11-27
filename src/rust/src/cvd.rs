@@ -50,16 +50,16 @@ impl Cvd {
     fn matrix(self) -> [f32; 9] {
         match self {
             Cvd::Protanopia => [
-                0.152286, 1.052583, -0.204868, 0.114503, 0.786281, 0.099216, -0.003882,
-                -0.048116, 1.051998,
+                0.152286, 1.052583, -0.204868, 0.114503, 0.786281, 0.099216, -0.003882, -0.048116,
+                1.051998,
             ],
             Cvd::Deuteranopia => [
-                0.367322, 0.860646, -0.227968, 0.280085, 0.672501, 0.047413, -0.011820,
-                0.042940, 0.968881,
+                0.367322, 0.860646, -0.227968, 0.280085, 0.672501, 0.047413, -0.011820, 0.042940,
+                0.968881,
             ],
             Cvd::Tritanopia => [
-                1.255528, -0.076749, -0.178779, -0.078411, 0.930809, 0.147602, 0.004733,
-                0.691367, 0.303900,
+                1.255528, -0.076749, -0.178779, -0.078411, 0.930809, 0.147602, 0.004733, 0.691367,
+                0.303900,
             ],
             // Rec. 709 luma, replicated across the three channels.
             Cvd::Achromatopsia => [
@@ -126,7 +126,11 @@ pub fn apply(pm: &mut Pixmap, kind: Cvd) {
             continue;
         }
         let d = px.demultiply();
-        let (r, g, b) = (lut[d.red() as usize], lut[d.green() as usize], lut[d.blue() as usize]);
+        let (r, g, b) = (
+            lut[d.red() as usize],
+            lut[d.green() as usize],
+            lut[d.blue() as usize],
+        );
         let nr = to_srgb(m[0] * r + m[1] * g + m[2] * b);
         let ng = to_srgb(m[3] * r + m[4] * g + m[5] * b);
         let nb = to_srgb(m[6] * r + m[7] * g + m[8] * b);

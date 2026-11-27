@@ -36,6 +36,13 @@ jobs:
 
       # Rust compiler for vellum's backend (SystemRequirements: Cargo, rustc).
       - uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          components: rustfmt
+
+      # The crate is kept rustfmt-clean, so a PR carries no formatting churn.
+      - name: Check Rust formatting
+        if: runner.os == 'Linux'
+        run: cargo fmt --manifest-path src/rust/Cargo.toml --check
 
       # R on Windows uses the GNU (UCRT) toolchain, so cargo must target it.
       - name: Add Windows GNU Rust target

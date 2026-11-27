@@ -742,7 +742,10 @@ impl RenderBackend for SvgBackend {
                         paths.push_str(&format!(
                             "<path d=\"{}\" fill=\"none\" stroke=\"{}\" stroke-opacity=\"{}\" \
                              stroke-width=\"{}\" stroke-linejoin=\"round\"{}/>",
-                            path_to_d(&p, None, None), rgb_hex(hcol), opacity(hcol), hw * 2.0,
+                            path_to_d(&p, None, None),
+                            rgb_hex(hcol),
+                            opacity(hcol),
+                            hw * 2.0,
                             transform_attr(base)
                         ));
                     }

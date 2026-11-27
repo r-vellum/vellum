@@ -21,7 +21,9 @@ use crate::render::{
     PdfBackend, RasterBackend, RenderBackend, ResolvedPaint, Shadow, StrokeStyle, SvgBackend,
     TextRun,
 };
-use crate::render::{pptx_package, resolve_media, write_media_files, DmlBackend, SlidePart, EMU_PER_INCH};
+use crate::render::{
+    pptx_package, resolve_media, write_media_files, DmlBackend, SlidePart, EMU_PER_INCH,
+};
 
 use crate::cache::TwoGenCache;
 use crate::color::{opt_color, Gpar, GparAcc, Lty, Paint, PartialGpar, Rgba};
@@ -209,7 +211,10 @@ pub(crate) fn pptx_pages(scenes: List, outline_text: bool, title: &str) -> (Vec<
         })
         .collect();
     let emu = |px: u32, dpi: f64| (px as f64 * EMU_PER_INCH / dpi).round() as i64;
-    let sizes: Vec<(i64, i64)> = eps.iter().map(|s| (emu(s.w_px, s.dpi), emu(s.h_px, s.dpi))).collect();
+    let sizes: Vec<(i64, i64)> = eps
+        .iter()
+        .map(|s| (emu(s.w_px, s.dpi), emu(s.h_px, s.dpi)))
+        .collect();
     // PowerPoint's slide size range: 1 to 56 inches each way.
     let (min, max) = (914_400i64, 51_206_400i64);
     let cx = sizes.iter().map(|s| s.0).max().unwrap_or(min).max(min);
@@ -228,7 +233,11 @@ pub(crate) fn pptx_pages(scenes: List, outline_text: bool, title: &str) -> (Vec<
         }
         slides.push(SlidePart { xml, media });
     }
-    let title = if title.is_empty() { eps[0].a11y_title.as_str() } else { title };
+    let title = if title.is_empty() {
+        eps[0].a11y_title.as_str()
+    } else {
+        title
+    };
     (warnings, pptx_package(&slides, cx, cy, title))
 }
 
@@ -237,14 +246,27 @@ pub(crate) fn pptx_pages(scenes: List, outline_text: bool, title: &str) -> (Vec<
 impl Scene {
     /// The scene as a DrawingML fragment placed `(left, top)` EMU from the
     /// slide corner: `(xml with media tokens, PNGs, warnings)`.
-    pub(crate) fn dml_parts(&self, left: i64, top: i64, outline_text: bool) -> (String, Vec<Vec<u8>>, Vec<String>) {
-        let mut b = DmlBackend::new(self.w_px, self.h_px, self.dpi, self.bg, left, top, outline_text);
+    pub(crate) fn dml_parts(
+        &self,
+        left: i64,
+        top: i64,
+        outline_text: bool,
+    ) -> (String, Vec<Vec<u8>>, Vec<String>) {
+        let mut b = DmlBackend::new(
+            self.w_px,
+            self.h_px,
+            self.dpi,
+            self.bg,
+            left,
+            top,
+            outline_text,
+        );
         b.set_a11y(&self.a11y_title, &self.a11y_desc);
         // A blended group composites onto what lies beneath it, so the backend
         // keeps a raster of the page when the scene has one.
-        if self.nodes.iter().any(|(_, n)| {
-            matches!(n, Node::GroupStart { blend, .. } if *blend != BlendKind::Normal)
-        }) {
+        if self.nodes.iter().any(
+            |(_, n)| matches!(n, Node::GroupStart { blend, .. } if *blend != BlendKind::Normal),
+        ) {
             b.enable_mirror(self.bg);
         }
         let warnings = self.render_to(&mut b);

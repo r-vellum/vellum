@@ -258,7 +258,11 @@ pub fn ribbon_contours(
         if !x.is_finite() || !y.is_finite() {
             continue;
         }
-        let hi = if hw[i].is_finite() { hw[i].max(0.0) } else { 0.0 };
+        let hi = if hw[i].is_finite() {
+            hw[i].max(0.0)
+        } else {
+            0.0
+        };
         let mut merged = false;
         if let (Some(&last), Some(lh)) = (p.last(), h.last_mut()) {
             if (x - last[0]).abs() < EPS_PT && (y - last[1]).abs() < EPS_PT {
@@ -336,8 +340,7 @@ pub fn ribbon_contours(
                     // Which side the corner opens on. `n = (-uy, ux)` is the left
                     // normal, so a left turn (cross > 0) puts the convex side on
                     // the minus side.
-                    let (ux0, uy0) =
-                        unit_dir(p[if i == 0 { n - 1 } else { i - 1 }], p[i]);
+                    let (ux0, uy0) = unit_dir(p[if i == 0 { n - 1 } else { i - 1 }], p[i]);
                     let (ux1, uy1) = unit_dir(p[i], p[(i + 1) % n]);
                     let cross = ux0 * uy1 - uy0 * ux1;
 
@@ -427,9 +430,8 @@ pub fn ribbon_contours(
                             let din = [a1[0] - a0[0], a1[1] - a0[1]];
                             let dout = [b1[0] - b0[0], b1[1] - b0[1]];
                             if let Some(apex) = line_meet(a0, din, b0, dout) {
-                                let d = ((apex[0] - p[i][0]).powi(2)
-                                    + (apex[1] - p[i][1]).powi(2))
-                                .sqrt();
+                                let d = ((apex[0] - p[i][0]).powi(2) + (apex[1] - p[i][1]).powi(2))
+                                    .sqrt();
                                 if d / h[i] <= nib.miter {
                                     push_ccw(&mut out, vec![a1, apex, b0]);
                                 }
@@ -567,7 +569,12 @@ mod tests {
     }
 
     fn butt_bevel() -> Nib {
-        Nib { cap: Cap::Butt, join: Join::Bevel, miter: 10.0, arc: 0 }
+        Nib {
+            cap: Cap::Butt,
+            join: Join::Bevel,
+            miter: 10.0,
+            arc: 0,
+        }
     }
 
     #[test]
@@ -612,7 +619,10 @@ mod tests {
             .collect();
         assert_eq!(at_start.len(), 2, "want both sides at x = 0");
         let w = (at_start[0] - at_start[1]).abs();
-        assert!((w - 10.0).abs() < 1e-9, "width at the butt end is {w}, want 10");
+        assert!(
+            (w - 10.0).abs() < 1e-9,
+            "width at the butt end is {w}, want 10"
+        );
     }
 
     #[test]
@@ -663,7 +673,11 @@ mod tests {
         };
 
         for (u, v) in [(sw.ap, sw.bp), (sw.am, sw.bm)] {
-            assert!((dist(a, u, v) - ha).abs() < 1e-12, "start: {}", dist(a, u, v));
+            assert!(
+                (dist(a, u, v) - ha).abs() < 1e-12,
+                "start: {}",
+                dist(a, u, v)
+            );
             assert!((dist(b, u, v) - hb).abs() < 1e-12, "end: {}", dist(b, u, v));
         }
 
@@ -790,7 +804,12 @@ mod tests {
     #[test]
     fn caps_change_the_extent() {
         let mk = |cap| {
-            let nib = Nib { cap, join: Join::Bevel, miter: 10.0, arc: 0 };
+            let nib = Nib {
+                cap,
+                join: Join::Bevel,
+                miter: 10.0,
+                arc: 0,
+            };
             horiz(20.0, 3.0, 3.0, &nib)
         };
         let (bx, by, bn) = mk(Cap::Butt);
@@ -811,7 +830,12 @@ mod tests {
     #[test]
     fn mitre_limit_falls_back_to_bevel() {
         let go = |join, miter| {
-            let nib = Nib { cap: Cap::Butt, join, miter, arc: 0 };
+            let nib = Nib {
+                cap: Cap::Butt,
+                join,
+                miter,
+                arc: 0,
+            };
             let r = variable_stroke(
                 &[0.0, 20.0, 22.0],
                 &[0.0, 0.0, 14.0],
@@ -825,8 +849,14 @@ mod tests {
         let bevel = go(Join::Bevel, 10.0);
         let tight = go(Join::Miter, 1.0);
         let loose = go(Join::Miter, 10.0);
-        assert!((tight - bevel).abs() < 1e-9, "tight mitre {tight} != bevel {bevel}");
-        assert!(loose > bevel + 1e-6, "loose mitre {loose} should exceed bevel {bevel}");
+        assert!(
+            (tight - bevel).abs() < 1e-9,
+            "tight mitre {tight} != bevel {bevel}"
+        );
+        assert!(
+            loose > bevel + 1e-6,
+            "loose mitre {loose} should exceed bevel {bevel}"
+        );
     }
 
     #[test]
@@ -841,7 +871,12 @@ mod tests {
         let hw: Vec<f64> = (0..n)
             .map(|i| 1.0 + 7.0 * (i as f64 / (n - 1) as f64))
             .collect();
-        let nib = Nib { cap: Cap::Butt, join: Join::Bevel, miter: 10.0, arc: 0 };
+        let nib = Nib {
+            cap: Cap::Butt,
+            join: Join::Bevel,
+            miter: 10.0,
+            arc: 0,
+        };
         let (x, y, nper) = variable_stroke(&px, &py, &[n as i32], &hw, false, &nib);
         assert_eq!(nper.len(), 1, "a notch would split or hole the ribbon");
         let got = total_area(&x, &y, &nper);
@@ -861,12 +896,22 @@ mod tests {
         // The invariant: with a positive half-width everywhere, no boundary point
         // may come near the centreline.
         for join in [Join::Bevel, Join::Miter] {
-            let nib = Nib { cap: Cap::Butt, join, miter: 10.0, arc: 0 };
+            let nib = Nib {
+                cap: Cap::Butt,
+                join,
+                miter: 10.0,
+                arc: 0,
+            };
             let p = [[38.4, 326.4], [307.2, 192.0], [115.2, 46.1]];
             let hw = [30.0, 18.35, 9.0];
-            let (x, y, nper) =
-                variable_stroke(&[p[0][0], p[1][0], p[2][0]], &[p[0][1], p[1][1], p[2][1]],
-                                &[3], &hw, false, &nib);
+            let (x, y, nper) = variable_stroke(
+                &[p[0][0], p[1][0], p[2][0]],
+                &[p[0][1], p[1][1], p[2][1]],
+                &[3],
+                &hw,
+                false,
+                &nib,
+            );
             assert_eq!(nper.len(), 1, "{join:?}: want one contour");
             let mut nearest = f64::INFINITY;
             for (ox, oy) in x.iter().zip(y.iter()) {
@@ -902,13 +947,19 @@ mod tests {
         //
         // A hole shows up as a second contour, which is the cheap oracle here.
         for join in [Join::Bevel, Join::Miter] {
-            let nib = Nib { cap: Cap::Butt, join, miter: 10.0, arc: 0 };
+            let nib = Nib {
+                cap: Cap::Butt,
+                join,
+                miter: 10.0,
+                arc: 0,
+            };
             let px = [90.0, 450.0, 810.0];
             let py = [450.0, 120.0, 450.0];
             let hw = [9.4, 43.7, 9.4]; // the lwd 20 / profile .3,1.4,.3 case
             let (_x, _y, nper) = variable_stroke(&px, &py, &[3], &hw, false, &nib);
             assert_eq!(
-                nper.len(), 1,
+                nper.len(),
+                1,
                 "{join:?}: {} contours -- an extra one is a hole at the join",
                 nper.len()
             );
@@ -941,4 +992,3 @@ mod tests {
         assert_eq!(Join::from_code(2), Join::Bevel);
     }
 }
-

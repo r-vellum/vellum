@@ -83,7 +83,10 @@ impl Unit {
 
     /// Decode a base code plus an absolute mm offset — the compound-unit ABI.
     pub fn from_code_off(code: i32, off_mm: f64) -> Unit {
-        Unit { kind: kind_from_code(code), off_mm }
+        Unit {
+            kind: kind_from_code(code),
+            off_mm,
+        }
     }
 
     /// This unit's absolute offset in device pixels.

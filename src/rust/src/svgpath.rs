@@ -25,7 +25,10 @@ struct Lexer<'a> {
 
 impl<'a> Lexer<'a> {
     fn new(s: &'a str) -> Self {
-        Lexer { s: s.as_bytes(), i: 0 }
+        Lexer {
+            s: s.as_bytes(),
+            i: 0,
+        }
     }
     fn skip_sep(&mut self) {
         while self.i < self.s.len() {
@@ -85,7 +88,10 @@ impl<'a> Lexer<'a> {
         if self.i == start {
             return None;
         }
-        std::str::from_utf8(&self.s[start..self.i]).ok()?.parse().ok()
+        std::str::from_utf8(&self.s[start..self.i])
+            .ok()?
+            .parse()
+            .ok()
     }
     /// An arc flag is a single character, `0` or `1`, and may be written without
     /// a separator ("a1 1 0 011 5 5"), so it cannot go through `number()`.
@@ -122,8 +128,15 @@ pub struct SvgPath {
 #[allow(clippy::too_many_arguments)]
 fn arc_to(
     out: &mut Vec<(f64, f64)>,
-    x0: f64, y0: f64, mut rx: f64, mut ry: f64,
-    phi_deg: f64, large: bool, sweep: bool, x1: f64, y1: f64,
+    x0: f64,
+    y0: f64,
+    mut rx: f64,
+    mut ry: f64,
+    phi_deg: f64,
+    large: bool,
+    sweep: bool,
+    x1: f64,
+    y1: f64,
 ) {
     if rx == 0.0 || ry == 0.0 {
         out.push((x1, y1)); // degenerate radii: the spec says draw a line
@@ -146,7 +159,11 @@ fn arc_to(
     }
     let num = (rx * rx * ry * ry) - (rx * rx * y1p * y1p) - (ry * ry * x1p * x1p);
     let den = (rx * rx * y1p * y1p) + (ry * ry * x1p * x1p);
-    let mut co = if den > 0.0 { (num / den).max(0.0).sqrt() } else { 0.0 };
+    let mut co = if den > 0.0 {
+        (num / den).max(0.0).sqrt()
+    } else {
+        0.0
+    };
     if large == sweep {
         co = -co;
     }
@@ -158,7 +175,11 @@ fn arc_to(
     let ang = |ux: f64, uy: f64, vx: f64, vy: f64| -> f64 {
         let dot = ux * vx + uy * vy;
         let len = (ux * ux + uy * uy).sqrt() * (vx * vx + vy * vy).sqrt();
-        let mut a = if len > 0.0 { (dot / len).clamp(-1.0, 1.0).acos() } else { 0.0 };
+        let mut a = if len > 0.0 {
+            (dot / len).clamp(-1.0, 1.0).acos()
+        } else {
+            0.0
+        };
         if ux * vy - uy * vx < 0.0 {
             a = -a;
         }
@@ -179,11 +200,20 @@ fn arc_to(
     for i in 1..=steps {
         let t = theta + delta * (i as f64 / steps as f64);
         let (ct, st) = (t.cos(), t.sin());
-        out.push((cx + rx * ct * cp - ry * st * sp, cy + rx * ct * sp + ry * st * cp));
+        out.push((
+            cx + rx * ct * cp - ry * st * sp,
+            cy + rx * ct * sp + ry * st * cp,
+        ));
     }
 }
 
-fn cubic(out: &mut Vec<(f64, f64)>, p0: (f64, f64), p1: (f64, f64), p2: (f64, f64), p3: (f64, f64)) {
+fn cubic(
+    out: &mut Vec<(f64, f64)>,
+    p0: (f64, f64),
+    p1: (f64, f64),
+    p2: (f64, f64),
+    p3: (f64, f64),
+) {
     for i in 1..=CURVE_STEPS {
         let t = i as f64 / CURVE_STEPS as f64;
         let u = 1.0 - t;
@@ -207,18 +237,19 @@ pub fn parse(d: &str) -> SvgPath {
     let mut cur_closed = false;
     let (mut px, mut py) = (0.0f64, 0.0f64); // current point
     let (mut sx, mut sy) = (0.0f64, 0.0f64); // start of the current subpath
-    // Last cubic/quadratic control point, for the S/T reflection rules.
+                                             // Last cubic/quadratic control point, for the S/T reflection rules.
     let mut last_c: Option<(f64, f64)> = None;
     let mut last_q: Option<(f64, f64)> = None;
     let mut cmd = 0u8;
 
-    let flush = |cur: &mut Vec<(f64, f64)>, closed: bool, subpaths: &mut Vec<(Vec<(f64, f64)>, bool)>| {
-        if cur.len() >= 2 {
-            subpaths.push((std::mem::take(cur), closed));
-        } else {
-            cur.clear();
-        }
-    };
+    let flush =
+        |cur: &mut Vec<(f64, f64)>, closed: bool, subpaths: &mut Vec<(Vec<(f64, f64)>, bool)>| {
+            if cur.len() >= 2 {
+                subpaths.push((std::mem::take(cur), closed));
+            } else {
+                cur.clear();
+            }
+        };
 
     loop {
         if let Some(c) = lx.command() {
@@ -234,7 +265,9 @@ pub fn parse(d: &str) -> SvgPath {
         let (ox, oy) = if rel { (px, py) } else { (0.0, 0.0) };
         match cmd.to_ascii_uppercase() {
             b'M' => {
-                let (Some(a), Some(b)) = (lx.number(), lx.number()) else { break };
+                let (Some(a), Some(b)) = (lx.number(), lx.number()) else {
+                    break;
+                };
                 flush(&mut cur, cur_closed, &mut subpaths);
                 cur_closed = false;
                 px = ox + a;
@@ -246,7 +279,9 @@ pub fn parse(d: &str) -> SvgPath {
                 last_q = None;
             }
             b'L' => {
-                let (Some(a), Some(b)) = (lx.number(), lx.number()) else { break };
+                let (Some(a), Some(b)) = (lx.number(), lx.number()) else {
+                    break;
+                };
                 px = ox + a;
                 py = oy + b;
                 cur.push((px, py));
@@ -269,14 +304,23 @@ pub fn parse(d: &str) -> SvgPath {
             }
             b'C' | b'S' => {
                 let (c1, c2, end) = if cmd.to_ascii_uppercase() == b'C' {
-                    let (Some(a), Some(b), Some(c), Some(d), Some(e), Some(f)) =
-                        (lx.number(), lx.number(), lx.number(), lx.number(), lx.number(), lx.number())
-                    else { break };
+                    let (Some(a), Some(b), Some(c), Some(d), Some(e), Some(f)) = (
+                        lx.number(),
+                        lx.number(),
+                        lx.number(),
+                        lx.number(),
+                        lx.number(),
+                        lx.number(),
+                    ) else {
+                        break;
+                    };
                     ((ox + a, oy + b), (ox + c, oy + d), (ox + e, oy + f))
                 } else {
                     let (Some(c), Some(d), Some(e), Some(f)) =
                         (lx.number(), lx.number(), lx.number(), lx.number())
-                    else { break };
+                    else {
+                        break;
+                    };
                     // S reflects the previous cubic's second control point about
                     // the current point; with no previous cubic it is the point.
                     let r = match last_c {
@@ -298,10 +342,14 @@ pub fn parse(d: &str) -> SvgPath {
                 let (q, end) = if cmd.to_ascii_uppercase() == b'Q' {
                     let (Some(a), Some(b), Some(c), Some(d)) =
                         (lx.number(), lx.number(), lx.number(), lx.number())
-                    else { break };
+                    else {
+                        break;
+                    };
                     ((ox + a, oy + b), (ox + c, oy + d))
                 } else {
-                    let (Some(c), Some(d)) = (lx.number(), lx.number()) else { break };
+                    let (Some(c), Some(d)) = (lx.number(), lx.number()) else {
+                        break;
+                    };
                     let r = match last_q {
                         Some((lqx, lqy)) => (2.0 * px - lqx, 2.0 * py - lqy),
                         None => (px, py),
@@ -314,7 +362,10 @@ pub fn parse(d: &str) -> SvgPath {
                 // Degree-elevate to a cubic rather than writing a second
                 // flattener: exactly equivalent, and one code path to be wrong in.
                 let c1 = (px + 2.0 / 3.0 * (q.0 - px), py + 2.0 / 3.0 * (q.1 - py));
-                let c2 = (end.0 + 2.0 / 3.0 * (q.0 - end.0), end.1 + 2.0 / 3.0 * (q.1 - end.1));
+                let c2 = (
+                    end.0 + 2.0 / 3.0 * (q.0 - end.0),
+                    end.1 + 2.0 / 3.0 * (q.1 - end.1),
+                );
                 cubic(&mut cur, (px, py), c1, c2, end);
                 last_q = Some(q);
                 last_c = None;
@@ -323,14 +374,31 @@ pub fn parse(d: &str) -> SvgPath {
             }
             b'A' => {
                 let (Some(rx), Some(ry), Some(rot)) = (lx.number(), lx.number(), lx.number())
-                else { break };
-                let (Some(large), Some(sweep)) = (lx.flag(), lx.flag()) else { break };
-                let (Some(a), Some(b)) = (lx.number(), lx.number()) else { break };
+                else {
+                    break;
+                };
+                let (Some(large), Some(sweep)) = (lx.flag(), lx.flag()) else {
+                    break;
+                };
+                let (Some(a), Some(b)) = (lx.number(), lx.number()) else {
+                    break;
+                };
                 let (ex, ey) = (ox + a, oy + b);
                 if cur.is_empty() {
                     cur.push((px, py));
                 }
-                arc_to(&mut cur, px, py, rx, ry, rot, large != 0.0, sweep != 0.0, ex, ey);
+                arc_to(
+                    &mut cur,
+                    px,
+                    py,
+                    rx,
+                    ry,
+                    rot,
+                    large != 0.0,
+                    sweep != 0.0,
+                    ex,
+                    ey,
+                );
                 px = ex;
                 py = ey;
                 last_c = None;
@@ -351,7 +419,12 @@ pub fn parse(d: &str) -> SvgPath {
     }
     flush(&mut cur, cur_closed, &mut subpaths);
 
-    let mut out = SvgPath { x: Vec::new(), y: Vec::new(), nper: Vec::new(), closed: Vec::new() };
+    let mut out = SvgPath {
+        x: Vec::new(),
+        y: Vec::new(),
+        nper: Vec::new(),
+        closed: Vec::new(),
+    };
     for (pts, closed) in subpaths {
         // A closed ring repeats its start point; the scene's rings are implicit,
         // so drop the duplicate rather than leaving a zero-length edge.
@@ -447,7 +520,9 @@ mod tests {
     #[test]
     fn a_quadratic_matches_its_cubic_equivalent() {
         let q = parse("M0 0 Q 5 10 10 0");
-        let c = parse("M0 0 C 3.3333333333333335 6.666666666666667 6.666666666666667 6.666666666666667 10 0");
+        let c = parse(
+            "M0 0 C 3.3333333333333335 6.666666666666667 6.666666666666667 6.666666666666667 10 0",
+        );
         for (a, b) in q.y.iter().zip(c.y.iter()) {
             assert!((a - b).abs() < 1e-9, "{a} vs {b}");
         }

@@ -247,8 +247,25 @@ fn lerp_node(a: &Node, b: &Node, fr: &Fracs) -> Node {
     }
     match (a, b) {
         (
-            Node::Rect { x: ax, y: ay, w: aw, h: ah, xu, yu, wu, hu, gp: agp },
-            Node::Rect { x: bx, y: by, w: bw, h: bh, gp: bgp, .. },
+            Node::Rect {
+                x: ax,
+                y: ay,
+                w: aw,
+                h: ah,
+                xu,
+                yu,
+                wu,
+                hu,
+                gp: agp,
+            },
+            Node::Rect {
+                x: bx,
+                y: by,
+                w: bw,
+                h: bh,
+                gp: bgp,
+                ..
+            },
         ) => Node::Rect {
             x: lerp(*ax, *bx, t),
             y: lerp(*ay, *by, t),
@@ -261,8 +278,30 @@ fn lerp_node(a: &Node, b: &Node, fr: &Fracs) -> Node {
             gp: lerp_gpar(agp, bgp, fr),
         },
         (
-            Node::RoundRect { x: ax, y: ay, w: aw, h: ah, r: ar, xu, yu, wu, hu, ru, sketch, key, gp: agp },
-            Node::RoundRect { x: bx, y: by, w: bw, h: bh, r: br, gp: bgp, .. },
+            Node::RoundRect {
+                x: ax,
+                y: ay,
+                w: aw,
+                h: ah,
+                r: ar,
+                xu,
+                yu,
+                wu,
+                hu,
+                ru,
+                sketch,
+                key,
+                gp: agp,
+            },
+            Node::RoundRect {
+                x: bx,
+                y: by,
+                w: bw,
+                h: bh,
+                r: br,
+                gp: bgp,
+                ..
+            },
         ) => Node::RoundRect {
             x: lerp(*ax, *bx, t),
             y: lerp(*ay, *by, t),
@@ -279,8 +318,23 @@ fn lerp_node(a: &Node, b: &Node, fr: &Fracs) -> Node {
             key: key.clone(),
         },
         (
-            Node::Circle { x: ax, y: ay, r: ar, xu, yu, ru, sketch, gp: agp },
-            Node::Circle { x: bx, y: by, r: br, gp: bgp, .. },
+            Node::Circle {
+                x: ax,
+                y: ay,
+                r: ar,
+                xu,
+                yu,
+                ru,
+                sketch,
+                gp: agp,
+            },
+            Node::Circle {
+                x: bx,
+                y: by,
+                r: br,
+                gp: bgp,
+                ..
+            },
         ) => Node::Circle {
             x: lerp(*ax, *bx, t),
             y: lerp(*ay, *by, t),
@@ -292,8 +346,26 @@ fn lerp_node(a: &Node, b: &Node, fr: &Fracs) -> Node {
             gp: lerp_gpar(agp, bgp, fr),
         },
         (
-            Node::Lines { x: ax, y: ay, xu, yu, scap, ecap, off, arrow, sketch, hw: ahw, gp: agp, key },
-            Node::Lines { x: bx, y: by, hw: bhw, .. },
+            Node::Lines {
+                x: ax,
+                y: ay,
+                xu,
+                yu,
+                scap,
+                ecap,
+                off,
+                arrow,
+                sketch,
+                hw: ahw,
+                gp: agp,
+                key,
+            },
+            Node::Lines {
+                x: bx,
+                y: by,
+                hw: bhw,
+                ..
+            },
         ) => Node::Lines {
             x: lerp_vec(ax, bx, t),
             y: lerp_vec(ay, by, t),
@@ -316,8 +388,21 @@ fn lerp_node(a: &Node, b: &Node, fr: &Fracs) -> Node {
             key: key.clone(),
         },
         (
-            Node::Polygon { x: ax, y: ay, xu, yu, sketch, gp: agp, key },
-            Node::Polygon { x: bx, y: by, gp: bgp, .. },
+            Node::Polygon {
+                x: ax,
+                y: ay,
+                xu,
+                yu,
+                sketch,
+                gp: agp,
+                key,
+            },
+            Node::Polygon {
+                x: bx,
+                y: by,
+                gp: bgp,
+                ..
+            },
         ) => Node::Polygon {
             x: lerp_vec(ax, bx, t),
             y: lerp_vec(ay, by, t),
@@ -328,8 +413,27 @@ fn lerp_node(a: &Node, b: &Node, fr: &Fracs) -> Node {
             key: key.clone(),
         },
         (
-            Node::Rects { x: ax, y: ay, w: aw, h: ah, xu, yu, wu, hu, sketch, gp: agp, keys },
-            Node::Rects { x: bx, y: by, w: bw, h: bh, gp: bgp, .. },
+            Node::Rects {
+                x: ax,
+                y: ay,
+                w: aw,
+                h: ah,
+                xu,
+                yu,
+                wu,
+                hu,
+                sketch,
+                gp: agp,
+                keys,
+            },
+            Node::Rects {
+                x: bx,
+                y: by,
+                w: bw,
+                h: bh,
+                gp: bgp,
+                ..
+            },
         ) => Node::Rects {
             x: lerp_vec(ax, bx, t),
             y: lerp_vec(ay, by, t),
@@ -344,8 +448,24 @@ fn lerp_node(a: &Node, b: &Node, fr: &Fracs) -> Node {
             keys: keys.clone(),
         },
         (
-            Node::Circles { x: ax, y: ay, r: ar, xu, yu, ru, sketch, gp: agp, keys },
-            Node::Circles { x: bx, y: by, r: br, gp: bgp, .. },
+            Node::Circles {
+                x: ax,
+                y: ay,
+                r: ar,
+                xu,
+                yu,
+                ru,
+                sketch,
+                gp: agp,
+                keys,
+            },
+            Node::Circles {
+                x: bx,
+                y: by,
+                r: br,
+                gp: bgp,
+                ..
+            },
         ) => Node::Circles {
             x: lerp_vec(ax, bx, t),
             y: lerp_vec(ay, by, t),
@@ -358,8 +478,25 @@ fn lerp_node(a: &Node, b: &Node, fr: &Fracs) -> Node {
             keys: keys.clone(),
         },
         (
-            Node::Markers { x: ax, y: ay, size: asz, xu, yu, su, shape, sketch, gp: agp, keys },
-            Node::Markers { x: bx, y: by, size: bsz, gp: bgp, .. },
+            Node::Markers {
+                x: ax,
+                y: ay,
+                size: asz,
+                xu,
+                yu,
+                su,
+                shape,
+                sketch,
+                gp: agp,
+                keys,
+            },
+            Node::Markers {
+                x: bx,
+                y: by,
+                size: bsz,
+                gp: bgp,
+                ..
+            },
         ) => Node::Markers {
             x: lerp_vec(ax, bx, t),
             y: lerp_vec(ay, by, t),
@@ -373,8 +510,32 @@ fn lerp_node(a: &Node, b: &Node, fr: &Fracs) -> Node {
             keys: keys.clone(),
         },
         (
-            Node::Hexagons { x: ax, y: ay, size: asz, w: aw, h: ah, xu, yu, su, wu, hu, fill: afill, flat, gp: agp, keys },
-            Node::Hexagons { x: bx, y: by, size: bsz, w: bw, h: bh, fill: bfill, gp: bgp, .. },
+            Node::Hexagons {
+                x: ax,
+                y: ay,
+                size: asz,
+                w: aw,
+                h: ah,
+                xu,
+                yu,
+                su,
+                wu,
+                hu,
+                fill: afill,
+                flat,
+                gp: agp,
+                keys,
+            },
+            Node::Hexagons {
+                x: bx,
+                y: by,
+                size: bsz,
+                w: bw,
+                h: bh,
+                fill: bfill,
+                gp: bgp,
+                ..
+            },
         ) => Node::Hexagons {
             x: lerp_vec(ax, bx, t),
             y: lerp_vec(ay, by, t),
@@ -394,8 +555,34 @@ fn lerp_node(a: &Node, b: &Node, fr: &Fracs) -> Node {
             keys: keys.clone(),
         },
         (
-            Node::Sectors { x: ax, y: ay, r0: ar0, r1: ar1, theta0: at0, theta1: at1, xu, yu, r0u, r1u, fill: afill, arrow, sketch, gp: agp, keys },
-            Node::Sectors { x: bx, y: by, r0: br0, r1: br1, theta0: bt0, theta1: bt1, fill: bfill, gp: bgp, .. },
+            Node::Sectors {
+                x: ax,
+                y: ay,
+                r0: ar0,
+                r1: ar1,
+                theta0: at0,
+                theta1: at1,
+                xu,
+                yu,
+                r0u,
+                r1u,
+                fill: afill,
+                arrow,
+                sketch,
+                gp: agp,
+                keys,
+            },
+            Node::Sectors {
+                x: bx,
+                y: by,
+                r0: br0,
+                r1: br1,
+                theta0: bt0,
+                theta1: bt1,
+                fill: bfill,
+                gp: bgp,
+                ..
+            },
         ) => Node::Sectors {
             x: lerp_vec(ax, bx, t),
             y: lerp_vec(ay, by, t),
@@ -414,8 +601,38 @@ fn lerp_node(a: &Node, b: &Node, fr: &Fracs) -> Node {
             keys: keys.clone(),
         },
         (
-            Node::Segments { x0: ax0, y0: ay0, x1: ax1, y1: ay1, x0u, y0u, x1u, y1u, scap, ecap, scapu, ecapu, off, offu, arrow, sketch, gp: agp, keys, cols, lwds },
-            Node::Segments { x0: bx0, y0: by0, x1: bx1, y1: by1, gp: bgp, cols: bcols, lwds: blwds, .. },
+            Node::Segments {
+                x0: ax0,
+                y0: ay0,
+                x1: ax1,
+                y1: ay1,
+                x0u,
+                y0u,
+                x1u,
+                y1u,
+                scap,
+                ecap,
+                scapu,
+                ecapu,
+                off,
+                offu,
+                arrow,
+                sketch,
+                gp: agp,
+                keys,
+                cols,
+                lwds,
+            },
+            Node::Segments {
+                x0: bx0,
+                y0: by0,
+                x1: bx1,
+                y1: by1,
+                gp: bgp,
+                cols: bcols,
+                lwds: blwds,
+                ..
+            },
         ) => Node::Segments {
             // Per-element stroke style is discrete data, not a continuous
             // quantity: take it from the near keyframe.
@@ -441,8 +658,30 @@ fn lerp_node(a: &Node, b: &Node, fr: &Fracs) -> Node {
             keys: keys.clone(),
         },
         (
-            Node::Loop { x: ax, y: ay, xu, yu, size: asz, su, foot: af, fu, angle: aang, width: aw, arrow, gp: agp },
-            Node::Loop { x: bx, y: by, size: bsz, foot: bf, angle: bang, width: bw, gp: bgp, .. },
+            Node::Loop {
+                x: ax,
+                y: ay,
+                xu,
+                yu,
+                size: asz,
+                su,
+                foot: af,
+                fu,
+                angle: aang,
+                width: aw,
+                arrow,
+                gp: agp,
+            },
+            Node::Loop {
+                x: bx,
+                y: by,
+                size: bsz,
+                foot: bf,
+                angle: bang,
+                width: bw,
+                gp: bgp,
+                ..
+            },
         ) => Node::Loop {
             x: lerp_vec(ax, bx, t),
             y: lerp_vec(ay, by, t),
@@ -461,8 +700,23 @@ fn lerp_node(a: &Node, b: &Node, fr: &Fracs) -> Node {
             gp: lerp_gpar(agp, bgp, fr),
         },
         (
-            Node::Path { x: ax, y: ay, xu, yu, nper, evenodd, sketch, gp: agp, key },
-            Node::Path { x: bx, y: by, gp: bgp, .. },
+            Node::Path {
+                x: ax,
+                y: ay,
+                xu,
+                yu,
+                nper,
+                evenodd,
+                sketch,
+                gp: agp,
+                key,
+            },
+            Node::Path {
+                x: bx,
+                y: by,
+                gp: bgp,
+                ..
+            },
         ) => Node::Path {
             x: lerp_vec(ax, bx, t),
             y: lerp_vec(ay, by, t),
@@ -474,15 +728,52 @@ fn lerp_node(a: &Node, b: &Node, fr: &Fracs) -> Node {
             gp: lerp_gpar(agp, bgp, fr),
             key: key.clone(),
         },
-        (Node::Text { x: ax, y: ay, rot: arot, gp: agp, .. }, Node::Text { x: bx, y: by, rot: brot, gp: bgp, .. }) => {
+        (
+            Node::Text {
+                x: ax,
+                y: ay,
+                rot: arot,
+                gp: agp,
+                ..
+            },
+            Node::Text {
+                x: bx,
+                y: by,
+                rot: brot,
+                gp: bgp,
+                ..
+            },
+        ) => {
             // Position and rotation tween. Everything else -- the string, its
             // glyph layout and extent, font, halo, baseline path -- is layout,
             // not a continuous quantity: take it whole from the near keyframe, so
             // a changed label switches at the positional midpoint and the last
             // keyframe's text is what the final frame shows.
             let Node::Text {
-                xu, yu, hjust, vjust, w, h, gid, gx, gy, gsize, gpath, gface, gcol, rules, gtext, spans, halo, label, family, face, size,
-                tpath, key, ..
+                xu,
+                yu,
+                hjust,
+                vjust,
+                w,
+                h,
+                gid,
+                gx,
+                gy,
+                gsize,
+                gpath,
+                gface,
+                gcol,
+                rules,
+                gtext,
+                spans,
+                halo,
+                label,
+                family,
+                face,
+                size,
+                tpath,
+                key,
+                ..
             } = snap(a, b, t)
             else {
                 unreachable!()
@@ -539,7 +830,14 @@ fn same_shape(a: &Node, b: &Node) -> bool {
         | (Node::Sectors { x: ax, .. }, Node::Sectors { x: bx, .. })
         | (Node::Loop { x: ax, .. }, Node::Loop { x: bx, .. })
         | (Node::Segments { x0: ax, .. }, Node::Segments { x0: bx, .. }) => ax.len() == bx.len(),
-        (Node::Path { x: ax, nper: an, .. }, Node::Path { x: bx, nper: bn, .. }) => ax.len() == bx.len() && an == bn,
+        (
+            Node::Path {
+                x: ax, nper: an, ..
+            },
+            Node::Path {
+                x: bx, nper: bn, ..
+            },
+        ) => ax.len() == bx.len() && an == bn,
         _ => std::mem::discriminant(a) == std::mem::discriminant(b),
     }
 }
@@ -1612,7 +1910,10 @@ fn tween_masks(a: &[MaskDef], b: &[MaskDef], fr: &Fracs) -> Vec<MaskDef> {
             } else {
                 snap(ma, mb, fr.pos).nodes.clone()
             };
-            MaskDef { kind: ma.kind.clone(), nodes }
+            MaskDef {
+                kind: ma.kind.clone(),
+                nodes,
+            }
         })
         .collect()
 }
@@ -1789,7 +2090,11 @@ fn patch_text(nodes: &mut [(usize, Node)], variant: &TextVariant) {
 
 /// The text variant frame `frame` uses, if any (`text_frame` is 1-based, 0 =
 /// none, and empty when the animation has no per-frame text).
-fn frame_variant<'a>(texts: &'a [TextVariant], text_frame: &[i32], frame: usize) -> Option<&'a TextVariant> {
+fn frame_variant<'a>(
+    texts: &'a [TextVariant],
+    text_frame: &[i32],
+    frame: usize,
+) -> Option<&'a TextVariant> {
     let v = *text_frame.get(frame)?;
     if v < 1 {
         return None;
@@ -1916,8 +2221,14 @@ fn animated_svg(
         // -- i.e. at wall time `i*dur/n`. Offsetting by `i` rather than `n - i`
         // would run the frames backwards (0, n-1, n-2, ...).
         let delay = -(((n - i) % n) as f64) * dur / n as f64;
-        let class = if i == still { format!("{CSS_TOKEN}vf {CSS_TOKEN}vs") } else { format!("{CSS_TOKEN}vf") };
-        out.push_str(&format!("<g class=\"{class}\" style=\"animation-delay:{delay:.4}s\">{body}</g>"));
+        let class = if i == still {
+            format!("{CSS_TOKEN}vf {CSS_TOKEN}vs")
+        } else {
+            format!("{CSS_TOKEN}vf")
+        };
+        out.push_str(&format!(
+            "<g class=\"{class}\" style=\"animation-delay:{delay:.4}s\">{body}</g>"
+        ));
     }
     out.push_str("</svg>");
     // One prefix for the whole document (the frames left the token in place):
@@ -2090,8 +2401,16 @@ fn still_frame(k: usize, seg: &[i32], frac: &[Fracs]) -> usize {
 /// `p` as a CSS identifier: characters outside `[A-Za-z0-9_-]` become `_`, and
 /// a leading digit or dash gets a `v` in front.
 fn css_ident(p: &str) -> String {
-    let mut s: String =
-        p.chars().map(|c| if c.is_ascii_alphanumeric() || c == '_' || c == '-' { c } else { '_' }).collect();
+    let mut s: String = p
+        .chars()
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || c == '_' || c == '-' {
+                c
+            } else {
+                '_'
+            }
+        })
+        .collect();
     if !s.starts_with(|c: char| c.is_ascii_alphabetic() || c == '_') {
         s.insert(0, 'v');
     }
@@ -2101,7 +2420,10 @@ fn css_ident(p: &str) -> String {
 /// The inner content of an SVG document -- everything between the opening `<svg …>`
 /// tag and the closing `</svg>`.
 fn svg_body(doc: &str) -> String {
-    let start = match doc.find("<svg").and_then(|i| doc[i..].find('>').map(|j| i + j + 1)) {
+    let start = match doc
+        .find("<svg")
+        .and_then(|i| doc[i..].find('>').map(|j| i + j + 1))
+    {
         Some(i) => i,
         None => return String::new(),
     };
@@ -2145,13 +2467,22 @@ enum Sink {
     /// One PNG per frame: `<dir>/frame00001.png`, ...
     Frames { dir: String, next: usize },
     /// A single animated PNG at `path`, frames appended to an open writer.
-    Apng { writer: png::Writer<BufWriter<File>> },
+    Apng {
+        writer: png::Writer<BufWriter<File>>,
+    },
     /// A single animated GIF at `path`. Each frame is quantised to a local 256
     /// colour palette by the pure-Rust `color_quant` (NeuQuant) — no C library.
     /// `speed` is the NeuQuant sample factor (1 = best quality, 30 = fastest);
     /// `dither` applies Floyd–Steinberg error diffusion to hide the banding a
     /// nearest-colour remap leaves on antialiased/gradient content.
-    Gif { encoder: gif::Encoder<BufWriter<File>>, w: u16, h: u16, delay_cs: u16, speed: i32, dither: bool },
+    Gif {
+        encoder: gif::Encoder<BufWriter<File>>,
+        w: u16,
+        h: u16,
+        delay_cs: u16,
+        speed: i32,
+        dither: bool,
+    },
 }
 
 impl Sink {
@@ -2166,7 +2497,14 @@ impl Sink {
             Sink::Apng { writer } => writer
                 .write_image_data(&straight_rgba(pm))
                 .map_err(|e| format!("APNG frame write failed: {e}")),
-            Sink::Gif { encoder, w, h, delay_cs, speed, dither } => {
+            Sink::Gif {
+                encoder,
+                w,
+                h,
+                delay_cs,
+                speed,
+                dither,
+            } => {
                 let mut frame = gif_frame(&straight_rgba(pm), *w, *h, *speed, *dither);
                 frame.delay = *delay_cs;
                 encoder
@@ -2179,7 +2517,9 @@ impl Sink {
     fn finish(self) -> EncResult<()> {
         match self {
             Sink::Frames { .. } => Ok(()),
-            Sink::Apng { writer } => writer.finish().map_err(|e| format!("APNG finalise failed: {e}")),
+            Sink::Apng { writer } => writer
+                .finish()
+                .map_err(|e| format!("APNG finalise failed: {e}")),
             // The gif encoder writes the trailer on drop (raii_no_panic).
             Sink::Gif { .. } => Ok(()),
         }
@@ -2200,9 +2540,12 @@ fn open_apng(
     let mut enc = png::Encoder::new(BufWriter::new(file), w, h);
     enc.set_color(png::ColorType::Rgba);
     enc.set_depth(png::BitDepth::Eight);
-    enc.set_animated(n, 0).map_err(|e| format!("APNG header failed: {e}"))?;
-    enc.set_frame_delay(delay_num, delay_den).map_err(|e| format!("APNG delay failed: {e}"))?;
-    enc.write_header().map_err(|e| format!("APNG header write failed: {e}"))
+    enc.set_animated(n, 0)
+        .map_err(|e| format!("APNG header failed: {e}"))?;
+    enc.set_frame_delay(delay_num, delay_den)
+        .map_err(|e| format!("APNG delay failed: {e}"))?;
+    enc.write_header()
+        .map_err(|e| format!("APNG header write failed: {e}"))
 }
 
 /// Encode one straight-RGBA frame to a GIF `Frame`.
@@ -2365,7 +2708,11 @@ fn render_animation(
     // one). The R wrapper defaults each to `frac`, so a single-curve animation
     // sends four identical vectors and every class lerps on the same `t` --
     // byte-identical to the pre-split behaviour.
-    for (name, v) in [("frac_col", frac_col), ("frac_size", frac_size), ("frac_alpha", frac_alpha)] {
+    for (name, v) in [
+        ("frac_col", frac_col),
+        ("frac_size", frac_size),
+        ("frac_alpha", frac_alpha),
+    ] {
         if v.len() != n {
             throw_r_error(&format!(
                 "render_animation(): {name} must have the same length as frac ({n}), got {}",
@@ -2374,7 +2721,12 @@ fn render_animation(
         }
     }
     let frac: Vec<Fracs> = (0..n)
-        .map(|i| Fracs { pos: frac[i], col: frac_col[i], size: frac_size[i], alpha: frac_alpha[i] })
+        .map(|i| Fracs {
+            pos: frac[i],
+            col: frac_col[i],
+            size: frac_size[i],
+            alpha: frac_alpha[i],
+        })
         .collect();
     let frac = &frac[..];
 
@@ -2396,7 +2748,10 @@ fn render_animation(
                 text_frame.len()
             ));
         }
-        if let Some(&bad) = text_frame.iter().find(|&&v| v < 0 || v as usize > variant_scenes.len()) {
+        if let Some(&bad) = text_frame
+            .iter()
+            .find(|&&v| v < 0 || v as usize > variant_scenes.len())
+        {
             throw_r_error(&format!(
                 "render_animation(): text_frame entry {bad} is not a text variant (0..{})",
                 variant_scenes.len()
@@ -2410,8 +2765,9 @@ fn render_animation(
     let kf: Vec<Scene> = keyframes
         .values()
         .map(|robj| {
-            let ep = <ExternalPtr<Scene>>::try_from(robj)
-                .unwrap_or_else(|_| throw_r_error("render_animation(): keyframes must be compiled vellum scenes"));
+            let ep = <ExternalPtr<Scene>>::try_from(robj).unwrap_or_else(|_| {
+                throw_r_error("render_animation(): keyframes must be compiled vellum scenes")
+            });
             (*ep).clone()
         })
         .collect();
@@ -2511,7 +2867,15 @@ fn render_animation(
                 sc
             })
             .collect();
-        if let Sink::Gif { encoder, w, h, delay_cs, speed, dither } = &mut sink {
+        if let Sink::Gif {
+            encoder,
+            w,
+            h,
+            delay_cs,
+            speed,
+            dither,
+        } = &mut sink
+        {
             // A GIF frame's palette quantisation and dither cost far more than
             // its rasterisation (NeuQuant + Floyd-Steinberg over every pixel), so
             // they run on the workers too, each frame independently; only the
@@ -2602,10 +2966,19 @@ fn tween_pairing(keyframes: List) -> List {
 ///
 /// @keywords internal
 #[extendr]
-fn tween_frame(a: Robj, b: Robj, frac: f64, frac_col: f64, frac_size: f64, frac_alpha: f64, text_variant: Robj) -> Scene {
+fn tween_frame(
+    a: Robj,
+    b: Robj,
+    frac: f64,
+    frac_col: f64,
+    frac_size: f64,
+    frac_alpha: f64,
+    text_variant: Robj,
+) -> Scene {
     let get = |r: Robj| {
-        <ExternalPtr<Scene>>::try_from(r)
-            .unwrap_or_else(|_| throw_r_error("tween_frame(): keyframes must be compiled vellum scenes"))
+        <ExternalPtr<Scene>>::try_from(r).unwrap_or_else(|_| {
+            throw_r_error("tween_frame(): keyframes must be compiled vellum scenes")
+        })
     };
     let (a, b) = (get(a), get(b));
     let (a, b): (&Scene, &Scene) = (&a, &b);
@@ -2638,7 +3011,12 @@ mod tests {
     use super::*;
 
     fn fr(pos: f64) -> Fracs {
-        Fracs { pos, col: pos, size: pos, alpha: pos }
+        Fracs {
+            pos,
+            col: pos,
+            size: pos,
+            alpha: pos,
+        }
     }
 
     fn gp(alpha: f64, lwd: f64) -> PartialGpar {
@@ -2662,7 +3040,10 @@ mod tests {
     fn overshoot_clamps_size_and_alpha() {
         // back-in-out dips below 0 and elastic rises above 1.
         assert_eq!(lerp_size(1.0, 5.0, -0.5), 0.0);
-        assert_eq!(lerp_vec_size(&[1.0, 2.0], &[3.0, 6.0], -1.0), vec![0.0, 0.0]);
+        assert_eq!(
+            lerp_vec_size(&[1.0, 2.0], &[3.0, 6.0], -1.0),
+            vec![0.0, 0.0]
+        );
         let (a, b) = (gp(0.2, 1.0), gp(1.0, 4.0));
         let g = lerp_gpar(&a, &b, &fr(1.3));
         assert!(matches!(g.alpha, Inh::Set(x) if x == 1.0));
@@ -2677,11 +3058,20 @@ mod tests {
     fn still_frame_holds_the_final_keyframe_only_when_reached() {
         // A non-looping schedule over 3 keyframes that ends at (seg 1, frac 1).
         let seg = [0, 0, 1, 1];
-        assert_eq!(still_frame(3, &seg, &[fr(0.0), fr(0.5), fr(0.5), fr(1.0)]), 3);
+        assert_eq!(
+            still_frame(3, &seg, &[fr(0.0), fr(0.5), fr(0.5), fr(1.0)]),
+            3
+        );
         // A loop stops short of its end: hold the first frame.
-        assert_eq!(still_frame(3, &seg, &[fr(0.0), fr(0.5), fr(0.0), fr(0.5)]), 0);
+        assert_eq!(
+            still_frame(3, &seg, &[fr(0.0), fr(0.5), fr(0.0), fr(0.5)]),
+            0
+        );
         // Ending on an earlier keyframe pair is not the end either.
-        assert_eq!(still_frame(4, &seg, &[fr(0.0), fr(0.5), fr(0.5), fr(1.0)]), 0);
+        assert_eq!(
+            still_frame(4, &seg, &[fr(0.0), fr(0.5), fr(0.5), fr(1.0)]),
+            0
+        );
     }
 
     fn text_node(label: &str, key: Option<&str>, x: f64, w: f64) -> Node {
@@ -2724,10 +3114,15 @@ mod tests {
             (0, text_node("axis", None, 0.1, 30.0)),
         ];
         let mut v = TextVariant::new();
-        v.insert("vp:title".to_string(), text_node("1954.5", Some("vp:title"), 0.9, 60.0));
+        v.insert(
+            "vp:title".to_string(),
+            text_node("1954.5", Some("vp:title"), 0.9, 60.0),
+        );
         patch_text(&mut nodes, &v);
         match &nodes[0].1 {
-            Node::Text { label, x, w, gid, .. } => {
+            Node::Text {
+                label, x, w, gid, ..
+            } => {
                 assert_eq!(label, "1954.5");
                 assert_eq!(*x, 0.3); // position from the tween, not the variant
                 assert_eq!(*w, 60.0); // extent from the variant's layout

@@ -1725,7 +1725,9 @@ impl Scene {
         let (xml, media, warnings) =
             self.dml_parts(left.round() as i64, top.round() as i64, outline_text);
         let files: Vec<String> = if media_dir.is_empty() {
-            (1..=media.len()).map(|i| format!("vellum-media-{i}")).collect()
+            (1..=media.len())
+                .map(|i| format!("vellum-media-{i}"))
+                .collect()
         } else {
             write_media_files(&media, media_dir).unwrap_or_else(|e| {
                 throw_r_error(format!(

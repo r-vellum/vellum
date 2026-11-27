@@ -23,7 +23,10 @@ use tiny_skia::{FillRule, Path, Transform};
 
 use crate::color::Rgba;
 use crate::pick::{circle_dist, inside_rings, poly_dist, seg_dist2};
-use crate::render::{flatten_rings, BlendKind, Clip, GroupEffect, MaskLayer, RenderBackend, ResolvedPaint, StrokeStyle, TextRun};
+use crate::render::{
+    flatten_rings, BlendKind, Clip, GroupEffect, MaskLayer, RenderBackend, ResolvedPaint,
+    StrokeStyle, TextRun,
+};
 use crate::units::rotation_about;
 
 /// One recorded piece of an element, in device px (y down).
@@ -31,7 +34,10 @@ use crate::units::rotation_about;
 pub enum Part {
     /// Closed rings filled under one rule: a rect, polygon, path (holes and
     /// all), hexagon, sector wedge, image cell, or a text label's quad.
-    Fill { rings: Vec<Vec<(f64, f64)>>, evenodd: bool },
+    Fill {
+        rings: Vec<Vec<(f64, f64)>>,
+        evenodd: bool,
+    },
     /// An open centre-line, stroked `width` px wide: a segment or polyline after
     /// its offset and caps. Non-finite vertices are breaks (an R `NA`).
     Stroke { pts: Vec<(f64, f64)>, width: f64 },
@@ -56,7 +62,11 @@ pub struct GeomSink {
 
 impl GeomSink {
     pub fn new(n_nodes: usize) -> Self {
-        GeomSink { t: Transform::identity(), node: 0, rec: vec![Vec::new(); n_nodes] }
+        GeomSink {
+            t: Transform::identity(),
+            node: 0,
+            rec: vec![Vec::new(); n_nodes],
+        }
     }
 
     /// Start recording node `node`, drawn through viewport transform `t`.
@@ -87,28 +97,50 @@ impl GeomSink {
     /// One closed ring (nonzero), local px.
     pub fn ring(&mut self, elem: usize, pts: &[(f64, f64)]) {
         let ring = pts.iter().map(|&(x, y)| self.dev(x, y)).collect();
-        self.push(elem, Part::Fill { rings: vec![ring], evenodd: false });
+        self.push(
+            elem,
+            Part::Fill {
+                rings: vec![ring],
+                evenodd: false,
+            },
+        );
     }
 
     /// An axis-aligned local rect, as a ring.
     pub fn rect(&mut self, elem: usize, x0: f64, y0: f64, w: f64, h: f64) {
-        self.ring(elem, &[(x0, y0), (x0 + w, y0), (x0 + w, y0 + h), (x0, y0 + h)]);
+        self.ring(
+            elem,
+            &[(x0, y0), (x0 + w, y0), (x0 + w, y0 + h), (x0, y0 + h)],
+        );
     }
 
     /// The closed rings of a path exactly as it is filled, under `rule`.
     pub fn path(&mut self, elem: usize, path: &Path, rule: FillRule) {
         let rings: Vec<Vec<(f64, f64)>> = flatten_rings(path)
             .into_iter()
-            .map(|r| r.into_iter().map(|(x, y)| self.dev(x as f64, y as f64)).collect())
+            .map(|r| {
+                r.into_iter()
+                    .map(|(x, y)| self.dev(x as f64, y as f64))
+                    .collect()
+            })
             .collect();
         if !rings.is_empty() {
-            self.push(elem, Part::Fill { rings, evenodd: rule == FillRule::EvenOdd });
+            self.push(
+                elem,
+                Part::Fill {
+                    rings,
+                    evenodd: rule == FillRule::EvenOdd,
+                },
+            );
         }
     }
 
     /// An open polyline stroked `width` px wide, local px.
     pub fn stroke(&mut self, elem: usize, pts: &[(f32, f32)], width: f64) {
-        let pts = pts.iter().map(|&(x, y)| self.dev(x as f64, y as f64)).collect();
+        let pts = pts
+            .iter()
+            .map(|&(x, y)| self.dev(x as f64, y as f64))
+            .collect();
         self.push(elem, Part::Stroke { pts, width });
     }
 
@@ -123,25 +155,56 @@ impl GeomSink {
     pub fn disc(&mut self, elem: usize, cx: f64, cy: f64, r: f64) {
         let (dx, dy) = self.dev(cx, cy);
         let t = self.t;
-        let s = ((t.sx as f64) * (t.sy as f64) - (t.kx as f64) * (t.ky as f64)).abs().sqrt();
-        self.push(elem, Part::Disc { cx: dx, cy: dy, r: r * s });
+        let s = ((t.sx as f64) * (t.sy as f64) - (t.kx as f64) * (t.ky as f64))
+            .abs()
+            .sqrt();
+        self.push(
+            elem,
+            Part::Disc {
+                cx: dx,
+                cy: dy,
+                r: r * s,
+            },
+        );
     }
 
     /// A text run's box, rotated about its anchor exactly as backends draw it.
     pub fn text(&mut self, run: &TextRun, t: Transform) {
-        let tr = if run.rot != 0.0 { t.pre_concat(rotation_about(run.rot, run.ax, run.ay)) } else { t };
+        let tr = if run.rot != 0.0 {
+            t.pre_concat(rotation_about(run.rot, run.ax, run.ay))
+        } else {
+            t
+        };
         let x0 = run.ax - run.hjust * run.w;
         let y0 = run.ay - (1.0 - run.vjust) * run.h;
-        let ring = [(x0, y0), (x0 + run.w, y0), (x0 + run.w, y0 + run.h), (x0, y0 + run.h)]
-            .iter()
-            .map(|&(x, y)| map(&tr, x, y))
-            .collect();
-        self.push(0, Part::Fill { rings: vec![ring], evenodd: false });
+        let ring = [
+            (x0, y0),
+            (x0 + run.w, y0),
+            (x0 + run.w, y0 + run.h),
+            (x0, y0 + run.h),
+        ]
+        .iter()
+        .map(|&(x, y)| map(&tr, x, y))
+        .collect();
+        self.push(
+            0,
+            Part::Fill {
+                rings: vec![ring],
+                evenodd: false,
+            },
+        );
     }
 }
 
 fn map(t: &Transform, x: f64, y: f64) -> (f64, f64) {
-    let (sx, ky, kx, sy, tx, ty) = (t.sx as f64, t.ky as f64, t.kx as f64, t.sy as f64, t.tx as f64, t.ty as f64);
+    let (sx, ky, kx, sy, tx, ty) = (
+        t.sx as f64,
+        t.ky as f64,
+        t.kx as f64,
+        t.sy as f64,
+        t.tx as f64,
+        t.ty as f64,
+    );
     (sx * x + kx * y + tx, ky * x + sy * y + ty)
 }
 
@@ -152,7 +215,9 @@ pub struct RecordBackend {
 
 impl RecordBackend {
     pub fn new(n_nodes: usize) -> Self {
-        RecordBackend { sink: GeomSink::new(n_nodes) }
+        RecordBackend {
+            sink: GeomSink::new(n_nodes),
+        }
     }
 }
 
@@ -166,7 +231,20 @@ impl RenderBackend for RecordBackend {
     }
     fn begin_group(&mut self, _: Option<MaskLayer>, _: f32, _: BlendKind, _: GroupEffect) {}
     fn end_group(&mut self) {}
-    fn draw_image(&mut self, _: &[u8], _: u32, _: u32, _: f64, _: f64, _: f64, _: f64, _: bool, _: Transform, _: &Clip) {}
+    fn draw_image(
+        &mut self,
+        _: &[u8],
+        _: u32,
+        _: u32,
+        _: f64,
+        _: f64,
+        _: f64,
+        _: f64,
+        _: bool,
+        _: Transform,
+        _: &Clip,
+    ) {
+    }
     fn geom_sink(&mut self) -> Option<&mut GeomSink> {
         Some(&mut self.sink)
     }
@@ -206,7 +284,10 @@ pub fn parts_bbox(parts: &[Part]) -> Option<(f64, f64, f64, f64)> {
 }
 
 /// Union of two optional boxes.
-pub fn union_bbox(a: Option<(f64, f64, f64, f64)>, b: Option<(f64, f64, f64, f64)>) -> Option<(f64, f64, f64, f64)> {
+pub fn union_bbox(
+    a: Option<(f64, f64, f64, f64)>,
+    b: Option<(f64, f64, f64, f64)>,
+) -> Option<(f64, f64, f64, f64)> {
     match (a, b) {
         (Some(a), Some(b)) => Some((a.0.min(b.0), a.1.min(b.1), a.2.max(b.2), a.3.max(b.3))),
         (a, None) => a,
@@ -289,7 +370,8 @@ pub fn parts_cover(parts: &[Part], px: f64, py: f64, min_half: f64) -> bool {
         Part::Disc { cx, cy, r } => (px - cx).powi(2) + (py - cy).powi(2) <= r * r,
         Part::Stroke { pts, width } => {
             let band = (width * 0.5).max(min_half);
-            pts.windows(2).any(|w| seg_dist2(px, py, w[0].0, w[0].1, w[1].0, w[1].1) <= band * band)
+            pts.windows(2)
+                .any(|w| seg_dist2(px, py, w[0].0, w[0].1, w[1].0, w[1].1) <= band * band)
         }
     })
 }

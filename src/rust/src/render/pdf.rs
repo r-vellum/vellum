@@ -661,7 +661,11 @@ impl RenderBackend for PdfBackend<'_, '_> {
 
         // The text glyphs map back to: a tex() label carries one character
         // per glyph separately from its label (the TeX source).
-        let text: &str = if run.gtext.is_empty() { run.label } else { run.gtext };
+        let text: &str = if run.gtext.is_empty() {
+            run.label
+        } else {
+            run.gtext
+        };
         // char byte boundaries for ToUnicode (exact when glyphs == chars).
         let bounds: Vec<usize> = text
             .char_indices()

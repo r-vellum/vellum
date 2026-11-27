@@ -36,7 +36,10 @@ pub fn box_overlaps(boxes: &[f64], pad: f64) -> Vec<i32> {
     };
     let mut order: Vec<usize> = (0..n).collect();
     order.sort_by(|&a, &b| {
-        get(a).0.partial_cmp(&get(b).0).unwrap_or(std::cmp::Ordering::Equal)
+        get(a)
+            .0
+            .partial_cmp(&get(b).0)
+            .unwrap_or(std::cmp::Ordering::Equal)
     });
     let mut out: Vec<i32> = Vec::new();
     // Indices whose right edge has not yet passed the sweep line.
@@ -70,9 +73,7 @@ pub fn box_overlaps(boxes: &[f64], pad: f64) -> Vec<i32> {
 /// `boxes` is a flat `[x0, y0, x1, y1, ...]`; `region` is one such quadruple.
 /// Returns `[x0, y0, x1, y1]` in the same coordinates, or all-zero if the region
 /// is degenerate or entirely covered.
-pub fn largest_empty_rect(
-    boxes: &[f64], region: [f64; 4], nx: usize, ny: usize,
-) -> [f64; 4] {
+pub fn largest_empty_rect(boxes: &[f64], region: [f64; 4], nx: usize, ny: usize) -> [f64; 4] {
     let (rx0, ry0, rx1, ry1) = (region[0], region[1], region[2], region[3]);
     let (rw, rh) = (rx1 - rx0, ry1 - ry0);
     if !(rw > 0.0) || !(rh > 0.0) || nx == 0 || ny == 0 {
@@ -82,7 +83,12 @@ pub fn largest_empty_rect(
     // free[r][c]: no obstacle overlaps this cell.
     let mut free = vec![true; nx * ny];
     for b in boxes.chunks_exact(4) {
-        let (bx0, by0, bx1, by1) = (b[0].min(b[2]), b[1].min(b[3]), b[0].max(b[2]), b[1].max(b[3]));
+        let (bx0, by0, bx1, by1) = (
+            b[0].min(b[2]),
+            b[1].min(b[3]),
+            b[0].max(b[2]),
+            b[1].max(b[3]),
+        );
         if bx1 <= rx0 || bx0 >= rx1 || by1 <= ry0 || by0 >= ry1 {
             continue;
         }
@@ -145,7 +151,9 @@ pub fn convex_hull(x: &[f64], y: &[f64]) -> Vec<usize> {
     if n < 3 {
         return (0..n).collect();
     }
-    let mut idx: Vec<usize> = (0..n).filter(|&i| x[i].is_finite() && y[i].is_finite()).collect();
+    let mut idx: Vec<usize> = (0..n)
+        .filter(|&i| x[i].is_finite() && y[i].is_finite())
+        .collect();
     idx.sort_by(|&a, &b| {
         x[a].partial_cmp(&x[b])
             .unwrap_or(std::cmp::Ordering::Equal)
@@ -181,7 +189,11 @@ pub fn convex_hull(x: &[f64], y: &[f64]) -> Vec<usize> {
 fn seg_dist2(px: f64, py: f64, ax: f64, ay: f64, bx: f64, by: f64) -> f64 {
     let (dx, dy) = (bx - ax, by - ay);
     let len2 = dx * dx + dy * dy;
-    let t = if len2 > 0.0 { (((px - ax) * dx + (py - ay) * dy) / len2).clamp(0.0, 1.0) } else { 0.0 };
+    let t = if len2 > 0.0 {
+        (((px - ax) * dx + (py - ay) * dy) / len2).clamp(0.0, 1.0)
+    } else {
+        0.0
+    };
     let (qx, qy) = (ax + t * dx, ay + t * dy);
     (px - qx).powi(2) + (py - qy).powi(2)
 }
@@ -294,7 +306,9 @@ mod tests {
         let mut boxes = Vec::new();
         let mut seed: u64 = 12345;
         let mut next = || {
-            seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+            seed = seed
+                .wrapping_mul(6364136223846793005)
+                .wrapping_add(1442695040888963407);
             ((seed >> 33) as f64) / (u32::MAX as f64 / 2.0)
         };
         for _ in 0..200 {
@@ -341,7 +355,10 @@ mod tests {
     #[test]
     fn empty_rect_is_zero_when_covered() {
         let boxes = [0.0, 0.0, 100.0, 100.0];
-        assert_eq!(largest_empty_rect(&boxes, [0.0, 0.0, 100.0, 100.0], 32, 32), [0.0; 4]);
+        assert_eq!(
+            largest_empty_rect(&boxes, [0.0, 0.0, 100.0, 100.0], 32, 32),
+            [0.0; 4]
+        );
     }
 
     #[test]
@@ -369,7 +386,10 @@ mod tests {
         }
         let convex = convex_hull(&x, &y);
         let concave = concave_hull(&x, &y, 1.0);
-        assert!(concave.len() > convex.len(), "concave picks up notch points");
+        assert!(
+            concave.len() > convex.len(),
+            "concave picks up notch points"
+        );
     }
 
     #[test]
