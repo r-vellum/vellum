@@ -26,6 +26,56 @@
 
 ### Bug fixes
 
+- PowerPoint text boxes sit on their bottom edge whatever the label’s
+  `vjust`, with the box still vellum’s line boxes. LibreOffice assumes a
+  fixed line, 1.0 em above the baseline and 0.2 em below, whatever the
+  font, so a label anchored at the box’s top or middle drew up to 0.23
+  em lower than vellum draws it (2.4 pt for a centred 18 pt Helvetica
+  label, 4 pt for a top-justified one); Keynote, which takes Helvetica’s
+  ascent from elsewhere, was off about as much. On the bottom edge both
+  draw within two pixels (at 36 pt, 150 dpi) of vellum for most fonts;
+  in LibreOffice a font whose descent is deeper than 0.2 em (Avenir
+  Next, Hoefler Text) still sits lower by the excess. PowerPoint itself
+  has not been checked. The paragraph alignment of a multi-line label
+  whose lines line up at both edges now follows its `hjust`: `"ab\nab"`,
+  and in Helvetica `"a\nb"`, are centred for a centred label, where they
+  were left-aligned. An
+  [`md()`](https://r-vellum.github.io/vellum/reference/md.md) label
+  whose box is cut to its text lines counts a `^superscript^` or
+  `~subscript~` run where it sits (VR-54).
+
+- [`scene_display_list()`](https://r-vellum.github.io/vellum/reference/scene_display_list.md)
+  lists a hatched point marker of any shape (square, triangle, diamond,
+  star) as its shape, the hatch’s background and its rules, exact and
+  unflagged like a hatched circle. It was a point record flagged as a
+  paint it could not reproduce, drawn from the flagged raster (VR-53).
+
+- The picking outline of a
+  [`roundrect_grob()`](https://r-vellum.github.io/vellum/reference/grob.md)
+  follows its drawn corners. It cut each corner with five points, about
+  0.012 r inside the arc, so a point 6 px inside a drawn corner of
+  radius 1000 px got no hit (VR-55).
+
+- Known issue: on macOS the variable font Skia can crash R inside
+  textshaping once
+  [`systemfonts::system_fonts()`](https://systemfonts.r-lib.org/reference/system_fonts.html)
+  has run (which a numeric `fontweight` does): systemfonts fails to open
+  the face and textshaping uses it anyway. This is an upstream problem;
+  avoid Skia, or the numeric weight, until it is fixed (VL-22).
+
+- [`scene_display_list()`](https://r-vellum.github.io/vellum/reference/scene_display_list.md)
+  is smaller for huge in-range arcs off the page: an arc it refines is
+  kept within 1/8 px near the page, as before, and within a tolerance
+  that grows with the distance from the page beyond it, in page lengths,
+  up to four times (1/2 px). A ring of 36 sectors of radius 30000 px
+  crossing an 8 inch page went from 33 KB to 20 KB (VR-56).
+
+- Hexagons far from the origin
+  ([`hexagon_grob()`](https://r-vellum.github.io/vellum/reference/grob.md),
+  past about 65,000 px) are cut at the page window of the backend rather
+  than a box around the origin, so SVG and PDF output is a little
+  smaller; the visible part is unchanged (VR-52).
+
 - A numeric `fontweight` snaps to the nearest weight among a family’s
   normal-width faces when it has any, so `fontweight = 900` with
   Helvetica Neue on macOS draws in Bold rather than “Condensed Black”,

@@ -70,11 +70,17 @@ Each label names the font vellum measured it with. PowerPoint uses that
 font when the machine opening the deck has it and substitutes another
 when it does not; the box is anchored so a wider substitute grows away
 from the label's anchor (right-aligned tick labels stay right-aligned)
-rather than drifting. Fonts are not embedded. `text = "outline"` writes
-glyph outlines instead: identical everywhere, but no longer editable as
-text. An [`md()`](https://r-vellum.github.io/vellum/reference/md.md)
-label is one text run per styled span (bold, italic, colour; a
-superscript or subscript as a raised or lowered run).
+rather than drifting. Vertically, the text sits on the box's bottom edge
+whatever its justification. LibreOffice assumes a fixed line, 1.0 em
+above the baseline and 0.2 em below, whatever the font: on the bottom
+edge a label sits where vellum draws it when the font's descent is about
+0.2 em, and lower by the excess for a deeper one (Avenir Next, Hoefler
+Text). Keynote follows the font's own metrics. PowerPoint itself has not
+been checked. Fonts are not embedded. `text = "outline"` writes glyph
+outlines instead: identical everywhere, but no longer editable as text.
+An [`md()`](https://r-vellum.github.io/vellum/reference/md.md) label is
+one text run per styled span (bold, italic, colour; a superscript or
+subscript as a raised or lowered run).
 [`tex()`](https://r-vellum.github.io/vellum/reference/tex.md) labels,
 [`md()`](https://r-vellum.github.io/vellum/reference/md.md) labels with
 inline math, halos and text set on a path are always outlines, as in

@@ -169,9 +169,9 @@ transparent page. The two halves together are exactly <code>"unkeyed"</code>.</p
 <p><code>"keyed_flagged"</code> draws only the marks of the <code>"keyed"</code> layer that
 <code><a href="scene_display_list.html">scene_display_list()</a></code> (<code>version = 2</code>, same <code>panels</code>) flags as not drawable
 from the list: marks under a mask, a blend mode or an effect, patterned or
-repeating-gradient fills, gradient strokes, text and hatched point markers
-other than circles. Any other hatched fill is listed as exact geometry, so
-it is not drawn here unless something else flags it (see
+repeating-gradient fills, gradient strokes and text. A hatched fill, on
+a point marker too, is listed as exact geometry, so it is not drawn here
+unless something else flags it (see
 <code><a href="scene_display_list.html">scene_display_list()</a></code>). Whole
 nodes are drawn (every record of a node with one flagged record), and an
 opacity group holding a flagged mark goes in whole. The flagged marks fall

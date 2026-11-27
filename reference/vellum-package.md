@@ -2,10 +2,10 @@
 
 A grid-like low-level graphics system for R. Text metrics and layout are
 resolved without a graphics device, so one solved scene renders to PNG,
-SVG, or PDF with the same geometry, and the finished scene can report
-that geometry back element by element (a data key and a resolved
-device-pixel box) or be queried by point. The scene graph, unit/layout
-engine, and rendering run in a Rust backend.
+SVG, PDF, or editable 'PowerPoint' shapes with the same geometry, and
+the finished scene can report that geometry back element by element (a
+data key and a resolved device-pixel box) or be queried by point. The
+scene graph, unit/layout engine, and rendering run in a Rust backend.
 
 ## See also
 

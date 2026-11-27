@@ -180,23 +180,21 @@ reflecting gradients and gradient strokes stay flagged.
 A
 [`vl_hatch()`](https://r-vellum.github.io/vellum/reference/vl_hatch.md)
 fill is not flagged for its paint in either version: vellum turns it
-into geometry before the list is made, so a hatched rect, path, polygon
-or circle (a circle
+into geometry before the list is made, so a hatched rect, path, polygon,
+circle or
 [`points_grob()`](https://r-vellum.github.io/vellum/reference/grob.md)
-marker included) is listed as two exact records, the shape filled with
-the hatch's `bg` (transparent when `bg = NA`) and a path of the rules
-stroked in the hatch's colour, then the shape's own stroke if it has
-one. The rules are already cut to the shape, and a clip, rotation or
-sketch applies to them as to any path. Such records are flagged only for
-the reasons any record is: a group with an opacity (version 1), a blend
-mode, mask or effect, or a clip that is not an axis-aligned rectangle
-(version 1).
+marker is listed as two exact records, the shape filled with the hatch's
+`bg` (transparent when `bg = NA`) and a path of the rules stroked in the
+hatch's colour, then the shape's own stroke if it has one. The rules are
+already cut to the shape, and a clip, rotation or sketch applies to them
+as to any path. Such records are flagged only for the reasons any record
+is: a group with an opacity (version 1), a blend mode, mask or effect,
+or a clip that is not an axis-aligned rectangle (version 1).
 
-The exception is a hatched
-[`points_grob()`](https://r-vellum.github.io/vellum/reference/grob.md)
-marker of any other shape (square, triangle, diamond, star, ...): it is
-one point record, which has room for one fill and one stroke but not the
-rules, so it is flagged `1` and drawn from `"keyed_flagged"`.
+A hatched marker of any shape is listed as this geometry rather than as
+a point record, which has room for one fill and one stroke but not the
+rules: its `record$kind` is `"path"` (or `"rect"` for an unrotated
+square), not `"point"`.
 
 - Flagged runs (VW-30): `record$run` is the run of flagged marks a
   record belongs to (1-based, 0 = none) and `runs` their count. A run is
