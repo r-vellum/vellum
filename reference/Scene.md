@@ -168,6 +168,14 @@ RGBA colour per rule. Empty vectors mean no rules. `gtext` optionally
 gives each label's per-glyph text for PDF extraction (empty: the label
 itself).
 
+`nspans`/`span_text`/`span_face`/`span_num` optionally give each label's
+styled runs (an
+[`md()`](https://r-vellum.github.io/vellum/reference/md.md) label's
+spans), for backends that write native rich text (PowerPoint): a run
+count per label, then per run its text, its face string and three
+numbers – size and baseline shift (points) and glyph count (`-1` marks a
+line break, whose size is the line pitch). Empty vectors mean no runs.
+
 ### Method `mask_begin`
 
 Begin collecting a mask's content for the current viewport. Until the

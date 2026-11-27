@@ -250,6 +250,12 @@ label, then <code>x, y, w, h</code> in the glyph frame (px, y up from the box
 bottom) and an RGBA colour per rule. Empty vectors mean no rules.
 <code>gtext</code> optionally gives each label's per-glyph text for PDF
 extraction (empty: the label itself).</p>
+<p><code>nspans</code>/<code>span_text</code>/<code>span_face</code>/<code>span_num</code> optionally give each label's
+styled runs (an <code><a href="md.html">md()</a></code> label's spans), for backends that write native
+rich text (PowerPoint): a run count per label, then per run its text, its
+face string and three numbers – size and baseline shift (points) and glyph
+count (<code>-1</code> marks a line break, whose size is the line pitch). Empty
+vectors mean no runs.</p>
 </div>
 
 <div class="section">

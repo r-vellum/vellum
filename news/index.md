@@ -13,6 +13,17 @@
   editable freeform; bars, tiles and lines are still one shape each
   (VR-39).
 
+- [`md()`](https://r-vellum.github.io/vellum/reference/md.md) labels are
+  now editable text in PowerPoint output: one text run per styled span,
+  keeping its bold, italic and colour. A `^superscript^` or
+  `~subscript~` run is written as a raised or lowered run at the size of
+  the text around it, which PowerPoint and LibreOffice shrink
+  themselves. Such labels used to be glyph outlines. An
+  [`md()`](https://r-vellum.github.io/vellum/reference/md.md) label with
+  inline math, a
+  [`tex()`](https://r-vellum.github.io/vellum/reference/tex.md) label, a
+  label with a halo, and `text = "outline"` keep outlines (VR-40).
+
 ### Bug fixes
 
 - A raster image reaching far past the page now draws its visible part

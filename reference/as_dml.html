@@ -140,8 +140,10 @@ when the machine opening the deck has it and substitutes another when it does
 not; the box is anchored so a wider substitute grows away from the label's
 anchor (right-aligned tick labels stay right-aligned) rather than drifting.
 Fonts are not embedded. <code>text = "outline"</code> writes glyph outlines instead:
-identical everywhere, but no longer editable as text. <code><a href="md.html">md()</a></code> and <code><a href="tex.html">tex()</a></code>
-labels, halos and text set on a path are always outlines, as in SVG.</p>
+identical everywhere, but no longer editable as text. An <code><a href="md.html">md()</a></code> label is
+one text run per styled span (bold, italic, colour; a superscript or
+subscript as a raised or lowered run). <code><a href="tex.html">tex()</a></code> labels, <code><a href="md.html">md()</a></code> labels with
+inline math, halos and text set on a path are always outlines, as in SVG.</p>
     </div>
     <div class="section level2">
     <h2 id="what-cannot-be-expressed">What cannot be expressed<a class="anchor" aria-label="anchor" href="#what-cannot-be-expressed"></a></h2>

@@ -72,9 +72,13 @@ when it does not; the box is anchored so a wider substitute grows away
 from the label's anchor (right-aligned tick labels stay right-aligned)
 rather than drifting. Fonts are not embedded. `text = "outline"` writes
 glyph outlines instead: identical everywhere, but no longer editable as
-text. [`md()`](https://r-vellum.github.io/vellum/reference/md.md) and
+text. An [`md()`](https://r-vellum.github.io/vellum/reference/md.md)
+label is one text run per styled span (bold, italic, colour; a
+superscript or subscript as a raised or lowered run).
 [`tex()`](https://r-vellum.github.io/vellum/reference/tex.md) labels,
-halos and text set on a path are always outlines, as in SVG.
+[`md()`](https://r-vellum.github.io/vellum/reference/md.md) labels with
+inline math, halos and text set on a path are always outlines, as in
+SVG.
 
 ## What cannot be expressed
 
