@@ -449,8 +449,25 @@ test_that("a label with one text line among blank ones keeps the line pitch (VR-
   expect_identical(box(md("\n**abc**")), one)
   expect_identical(box(md("\n\n**abc**")), one)
   expect_identical(box(md("**abc**\n\n")), one)
+  # unequal blank lines on both ends
+  expect_identical(box(md("\n**abc**\n\n\n")), one)
+  expect_identical(box(md("\n\n**abc**\n\n\n\n")), one)
   # a blank line between text lines stays
   expect_identical(box(md("**a**\n\n*b*"))$spc, rep("1440", 3))
+})
+
+test_that("a CRLF line break is one break in PowerPoint", {
+  skip_if_not_installed("xml2")
+  paras <- function(lab) {
+    sc <- vl_scene(4, 2, dpi = 96) |> draw(text_grob(lab))
+    doc <- xml2::read_xml(.dml_fragment(sc)$xml)
+    ns <- xml2::xml_ns(doc)
+    xml2::xml_text(xml2::xml_find_all(doc, ".//p:txBody/a:p", ns))
+  }
+  expect_identical(paras("a\r\nb"), c("a", "b"))
+  expect_identical(paras("a\r\n\r\nb"), c("a", "", "b"))
+  expect_identical(paras(md("**a**\r\n*b*")), c("a", "b"))
+  expect_identical(paras(md("\r\n**a**")), "a")
 })
 
 test_that("a blank line keeps a label native", {

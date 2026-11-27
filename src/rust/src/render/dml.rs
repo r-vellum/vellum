@@ -2332,7 +2332,7 @@ impl DmlBackend {
                     let mut g = 0usize;
                     for (i, p) in ps.iter().enumerate() {
                         let n: usize = p.iter().map(|sp| sp.glyphs).sum();
-                        if p.iter().any(|sp| !sp.text.is_empty()) {
+                        if p.iter().any(|sp| !span_text(sp).is_empty()) {
                             nonblank.push(i);
                             lines.push((g, g + n));
                         }
@@ -2341,7 +2341,12 @@ impl DmlBackend {
                     (lines, nonblank, Vec::new())
                 }
                 None => {
-                    let mut label_lines: Vec<&str> = run.label.split('\n').collect();
+                    // A CRLF line break is one break: its `\r` is not text.
+                    let mut label_lines: Vec<&str> = run
+                        .label
+                        .split('\n')
+                        .map(|l| l.strip_suffix('\r').unwrap_or(l))
+                        .collect();
                     // vellum splits a label as `strsplit()` does, which drops
                     // one trailing empty line: "abc\n" is set as one line, so
                     // it is one paragraph here too.
@@ -2374,11 +2379,11 @@ impl DmlBackend {
         let x0 = run.ax - run.hjust * run.w;
         let mut y0 = run.ay - (1.0 - run.vjust) * run.h;
         let mut h = run.h;
-        if let Some(ps) = paras.as_ref().filter(|_| (cut.0 > 0) != (cut.1 > 0)) {
+        if let Some(ps) = paras.as_ref().filter(|_| cut.0 != cut.1) {
             // An `md()` box always reaches the label's middle, so text lines
-            // all below it (after cut blank lines) or all above it (before
-            // them) sit at one end of a taller box: shrink the box to them,
-            // keeping that end.
+            // off the middle (more blank lines cut before them than after, or
+            // the reverse) sit at one end of a taller box: shrink the box to
+            // them, keeping that end.
             let pitch = run
                 .spans
                 .iter()
@@ -2386,7 +2391,7 @@ impl DmlBackend {
                 .map_or(run.size * LINE_HEIGHT, |sp| sp.size);
             let tall = ((ps.len() - 1) as f64 * pitch + run.size) * run.dpi / 72.0;
             if tall < h {
-                if cut.0 > 0 {
+                if cut.0 > cut.1 {
                     y0 += h - tall;
                 }
                 h = tall;
@@ -2528,14 +2533,14 @@ impl DmlBackend {
                         col = *c;
                     }
                     g += sp.glyphs;
-                    if sp.text.is_empty() {
+                    if span_text(sp).is_empty() {
                         continue;
                     }
                     any = true;
                     let rpr = span_rpr(run, sp, g - sp.glyphs, s, col);
                     body.push_str(&format!(
                         "<a:r>{rpr}<a:t>{}</a:t></a:r>",
-                        dml_escape(&sp.text)
+                        dml_escape(span_text(sp))
                     ));
                 }
                 if !any {
@@ -3204,10 +3209,15 @@ fn fold_alpha(xml: &str, a: f32) -> String {
     o
 }
 
+/// A styled run's text as written: a CRLF break's `\r` at its end dropped.
+fn span_text(sp: &TextSpan) -> &str {
+    sp.text.strip_suffix('\r').unwrap_or(&sp.text)
+}
+
 /// `paras` without the blank paragraphs before its first and after its last
 /// non-blank one, and how many went from each end. All blank: kept whole.
 fn trim_blank_paras(paras: Vec<Vec<&TextSpan>>) -> (Vec<Vec<&TextSpan>>, (usize, usize)) {
-    let blank = |p: &Vec<&TextSpan>| p.iter().all(|sp| sp.text.is_empty());
+    let blank = |p: &Vec<&TextSpan>| p.iter().all(|sp| span_text(sp).is_empty());
     let Some(first) = paras.iter().position(|p| !blank(p)) else {
         return (paras, (0, 0));
     };

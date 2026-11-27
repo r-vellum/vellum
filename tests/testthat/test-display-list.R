@@ -573,6 +573,26 @@ test_that("a hatched fill is listed as exact geometry, not flagged (VL-19)", {
       expect_identical(d$kind[2], "path", info = paste(nm, v))
     }
   }
+  # a hatched marker other than a circle is one point record, which cannot
+  # carry the rules: flagged as a paint it does not reproduce
+  for (shape in c("square", "triangle", "diamond")) {
+    sc <- base() |>
+      draw(points_grob(
+        x = 0.5,
+        y = 0.5,
+        shape = shape,
+        size = vl_unit(10, "mm"),
+        key = "k",
+        gp = vl_gpar(fill = h, col = "black")
+      ))
+    d <- .dl_decode(scene_display_list(sc, version = 2))
+    expect_identical(d$kind, "point", info = shape)
+    expect_identical(d$flags, 1, info = shape)
+  }
+  # a solid marker stays exact
+  sc <- base() |>
+    draw(points_grob(0.5, 0.5, shape = "square", key = "k", gp = vl_gpar(fill = "red")))
+  expect_identical(.dl_decode(scene_display_list(sc))$flags, 0)
   # rotated and clipped to a rotated viewport: exact in version 2
   sc <- base() |>
     push(vl_viewport(width = 0.5, height = 0.5, angle = 30, clip = TRUE)) |>

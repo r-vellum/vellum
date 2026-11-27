@@ -121,6 +121,7 @@ pub(super) fn fill_or_hatch<B: RenderBackend>(
             return;
         }
     };
+    b.begin_hatch();
     // An opaque background behind the rules, when asked for: a hatch over white
     // and a hatch over the map beneath it are different designs.
     if let Some(c) = bg {

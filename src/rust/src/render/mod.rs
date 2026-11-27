@@ -705,6 +705,12 @@ pub trait RenderBackend {
     ) {
     }
 
+    /// Announce that the fill about to be painted is a hatch, expanded into a
+    /// background fill and stroked rules by the shared walk. Painting backends
+    /// ignore it; the display list flags an open marker whose paint it cannot
+    /// carry in one point record (VL-19).
+    fn begin_hatch(&mut self) {}
+
     /// Stroke a polyline / batch of disjoint segments (one `Path` whose subpaths
     /// are the lines). The default emits the single combined stroke; the raster
     /// backend overrides this with a per-segment fast path that avoids the

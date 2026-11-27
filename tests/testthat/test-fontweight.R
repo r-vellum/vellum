@@ -188,17 +188,24 @@ test_that("a weight snaps to a normal-width face first (VL-20)", {
     "ultracondensed", "extracondensed", "condensed", "semicondensed",
     "normal", "semiexpanded", "expanded", "extraexpanded", "ultraexpanded"
   )
-  faces <- function(weight, width, italic = FALSE) {
+  faces <- function(weight, width, italic = FALSE, style = NULL) {
+    # a style name that says the width, as real faces' names do
+    style <- style %||% ifelse(is.na(width) | width == "normal", "Regular", "Condensed")
     data.frame(
       weight = factor(weight, levels = wl, ordered = TRUE),
       width = factor(width, levels = wd, ordered = TRUE),
-      italic = rep(italic, length(weight))
+      italic = rep(italic, length(weight)),
+      style = rep(style, length.out = length(weight))
     )
   }
   # Helvetica Neue's upright faces on macOS: the only 900 is condensed
   hn <- faces(
     c("thin", "ultralight", "light", "normal", "medium", "bold", "bold", "heavy"),
-    c(rep("normal", 6), "semicondensed", "semicondensed")
+    c(rep("normal", 6), "semicondensed", "semicondensed"),
+    style = c(
+      "UltraLight", "Thin", "Light", "Regular", "Medium", "Bold",
+      "Condensed Bold", "Condensed Black"
+    )
   )
   expect_identical(.pick_weight(hn, FALSE, 900L), 700L)
   expect_identical(.pick_weight(hn, FALSE, 800L), 700L)
@@ -217,6 +224,21 @@ test_that("a weight snaps to a normal-width face first (VL-20)", {
   expect_identical(.pick_weight(mixed, TRUE, 400L), 900L)
   expect_identical(.pick_weight(mixed, FALSE, 550L), 700L)
   expect_identical(.pick_weight(faces(character(), character()), FALSE, 500L), 500L)
+  # a width tag the style name does not back is ignored: Sukhumvit Set's
+  # Thin is tagged semicondensed, and must stay reachable
+  sk <- faces(
+    c("thin", "light", "normal", "medium", "semibold", "bold"),
+    c("semicondensed", rep("normal", 5)),
+    style = c("Thin", "Light", "Text", "Medium", "SemiBold", "Bold")
+  )
+  expect_identical(.pick_weight(sk, FALSE, 100L), 100L)
+  # "SemiCondensed" and "Extra Expanded" styles count as other widths
+  sc <- faces(
+    c("normal", "heavy", "heavy"),
+    c("normal", "semicondensed", "extraexpanded"),
+    style = c("Regular", "SemiCondensed Black", "Extra Expanded Black")
+  )
+  expect_identical(.pick_weight(sc, FALSE, 900L), 400L)
 })
 
 test_that("Helvetica Neue at weight 900 is not the condensed face (VL-20)", {

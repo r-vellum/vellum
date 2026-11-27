@@ -23,8 +23,10 @@
 * A numeric `fontweight` snaps to the nearest weight among a family's
   normal-width faces when it has any, so `fontweight = 900` with Helvetica
   Neue on macOS draws in Bold rather than "Condensed Black", which measured
-  narrower than every lighter weight. A family with only condensed (or only
-  expanded) faces still uses them (VL-20).
+  narrower than every lighter weight. A face counts as condensed or expanded
+  only when its style name says so too, since width tags are unreliable
+  (Sukhumvit Set's Thin is tagged semicondensed). A family with only
+  condensed (or only expanded) faces still uses them (VL-20).
 
 * `vl_pattern()` takes `vl_unit()` cell sizes:
   `vl_pattern(grob, width = vl_unit(5, "mm"), height = vl_unit(5, "mm"))`
@@ -40,7 +42,8 @@
   an empty paragraph that lifted the text by half a line, since vellum sets
   that label as one line; and an `md()` label leaves out blank lines before
   or after its text, as vellum's own layout does, instead of shifting the
-  text off its place (VR-51).
+  text off its place. A CRLF line break (`"a\r\nb"`) is one break, where
+  the `\r` was written into the text and doubled the gap (VR-51).
 
 * Large circles, sectors and round-rect corners now follow their arcs to
   within a small fraction of a pixel. In PNG and PDF a circle was tiny-skia's
@@ -141,7 +144,9 @@
   is listed as the shape in the hatch's background and a path of its rules,
   both exact; a new *Hatched fills* section gives the rule, and such records
   are flagged only for the usual reasons (a group, a non-rectangular clip in
-  version 1) (VL-19).
+  version 1). A hatched point marker other than a circle is one point record
+  that cannot carry the rules: it is now flagged `1` (a paint it does not
+  reproduce), where it was listed unflagged with its hatch lost (VL-19).
 
 * New articles: "Editable PowerPoint output" (`vignette("powerpoint")`, D-9)
   and "Keyframe animation in the engine" (`vignette("animation")`, D-11),

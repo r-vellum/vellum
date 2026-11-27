@@ -79,9 +79,10 @@ transparent page. The two halves together are exactly \code{"unkeyed"}.
 \code{"keyed_flagged"} draws only the marks of the \code{"keyed"} layer that
 \code{\link[=scene_display_list]{scene_display_list()}} (\code{version = 2}, same \code{panels}) flags as not drawable
 from the list: marks under a mask, a blend mode or an effect, patterned or
-repeating-gradient fills, gradient strokes and text. A hatched fill is
-listed as exact geometry, so it is not drawn here unless something else
-flags it (see \code{\link[=scene_display_list]{scene_display_list()}}). Whole
+repeating-gradient fills, gradient strokes, text and hatched point markers
+other than circles. Any other hatched fill is listed as exact geometry, so
+it is not drawn here unless something else flags it (see
+\code{\link[=scene_display_list]{scene_display_list()}}). Whole
 nodes are drawn (every record of a node with one flagged record), and an
 opacity group holding a flagged mark goes in whole. The flagged marks fall
 into \emph{runs}: maximal stretches in paint order not interrupted by a mark the

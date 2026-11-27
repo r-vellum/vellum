@@ -21,7 +21,8 @@
 //! one layer). Masks, blend modes, effects, patterns, repeating gradients and
 //! gradient strokes stay flagged. A hatch never reaches the list as a paint:
 //! the shared walk expands it into a `bg` fill and stroked rules first, which
-//! are listed exactly like any fill and stroke.
+//! are listed exactly like any fill and stroke -- except inside a marker's
+//! point record, which cannot hold the rules and is flagged instead.
 
 use std::collections::HashMap;
 
@@ -1073,6 +1074,14 @@ impl RenderBackend for DisplayListBackend {
         self.dl.pt_shape.push(shape.min(255) as u8);
         self.push_rec(KIND_POINT, PaintKey::default(), 0, clip);
         self.marker = Some(self.dl.recs.len() - 1);
+    }
+
+    fn begin_hatch(&mut self) {
+        // A point record has one fill and one stroke, so a hatched marker's
+        // rules cannot ride on it: flag it rather than list it as exact.
+        if let Some(m) = self.marker {
+            self.dl.recs[m].flags |= FLAG_PAINT;
+        }
     }
 
     fn begin_draw_node(&mut self, node: usize) {

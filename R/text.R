@@ -1823,15 +1823,24 @@ md <- function(text) {
 # weight whatever its width, so Helvetica Neue at 900 drew in "Condensed
 # Black", narrower than every other weight. Asking for the nearest weight a
 # normal-width face has (700 there) gets that face instead. A family with no
-# normal-width face, or no width information, uses all of them. The matcher
-# still chooses between faces of equal weight itself.
+# normal-width face uses all of them. The matcher still chooses between faces
+# of equal weight itself.
+#
+# Width tags are unreliable (Sukhumvit Set's Thin is tagged semicondensed but
+# is not narrow; every face of Skia is tagged condensed), so a face counts as
+# narrow or wide only when its style name says so too.
+# A style name that says the face is narrower or wider than normal (also
+# matching "SemiCondensed", "Ultra Expanded" and the like).
+.WIDTH_STYLE <- "condensed|narrow|compressed|extended|expanded"
+
 .pick_weight <- function(faces, italic, weight) {
   same_style <- faces[faces$italic == italic, , drop = FALSE]
   if (nrow(same_style)) {
     faces <- same_style
   }
   wd <- as.character(faces$width)
-  normal <- !is.na(wd) & wd == "normal"
+  named <- grepl(.WIDTH_STYLE, as.character(faces$style), ignore.case = TRUE)
+  normal <- is.na(wd) | wd == "normal" | !named
   if (any(normal) && !all(normal)) {
     faces <- faces[normal, , drop = FALSE]
   }
