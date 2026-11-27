@@ -10,6 +10,14 @@
   320 shapes and 136 KB. Each shape stays an editable freeform; bars, tiles
   and lines are still one shape each (VR-39).
 
+* `md()` labels are now editable text in PowerPoint output: one text run per
+  styled span, keeping its bold, italic and colour. A `^superscript^` or
+  `~subscript~` run is written as a raised or lowered run at the size of the
+  text around it, which PowerPoint and LibreOffice shrink themselves. Such
+  labels used to be glyph outlines. An `md()` label with inline math, a
+  `tex()` label, a label with a halo, and `text = "outline"` keep outlines
+  (VR-40).
+
 ## Bug fixes
 
 * A raster image reaching far past the page now draws its visible part in

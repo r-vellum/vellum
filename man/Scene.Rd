@@ -155,6 +155,13 @@ label, then \verb{x, y, w, h} in the glyph frame (px, y up from the box
 bottom) and an RGBA colour per rule. Empty vectors mean no rules.
 \code{gtext} optionally gives each label's per-glyph text for PDF
 extraction (empty: the label itself).
+
+\code{nspans}/\code{span_text}/\code{span_face}/\code{span_num} optionally give each label's
+styled runs (an \code{md()} label's spans), for backends that write native
+rich text (PowerPoint): a run count per label, then per run its text, its
+face string and three numbers -- size and baseline shift (points) and glyph
+count (\code{-1} marks a line break, whose size is the line pitch). Empty
+vectors mean no runs.
 }
 
 \subsection{Method \code{mask_begin}}{

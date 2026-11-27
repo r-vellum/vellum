@@ -1286,10 +1286,29 @@ md <- function(text) {
   gpath <- character(0)
   gface <- integer(0)
   cols <- character(0)
+  # The styled runs as the backend can write them as native text (PowerPoint
+  # text runs, VR-40): text, face, size and baseline shift (points) and glyph
+  # count per run; a line break is a run with `ng = -1` whose size is the line
+  # pitch. The shift is where the run's baseline really sits above the line's:
+  # a run's glyphs are placed from its box bottom, which lies higher in a
+  # smaller font, so a superscript's baseline rises less than its `dy`.
+  ref_yoff <- NULL
+  sp_text <- character(0)
+  sp_face <- character(0)
+  sp_size <- numeric(0)
+  sp_dy <- numeric(0)
+  sp_ng <- integer(0)
   wmax <- 0
   top <- 0
   bot <- 0
   for (li in seq_len(nl)) {
+    if (li > 1L) {
+      sp_text <- c(sp_text, "")
+      sp_face <- c(sp_face, "")
+      sp_size <- c(sp_size, lead)
+      sp_dy <- c(sp_dy, 0)
+      sp_ng <- c(sp_ng, -1L)
+    }
     loff <- ((nl - 1) / 2 - (li - 1)) * lead # line baseline, centred about 0 (+up)
     adv <- 0
     runs <- Filter(function(r) nzchar(r$text), lines[[li]])
@@ -1306,6 +1325,20 @@ md <- function(text) {
         features
       )[[1]]
       dyp <- run$dy * fontsize + loff
+      sp_text <- c(sp_text, run$text)
+      sp_face <- c(sp_face, .md_run_face(fontface, run))
+      sp_size <- c(sp_size, rsize)
+      rise <- run$dy * fontsize
+      if (run$dy != 0 && sh$n > 0L) {
+        if (is.null(ref_yoff)) {
+          bf <- .rs_face(fontface)
+          ref <- .shape_cached("x", family, bf$italic, bf$weight, fontsize, features)[[1]]
+          ref_yoff <- if (ref$n > 0L) ref$yoff[1] else 0
+        }
+        rise <- rise + sh$yoff[1] - ref_yoff
+      }
+      sp_dy <- c(sp_dy, rise)
+      sp_ng <- c(sp_ng, as.integer(sh$n))
       if (sh$n > 0L) {
         gid <- c(gid, sh$index)
         gx <- c(gx, sh$xoff + adv)
@@ -1344,7 +1377,14 @@ md <- function(text) {
     h = top - bot,
     baseline = lift +
       (nl - 1) / 2 * lead +
-      .md_strut_depth(family, fontface, fontsize)
+      .md_strut_depth(family, fontface, fontsize),
+    spans = list(
+      text = sp_text,
+      face = sp_face,
+      size = sp_size,
+      dy = sp_dy,
+      ng = sp_ng
+    )
   )
 }
 
@@ -1625,6 +1665,12 @@ md <- function(text) {
   rcol <- integer(0)
   nodelab <- character(np)
   gtext <- character(np)
+  # Styled runs (`.md_compose()`'s `spans`) per label, for backends that write
+  # native rich text. A label without them (math, tex()) sends a zero count.
+  nspan <- integer(np)
+  sp_text <- character(0)
+  sp_face <- character(0)
+  sp_num <- numeric(0)
   for (j in seq_len(np)) {
     g <- comp[[keytxt[j]]]
     ng <- length(g$gid)
@@ -1633,6 +1679,13 @@ md <- function(text) {
     h[j] <- g$h * scale
     nodelab[j] <- g$text
     gtext[j] <- g$gtext
+    sp <- g$spans
+    if (!is.null(sp) && length(sp$text)) {
+      nspan[j] <- length(sp$text)
+      sp_text <- c(sp_text, sp$text)
+      sp_face <- c(sp_face, sp$face)
+      sp_num <- c(sp_num, rbind(sp$size, sp$dy, sp$ng))
+    }
     nr <- length(g$rx)
     nrule[j] <- nr
     if (nr > 0L) {
@@ -1689,7 +1742,11 @@ md <- function(text) {
     if (any(nrule > 0L)) nrule else integer(0),
     rules,
     rcol,
-    if (any(nzchar(gtext))) gtext else character(0)
+    if (any(nzchar(gtext))) gtext else character(0),
+    if (any(nspan > 0L)) nspan else integer(0),
+    sp_text,
+    sp_face,
+    sp_num
   )
   invisible()
 }

@@ -419,6 +419,13 @@ rs_math_layout <- function(src, path, face, size, display) .Call(wrap__rs_math_l
 #'bottom) and an RGBA colour per rule. Empty vectors mean no rules.
 #'`gtext` optionally gives each label's per-glyph text for PDF
 #'extraction (empty: the label itself).
+#'
+#'`nspans`/`span_text`/`span_face`/`span_num` optionally give each label's
+#'styled runs (an `md()` label's spans), for backends that write native
+#'rich text (PowerPoint): a run count per label, then per run its text, its
+#'face string and three numbers -- size and baseline shift (points) and glyph
+#'count (`-1` marks a line break, whose size is the line pitch). Empty
+#'vectors mean no runs.
 #'}
 #'
 #'\subsection{Method `mask_begin`}{
@@ -699,7 +706,7 @@ Scene$text_path <- function(px, py, pxu, pxoff, pyu, pyoff, offset, hjust, vjust
 
 Scene$texts <- function(x, y, xu, xoff, yu, yoff, rot, hjust, vjust, w, h, nper, gid, gx, gy, gsize, gpath, gface, label, family, face, size, col, alpha, halo_col, halo_width, keys) .Call(wrap__Scene__texts, self, x, y, xu, xoff, yu, yoff, rot, hjust, vjust, w, h, nper, gid, gx, gy, gsize, gpath, gface, label, family, face, size, col, alpha, halo_col, halo_width, keys)
 
-Scene$texts_rich <- function(x, y, xu, xoff, yu, yoff, rot, hjust, vjust, w, h, nper, gid, gx, gy, gsize, gpath, gface, gcol, label, family, face, size, col, alpha, halo_col, halo_width, keys, nrules, rules, rcol, gtext) .Call(wrap__Scene__texts_rich, self, x, y, xu, xoff, yu, yoff, rot, hjust, vjust, w, h, nper, gid, gx, gy, gsize, gpath, gface, gcol, label, family, face, size, col, alpha, halo_col, halo_width, keys, nrules, rules, rcol, gtext)
+Scene$texts_rich <- function(x, y, xu, xoff, yu, yoff, rot, hjust, vjust, w, h, nper, gid, gx, gy, gsize, gpath, gface, gcol, label, family, face, size, col, alpha, halo_col, halo_width, keys, nrules, rules, rcol, gtext, nspans, span_text, span_face, span_num) .Call(wrap__Scene__texts_rich, self, x, y, xu, xoff, yu, yoff, rot, hjust, vjust, w, h, nper, gid, gx, gy, gsize, gpath, gface, gcol, label, family, face, size, col, alpha, halo_col, halo_width, keys, nrules, rules, rcol, gtext, nspans, span_text, span_face, span_num)
 
 Scene$mask_begin <- function(kind) .Call(wrap__Scene__mask_begin, self, kind)
 

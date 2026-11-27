@@ -656,6 +656,7 @@ pub(super) fn draw_text_on_path<B: RenderBackend>(
                 // plain strings), so a path run never has rules or gtext.
                 rules: &[],
                 gtext: "",
+                spans: &[],
                 halo: if halo_pass { run.halo } else { None },
                 label: glyph_label,
                 family: run.family,

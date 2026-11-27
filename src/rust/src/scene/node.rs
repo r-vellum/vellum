@@ -133,6 +133,9 @@ pub(super) enum Node {
         /// from `label` (a `tex()` label keeps its TeX source in `label`
         /// for queries and lint). Empty means "use `label`".
         gtext: String,
+        /// Styled runs of an `md()` label (see `TextSpan`), for backends that
+        /// write native rich text. Empty for every other label.
+        spans: Vec<crate::render::TextSpan>,
         /// Optional halo (shadowtext): `(colour, width_px)`. The glyph outlines are
         /// stroked in this colour *under* the fill, so a label stays legible over
         /// busy marks or map imagery. `None` (the default) leaves every backend's
