@@ -51,7 +51,7 @@
 <li><hr class="dropdown-divider"></li>
     <li><h6 class="dropdown-header" data-toc-skip>Concepts</h6></li>
     <li><a class="dropdown-item" href="../articles/scene-and-paint.html">The scene graph and the paint model</a></li>
-    <li><a class="dropdown-item" href="../articles/typography.html">Typography: layout, halos and OpenType features</a></li>
+    <li><a class="dropdown-item" href="../articles/typography.html">Typography: layout, halos, weights and OpenType features</a></li>
     <li><a class="dropdown-item" href="../articles/render-quality.html">Render quality: accessibility, crisp edges, group effects</a></li>
     <li><a class="dropdown-item" href="../articles/retained-mode.html">Asking a scene what it drew: read-back, picking, and editing</a></li>
     <li><a class="dropdown-item" href="../articles/accessible-output.html">Accessible output, and fonts you can trust</a></li>
@@ -65,6 +65,8 @@
     <li><hr class="dropdown-divider"></li>
     <li><h6 class="dropdown-header" data-toc-skip>Output</h6></li>
     <li><a class="dropdown-item" href="../articles/output-formats.html">Choosing an output format</a></li>
+    <li><a class="dropdown-item" href="../articles/powerpoint.html">Editable PowerPoint output</a></li>
+    <li><a class="dropdown-item" href="../articles/animation.html">Keyframe animation in the engine</a></li>
     <li><hr class="dropdown-divider"></li>
     <li><h6 class="dropdown-header" data-toc-skip>Interop</h6></li>
     <li><a class="dropdown-item" href="../articles/coming-from-grid.html">Coming from grid</a></li>
@@ -221,6 +223,40 @@ those. And the guest’s <code>npc</code> coordinates become relative to
 the region, so a guest built on a square page and dropped into a wide
 region will stretch; match the aspect, or build the guest at the aspect
 you want.</p>
+<p>A guest whose content has a fixed aspect ratio, such as a map or a
+plot with a fixed coordinate ratio, can declare it, and <code>fit</code>
+decides what to do with the declaration. The guest carries the attribute
+<code>vellum_content_fit</code>:
+<code>c(fixed_w, fixed_h, null_w, null_h)</code>, the fixed width and
+height of its frame in mm and the weights of its aspect-locked tracks.
+vellumplot sets it on an aspect-locked plot; here it is set by hand on a
+square guest. With <code>fit = "auto"</code> (the default) the region
+shrinks around the content, keeping its centre, so the guest’s
+background and border hug it. <code>fit = "fill"</code> stretches the
+guest to the region as before, and <code>fit = "contain"</code> is
+<code>"auto"</code> but an error for a guest that declares nothing.</p>
+<div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">square</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/vl_scene.html">vl_scene</a></span><span class="op">(</span><span class="fl">1</span>, <span class="fl">1</span><span class="op">)</span> <span class="op">|&gt;</span></span>
+<span>  <span class="fu"><a href="../reference/vl_scene.html">draw</a></span><span class="op">(</span><span class="fu"><a href="../reference/grob.html">rect_grob</a></span><span class="op">(</span>gp <span class="op">=</span> <span class="fu"><a href="../reference/vl_gpar.html">vl_gpar</a></span><span class="op">(</span>fill <span class="op">=</span> <span class="st">"#eef2f6"</span>, col <span class="op">=</span> <span class="st">"grey40"</span><span class="op">)</span><span class="op">)</span><span class="op">)</span> <span class="op">|&gt;</span></span>
+<span>  <span class="fu"><a href="../reference/vl_scene.html">draw</a></span><span class="op">(</span><span class="fu"><a href="../reference/grob.html">rect_grob</a></span><span class="op">(</span>width <span class="op">=</span> <span class="fl">0.6</span>, height <span class="op">=</span> <span class="fl">0.6</span>, gp <span class="op">=</span> <span class="fu"><a href="../reference/vl_gpar.html">vl_gpar</a></span><span class="op">(</span>fill <span class="op">=</span> <span class="st">"tomato"</span>, col <span class="op">=</span> <span class="cn">NA</span><span class="op">)</span><span class="op">)</span><span class="op">)</span> <span class="op">|&gt;</span></span>
+<span>  <span class="fu"><a href="../reference/vl_scene.html">draw</a></span><span class="op">(</span><span class="fu"><a href="../reference/grob.html">segments_grob</a></span><span class="op">(</span><span class="fl">0</span>, <span class="fl">0</span>, <span class="fl">1</span>, <span class="fl">1</span>, gp <span class="op">=</span> <span class="fu"><a href="../reference/vl_gpar.html">vl_gpar</a></span><span class="op">(</span>col <span class="op">=</span> <span class="st">"grey40"</span><span class="op">)</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/base/attr.html" class="external-link">attr</a></span><span class="op">(</span><span class="va">square</span>, <span class="st">"vellum_content_fit"</span><span class="op">)</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0</span>, <span class="fl">0</span>, <span class="fl">1</span>, <span class="fl">1</span><span class="op">)</span> <span class="co"># no frame, one square track</span></span>
+<span></span>
+<span><span class="va">page</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/vl_scene.html">vl_scene</a></span><span class="op">(</span><span class="fl">6</span>, <span class="fl">2.2</span>, dpi <span class="op">=</span> <span class="fl">96</span>, bg <span class="op">=</span> <span class="st">"white"</span><span class="op">)</span> <span class="op">|&gt;</span></span>
+<span>  <span class="fu"><a href="../reference/vl_scene.html">draw</a></span><span class="op">(</span><span class="fu"><a href="../reference/grob.html">rect_grob</a></span><span class="op">(</span>x <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.27</span>, <span class="fl">0.73</span><span class="op">)</span>, width <span class="op">=</span> <span class="fl">0.42</span>, height <span class="op">=</span> <span class="fl">0.8</span>,</span>
+<span>                 gp <span class="op">=</span> <span class="fu"><a href="../reference/vl_gpar.html">vl_gpar</a></span><span class="op">(</span>fill <span class="op">=</span> <span class="cn">NA</span>, col <span class="op">=</span> <span class="st">"grey75"</span>, lty <span class="op">=</span> <span class="st">"dashed"</span><span class="op">)</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="fu"><a href="../reference/display.html">display</a></span><span class="op">(</span></span>
+<span>  <span class="va">page</span> <span class="op">|&gt;</span></span>
+<span>    <span class="fu"><a href="../reference/scene_inset.html">scene_inset</a></span><span class="op">(</span><span class="va">square</span>, x <span class="op">=</span> <span class="fl">0.27</span>, width <span class="op">=</span> <span class="fl">0.42</span>, height <span class="op">=</span> <span class="fl">0.8</span>, fit <span class="op">=</span> <span class="st">"fill"</span><span class="op">)</span> <span class="op">|&gt;</span></span>
+<span>    <span class="fu"><a href="../reference/scene_inset.html">scene_inset</a></span><span class="op">(</span><span class="va">square</span>, x <span class="op">=</span> <span class="fl">0.73</span>, width <span class="op">=</span> <span class="fl">0.42</span>, height <span class="op">=</span> <span class="fl">0.8</span>, fit <span class="op">=</span> <span class="st">"auto"</span><span class="op">)</span></span>
+<span><span class="op">)</span></span></code></pre></div>
+<p><img src="scenes-as-values_files/figure-html/unnamed-chunk-8-1.png" class="r-plt" alt="" width="576"></p>
+<p>The dashed boxes are the two regions. On the left,
+<code>"fill"</code> stretches the square and its diagonal to the wide
+region; on the right, <code>"auto"</code> keeps them square. Fitting
+needs the region’s physical size, so it applies when the region is
+placed at the host’s top level, in <code>npc</code> numbers or absolute
+units; inside a pushed viewport the guest fills its region.</p>
 <p>What vellum deliberately does <em>not</em> decide is the
 <strong>policy</strong>: whether panel edges should align across
 composed plots, whether axes should be shared. Those are properties of

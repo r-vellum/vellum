@@ -51,7 +51,7 @@
 <li><hr class="dropdown-divider"></li>
     <li><h6 class="dropdown-header" data-toc-skip>Concepts</h6></li>
     <li><a class="dropdown-item" href="../articles/scene-and-paint.html">The scene graph and the paint model</a></li>
-    <li><a class="dropdown-item" href="../articles/typography.html">Typography: layout, halos and OpenType features</a></li>
+    <li><a class="dropdown-item" href="../articles/typography.html">Typography: layout, halos, weights and OpenType features</a></li>
     <li><a class="dropdown-item" href="../articles/render-quality.html">Render quality: accessibility, crisp edges, group effects</a></li>
     <li><a class="dropdown-item" href="../articles/retained-mode.html">Asking a scene what it drew: read-back, picking, and editing</a></li>
     <li><a class="dropdown-item" href="../articles/accessible-output.html">Accessible output, and fonts you can trust</a></li>
@@ -65,6 +65,8 @@
     <li><hr class="dropdown-divider"></li>
     <li><h6 class="dropdown-header" data-toc-skip>Output</h6></li>
     <li><a class="dropdown-item" href="../articles/output-formats.html">Choosing an output format</a></li>
+    <li><a class="dropdown-item" href="../articles/powerpoint.html">Editable PowerPoint output</a></li>
+    <li><a class="dropdown-item" href="../articles/animation.html">Keyframe animation in the engine</a></li>
     <li><hr class="dropdown-divider"></li>
     <li><h6 class="dropdown-header" data-toc-skip>Interop</h6></li>
     <li><a class="dropdown-item" href="../articles/coming-from-grid.html">Coming from grid</a></li>
@@ -176,8 +178,8 @@ to capture its grob tree, or pass a captured grob to
 <p>Reach for <code><a href="../reference/as_vellum.html">as_vellum()</a></code> / <code><a href="../reference/as_vellum.html">render_grid()</a></code> when
 you already have grid, ggplot2, or lattice output and want vellum’s
 deterministic, multi-backend rendering (for example byte-stable PNGs for
-snapshot tests, or one plot emitted to PNG, SVG, and PDF from the same
-source).</p>
+snapshot tests, or one plot emitted to PNG, SVG, PDF, and PowerPoint
+from the same source).</p>
 <p>Build with the native <code><a href="../reference/vl_scene.html">vl_scene()</a></code> API instead when you
 want what the retained scene graph offers: named and editable nodes,
 hit-testing, and a per-element <code><a href="../reference/scene_model.html">scene_model()</a></code> (see

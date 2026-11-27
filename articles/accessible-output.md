@@ -104,6 +104,27 @@ the tagging and the
 [`describe()`](https://r-vellum.github.io/vellum/reference/describe.md)
 text becomes the root figure’s alt.
 
+### PowerPoint
+
+A slide gets less structure than a PDF. In PowerPoint output, written
+with `render(scene, "deck.pptx")`,
+[`pptx_pages()`](https://r-vellum.github.io/vellum/reference/pptx_pages.md)
+or officer, the scene becomes one group of shapes. Its alt text is the
+[`describe()`](https://r-vellum.github.io/vellum/reference/describe.md)
+description, or the title when there is no description. This is the text
+PowerPoint’s own Alt Text pane shows and a screen reader announces for
+the graphic.
+[`render()`](https://r-vellum.github.io/vellum/reference/vl_scene.md)
+and
+[`pptx_pages()`](https://r-vellum.github.io/vellum/reference/pptx_pages.md)
+name the group after the title; through
+[`officer::ph_with()`](https://davidgohel.github.io/officer/reference/ph_with.html)
+it takes the placeholder’s name instead. The per-mark `role` and `name`
+are not written to the slide. Text labels stay real text in the slide,
+so a screen reader can still read them, except for the labels drawn as
+outlines (see
+[`vignette("powerpoint")`](https://r-vellum.github.io/vellum/articles/powerpoint.md)).
+
 ## Fonts you can trust
 
 `DESIGN.md` opens by claiming identical pixels on every OS and in CI.
@@ -211,5 +232,7 @@ tail item.
   has any glyph at all on this machine.
 - [`vignette("render-quality")`](https://r-vellum.github.io/vellum/articles/render-quality.md):
   colour-vision simulation.
+- [`vignette("powerpoint")`](https://r-vellum.github.io/vellum/articles/powerpoint.md):
+  editable slides, and what becomes a picture.
 - [`vignette("scene-contract")`](https://r-vellum.github.io/vellum/articles/scene-contract.md):
   what the `id`/`role`/`name` channel promises to layers above vellum.

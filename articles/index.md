@@ -4,7 +4,7 @@
 
 - [The scene graph and the paint
   model](https://r-vellum.github.io/vellum/articles/scene-and-paint.md):
-- [Typography: layout, halos and OpenType
+- [Typography: layout, halos, weights and OpenType
   features](https://r-vellum.github.io/vellum/articles/typography.md):
 - [Render quality: accessibility, crisp edges, group
   effects](https://r-vellum.github.io/vellum/articles/render-quality.md):
@@ -30,6 +30,10 @@
 
 - [Choosing an output
   format](https://r-vellum.github.io/vellum/articles/output-formats.md):
+- [Editable PowerPoint
+  output](https://r-vellum.github.io/vellum/articles/powerpoint.md):
+- [Keyframe animation in the
+  engine](https://r-vellum.github.io/vellum/articles/animation.md):
 
 ### Interop
 

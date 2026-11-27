@@ -97,8 +97,8 @@ Reach for
 [`render_grid()`](https://r-vellum.github.io/vellum/reference/as_vellum.md)
 when you already have grid, ggplot2, or lattice output and want vellum’s
 deterministic, multi-backend rendering (for example byte-stable PNGs for
-snapshot tests, or one plot emitted to PNG, SVG, and PDF from the same
-source).
+snapshot tests, or one plot emitted to PNG, SVG, PDF, and PowerPoint
+from the same source).
 
 Build with the native
 [`vl_scene()`](https://r-vellum.github.io/vellum/reference/vl_scene.md)

@@ -1,4 +1,4 @@
-# Typography: layout, halos and OpenType features
+# Typography: layout, halos, weights and OpenType features
 
 vellum ships the shaper and the font tables in-process, and it measures
 text when a scene is *built* rather than when it is drawn. Between them,
@@ -154,9 +154,10 @@ space until the viewport’s pixel extent is known.
 
 On-path text is an ordinary text node with a baseline attached, so
 everything else still applies — halos, features, colour, clipping, and
-all three backends. The run is fanned out into one glyph per position at
-draw time, so SVG output is still real `<text>` and PDF still carries
-copyable text:
+every output format. The run is fanned out into one glyph per position
+at draw time, so SVG output is still real `<text>` and PDF still carries
+copyable text. PowerPoint cannot set text along a curve, so there it is
+drawn as glyph outlines:
 
 ``` r
 
@@ -298,6 +299,72 @@ display(
 
 ![](typography_files/figure-html/unnamed-chunk-10-1.png)
 
+## Font weight
+
+`fontface` knows two weights, plain and bold. Many families ship more: a
+thin, a light, a medium, a semi-bold, a black. `vl_gpar(fontweight = )`
+picks one, as a number from 100 to 900 in CSS numbering (300 light, 400
+regular, 600 semi-bold, 700 bold, 900 black) or as a CSS name such as
+`"light"` or `"semi-bold"`.
+
+``` r
+
+w <- c(thin = 100, light = 300, regular = 400, "semi-bold" = 600,
+       bold = 700, black = 900)
+s <- vl_scene(6, 1.4, dpi = 96, bg = "white")
+for (i in seq_along(w)) {
+  s <- s |>
+    draw(text_grob("Aa", x = (i - 0.5) / 6, y = 0.62,
+                   gp = vl_gpar(fontfamily = family, fontsize = 28,
+                                fontweight = w[[i]]))) |>
+    draw(text_grob(paste(w[[i]], names(w)[i]), x = (i - 0.5) / 6, y = 0.2,
+                   gp = vl_gpar(fontfamily = family, fontsize = 9, col = "grey40")))
+}
+display(s)
+```
+
+![](typography_files/figure-html/unnamed-chunk-12-1.png)
+
+The face is chosen through systemfonts. A family without the exact
+weight uses its nearest installed one, so on a family that has only
+regular and bold the lighter numbers above draw regular. Fonts added for
+the session with
+[`systemfonts::add_fonts()`](https://systemfonts.r-lib.org/reference/add_fonts.html)
+or
+[`systemfonts::require_font()`](https://systemfonts.r-lib.org/reference/require_font.html)
+count as installed.
+
+The weight sits beside `fontface` rather than replacing it. When set, it
+replaces the bold that `fontface` implies, and the italic part still
+applies, so `fontface = "italic", fontweight = 300` is light italic.
+Rich labels follow it too: an
+[`md()`](https://r-vellum.github.io/vellum/reference/md.md) or
+[`tex()`](https://r-vellum.github.io/vellum/reference/tex.md) label is
+drawn at the weight, and a `**bold**` run inside an
+[`md()`](https://r-vellum.github.io/vellum/reference/md.md) label is
+drawn at least at 700.
+
+Measurement follows the weight, as it follows features.
+[`vl_strwidth()`](https://r-vellum.github.io/vellum/reference/vl_strwidth.md)
+takes the same `fontweight`, and
+[`grobwidth()`](https://r-vellum.github.io/vellum/reference/grobwidth.md)
+of a text grob uses the weight in its
+[`vl_gpar()`](https://r-vellum.github.io/vellum/reference/vl_gpar.md):
+
+``` r
+
+sapply(c(light = 300, regular = 400, bold = 700), function(wt) {
+  vl_strwidth("Weight changes width", family, fontsize = 14, unit = "mm",
+              fontweight = wt)
+})
+#>    light  regular     bold 
+#> 54.71914 54.71914 61.94557
+```
+
+Text with no `fontweight` draws exactly as before, and its scene spec
+and hash do not change. In native SVG text the weight is written as
+`font-weight`.
+
 ## Math
 
 [`tex()`](https://r-vellum.github.io/vellum/reference/tex.md) takes TeX
@@ -321,7 +388,7 @@ display(
 )
 ```
 
-![](typography_files/figure-html/unnamed-chunk-11-1.png)
+![](typography_files/figure-html/unnamed-chunk-14-1.png)
 
 Like [`md()`](https://r-vellum.github.io/vellum/reference/md.md), a
 formula is measured exactly as it is drawn, so a
@@ -347,7 +414,7 @@ display(
 )
 ```
 
-![](typography_files/figure-html/unnamed-chunk-12-1.png)
+![](typography_files/figure-html/unnamed-chunk-15-1.png)
 
 The `$` rules are pandoc’s, with a stricter close: the opening `$` must
 be followed by a non-space, and the closing one preceded by a non-space
@@ -383,7 +450,7 @@ display(
 )
 ```
 
-![](typography_files/figure-html/unnamed-chunk-13-1.png)
+![](typography_files/figure-html/unnamed-chunk-16-1.png)
 
 One difference from base graphics: single letters are set in math
 italic, as TeX sets them; wrap them in `plain()` for upright letters.

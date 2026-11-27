@@ -283,6 +283,45 @@ vl_nearest(region, 0.5, 0.4)
 #> 1 tri polygon    0
 ```
 
+### Brushing and lasso selection
+
+[`vl_brush()`](https://r-vellum.github.io/vellum/reference/vl_brush.md)
+selects the keyed marks that meet a rectangle, and
+[`vl_lasso()`](https://r-vellum.github.io/vellum/reference/vl_brush.md)
+the ones that meet a free-form polygon. Like
+[`vl_nearest()`](https://r-vellum.github.io/vellum/reference/vl_nearest.md),
+they test the real geometry, so the diagonal is selected only when the
+line itself enters the region, not because the region is inside its
+bounding box:
+
+``` r
+
+vl_brush(demo, xmin = 0.7, xmax = 0.95, ymin = 0.05, ymax = 0.3) # the corner only
+#>      key  kind
+#> 1 corner point
+vl_brush(demo, xmin = 0.4, xmax = 0.6, ymin = 0.4, ymax = 0.6)   # crosses the line
+#>        key    kind
+#> 1 diagonal segment
+vl_lasso(demo, x = c(0.6, 0.98, 0.98), y = c(0.02, 0.02, 0.4))
+#>      key  kind
+#> 1 corner point
+```
+
+`mode` sets how a mark has to meet the region: `"intersect"` (the
+default, any part touches it), `"contain"` (all of it inside) or
+`"centre"` (the centre of its bounding box inside, the rule
+vellumwidget’s client-side lasso uses, so a Shiny server can reproduce a
+selection made in the browser exactly).
+
+The first query on a scene builds a spatial index over its keyed
+elements, and every later
+[`vl_nearest()`](https://r-vellum.github.io/vellum/reference/vl_nearest.md),
+[`vl_brush()`](https://r-vellum.github.io/vellum/reference/vl_brush.md)
+or
+[`vl_lasso()`](https://r-vellum.github.io/vellum/reference/vl_brush.md)
+on the same scene reuses it, so a server answering a stream of brush
+events pays for the index once.
+
 ### For a host that cannot ask
 
 A browser cannot call back into R on every mouse move.
@@ -338,8 +377,10 @@ Ranked by how much of it you cannot get elsewhere:
 - **any mark can be made addressable** — including lines, polygons and
   labels, which is what lets a whole series or an annotation be a thing
   the user can point at;
-- marks can be picked by their **true geometry**
-  ([`vl_nearest()`](https://r-vellum.github.io/vellum/reference/vl_nearest.md)),
+- marks can be picked and brushed by their **true geometry**
+  ([`vl_nearest()`](https://r-vellum.github.io/vellum/reference/vl_nearest.md),
+  [`vl_brush()`](https://r-vellum.github.io/vellum/reference/vl_brush.md),
+  [`vl_lasso()`](https://r-vellum.github.io/vellum/reference/vl_brush.md)),
   or that geometry handed to a client to do it itself
   ([`element_geometry()`](https://r-vellum.github.io/vellum/reference/element_geometry.md)),
   so a diagonal is not matched from the far corner of its bounding box;

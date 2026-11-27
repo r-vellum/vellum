@@ -108,9 +108,10 @@ guessed.
 Any `fill` in
 [`vl_gpar()`](https://r-vellum.github.io/vellum/reference/vl_gpar.md)
 can be more than a flat colour — and so can `col`. The same three paint
-types work identically on the raster, SVG, and PDF backends (with the
-documented exception that the PDF backend does not yet rasterise
-patterns).
+types work identically on the raster, SVG, and PDF backends. PowerPoint
+keeps gradients as native gradient fills and writes a pattern as a tiled
+picture fill (see
+[`vignette("output-formats")`](https://r-vellum.github.io/vellum/articles/output-formats.md)).
 
 ### Gradients
 

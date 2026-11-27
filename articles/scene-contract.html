@@ -51,7 +51,7 @@
 <li><hr class="dropdown-divider"></li>
     <li><h6 class="dropdown-header" data-toc-skip>Concepts</h6></li>
     <li><a class="dropdown-item" href="../articles/scene-and-paint.html">The scene graph and the paint model</a></li>
-    <li><a class="dropdown-item" href="../articles/typography.html">Typography: layout, halos and OpenType features</a></li>
+    <li><a class="dropdown-item" href="../articles/typography.html">Typography: layout, halos, weights and OpenType features</a></li>
     <li><a class="dropdown-item" href="../articles/render-quality.html">Render quality: accessibility, crisp edges, group effects</a></li>
     <li><a class="dropdown-item" href="../articles/retained-mode.html">Asking a scene what it drew: read-back, picking, and editing</a></li>
     <li><a class="dropdown-item" href="../articles/accessible-output.html">Accessible output, and fonts you can trust</a></li>
@@ -65,6 +65,8 @@
     <li><hr class="dropdown-divider"></li>
     <li><h6 class="dropdown-header" data-toc-skip>Output</h6></li>
     <li><a class="dropdown-item" href="../articles/output-formats.html">Choosing an output format</a></li>
+    <li><a class="dropdown-item" href="../articles/powerpoint.html">Editable PowerPoint output</a></li>
+    <li><a class="dropdown-item" href="../articles/animation.html">Keyframe animation in the engine</a></li>
     <li><hr class="dropdown-divider"></li>
     <li><h6 class="dropdown-header" data-toc-skip>Interop</h6></li>
     <li><a class="dropdown-item" href="../articles/coming-from-grid.html">Coming from grid</a></li>
@@ -751,6 +753,165 @@ non-pannable panels and other backends are unchanged.</p>
 </div>
 </div>
 <div class="section level2">
+<h2 id="split-rendering-for-hosts">Split rendering for hosts<a class="anchor" aria-label="anchor" href="#split-rendering-for-hosts"></a>
+</h2>
+<p>A host that draws many marks does not want them all as SVG elements.
+vellumwidget splits a scene into layers instead: the furniture
+(background, gridlines, axes, legends) as SVG, and the keyed marks as a
+PNG, or drawn by the browser itself from a display list. Every layer is
+drawn on the same page, with the same transforms and clips, so the
+layers overlay pixel for pixel.</p>
+<div class="section level3">
+<h3 id="layer-in-scene_svg-and-scene_png">
+<code>layer =</code> in <code>scene_svg()</code> and
+<code>scene_png()</code><a class="anchor" aria-label="anchor" href="#layer-in-scene_svg-and-scene_png"></a>
+</h3>
+<table class="table">
+<colgroup>
+<col width="50%">
+<col width="50%">
+</colgroup>
+<thead><tr class="header">
+<th><code>layer</code></th>
+<th>draws</th>
+</tr></thead>
+<tbody>
+<tr class="odd">
+<td>
+<code>"all"</code> (default)</td>
+<td>the whole scene</td>
+</tr>
+<tr class="even">
+<td><code>"keyed"</code></td>
+<td>only the marks with a <code>key</code>, on a transparent page</td>
+</tr>
+<tr class="odd">
+<td><code>"unkeyed"</code></td>
+<td>everything else</td>
+</tr>
+<tr class="even">
+<td><code>"unkeyed_below"</code></td>
+<td>the unkeyed elements painted before the marks</td>
+</tr>
+<tr class="odd">
+<td><code>"unkeyed_above"</code></td>
+<td>the unkeyed elements painted after the marks, on a transparent
+page</td>
+</tr>
+<tr class="even">
+<td><code>"keyed_flagged"</code></td>
+<td>only the keyed marks the display list cannot draw exactly (see
+below), on a transparent page</td>
+</tr>
+</tbody>
+</table>
+<p><code>"keyed"</code> over <code>"unkeyed"</code> reproduces the full
+render, except that an unkeyed element painted <em>after</em> a mark
+ends up under it. Stacking <code>"unkeyed_below"</code>,
+<code>"keyed"</code> and <code>"unkeyed_above"</code> keeps that order
+too. In this scene the dashed reference line is drawn after the points,
+so it belongs to the top layer:</p>
+<div class="sourceCode" id="cb11"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">split</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/vl_scene.html">vl_scene</a></span><span class="op">(</span><span class="fl">3</span>, <span class="fl">1.8</span>, dpi <span class="op">=</span> <span class="fl">96</span>, bg <span class="op">=</span> <span class="st">"white"</span><span class="op">)</span> <span class="op">|&gt;</span></span>
+<span>  <span class="fu"><a href="../reference/vl_scene.html">push</a></span><span class="op">(</span><span class="fu"><a href="../reference/vl_viewport.html">vl_viewport</a></span><span class="op">(</span>name <span class="op">=</span> <span class="st">"panel"</span>, xscale <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0</span>, <span class="fl">10</span><span class="op">)</span>, yscale <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0</span>, <span class="fl">10</span><span class="op">)</span><span class="op">)</span><span class="op">)</span> <span class="op">|&gt;</span></span>
+<span>  <span class="fu"><a href="../reference/vl_scene.html">draw</a></span><span class="op">(</span><span class="fu"><a href="../reference/grob.html">rect_grob</a></span><span class="op">(</span>gp <span class="op">=</span> <span class="fu"><a href="../reference/vl_gpar.html">vl_gpar</a></span><span class="op">(</span>fill <span class="op">=</span> <span class="st">"grey93"</span>, col <span class="op">=</span> <span class="cn">NA</span><span class="op">)</span><span class="op">)</span><span class="op">)</span> <span class="op">|&gt;</span></span>
+<span>  <span class="fu"><a href="../reference/vl_scene.html">draw</a></span><span class="op">(</span><span class="fu"><a href="../reference/grob.html">points_grob</a></span><span class="op">(</span><span class="fu"><a href="../reference/vl_unit.html">vl_unit</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">2</span>, <span class="fl">5</span>, <span class="fl">8</span><span class="op">)</span>, <span class="st">"native"</span><span class="op">)</span>, <span class="fu"><a href="../reference/vl_unit.html">vl_unit</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">3</span>, <span class="fl">6</span>, <span class="fl">4</span><span class="op">)</span>, <span class="st">"native"</span><span class="op">)</span>,</span>
+<span>                   size <span class="op">=</span> <span class="fu"><a href="../reference/vl_unit.html">vl_unit</a></span><span class="op">(</span><span class="fl">6</span>, <span class="st">"mm"</span><span class="op">)</span>, key <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"a"</span>, <span class="st">"b"</span>, <span class="st">"c"</span><span class="op">)</span>,</span>
+<span>                   gp <span class="op">=</span> <span class="fu"><a href="../reference/vl_gpar.html">vl_gpar</a></span><span class="op">(</span>fill <span class="op">=</span> <span class="st">"#2c6fa6"</span>, col <span class="op">=</span> <span class="cn">NA</span><span class="op">)</span><span class="op">)</span><span class="op">)</span> <span class="op">|&gt;</span></span>
+<span>  <span class="fu"><a href="../reference/vl_scene.html">draw</a></span><span class="op">(</span><span class="fu"><a href="../reference/grob.html">segments_grob</a></span><span class="op">(</span><span class="fl">0</span>, <span class="fu"><a href="../reference/vl_unit.html">vl_unit</a></span><span class="op">(</span><span class="fl">5</span>, <span class="st">"native"</span><span class="op">)</span>, <span class="fl">1</span>, <span class="fu"><a href="../reference/vl_unit.html">vl_unit</a></span><span class="op">(</span><span class="fl">5</span>, <span class="st">"native"</span><span class="op">)</span>,</span>
+<span>                     gp <span class="op">=</span> <span class="fu"><a href="../reference/vl_gpar.html">vl_gpar</a></span><span class="op">(</span>col <span class="op">=</span> <span class="st">"#c0392b"</span>, lwd <span class="op">=</span> <span class="fl">2</span>, lty <span class="op">=</span> <span class="st">"dashed"</span><span class="op">)</span><span class="op">)</span><span class="op">)</span> <span class="op">|&gt;</span></span>
+<span>  <span class="fu"><a href="../reference/vl_scene.html">pop</a></span><span class="op">(</span><span class="op">)</span></span>
+<span></span>
+<span><span class="va">layers</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"unkeyed_below"</span>, <span class="st">"keyed"</span>, <span class="st">"unkeyed_above"</span>, <span class="st">"all"</span><span class="op">)</span></span>
+<span><span class="va">files</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/lapply.html" class="external-link">vapply</a></span><span class="op">(</span><span class="va">layers</span>, <span class="kw">function</span><span class="op">(</span><span class="va">l</span><span class="op">)</span> <span class="op">{</span></span>
+<span>  <span class="va">f</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/tempfile.html" class="external-link">tempfile</a></span><span class="op">(</span>fileext <span class="op">=</span> <span class="st">".png"</span><span class="op">)</span></span>
+<span>  <span class="fu"><a href="https://rdrr.io/r/base/readBin.html" class="external-link">writeBin</a></span><span class="op">(</span><span class="fu"><a href="../reference/scene_png.html">scene_png</a></span><span class="op">(</span><span class="va">split</span>, layer <span class="op">=</span> <span class="va">l</span><span class="op">)</span>, <span class="va">f</span><span class="op">)</span></span>
+<span>  <span class="va">f</span></span>
+<span><span class="op">}</span>, <span class="fu"><a href="https://rdrr.io/r/base/character.html" class="external-link">character</a></span><span class="op">(</span><span class="fl">1</span><span class="op">)</span><span class="op">)</span></span>
+<span></span>
+<span><span class="va">sheet</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/vl_scene.html">vl_scene</a></span><span class="op">(</span><span class="fl">6</span>, <span class="fl">1.5</span>, dpi <span class="op">=</span> <span class="fl">96</span>, bg <span class="op">=</span> <span class="st">"white"</span><span class="op">)</span></span>
+<span><span class="kw">for</span> <span class="op">(</span><span class="va">i</span> <span class="kw">in</span> <span class="fu"><a href="https://rdrr.io/r/base/seq.html" class="external-link">seq_along</a></span><span class="op">(</span><span class="va">files</span><span class="op">)</span><span class="op">)</span> <span class="op">{</span></span>
+<span>  <span class="va">sheet</span> <span class="op">&lt;-</span> <span class="va">sheet</span> <span class="op">|&gt;</span></span>
+<span>    <span class="fu"><a href="../reference/vl_scene.html">draw</a></span><span class="op">(</span><span class="fu"><a href="../reference/grob.html">rect_grob</a></span><span class="op">(</span>x <span class="op">=</span> <span class="op">(</span><span class="va">i</span> <span class="op">-</span> <span class="fl">0.5</span><span class="op">)</span> <span class="op">/</span> <span class="fl">4</span>, y <span class="op">=</span> <span class="fl">0.6</span>, width <span class="op">=</span> <span class="fu"><a href="../reference/vl_unit.html">vl_unit</a></span><span class="op">(</span><span class="fl">1.2</span>, <span class="st">"in"</span><span class="op">)</span>,</span>
+<span>                   height <span class="op">=</span> <span class="fu"><a href="../reference/vl_unit.html">vl_unit</a></span><span class="op">(</span><span class="fl">0.72</span>, <span class="st">"in"</span><span class="op">)</span>,</span>
+<span>                   gp <span class="op">=</span> <span class="fu"><a href="../reference/vl_gpar.html">vl_gpar</a></span><span class="op">(</span>fill <span class="op">=</span> <span class="st">"#ffe9e9"</span>, col <span class="op">=</span> <span class="st">"grey70"</span><span class="op">)</span><span class="op">)</span><span class="op">)</span> <span class="op">|&gt;</span></span>
+<span>    <span class="fu"><a href="../reference/vl_scene.html">draw</a></span><span class="op">(</span><span class="fu"><a href="../reference/grob.html">raster_grob</a></span><span class="op">(</span><span class="va">files</span><span class="op">[</span><span class="va">i</span><span class="op">]</span>, x <span class="op">=</span> <span class="op">(</span><span class="va">i</span> <span class="op">-</span> <span class="fl">0.5</span><span class="op">)</span> <span class="op">/</span> <span class="fl">4</span>, y <span class="op">=</span> <span class="fl">0.6</span>,</span>
+<span>                     width <span class="op">=</span> <span class="fu"><a href="../reference/vl_unit.html">vl_unit</a></span><span class="op">(</span><span class="fl">1.2</span>, <span class="st">"in"</span><span class="op">)</span>, height <span class="op">=</span> <span class="fu"><a href="../reference/vl_unit.html">vl_unit</a></span><span class="op">(</span><span class="fl">0.72</span>, <span class="st">"in"</span><span class="op">)</span><span class="op">)</span><span class="op">)</span> <span class="op">|&gt;</span></span>
+<span>    <span class="fu"><a href="../reference/vl_scene.html">draw</a></span><span class="op">(</span><span class="fu"><a href="../reference/grob.html">text_grob</a></span><span class="op">(</span><span class="va">layers</span><span class="op">[</span><span class="va">i</span><span class="op">]</span>, x <span class="op">=</span> <span class="op">(</span><span class="va">i</span> <span class="op">-</span> <span class="fl">0.5</span><span class="op">)</span> <span class="op">/</span> <span class="fl">4</span>, y <span class="op">=</span> <span class="fl">0.08</span>,</span>
+<span>                   gp <span class="op">=</span> <span class="fu"><a href="../reference/vl_gpar.html">vl_gpar</a></span><span class="op">(</span>fontsize <span class="op">=</span> <span class="fl">9</span><span class="op">)</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="op">}</span></span>
+<span><span class="fu"><a href="../reference/display.html">display</a></span><span class="op">(</span><span class="va">sheet</span><span class="op">)</span></span></code></pre></div>
+<p><img src="scene-contract_files/figure-html/split-1.png" class="r-plt" alt="" width="576"></p>
+<p>The pink behind the second and third layers is the transparent page
+showing through. <code>panels =</code> narrows the mark layer to keyed
+marks in the named panels, so a legend’s keyed swatches can stay with
+the furniture; the layers stay exact complements.</p>
+</div>
+<div class="section level3">
+<h3 id="the-display-list">The display list<a class="anchor" aria-label="anchor" href="#the-display-list"></a>
+</h3>
+<p><code><a href="../reference/scene_display_list.html">scene_display_list()</a></code> resolves every keyed mark to
+device-pixel geometry, a paint and its key, packed as compact columns
+that a browser draws and hit-tests without parsing SVG. It is
+<strong>internal but versioned</strong>: it is a private vellum to
+vellumwidget payload, documented in <code><a href="../reference/scene_display_list.html">?scene_display_list</a></code> but
+not a format to build on. Its fields may change in any release, in step
+with vellumwidget, and <code>version =</code> says which layout the
+reader gets. A reader that knows only version 1 must never be handed
+version 2.</p>
+<div class="sourceCode" id="cb12"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">dl</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/scene_display_list.html">scene_display_list</a></span><span class="op">(</span><span class="va">split</span>, version <span class="op">=</span> <span class="fl">2</span>, precision <span class="op">=</span> <span class="st">"u16"</span><span class="op">)</span></span>
+<span><span class="va">dl</span><span class="op">$</span><span class="va">format</span></span>
+<span><span class="co">#&gt; [1] "vellum-display-list"</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/base/unlist.html" class="external-link">unlist</a></span><span class="op">(</span><span class="va">dl</span><span class="op">[</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"version"</span>, <span class="st">"n"</span>, <span class="st">"runs"</span><span class="op">)</span><span class="op">]</span><span class="op">)</span></span>
+<span><span class="co">#&gt; version       n    runs </span></span>
+<span><span class="co">#&gt;       2       3       0</span></span>
+<span><span class="va">dl</span><span class="op">$</span><span class="va">keys</span></span>
+<span><span class="co">#&gt; [1] "a" "b" "c"</span></span></code></pre></div>
+<p><code>version = 2</code> adds linear and radial gradient fills with
+<code>pad</code> extension, clips by a path, and opacity groups to what
+the list draws exactly. <code>precision</code> quantises the coordinates
+to 16 or 24 bits (or to a largest rounding error in device px), and
+<code>keys</code> lets a host that already holds the keys avoid shipping
+them twice.</p>
+<p>Some marks cannot be drawn from the list: a mark under a mask, a
+blend mode or an effect, a hatch or pattern fill, a repeating or
+reflecting gradient, a gradient stroke, or text. The list still carries
+them, for hit-testing, but flags them, and groups them into numbered
+<strong>runs</strong>: stretches of flagged marks in paint order that no
+exactly drawn mark interrupts.
+<code>scene_png(layer = "keyed_flagged", run = k)</code> draws run
+<code>k</code> alone, so the host composites it at its place in paint
+order (<code>run_blend</code> gives the blend mode to composite
+with):</p>
+<div class="sourceCode" id="cb13"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">dots</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/grob.html">circle_grob</a></span><span class="op">(</span>r <span class="op">=</span> <span class="fl">0.3</span>, gp <span class="op">=</span> <span class="fu"><a href="../reference/vl_gpar.html">vl_gpar</a></span><span class="op">(</span>fill <span class="op">=</span> <span class="st">"#2c6fa6"</span>, col <span class="op">=</span> <span class="cn">NA</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="va">flagged</span> <span class="op">&lt;-</span> <span class="va">split</span> <span class="op">|&gt;</span></span>
+<span>  <span class="fu"><a href="../reference/vl_scene.html">draw</a></span><span class="op">(</span><span class="fu"><a href="../reference/grob.html">rect_grob</a></span><span class="op">(</span>x <span class="op">=</span> <span class="fl">0.8</span>, y <span class="op">=</span> <span class="fl">0.75</span>, width <span class="op">=</span> <span class="fl">0.25</span>, height <span class="op">=</span> <span class="fl">0.3</span>, key <span class="op">=</span> <span class="st">"p"</span>,</span>
+<span>                 gp <span class="op">=</span> <span class="fu"><a href="../reference/vl_gpar.html">vl_gpar</a></span><span class="op">(</span>fill <span class="op">=</span> <span class="fu"><a href="../reference/vl_pattern.html">vl_pattern</a></span><span class="op">(</span><span class="va">dots</span>, width <span class="op">=</span> <span class="fl">0.05</span>, height <span class="op">=</span> <span class="fl">0.08</span><span class="op">)</span><span class="op">)</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="va">fl</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/scene_display_list.html">scene_display_list</a></span><span class="op">(</span><span class="va">flagged</span>, version <span class="op">=</span> <span class="fl">2</span><span class="op">)</span></span>
+<span><span class="va">fl</span><span class="op">$</span><span class="va">runs</span></span>
+<span><span class="co">#&gt; [1] 1</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/base/length.html" class="external-link">length</a></span><span class="op">(</span><span class="fu"><a href="../reference/scene_png.html">scene_png</a></span><span class="op">(</span><span class="va">flagged</span>, layer <span class="op">=</span> <span class="st">"keyed_flagged"</span>, run <span class="op">=</span> <span class="fl">1</span><span class="op">)</span><span class="op">)</span> <span class="op">&gt;</span> <span class="fl">0</span></span>
+<span><span class="co">#&gt; [1] TRUE</span></span></code></pre></div>
+</div>
+<div class="section level3">
+<h3 id="vellum_content_fit">
+<code>vellum_content_fit</code><a class="anchor" aria-label="anchor" href="#vellum_content_fit"></a>
+</h3>
+<p>A guest scene whose content has a fixed aspect ratio (a map, or a
+plot with a fixed coordinate ratio) can declare it with the attribute
+<code>vellum_content_fit</code>:
+<code>c(fixed_w, fixed_h, null_w, null_h)</code>, the fixed width and
+height of its frame in mm and the weights of its aspect-locked
+<code>null</code> tracks. vellumplot sets it on an aspect-locked plot.
+<code>scene_inset(fit = "auto")</code> reads it and shrinks the inset’s
+region around the content, so its background and border hug the plot
+(see <code><a href="../articles/scenes-as-values.html">vignette("scenes-as-values")</a></code>). The attribute, like the
+display list, is part of the contract between the packages.</p>
+</div>
+</div>
+<div class="section level2">
 <h2 id="accessibility">Accessibility<a class="anchor" aria-label="anchor" href="#accessibility"></a>
 </h2>
 <p>A scene carries an optional accessible <strong>name</strong> and
@@ -765,6 +926,11 @@ reliable screen-reader pattern; WCAG 1.1.1);</li>
 <li>the <strong>PDF</strong> is a <strong>tagged PDF</strong>: the chart
 is a <code>Figure</code> in the structure tree whose <code>Alt</code> is
 the description.</li>
+<li>the <strong>PowerPoint</strong> group holding the scene carries the
+description (or the title, when there is no description) as its alt
+text, and is named after the title when written by <code><a href="../reference/vl_scene.html">render()</a></code>
+or <code><a href="../reference/pptx_pages.html">pptx_pages()</a></code> (through officer it takes the placeholder’s
+name).</li>
 </ul>
 <p>This is additive: with no title/desc the output is unchanged. The
 grammar layer (<code>vellumplot</code>) sets these automatically from
@@ -825,6 +991,10 @@ count),</li>
 <li>the default reading of bare numbers
 (<code>default_units = "npc"</code>),</li>
 <li>the SVG attribute names, or when they are emitted,</li>
+<li>the <code>layer</code> values of <code><a href="../reference/scene_svg.html">scene_svg()</a></code> /
+<code><a href="../reference/scene_png.html">scene_png()</a></code>, the display-list format (bump its
+<code>version</code>), or the <code>vellum_content_fit</code>
+attribute,</li>
 <li>the reserved <code>meta</code> key vocabulary. ```</li>
 </ul>
 </div>

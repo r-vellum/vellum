@@ -2,7 +2,7 @@
 
 vellum is a low-level graphics framework for R, in the spirit of grid.
 You describe a scene with a small declarative API and render it to PNG,
-SVG, or PDF.
+SVG, PDF, or editable PowerPoint shapes.
 
 The property most of the rest follows from is that vellum measures text
 and solves layout itself, in process, instead of asking whichever device
@@ -129,14 +129,19 @@ it picks the backend from the file extension.
 s <- vl_scene(4, 3) |>
   draw(circle_grob(r = 0.3, gp = vl_gpar(fill = "tomato", col = NA)))
 
-render(s, "out.png") # raster (tiny-skia)
-render(s, "out.svg") # vector (hand-rolled SVG)
-render(s, "out.pdf") # vector (krilla)
+render(s, "out.png")  # raster (tiny-skia)
+render(s, "out.svg")  # vector (hand-rolled SVG)
+render(s, "out.pdf")  # vector (krilla)
+render(s, "out.pptx") # editable PowerPoint shapes
 ```
 
-The same scene value renders to all three formats with consistent
-geometry, and raster and PDF output is byte-stable, so it is
+The same scene value renders to all four formats with consistent
+geometry, and raster, PDF and PowerPoint output is byte-stable, so it is
 reproducible and snapshot-testable.
+[`vignette("output-formats")`](https://r-vellum.github.io/vellum/articles/output-formats.md)
+compares the formats, and
+[`vignette("powerpoint")`](https://r-vellum.github.io/vellum/articles/powerpoint.md)
+covers slides.
 
 [`render()`](https://r-vellum.github.io/vellum/reference/vl_scene.md)
 takes two arguments worth knowing about. `scale` renders at a multiple
@@ -184,7 +189,13 @@ scene_raster(s) # integer array: the pixels themselves
   colour-vision simulation, crisp gridlines, and group blur/shadow
   effects.
 - [`vignette("typography")`](https://r-vellum.github.io/vellum/articles/typography.md):
-  text halos and OpenType features.
+  text in a box or on a path, halos, OpenType features, font weights,
+  and math from TeX or plotmath notation.
+- [`vignette("output-formats")`](https://r-vellum.github.io/vellum/articles/output-formats.md),
+  [`vignette("powerpoint")`](https://r-vellum.github.io/vellum/articles/powerpoint.md)
+  and
+  [`vignette("animation")`](https://r-vellum.github.io/vellum/articles/animation.md):
+  choosing a format, editable slides, and keyframe animation.
 - [`vignette("coming-from-grid")`](https://r-vellum.github.io/vellum/articles/coming-from-grid.md):
   a translation guide if you already know grid.
 - [`vignette("grid-interop")`](https://r-vellum.github.io/vellum/articles/grid-interop.md):

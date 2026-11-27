@@ -5,8 +5,8 @@
 Text is measured, layout is solved and every mark’s position is resolved
 *before* anything reaches a canvas, in process, with no device open.
 Everything below follows from that: a scene you can interrogate, wrap
-text inside, move labels around in, lint, hash, diff and render three
-ways from a single solve.
+text inside, move labels around in, lint, hash, diff and render four
+ways (PNG, SVG, PDF and editable PowerPoint) from a single solve.
 
 It is a low-level graphics framework in the spirit of **grid** (units,
 viewports, grobs, layout), and the foundation layer a grammar of
@@ -108,9 +108,11 @@ render(plot, "report.pdf")          # tagged, if the marks carry role/name
 And more that has no device-driven equivalent: **text set along a
 curve**, **boolean path operations** on real geometry, **contours**
 chained into polylines, **SVG icon paths** as crisp vector markers,
-**stroke-to-outline** expansion, **animated SVG**, **multi-page PDF**,
-and **font pinning** that makes “identical pixels everywhere” checkable
-rather than merely claimed.
+**stroke-to-outline** expansion, **math typeset from TeX** with no LaTeX
+installed, **keyframe animation** to GIF, APNG or animated SVG,
+**multi-page PDF**, **editable PowerPoint slides**, and **font pinning**
+that makes “identical pixels everywhere” checkable rather than merely
+claimed.
 
 ## How a scene is built
 
@@ -145,17 +147,24 @@ expect of a graphics engine and would miss if they were absent.
 
 - **Layout is solved once, not once per device.** The *same* solved
   scene is walked for each backend, so
-  `render(scene, "plot.png" | "plot.svg" | "plot.pdf")` agree on
-  geometry rather than each re-solving it against their own font
-  metrics. Output is byte-stable, so figures are snapshot-testable.
+  `render(scene, "plot.png" | "plot.svg" | "plot.pdf" | "plot.pptx")`
+  agree on geometry rather than each re-solving it against their own
+  font metrics. Output is byte-stable, so figures are snapshot-testable.
   Where a backend cannot honour something it **says so** rather than
   silently dropping it.
 - **Text that matches the rest of R.** Shaping runs through
   [textshaping](https://github.com/r-lib/textshaping) on
   [systemfonts](https://github.com/r-lib/systemfonts), the stack ragg
   and svglite use, with per-glyph fallback, OpenType features (`tnum`,
-  `smcp`, `onum`), haloed text, and Markdown-style rich labels
-  ([`md()`](https://r-vellum.github.io/vellum/reference/md.md)).
+  `smcp`, `onum`), numeric font weights (`vl_gpar(fontweight = 300)`),
+  haloed text, and Markdown-style rich labels
+  ([`md()`](https://r-vellum.github.io/vellum/reference/md.md)). Math is
+  typeset in process from TeX
+  ([`tex()`](https://r-vellum.github.io/vellum/reference/tex.md), or
+  `$...$` inside
+  [`md()`](https://r-vellum.github.io/vellum/reference/md.md)) or R’s
+  plotmath notation
+  ([`plotmath()`](https://r-vellum.github.io/vellum/reference/plotmath.md)).
   [`vl_strwidth()`](https://r-vellum.github.io/vellum/reference/vl_strwidth.md)
   measures without opening a device.
 - **A modern paint model, everywhere.** Linear and radial **gradients**
@@ -194,9 +203,10 @@ expect of a graphics engine and would miss if they were absent.
 
 The engine ([tiny-skia](https://github.com/linebender/tiny-skia) for
 raster, an SVG writer, [krilla](https://github.com/LaurenzV/krilla) for
-PDF) is written in **Rust** because all of the above requires owning the
-measuring and rasterising stack. It is not a performance claim. That is
-also why installing from source needs `cargo`.
+PDF, a DrawingML writer for PowerPoint) is written in **Rust** because
+all of the above requires owning the measuring and rasterising stack. It
+is not a performance claim. That is also why installing from source
+needs `cargo`.
 
 ## Installation
 
@@ -317,16 +327,17 @@ vl_scene(4.5, 3, bg = "white") |>
 
 ![](reference/figures/README-datashade.png)
 
-### One scene, three formats
+### One scene, four formats
 
 ``` r
 
 s <- vl_scene(4, 3) |>
   draw(circle_grob(r = 0.3, gp = vl_gpar(fill = "tomato", col = NA)))
 
-render(s, "out.png") # raster   (tiny-skia)
-render(s, "out.svg") # vector   (hand-rolled SVG)
-render(s, "out.pdf") # vector   (krilla)
+render(s, "out.png")  # raster   (tiny-skia)
+render(s, "out.svg")  # vector   (hand-rolled SVG)
+render(s, "out.pdf")  # vector   (krilla)
+render(s, "out.pptx") # editable PowerPoint shapes
 ```
 
 ## Relationship to grid and ggplot2
@@ -401,7 +412,8 @@ and a pipeline of
 [`pop()`](https://r-vellum.github.io/vellum/reference/vl_scene.md), then
 render it.
 [`render()`](https://r-vellum.github.io/vellum/reference/vl_scene.md)
-picks the backend (PNG / SVG / PDF) from the file extension.
+picks the backend (PNG / SVG / PDF / PowerPoint) from the file
+extension.
 
 - [`vl_scene()`](https://r-vellum.github.io/vellum/reference/vl_scene.md)
   [`push()`](https://r-vellum.github.io/vellum/reference/vl_scene.md)
@@ -422,6 +434,14 @@ picks the backend (PNG / SVG / PDF) from the file extension.
   : Render a scene to PNG or PDF bytes
 - [`as_vellum_scene()`](https://r-vellum.github.io/vellum/reference/as_vellum_scene.md)
   : Coerce an object to a vellum scene
+
+## Animation
+
+Keyframe animation: tween between finished scenes on a schedule and
+encode the frames as GIF, APNG, animated SVG or PNG files, or draw one
+frame as a still. See
+[`vignette("animation")`](https://r-vellum.github.io/vellum/articles/animation.md).
+
 - [`vl_render_animation()`](https://r-vellum.github.io/vellum/reference/vl_render_animation.md)
   : Render a keyframe animation
 - [`vl_render_frame()`](https://r-vellum.github.io/vellum/reference/vl_render_frame.md)
@@ -531,7 +551,11 @@ masks, reusable styles, and hand-drawn rendering.
 
 ## Text
 
-Device-independent shaping and measurement, Markdown-style rich labels,
+Device-independent shaping and measurement, font weights, Markdown-style
+rich labels, math typeset from TeX or plotmath notation
+([`tex()`](https://r-vellum.github.io/vellum/reference/tex.md), inline
+`$...$` in [`md()`](https://r-vellum.github.io/vellum/reference/md.md),
+[`plotmath()`](https://r-vellum.github.io/vellum/reference/plotmath.md)),
 and layout: text wrapped to a box or set along a curve.
 
 - [`vl_strwidth()`](https://r-vellum.github.io/vellum/reference/vl_strwidth.md)
@@ -577,8 +601,10 @@ path data imported as real vector geometry.
 
 ## Output reach
 
-Destinations for a finished scene beyond a single file: a multi-page
-document, and a batch rendered across cores.
+Destinations for a finished scene beyond a single file: a multi-page PDF
+document, a batch rendered across cores, and editable PowerPoint slides,
+written directly or through officer (see
+[`vignette("powerpoint")`](https://r-vellum.github.io/vellum/articles/powerpoint.md)).
 
 - [`pdf_pages()`](https://r-vellum.github.io/vellum/reference/pdf_pages.md)
   : Write several scenes as the pages of one PDF
@@ -663,7 +689,7 @@ through the vellum backend.
 
 - [The scene graph and the paint
   model](https://r-vellum.github.io/vellum/articles/scene-and-paint.md):
-- [Typography: layout, halos and OpenType
+- [Typography: layout, halos, weights and OpenType
   features](https://r-vellum.github.io/vellum/articles/typography.md):
 - [Render quality: accessibility, crisp edges, group
   effects](https://r-vellum.github.io/vellum/articles/render-quality.md):
@@ -689,6 +715,10 @@ through the vellum backend.
 
 - [Choosing an output
   format](https://r-vellum.github.io/vellum/articles/output-formats.md):
+- [Editable PowerPoint
+  output](https://r-vellum.github.io/vellum/articles/powerpoint.md):
+- [Keyframe animation in the
+  engine](https://r-vellum.github.io/vellum/articles/animation.md):
 
 ### Interop
 

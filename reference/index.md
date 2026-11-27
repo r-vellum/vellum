@@ -10,7 +10,8 @@ and a pipeline of
 [`pop()`](https://r-vellum.github.io/vellum/reference/vl_scene.md), then
 render it.
 [`render()`](https://r-vellum.github.io/vellum/reference/vl_scene.md)
-picks the backend (PNG / SVG / PDF) from the file extension.
+picks the backend (PNG / SVG / PDF / PowerPoint) from the file
+extension.
 
 - [`vl_scene()`](https://r-vellum.github.io/vellum/reference/vl_scene.md)
   [`push()`](https://r-vellum.github.io/vellum/reference/vl_scene.md)
@@ -31,6 +32,14 @@ picks the backend (PNG / SVG / PDF) from the file extension.
   : Render a scene to PNG or PDF bytes
 - [`as_vellum_scene()`](https://r-vellum.github.io/vellum/reference/as_vellum_scene.md)
   : Coerce an object to a vellum scene
+
+## Animation
+
+Keyframe animation: tween between finished scenes on a schedule and
+encode the frames as GIF, APNG, animated SVG or PNG files, or draw one
+frame as a still. See
+[`vignette("animation")`](https://r-vellum.github.io/vellum/articles/animation.md).
+
 - [`vl_render_animation()`](https://r-vellum.github.io/vellum/reference/vl_render_animation.md)
   : Render a keyframe animation
 - [`vl_render_frame()`](https://r-vellum.github.io/vellum/reference/vl_render_frame.md)
@@ -140,7 +149,11 @@ masks, reusable styles, and hand-drawn rendering.
 
 ## Text
 
-Device-independent shaping and measurement, Markdown-style rich labels,
+Device-independent shaping and measurement, font weights, Markdown-style
+rich labels, math typeset from TeX or plotmath notation
+([`tex()`](https://r-vellum.github.io/vellum/reference/tex.md), inline
+`$...$` in [`md()`](https://r-vellum.github.io/vellum/reference/md.md),
+[`plotmath()`](https://r-vellum.github.io/vellum/reference/plotmath.md)),
 and layout: text wrapped to a box or set along a curve.
 
 - [`vl_strwidth()`](https://r-vellum.github.io/vellum/reference/vl_strwidth.md)
@@ -186,8 +199,10 @@ path data imported as real vector geometry.
 
 ## Output reach
 
-Destinations for a finished scene beyond a single file: a multi-page
-document, and a batch rendered across cores.
+Destinations for a finished scene beyond a single file: a multi-page PDF
+document, a batch rendered across cores, and editable PowerPoint slides,
+written directly or through officer (see
+[`vignette("powerpoint")`](https://r-vellum.github.io/vellum/articles/powerpoint.md)).
 
 - [`pdf_pages()`](https://r-vellum.github.io/vellum/reference/pdf_pages.md)
   : Write several scenes as the pages of one PDF

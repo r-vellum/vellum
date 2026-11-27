@@ -3,6 +3,7 @@ pkgdown: 2.2.1
 pkgdown_sha: ~
 articles:
   accessible-output: accessible-output.html
+  animation: animation.html
   coming-from-grid: coming-from-grid.html
   datashading: datashading.html
   geometry-operations: geometry-operations.html
@@ -10,6 +11,7 @@ articles:
   inspecting-scenes: inspecting-scenes.html
   output-formats: output-formats.html
   placement: placement.html
+  powerpoint: powerpoint.html
   render-quality: render-quality.html
   retained-mode: retained-mode.html
   scene-and-paint: scene-and-paint.html
@@ -17,7 +19,7 @@ articles:
   scenes-as-values: scenes-as-values.html
   typography: typography.html
   vellum: vellum.html
-last_built: 2026-11-27T00:27Z
+last_built: 2026-11-27T01:01Z
 urls:
   reference: https://r-vellum.github.io/vellum/reference
   article: https://r-vellum.github.io/vellum/articles

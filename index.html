@@ -25,9 +25,9 @@
 <link href="deps/font-awesome-6.5.2/css/v4-shims.min.css" rel="stylesheet">
 <script src="deps/headroom-0.11.0/headroom.min.js"></script><script src="deps/headroom-0.11.0/jQuery.headroom.min.js"></script><script src="deps/bootstrap-toc-1.0.1/bootstrap-toc.min.js"></script><script src="deps/clipboard.js-2.0.11/clipboard.min.js"></script><script src="deps/search-1.0.0/autocomplete.jquery.min.js"></script><script src="deps/search-1.0.0/fuse.min.js"></script><script src="deps/search-1.0.0/mark.min.js"></script><!-- pkgdown --><script src="pkgdown.js"></script><link href="extra.css" rel="stylesheet">
 <meta property="og:title" content="A low-level graphics framework whose scenes report their geometry">
-<meta name="description" content="vellum is the parchment of the vellum ecosystem: a grid-like scene graph, unit/layout engine, and renderer. It measures text and solves layout without a device, so one solved scene draws to PNG, SVG, or PDF with the same geometry — and can report that geometry back, element by element, for a host to build on. It is the foundation a grammar of graphics builds on, not a plotting package itself.
+<meta name="description" content="vellum is the parchment of the vellum ecosystem: a grid-like scene graph, unit/layout engine, and renderer. It measures text and solves layout without a device, so one solved scene draws to PNG, SVG, PDF, or editable PowerPoint with the same geometry — and can report that geometry back, element by element, for a host to build on. It is the foundation a grammar of graphics builds on, not a plotting package itself.
 ">
-<meta property="og:description" content="vellum is the parchment of the vellum ecosystem: a grid-like scene graph, unit/layout engine, and renderer. It measures text and solves layout without a device, so one solved scene draws to PNG, SVG, or PDF with the same geometry — and can report that geometry back, element by element, for a host to build on. It is the foundation a grammar of graphics builds on, not a plotting package itself.
+<meta property="og:description" content="vellum is the parchment of the vellum ecosystem: a grid-like scene graph, unit/layout engine, and renderer. It measures text and solves layout without a device, so one solved scene draws to PNG, SVG, PDF, or editable PowerPoint with the same geometry — and can report that geometry back, element by element, for a host to build on. It is the foundation a grammar of graphics builds on, not a plotting package itself.
 ">
 <meta property="og:image" content="https://r-vellum.github.io/vellum/logo.png">
 <meta name="twitter:card" content="summary_large_image">
@@ -59,7 +59,7 @@
 <li><hr class="dropdown-divider"></li>
     <li><h6 class="dropdown-header" data-toc-skip>Concepts</h6></li>
     <li><a class="dropdown-item" href="articles/scene-and-paint.html">The scene graph and the paint model</a></li>
-    <li><a class="dropdown-item" href="articles/typography.html">Typography: layout, halos and OpenType features</a></li>
+    <li><a class="dropdown-item" href="articles/typography.html">Typography: layout, halos, weights and OpenType features</a></li>
     <li><a class="dropdown-item" href="articles/render-quality.html">Render quality: accessibility, crisp edges, group effects</a></li>
     <li><a class="dropdown-item" href="articles/retained-mode.html">Asking a scene what it drew: read-back, picking, and editing</a></li>
     <li><a class="dropdown-item" href="articles/accessible-output.html">Accessible output, and fonts you can trust</a></li>
@@ -73,6 +73,8 @@
     <li><hr class="dropdown-divider"></li>
     <li><h6 class="dropdown-header" data-toc-skip>Output</h6></li>
     <li><a class="dropdown-item" href="articles/output-formats.html">Choosing an output format</a></li>
+    <li><a class="dropdown-item" href="articles/powerpoint.html">Editable PowerPoint output</a></li>
+    <li><a class="dropdown-item" href="articles/animation.html">Keyframe animation in the engine</a></li>
     <li><hr class="dropdown-divider"></li>
     <li><h6 class="dropdown-header" data-toc-skip>Interop</h6></li>
     <li><a class="dropdown-item" href="articles/coming-from-grid.html">Coming from grid</a></li>
@@ -109,7 +111,7 @@
 <!-- badges: start -->
 
 <p><strong>vellum draws nothing until it knows exactly what it is drawing.</strong></p>
-<p>Text is measured, layout is solved and every mark’s position is resolved <em>before</em> anything reaches a canvas, in process, with no device open. Everything below follows from that: a scene you can interrogate, wrap text inside, move labels around in, lint, hash, diff and render three ways from a single solve.</p>
+<p>Text is measured, layout is solved and every mark’s position is resolved <em>before</em> anything reaches a canvas, in process, with no device open. Everything below follows from that: a scene you can interrogate, wrap text inside, move labels around in, lint, hash, diff and render four ways (PNG, SVG, PDF and editable PowerPoint) from a single solve.</p>
 <p>It is a low-level graphics framework in the spirit of <strong>grid</strong> (units, viewports, grobs, layout), and the foundation layer a grammar of graphics builds on. That grammar is <a href="https://github.com/r-vellum/vellumplot" class="external-link">vellumplot</a>.</p>
 <p><img src="reference/figures/README-hello.png"></p>
 <div class="section level2">
@@ -158,7 +160,7 @@
 <div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="reference/vl_scene.html">render</a></span><span class="op">(</span><span class="va">plot</span>, <span class="st">"check.png"</span>, cvd <span class="op">=</span> <span class="st">"deuteranopia"</span><span class="op">)</span></span>
 <span><span class="fu"><a href="reference/vl_scene.html">render</a></span><span class="op">(</span><span class="va">plot</span>, <span class="st">"report.pdf"</span><span class="op">)</span>          <span class="co"># tagged, if the marks carry role/name</span></span></code></pre></div>
-<p>And more that has no device-driven equivalent: <strong>text set along a curve</strong>, <strong>boolean path operations</strong> on real geometry, <strong>contours</strong> chained into polylines, <strong>SVG icon paths</strong> as crisp vector markers, <strong>stroke-to-outline</strong> expansion, <strong>animated SVG</strong>, <strong>multi-page PDF</strong>, and <strong>font pinning</strong> that makes “identical pixels everywhere” checkable rather than merely claimed.</p>
+<p>And more that has no device-driven equivalent: <strong>text set along a curve</strong>, <strong>boolean path operations</strong> on real geometry, <strong>contours</strong> chained into polylines, <strong>SVG icon paths</strong> as crisp vector markers, <strong>stroke-to-outline</strong> expansion, <strong>math typeset from TeX</strong> with no LaTeX installed, <strong>keyframe animation</strong> to GIF, APNG or animated SVG, <strong>multi-page PDF</strong>, <strong>editable PowerPoint slides</strong>, and <strong>font pinning</strong> that makes “identical pixels everywhere” checkable rather than merely claimed.</p>
 </div>
 <div class="section level2">
 <h2 id="how-a-scene-is-built">How a scene is built<a class="anchor" aria-label="anchor" href="#how-a-scene-is-built"></a>
@@ -182,9 +184,9 @@
 <p>These are the parts that make the above possible, or that you would expect of a graphics engine and would miss if they were absent.</p>
 <ul>
 <li>
-<strong>Layout is solved once, not once per device.</strong> The <em>same</em> solved scene is walked for each backend, so <code>render(scene, "plot.png" | "plot.svg" | "plot.pdf")</code> agree on geometry rather than each re-solving it against their own font metrics. Output is byte-stable, so figures are snapshot-testable. Where a backend cannot honour something it <strong>says so</strong> rather than silently dropping it.</li>
+<strong>Layout is solved once, not once per device.</strong> The <em>same</em> solved scene is walked for each backend, so <code>render(scene, "plot.png" | "plot.svg" | "plot.pdf" | "plot.pptx")</code> agree on geometry rather than each re-solving it against their own font metrics. Output is byte-stable, so figures are snapshot-testable. Where a backend cannot honour something it <strong>says so</strong> rather than silently dropping it.</li>
 <li>
-<strong>Text that matches the rest of R.</strong> Shaping runs through <a href="https://github.com/r-lib/textshaping" class="external-link">textshaping</a> on <a href="https://github.com/r-lib/systemfonts" class="external-link">systemfonts</a>, the stack ragg and svglite use, with per-glyph fallback, OpenType features (<code>tnum</code>, <code>smcp</code>, <code>onum</code>), haloed text, and Markdown-style rich labels (<code><a href="reference/md.html">md()</a></code>). <code><a href="reference/vl_strwidth.html">vl_strwidth()</a></code> measures without opening a device.</li>
+<strong>Text that matches the rest of R.</strong> Shaping runs through <a href="https://github.com/r-lib/textshaping" class="external-link">textshaping</a> on <a href="https://github.com/r-lib/systemfonts" class="external-link">systemfonts</a>, the stack ragg and svglite use, with per-glyph fallback, OpenType features (<code>tnum</code>, <code>smcp</code>, <code>onum</code>), numeric font weights (<code>vl_gpar(fontweight = 300)</code>), haloed text, and Markdown-style rich labels (<code><a href="reference/md.html">md()</a></code>). Math is typeset in process from TeX (<code><a href="reference/tex.html">tex()</a></code>, or <code>$...$</code> inside <code><a href="reference/md.html">md()</a></code>) or R’s plotmath notation (<code><a href="reference/plotmath.html">plotmath()</a></code>). <code><a href="reference/vl_strwidth.html">vl_strwidth()</a></code> measures without opening a device.</li>
 <li>
 <strong>A modern paint model, everywhere.</strong> Linear and radial <strong>gradients</strong> (on strokes too), tiling <strong>patterns</strong>, real hatch <strong>geometry</strong>, alpha and luminance <strong>masks</strong>, group opacity, blur, drop shadow and glow.</li>
 <li>
@@ -198,7 +200,7 @@
 <li>
 <strong>Grid interop.</strong> <code><a href="reference/as_vellum.html">as_vellum()</a></code> / <code><a href="reference/as_vellum.html">render_grid()</a></code> render an existing grid grob tree, including <strong>ggplot2</strong> and <strong>lattice</strong>, through the vellum backend.</li>
 </ul>
-<p>The engine (<a href="https://github.com/linebender/tiny-skia" class="external-link">tiny-skia</a> for raster, an SVG writer, <a href="https://github.com/LaurenzV/krilla" class="external-link">krilla</a> for PDF) is written in <strong>Rust</strong> because all of the above requires owning the measuring and rasterising stack. It is not a performance claim. That is also why installing from source needs <code>cargo</code>.</p>
+<p>The engine (<a href="https://github.com/linebender/tiny-skia" class="external-link">tiny-skia</a> for raster, an SVG writer, <a href="https://github.com/LaurenzV/krilla" class="external-link">krilla</a> for PDF, a DrawingML writer for PowerPoint) is written in <strong>Rust</strong> because all of the above requires owning the measuring and rasterising stack. It is not a performance claim. That is also why installing from source needs <code>cargo</code>.</p>
 </div>
 <div class="section level2">
 <h2 id="installation">Installation<a class="anchor" aria-label="anchor" href="#installation"></a>
@@ -293,15 +295,16 @@
 <p><img src="reference/figures/README-datashade.png"></p>
 </div>
 <div class="section level3">
-<h3 id="one-scene-three-formats">One scene, three formats<a class="anchor" aria-label="anchor" href="#one-scene-three-formats"></a>
+<h3 id="one-scene-four-formats">One scene, four formats<a class="anchor" aria-label="anchor" href="#one-scene-four-formats"></a>
 </h3>
 <div class="sourceCode" id="cb12"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">s</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/vl_scene.html">vl_scene</a></span><span class="op">(</span><span class="fl">4</span>, <span class="fl">3</span><span class="op">)</span> <span class="op">|&gt;</span></span>
 <span>  <span class="fu"><a href="reference/vl_scene.html">draw</a></span><span class="op">(</span><span class="fu"><a href="reference/grob.html">circle_grob</a></span><span class="op">(</span>r <span class="op">=</span> <span class="fl">0.3</span>, gp <span class="op">=</span> <span class="fu"><a href="reference/vl_gpar.html">vl_gpar</a></span><span class="op">(</span>fill <span class="op">=</span> <span class="st">"tomato"</span>, col <span class="op">=</span> <span class="cn">NA</span><span class="op">)</span><span class="op">)</span><span class="op">)</span></span>
 <span></span>
-<span><span class="fu"><a href="reference/vl_scene.html">render</a></span><span class="op">(</span><span class="va">s</span>, <span class="st">"out.png"</span><span class="op">)</span> <span class="co"># raster   (tiny-skia)</span></span>
-<span><span class="fu"><a href="reference/vl_scene.html">render</a></span><span class="op">(</span><span class="va">s</span>, <span class="st">"out.svg"</span><span class="op">)</span> <span class="co"># vector   (hand-rolled SVG)</span></span>
-<span><span class="fu"><a href="reference/vl_scene.html">render</a></span><span class="op">(</span><span class="va">s</span>, <span class="st">"out.pdf"</span><span class="op">)</span> <span class="co"># vector   (krilla)</span></span></code></pre></div>
+<span><span class="fu"><a href="reference/vl_scene.html">render</a></span><span class="op">(</span><span class="va">s</span>, <span class="st">"out.png"</span><span class="op">)</span>  <span class="co"># raster   (tiny-skia)</span></span>
+<span><span class="fu"><a href="reference/vl_scene.html">render</a></span><span class="op">(</span><span class="va">s</span>, <span class="st">"out.svg"</span><span class="op">)</span>  <span class="co"># vector   (hand-rolled SVG)</span></span>
+<span><span class="fu"><a href="reference/vl_scene.html">render</a></span><span class="op">(</span><span class="va">s</span>, <span class="st">"out.pdf"</span><span class="op">)</span>  <span class="co"># vector   (krilla)</span></span>
+<span><span class="fu"><a href="reference/vl_scene.html">render</a></span><span class="op">(</span><span class="va">s</span>, <span class="st">"out.pptx"</span><span class="op">)</span> <span class="co"># editable PowerPoint shapes</span></span></code></pre></div>
 </div>
 </div>
 <div class="section level2">

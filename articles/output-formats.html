@@ -51,7 +51,7 @@
 <li><hr class="dropdown-divider"></li>
     <li><h6 class="dropdown-header" data-toc-skip>Concepts</h6></li>
     <li><a class="dropdown-item" href="../articles/scene-and-paint.html">The scene graph and the paint model</a></li>
-    <li><a class="dropdown-item" href="../articles/typography.html">Typography: layout, halos and OpenType features</a></li>
+    <li><a class="dropdown-item" href="../articles/typography.html">Typography: layout, halos, weights and OpenType features</a></li>
     <li><a class="dropdown-item" href="../articles/render-quality.html">Render quality: accessibility, crisp edges, group effects</a></li>
     <li><a class="dropdown-item" href="../articles/retained-mode.html">Asking a scene what it drew: read-back, picking, and editing</a></li>
     <li><a class="dropdown-item" href="../articles/accessible-output.html">Accessible output, and fonts you can trust</a></li>
@@ -65,6 +65,8 @@
     <li><hr class="dropdown-divider"></li>
     <li><h6 class="dropdown-header" data-toc-skip>Output</h6></li>
     <li><a class="dropdown-item" href="../articles/output-formats.html">Choosing an output format</a></li>
+    <li><a class="dropdown-item" href="../articles/powerpoint.html">Editable PowerPoint output</a></li>
+    <li><a class="dropdown-item" href="../articles/animation.html">Keyframe animation in the engine</a></li>
     <li><hr class="dropdown-divider"></li>
     <li><h6 class="dropdown-header" data-toc-skip>Interop</h6></li>
     <li><a class="dropdown-item" href="../articles/coming-from-grid.html">Coming from grid</a></li>
@@ -114,21 +116,24 @@ format <em>degrades</em>.</p>
 <h2 id="still-pictures">Still pictures<a class="anchor" aria-label="anchor" href="#still-pictures"></a>
 </h2>
 <div class="sourceCode" id="cb1"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="fu"><a href="../reference/vl_scene.html">render</a></span><span class="op">(</span><span class="va">scene</span>, <span class="st">"figure.png"</span><span class="op">)</span> <span class="co"># raster</span></span>
-<span><span class="fu"><a href="../reference/vl_scene.html">render</a></span><span class="op">(</span><span class="va">scene</span>, <span class="st">"figure.svg"</span><span class="op">)</span> <span class="co"># vector, web</span></span>
-<span><span class="fu"><a href="../reference/vl_scene.html">render</a></span><span class="op">(</span><span class="va">scene</span>, <span class="st">"figure.pdf"</span><span class="op">)</span> <span class="co"># vector, print</span></span></code></pre></div>
+<code class="sourceCode R"><span><span class="fu"><a href="../reference/vl_scene.html">render</a></span><span class="op">(</span><span class="va">scene</span>, <span class="st">"figure.png"</span><span class="op">)</span>  <span class="co"># raster</span></span>
+<span><span class="fu"><a href="../reference/vl_scene.html">render</a></span><span class="op">(</span><span class="va">scene</span>, <span class="st">"figure.svg"</span><span class="op">)</span>  <span class="co"># vector, web</span></span>
+<span><span class="fu"><a href="../reference/vl_scene.html">render</a></span><span class="op">(</span><span class="va">scene</span>, <span class="st">"figure.pdf"</span><span class="op">)</span>  <span class="co"># vector, print</span></span>
+<span><span class="fu"><a href="../reference/vl_scene.html">render</a></span><span class="op">(</span><span class="va">scene</span>, <span class="st">"figure.pptx"</span><span class="op">)</span> <span class="co"># editable shapes, slides</span></span></code></pre></div>
 <table class="table">
 <colgroup>
-<col width="25%">
-<col width="25%">
-<col width="25%">
-<col width="25%">
+<col width="20%">
+<col width="20%">
+<col width="20%">
+<col width="20%">
+<col width="20%">
 </colgroup>
 <thead><tr class="header">
 <th></th>
 <th>PNG</th>
 <th>SVG</th>
 <th>PDF</th>
+<th>PPTX</th>
 </tr></thead>
 <tbody>
 <tr class="odd">
@@ -136,42 +141,63 @@ format <em>degrades</em>.</p>
 <td>✗</td>
 <td>✓</td>
 <td>✓</td>
+<td>✓</td>
 </tr>
 <tr class="even">
-<td>Gradients, patterns</td>
+<td>Gradients</td>
 <td>✓</td>
 <td>✓</td>
 <td>✓</td>
+<td>✓ (native gradient fills)</td>
 </tr>
 <tr class="odd">
+<td>Tiling patterns</td>
+<td>✓</td>
+<td>✓</td>
+<td>✓</td>
+<td>as a tiled picture fill</td>
+</tr>
+<tr class="even">
 <td>Hatching (<code><a href="../reference/vl_hatch.html">vl_hatch()</a></code>)</td>
 <td>✓</td>
 <td>✓ (as <code>&lt;path&gt;</code>)</td>
 <td>✓</td>
+<td>✓ (as shapes)</td>
+</tr>
+<tr class="odd">
+<td>Clipping</td>
+<td>✓</td>
+<td>✓</td>
+<td>✓</td>
+<td>geometry cut in advance</td>
 </tr>
 <tr class="even">
-<td>Selectable / searchable text</td>
+<td>Masks, blend modes</td>
+<td>✓</td>
+<td>✓</td>
+<td>✓</td>
+<td>as a picture of the region, with a warning</td>
+</tr>
+<tr class="odd">
+<td>Blur, shadow</td>
+<td>✓</td>
+<td>✓ (native filters)</td>
+<td>drawn unfiltered, with a warning</td>
+<td>as a picture of the region, with a warning</td>
+</tr>
+<tr class="even">
+<td>Selectable / editable text</td>
 <td>✗</td>
 <td>✓ (<code>text = "native"</code>)</td>
-<td>✓</td>
+<td>selectable</td>
+<td>editable (<code>text = "native"</code>)</td>
 </tr>
 <tr class="odd">
 <td>Screen-reader structure</td>
 <td>✗</td>
 <td>✓ (<code>role</code>, <code>data-*</code>)</td>
 <td>✓ (tagged)</td>
-</tr>
-<tr class="even">
-<td>Masks</td>
-<td>✓</td>
-<td>✓</td>
-<td>✓</td>
-</tr>
-<tr class="odd">
-<td>Tiling patterns</td>
-<td>✓</td>
-<td>✓</td>
-<td>degrades</td>
+<td>title and alt text only</td>
 </tr>
 <tr class="even">
 <td>Faithful without the author’s fonts</td>
@@ -179,10 +205,12 @@ format <em>degrades</em>.</p>
 <td>only with <code>text = "outline"</code>
 </td>
 <td>✓ (embedded)</td>
+<td>only with <code>text = "outline"</code>
+</td>
 </tr>
 </tbody>
 </table>
-<p>Two rows deserve expansion.</p>
+<p>A few rows deserve expansion.</p>
 <p><strong>SVG text is a choice, not a default you can ignore.</strong>
 <code>text = "native"</code> emits real <code>&lt;text&gt;</code> —
 selectable, searchable, readable by a screen reader — but it references
@@ -193,6 +221,21 @@ no third option yet; embedding a subset font would give both, and is
 blocked on tooling (see <code><a href="../articles/accessible-output.html">vignette("accessible-output")</a></code>).</p>
 <p><strong>PDF embeds its fonts</strong>, which is why it is the format
 to hand someone when fidelity matters more than editability.</p>
+<p><strong>PowerPoint is the format for editability.</strong> Paths
+become freeform shapes, text becomes text boxes you can retype, and
+panels become named groups. DrawingML has no clipping, so geometry that
+a clip would hide is cut away before it is written. The same applies to
+text and fonts as in SVG: <code>text = "native"</code> (the default) is
+editable and uses whatever fonts the viewer has, and
+<code>text = "outline"</code> gives glyph outlines that look the same
+everywhere. A <code><a href="../reference/tex.html">tex()</a></code> or <code><a href="../reference/plotmath.html">plotmath()</a></code> formula,
+inline math in an <code><a href="../reference/md.html">md()</a></code> label, haloed text and text on a
+path are outlines in either mode (the table in
+<code><a href="../articles/powerpoint.html">vignette("powerpoint")</a></code> lists every case). That article also
+covers placing scenes on slides.</p>
+<p>Geometry far off the page is cut to the page the same way on every
+backend, so a mark with an extreme coordinate draws its visible part
+identically in all four formats.</p>
 <p>Anything a backend cannot honour is reported as a warning at render
 time rather than silently dropped, so you do not have to consult this
 table to find out.</p>
@@ -293,8 +336,12 @@ worth building for, and there it wins by a wide margin <em>and</em>
 stays crisp at any size. A 2000-point cloud is 24 MB uncompressed;
 vellum warns above 5 MB rather than letting you find out later.</p>
 <p><code>prefers-reduced-motion</code> is worth noting as more than a
-checkbox: a reader who has asked their system not to animate gets the
-first frame, held, instead of nothing.</p>
+checkbox: a reader who has asked their system not to animate gets one
+frame, held, instead of nothing. That is the last frame when the
+schedule ends on the final keyframe (the complete picture of a reveal or
+a time series), and the first one otherwise.
+<code><a href="../articles/animation.html">vignette("animation")</a></code> covers building the keyframes and the
+schedule.</p>
 </div>
 <div class="section level2">
 <h2 id="documents-and-batches">Documents and batches<a class="anchor" aria-label="anchor" href="#documents-and-batches"></a>
@@ -324,13 +371,6 @@ byte-identical either way, and that is asserted in the test suite.</p>
 </h2>
 <p>Named because “can it?” is a reasonable question with a definite
 answer.</p>
-<p><strong>PowerPoint / OOXML DrawingML.</strong> The gap with the
-clearest audience: <code>rvg</code> and <code>officer</code> are widely
-used because people need <em>editable</em> shapes in a deck, not a
-picture of a plot. A resolved scene maps onto DrawingML about as
-directly as onto SVG. It is not here because it needs a new backend and
-a zip container writer — a phase of its own rather than a tail item, and
-worth doing properly.</p>
 <p><strong>EPS / PostScript.</strong> Still demanded by some journals,
 and a hard blocker for those who need it. Also a new backend: krilla
 writes PDF and nothing else, so this is a PostScript writer from scratch
@@ -347,6 +387,12 @@ appears.</p>
 <li>
 <code><a href="../articles/accessible-output.html">vignette("accessible-output")</a></code>: tagged PDF, and why SVG
 cannot yet be both faithful and selectable.</li>
+<li>
+<code><a href="../articles/powerpoint.html">vignette("powerpoint")</a></code>: scenes and plots as editable
+PowerPoint shapes.</li>
+<li>
+<code><a href="../articles/animation.html">vignette("animation")</a></code>: keyframes, schedules, and how
+marks are matched between frames.</li>
 <li>
 <code><a href="../articles/scene-and-paint.html">vignette("scene-and-paint")</a></code>: the paint features whose
 degradation this table summarises.</li>

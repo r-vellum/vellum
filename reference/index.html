@@ -27,7 +27,7 @@
   <ul class="dropdown-menu" aria-labelledby="dropdown-articles"><li><hr class="dropdown-divider"></li>
     <li><h6 class="dropdown-header" data-toc-skip>Concepts</h6></li>
     <li><a class="dropdown-item" href="../articles/scene-and-paint.html">The scene graph and the paint model</a></li>
-    <li><a class="dropdown-item" href="../articles/typography.html">Typography: layout, halos and OpenType features</a></li>
+    <li><a class="dropdown-item" href="../articles/typography.html">Typography: layout, halos, weights and OpenType features</a></li>
     <li><a class="dropdown-item" href="../articles/render-quality.html">Render quality: accessibility, crisp edges, group effects</a></li>
     <li><a class="dropdown-item" href="../articles/retained-mode.html">Asking a scene what it drew: read-back, picking, and editing</a></li>
     <li><a class="dropdown-item" href="../articles/accessible-output.html">Accessible output, and fonts you can trust</a></li>
@@ -41,6 +41,8 @@
     <li><hr class="dropdown-divider"></li>
     <li><h6 class="dropdown-header" data-toc-skip>Output</h6></li>
     <li><a class="dropdown-item" href="../articles/output-formats.html">Choosing an output format</a></li>
+    <li><a class="dropdown-item" href="../articles/powerpoint.html">Editable PowerPoint output</a></li>
+    <li><a class="dropdown-item" href="../articles/animation.html">Keyframe animation in the engine</a></li>
     <li><hr class="dropdown-divider"></li>
     <li><h6 class="dropdown-header" data-toc-skip>Interop</h6></li>
     <li><a class="dropdown-item" href="../articles/coming-from-grid.html">Coming from grid</a></li>
@@ -71,7 +73,7 @@
     <div class="section level2">
       <h2 id="building-rendering-scenes">Building &amp; rendering scenes<a class="anchor" aria-label="anchor" href="#building-rendering-scenes"></a></h2>
 
-      <div class="section-desc"><p>Build a scene functionally with <code><a href="../reference/vl_scene.html">vl_scene()</a></code> and a pipeline of <code><a href="../reference/vl_scene.html">push()</a></code> / <code><a href="../reference/vl_scene.html">draw()</a></code> / <code><a href="../reference/vl_scene.html">pop()</a></code>, then render it. <code><a href="../reference/vl_scene.html">render()</a></code> picks the backend (PNG / SVG / PDF) from the file extension.</p></div>
+      <div class="section-desc"><p>Build a scene functionally with <code><a href="../reference/vl_scene.html">vl_scene()</a></code> and a pipeline of <code><a href="../reference/vl_scene.html">push()</a></code> / <code><a href="../reference/vl_scene.html">draw()</a></code> / <code><a href="../reference/vl_scene.html">pop()</a></code>, then render it. <code><a href="../reference/vl_scene.html">render()</a></code> picks the backend (PNG / SVG / PDF / PowerPoint) from the file extension.</p></div>
 
       <dl></dl></div><div class="section level2">
 
@@ -126,8 +128,17 @@
 
         </dt>
         <dd>Coerce an object to a vellum scene</dd>
+      </dl></div><div class="section level2">
+      <h2 id="animation">Animation<a class="anchor" aria-label="anchor" href="#animation"></a></h2>
 
-        <dt>
+      <div class="section-desc"><p>Keyframe animation: tween between finished scenes on a schedule and encode the frames as GIF, APNG, animated SVG or PNG files, or draw one frame as a still. See <code><a href="../articles/animation.html">vignette("animation")</a></code>.</p></div>
+
+      <dl></dl></div><div class="section level2">
+
+
+
+
+      <dl><dt>
 
           <code><a href="vl_render_animation.html">vl_render_animation()</a></code>
 
@@ -382,7 +393,7 @@
       </dl></div><div class="section level2">
       <h2 id="text">Text<a class="anchor" aria-label="anchor" href="#text"></a></h2>
 
-      <div class="section-desc"><p>Device-independent shaping and measurement, Markdown-style rich labels, and layout: text wrapped to a box or set along a curve.</p></div>
+      <div class="section-desc"><p>Device-independent shaping and measurement, font weights, Markdown-style rich labels, math typeset from TeX or plotmath notation (<code><a href="../reference/tex.html">tex()</a></code>, inline <code>$...$</code> in <code><a href="../reference/md.html">md()</a></code>, <code><a href="../reference/plotmath.html">plotmath()</a></code>), and layout: text wrapped to a box or set along a curve.</p></div>
 
       <dl></dl></div><div class="section level2">
 
@@ -493,7 +504,7 @@
       </dl></div><div class="section level2">
       <h2 id="output-reach">Output reach<a class="anchor" aria-label="anchor" href="#output-reach"></a></h2>
 
-      <div class="section-desc"><p>Destinations for a finished scene beyond a single file: a multi-page document, and a batch rendered across cores.</p></div>
+      <div class="section-desc"><p>Destinations for a finished scene beyond a single file: a multi-page PDF document, a batch rendered across cores, and editable PowerPoint slides, written directly or through officer (see <code><a href="../articles/powerpoint.html">vignette("powerpoint")</a></code>).</p></div>
 
       <dl></dl></div><div class="section level2">
 

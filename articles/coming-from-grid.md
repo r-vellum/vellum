@@ -11,6 +11,7 @@ places where vellum works differently on purpose.
 |----|----|----|
 | [`grid.newpage()`](https://rdrr.io/r/grid/grid.newpage.html) | [`vl_scene()`](https://r-vellum.github.io/vellum/reference/vl_scene.md) | vellum’s scene also fixes page size, background, and dpi up front |
 | `unit(1, "native")` | `vl_unit(1, "native")` | same idea; each element carries its own unit |
+| `default.units = "npc"` | `default_units = "npc"` | the unit a bare number is read in; `"npc"` in every constructor, as in grid |
 | [`viewport()`](https://rdrr.io/r/grid/viewport.html) | [`vl_viewport()`](https://r-vellum.github.io/vellum/reference/vl_viewport.md) | region with its own `xscale` / `yscale` |
 | [`pushViewport()`](https://rdrr.io/r/grid/viewports.html) / [`popViewport()`](https://rdrr.io/r/grid/viewports.html) | [`push()`](https://r-vellum.github.io/vellum/reference/vl_scene.md) / [`pop()`](https://r-vellum.github.io/vellum/reference/vl_scene.md) | functional: they take and return a scene, no global stack |
 | [`grid.rect()`](https://rdrr.io/r/grid/grid.rect.html), [`grid.circle()`](https://rdrr.io/r/grid/grid.circle.html), … | [`rect_grob()`](https://r-vellum.github.io/vellum/reference/grob.md), [`circle_grob()`](https://r-vellum.github.io/vellum/reference/grob.md), … plus [`draw()`](https://r-vellum.github.io/vellum/reference/vl_scene.md) | the constructor builds a value; [`draw()`](https://r-vellum.github.io/vellum/reference/vl_scene.md) adds it |
@@ -106,6 +107,29 @@ or size a unit by a grob’s extent with
 /
 [`grobheight()`](https://r-vellum.github.io/vellum/reference/grobwidth.md)
 immediately, without an open device.
+
+### Bare numbers are npc
+
+As in grid, a bare number passed as a position or size is read in
+`"npc"`, in every constructor and in
+[`vl_viewport()`](https://r-vellum.github.io/vellum/reference/vl_viewport.md).
+Each takes `default_units` (grid’s `default.units`) to read bare numbers
+in another unit, such as `"native"` for data coordinates on the
+viewport’s `xscale` and `yscale`:
+
+``` r
+
+lines_grob(c(1, 5, 9), c(2, 8, 4), default_units = "native")
+# the same as
+lines_grob(vl_unit(c(1, 5, 9), "native"), vl_unit(c(2, 8, 4), "native"))
+```
+
+A few arguments have a physical default of their own and ignore it: a
+bare point, hexagon or loop `size` and the `foot`, `start_cap`,
+`end_cap` and `offset` lengths are millimetres, and an arrow’s `length`
+is inches. Before vellum 0.8.0 the line and polygon family read bare
+numbers as `"native"`; code written for that needs
+`default_units = "native"`.
 
 ### Units are records, not expression trees
 

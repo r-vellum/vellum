@@ -51,7 +51,7 @@
 <li><hr class="dropdown-divider"></li>
     <li><h6 class="dropdown-header" data-toc-skip>Concepts</h6></li>
     <li><a class="dropdown-item" href="../articles/scene-and-paint.html">The scene graph and the paint model</a></li>
-    <li><a class="dropdown-item" href="../articles/typography.html">Typography: layout, halos and OpenType features</a></li>
+    <li><a class="dropdown-item" href="../articles/typography.html">Typography: layout, halos, weights and OpenType features</a></li>
     <li><a class="dropdown-item" href="../articles/render-quality.html">Render quality: accessibility, crisp edges, group effects</a></li>
     <li><a class="dropdown-item" href="../articles/retained-mode.html">Asking a scene what it drew: read-back, picking, and editing</a></li>
     <li><a class="dropdown-item" href="../articles/accessible-output.html">Accessible output, and fonts you can trust</a></li>
@@ -65,6 +65,8 @@
     <li><hr class="dropdown-divider"></li>
     <li><h6 class="dropdown-header" data-toc-skip>Output</h6></li>
     <li><a class="dropdown-item" href="../articles/output-formats.html">Choosing an output format</a></li>
+    <li><a class="dropdown-item" href="../articles/powerpoint.html">Editable PowerPoint output</a></li>
+    <li><a class="dropdown-item" href="../articles/animation.html">Keyframe animation in the engine</a></li>
     <li><hr class="dropdown-divider"></li>
     <li><h6 class="dropdown-header" data-toc-skip>Interop</h6></li>
     <li><a class="dropdown-item" href="../articles/coming-from-grid.html">Coming from grid</a></li>
@@ -138,12 +140,18 @@ front</td>
 <td>same idea; each element carries its own unit</td>
 </tr>
 <tr class="odd">
+<td><code>default.units = "npc"</code></td>
+<td><code>default_units = "npc"</code></td>
+<td>the unit a bare number is read in; <code>"npc"</code> in every
+constructor, as in grid</td>
+</tr>
+<tr class="even">
 <td><code><a href="https://rdrr.io/r/grid/viewport.html" class="external-link">viewport()</a></code></td>
 <td><code><a href="../reference/vl_viewport.html">vl_viewport()</a></code></td>
 <td>region with its own <code>xscale</code> / <code>yscale</code>
 </td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td>
 <code><a href="https://rdrr.io/r/grid/viewports.html" class="external-link">pushViewport()</a></code> / <code><a href="https://rdrr.io/r/grid/viewports.html" class="external-link">popViewport()</a></code>
 </td>
@@ -152,7 +160,7 @@ front</td>
 </td>
 <td>functional: they take and return a scene, no global stack</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td>
 <code><a href="https://rdrr.io/r/grid/grid.rect.html" class="external-link">grid.rect()</a></code>, <code><a href="https://rdrr.io/r/grid/grid.circle.html" class="external-link">grid.circle()</a></code>, …</td>
 <td>
@@ -161,7 +169,7 @@ front</td>
 </td>
 <td>the constructor builds a value; <code><a href="../reference/vl_scene.html">draw()</a></code> adds it</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td>
 <code><a href="https://rdrr.io/r/grid/grid.rect.html" class="external-link">rectGrob()</a></code>, <code><a href="https://rdrr.io/r/grid/grid.grob.html" class="external-link">gTree()</a></code>
 </td>
@@ -169,18 +177,18 @@ front</td>
 <code><a href="../reference/grob.html">rect_grob()</a></code>, the scene tree</td>
 <td>grobs are immutable S7 values</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td><code><a href="https://rdrr.io/r/grid/gpar.html" class="external-link">gpar()</a></code></td>
 <td><code><a href="../reference/vl_gpar.html">vl_gpar()</a></code></td>
 <td>familiar fields (including <code>cex</code>); <code>fill</code> also
 accepts gradients</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td><code><a href="https://rdrr.io/r/grid/grid.layout.html" class="external-link">grid.layout()</a></code></td>
 <td><code><a href="../reference/vl_viewport.html">grid_layout()</a></code></td>
 <td>flexible <code>"null"</code> tracks work the same</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td>
 <code><a href="https://rdrr.io/r/grid/grid.ls.html" class="external-link">grid.ls()</a></code> / <code><a href="https://rdrr.io/r/grid/grid.get.html" class="external-link">grid.get()</a></code>
 </td>
@@ -190,7 +198,7 @@ accepts gradients</td>
 <td>list and read nodes by <code>name</code>
 </td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td>
 <code><a href="https://rdrr.io/r/grid/grid.edit.html" class="external-link">grid.edit()</a></code> / <code><a href="https://rdrr.io/r/grid/grid.edit.html" class="external-link">editGrob()</a></code>
 </td>
@@ -199,28 +207,28 @@ accepts gradients</td>
 <code><a href="https://rdrr.io/r/grid/grid.edit.html" class="external-link">editGrob()</a></code> also copies; <code><a href="https://rdrr.io/r/grid/grid.edit.html" class="external-link">grid.edit()</a></code>
 mutates the display list, <code><a href="../reference/node_names.html">edit_node()</a></code> never does</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td>
 <code><a href="https://rdrr.io/r/grid/grid.grab.html" class="external-link">grid.grabExpr()</a></code> / display list</td>
 <td>the retained scene</td>
 <td>the tree is the model, not something you recover from a device</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td><code><a href="https://rdrr.io/r/grid/grid.locator.html" class="external-link">grid.locator()</a></code></td>
 <td><code><a href="../reference/hit_test.html">hit_test()</a></code></td>
 <td>picking from a pick-buffer, not one interactive click</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td>(no counterpart)</td>
 <td><code><a href="../reference/scene_model.html">scene_model()</a></code></td>
 <td>per-element identity plus resolved device-pixel bbox</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td>(no counterpart)</td>
 <td><code><a href="../reference/vl_lint.html">vl_lint()</a></code></td>
 <td>static analysis: off-canvas marks, illegible text, low contrast</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td>
 <code><a href="https://rdrr.io/r/grid/grid.convert.html" class="external-link">convertWidth()</a></code> / <code><a href="https://rdrr.io/r/grid/grid.convert.html" class="external-link">convertX()</a></code>
 </td>
@@ -228,7 +236,7 @@ mutates the display list, <code><a href="../reference/node_names.html">edit_node
 <td>one function; <code>axis</code> picks the extent, <code>what</code>
 a length vs a position</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td>device (<code><a href="https://rdrr.io/r/grDevices/png.html" class="external-link">png()</a></code>, <code><a href="https://rdrr.io/r/grDevices/pdf.html" class="external-link">pdf()</a></code>, …)</td>
 <td><code>render(scene, path)</code></td>
 <td>the extension picks the backend</td>
@@ -334,6 +342,27 @@ extent with <code><a href="../reference/grobwidth.html">grobwidth()</a></code> /
 immediately, without an open device.</p>
 </div>
 <div class="section level3">
+<h3 id="bare-numbers-are-npc">Bare numbers are npc<a class="anchor" aria-label="anchor" href="#bare-numbers-are-npc"></a>
+</h3>
+<p>As in grid, a bare number passed as a position or size is read in
+<code>"npc"</code>, in every constructor and in
+<code><a href="../reference/vl_viewport.html">vl_viewport()</a></code>. Each takes <code>default_units</code>
+(grid’s <code>default.units</code>) to read bare numbers in another
+unit, such as <code>"native"</code> for data coordinates on the
+viewport’s <code>xscale</code> and <code>yscale</code>:</p>
+<div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="../reference/grob.html">lines_grob</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">1</span>, <span class="fl">5</span>, <span class="fl">9</span><span class="op">)</span>, <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">2</span>, <span class="fl">8</span>, <span class="fl">4</span><span class="op">)</span>, default_units <span class="op">=</span> <span class="st">"native"</span><span class="op">)</span></span>
+<span><span class="co"># the same as</span></span>
+<span><span class="fu"><a href="../reference/grob.html">lines_grob</a></span><span class="op">(</span><span class="fu"><a href="../reference/vl_unit.html">vl_unit</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">1</span>, <span class="fl">5</span>, <span class="fl">9</span><span class="op">)</span>, <span class="st">"native"</span><span class="op">)</span>, <span class="fu"><a href="../reference/vl_unit.html">vl_unit</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">2</span>, <span class="fl">8</span>, <span class="fl">4</span><span class="op">)</span>, <span class="st">"native"</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
+<p>A few arguments have a physical default of their own and ignore it: a
+bare point, hexagon or loop <code>size</code> and the <code>foot</code>,
+<code>start_cap</code>, <code>end_cap</code> and <code>offset</code>
+lengths are millimetres, and an arrow’s <code>length</code> is inches.
+Before vellum 0.8.0 the line and polygon family read bare numbers as
+<code>"native"</code>; code written for that needs
+<code>default_units = "native"</code>.</p>
+</div>
+<div class="section level3">
 <h3 id="units-are-records-not-expression-trees">Units are records, not expression trees<a class="anchor" aria-label="anchor" href="#units-are-records-not-expression-trees"></a>
 </h3>
 <p>A grid unit defers its arithmetic:
@@ -342,7 +371,7 @@ immediately, without an open device.</p>
 exist. A vellum unit is a flat record — a value, a base code, and an
 absolute millimetre offset — so arithmetic reduces at construction
 wherever it can.</p>
-<div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/vl_unit.html">vl_unit</a></span><span class="op">(</span><span class="fl">10</span>, <span class="st">"mm"</span><span class="op">)</span> <span class="op">+</span> <span class="fu"><a href="../reference/vl_unit.html">vl_unit</a></span><span class="op">(</span><span class="fl">1</span>, <span class="st">"in"</span><span class="op">)</span>     <span class="co"># absolute + absolute -&gt; mm</span></span>
 <span><span class="co">#&gt; &lt;vellum_unit[1]&gt;</span></span>
 <span><span class="co">#&gt; [1] 35.4mm</span></span>

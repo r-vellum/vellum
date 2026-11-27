@@ -27,7 +27,7 @@
   <ul class="dropdown-menu" aria-labelledby="dropdown-articles"><li><hr class="dropdown-divider"></li>
     <li><h6 class="dropdown-header" data-toc-skip>Concepts</h6></li>
     <li><a class="dropdown-item" href="../articles/scene-and-paint.html">The scene graph and the paint model</a></li>
-    <li><a class="dropdown-item" href="../articles/typography.html">Typography: layout, halos and OpenType features</a></li>
+    <li><a class="dropdown-item" href="../articles/typography.html">Typography: layout, halos, weights and OpenType features</a></li>
     <li><a class="dropdown-item" href="../articles/render-quality.html">Render quality: accessibility, crisp edges, group effects</a></li>
     <li><a class="dropdown-item" href="../articles/retained-mode.html">Asking a scene what it drew: read-back, picking, and editing</a></li>
     <li><a class="dropdown-item" href="../articles/accessible-output.html">Accessible output, and fonts you can trust</a></li>
@@ -41,6 +41,8 @@
     <li><hr class="dropdown-divider"></li>
     <li><h6 class="dropdown-header" data-toc-skip>Output</h6></li>
     <li><a class="dropdown-item" href="../articles/output-formats.html">Choosing an output format</a></li>
+    <li><a class="dropdown-item" href="../articles/powerpoint.html">Editable PowerPoint output</a></li>
+    <li><a class="dropdown-item" href="../articles/animation.html">Keyframe animation in the engine</a></li>
     <li><hr class="dropdown-divider"></li>
     <li><h6 class="dropdown-header" data-toc-skip>Interop</h6></li>
     <li><a class="dropdown-item" href="../articles/coming-from-grid.html">Coming from grid</a></li>
@@ -84,6 +86,10 @@
 <li><p>PNG output no longer errors (a tiny-skia panic) on a shape that crosses the page with coordinates or a size far beyond it: from about 2e9 px, a circle, rect, point, stroke, glyph, picture or clip region made the rasteriser index past its buffers. Such geometry is now cut to the page in double precision before rasterising, and a dashed stroke keeps the dash phase the whole line would give; anything within 1e6 px is drawn exactly as before, and geometry beyond 1e15 px is skipped, as the PDF backend skips it. A stroke whose pen alone is that wide is drawn from its outline. Hit testing and PowerPoint output no longer lose the content under a clip region reaching that far (VR-43).</p></li>
 <li><p>SVG and PDF output now draw the visible part of paths, strokes and clips reaching far past the page, as PNG does. A circle of radius 1e10 px, a line from -1e12 to 1e12 px or a huge clip path used to be written as given, and librsvg, poppler and browsers then drew nothing, or nothing under the clip. Such geometry and such clips are now cut to the page the same way PNG cuts them (dashed strokes keep their phase); anything within 1e6 px is written exactly as before, and SVG now skips geometry beyond 1e15 px as PNG and PDF do. Raster images are not cut yet. PowerPoint cuts far paths and strokes the same way instead of clamping each point, which bent the visible part of a long, slanted line (VR-44).</p></li>
 <li><p>Geometry far from the origin no longer loses precision before it is drawn. A viewport placed more than 65536 px from the page origin has its local frame shifted so its transform carries no large offset, and viewport placement is composed in double precision, so a mark drawn 1e7 px into a viewport placed 1e7 px off the page lands where it should instead of snapping to whole pixels (64 px at 1e9). Rects and circles reaching that far are built in double precision too, so a huge one keeps the edge it has on the page. A far clipped viewport still clips as a rect, so PowerPoint and the display list treat it as a near one. Ordinary scenes are unchanged (VR-45).</p></li>
+</ul></div>
+<div class="section level3">
+<h3 id="documentation-development-version">Documentation<a class="anchor" aria-label="anchor" href="#documentation-development-version"></a></h3>
+<ul><li>New articles: “Editable PowerPoint output” (<code><a href="../articles/powerpoint.html">vignette("powerpoint")</a></code>, D-9) and “Keyframe animation in the engine” (<code><a href="../articles/animation.html">vignette("animation")</a></code>, D-11), added to the Output section of the navbar, and a new Animation section in the reference (D-8 to D-16). The output-formats matrix gains a PowerPoint column and no longer says PDF degrades tiling patterns (it draws them as PNG and SVG do). The typography article covers font weights, scene-contract the split render layers, the display list and <code>vellum_content_fit</code>, retained-mode <code><a href="../reference/vl_brush.html">vl_brush()</a></code> and <code><a href="../reference/vl_brush.html">vl_lasso()</a></code>, scenes-as-values <code>scene_inset(fit = )</code>, and coming-from-grid <code>default_units</code>. README, DESCRIPTION and the pkgdown descriptions list PowerPoint and math. Stale <code>vignettes/figure/</code> images are removed.</li>
 </ul></div>
 <div class="section level3">
 <h3 id="internal-development-version">Internal<a class="anchor" aria-label="anchor" href="#internal-development-version"></a></h3>

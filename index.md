@@ -5,8 +5,8 @@
 Text is measured, layout is solved and every mark’s position is resolved
 *before* anything reaches a canvas, in process, with no device open.
 Everything below follows from that: a scene you can interrogate, wrap
-text inside, move labels around in, lint, hash, diff and render three
-ways from a single solve.
+text inside, move labels around in, lint, hash, diff and render four
+ways (PNG, SVG, PDF and editable PowerPoint) from a single solve.
 
 It is a low-level graphics framework in the spirit of **grid** (units,
 viewports, grobs, layout), and the foundation layer a grammar of
@@ -108,9 +108,11 @@ render(plot, "report.pdf")          # tagged, if the marks carry role/name
 And more that has no device-driven equivalent: **text set along a
 curve**, **boolean path operations** on real geometry, **contours**
 chained into polylines, **SVG icon paths** as crisp vector markers,
-**stroke-to-outline** expansion, **animated SVG**, **multi-page PDF**,
-and **font pinning** that makes “identical pixels everywhere” checkable
-rather than merely claimed.
+**stroke-to-outline** expansion, **math typeset from TeX** with no LaTeX
+installed, **keyframe animation** to GIF, APNG or animated SVG,
+**multi-page PDF**, **editable PowerPoint slides**, and **font pinning**
+that makes “identical pixels everywhere” checkable rather than merely
+claimed.
 
 ## How a scene is built
 
@@ -145,17 +147,24 @@ expect of a graphics engine and would miss if they were absent.
 
 - **Layout is solved once, not once per device.** The *same* solved
   scene is walked for each backend, so
-  `render(scene, "plot.png" | "plot.svg" | "plot.pdf")` agree on
-  geometry rather than each re-solving it against their own font
-  metrics. Output is byte-stable, so figures are snapshot-testable.
+  `render(scene, "plot.png" | "plot.svg" | "plot.pdf" | "plot.pptx")`
+  agree on geometry rather than each re-solving it against their own
+  font metrics. Output is byte-stable, so figures are snapshot-testable.
   Where a backend cannot honour something it **says so** rather than
   silently dropping it.
 - **Text that matches the rest of R.** Shaping runs through
   [textshaping](https://github.com/r-lib/textshaping) on
   [systemfonts](https://github.com/r-lib/systemfonts), the stack ragg
   and svglite use, with per-glyph fallback, OpenType features (`tnum`,
-  `smcp`, `onum`), haloed text, and Markdown-style rich labels
-  ([`md()`](https://r-vellum.github.io/vellum/reference/md.md)).
+  `smcp`, `onum`), numeric font weights (`vl_gpar(fontweight = 300)`),
+  haloed text, and Markdown-style rich labels
+  ([`md()`](https://r-vellum.github.io/vellum/reference/md.md)). Math is
+  typeset in process from TeX
+  ([`tex()`](https://r-vellum.github.io/vellum/reference/tex.md), or
+  `$...$` inside
+  [`md()`](https://r-vellum.github.io/vellum/reference/md.md)) or R’s
+  plotmath notation
+  ([`plotmath()`](https://r-vellum.github.io/vellum/reference/plotmath.md)).
   [`vl_strwidth()`](https://r-vellum.github.io/vellum/reference/vl_strwidth.md)
   measures without opening a device.
 - **A modern paint model, everywhere.** Linear and radial **gradients**
@@ -194,9 +203,10 @@ expect of a graphics engine and would miss if they were absent.
 
 The engine ([tiny-skia](https://github.com/linebender/tiny-skia) for
 raster, an SVG writer, [krilla](https://github.com/LaurenzV/krilla) for
-PDF) is written in **Rust** because all of the above requires owning the
-measuring and rasterising stack. It is not a performance claim. That is
-also why installing from source needs `cargo`.
+PDF, a DrawingML writer for PowerPoint) is written in **Rust** because
+all of the above requires owning the measuring and rasterising stack. It
+is not a performance claim. That is also why installing from source
+needs `cargo`.
 
 ## Installation
 
@@ -317,16 +327,17 @@ vl_scene(4.5, 3, bg = "white") |>
 
 ![](reference/figures/README-datashade.png)
 
-### One scene, three formats
+### One scene, four formats
 
 ``` r
 
 s <- vl_scene(4, 3) |>
   draw(circle_grob(r = 0.3, gp = vl_gpar(fill = "tomato", col = NA)))
 
-render(s, "out.png") # raster   (tiny-skia)
-render(s, "out.svg") # vector   (hand-rolled SVG)
-render(s, "out.pdf") # vector   (krilla)
+render(s, "out.png")  # raster   (tiny-skia)
+render(s, "out.svg")  # vector   (hand-rolled SVG)
+render(s, "out.pdf")  # vector   (krilla)
+render(s, "out.pptx") # editable PowerPoint shapes
 ```
 
 ## Relationship to grid and ggplot2

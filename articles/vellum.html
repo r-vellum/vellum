@@ -51,7 +51,7 @@
 <li><hr class="dropdown-divider"></li>
     <li><h6 class="dropdown-header" data-toc-skip>Concepts</h6></li>
     <li><a class="dropdown-item" href="../articles/scene-and-paint.html">The scene graph and the paint model</a></li>
-    <li><a class="dropdown-item" href="../articles/typography.html">Typography: layout, halos and OpenType features</a></li>
+    <li><a class="dropdown-item" href="../articles/typography.html">Typography: layout, halos, weights and OpenType features</a></li>
     <li><a class="dropdown-item" href="../articles/render-quality.html">Render quality: accessibility, crisp edges, group effects</a></li>
     <li><a class="dropdown-item" href="../articles/retained-mode.html">Asking a scene what it drew: read-back, picking, and editing</a></li>
     <li><a class="dropdown-item" href="../articles/accessible-output.html">Accessible output, and fonts you can trust</a></li>
@@ -65,6 +65,8 @@
     <li><hr class="dropdown-divider"></li>
     <li><h6 class="dropdown-header" data-toc-skip>Output</h6></li>
     <li><a class="dropdown-item" href="../articles/output-formats.html">Choosing an output format</a></li>
+    <li><a class="dropdown-item" href="../articles/powerpoint.html">Editable PowerPoint output</a></li>
+    <li><a class="dropdown-item" href="../articles/animation.html">Keyframe animation in the engine</a></li>
     <li><hr class="dropdown-divider"></li>
     <li><h6 class="dropdown-header" data-toc-skip>Interop</h6></li>
     <li><a class="dropdown-item" href="../articles/coming-from-grid.html">Coming from grid</a></li>
@@ -109,7 +111,7 @@
     
 <p>vellum is a low-level graphics framework for R, in the spirit of
 grid. You describe a scene with a small declarative API and render it to
-PNG, SVG, or PDF.</p>
+PNG, SVG, PDF, or editable PowerPoint shapes.</p>
 <p>The property most of the rest follows from is that vellum measures
 text and solves layout itself, in process, instead of asking whichever
 device happens to be current. So a scene has a size before there is a
@@ -208,12 +210,15 @@ extension.</p>
 <code class="sourceCode R"><span><span class="va">s</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/vl_scene.html">vl_scene</a></span><span class="op">(</span><span class="fl">4</span>, <span class="fl">3</span><span class="op">)</span> <span class="op">|&gt;</span></span>
 <span>  <span class="fu"><a href="../reference/vl_scene.html">draw</a></span><span class="op">(</span><span class="fu"><a href="../reference/grob.html">circle_grob</a></span><span class="op">(</span>r <span class="op">=</span> <span class="fl">0.3</span>, gp <span class="op">=</span> <span class="fu"><a href="../reference/vl_gpar.html">vl_gpar</a></span><span class="op">(</span>fill <span class="op">=</span> <span class="st">"tomato"</span>, col <span class="op">=</span> <span class="cn">NA</span><span class="op">)</span><span class="op">)</span><span class="op">)</span></span>
 <span></span>
-<span><span class="fu"><a href="../reference/vl_scene.html">render</a></span><span class="op">(</span><span class="va">s</span>, <span class="st">"out.png"</span><span class="op">)</span> <span class="co"># raster (tiny-skia)</span></span>
-<span><span class="fu"><a href="../reference/vl_scene.html">render</a></span><span class="op">(</span><span class="va">s</span>, <span class="st">"out.svg"</span><span class="op">)</span> <span class="co"># vector (hand-rolled SVG)</span></span>
-<span><span class="fu"><a href="../reference/vl_scene.html">render</a></span><span class="op">(</span><span class="va">s</span>, <span class="st">"out.pdf"</span><span class="op">)</span> <span class="co"># vector (krilla)</span></span></code></pre></div>
-<p>The same scene value renders to all three formats with consistent
-geometry, and raster and PDF output is byte-stable, so it is
-reproducible and snapshot-testable.</p>
+<span><span class="fu"><a href="../reference/vl_scene.html">render</a></span><span class="op">(</span><span class="va">s</span>, <span class="st">"out.png"</span><span class="op">)</span>  <span class="co"># raster (tiny-skia)</span></span>
+<span><span class="fu"><a href="../reference/vl_scene.html">render</a></span><span class="op">(</span><span class="va">s</span>, <span class="st">"out.svg"</span><span class="op">)</span>  <span class="co"># vector (hand-rolled SVG)</span></span>
+<span><span class="fu"><a href="../reference/vl_scene.html">render</a></span><span class="op">(</span><span class="va">s</span>, <span class="st">"out.pdf"</span><span class="op">)</span>  <span class="co"># vector (krilla)</span></span>
+<span><span class="fu"><a href="../reference/vl_scene.html">render</a></span><span class="op">(</span><span class="va">s</span>, <span class="st">"out.pptx"</span><span class="op">)</span> <span class="co"># editable PowerPoint shapes</span></span></code></pre></div>
+<p>The same scene value renders to all four formats with consistent
+geometry, and raster, PDF and PowerPoint output is byte-stable, so it is
+reproducible and snapshot-testable.
+<code><a href="../articles/output-formats.html">vignette("output-formats")</a></code> compares the formats, and
+<code><a href="../articles/powerpoint.html">vignette("powerpoint")</a></code> covers slides.</p>
 <p><code><a href="../reference/vl_scene.html">render()</a></code> takes two arguments worth knowing about.
 <code>scale</code> renders at a multiple of the device pixels while
 keeping the same physical size — the retina idiom — so nothing about the
@@ -250,8 +255,14 @@ crowding, <code><a href="../reference/profile_render.html">profile_render()</a><
 <code><a href="../articles/render-quality.html">vignette("render-quality")</a></code>: colour-vision simulation,
 crisp gridlines, and group blur/shadow effects.</li>
 <li>
-<code><a href="../articles/typography.html">vignette("typography")</a></code>: text halos and OpenType
-features.</li>
+<code><a href="../articles/typography.html">vignette("typography")</a></code>: text in a box or on a path,
+halos, OpenType features, font weights, and math from TeX or plotmath
+notation.</li>
+<li>
+<code><a href="../articles/output-formats.html">vignette("output-formats")</a></code>,
+<code><a href="../articles/powerpoint.html">vignette("powerpoint")</a></code> and
+<code><a href="../articles/animation.html">vignette("animation")</a></code>: choosing a format, editable slides,
+and keyframe animation.</li>
 <li>
 <code><a href="../articles/coming-from-grid.html">vignette("coming-from-grid")</a></code>: a translation guide if
 you already know grid.</li>

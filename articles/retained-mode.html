@@ -51,7 +51,7 @@
 <li><hr class="dropdown-divider"></li>
     <li><h6 class="dropdown-header" data-toc-skip>Concepts</h6></li>
     <li><a class="dropdown-item" href="../articles/scene-and-paint.html">The scene graph and the paint model</a></li>
-    <li><a class="dropdown-item" href="../articles/typography.html">Typography: layout, halos and OpenType features</a></li>
+    <li><a class="dropdown-item" href="../articles/typography.html">Typography: layout, halos, weights and OpenType features</a></li>
     <li><a class="dropdown-item" href="../articles/render-quality.html">Render quality: accessibility, crisp edges, group effects</a></li>
     <li><a class="dropdown-item" href="../articles/retained-mode.html">Asking a scene what it drew: read-back, picking, and editing</a></li>
     <li><a class="dropdown-item" href="../articles/accessible-output.html">Accessible output, and fonts you can trust</a></li>
@@ -65,6 +65,8 @@
     <li><hr class="dropdown-divider"></li>
     <li><h6 class="dropdown-header" data-toc-skip>Output</h6></li>
     <li><a class="dropdown-item" href="../articles/output-formats.html">Choosing an output format</a></li>
+    <li><a class="dropdown-item" href="../articles/powerpoint.html">Editable PowerPoint output</a></li>
+    <li><a class="dropdown-item" href="../articles/animation.html">Keyframe animation in the engine</a></li>
     <li><hr class="dropdown-divider"></li>
     <li><h6 class="dropdown-header" data-toc-skip>Interop</h6></li>
     <li><a class="dropdown-item" href="../articles/coming-from-grid.html">Coming from grid</a></li>
@@ -342,6 +344,36 @@ its nearest border.</p>
 <span><span class="co">#&gt;   key    kind dist</span></span>
 <span><span class="co">#&gt; 1 tri polygon    0</span></span></code></pre></div>
 <div class="section level3">
+<h3 id="brushing-and-lasso-selection">Brushing and lasso selection<a class="anchor" aria-label="anchor" href="#brushing-and-lasso-selection"></a>
+</h3>
+<p><code><a href="../reference/vl_brush.html">vl_brush()</a></code> selects the keyed marks that meet a
+rectangle, and <code><a href="../reference/vl_brush.html">vl_lasso()</a></code> the ones that meet a free-form
+polygon. Like <code><a href="../reference/vl_nearest.html">vl_nearest()</a></code>, they test the real geometry, so
+the diagonal is selected only when the line itself enters the region,
+not because the region is inside its bounding box:</p>
+<div class="sourceCode" id="cb12"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="../reference/vl_brush.html">vl_brush</a></span><span class="op">(</span><span class="va">demo</span>, xmin <span class="op">=</span> <span class="fl">0.7</span>, xmax <span class="op">=</span> <span class="fl">0.95</span>, ymin <span class="op">=</span> <span class="fl">0.05</span>, ymax <span class="op">=</span> <span class="fl">0.3</span><span class="op">)</span> <span class="co"># the corner only</span></span>
+<span><span class="co">#&gt;      key  kind</span></span>
+<span><span class="co">#&gt; 1 corner point</span></span>
+<span><span class="fu"><a href="../reference/vl_brush.html">vl_brush</a></span><span class="op">(</span><span class="va">demo</span>, xmin <span class="op">=</span> <span class="fl">0.4</span>, xmax <span class="op">=</span> <span class="fl">0.6</span>, ymin <span class="op">=</span> <span class="fl">0.4</span>, ymax <span class="op">=</span> <span class="fl">0.6</span><span class="op">)</span>   <span class="co"># crosses the line</span></span>
+<span><span class="co">#&gt;        key    kind</span></span>
+<span><span class="co">#&gt; 1 diagonal segment</span></span>
+<span><span class="fu"><a href="../reference/vl_brush.html">vl_lasso</a></span><span class="op">(</span><span class="va">demo</span>, x <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.6</span>, <span class="fl">0.98</span>, <span class="fl">0.98</span><span class="op">)</span>, y <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.02</span>, <span class="fl">0.02</span>, <span class="fl">0.4</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="co">#&gt;      key  kind</span></span>
+<span><span class="co">#&gt; 1 corner point</span></span></code></pre></div>
+<p><code>mode</code> sets how a mark has to meet the region:
+<code>"intersect"</code> (the default, any part touches it),
+<code>"contain"</code> (all of it inside) or <code>"centre"</code> (the
+centre of its bounding box inside, the rule vellumwidget’s client-side
+lasso uses, so a Shiny server can reproduce a selection made in the
+browser exactly).</p>
+<p>The first query on a scene builds a spatial index over its keyed
+elements, and every later <code><a href="../reference/vl_nearest.html">vl_nearest()</a></code>,
+<code><a href="../reference/vl_brush.html">vl_brush()</a></code> or <code><a href="../reference/vl_brush.html">vl_lasso()</a></code> on the same scene
+reuses it, so a server answering a stream of brush events pays for the
+index once.</p>
+</div>
+<div class="section level3">
 <h3 id="for-a-host-that-cannot-ask">For a host that cannot ask<a class="anchor" aria-label="anchor" href="#for-a-host-that-cannot-ask"></a>
 </h3>
 <p>A browser cannot call back into R on every mouse move.
@@ -349,7 +381,7 @@ its nearest border.</p>
 <strong>once</strong>, so the client computes distances locally at
 whatever rate it likes — typically an R-tree over the boxes to shortlist
 candidates, then an exact test against these vertices to rank them.</p>
-<div class="sourceCode" id="cb12"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb13"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="../reference/element_geometry.html">element_geometry</a></span><span class="op">(</span><span class="va">demo</span><span class="op">)</span></span>
 <span><span class="co">#&gt;        key    kind vertex ring      x      y rule</span></span>
 <span><span class="co">#&gt; 1 diagonal segment      1    1  46.08 253.44 &lt;NA&gt;</span></span>
@@ -366,7 +398,7 @@ phantom edge from each ring’s end to the next ring’s start. Split on
 <code>ring</code> and test the rings separately; the engine’s own rule
 is that being inside <strong>any</strong> ring is a hit, so a point in a
 hole is at distance zero.</p>
-<div class="sourceCode" id="cb13"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb14"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">holed</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/vl_scene.html">vl_scene</a></span><span class="op">(</span><span class="fl">3</span>, <span class="fl">2</span>, dpi <span class="op">=</span> <span class="fl">96</span>, bg <span class="op">=</span> <span class="st">"white"</span><span class="op">)</span> <span class="op">|&gt;</span></span>
 <span>  <span class="fu"><a href="../reference/vl_scene.html">draw</a></span><span class="op">(</span><span class="fu"><a href="../reference/grob.html">path_grob</a></span><span class="op">(</span></span>
 <span>    x <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">0.1</span>, <span class="fl">0.9</span>, <span class="fl">0.9</span>, <span class="fl">0.1</span>, <span class="fl">0.4</span>, <span class="fl">0.6</span>, <span class="fl">0.6</span>, <span class="fl">0.4</span><span class="op">)</span>,</span>
@@ -391,10 +423,11 @@ or a positional test binds to;</li>
 <strong>any mark can be made addressable</strong> — including lines,
 polygons and labels, which is what lets a whole series or an annotation
 be a thing the user can point at;</li>
-<li>marks can be picked by their <strong>true geometry</strong>
-(<code><a href="../reference/vl_nearest.html">vl_nearest()</a></code>), or that geometry handed to a client to do
-it itself (<code><a href="../reference/element_geometry.html">element_geometry()</a></code>), so a diagonal is not
-matched from the far corner of its bounding box;</li>
+<li>marks can be picked and brushed by their <strong>true
+geometry</strong> (<code><a href="../reference/vl_nearest.html">vl_nearest()</a></code>, <code><a href="../reference/vl_brush.html">vl_brush()</a></code>,
+<code><a href="../reference/vl_brush.html">vl_lasso()</a></code>), or that geometry handed to a client to do it
+itself (<code><a href="../reference/element_geometry.html">element_geometry()</a></code>), so a diagonal is not matched
+from the far corner of its bounding box;</li>
 <li>
 <strong>any point can be picked</strong> back to the node that drew
 it (<code><a href="../reference/hit_test.html">hit_test()</a></code>), through the same compile path that

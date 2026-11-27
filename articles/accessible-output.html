@@ -51,7 +51,7 @@
 <li><hr class="dropdown-divider"></li>
     <li><h6 class="dropdown-header" data-toc-skip>Concepts</h6></li>
     <li><a class="dropdown-item" href="../articles/scene-and-paint.html">The scene graph and the paint model</a></li>
-    <li><a class="dropdown-item" href="../articles/typography.html">Typography: layout, halos and OpenType features</a></li>
+    <li><a class="dropdown-item" href="../articles/typography.html">Typography: layout, halos, weights and OpenType features</a></li>
     <li><a class="dropdown-item" href="../articles/render-quality.html">Render quality: accessibility, crisp edges, group effects</a></li>
     <li><a class="dropdown-item" href="../articles/retained-mode.html">Asking a scene what it drew: read-back, picking, and editing</a></li>
     <li><a class="dropdown-item" href="../articles/accessible-output.html">Accessible output, and fonts you can trust</a></li>
@@ -65,6 +65,8 @@
     <li><hr class="dropdown-divider"></li>
     <li><h6 class="dropdown-header" data-toc-skip>Output</h6></li>
     <li><a class="dropdown-item" href="../articles/output-formats.html">Choosing an output format</a></li>
+    <li><a class="dropdown-item" href="../articles/powerpoint.html">Editable PowerPoint output</a></li>
+    <li><a class="dropdown-item" href="../articles/animation.html">Keyframe animation in the engine</a></li>
     <li><hr class="dropdown-divider"></li>
     <li><h6 class="dropdown-header" data-toc-skip>Interop</h6></li>
     <li><a class="dropdown-item" href="../articles/coming-from-grid.html">Coming from grid</a></li>
@@ -237,6 +239,22 @@ exclusive, because PDF does not allow one tagged content span inside
 another. When any mark is annotated, the marks own the tagging and the
 <code><a href="../reference/describe.html">describe()</a></code> text becomes the root figure’s alt.</p>
 </div>
+<div class="section level3">
+<h3 id="powerpoint">PowerPoint<a class="anchor" aria-label="anchor" href="#powerpoint"></a>
+</h3>
+<p>A slide gets less structure than a PDF. In PowerPoint output, written
+with <code>render(scene, "deck.pptx")</code>, <code><a href="../reference/pptx_pages.html">pptx_pages()</a></code>
+or officer, the scene becomes one group of shapes. Its alt text is the
+<code><a href="../reference/describe.html">describe()</a></code> description, or the title when there is no
+description. This is the text PowerPoint’s own Alt Text pane shows and a
+screen reader announces for the graphic. <code><a href="../reference/vl_scene.html">render()</a></code> and
+<code><a href="../reference/pptx_pages.html">pptx_pages()</a></code> name the group after the title; through
+<code><a href="https://davidgohel.github.io/officer/reference/ph_with.html" class="external-link">officer::ph_with()</a></code> it takes the placeholder’s name instead.
+The per-mark <code>role</code> and <code>name</code> are not written to
+the slide. Text labels stay real text in the slide, so a screen reader
+can still read them, except for the labels drawn as outlines (see
+<code><a href="../articles/powerpoint.html">vignette("powerpoint")</a></code>).</p>
+</div>
 </div>
 <div class="section level2">
 <h2 id="fonts-you-can-trust">Fonts you can trust<a class="anchor" aria-label="anchor" href="#fonts-you-can-trust"></a>
@@ -334,6 +352,9 @@ this machine.</li>
 <li>
 <code><a href="../articles/render-quality.html">vignette("render-quality")</a></code>: colour-vision
 simulation.</li>
+<li>
+<code><a href="../articles/powerpoint.html">vignette("powerpoint")</a></code>: editable slides, and what
+becomes a picture.</li>
 <li>
 <code><a href="../articles/scene-contract.html">vignette("scene-contract")</a></code>: what the
 <code>id</code>/<code>role</code>/<code>name</code> channel promises to

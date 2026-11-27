@@ -51,7 +51,7 @@
 <li><hr class="dropdown-divider"></li>
     <li><h6 class="dropdown-header" data-toc-skip>Concepts</h6></li>
     <li><a class="dropdown-item" href="../articles/scene-and-paint.html">The scene graph and the paint model</a></li>
-    <li><a class="dropdown-item" href="../articles/typography.html">Typography: layout, halos and OpenType features</a></li>
+    <li><a class="dropdown-item" href="../articles/typography.html">Typography: layout, halos, weights and OpenType features</a></li>
     <li><a class="dropdown-item" href="../articles/render-quality.html">Render quality: accessibility, crisp edges, group effects</a></li>
     <li><a class="dropdown-item" href="../articles/retained-mode.html">Asking a scene what it drew: read-back, picking, and editing</a></li>
     <li><a class="dropdown-item" href="../articles/accessible-output.html">Accessible output, and fonts you can trust</a></li>
@@ -65,6 +65,8 @@
     <li><hr class="dropdown-divider"></li>
     <li><h6 class="dropdown-header" data-toc-skip>Output</h6></li>
     <li><a class="dropdown-item" href="../articles/output-formats.html">Choosing an output format</a></li>
+    <li><a class="dropdown-item" href="../articles/powerpoint.html">Editable PowerPoint output</a></li>
+    <li><a class="dropdown-item" href="../articles/animation.html">Keyframe animation in the engine</a></li>
     <li><hr class="dropdown-divider"></li>
     <li><h6 class="dropdown-header" data-toc-skip>Interop</h6></li>
     <li><a class="dropdown-item" href="../articles/coming-from-grid.html">Coming from grid</a></li>
@@ -203,9 +205,9 @@ reduced to one unit, and that errors rather than being guessed.</p>
 </h2>
 <p>Any <code>fill</code> in <code><a href="../reference/vl_gpar.html">vl_gpar()</a></code> can be more than a
 flat colour — and so can <code>col</code>. The same three paint types
-work identically on the raster, SVG, and PDF backends (with the
-documented exception that the PDF backend does not yet rasterise
-patterns).</p>
+work identically on the raster, SVG, and PDF backends. PowerPoint keeps
+gradients as native gradient fills and writes a pattern as a tiled
+picture fill (see <code><a href="../articles/output-formats.html">vignette("output-formats")</a></code>).</p>
 <div class="section level3">
 <h3 id="gradients">Gradients<a class="anchor" aria-label="anchor" href="#gradients"></a>
 </h3>
